@@ -64,7 +64,7 @@ pub enum ParseError {
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
 	match server.servers.len() {
-		0 => Ok("/".to_string()),
+		0 => Ok("".to_string()), // Return empty string instead of "/" to avoid double slash
 		1 => Ok(server.servers[0].url.clone()),
 		_ => Err(ParseError::UnsupportedReference(format!(
 			"multiple servers are not supported: {:?}",
@@ -497,6 +497,24 @@ impl Default for JsonSchema {
 	}
 }
 
+/// Normalizes URL path construction to avoid double slashes
+/// Ensures exactly one slash between prefix and path components
+fn normalize_url_path(prefix: &str, path: &str) -> String {
+	let prefix = prefix.trim_end_matches('/');
+	let path = if path.starts_with('/') {
+		path
+	} else {
+		// If path doesn't start with '/', add one
+		&format!("/{}", path)
+	};
+
+	if prefix.is_empty() {
+		path.to_string()
+	} else {
+		format!("{}{}", prefix, path)
+	}
+}
+
 #[derive(Debug)]
 pub struct Handler {
 	pub prefix: String,
@@ -578,12 +596,11 @@ impl Handler {
 			}
 		}
 
+		// Use normalize_url_path to avoid double slashes
+		let normalized_path = normalize_url_path(&self.prefix, &path);
 		let base_url = format!(
-			"{}://{}{}{}",
-			"http",
-			self.backend.hostport(),
-			self.prefix,
-			path
+			"{}://{}{}",
+			"http", self.backend.hostport(),normalized_path
 		);
 
 		// --- Request Building ---
