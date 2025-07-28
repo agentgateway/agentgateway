@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { program } = require('commander');
 
-const ResourceMonitor = require('./lib/resource-monitor');
+const ResourceMonitor = require('./lib/resource-monitor-fixed');
 const TestScheduler = require('./lib/test-scheduler');
 const WorkerManager = require('./lib/worker-manager');
 const { ensureDirectoryExists, REQUIRED_DIRECTORIES } = require('./setup-test-directories.js');

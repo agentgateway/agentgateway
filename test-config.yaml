@@ -1,7 +1,7 @@
+# Minimal test configuration for AgentGateway
 binds:
-- port: 8080
+- port: 15021
   listeners:
-  - protocol: HTTP
-    routes:
+  - routes:
     - backends:
       - host: httpbin.org:80
