@@ -2,8 +2,8 @@
   "metadata": {
     "report_version": "1.0",
     "generated_at": {
-      "secs_since_epoch": 1753197923,
-      "nanos_since_epoch": 92751492
+      "secs_since_epoch": 1753624955,
+      "nanos_since_epoch": 73727513
     },
     "generator_version": "0.6.0",
     "total_benchmarks": 9,
@@ -173,8 +173,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92725578
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73699390
         },
         "benchmark_version": "0.6.0"
       },
@@ -684,8 +684,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92727212
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73702032
         },
         "benchmark_version": "0.6.0"
       },
@@ -1195,8 +1195,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92728371
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73703212
         },
         "benchmark_version": "0.6.0"
       },
@@ -1706,8 +1706,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92729501
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73704339
         },
         "benchmark_version": "0.6.0"
       },
@@ -2217,8 +2217,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92731810
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73706496
         },
         "benchmark_version": "0.6.0"
       },
@@ -2728,8 +2728,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92734214
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73708788
         },
         "benchmark_version": "0.6.0"
       },
@@ -3239,8 +3239,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92736339
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73709901
         },
         "benchmark_version": "0.6.0"
       },
@@ -3750,8 +3750,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92737319
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73711838
         },
         "benchmark_version": "0.6.0"
       },
@@ -4261,8 +4261,8 @@
           ]
         },
         "timestamp": {
-          "secs_since_epoch": 1753197923,
-          "nanos_since_epoch": 92738541
+          "secs_since_epoch": 1753624955,
+          "nanos_since_epoch": 73713109
         },
         "benchmark_version": "0.6.0"
       },
@@ -4711,34 +4711,34 @@
       ]
     },
     "timestamp": {
-      "secs_since_epoch": 1753197923,
-      "nanos_since_epoch": 92725578
+      "secs_since_epoch": 1753624955,
+      "nanos_since_epoch": 73699390
     },
     "benchmark_version": "0.6.0"
   },
   "methodology": {
     "statistical_approach": "Multiple samples with 95% confidence intervals, outlier detection, and statistical significance testing",
     "sample_sizes": {
-      "mcp_call_tool": 100,
       "http_request_latency_1_connection": 100,
-      "connection_limit_10000": 100,
       "agentgateway_vs_baseline": 100,
+      "mcp_call_tool": 100,
       "payload_throughput_1MB": 100,
-      "jwt_validation_HS256": 100,
-      "memory_pressure_100_workers": 100,
       "config_parsing_simple": 100,
-      "a2a_agent_discovery": 100
+      "connection_limit_10000": 100,
+      "memory_pressure_100_workers": 100,
+      "a2a_agent_discovery": 100,
+      "jwt_validation_HS256": 100
     },
     "confidence_levels": {
-      "http_request_latency_1_connection": 95.0,
-      "a2a_agent_discovery": 95.0,
-      "agentgateway_vs_baseline": 95.0,
       "config_parsing_simple": 95.0,
-      "payload_throughput_1MB": 95.0,
+      "a2a_agent_discovery": 95.0,
       "connection_limit_10000": 95.0,
-      "memory_pressure_100_workers": 95.0,
       "mcp_call_tool": 95.0,
-      "jwt_validation_HS256": 95.0
+      "memory_pressure_100_workers": 95.0,
+      "payload_throughput_1MB": 95.0,
+      "jwt_validation_HS256": 95.0,
+      "agentgateway_vs_baseline": 95.0,
+      "http_request_latency_1_connection": 95.0
     },
     "reproducibility_instructions": [
       "1. Clone the AgentGateway repository",
