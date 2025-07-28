@@ -1,24 +1,5 @@
 # E2E Testing Infrastructure Fixes
 
-This document outlines the fixes implemented to address the memory usage and testing issues identified in PR #184.
-
-## Issues Identified
-
-### 1. Memory Calculation Problems
-- **Original Issue**: Resource monitor showed 99.9% memory usage on a 64GB system, triggering emergency shutdown
-- **Root Cause**: Used `os.freemem()` which shows currently available memory, not accounting for system overhead
-- **Impact**: Even systems with abundant memory couldn't run parallel tests
-
-### 2. Unrealistic Memory Expectations
-- **Original Issue**: Documentation suggested 250-500MB per worker, but actual usage was much higher
-- **Root Cause**: Cypress with video recording and browser instances uses significantly more memory
-- **Impact**: Worker calculations were based on incorrect assumptions
-
-### 3. Aggressive Emergency Thresholds
-- **Original Issue**: 85% memory limit with 90% emergency shutdown was too aggressive
-- **Root Cause**: Didn't account for system processes and OS overhead
-- **Impact**: False emergencies on healthy systems
-
 ## Fixes Implemented
 
 ### 1. Resource Detection Script (`scripts/detect-system-resources.js`)
@@ -294,4 +275,3 @@ npm run test:e2e:auto
 3. **Monitor Performance**: Use the fixed resource monitor to track actual usage
 4. **Optimize Further**: Based on real usage data, fine-tune memory estimates
 
-The fixes provide a solid foundation for reliable E2E testing across different environments while maintaining safety and performance.
