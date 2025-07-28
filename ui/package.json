@@ -21,6 +21,7 @@
     "e2e:open": "cypress open",
     "e2e:smoke": "cypress run --spec 'cypress/e2e/smoke/**/*.cy.{js,jsx,ts,tsx}'",
     "e2e:smoke:headed": "cypress run --headed --spec 'cypress/e2e/smoke/**/*.cy.{js,jsx,ts,tsx}'",
+    "e2e:smoke:with-backend": "./scripts/run-smoke-tests.sh",
     "test:e2e:parallel": "node ../scripts/parallel-test-runner.js",
     "test:e2e:parallel:dev": "node ../scripts/parallel-test-runner.js --dev",
     "test:e2e:parallel:ci": "node ../scripts/parallel-test-runner.js --ci",
