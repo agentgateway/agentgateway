@@ -259,6 +259,7 @@ npm run cypress:open                   # Open Cypress Test Runner
 ```bash
 npm run e2e:smoke                      # Run smoke tests (headless)
 npm run e2e:smoke:headed               # Run smoke tests (headed)
+npm run e2e:smoke:with-backend         # Run smoke tests and start backend
 ```
 
 ## Shell Script Runner
