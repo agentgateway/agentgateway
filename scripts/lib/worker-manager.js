@@ -466,7 +466,9 @@ module.exports = {
       return null;
     }
     
-    // Look for JSON output in stdout
+    const allResults = [];
+    
+    // Look for JSON output in stdout - collect ALL results from all test files
     for (const outputEntry of workerInfo.output) {
       if (outputEntry.type === 'stdout' && outputEntry.content) {
         const content = outputEntry.content.trim();
@@ -478,8 +480,8 @@ module.exports = {
             try {
               const parsed = JSON.parse(jsonMatch);
               if (parsed.stats && typeof parsed.stats.tests === 'number') {
-                console.log(`✅ Extracted results from stdout for worker ${workerInfo.id}: ${parsed.stats.passes}/${parsed.stats.tests} passed`);
-                return parsed;
+                allResults.push(parsed);
+                console.log(`✅ Found test results for worker ${workerInfo.id}: ${parsed.stats.passes}/${parsed.stats.tests} passed`);
               }
             } catch (e) {
               // Continue trying other matches
@@ -489,7 +491,87 @@ module.exports = {
       }
     }
     
-    return null;
+    if (allResults.length === 0) {
+      return null;
+    }
+    
+    // If we only have one result, return it directly
+    if (allResults.length === 1) {
+      console.log(`✅ Extracted single result from stdout for worker ${workerInfo.id}: ${allResults[0].stats.passes}/${allResults[0].stats.tests} passed`);
+      return allResults[0];
+    }
+    
+    // Aggregate multiple results from different test files
+    console.log(`✅ Aggregating ${allResults.length} test file results for worker ${workerInfo.id}`);
+    
+    const aggregatedStats = {
+      suites: 0,
+      tests: 0,
+      passes: 0,
+      pending: 0,
+      failures: 0,
+      start: null,
+      end: null,
+      duration: 0
+    };
+    
+    const aggregatedTests = [];
+    const aggregatedPending = [];
+    const aggregatedFailures = [];
+    const aggregatedPasses = [];
+    
+    // Aggregate all results
+    for (const result of allResults) {
+      if (result.stats) {
+        aggregatedStats.suites += result.stats.suites || 0;
+        aggregatedStats.tests += result.stats.tests || 0;
+        aggregatedStats.passes += result.stats.passes || 0;
+        aggregatedStats.pending += result.stats.pending || 0;
+        aggregatedStats.failures += result.stats.failures || 0;
+        aggregatedStats.duration += result.stats.duration || 0;
+        
+        // Track earliest start and latest end times
+        if (result.stats.start) {
+          const startTime = new Date(result.stats.start);
+          if (!aggregatedStats.start || startTime < new Date(aggregatedStats.start)) {
+            aggregatedStats.start = result.stats.start;
+          }
+        }
+        
+        if (result.stats.end) {
+          const endTime = new Date(result.stats.end);
+          if (!aggregatedStats.end || endTime > new Date(aggregatedStats.end)) {
+            aggregatedStats.end = result.stats.end;
+          }
+        }
+      }
+      
+      // Aggregate test arrays
+      if (result.tests && Array.isArray(result.tests)) {
+        aggregatedTests.push(...result.tests);
+      }
+      if (result.pending && Array.isArray(result.pending)) {
+        aggregatedPending.push(...result.pending);
+      }
+      if (result.failures && Array.isArray(result.failures)) {
+        aggregatedFailures.push(...result.failures);
+      }
+      if (result.passes && Array.isArray(result.passes)) {
+        aggregatedPasses.push(...result.passes);
+      }
+    }
+    
+    const aggregatedResult = {
+      stats: aggregatedStats,
+      tests: aggregatedTests,
+      pending: aggregatedPending,
+      failures: aggregatedFailures,
+      passes: aggregatedPasses
+    };
+    
+    console.log(`✅ Aggregated results for worker ${workerInfo.id}: ${aggregatedStats.passes}/${aggregatedStats.tests} total passed from ${allResults.length} test files`);
+    
+    return aggregatedResult;
   }
 
   /**
