@@ -30,6 +30,7 @@
     "test:e2e:parallel:chrome": "node ../scripts/parallel-test-runner.js --browser chrome",
     "test:e2e:parallel:firefox": "node ../scripts/parallel-test-runner.js --browser firefox",
     "test:e2e:parallel:smoke": "node ../scripts/parallel-test-runner.js --smoke",
+    "test:e2e:conservative": "node ../scripts/parallel-test-runner.js --workers=2 --memory-limit=70",
     "test:e2e:sequential": "cypress run",
     "test:e2e:sequential:headed": "cypress run --headed",
     "test:setup-dirs": "node ../scripts/setup-test-directories.js",
