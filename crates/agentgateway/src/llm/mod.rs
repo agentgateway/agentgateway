@@ -6,6 +6,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
 use headers::{Header, HeaderMapExt};
+use itertools::Itertools;
 pub use policy::Policy;
 use serde_json::Value;
 use tiktoken_rs::CoreBPE;
@@ -16,23 +17,24 @@ use crate::http::backendtls::BackendTLS;
 use crate::http::localratelimit::RateLimit;
 use crate::http::{Body, Request, Response};
 use crate::llm::universal::{
-	ChatCompletionError, ChatCompletionErrorResponse, ChatCompletionResponse,
+	ChatCompletionError, ChatCompletionErrorResponse, ChatCompletionResponse, Content, MessageRole,
+	ToolCall,
 };
 use crate::proxy::ProxyError;
 use crate::store::BackendPolicies;
-use crate::telemetry::log::AsyncLog;
+use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::{BackendName, Target};
-use crate::*;
+use crate::{client, *};
 
-mod anthropic;
-mod bedrock;
-mod gemini;
-mod openai;
+pub mod anthropic;
+pub mod bedrock;
+pub mod gemini;
+pub mod openai;
 mod pii;
 mod policy;
 #[cfg(test)]
 mod tests;
-mod vertex;
+pub mod vertex;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,6 +74,7 @@ pub struct LLMResponse {
 	pub output_tokens: Option<u64>,
 	pub total_tokens: Option<u64>,
 	pub provider_model: Option<Strng>,
+	pub completion: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
@@ -97,6 +100,7 @@ impl AIProvider {
 			backend_auth: None,
 			a2a: None,
 			llm: None,
+			inference_routing: None,
 			llm_provider: Some((self.clone(), true)),
 		};
 		match self {
@@ -108,6 +112,7 @@ impl AIProvider {
 					backend_auth: Some(BackendAuth::Gcp {}),
 					a2a: None,
 					llm: None,
+					inference_routing: None,
 					llm_provider: Some((self.clone(), true)),
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
@@ -119,6 +124,7 @@ impl AIProvider {
 					backend_auth: Some(BackendAuth::Aws {}),
 					a2a: None,
 					llm: None,
+					inference_routing: None,
 					llm_provider: Some((self.clone(), true)),
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
@@ -195,6 +201,7 @@ impl AIProvider {
 		client: client::Client,
 		policies: Option<&Policy>,
 		req: Request,
+		mut log: &mut Option<&mut RequestLog>,
 	) -> (Result<RequestResult, AIError>) {
 		// Buffer the body, max 2mb
 		let (mut parts, body) = req.into_parts();
@@ -220,6 +227,15 @@ impl AIProvider {
 			}
 		}
 		let llm_info = self.to_llm_request(&req).await?;
+		if let Some(log) = log {
+			let needs_prompt = log.cel.cel_context.with_llm_request(&llm_info);
+			if needs_prompt {
+				log
+					.cel
+					.cel_context
+					.with_llm_prompt(req.messages.iter().map(Into::into).collect_vec())
+			}
+		}
 		let resp_json = match self {
 			AIProvider::OpenAI(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Gemini(p) => serde_json::to_vec(&p.process_request(req).await?),
@@ -239,10 +255,13 @@ impl AIProvider {
 		req: LLMRequest,
 		rate_limit: Vec<http::localratelimit::RateLimit>,
 		log: AsyncLog<llm::LLMResponse>,
+		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
 		if req.streaming {
-			return self.process_streaming(req, rate_limit, log, resp).await;
+			return self
+				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
+				.await;
 		}
 		// Buffer the body, max 2mb
 		let (mut parts, body) = resp.into_parts();
@@ -277,6 +296,17 @@ impl AIProvider {
 					output_tokens: Some(success.usage.completion_tokens as u64),
 					total_tokens: Some(success.usage.total_tokens as u64),
 					provider_model: Some(strng::new(&success.model)),
+					completion: if include_completion_in_log {
+						Some(
+							success
+								.choices
+								.iter()
+								.flat_map(|c| c.message.content.clone())
+								.collect_vec(),
+						)
+					} else {
+						None
+					},
 				};
 				let body = Body::from(serde_json::to_vec(&success).map_err(AIError::ResponseMarshal)?);
 				(llm_resp, body)
@@ -288,6 +318,7 @@ impl AIProvider {
 					output_tokens: None,
 					total_tokens: None,
 					provider_model: None,
+					completion: None,
 				};
 				let body = Body::from(serde_json::to_vec(&err).map_err(AIError::ResponseMarshal)?);
 				(llm_resp, body)
@@ -334,6 +365,7 @@ impl AIProvider {
 		req: LLMRequest,
 		rate_limit: Vec<http::localratelimit::RateLimit>,
 		log: AsyncLog<llm::LLMResponse>,
+		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
 		// Store an empty response, as we stream in info we will parse into it
@@ -343,12 +375,17 @@ impl AIProvider {
 			output_tokens: Default::default(),
 			total_tokens: Default::default(),
 			provider_model: Default::default(),
+			completion: Default::default(),
 		};
 		log.store(Some(llmresp));
 		let resp = match self {
 			AIProvider::Anthropic(p) => p.process_streaming(log, resp).await,
 			AIProvider::Bedrock(p) => return Err(AIError::StreamingUnsupported),
-			_ => self.default_process_streaming(log, rate_limit, resp).await,
+			_ => {
+				self
+					.default_process_streaming(log, include_completion_in_log, rate_limit, resp)
+					.await
+			},
 		};
 		Ok(resp)
 	}
@@ -356,26 +393,54 @@ impl AIProvider {
 	async fn default_process_streaming(
 		&self,
 		log: AsyncLog<llm::LLMResponse>,
+		include_completion_in_log: bool,
 		rate_limit: Vec<http::localratelimit::RateLimit>,
 		resp: Response,
 	) -> Response {
+		let mut completion = if include_completion_in_log {
+			Some(String::new())
+		} else {
+			None
+		};
 		resp.map(|b| {
 			let mut seen_provider = false;
 			parse::sse::json_passthrough::<universal::ChatCompletionStreamResponse>(b, move |f| {
-				if let Ok(f) = f {
-					if !seen_provider {
-						seen_provider = true;
-						log.non_atomic_mutate(|r| r.provider_model = Some(strng::new(&f.model)));
-					}
-					if let Some(u) = f.usage {
-						log.non_atomic_mutate(|r| {
-							r.input_tokens_from_response = Some(u.prompt_tokens as u64);
-							r.output_tokens = Some(u.completion_tokens as u64);
-							r.total_tokens = Some(u.total_tokens as u64);
+				match f {
+					Some(Ok(f)) => {
+						if let Some(c) = completion.as_mut() {
+							if let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref()) {
+								c.push_str(delta);
+							}
+						}
+						if !seen_provider {
+							seen_provider = true;
+							log.non_atomic_mutate(|r| r.provider_model = Some(strng::new(&f.model)));
+						}
+						if let Some(u) = f.usage {
+							log.non_atomic_mutate(|r| {
+								r.input_tokens_from_response = Some(u.prompt_tokens as u64);
+								r.output_tokens = Some(u.completion_tokens as u64);
+								r.total_tokens = Some(u.total_tokens as u64);
+								if let Some(c) = completion.take() {
+									r.completion = Some(vec![c]);
+								}
 
-							amend_tokens(rate_limit.as_slice(), r);
+								amend_tokens(rate_limit.as_slice(), r);
+							});
+						}
+					},
+					Some(Err(e)) => {
+						debug!("failed to parse streaming response: {e}");
+					},
+					None => {
+						// We are done, try to set completion if we haven't already
+						// This is useful in case we never see "usage"
+						log.non_atomic_mutate(|r| {
+							if let Some(c) = completion.take() {
+								r.completion = Some(vec![c]);
+							}
 						});
-					}
+					},
 				}
 			})
 		})
@@ -441,6 +506,13 @@ fn num_tokens_from_messages(
 	Ok(num_tokens)
 }
 
+/// Tokenizers take about 200ms to load and are lazy loaded. This loads them on demand, outside the
+/// request path
+pub fn preload_tokenizers() {
+	let _ = tiktoken_rs::cl100k_base_singleton();
+	let _ = tiktoken_rs::o200k_base_singleton();
+}
+
 pub fn get_bpe_from_tokenizer<'a>(tokenizer: Tokenizer) -> &'a CoreBPE {
 	match tokenizer {
 		Tokenizer::O200kBase => tiktoken_rs::o200k_base_singleton(),
@@ -498,6 +570,33 @@ fn amend_tokens(rate_limit: &[RateLimit], llm_resp: &LLMResponse) {
 	}
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct SimpleChatCompletionMessage {
+	pub role: Strng,
+	pub content: Strng,
+}
+
+impl From<&universal::ChatCompletionMessage> for SimpleChatCompletionMessage {
+	fn from(msg: &universal::ChatCompletionMessage) -> Self {
+		Self {
+			role: match msg.role {
+				MessageRole::user => strng::literal!("user"),
+				MessageRole::system => strng::literal!("system"),
+				MessageRole::assistant => strng::literal!("assistant"),
+				MessageRole::function => strng::literal!("function"),
+				MessageRole::tool => strng::literal!("tool"),
+			},
+			content: match &msg.content {
+				Content::Text(t) => t.into(),
+				Content::ImageUrl(t) => {
+					strng::literal!("image")
+				},
+			},
+		}
+	}
+}
+
 mod universal {
 	use std::collections::HashMap;
 	use std::fmt;
@@ -506,6 +605,7 @@ mod universal {
 	use serde::ser::SerializeMap;
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
 	use serde_json::Value;
+
 	#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 	#[serde(rename_all = "snake_case")]
 	pub enum ToolChoiceType {

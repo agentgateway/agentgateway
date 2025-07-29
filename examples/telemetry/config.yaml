@@ -8,7 +8,6 @@ binds:
   - routes:
     - backends:
       - mcp:
-          name: default
           targets:
           - name: everything
             stdio:

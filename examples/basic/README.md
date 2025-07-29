@@ -30,7 +30,6 @@ Additionally, we can connect to *multiple* MCP servers, and expose them all as o
 In this example, we will connect to one server over Stdio.
 
 ```yaml
-name: default
 targets:
 - name: everything
   stdio:

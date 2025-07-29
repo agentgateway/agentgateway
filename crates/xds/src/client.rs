@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::time::Duration;
 use std::{fmt, mem};
 
@@ -111,7 +111,7 @@ struct HandlerWrapper<T: prost::Message> {
 	h: Box<dyn Handler<T>>,
 }
 
-impl<T: 'static + prost::Message + Default> RawHandler for HandlerWrapper<T> {
+impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrapper<T> {
 	fn handle(
 		&self,
 		state: &mut State,
@@ -254,7 +254,7 @@ impl State {
 impl Config {
 	pub fn with_watched_handler<F>(self, type_url: Strng, f: impl Handler<F>) -> Config
 	where
-		F: 'static + prost::Message + Default,
+		F: 'static + prost::Message + Default + Debug,
 	{
 		let no_on_demand = f.no_on_demand();
 		self
@@ -264,7 +264,7 @@ impl Config {
 
 	fn with_handler<F>(mut self, type_url: Strng, f: impl Handler<F>) -> Config
 	where
-		F: 'static + prost::Message + Default,
+		F: 'static + prost::Message + Default + Debug,
 	{
 		let h = HandlerWrapper { h: Box::new(f) };
 		self.handlers.insert(type_url, Box::new(h));

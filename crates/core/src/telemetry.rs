@@ -42,6 +42,9 @@ pub trait OptionExt<T>: Sized {
 	fn display(&self) -> Option<ValueBag>
 	where
 		T: Display;
+	fn debug(&self) -> Option<ValueBag>
+	where
+		T: Debug;
 }
 
 impl<T: 'static> OptionExt<T> for Option<T> {
@@ -51,6 +54,12 @@ impl<T: 'static> OptionExt<T> for Option<T> {
 	{
 		self.as_ref().map(display)
 	}
+	fn debug(&self) -> Option<ValueBag>
+	where
+		T: Debug,
+	{
+		self.as_ref().map(debug)
+	}
 }
 
 pub fn display<T: Display + 'static>(value: &T) -> ValueBag {
@@ -59,6 +68,18 @@ pub fn display<T: Display + 'static>(value: &T) -> ValueBag {
 
 pub fn debug<T: Debug + 'static>(value: &T) -> ValueBag {
 	ValueBag::capture_debug(value)
+}
+
+/// A safe function to determine if a target is enabled.
+/// Do NOT use `tracing::enabled!` which is broken (https://github.com/tokio-rs/tracing/issues/3345)
+pub fn enabled(target: &'static str, level: &tracing::Level) -> bool {
+	if let Some(handle) = LOG_HANDLE.get() {
+		handle
+			.with_current(|f| f.filter().would_enable(target, level))
+			.unwrap_or_default()
+	} else {
+		false
+	}
 }
 
 // log is like using tracing macros, but allows arbitrary k/v pairs. Tracing requires compile-time keys!

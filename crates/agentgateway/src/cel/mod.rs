@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 
+use agent_core::strng::Strng;
 use axum_core::body::Body;
 use bytes::Bytes;
 use cel_interpreter::extractors::{Arguments, This};
@@ -14,12 +15,14 @@ use cel_parser::{Expression as CelExpression, ParseError};
 use http::Request;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize, Serializer};
+use tiktoken_rs::ChatCompletionRequestMessage;
 
 use crate::http::backendtls::{BackendTLS, LocalBackendTLS};
 use crate::http::jwt::Claims;
-use crate::json;
+use crate::llm::{LLMRequest, LLMResponse};
 use crate::serdes::*;
 use crate::telemetry::log::CelLogging;
+use crate::{json, llm};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -39,6 +42,9 @@ impl From<Box<dyn std::error::Error>> for Error {
 
 pub const REQUEST_ATTRIBUTE: &str = "request";
 pub const REQUEST_BODY_ATTRIBUTE: &str = "request.body";
+pub const LLM_ATTRIBUTE: &str = "llm";
+pub const LLM_PROMPT_ATTRIBUTE: &str = "llm.prompt";
+pub const LLM_COMPLETION_ATTRIBUTE: &str = "llm.completion";
 pub const RESPONSE_ATTRIBUTE: &str = "response";
 pub const JWT_ATTRIBUTE: &str = "jwt";
 pub const MCP_ATTRIBUTE: &str = "mcp";
@@ -69,10 +75,11 @@ impl Debug for Expression {
 fn root_context() -> Arc<Context<'static>> {
 	let mut ctx = Context::default();
 	ctx.add_function("json", fns::json_parse);
+	ctx.add_function("with", fns::with);
 	Arc::new(ctx)
 }
 
-static ROOT_CONTEXT: Lazy<Arc<Context<'static>>> = Lazy::new(|| Arc::new(Context::default()));
+static ROOT_CONTEXT: Lazy<Arc<Context<'static>>> = Lazy::new(root_context);
 
 #[derive(Debug)]
 pub struct ContextBuilder {
@@ -135,6 +142,54 @@ impl ContextBuilder {
 		self.context.jwt = Some(info.clone())
 	}
 
+	pub fn with_llm_request(&mut self, info: &LLMRequest) -> bool {
+		if !self.attributes.contains(LLM_ATTRIBUTE) {
+			return false;
+		}
+
+		self.context.llm = Some(LLMContext {
+			streaming: info.streaming,
+			request_model: info.request_model.clone(),
+			provider: info.provider.clone(),
+			input_tokens: info.input_tokens,
+
+			response_model: None,
+			output_tokens: None,
+			total_tokens: None,
+			prompt: None,
+			completion: None,
+		});
+		self.attributes.contains(LLM_PROMPT_ATTRIBUTE)
+	}
+
+	pub fn with_llm_prompt(&mut self, msg: Vec<llm::SimpleChatCompletionMessage>) {
+		let Some(r) = &mut self.context.llm else {
+			return;
+		};
+		r.prompt = Some(msg);
+	}
+
+	pub fn with_llm_response(&mut self, info: &LLMResponse) {
+		if !self.attributes.contains(LLM_ATTRIBUTE) {
+			return;
+		}
+		if let Some(o) = self.context.llm.as_mut() {
+			o.output_tokens = info.output_tokens;
+			o.total_tokens = info.total_tokens;
+			if let Some(pt) = info.input_tokens_from_response {
+				// Better info, override
+				o.input_tokens = pt;
+			}
+			o.response_model = info.provider_model.clone();
+			// Not always set
+			o.completion = info.completion.clone();
+		}
+	}
+
+	pub fn needs_llm_completion(&self) -> bool {
+		self.attributes.contains(LLM_COMPLETION_ATTRIBUTE)
+	}
+
 	pub fn build_with_mcp(
 		&self,
 		mcp: Option<&crate::mcp::rbac::ResourceType>,
@@ -145,12 +200,14 @@ impl ContextBuilder {
 			request,
 			response,
 			jwt,
+			llm,
 		} = &self.context;
 
 		ctx.add_variable_from_value(REQUEST_ATTRIBUTE, opt_to_value(request)?);
 		ctx.add_variable_from_value(RESPONSE_ATTRIBUTE, opt_to_value(response)?);
 		ctx.add_variable_from_value(JWT_ATTRIBUTE, opt_to_value(jwt)?);
 		ctx.add_variable_from_value(MCP_ATTRIBUTE, opt_to_value(&mcp)?);
+		ctx.add_variable_from_value(LLM_ATTRIBUTE, opt_to_value(llm)?);
 
 		Ok(Executor { ctx })
 	}
@@ -188,6 +245,8 @@ impl Expression {
 			.into_iter()
 			.filter_map(|tokens| match tokens.as_slice() {
 				["request", "body", ..] => Some(REQUEST_BODY_ATTRIBUTE.to_string()),
+				["llm", "prompt", ..] => Some(LLM_PROMPT_ATTRIBUTE.to_string()),
+				["llm", "completion", ..] => Some(LLM_COMPLETION_ATTRIBUTE.to_string()),
 				[first, ..] => Some(first.to_string()),
 				_ => None,
 			})
@@ -202,30 +261,60 @@ impl Expression {
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct ExpressionContext {
 	pub request: Option<RequestContext>,
 	pub response: Option<ResponseContext>,
 	pub jwt: Option<Claims>,
+	pub llm: Option<LLMContext>,
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct RequestContext {
 	#[serde(with = "http_serde::method")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub method: ::http::Method,
 
 	#[serde(with = "http_serde::uri")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub uri: ::http::Uri,
 
 	#[serde(with = "http_serde::header_map")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
 	pub headers: ::http::HeaderMap,
 
 	pub body: Option<Bytes>,
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct ResponseContext {
 	#[serde(with = "http_serde::status_code")]
+	#[cfg_attr(feature = "schema", schemars(with = "u16"))]
 	pub code: ::http::StatusCode,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct LLMContext {
+	streaming: bool,
+	request_model: Strng,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	response_model: Option<Strng>,
+	provider: Strng,
+	input_tokens: u64,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	output_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	total_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	prompt: Option<Vec<llm::SimpleChatCompletionMessage>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	completion: Option<Vec<String>>,
 }
 
 fn create_context<'a>() -> Context<'a> {
@@ -274,11 +363,9 @@ fn properties<'e>(exp: &'e CelExpression, all: &mut Vec<Vec<&'e str>>, path: &mu
 		},
 		CelExpression::Atom(_) => {},
 		CelExpression::Ident(v) => {
-			if !path.is_empty() {
-				path.insert(0, v.as_str());
-				all.push(path.clone());
-				path.clear();
-			}
+			path.insert(0, v.as_str());
+			all.push(path.clone());
+			path.clear();
 		},
 	}
 }
@@ -367,9 +454,23 @@ fn to_value(v: impl Serialize) -> Result<Value, Error> {
 mod fns {
 	use std::sync::Arc;
 
-	use cel_interpreter::{FunctionContext, ResolveResult, Value};
+	use cel_interpreter::extractors::{Identifier, This};
+	use cel_interpreter::objects::ValueType;
+	use cel_interpreter::{ExecutionError, FunctionContext, ResolveResult, Value};
+	use cel_parser::Expression;
 
 	use crate::cel::to_value;
+
+	pub fn with(
+		ftx: &FunctionContext,
+		This(this): This<Value>,
+		ident: Identifier,
+		expr: Expression,
+	) -> ResolveResult {
+		let mut ptx = ftx.ptx.new_inner_scope();
+		ptx.add_variable_from_value(&ident, this);
+		ptx.resolve(&expr)
+	}
 
 	pub fn json_parse(ftx: &FunctionContext, v: Value) -> ResolveResult {
 		let sv = match v {
@@ -383,182 +484,5 @@ mod fns {
 }
 
 #[cfg(any(test, feature = "internal_benches"))]
-pub mod tests {
-	use std::collections::HashMap;
-	use std::fs::File;
-	use std::io::Write;
-	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-	use std::time::Duration;
-
-	use agent_core::strng;
-	use divan::Bencher;
-	use http::Method;
-
-	use super::*;
-	use crate::http::Body;
-	use crate::store::Stores;
-	use crate::types::agent::{Listener, ListenerProtocol, PathMatch, Route, RouteMatch, RouteSet};
-	fn simple(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
-		let mut cb = ContextBuilder::new();
-		let exp = Expression::new(expr)?;
-		cb.register_expression(&exp);
-		cb.with_request(&req);
-		let exec = cb.build()?;
-		exec.eval(&exp)
-	}
-
-	#[test]
-	fn test_eval() {
-		let expr = Arc::new(Expression::new(r#"request.method"#).unwrap());
-		let ctx = root_context();
-		let req = ::http::Request::builder()
-			.method(Method::GET)
-			.header("x-example", "value")
-			.body(Body::empty())
-			.unwrap();
-		let mut cb = ContextBuilder::new();
-		cb.register_expression(&expr);
-		cb.with_request(&req);
-		let exec = cb.build().unwrap();
-
-		exec.eval(&expr);
-	}
-
-	#[test]
-	fn expression() {
-		let expr = r#"request.method == "GET" && request.headers["x-example"] == "value""#;
-		let req = ::http::Request::builder()
-			.method(Method::GET)
-			.uri("http://example.com")
-			.header("x-example", "value")
-			.body(Body::empty())
-			.unwrap();
-		assert_eq!(Value::Bool(true), simple(expr, req).unwrap());
-	}
-
-	#[divan::bench]
-	fn bench_native(b: Bencher) {
-		let req = ::http::Request::builder()
-			.method(Method::GET)
-			.header("x-example", "value")
-			.body(http_body_util::Empty::<Bytes>::new())
-			.unwrap();
-		b.bench(|| {
-			divan::black_box(req.method());
-		});
-	}
-
-	#[divan::bench]
-	fn bench_native_map(b: Bencher) {
-		let req = ::http::Request::builder()
-			.method(Method::GET)
-			.header("x-example", "value")
-			.body(http_body_util::Empty::<Bytes>::new())
-			.unwrap();
-		let map = HashMap::from([(
-			"request".to_string(),
-			HashMap::from([("method".to_string(), "GET".to_string())]),
-		)]);
-
-		with_profiling("native", || {
-			b.bench(|| {
-				divan::black_box(map.get("request").unwrap().get("method").unwrap());
-			});
-		})
-	}
-
-	#[macro_export]
-	macro_rules! function {
-		() => {{
-			fn f() {}
-			fn type_name_of<T>(_: T) -> &'static str {
-				std::any::type_name::<T>()
-			}
-			let name = type_name_of(f);
-			let name = &name[..name.len() - 3].to_string();
-			name.strip_suffix("::with_profiling").unwrap().to_string()
-		}};
-	}
-
-	fn with_profiling(name: &str, f: impl FnOnce()) {
-		use pprof::protos::Message;
-		let guard = pprof::ProfilerGuardBuilder::default()
-			.frequency(1000)
-			// .blocklist(&["libc", "libgcc", "pthread", "vdso"])
-			.build()
-			.unwrap();
-
-		f();
-
-		let report = guard.report().build().unwrap();
-		let profile = report.pprof().unwrap();
-
-		let mut body = profile.write_to_bytes().unwrap();
-		File::create(format!("/tmp/pprof-{}::{name}", function!()))
-			.unwrap()
-			.write_all(&body)
-			.unwrap()
-	}
-
-	#[divan::bench]
-	fn bench_lookup(b: Bencher) {
-		let expr = Arc::new(Expression::new(r#"request.method"#).unwrap());
-		let ctx = root_context();
-		let req = ::http::Request::builder()
-			.method(Method::GET)
-			.header("x-example", "value")
-			.body(Body::empty())
-			.unwrap();
-		let mut cb = ContextBuilder::new();
-		cb.register_expression(&expr);
-		cb.with_request(&req);
-		let exec = cb.build().unwrap();
-
-		with_profiling("lookup", || {
-			b.bench(|| {
-				exec.eval(&expr);
-			});
-		})
-	}
-
-	#[divan::bench]
-	fn bench_with_response(b: Bencher) {
-		let expr = Arc::new(
-			Expression::new(r#"response.status == 200 && response.headers["x-example"] == "value""#)
-				.unwrap(),
-		);
-		b.with_inputs(|| {
-			::http::Response::builder()
-				.status(200)
-				.header("x-example", "value")
-				.body(Body::empty())
-				.unwrap()
-		})
-		.bench_refs(|r| {
-			let mut cb = ContextBuilder::new();
-			cb.register_expression(&expr);
-			cb.with_response(r);
-			let exec = cb.build()?;
-			exec.eval(&expr)
-		});
-	}
-
-	#[divan::bench]
-	fn bench(b: Bencher) {
-		let expr = Arc::new(Expression::new(r#"1 + 2 == 3"#).unwrap());
-		b.with_inputs(|| {
-			::http::Response::builder()
-				.status(200)
-				.header("x-example", "value")
-				.body(Body::empty())
-				.unwrap()
-		})
-		.bench_refs(|r| {
-			let mut cb = ContextBuilder::new();
-			cb.register_expression(&expr);
-			cb.with_response(r);
-			let exec = cb.build()?;
-			exec.eval(&expr)
-		});
-	}
-}
+#[path = "tests.rs"]
+mod tests;

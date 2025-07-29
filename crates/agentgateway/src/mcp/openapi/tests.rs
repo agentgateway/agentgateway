@@ -1,7 +1,9 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
+use agent_core::{drain, metrics, strng};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+use prometheus_client::registry::Registry;
 use rmcp::model::Tool;
 use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path, query_param};
@@ -9,12 +11,16 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 use crate::client::Client;
+use crate::store::Stores;
+use crate::{ProxyInputs, mcp};
 
 // Helper to create a handler and mock server for tests
 async fn setup() -> (MockServer, Handler) {
 	let server = MockServer::start().await;
 	let host = server.uri();
 	let parsed = reqwest::Url::parse(&host).unwrap();
+	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	let stores = Stores::new();
 	let client = Client::new(
 		&client::Config {
 			resolver_cfg: ResolverConfig::default(),
@@ -22,7 +28,28 @@ async fn setup() -> (MockServer, Handler) {
 		},
 		None,
 	);
+	let (drain_tx, drain_rx) = drain::new();
+	let pi = Arc::new(ProxyInputs {
+		cfg: Arc::new(config),
+		stores: stores.clone(),
+		tracer: None,
+		metrics: Arc::new(crate::metrics::Metrics::new(metrics::sub_registry(
+			&mut Registry::default(),
+		))),
+		upstream: client.clone(),
+		ca: None,
 
+		mcp_state: mcp::sse::App::new(
+			stores.clone(),
+			Arc::new(crate::mcp::relay::metrics::Metrics::new(
+				&mut Registry::default(),
+				None, // TODO custom tags
+			)),
+			drain_rx.clone(),
+		),
+	});
+
+	let client = PolicyClient { inputs: pi };
 	// Define a sample tool for testing
 	let test_tool_get = Tool {
 		name: Cow::Borrowed("get_user"),
@@ -106,15 +133,20 @@ async fn setup() -> (MockServer, Handler) {
 	};
 
 	let handler = Handler {
-		host: parsed.host().unwrap().to_string(),
 		prefix: "".to_string(),
-		port: parsed.port().unwrap_or(8080),
 		client,
 		tools: vec![
 			(test_tool_get, upstream_call_get),
 			(test_tool_post, upstream_call_post),
 		],
-		policies: BackendPolicies::default(),
+		default_policies: BackendPolicies::default(),
+		backend: SimpleBackend::Opaque(
+			strng::literal!("dummy"),
+			Target::Hostname(
+				parsed.host().unwrap().to_string().into(),
+				parsed.port().unwrap_or(8080),
+			),
+		),
 	};
 
 	(server, handler)

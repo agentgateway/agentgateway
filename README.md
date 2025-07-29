@@ -103,7 +103,7 @@ For detailed testing documentation, see [ui/cypress/README.md](ui/cypress/README
 For instructions on how to contribute to the agentgateway project, see the [CONTRIBUTION.md](CONTRIBUTION.md) file.
 
 ## Community Meetings
-To join a community meeting, add the [agentgateway calendar](https://discord.com/channels/1357069518689534073/1357069518689534076/1397283418919796909) to your Google account. Then, you can find event details on the calendar.
+To join a community meeting, add the [agentgateway calendar](https://calendar.google.com/calendar/u/0?cid=Y18zZTAzNGE0OTFiMGUyYzU2OWI1Y2ZlOWNmOWM4NjYyZTljNTNjYzVlOTdmMjdkY2I5ZTZmNmM5ZDZhYzRkM2ZmQGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20) to your Google account. Then, you can find event details on the calendar.
 
 Recordings of the community meetings will be published on our [google drive](https://drive.google.com/drive/folders/138716fESpxLkbd_KkGrUHa6TD7OA2tHs?usp=sharing).
 

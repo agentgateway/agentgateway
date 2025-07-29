@@ -39,10 +39,6 @@ fn main() -> anyhow::Result<()> {
 	let _log_flush = telemetry::setup_logging();
 
 	let args = Args::parse();
-	#[cfg(feature = "schema")]
-	println!("{}", agentgateway::types::local::generate_schema());
-	#[cfg(feature = "schema")]
-	return Ok(());
 
 	tokio::runtime::Builder::new_current_thread()
 		.enable_all()

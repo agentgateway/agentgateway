@@ -1,0 +1,12 @@
+[package]
+publish = false
+name = "xtask"
+version = "0.0.0"
+edition.workspace = true
+
+[dependencies]
+agentgateway = {workspace = true, features = ["schema"]}
+anyhow.workspace = true
+fs-err.workspace = true
+serde_json.workspace = true
+schemars.workspace = true

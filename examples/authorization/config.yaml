@@ -25,7 +25,6 @@ binds:
           - 'mcp.tool.name == "printEnv" && jwt.nested.key == "value"'
       backends:
       - mcp:
-          name: default
           targets:
           - name: everything
             stdio:

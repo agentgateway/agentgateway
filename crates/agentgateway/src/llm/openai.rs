@@ -8,7 +8,7 @@ use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
 use super::{LLMResponse, Provider as LLMProvider, universal};
 use crate::http::{Body, Request, Response};
-use crate::llm::universal::ChatCompletionRequest;
+use crate::llm::universal::{ChatCompletionRequest, ChatCompletionStreamOptions};
 use crate::llm::{AIError, AIProvider, LLMRequest};
 use crate::proxy::ProxyError;
 use crate::*;
@@ -17,7 +17,7 @@ use crate::*;
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	model: Option<Strng>,
+	pub model: Option<Strng>,
 }
 
 impl super::Provider for Provider {
@@ -34,6 +34,17 @@ impl Provider {
 	) -> Result<universal::ChatCompletionRequest, AIError> {
 		if let Some(model) = &self.model {
 			req.model = model.to_string();
+		}
+		// If a user doesn't request usage, we will not get token information which we need
+		// We always set it.
+		// TODO?: this may impact the user, if they make assumptions about the stream NOT including usage.
+		// Notably, this adds a final SSE event.
+		// We could actually go remove that on the response, but it would mean we cannot do passthrough-parsing,
+		// so unless we have a compelling use case for it, for now we keep it.
+		if req.stream.unwrap_or_default() && req.stream_options.is_none() {
+			req.stream_options = Some(ChatCompletionStreamOptions {
+				include_usage: true,
+			});
 		}
 		// This is openai already...
 		Ok(req)

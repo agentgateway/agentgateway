@@ -244,7 +244,6 @@ impl Client {
 		let dest = match &target {
 			Target::Address(addr) => *addr,
 			Target::Hostname(hostname, port) => {
-				// TODO we need caching here!
 				let ip = self
 					.resolver
 					.resolve(hostname.clone())
@@ -272,10 +271,9 @@ impl Client {
 		let version = req.version();
 		let transport_name = transport.name();
 		let target_name = target.to_string();
-		req
-			.extensions_mut()
-			.insert(PoolKey(target, dest, transport, version));
-		trace!(?req, "sending request");
+		let key = PoolKey(target, dest, transport, version);
+		trace!(?req, ?key, "sending request");
+		req.extensions_mut().insert(key);
 		let method = req.method().clone();
 		let uri = req.uri().clone();
 		let path = uri.path();

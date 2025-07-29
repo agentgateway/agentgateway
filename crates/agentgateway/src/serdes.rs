@@ -9,11 +9,10 @@ use secrecy::SecretString;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+pub use serde_with;
 
 use crate::client::Client;
 use crate::http::Body;
-
-pub use serde_with;
 
 /// Serde yaml represents things different than just as "JSON in YAML format".
 /// We don't want this. Instead, we transcode YAML via the JSON module.

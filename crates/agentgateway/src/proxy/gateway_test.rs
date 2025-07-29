@@ -283,7 +283,6 @@ fn setup() -> anyhow::Result<TestBind> {
 				&mut Registry::default(),
 				None, // TODO custom tags
 			)),
-			client.clone(),
 			drain_rx.clone(),
 		),
 	});

@@ -10,6 +10,7 @@ use tokio::task::JoinSet;
 
 use crate::control::caclient;
 use crate::management::admin::ConfigDumpHandler;
+use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::trc;
 use crate::telemetry::trc::Tracer;
 use crate::transport::hbone;
@@ -115,7 +116,6 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 				&mut registry,
 				None, // TODO custom tags
 			)),
-			client.clone(),
 			drain_rx.clone(),
 		),
 	};
@@ -148,6 +148,11 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let metrics_address = metrics_server.address();
 	// Run the metrics sever in the current tokio worker pool.
 	metrics_server.spawn();
+	tokio::task::spawn_blocking(|| {
+		let t0 = std::time::Instant::now();
+		crate::llm::preload_tokenizers();
+		debug!("tokenizers loaded in {}ms", t0.elapsed().as_millis());
+	});
 	Ok(Bound {
 		drain_tx,
 		shutdown,

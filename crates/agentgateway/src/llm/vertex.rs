@@ -18,10 +18,10 @@ use crate::*;
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	model: Option<Strng>,
+	pub model: Option<Strng>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	region: Option<Strng>,
-	project_id: Strng,
+	pub region: Option<Strng>,
+	pub project_id: Strng,
 }
 
 impl super::Provider for Provider {

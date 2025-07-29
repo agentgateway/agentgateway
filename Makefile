@@ -49,20 +49,20 @@ install-go-tools:
 
 .PHONY: gen
 gen: generate-apis generate-schema
-	:
+	@:
 
 .PHONY: generate-schema
 generate-schema:
-	cargo run -F schema > schema/local.json
+	@cargo xtask schema
 
 # Code generation for xds apis
 .PHONY: generate-apis
 generate-apis: install-go-tools
-	protoc --proto_path=./crates/agentgateway/proto/ \
+	@protoc --proto_path=./crates/agentgateway/proto/ \
 		--go_out=./go/api \
 		--go_opt=paths=source_relative \
 		./crates/agentgateway/proto/resource.proto
-	protoc --proto_path=./crates/agentgateway/proto/ \
+	@protoc --proto_path=./crates/agentgateway/proto/ \
 		--go_out=./go/api \
 		--go_opt=paths=source_relative \
 		./crates/agentgateway/proto/workload.proto

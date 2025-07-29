@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExpressionContext",
+  "type": "object",
+  "properties": {
+    "request": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": [
+            "array",
+            "string",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      },
+      "required": [
+        "method",
+        "uri",
+        "headers"
+      ]
+    },
+    "response": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "code"
+      ]
+    },
+    "jwt": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "inner": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "inner"
+      ]
+    },
+    "llm": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "streaming": {
+          "type": "boolean"
+        },
+        "request_model": {
+          "type": "string"
+        },
+        "response_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "input_tokens": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "total_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "prompt": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ]
+          }
+        },
+        "completion": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "streaming",
+        "request_model",
+        "provider",
+        "input_tokens"
+      ]
+    }
+  }
+}

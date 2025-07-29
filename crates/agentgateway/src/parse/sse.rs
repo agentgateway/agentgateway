@@ -22,7 +22,7 @@ use crate::*;
 
 pub fn json_passthrough<F: DeserializeOwned>(
 	b: http::Body,
-	mut f: impl FnMut(anyhow::Result<F>) + Send + 'static,
+	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
 ) -> http::Body {
 	let decoder = SseDecoder::<Bytes>::with_max_size(2_097_152);
 
@@ -31,10 +31,11 @@ pub fn json_passthrough<F: DeserializeOwned>(
 			return;
 		};
 		if data.as_ref() == b"[DONE]" {
+			f(None);
 			return;
 		}
 		let obj = serde_json::from_slice::<F>(&data);
-		f(obj.map_err(anyhow::Error::from))
+		f(Some(obj.map_err(anyhow::Error::from)))
 	})
 }
 

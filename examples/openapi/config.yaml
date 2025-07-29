@@ -5,7 +5,6 @@ binds:
   - routes:
     - backends:
       - mcp:
-          name: default
           targets:
           - name: openapi
             openapi:

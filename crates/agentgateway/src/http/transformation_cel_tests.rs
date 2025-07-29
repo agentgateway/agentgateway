@@ -1,6 +1,7 @@
-use super::*;
 use agent_core::strng;
 use itertools::Itertools;
+
+use super::*;
 
 fn build<const N: usize>(items: [(&str, &str); N]) -> Transformation {
 	let c = super::LocalTransformationConfig {

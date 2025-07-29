@@ -10,9 +10,9 @@ binds:
           allowHeaders:
             - mcp-protocol-version
             - content-type
+            - cache-control
       backends:
       - mcp:
-          name: default
           targets:
           - name: everything
             stdio:

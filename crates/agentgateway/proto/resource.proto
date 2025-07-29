@@ -2,9 +2,8 @@ syntax = "proto3";
 
 package agentgateway.dev.resource;
 
-import "google/protobuf/wrappers.proto";
-import "google/protobuf/any.proto";
 import "google/protobuf/duration.proto";
+import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/agentgateway/agentgateway/go/api;api";
 
@@ -112,7 +111,24 @@ message RouteFilter {
     RequestRedirect request_redirect = 3;
     UrlRewrite url_rewrite = 4;
     RequestMirror request_mirror = 5;
+    DirectResponse direct_response = 6;
+    CORS cors = 7;
   }
+}
+
+message CORS {
+  bool allow_credentials = 1;
+  repeated string allow_headers = 2;
+  repeated string allow_methods = 3;
+  repeated string allow_origins = 4;
+  repeated string expose_headers = 5;
+  // max_age is in seconds, use google.protobuf.Duration if available, otherwise uint64 for seconds
+  google.protobuf.Duration max_age = 6;
+}
+
+message DirectResponse {
+  uint32 status = 1;
+  bytes body = 2;
 }
 
 message HeaderModifier {
@@ -122,12 +138,9 @@ message HeaderModifier {
 }
 
 message RequestMirror {
-  oneof kind {
-    string service = 1;
-  }
+  BackendReference backend = 1;
   // 0-100
   double percentage = 2;
-  int32 port = 3;
 }
 
 message RequestRedirect {
@@ -155,16 +168,8 @@ message Header {
 }
 
 message RouteBackend {
-  oneof kind {
-    // A service (could be Service, ServiceEntry, etc) in "<ns>/<hostname>" format
-    // These are joined with the service discovery.
-    string service = 1;
-    // A Backend object.
-    // Format is "<ns>/<name>". Joined with the Backend object
-    string backend = 5;
-  }
+  BackendReference backend = 1;
   int32 weight = 2;
-  int32 port = 3;
   repeated RouteFilter filters = 4;
 }
 
@@ -194,8 +199,20 @@ message PolicySpec {
     google.protobuf.Duration fill_interval = 3;
     Type type = 4;
   }
+  message ExternalAuth {
+    BackendReference target = 1;
+    map<string, string> context = 2;
+  }
+  message A2a {
+  }
+  message InferenceRouting {
+    BackendReference endpoint_picker = 1;
+  }
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
+    ExternalAuth ext_authz = 2;
+    A2a a2a = 3;
+    InferenceRouting inference_routing = 4;
   }
 }
 
@@ -227,21 +244,21 @@ message AIBackend {
   }
   Override override = 1;
   message OpenAI {
-    string model = 1;
+    google.protobuf.StringValue model = 1;
   }
   message Gemini {
-    string model = 1;
+    google.protobuf.StringValue model = 1;
   }
   message Vertex {
-    string model = 1;
+    google.protobuf.StringValue model = 1;
     string region = 2;
     string project_id = 3;
   }
   message Anthropic {
-    string model = 1;
+    google.protobuf.StringValue model = 1;
   }
   message Bedrock {
-    string model = 1;
+    google.protobuf.StringValue model = 1;
     string region = 2;
   }
   oneof provider {
@@ -264,14 +281,20 @@ message MCPTarget {
     STREAMABLE_HTTP = 2;
   }
   string name = 1;
+  BackendReference backend = 2;
+  Protocol protocol = 4;
+}
+
+message BackendReference {
   oneof kind {
     // A service (could be Service, ServiceEntry, etc) in "<ns>/<hostname>" format
     // These are joined with the service discovery.
-    string service = 2;
+    string service = 1;
     // A Backend object.
-    // Format is "<ns>/<name>". Joined with the Backend object
-    string backend = 3;
+    // Format is "<ns>/<name>". Joined with the Backend object.
+    // Must be of type StaticBackend.
+    string backend = 2;
   }
-  int32 port = 4;
-  Protocol protocol = 5;
+  // Port, used only with 'service' type
+  uint32 port = 3;
 }
