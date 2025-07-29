@@ -64,7 +64,7 @@ The validation runs in a clean Ubuntu 22.04 environment with:
 
 - **Base System**: Ubuntu 22.04 LTS
 - **Dependencies**: curl, wget, git, build-essential, pkg-config, ca-certificates, lsof, procps
-- **Node.js**: Version 18.x (required for resource detection)
+- **Node.js**: Version 20.x (required for resource detection)
 - **User**: Non-root `developer` user with sudo access
 - **Working Directory**: `/home/developer/agentgateway`
 

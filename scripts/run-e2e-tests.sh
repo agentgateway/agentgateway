@@ -564,7 +564,7 @@ ${YELLOW}General Troubleshooting:${NC}
   
   2. Check system requirements:
      - Rust toolchain installed
-     - Node.js 18+ installed
+     - Node.js 20+ installed
      - At least 4GB RAM available
      - At least 2GB disk space
   

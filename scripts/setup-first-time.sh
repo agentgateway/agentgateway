@@ -226,10 +226,10 @@ check_prerequisites() {
         print_status "Node.js: $node_version ✓"
         print_status "npm: $npm_version ✓"
         
-        # Check Node.js version (require >= 18)
+        # Check Node.js version (require >= 20)
         local node_major=$(echo "$node_version" | sed 's/v//' | cut -d'.' -f1)
-        if [[ "$node_major" -lt 18 ]]; then
-            warnings+=("Node.js version $node_version is older than recommended (18+)")
+        if [[ "$node_major" -lt 20 ]]; then
+            warnings+=("Node.js version $node_version is older than recommended (20+)")
         fi
     else
         missing_deps+=("nodejs")
