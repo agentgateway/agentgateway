@@ -28,11 +28,9 @@ jobs:
             ui/package-lock.json
           
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          profile: minimal
-          override: true
           
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
@@ -84,6 +82,7 @@ jobs:
             ui/cypress/screenshots/
             ui/cypress/results/
           retention-days: 7
+          if-no-files-found: ignore
           
       - name: Upload test reports
         uses: actions/upload-artifact@v4
@@ -92,6 +91,7 @@ jobs:
           name: cypress-reports-node-${{ matrix.node-version }}
           path: ui/cypress/reports/
           retention-days: 7
+          if-no-files-found: ignore
 
   e2e-tests-summary:
     runs-on: ubuntu-latest
