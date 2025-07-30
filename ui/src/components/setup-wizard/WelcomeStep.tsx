@@ -22,20 +22,20 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
         <div className="flex justify-center mb-6">
           <AgentgatewayLogo className="h-12" />
         </div>
-        <CardTitle className="text-center">Welcome to Agent Gateway</CardTitle>
+        <CardTitle className="text-center">Welcome to agentgateway</CardTitle>
         <CardDescription className="text-center">
           Let&apos;s configure your gateway in just a few steps
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-3">
-          <h3 className="font-medium">What is Agent Gateway?</h3>
+          <h3 className="font-medium">What is agentgateway?</h3>
           <p className="text-sm text-muted-foreground">
             <a
               href="https://agentgateway.dev"
               className="text-accent-foreground hover:text-accent/90 hover:underline"
             >
-              Agent Gateway
+              Agentgateway
             </a>{" "}
             is an open source tool that helps you connect, secure, and observe agent-to-agent and
             agent-to-tool communication across any agent framework and environment.

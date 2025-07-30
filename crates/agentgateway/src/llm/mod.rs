@@ -26,15 +26,15 @@ use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::{BackendName, Target};
 use crate::{client, *};
 
-mod anthropic;
-mod bedrock;
-mod gemini;
-mod openai;
+pub mod anthropic;
+pub mod bedrock;
+pub mod gemini;
+pub mod openai;
 mod pii;
 mod policy;
 #[cfg(test)]
 mod tests;
-mod vertex;
+pub mod vertex;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,6 +100,7 @@ impl AIProvider {
 			backend_auth: None,
 			a2a: None,
 			llm: None,
+			inference_routing: None,
 			llm_provider: Some((self.clone(), true)),
 		};
 		match self {
@@ -111,6 +112,7 @@ impl AIProvider {
 					backend_auth: Some(BackendAuth::Gcp {}),
 					a2a: None,
 					llm: None,
+					inference_routing: None,
 					llm_provider: Some((self.clone(), true)),
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
@@ -122,6 +124,7 @@ impl AIProvider {
 					backend_auth: Some(BackendAuth::Aws {}),
 					a2a: None,
 					llm: None,
+					inference_routing: None,
 					llm_provider: Some((self.clone(), true)),
 				};
 				(Target::Hostname(p.get_host(), 443), bp)

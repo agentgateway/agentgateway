@@ -1,3 +1,4 @@
+use std::io;
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -6,9 +7,9 @@ use once_cell::sync::Lazy;
 use rustls::ClientConfig;
 use serde::Serializer;
 
-use crate::transport;
 use crate::transport::tls;
 use crate::types::agent::{parse_cert, parse_key};
+use crate::{serdes, transport};
 
 pub static SYSTEM_TRUST: Lazy<BackendTLS> =
 	Lazy::new(|| LocalBackendTLS::default().try_into().unwrap());
@@ -56,7 +57,7 @@ impl serde::Serialize for BackendTLS {
 static SYSTEM_ROOT: Lazy<rustls_native_certs::CertificateResult> =
 	Lazy::new(rustls_native_certs::load_native_certs);
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct LocalBackendTLS {
@@ -68,12 +69,18 @@ pub struct LocalBackendTLS {
 	#[serde(default)]
 	insecure_host: bool,
 }
+pub struct ResolvedBackendTLS {
+	pub cert: Option<Vec<u8>>,
+	pub key: Option<Vec<u8>>,
+	pub root: Option<Vec<u8>>,
+	pub insecure: bool,
+	pub insecure_host: bool,
+}
 
-impl LocalBackendTLS {
+impl ResolvedBackendTLS {
 	pub fn try_into(self) -> anyhow::Result<BackendTLS> {
 		let mut roots = rustls::RootCertStore::empty();
 		if let Some(root) = self.root {
-			let root = fs_err::read(root)?;
 			let mut reader = std::io::BufReader::new(Cursor::new(root));
 			let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
 			roots.add_parsable_certificates(certs);
@@ -92,9 +99,7 @@ impl LocalBackendTLS {
 
 		let mut cc = match (self.cert, self.key) {
 			(Some(cert), Some(key)) => {
-				let cert = fs_err::read(cert)?;
 				let cert_chain = parse_cert(&cert)?;
-				let key = fs_err::read(key)?;
 				let private_key = parse_key(&key)?;
 				ccb.with_client_auth_cert(cert_chain, private_key)?
 			},
@@ -118,5 +123,18 @@ impl LocalBackendTLS {
 		Ok(BackendTLS {
 			config: Arc::new(cc),
 		})
+	}
+}
+
+impl LocalBackendTLS {
+	pub fn try_into(self) -> anyhow::Result<BackendTLS> {
+		ResolvedBackendTLS {
+			cert: self.cert.map(fs_err::read).transpose()?,
+			key: self.key.map(fs_err::read).transpose()?,
+			root: self.root.map(fs_err::read).transpose()?,
+			insecure: self.insecure,
+			insecure_host: self.insecure_host,
+		}
+		.try_into()
 	}
 }

@@ -174,8 +174,8 @@ impl<'a> CelLoggingExecutor<'a> {
 		let mut raws = Vec::with_capacity(fields.add.len());
 		for (k, v) in fields.add.iter() {
 			let field = self.executor.eval(v.as_ref());
-			if let Err(e) = &field {
-				trace!(target: "cel", ?e, expression=?v, "expression failed");
+			if let Err(err) = &field {
+				trace!(target: "cel", ?err, expression=?v, "expression failed");
 			}
 			let celv = field
 				.ok()

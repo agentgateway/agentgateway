@@ -244,7 +244,6 @@ impl Client {
 		let dest = match &target {
 			Target::Address(addr) => *addr,
 			Target::Hostname(hostname, port) => {
-				// TODO we need caching here!
 				let ip = self
 					.resolver
 					.resolve(hostname.clone())
@@ -272,15 +271,26 @@ impl Client {
 		let version = req.version();
 		let transport_name = transport.name();
 		let target_name = target.to_string();
-		req
-			.extensions_mut()
-			.insert(PoolKey(target, dest, transport, version));
-		trace!(?req, "sending request");
+		let key = PoolKey(target, dest, transport, version);
+		trace!(?req, ?key, "sending request");
+		req.extensions_mut().insert(key);
 		let method = req.method().clone();
 		let uri = req.uri().clone();
 		let path = uri.path();
 		let host = uri.authority().to_owned();
-		let resp = self.client.request(req).await;
+		// const TIMEOUT: Option<Duration> = Some(Duration::from_secs(5));
+		const TIMEOUT: Option<Duration> = None;
+		let resp = match TIMEOUT {
+			Some(to) => match tokio::time::timeout(to, self.client.request(req)).await {
+				Ok(res) => res.map_err(ProxyError::UpstreamCallFailed),
+				Err(to) => Err(ProxyError::RequestTimeout),
+			},
+			None => self
+				.client
+				.request(req)
+				.await
+				.map_err(ProxyError::UpstreamCallFailed),
+		};
 		let dur = format!("{}ms", start.elapsed().as_millis());
 		event!(
 			target: "upstream request",
@@ -299,10 +309,6 @@ impl Client {
 
 			duration = dur,
 		);
-		Ok(
-			resp
-				.map_err(ProxyError::UpstreamCallFailed)?
-				.map(http::Body::new),
-		)
+		Ok(resp?.map(http::Body::new))
 	}
 }

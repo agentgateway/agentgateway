@@ -35,7 +35,7 @@ export default function RoutesPage() {
           if (hasHttpRoutes && hasTcpRoutes) {
             invalidListeners.push({
               bindPort: bind.port,
-              listenerName: listener.name || "unnamed",
+              listenerName: listener.name || "unnamed listener",
             });
           }
 

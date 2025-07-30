@@ -147,7 +147,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		.or(raw.connection_min_termination_deadline)
 		.unwrap_or_default();
 	let termination_max_deadline =
-		parse_duration("CONNECTION_TERMINATION_DEADLINE")?.or(raw.connection_min_termination_deadline);
+		parse_duration("CONNECTION_TERMINATION_DEADLINE")?.or(raw.connection_termination_deadline);
 	let otlp = empty_to_none(parse("OTLP_ENDPOINT")?)
 		.or(raw.tracing.as_ref().map(|t| t.otlp_endpoint.clone()));
 	// Parse admin_addr from environment variable or config file

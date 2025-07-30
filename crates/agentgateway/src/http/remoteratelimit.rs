@@ -17,16 +17,17 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::client::{Client, Transport};
 use crate::control::AuthSource;
 use crate::http::backendtls::BackendTLS;
-use crate::http::ext_proc::GrpcChannel;
+use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::DirectResponse;
 use crate::http::remoteratelimit::proto::RateLimitDescriptor;
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
 use crate::http::remoteratelimit::proto::rate_limit_service_client::RateLimitServiceClient;
 use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request, Response};
 use crate::proxy::ProxyError;
+use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent;
-use crate::types::agent::{Backend, Target};
+use crate::types::agent::{Backend, SimpleBackendReference, Target};
 use crate::*;
 
 #[allow(warnings)]
@@ -35,25 +36,26 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.ratelimit.v3");
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteRateLimit {
-	pub target: Target,
+	pub target: Arc<SimpleBackendReference>,
 	pub descriptors: HashMap<String, Descriptor>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum Descriptor {
 	#[serde(serialize_with = "ser_display", deserialize_with = "de_parse")]
-	RequestHeader(HeaderName),
+	RequestHeader(#[cfg_attr(feature = "schema", schemars(with = "String"))] HeaderName),
 	Static(Strng),
 }
 
 impl RemoteRateLimit {
 	pub async fn check(
 		&self,
-		client: Client,
+		client: PolicyClient,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
 		let mut entries = Vec::with_capacity(self.descriptors.len());
@@ -87,12 +89,9 @@ impl RemoteRateLimit {
 			hits_addend: 0,
 		};
 
-		trace!("connecting to {}", self.target);
-		let chan = GrpcChannel {
+		trace!("connecting to {:?}", self.target);
+		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
-			// TODO: lookup policy, don't hardcode
-			// transport: Transport::Tls(agent::INSECURE_TRUST.clone()),
-			transport: Transport::Plaintext,
 			client,
 		};
 		let mut client = RateLimitServiceClient::new(chan);

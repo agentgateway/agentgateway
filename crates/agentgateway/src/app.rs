@@ -10,6 +10,7 @@ use tokio::task::JoinSet;
 
 use crate::control::caclient;
 use crate::management::admin::ConfigDumpHandler;
+use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::trc;
 use crate::telemetry::trc::Tracer;
 use crate::transport::hbone;
@@ -98,6 +99,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	.context("admin server starts")?;
 	#[cfg(feature = "ui")]
 	admin_server.set_admin_handler(Arc::new(crate::ui::UiHandler::new(config.clone())));
+	#[cfg(feature = "ui")]
+	info!("serving UI at http://{}/ui", config.admin_addr);
 
 	let sub_registry = metrics::sub_registry(&mut registry);
 	let tracer = trc::Tracer::new(&config.tracing)?;
@@ -115,7 +118,6 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 				&mut registry,
 				None, // TODO custom tags
 			)),
-			client.clone(),
 			drain_rx.clone(),
 		),
 	};

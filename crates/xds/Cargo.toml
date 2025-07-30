@@ -18,9 +18,10 @@ split-iter.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tonic.workspace = true
+tonic-prost.workspace = true
 tracing.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true
 prost-build.workspace = true
-tonic-build.workspace = true
+tonic-prost-build.workspace = true

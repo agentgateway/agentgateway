@@ -102,6 +102,7 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio_sse_codec.workspace = true
 tonic.workspace = true
+tonic-prost.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 tower-serve-static.workspace = true
@@ -121,10 +122,11 @@ value-bag = { workspace = true, features = ["value-bag-serde1"] }
 httpdate = "1.0"
 net2 = "0.2.39"
 core_affinity = "0.8.3"
-
+macro_rules_attribute = "0.2.2"
 [build-dependencies]
 anyhow.workspace = true
 prost-build.workspace = true
+tonic-prost-build.workspace = true
 tonic-build.workspace = true
 
 [dev-dependencies]

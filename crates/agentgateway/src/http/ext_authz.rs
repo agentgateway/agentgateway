@@ -23,7 +23,7 @@ use crate::http::ext_authz::proto::check_response::HttpResponse;
 use crate::http::ext_authz::proto::{
 	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, OkHttpResponse,
 };
-use crate::http::ext_proc::GrpcChannel;
+use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, HeadersResponse, HttpBody, HttpHeaders, HttpTrailers,
 	ProcessingRequest, ProcessingResponse,
@@ -31,9 +31,10 @@ use crate::http::ext_proc::proto::{
 use crate::http::filters::DirectResponse;
 use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request, Response};
 use crate::proxy::ProxyError;
+use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent;
-use crate::types::agent::{Backend, Target};
+use crate::types::agent::{Backend, SimpleBackendReference, Target};
 use crate::*;
 
 #[allow(warnings)]
@@ -42,10 +43,10 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.auth.v3");
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtAuthz {
-	pub target: Target,
+	pub target: Arc<SimpleBackendReference>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub context: Option<HashMap<String, String>>, // TODO: gRPC vs HTTP, fail open, include body,
 }
@@ -53,15 +54,12 @@ pub struct ExtAuthz {
 impl ExtAuthz {
 	pub async fn check(
 		&self,
-		client: Client,
+		client: PolicyClient,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
-		trace!("connecting to {}", self.target);
-		let chan = GrpcChannel {
+		trace!("connecting to {:?}", self.target);
+		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
-			// TODO: lookup policy, don't hardcode
-			// transport: Transport::Tls(agent::INSECURE_TRUST.clone()),
-			transport: Transport::Plaintext,
 			client,
 		};
 		let mut client = AuthorizationClient::new(chan);

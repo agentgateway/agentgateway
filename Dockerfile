@@ -35,6 +35,6 @@ WORKDIR /app
 COPY --from=builder /out/agentgateway /app/agentgateway
 
 LABEL org.opencontainers.image.source=https://github.com/agentgateway/agentgateway
-LABEL org.opencontainers.image.description="Agent Gateway is an agentic network gateway."
+LABEL org.opencontainers.image.description="Agentgateway is an open source project that is built on AI-native protocols to connect, secure, and observe agent-to-agent and agent-to-tool communication across any agent framework and environment."
 
 ENTRYPOINT ["/app/agentgateway"]

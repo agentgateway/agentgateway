@@ -213,7 +213,7 @@ export default function Home() {
         <div className="text-center py-12">
           <div className="mx-auto max-w-2xl">
             <Network className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Welcome to Agent Gateway</h3>
+            <h3 className="text-lg font-semibold mb-2">Welcome to agentgateway</h3>
             <p className="text-muted-foreground mb-6">
               Get started by configuring your first port bind and listener to begin routing traffic.
             </p>

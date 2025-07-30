@@ -13,7 +13,6 @@ binds:
             - cache-control
       backends:
       - mcp:
-          name: default
           targets:
           - name: everything
             stdio:

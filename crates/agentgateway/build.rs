@@ -28,9 +28,9 @@ fn main() -> Result<(), anyhow::Error> {
 		]);
 		c
 	};
-	tonic_build::configure()
+	tonic_prost_build::configure()
 		.build_server(true)
-		.compile_protos_with_config(
+		.compile_with_config(
 			config,
 			&proto_files
 				.iter()

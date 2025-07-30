@@ -24,25 +24,29 @@ use sse_stream::{Error as SseError, Sse, SseStream};
 
 use super::*;
 use crate::client::Client;
-use crate::http::{Body, Error as HttpError, auth};
+use crate::http::{Body, Error as HttpError, Response, auth};
 use crate::mcp::sse::McpTarget;
+use crate::proxy::ProxyError;
+use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
-use crate::types::agent::{Backend, McpBackend, McpTargetSpec, Target};
-use crate::{client, json};
+use crate::types::agent::{Backend, McpBackend, McpTargetSpec, SimpleBackend, Target};
+use crate::{ProxyInputs, client, json};
 
 type McpError = ErrorData;
 
 pub(crate) struct ConnectionPool {
+	pi: Arc<ProxyInputs>,
 	backend: McpBackendGroup,
-	client: client::Client,
+	client: PolicyClient,
 	by_name: HashMap<Strng, upstream::UpstreamTarget>,
 }
 
 impl ConnectionPool {
-	pub(crate) fn new(client: client::Client, backend: McpBackendGroup) -> Self {
+	pub(crate) fn new(pi: Arc<ProxyInputs>, client: PolicyClient, backend: McpBackendGroup) -> Self {
 		Self {
 			backend,
 			client,
+			pi,
 			by_name: HashMap::new(),
 		}
 	}
@@ -110,12 +114,12 @@ impl ConnectionPool {
 	}
 
 	#[instrument(
-		level = "debug",
-		skip_all,
-		fields(
+        level = "debug",
+        skip_all,
+        fields(
         name=%target.name,
-		),
-	)]
+        ),
+    )]
 	pub(crate) async fn connect(
 		&mut self,
 		rq_ctx: &RqCtx,
@@ -136,13 +140,14 @@ impl ConnectionPool {
 					"" => "/sse",
 					_ => sse.path.as_str(),
 				};
-				let url = format!("http://{}:{}{}", sse.host, sse.port, path);
+				let be = crate::proxy::resolve_simple_backend(&sse.backend, &self.pi)?;
+				let hostport = be.hostport();
 				let client =
-					ClientWrapper::new_with_client(self.client.clone(), target.backend_policies.clone());
+					ClientWrapper::new_with_client(be, self.client.clone(), target.backend_policies.clone());
 				let transport = SseClientTransport::start_with_client(
 					client,
 					SseClientConfig {
-						sse_endpoint: url.into(),
+						sse_endpoint: format!("http://{hostport}{path}").into(),
 						..Default::default()
 					},
 				)
@@ -173,13 +178,13 @@ impl ConnectionPool {
 					"" => "/mcp",
 					_ => mcp.path.as_str(),
 				};
-				let url = format!("http://{}:{}{}", mcp.host, mcp.port, path);
+				let be = crate::proxy::resolve_simple_backend(&mcp.backend, &self.pi)?;
 				let client =
-					ClientWrapper::new_with_client(self.client.clone(), target.backend_policies.clone());
+					ClientWrapper::new_with_client(be, self.client.clone(), target.backend_policies.clone());
 				let mut transport = StreamableHttpClientTransport::with_client(
 					client,
 					StreamableHttpClientTransportConfig {
-						uri: url.into(),
+						uri: path.into(),
 						..Default::default()
 					},
 				);
@@ -240,15 +245,14 @@ impl ConnectionPool {
 						e
 					)
 				})?;
-
+				let be = crate::proxy::resolve_simple_backend(&open.backend, &self.pi)?;
 				upstream::UpstreamTarget {
 					spec: upstream::UpstreamTargetSpec::OpenAPI(Box::new(crate::mcp::openapi::Handler {
-						host: open.host.clone(),
+						backend: be,
 						client: self.client.clone(),
-						policies: target.backend_policies.clone(),
+						default_policies: target.backend_policies.clone(),
 						tools,  // From parse_openapi_schema
 						prefix, // From get_server_prefix
-						port: open.port,
 					})),
 				}
 			},
@@ -368,30 +372,35 @@ impl ClientHandler for PeerClientHandler {
 
 #[derive(Clone)]
 pub struct ClientWrapper {
-	client: Client,
+	backend: Arc<SimpleBackend>,
+	client: PolicyClient,
 	policies: BackendPolicies,
 }
 
 impl ClientWrapper {
-	pub fn new_with_client(client: Client, policies: BackendPolicies) -> Self {
-		Self { client, policies }
+	pub fn new_with_client(
+		backend: SimpleBackend,
+		client: PolicyClient,
+		policies: BackendPolicies,
+	) -> Self {
+		Self {
+			backend: Arc::new(backend),
+			client,
+			policies,
+		}
 	}
 
 	fn parse_uri(
 		uri: Arc<str>,
-	) -> Result<(Uri, Target), StreamableHttpError<<ClientWrapper as StreamableHttpClient>::Error>> {
-		let parsed_uri = uri
+	) -> Result<String, StreamableHttpError<<ClientWrapper as StreamableHttpClient>::Error>> {
+		uri
 			.parse::<Uri>()
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-		let (host, port) = (
-			parsed_uri
-				.host()
-				.ok_or_else(|| StreamableHttpError::Client(HttpError::new(anyhow!("no host set"))))?,
-			parsed_uri.port_u16().unwrap_or(80),
-		);
-		let target = crate::types::agent::Target::try_from((host, port))
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-		Ok((parsed_uri, target))
+			.map(|u| {
+				u.path_and_query()
+					.map(|p| p.as_str().to_string())
+					.unwrap_or_default()
+			})
+			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))
 	}
 }
 
@@ -406,15 +415,14 @@ impl StreamableHttpClient for ClientWrapper {
 		auth_header: Option<String>,
 	) -> Result<StreamableHttpPostResponse, StreamableHttpError<Self::Error>> {
 		let client = self.client.clone();
-		let policies = self.policies.clone();
 
-		let (parsed_uri, target) = Self::parse_uri(uri)?;
+		let uri = "http://".to_string() + &self.backend.hostport() + &Self::parse_uri(uri)?;
 
 		let body =
 			serde_json::to_vec(&message).map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
 
 		let mut req = http::Request::builder()
-			.uri(parsed_uri)
+			.uri(uri)
 			.method(http::Method::POST)
 			.header(CONTENT_TYPE, "application/json")
 			.header(ACCEPT, [EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE].join(", "))
@@ -432,11 +440,7 @@ impl StreamableHttpClient for ClientWrapper {
 		}
 
 		let resp = client
-			.call(client::Call {
-				req,
-				target,
-				transport: policies.backend_tls.clone().into(),
-			})
+			.call_with_default_policies(req, &self.backend, self.policies.clone())
 			.await
 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
 
@@ -485,28 +489,18 @@ impl StreamableHttpClient for ClientWrapper {
 		auth_header: Option<String>,
 	) -> Result<(), StreamableHttpError<Self::Error>> {
 		let client = self.client.clone();
-		let policies = self.policies.clone();
 
-		let (parsed_uri, target) = Self::parse_uri(uri)?;
+		let uri = "http://".to_string() + &self.backend.hostport() + &Self::parse_uri(uri)?;
 
 		let mut req = http::Request::builder()
-			.uri(parsed_uri)
+			.uri(uri)
 			.method(http::Method::DELETE)
 			.header(HEADER_SESSION_ID, session_id.as_ref())
 			.body(Body::empty())
 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
 
-		// Apply backend auth
-		auth::apply_backend_auth(policies.backend_auth.as_ref(), &mut req)
-			.await
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-
 		let resp = client
-			.call(client::Call {
-				req,
-				target,
-				transport: policies.backend_tls.clone().into(),
-			})
+			.call_with_default_policies(req, &self.backend, self.policies.clone())
 			.await
 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
 
@@ -534,12 +528,11 @@ impl StreamableHttpClient for ClientWrapper {
 		auth_header: Option<String>,
 	) -> Result<BoxStream<'static, Result<Sse, SseError>>, StreamableHttpError<Self::Error>> {
 		let client = self.client.clone();
-		let policies = self.policies.clone();
 
-		let (parsed_uri, target) = Self::parse_uri(uri)?;
+		let uri = "http://".to_string() + &self.backend.hostport() + &Self::parse_uri(uri)?;
 
 		let mut reqb = http::Request::builder()
-			.uri(parsed_uri)
+			.uri(uri)
 			.method(http::Method::GET)
 			.header(ACCEPT, EVENT_STREAM_MIME_TYPE)
 			.header(HEADER_SESSION_ID, session_id.as_ref());
@@ -552,17 +545,8 @@ impl StreamableHttpClient for ClientWrapper {
 			.body(Body::empty())
 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
 
-		// Apply backend auth
-		auth::apply_backend_auth(policies.backend_auth.as_ref(), &mut req)
-			.await
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-
 		let resp = client
-			.call(client::Call {
-				req,
-				target,
-				transport: policies.backend_tls.clone().into(),
-			})
+			.call_with_default_policies(req, &self.backend, self.policies.clone())
 			.await
 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
 
@@ -604,14 +588,9 @@ impl SseClient for ClientWrapper {
 		message: ClientJsonRpcMessage,
 		auth_token: Option<String>,
 	) -> Result<(), SseTransportError<Self::Error>> {
-		let (host, port) = (
-			uri
-				.host()
-				.ok_or_else(|| SseTransportError::Client(HttpError::new(anyhow!("no host set"))))?,
-			uri.port_u16().unwrap_or(80),
-		);
-		let target = crate::types::agent::Target::try_from((host, port))
-			.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
+		let uri = "http://".to_string()
+			+ &self.backend.hostport()
+			+ uri.path_and_query().map(|p| p.as_str()).unwrap_or_default();
 		let body =
 			serde_json::to_vec(&message).map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
 		let mut req = http::Request::builder()
@@ -636,16 +615,10 @@ impl SseClient for ClientWrapper {
 				},
 			}
 		}
-		auth::apply_backend_auth(self.policies.backend_auth.as_ref(), &mut req)
-			.await
-			.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
+
 		self
 			.client
-			.call(client::Call {
-				req,
-				target,
-				transport: self.policies.backend_tls.clone().into(),
-			})
+			.call_with_default_policies(req, &self.backend, self.policies.clone())
 			.await
 			.map_err(|e| SseTransportError::Client(HttpError::new(e)))
 			.and_then(|resp| {
@@ -661,64 +634,59 @@ impl SseClient for ClientWrapper {
 			.map(drop)
 	}
 
-	async fn get_stream(
+	fn get_stream(
 		&self,
 		uri: Uri,
 		last_event_id: Option<String>,
 		auth_token: Option<String>,
-	) -> Result<BoxedSseResponse, SseTransportError<Self::Error>> {
-		let (host, port) = (
-			uri
-				.host()
-				.ok_or_else(|| SseTransportError::Client(HttpError::new(anyhow!("no host set"))))?,
-			uri.port_u16().unwrap_or(80),
-		);
-		let target = crate::types::agent::Target::try_from((host, port))
-			.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
+	) -> impl Future<Output = Result<BoxedSseResponse, SseTransportError<Self::Error>>> + Send + '_ {
+		Box::pin(async move {
+			let uri = "http://".to_string()
+				+ &self.backend.hostport()
+				+ uri.path_and_query().map(|p| p.as_str()).unwrap_or_default();
 
-		let mut reqb = http::Request::builder()
-			.uri(uri)
-			.method(http::Method::GET)
-			.header(ACCEPT, EVENT_STREAM_MIME_TYPE);
-		if let Some(last_event_id) = last_event_id {
-			reqb = reqb.header(HEADER_LAST_EVENT_ID, last_event_id);
-		}
-		let req = reqb
-			.body(Body::empty())
-			.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
+			let mut reqb = http::Request::builder()
+				.uri(uri)
+				.method(http::Method::GET)
+				.header(ACCEPT, EVENT_STREAM_MIME_TYPE);
+			if let Some(last_event_id) = last_event_id {
+				reqb = reqb.header(HEADER_LAST_EVENT_ID, last_event_id);
+			}
+			let req = reqb
+				.body(Body::empty())
+				.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
 
-		let resp = self
-			.client
-			.call(client::Call {
-				req,
-				target,
-				transport: self.policies.backend_tls.clone().into(),
-			})
-			.await
-			.map_err(|e| SseTransportError::Client(HttpError::new(e)))
-			.and_then(|resp| {
-				if resp.status().is_client_error() || resp.status().is_server_error() {
-					Err(SseTransportError::Client(HttpError::new(anyhow!(
-						"received status code {}",
-						resp.status()
-					))))
-				} else {
-					Ok(resp)
-				}
-			})?;
-		match resp.headers().get(CONTENT_TYPE) {
-			Some(ct) => {
-				if !ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) {
-					return Err(SseTransportError::UnexpectedContentType(Some(ct.clone())));
-				}
-			},
-			None => {
-				return Err(SseTransportError::UnexpectedContentType(None));
-			},
-		}
+			let resp: Result<Response, ProxyError> = self
+				.client
+				.call_with_default_policies(req, &self.backend, self.policies.clone())
+				.await;
 
-		let event_stream =
-			sse_stream::SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
-		Ok(event_stream)
+			let resp = resp
+				.map_err(|e| SseTransportError::Client(HttpError::new(e)))
+				.and_then(|resp| {
+					if resp.status().is_client_error() || resp.status().is_server_error() {
+						Err(SseTransportError::Client(HttpError::new(anyhow!(
+							"received status code {}",
+							resp.status()
+						))))
+					} else {
+						Ok(resp)
+					}
+				})?;
+			match resp.headers().get(CONTENT_TYPE) {
+				Some(ct) => {
+					if !ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) {
+						return Err(SseTransportError::UnexpectedContentType(Some(ct.clone())));
+					}
+				},
+				None => {
+					return Err(SseTransportError::UnexpectedContentType(None));
+				},
+			}
+
+			let event_stream =
+				sse_stream::SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
+			Ok(event_stream)
+		})
 	}
 }

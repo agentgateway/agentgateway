@@ -4,6 +4,242 @@
   "type": "object",
   "properties": {
     "config": {
+      "type": "object",
+      "properties": {
+        "enableIpv6": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "localXdsPath": {
+          "description": "Local XDS path. If not specified, the current configuration file will be used.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "caAddress": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "xdsAddress": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gateway": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trustDomain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "serviceAccount": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clusterId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "network": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "adminAddr": {
+          "description": "Admin UI address in the format \"ip:port\"",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "statsAddr": {
+          "description": "Stats/metrics server address in the format \"ip:port\"",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "readinessAddr": {
+          "description": "Readiness probe server address in the format \"ip:port\"",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authToken": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "connectionTerminationDeadline": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "connectionMinTerminationDeadline": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "workerThreads": {
+          "type": "string"
+        },
+        "tracing": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "otlpEndpoint": {
+              "type": "string"
+            },
+            "fields": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "remove": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
+                "add": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "default": {}
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "otlpEndpoint"
+          ]
+        },
+        "logging": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "filter": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "fields": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "remove": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
+                "add": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "default": {}
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "http2": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "windowSize": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "connectionWindowSize": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "frameSize": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "poolMaxStreamsPerConn": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "poolUnusedReleaseTimeout": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "workerThreads"
+      ],
       "default": null
     },
     "binds": {
@@ -586,45 +822,7 @@
                                     "type": "object",
                                     "properties": {
                                       "host": {
-                                        "oneOf": [
-                                          {
-                                            "type": "object",
-                                            "properties": {
-                                              "Address": {
-                                                "type": "string"
-                                              }
-                                            },
-                                            "required": [
-                                              "Address"
-                                            ],
-                                            "additionalProperties": false
-                                          },
-                                          {
-                                            "type": "object",
-                                            "properties": {
-                                              "Hostname": {
-                                                "type": "array",
-                                                "prefixItems": [
-                                                  {
-                                                    "type": "string"
-                                                  },
-                                                  {
-                                                    "type": "integer",
-                                                    "format": "uint16",
-                                                    "minimum": 0,
-                                                    "maximum": 65535
-                                                  }
-                                                ],
-                                                "minItems": 2,
-                                                "maxItems": 2
-                                              }
-                                            },
-                                            "required": [
-                                              "Hostname"
-                                            ],
-                                            "additionalProperties": false
-                                          }
-                                        ]
+                                        "type": "string"
                                       }
                                     },
                                     "required": [
@@ -643,8 +841,7 @@
                             "required": [
                               "backend",
                               "percentage"
-                            ],
-                            "default": null
+                            ]
                           },
                           "directResponse": {
                             "description": "Directly respond to the request with a static response.",
@@ -856,8 +1053,7 @@
                                 "default": false
                               }
                             },
-                            "additionalProperties": false,
-                            "default": null
+                            "additionalProperties": false
                           },
                           "backendAuth": {
                             "description": "Authenticate to the backend.",
@@ -941,7 +1137,109 @@
                           },
                           "remoteRateLimit": {
                             "description": "Rate limit incoming requests. State is managed by a remote server.",
-                            "default": null
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "descriptors": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "requestHeader": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "requestHeader"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "static": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "static"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    }
+                                  }
+                                },
+                                "unevaluatedProperties": false,
+                                "oneOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "invalid"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "service": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "object",
+                                            "properties": {
+                                              "namespace": {
+                                                "type": "string"
+                                              },
+                                              "hostname": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "namespace",
+                                              "hostname"
+                                            ]
+                                          },
+                                          "port": {
+                                            "type": "integer",
+                                            "format": "uint16",
+                                            "minimum": 0,
+                                            "maximum": 65535
+                                          }
+                                        },
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "name",
+                                          "port"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "service"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "host": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "host"
+                                    ]
+                                  }
+                                ],
+                                "required": [
+                                  "descriptors"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "jwtAuth": {
                             "description": "Authenticate incoming JWT requests.",
@@ -998,7 +1296,84 @@
                           },
                           "extAuthz": {
                             "description": "Authenticate incoming requests by calling an external authorization server.",
-                            "default": null
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "context": {
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "unevaluatedProperties": false,
+                                "oneOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "invalid"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "service": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "object",
+                                            "properties": {
+                                              "namespace": {
+                                                "type": "string"
+                                              },
+                                              "hostname": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "namespace",
+                                              "hostname"
+                                            ]
+                                          },
+                                          "port": {
+                                            "type": "integer",
+                                            "format": "uint16",
+                                            "minimum": 0,
+                                            "maximum": 65535
+                                          }
+                                        },
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "name",
+                                          "port"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "service"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "host": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "host"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "transformations": {
                             "description": "Modify requests and responses",
@@ -1210,45 +1585,7 @@
                               "type": "object",
                               "properties": {
                                 "host": {
-                                  "oneOf": [
-                                    {
-                                      "type": "object",
-                                      "properties": {
-                                        "Address": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "Address"
-                                      ],
-                                      "additionalProperties": false
-                                    },
-                                    {
-                                      "type": "object",
-                                      "properties": {
-                                        "Hostname": {
-                                          "type": "array",
-                                          "prefixItems": [
-                                            {
-                                              "type": "string"
-                                            },
-                                            {
-                                              "type": "integer",
-                                              "format": "uint16",
-                                              "minimum": 0,
-                                              "maximum": 65535
-                                            }
-                                          ],
-                                          "minItems": 2,
-                                          "maxItems": 2
-                                        }
-                                      },
-                                      "required": [
-                                        "Hostname"
-                                      ],
-                                      "additionalProperties": false
-                                    }
-                                  ]
+                                  "type": "string"
                                 }
                               },
                               "required": [
@@ -1285,6 +1622,7 @@
                                         "required": [
                                           "name"
                                         ],
+                                        "unevaluatedProperties": false,
                                         "oneOf": [
                                           {
                                             "type": "object",
@@ -1292,22 +1630,70 @@
                                               "sse": {
                                                 "type": "object",
                                                 "properties": {
-                                                  "host": {
-                                                    "type": "string"
-                                                  },
-                                                  "port": {
-                                                    "type": "integer",
-                                                    "format": "uint16",
-                                                    "minimum": 0,
-                                                    "maximum": 65535
-                                                  },
                                                   "path": {
                                                     "type": "string"
                                                   }
                                                 },
+                                                "unevaluatedProperties": false,
+                                                "oneOf": [
+                                                  {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "invalid"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "service": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "name": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "namespace": {
+                                                                "type": "string"
+                                                              },
+                                                              "hostname": {
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "namespace",
+                                                              "hostname"
+                                                            ]
+                                                          },
+                                                          "port": {
+                                                            "type": "integer",
+                                                            "format": "uint16",
+                                                            "minimum": 0,
+                                                            "maximum": 65535
+                                                          }
+                                                        },
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "name",
+                                                          "port"
+                                                        ]
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "service"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "host": {
+                                                        "type": "string"
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "host"
+                                                    ]
+                                                  }
+                                                ],
                                                 "required": [
-                                                  "host",
-                                                  "port",
                                                   "path"
                                                 ]
                                               }
@@ -1322,22 +1708,70 @@
                                               "mcp": {
                                                 "type": "object",
                                                 "properties": {
-                                                  "host": {
-                                                    "type": "string"
-                                                  },
-                                                  "port": {
-                                                    "type": "integer",
-                                                    "format": "uint16",
-                                                    "minimum": 0,
-                                                    "maximum": 65535
-                                                  },
                                                   "path": {
                                                     "type": "string"
                                                   }
                                                 },
+                                                "unevaluatedProperties": false,
+                                                "oneOf": [
+                                                  {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "invalid"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "service": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "name": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "namespace": {
+                                                                "type": "string"
+                                                              },
+                                                              "hostname": {
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "namespace",
+                                                              "hostname"
+                                                            ]
+                                                          },
+                                                          "port": {
+                                                            "type": "integer",
+                                                            "format": "uint16",
+                                                            "minimum": 0,
+                                                            "maximum": 65535
+                                                          }
+                                                        },
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "name",
+                                                          "port"
+                                                        ]
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "service"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "host": {
+                                                        "type": "string"
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "host"
+                                                    ]
+                                                  }
+                                                ],
                                                 "required": [
-                                                  "host",
-                                                  "port",
                                                   "path"
                                                 ]
                                               }
@@ -1368,6 +1802,7 @@
                                                     }
                                                   }
                                                 },
+                                                "additionalProperties": false,
                                                 "required": [
                                                   "cmd"
                                                 ]
@@ -1383,20 +1818,68 @@
                                               "openapi": {
                                                 "type": "object",
                                                 "properties": {
-                                                  "host": {
-                                                    "type": "string"
-                                                  },
-                                                  "port": {
-                                                    "type": "integer",
-                                                    "format": "uint16",
-                                                    "minimum": 0,
-                                                    "maximum": 65535
-                                                  },
                                                   "schema": true
                                                 },
+                                                "unevaluatedProperties": false,
+                                                "oneOf": [
+                                                  {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "invalid"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "service": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "name": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "namespace": {
+                                                                "type": "string"
+                                                              },
+                                                              "hostname": {
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "namespace",
+                                                              "hostname"
+                                                            ]
+                                                          },
+                                                          "port": {
+                                                            "type": "integer",
+                                                            "format": "uint16",
+                                                            "minimum": 0,
+                                                            "maximum": 65535
+                                                          }
+                                                        },
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "name",
+                                                          "port"
+                                                        ]
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "service"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "host": {
+                                                        "type": "string"
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "host"
+                                                    ]
+                                                  }
+                                                ],
                                                 "required": [
-                                                  "host",
-                                                  "port",
                                                   "schema"
                                                 ]
                                               }
@@ -1409,6 +1892,7 @@
                                       }
                                     }
                                   },
+                                  "additionalProperties": false,
                                   "required": [
                                     "targets"
                                   ]
@@ -1545,51 +2029,9 @@
                                       ]
                                     },
                                     "hostOverride": {
-                                      "anyOf": [
-                                        {
-                                          "oneOf": [
-                                            {
-                                              "type": "object",
-                                              "properties": {
-                                                "Address": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "Address"
-                                              ],
-                                              "additionalProperties": false
-                                            },
-                                            {
-                                              "type": "object",
-                                              "properties": {
-                                                "Hostname": {
-                                                  "type": "array",
-                                                  "prefixItems": [
-                                                    {
-                                                      "type": "string"
-                                                    },
-                                                    {
-                                                      "type": "integer",
-                                                      "format": "uint16",
-                                                      "minimum": 0,
-                                                      "maximum": 65535
-                                                    }
-                                                  ],
-                                                  "minItems": 2,
-                                                  "maxItems": 2
-                                                }
-                                              },
-                                              "required": [
-                                                "Hostname"
-                                              ],
-                                              "additionalProperties": false
-                                            }
-                                          ]
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
+                                      "type": [
+                                        "string",
+                                        "null"
                                       ]
                                     }
                                   },
@@ -1743,45 +2185,7 @@
                                   "type": "object",
                                   "properties": {
                                     "host": {
-                                      "oneOf": [
-                                        {
-                                          "type": "object",
-                                          "properties": {
-                                            "Address": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "Address"
-                                          ],
-                                          "additionalProperties": false
-                                        },
-                                        {
-                                          "type": "object",
-                                          "properties": {
-                                            "Hostname": {
-                                              "type": "array",
-                                              "prefixItems": [
-                                                {
-                                                  "type": "string"
-                                                },
-                                                {
-                                                  "type": "integer",
-                                                  "format": "uint16",
-                                                  "minimum": 0,
-                                                  "maximum": 65535
-                                                }
-                                              ],
-                                              "minItems": 2,
-                                              "maxItems": 2
-                                            }
-                                          },
-                                          "required": [
-                                            "Hostname"
-                                          ],
-                                          "additionalProperties": false
-                                        }
-                                      ]
+                                      "type": "string"
                                     }
                                   },
                                   "required": [

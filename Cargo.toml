@@ -103,9 +103,9 @@ pprof = { version = "0.15", features = [
 ] }
 pretty_env_logger = "0.5"
 prometheus-client = "0.23"
-prost = "0.13"
-prost-build = "0.13"
-prost-types = "0.13"
+prost = "0.14"
+prost-build = "0.14"
+prost-types = "0.14"
 rand = "0.9"
 rcgen = "0.14"
 regex = "1.11"
@@ -115,7 +115,9 @@ reqwest = { version = "0.12", default-features = false, features = [
     "macos-system-configuration",
     "rustls-tls",
 ] }
-rmcp = { version = "0.3", features = [
+# Use release version once 0.3.2 comes out
+#rmcp = { version = "0.3", features = [
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", rev = "0a9a0a0b1f234bd296459fc98b41fd6215c8e3a9", features = [
     "client",
     "transport-sse-server",
     "transport-sse-client",
@@ -135,6 +137,7 @@ schemars = { version = "=1.0.4", git = "https://github.com/howardjohn/schemars",
     "bytes1",
     "arcstr1",
     "raw_value",
+    "preserve_order",
 ] }
 secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
@@ -156,8 +159,10 @@ tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-test = "0.4"
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio_sse_codec = "0.0.2"
-tonic = { version = "0.13", features = ["prost", "codegen", "transport"] }
-tonic-build = { version = "0.13", features = ["prost", "transport"] }
+tonic = { version = "0.14", features = ["codegen", "transport"] }
+tonic-prost = { version = "0.14" }
+tonic-prost-build = { version = "0.14", features = ["transport"] }
+tonic-build = { version = "0.14", features = ["transport"] }
 tower = { version = "0.5" }
 tower-http = { version = "0.6", features = ["cors"] }
 tower-serve-static = "0.1"

@@ -16,8 +16,9 @@ use tracing::instrument;
 use url::Url;
 
 use crate::client;
+use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
-use crate::types::agent::Target;
+use crate::types::agent::{SimpleBackend, SimpleBackendReference, Target};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -501,12 +502,11 @@ impl Default for JsonSchema {
 
 #[derive(Debug)]
 pub struct Handler {
-	pub host: String,
 	pub prefix: String,
-	pub port: u16,
-	pub client: client::Client,
+	pub client: PolicyClient,
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
-	pub policies: BackendPolicies,
+	pub default_policies: BackendPolicies,
+	pub backend: SimpleBackend,
 }
 
 impl Handler {
@@ -582,8 +582,11 @@ impl Handler {
 		}
 
 		let base_url = format!(
-			"{}://{}:{}{}{}",
-			"http", self.host, self.port, self.prefix, path
+			"{}://{}{}{}",
+			"http",
+			self.backend.hostport(),
+			self.prefix,
+			path
 		);
 
 		// --- Request Building ---
@@ -669,14 +672,9 @@ impl Handler {
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
 
 		// Make the request
-		let target = Target::try_from((self.host.as_str(), self.port))?;
 		let response = self
 			.client
-			.call(client::Call {
-				req: request,
-				target,
-				transport: self.policies.backend_tls.clone().into(),
-			})
+			.call_with_default_policies(request, &self.backend, self.default_policies.clone())
 			.await?;
 
 		// Read response body

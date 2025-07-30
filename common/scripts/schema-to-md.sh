@@ -4,18 +4,24 @@ echo "|Field|Column|"
 echo "|-|-|"
 jq -r '
 def schema_paths(prefix):
-  if (.type // [] | if type == "array" then . else [.] end | contains(["object"])) and .properties then
+  if .oneOf then
+    .oneOf[] | schema_paths(prefix + "(1)")
+  elif .anyOf then
+    .anyOf[] | schema_paths(prefix + "(any)")
+  elif .allOf then
+    .allOf[] | schema_paths(prefix + "(all)")
+  elif (.type // [] | if type == "array" then . else [.] end | contains(["object"])) and .properties then
     .properties | to_entries[] |
     (prefix + .key) as $path |
-    [$path, (.value.description // "")] as $entry |
+    [$path, (.value.description? // "")] as $entry |
     $entry,
-    (.value | schema_paths($path + "."))
+    (.value | select(type != "boolean") | schema_paths($path + "."))
   elif (.type // [] | if type == "array" then . else [.] end | contains(["array"])) and .items then
     .items | schema_paths(prefix + "[].")
   elif .properties then
     .properties | to_entries[] |
     (prefix + .key) as $path |
-    [$path, (.value.description // "")] as $entry |
+    [$path, (.value.description? // "")] as $entry |
     $entry,
     (.value | schema_paths($path + "."))
   else

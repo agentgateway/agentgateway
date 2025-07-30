@@ -25,16 +25,17 @@ use tokio::sync::RwLock;
 use tracing::instrument;
 
 use crate::cel::ContextBuilder;
-use crate::client;
 use crate::http::jwt::Claims;
 use crate::mcp::rbac;
 use crate::mcp::rbac::{Identity, RuleSets};
 use crate::mcp::sse::{MCPInfo, McpBackendGroup};
+use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Stores;
 use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{McpAuthorization, McpBackend};
+use crate::{ProxyInputs, client};
 
 type McpError = ErrorData;
 
@@ -77,10 +78,11 @@ pub struct Relay {
 
 impl Relay {
 	pub fn new(
+		pi: Arc<ProxyInputs>,
 		backend: McpBackendGroup,
 		metrics: Arc<metrics::Metrics>,
 		policies: RuleSets,
-		client: client::Client,
+		client: PolicyClient,
 	) -> Self {
 		let default_target_name = if backend.targets.len() != 1 {
 			None
@@ -88,7 +90,7 @@ impl Relay {
 			Some(backend.targets[0].name.to_string())
 		};
 		Self {
-			pool: Arc::new(RwLock::new(pool::ConnectionPool::new(client, backend))),
+			pool: Arc::new(RwLock::new(pool::ConnectionPool::new(pi, client, backend))),
 			metrics,
 			policies,
 			default_target_name,
@@ -534,60 +536,65 @@ impl ServerHandler for Relay {
         name=%request.name,
         ),
     )]
-	async fn call_tool(
+	fn call_tool(
 		&self,
 		request: CallToolRequestParam,
 		context: RequestContext<RoleServer>,
-	) -> std::result::Result<CallToolResult, McpError> {
-		let (_span, ref rq_ctx, log, cel) = Self::setup_request_log(&context.extensions, "call_tool")?;
-		let tool_name = request.name.to_string();
-		let (service_name, tool) = self.parse_resource_name(&tool_name)?;
-		log.non_atomic_mutate(|l| {
-			l.tool_call_name = Some(tool.to_string());
-			l.target_name = Some(service_name.to_string());
-		});
-		if !self.policies.validate(
-			&rbac::ResourceType::Tool(rbac::ResourceId::new(
-				service_name.to_string(),
-				tool.to_string(),
-			)),
-			cel.as_ref(),
-		) {
-			return Err(McpError::invalid_request("not allowed", None));
-		}
-		let mut pool = self.pool.write().await;
-		let svc = pool
-			.get(rq_ctx, &context.peer, service_name)
-			.await
-			.map_err(|_e| McpError::invalid_request(format!("Service {service_name} not found"), None))?;
-		let req = CallToolRequestParam {
-			name: Cow::Owned(tool.to_string()),
-			arguments: request.arguments,
-		};
+	) -> impl Future<Output = Result<CallToolResult, McpError>> + Send + '_ {
+		Box::pin(async move {
+			let (_span, ref rq_ctx, log, cel) =
+				Self::setup_request_log(&context.extensions, "call_tool")?;
+			let tool_name = request.name.to_string();
+			let (service_name, tool) = self.parse_resource_name(&tool_name)?;
+			log.non_atomic_mutate(|l| {
+				l.tool_call_name = Some(tool.to_string());
+				l.target_name = Some(service_name.to_string());
+			});
+			if !self.policies.validate(
+				&rbac::ResourceType::Tool(rbac::ResourceId::new(
+					service_name.to_string(),
+					tool.to_string(),
+				)),
+				cel.as_ref(),
+			) {
+				return Err(McpError::invalid_request("not allowed", None));
+			}
+			let mut pool = self.pool.write().await;
+			let svc = pool
+				.get(rq_ctx, &context.peer, service_name)
+				.await
+				.map_err(|_e| {
+					McpError::invalid_request(format!("Service {service_name} not found"), None)
+				})?;
+			let req = CallToolRequestParam {
+				name: Cow::Owned(tool.to_string()),
+				arguments: request.arguments,
+			};
 
-		self.metrics.record(
-			metrics::ToolCall {
-				server: service_name.to_string(),
-				name: tool.to_string(),
-				params: vec![],
-			},
-			(),
-		);
+			self.metrics.record(
+				metrics::ToolCall {
+					server: service_name.to_string(),
+					name: tool.to_string(),
+					params: vec![],
+				},
+				(),
+			);
 
-		match svc.call_tool(req, rq_ctx).await {
-			Ok(r) => Ok(r),
-			Err(e) => {
-				self.metrics.record(
-					metrics::ToolCallError {
-						server: service_name.to_string(),
-						name: tool.to_string(),
-						error_type: e.error_code(),
-						params: vec![],
-					},
-					(),
-				);
-				Err(e.into())
-			},
-		}
+			match svc.call_tool(req, rq_ctx).await {
+				Ok(r) => Ok(r),
+				Err(e) => {
+					self.metrics.record(
+						metrics::ToolCallError {
+							server: service_name.to_string(),
+							name: tool.to_string(),
+							error_type: e.error_code(),
+							params: vec![],
+						},
+						(),
+					);
+					Err(e.into())
+				},
+			}
+		})
 	}
 }

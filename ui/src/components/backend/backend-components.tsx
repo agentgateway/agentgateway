@@ -12,6 +12,12 @@ import {
 } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -40,6 +46,8 @@ import {
   Server,
   Globe,
   Loader2,
+  Shield,
+  AlertTriangle,
 } from "lucide-react";
 import { Bind } from "@/lib/types";
 import { BackendWithContext } from "@/lib/backend-hooks";
@@ -60,7 +68,14 @@ import {
   getAvailableRoutes,
   AI_PROVIDERS,
   MCP_TARGET_TYPES,
+  hasBackendPolicies,
+  getBackendPolicyTypes,
+  canDeleteBackend,
 } from "@/lib/backend-utils";
+
+const getEnvAsRecord = (env: unknown): Record<string, string> => {
+  return typeof env === 'object' && env !== null ? env as Record<string, string> : {};
+};
 
 // Icon mapping
 const getBackendIcon = (type: string) => {
@@ -187,7 +202,7 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
-                                {backendContext.listener.name || "unnamed"}
+                                {backendContext.listener.name || "unnamed listener"}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -199,12 +214,23 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                             <TableCell className="text-sm text-muted-foreground">
                               {(() => {
                                 const details = getBackendDetails(backendContext.backend);
+                                const hasPolicies = hasBackendPolicies(backendContext.route);
+                                const policyTypes = hasPolicies ? getBackendPolicyTypes(backendContext.route) : [];
+                                
                                 return (
                                   <div className="space-y-1">
                                     <div>{details.primary}</div>
                                     {details.secondary && (
                                       <div className="text-xs text-muted-foreground/80 font-mono">
                                         {details.secondary}
+                                      </div>
+                                    )}
+                                    {hasPolicies && (
+                                      <div className="flex items-center space-x-1 mt-1">
+                                        <Shield className="h-3 w-3 text-blue-500" />
+                                        <span className="text-xs text-blue-600 font-medium">
+                                          Backend Policies: {policyTypes.join(", ")}
+                                        </span>
                                       </div>
                                     )}
                                   </div>
@@ -225,15 +251,55 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => onDeleteBackend(backendContext)}
-                                  className="text-destructive hover:text-destructive"
-                                  disabled={isSubmitting}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {(() => {
+                                  // Check if deletion is allowed
+                                  const totalBackendsInRoute = backendContexts.filter(bc => 
+                                    bc.bind.port === backendContext.bind.port &&
+                                    bc.listener.name === backendContext.listener.name &&
+                                    bc.routeIndex === backendContext.routeIndex
+                                  ).length;
+                                  
+                                  const deleteCheck = canDeleteBackend(backendContext.route, totalBackendsInRoute);
+                                  
+                                  if (!deleteCheck.canDelete) {
+                                    return (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                disabled={true}
+                                                className="text-muted-foreground cursor-not-allowed"
+                                              >
+                                                <div className="relative">
+                                                  <Trash2 className="h-4 w-4" />
+                                                  <AlertTriangle className="h-2 w-2 absolute -top-0.5 -right-0.5 text-amber-500" />
+                                                </div>
+                                              </Button>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-sm">
+                                            <p>{deleteCheck.reason}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    );
+                                  }
+                                  
+                                  return (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => onDeleteBackend(backendContext)}
+                                      className="text-destructive hover:text-destructive"
+                                      disabled={isSubmitting}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  );
+                                })()}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -291,7 +357,12 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{editingBackend ? "Edit Backend" : "Add Backend"}</DialogTitle>
+          <DialogTitle>
+            {editingBackend 
+              ? `Edit Backend: ${getBackendName(editingBackend.backend)}`
+              : `Add ${selectedBackendType.toUpperCase()} Backend`
+            }
+          </DialogTitle>
           <DialogDescription>
             {editingBackend
               ? "Update the backend configuration."
@@ -330,16 +401,19 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
           </div>
 
           {/* Common fields */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="backend-name">Name *</Label>
-              <Input
-                id="backend-name"
-                value={backendForm.name}
-                onChange={(e) => setBackendForm((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Backend name"
-              />
-            </div>
+          <div className={selectedBackendType === "ai" || selectedBackendType === "mcp" ? "space-y-4" : "grid grid-cols-2 gap-4"}>
+            {/* Only show name input for backends that support custom names */}
+            {selectedBackendType !== "ai" && selectedBackendType !== "mcp" && (
+              <div className="space-y-2">
+                <Label htmlFor="backend-name">Name *</Label>
+                <Input
+                  id="backend-name"
+                  value={backendForm.name}
+                  onChange={(e) => setBackendForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Backend name"
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="backend-weight">Weight</Label>
               <Input
@@ -363,7 +437,7 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
             {editingBackend ? (
               <div className="p-3 bg-muted rounded-md">
                 <p className="text-sm">
-                  Port {editingBackend.bind.port} → {editingBackend.listener.name || "unnamed"} →{" "}
+                  Port {editingBackend.bind.port} → {editingBackend.listener.name || "unnamed listener"} →{" "}
                   {editingBackend.route.name || `Route ${editingBackend.routeIndex + 1}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -692,21 +766,126 @@ const McpBackendForm: React.FC<McpBackendFormProps> = ({
                   placeholder="python3 my_mcp_server.py"
                 />
               </div>
+              {/* Arguments Section */}
               <div className="space-y-2">
-                <Label>Arguments (comma-separated)</Label>
-                <Input
-                  value={target.args}
-                  onChange={(e) => updateMcpTarget(index, "args", e.target.value)}
-                  placeholder="--verbose, --config=/path/to/config"
-                />
+                <div className="flex items-center justify-between">
+                  <Label>Arguments</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const currentArgs = Array.isArray(target.args) ? target.args : [];
+                      updateMcpTarget(index, "args", [...currentArgs, ""]);
+                    }}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Add Argument
+                  </Button>
+                </div>
+                {Array.isArray(target.args) && target.args.length > 0 ? (
+                  <div className="space-y-2">
+                    {target.args.map((arg, argIndex) => (
+                      <div key={argIndex} className="flex items-center space-x-2">
+                        <Input
+                          value={arg}
+                          onChange={(e) => {
+                            const newArgs = [...target.args];
+                            newArgs[argIndex] = e.target.value;
+                            updateMcpTarget(index, "args", newArgs);
+                          }}
+                          placeholder="--verbose"
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newArgs = Array.isArray(target.args) ? target.args.filter((_, i: number) => i !== argIndex) : [];
+                            updateMcpTarget(index, "args", newArgs);
+                          }}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 border-2 border-dashed border-muted rounded-md">
+                    <p className="text-sm text-muted-foreground">No arguments configured</p>
+                  </div>
+                )}
               </div>
+
+              {/* Environment Variables Section */}
               <div className="space-y-2">
-                <Label>Environment Variables (key=value, comma-separated)</Label>
-                <Input
-                  value={target.env}
-                  onChange={(e) => updateMcpTarget(index, "env", e.target.value)}
-                  placeholder="DEBUG=true, API_KEY=secret"
-                />
+                <div className="flex items-center justify-between">
+                  <Label>Environment Variables</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const currentEnv = getEnvAsRecord(target.env);
+                      updateMcpTarget(index, "env", { ...currentEnv, "": "" });
+                    }}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Add Variable
+                  </Button>
+                </div>
+                {Object.keys(getEnvAsRecord(target.env)).length > 0 ? (
+                  <div className="space-y-2">
+                    {Object.entries(getEnvAsRecord(target.env)).map(([key, value], envIndex) => (
+                      <div key={envIndex} className="flex items-center space-x-2">
+                        <Input
+                          value={key}
+                          onChange={(e) => {
+                            const currentEnv = getEnvAsRecord(target.env);
+                            const newEnv = { ...currentEnv };
+                            delete newEnv[key];
+                            newEnv[e.target.value] = String(value);
+                            updateMcpTarget(index, "env", newEnv);
+                          }}
+                          placeholder="DEBUG"
+                          className="flex-1"
+                        />
+                        <span className="text-muted-foreground">=</span>
+                        <Input
+                          value={String(value)}
+                          onChange={(e) => {
+                            const currentEnv = getEnvAsRecord(target.env);
+                            const newEnv = { ...currentEnv };
+                            newEnv[key] = e.target.value;
+                            updateMcpTarget(index, "env", newEnv);
+                          }}
+                          placeholder="true"
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const currentEnv = getEnvAsRecord(target.env);
+                            const newEnv = { ...currentEnv };
+                            delete newEnv[key];
+                            updateMcpTarget(index, "env", newEnv);
+                          }}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 border-2 border-dashed border-muted rounded-md">
+                    <p className="text-sm text-muted-foreground">No environment variables configured</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

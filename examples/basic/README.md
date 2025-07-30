@@ -30,13 +30,20 @@ Additionally, we can connect to *multiple* MCP servers, and expose them all as o
 In this example, we will connect to one server over Stdio.
 
 ```yaml
-name: default
 targets:
 - name: everything
   stdio:
     cmd: npx
     args: ["@modelcontextprotocol/server-everything"]
 ```
+
+> [!TIP]
+> If you don't have `npx`, you can also run with docker:
+> ```yaml
+> stdio:
+>   cmd: docker
+>   args: ["run", "--rm", "-i", "mcp/everything"]
+> ```
 
 When clients connect to the gateway, the `cmd` will be executed to serve the traffic.
 

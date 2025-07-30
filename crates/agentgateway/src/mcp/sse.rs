@@ -53,13 +53,14 @@ use crate::llm::LLMRequest;
 use crate::mcp::rbac::RuleSets;
 use crate::mcp::relay::Relay;
 use crate::mcp::{rbac, relay};
+use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
 use crate::types::agent::{
 	BackendName, McpAuthentication, McpBackend, McpIDP, McpTarget as TypeMcpTarget, McpTargetSpec,
 	PolicyTarget, Target,
 };
-use crate::{client, json, mcp};
+use crate::{ProxyInputs, client, json, mcp};
 
 type SseTxs =
 	Arc<std::sync::RwLock<HashMap<SessionId, tokio::sync::mpsc::Sender<ClientJsonRpcMessage>>>>;
@@ -76,31 +77,25 @@ pub struct App {
 	metrics: Arc<relay::metrics::Metrics>,
 	drain: DrainWatcher,
 	session: Arc<LocalSessionManager>,
-	client: client::Client,
 
 	sse_txs: SseTxs,
 }
 
 impl App {
-	pub fn new(
-		state: Stores,
-		metrics: Arc<relay::metrics::Metrics>,
-		client: client::Client,
-		drain: DrainWatcher,
-	) -> Self {
+	pub fn new(state: Stores, metrics: Arc<relay::metrics::Metrics>, drain: DrainWatcher) -> Self {
 		let session: Arc<LocalSessionManager> = Arc::new(Default::default());
 		Self {
 			state,
 			metrics,
 			drain,
 			session,
-			client,
 			sse_txs: Default::default(),
 		}
 	}
 
 	pub async fn serve(
 		&self,
+		pi: Arc<ProxyInputs>,
 		name: BackendName,
 		backends: McpBackend,
 		mut req: Request,
@@ -133,7 +128,7 @@ impl App {
 		let state = self.state.clone();
 		let metrics = self.metrics.clone();
 		let sm = self.session.clone();
-		let client = self.client.clone();
+		let client = PolicyClient { inputs: pi.clone() };
 
 		// Store an empty value, we will populate each field async
 		log.store(Some(MCPInfo::default()));
@@ -158,6 +153,7 @@ impl App {
 			("/sse", m, _) if m == Method::GET => Self::sse_get_handler(
 				self.sse_txs.clone(),
 				Relay::new(
+					pi.clone(),
 					backends.clone(),
 					metrics.clone(),
 					authorization_policies.clone(),
@@ -172,7 +168,7 @@ impl App {
 				.await
 				.into_response(),
 			("/.well-known/oauth-authorization-server", _, Some(auth)) => self
-				.authorization_server_metadata(req, auth)
+				.authorization_server_metadata(req, auth, client.clone())
 				.await
 				.map_err(|e| {
 					warn!("authorization_server_metadata error: {}", e);
@@ -180,7 +176,7 @@ impl App {
 				})
 				.into_response(),
 			("/client-registration", _, Some(auth)) => self
-				.client_registration(req, auth)
+				.client_registration(req, auth, client.clone())
 				.await
 				.map_err(|e| {
 					warn!("client_registration error: {}", e);
@@ -192,6 +188,7 @@ impl App {
 				let streamable = StreamableHttpService::new(
 					move || {
 						Ok(Relay::new(
+							pi.clone(),
 							backends.clone(),
 							metrics.clone(),
 							authorization_policies.clone(),
@@ -270,6 +267,7 @@ impl App {
 		&self,
 		req: Request,
 		auth: McpAuthentication,
+		client: PolicyClient,
 	) -> anyhow::Result<Json<Value>> {
 		let new_uri = Self::get_redirect_url(&req, "/.well-known/oauth-authorization-server");
 		let ureq = ::http::Request::builder()
@@ -278,7 +276,7 @@ impl App {
 				auth.issuer
 			))
 			.body(Body::empty())?;
-		let upstream = self.client.simple_call(ureq).await?;
+		let upstream = client.simple_call(ureq).await?;
 		let mut resp: serde_json::Value = from_body(upstream.into_body()).await?;
 		match &auth.provider {
 			Some(McpIDP::Auth0 {}) => {
@@ -315,6 +313,7 @@ impl App {
 		&self,
 		req: Request,
 		auth: McpAuthentication,
+		client: PolicyClient,
 	) -> anyhow::Result<Response> {
 		let new_uri = Self::get_redirect_url(&req, "/.well-known/oauth-authorization-server");
 		let ureq = ::http::Request::builder()
@@ -324,7 +323,7 @@ impl App {
 			))
 			.method(Method::POST)
 			.body(req.into_body())?;
-		let upstream = self.client.simple_call(ureq).await?;
+		let upstream = client.simple_call(ureq).await?;
 		Ok(upstream)
 	}
 

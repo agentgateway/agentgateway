@@ -121,7 +121,7 @@ checkDesiredVersion() {
 # if it needs to be changed.
 checkAgentGatewayInstalledVersion() {
   if [[ -f "${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    local version=$("${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" version --template="{{ .Version }}")
+    local version="$("${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" --version | sed -n 's/.*GitTag:"\([^"]*\)".*/\1/p')"
     if [[ "$version" == "$TAG" ]]; then
       echo "agentgateway ${version} is already ${DESIRED_VERSION:-latest}"
       return 0

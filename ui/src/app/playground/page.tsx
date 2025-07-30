@@ -834,7 +834,7 @@ export default function PlaygroundPage() {
                   return Array.from(groupedRoutes.entries()).map(([groupKey, routeInfos]) => {
                     const firstRoute = routeInfos[0];
                     const port = firstRoute.bindPort;
-                    const listenerName = firstRoute.listener.name || "unnamed";
+                    const listenerName = firstRoute.listener.name || "unnamed listener";
                     const endpoint = firstRoute.endpoint;
 
                     return (

@@ -17,7 +17,7 @@ use crate::*;
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	model: Option<Strng>,
+	pub model: Option<Strng>,
 }
 
 impl super::Provider for Provider {

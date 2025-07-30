@@ -106,20 +106,20 @@ impl<'de> serde::Deserialize<'de> for Cors {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-struct CorsSerde {
+pub struct CorsSerde {
 	#[serde(default)]
-	allow_credentials: bool,
+	pub allow_credentials: bool,
 	#[serde(default)]
-	allow_headers: Vec<String>,
+	pub allow_headers: Vec<String>,
 	#[serde(default)]
-	allow_methods: Vec<String>,
+	pub allow_methods: Vec<String>,
 	#[serde(default)]
-	allow_origins: Vec<String>,
+	pub allow_origins: Vec<String>,
 	#[serde(default)]
-	expose_headers: Vec<String>,
+	pub expose_headers: Vec<String>,
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	max_age: Option<Duration>,
+	pub max_age: Option<Duration>,
 }
 
 impl TryFrom<CorsSerde> for Cors {

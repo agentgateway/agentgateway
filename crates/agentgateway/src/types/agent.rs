@@ -28,8 +28,8 @@ use crate::http::auth::BackendAuth;
 use crate::http::jwt::Jwt;
 use crate::http::localratelimit::RateLimit;
 use crate::http::{
-	HeaderName, HeaderValue, StatusCode, ext_authz, filters, remoteratelimit, retry, status, timeout,
-	uri,
+	HeaderName, HeaderValue, StatusCode, ext_authz, ext_proc, filters, remoteratelimit, retry,
+	status, timeout, uri,
 };
 use crate::mcp::rbac::RuleSet;
 use crate::proxy::ProxyError;
@@ -103,6 +103,7 @@ pub fn parse_key(mut key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error
 	match parsed {
 		Item::Pkcs8Key(c) => Ok(PrivateKeyDer::Pkcs8(c)),
 		Item::Pkcs1Key(c) => Ok(PrivateKeyDer::Pkcs1(c)),
+		Item::Sec1Key(c) => Ok(PrivateKeyDer::Sec1(c)),
 		_ => Err(anyhow!("unsupported key")),
 	}
 }
@@ -349,14 +350,28 @@ fn default_weight() -> usize {
 #[serde(rename_all = "camelCase")]
 pub enum Backend {
 	Service(Arc<Service>, u16),
-	#[serde(rename = "host")]
+	#[serde(rename = "host", serialize_with = "serialize_backend_tuple")]
 	Opaque(BackendName, Target), // Hostname or IP
-	#[serde(rename = "mcp")]
+	#[serde(rename = "mcp", serialize_with = "serialize_backend_tuple")]
 	MCP(BackendName, McpBackend),
-	#[serde(rename = "ai")]
+	#[serde(rename = "ai", serialize_with = "serialize_backend_tuple")]
 	AI(BackendName, crate::llm::AIBackend),
 	Dynamic {},
 	Invalid,
+}
+
+pub fn serialize_backend_tuple<S: Serializer, T: serde::Serialize>(
+	name: &BackendName,
+	t: T,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	#[derive(Debug, Clone, serde::Serialize)]
+	#[serde(rename_all = "camelCase")]
+	struct BackendTuple<'a, T: serde::Serialize> {
+		name: &'a BackendName,
+		target: &'a T,
+	}
+	BackendTuple { name, target: &t }.serialize(serializer)
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -421,6 +436,15 @@ impl SimpleBackendReference {
 }
 
 impl SimpleBackend {
+	pub fn hostport(&self) -> String {
+		match self {
+			SimpleBackend::Service(svc, port) => {
+				format!("{}:{port}", svc.hostname)
+			},
+			SimpleBackend::Opaque(name, tgt) => tgt.to_string(),
+			SimpleBackend::Invalid => "invalid".to_string(),
+		}
+	}
 	pub fn name(&self) -> BackendName {
 		match self {
 			SimpleBackend::Service(svc, port) => {
@@ -461,7 +485,7 @@ impl Backend {
 
 pub type BackendName = Strng;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct McpBackend {
@@ -478,7 +502,7 @@ impl McpBackend {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct McpTarget {
@@ -487,9 +511,9 @@ pub struct McpTarget {
 	pub spec: McpTargetSpec,
 }
 
-type McpTargetName = Strng;
+pub type McpTargetName = Strng;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum McpTargetSpec {
@@ -509,38 +533,33 @@ pub enum McpTargetSpec {
 	OpenAPI(OpenAPITarget),
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct SseTargetSpec {
-	// TODO: reference a service
-	pub host: String,
-	pub port: u16,
+	pub backend: SimpleBackendReference,
 	pub path: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct StreamableHTTPTargetSpec {
-	// TODO: reference a service
-	pub host: String,
-	pub port: u16,
+	pub backend: SimpleBackendReference,
 	pub path: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct OpenAPITarget {
-	pub host: String,
-	pub port: u16,
+	pub backend: SimpleBackendReference,
 	#[serde(deserialize_with = "de_openapi")]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	pub schema: Arc<OpenAPI>,
 }
 
-fn de_openapi<'a, D>(deserializer: D) -> Result<Arc<OpenAPI>, D::Error>
+pub fn de_openapi<'a, D>(deserializer: D) -> Result<Arc<OpenAPI>, D::Error>
 where
 	D: serde::Deserializer<'a>,
 {
@@ -1021,6 +1040,8 @@ pub enum Policy {
 	// Supported targets: Backend; single policy allowed
 	#[serde(rename = "ai")]
 	AI(llm::Policy),
+	// Supported targets: Backend; single policy allowed
+	InferenceRouting(ext_proc::InferenceRouting),
 
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	// Transformation(),
@@ -1095,6 +1116,7 @@ impl McpAuthorization {
 }
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(with = "String"))]
 pub enum Target {
 	Address(SocketAddr),
 	Hostname(Strng, u16),
@@ -1148,5 +1170,90 @@ impl Display for Target {
 			Target::Hostname(hostname, port) => format!("{hostname}:{port}"),
 		};
 		write!(f, "{str}")
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_parse_key_ec_p256() {
+		let ec_key = b"-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIGfhD3tZlZOmw7LfyyERnPCyOnzmqiy1VcwiK36ro1H5oAoGCCqGSM49
+AwEHoUQDQgAEwWSdCtU7tQGYtpNpJXSB5VN4yT1lRXzHh8UOgWWqiYXX1WYHk8vf
+63XQuFFo4YbnXLIPdRxfxk9HzwyPw8jW8Q==
+-----END EC PRIVATE KEY-----";
+
+		let result = parse_key(ec_key);
+		assert!(result.is_ok());
+
+		let key = result.unwrap();
+		match key {
+			PrivateKeyDer::Sec1(_) => {}, // Expected
+			_ => panic!("Expected SEC1 (EC) private key format"),
+		}
+	}
+
+	#[test]
+	fn test_parse_key_ec_p384() {
+		let ec_key = b"-----BEGIN EC PRIVATE KEY-----
+MIGkAgEBBDDLaVsYgpuTvciGqF9ULn07Kk9k9bxvZxqMFQX3VIccWAMhP3qlKC9O
+xK4lPQIqDnGgBwYFK4EEACKhZANiAASK2hFgrQdhSnKMTHUc0Kf42kwjAIvv0Nds
+z766bcs7vNyDqYpw7Gtr5weUGnl8M9h6BpONpZIS9RECMPTdfsLmYqlX0DGsMR3v
+L/VtP/WipvzV+9ejgYQwt0cOKYYCoSc=
+-----END EC PRIVATE KEY-----";
+
+		let result = parse_key(ec_key);
+		assert!(result.is_ok());
+
+		let key = result.unwrap();
+		match key {
+			PrivateKeyDer::Sec1(_) => {}, // Expected
+			_ => panic!("Expected SEC1 (EC) private key format"),
+		}
+	}
+
+	#[test]
+	fn test_parse_key_pkcs8() {
+		// Test existing PKCS8 support still works
+		let pkcs8_key = b"-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg7oRJ3/tWjzNRdSXj
+k2kj5FhI/GKfGpvAJbDe6A4VlzuhRANCAASTGTFE0FdYwKqcaUEZ3VhqKlpZLjY/
+SGjfUH8wjCgRLFmKGfZSFZFh1xN9M5Bq6v1P6kNqW7nM7oA4VJWqKp5W
+-----END PRIVATE KEY-----";
+
+		let result = parse_key(pkcs8_key);
+		assert!(result.is_ok());
+
+		let key = result.unwrap();
+		match key {
+			PrivateKeyDer::Pkcs8(_) => {}, // Expected
+			_ => panic!("Expected PKCS8 private key format"),
+		}
+	}
+
+	#[test]
+	fn test_parse_key_invalid() {
+		let invalid_key = b"-----BEGIN INVALID KEY-----
+InvalidKeyData
+-----END INVALID KEY-----";
+
+		let result = parse_key(invalid_key);
+		assert!(result.is_err());
+		// Check for actual error message that rustls_pemfile returns
+		let error_msg = result.unwrap_err().to_string();
+		assert!(
+			error_msg.contains("failed to fill whole buffer")
+				|| error_msg.contains("no key")
+				|| error_msg.contains("unsupported key")
+		);
+	}
+
+	#[test]
+	fn test_parse_key_empty() {
+		let empty_key = b"";
+		let result = parse_key(empty_key);
+		assert!(result.is_err());
 	}
 }

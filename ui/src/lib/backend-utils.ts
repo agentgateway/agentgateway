@@ -1,5 +1,6 @@
 import { Backend, Route, Listener, Bind } from "@/lib/types";
 import { DEFAULT_BACKEND_FORM, BACKEND_TYPE_COLORS } from "./backend-constants";
+import { POLICY_TYPES, BACKEND_POLICY_KEYS } from "./policy-constants";
 
 /**
  * Determine the backend type based on the backend configuration
@@ -47,6 +48,11 @@ export const MCP_TARGET_TYPES = [
 ] as const;
 
 /**
+ * Backend policy keys (subset of PolicyType that apply to backends)
+ */
+export type BackendPolicyKey = typeof BACKEND_POLICY_KEYS[number];
+
+/**
  * Default ports for different protocols
  */
 export const DEFAULT_PORTS = {
@@ -70,9 +76,25 @@ export function ensurePortInAddress(
 
 // Get backend name for display
 export const getBackendName = (backend: Backend): string => {
-  if (backend.mcp) return backend.mcp.name;
-  if (backend.ai) return backend.ai.name;
-  if (backend.service) return backend.service.name.hostname;
+  if (backend.mcp) {
+    if (backend.mcp.targets && backend.mcp.targets.length > 0) {
+      const targetNames = backend.mcp.targets.map(t => t.name).join(", ");
+      return `MCP: ${targetNames}`;
+    }
+    return "MCP Backend";
+  }
+  if (backend.ai) {
+    if (backend.ai.provider) {
+      const provider = Object.keys(backend.ai.provider)[0];
+      const config = Object.values(backend.ai.provider)[0] as any;
+      if (config?.model) {
+        return `${provider.toUpperCase()}: ${config.model}`;
+      }
+      return `${provider.toUpperCase()} Backend`;
+    }
+    return "AI Backend";
+  }
+  if (backend.service) return backend.service.name?.hostname || "";
   if (backend.host) {
     return typeof backend.host === "string" ? backend.host : String(backend.host);
   }
@@ -167,9 +189,11 @@ export const getBackendDetails = (backend: Backend): { primary: string; secondar
 // Form validation functions
 export const validateCommonFields = (
   form: typeof DEFAULT_BACKEND_FORM,
-  editingBackend?: boolean
+  editingBackend?: boolean,
+  backendType?: string
 ): boolean => {
-  if (!form.name.trim()) return false;
+  if (backendType !== "ai" && backendType !== "mcp" && !form.name.trim()) return false;
+  
   // Only validate route selection when adding (not editing)
   if (!editingBackend && (!form.selectedBindPort || form.selectedRouteIndex === "")) return false;
 
@@ -217,7 +241,7 @@ export const validateBackendForm = (
   backendType: string,
   editingBackend?: boolean
 ): boolean => {
-  if (!validateCommonFields(form, editingBackend)) return false;
+  if (!validateCommonFields(form, editingBackend, backendType)) return false;
 
   switch (backendType) {
     case "service":
@@ -274,7 +298,6 @@ export const createHostBackend = (form: typeof DEFAULT_BACKEND_FORM, weight: num
 export const createMcpTarget = (target: any) => {
   const baseTarget = {
     name: target.name,
-    filters: [], // Target filters if needed
   };
 
   switch (target.type) {
@@ -301,18 +324,9 @@ export const createMcpTarget = (target: any) => {
         ...baseTarget,
         stdio: {
           cmd: target.cmd,
-          args: target.args ? target.args.split(",").map((arg: string) => arg.trim()) : [],
-          env: target.env
-            ? Object.fromEntries(
-                target.env
-                  .split(",")
-                  .map((pair: string) => {
-                    const [key, value] = pair.split("=");
-                    return [key?.trim(), value?.trim()];
-                  })
-                  .filter(([key, value]: [string, string]) => key && value)
-              )
-            : {},
+          args: Array.isArray(target.args) ? target.args.filter((arg: string) => arg.trim()) : [],
+          env: typeof target.env === 'object' && target.env !== null && !Array.isArray(target.env) ? 
+            Object.fromEntries(Object.entries(target.env).filter(([key, value]) => typeof key === 'string' && key.trim() && String(value).trim())) : {},
         },
       };
     case "openapi":
@@ -334,7 +348,6 @@ export const createMcpBackend = (form: typeof DEFAULT_BACKEND_FORM, weight: numb
   return addWeightIfNeeded(
     {
       mcp: {
-        name: form.name,
         targets,
       },
     },
@@ -375,7 +388,6 @@ export const createAiProviderConfig = (form: typeof DEFAULT_BACKEND_FORM) => {
 
 export const createAiBackend = (form: typeof DEFAULT_BACKEND_FORM, weight: number): Backend => {
   const aiConfig: any = {
-    name: form.name,
     provider: createAiProviderConfig(form),
   };
 
@@ -437,7 +449,7 @@ export const getAvailableRoutes = (binds: Bind[]) => {
 
         routes.push({
           bindPort: bind.port,
-          listenerName: listener.name || "unnamed",
+          listenerName: listener.name || "unnamed listener",
           routeIndex,
           routeName,
           path,
@@ -474,10 +486,10 @@ export const populateFormFromBackend = (
   const backendType = getBackendType(backend);
 
   return {
-    name: getBackendName(backend),
+    name: (backendType === "ai" || backendType === "mcp") ? "" : getBackendName(backend) || "",
     weight: String(backend.weight || 1),
     selectedBindPort: String(bind.port),
-    selectedListenerName: listener.name || "unnamed",
+    selectedListenerName: listener.name || "",
     selectedRouteIndex: String(routeIndex),
 
     serviceNamespace: backend.service?.name?.namespace || "",
@@ -502,14 +514,14 @@ export const populateFormFromBackend = (
       backend.mcp?.targets?.map((target) => {
         const baseTarget = {
           name: target.name,
-          type: "sse" as const,
+          type: "sse" as "sse" | "mcp" | "stdio" | "openapi",
           host: "",
           port: "",
           path: "",
           fullUrl: "",
           cmd: "",
-          args: "",
-          env: "",
+          args: [] as string[],
+          env: {} as Record<string, string>,
           schema: true,
         };
 
@@ -537,11 +549,9 @@ export const populateFormFromBackend = (
           return {
             ...baseTarget,
             type: "stdio" as const,
-            cmd: target.stdio.cmd,
-            args: target.stdio.args?.join(", ") || "",
-            env: Object.entries(target.stdio.env || {})
-              .map(([k, v]) => `${k}=${v}`)
-              .join(", "),
+            cmd: target.stdio.cmd || "",
+            args: target.stdio.args || [],
+            env: target.stdio.env || {},
           };
         } else if (target.openapi) {
           const fullUrl = `http://${target.openapi.host}:${target.openapi.port}`;
@@ -571,4 +581,56 @@ export const populateFormFromBackend = (
     aiHostHostname: backend.ai?.hostOverride?.Hostname?.[0] || "",
     aiHostPort: String(backend.ai?.hostOverride?.Hostname?.[1] || ""),
   };
+};
+
+/**
+ * Check if a route has backend policies that require exactly 1 backend
+ */
+export const hasBackendPolicies = (route: Route) => {
+  return getBackendPolicyKeys(route).length > 0;
+};
+
+/**
+ * Get the backend policy keys configured on a route
+ */
+export const getBackendPolicyKeys = (route: Route): BackendPolicyKey[] => {
+  if (!route?.policies) return [];
+  
+  return BACKEND_POLICY_KEYS.filter(policyKey => 
+    route.policies![policyKey] !== undefined && route.policies![policyKey] !== null
+  );
+};
+
+/**
+ * Get the display names of backend policies configured on a route
+ */
+export const getBackendPolicyTypes = (route: Route): string[] => {
+  const policyKeys = getBackendPolicyKeys(route);
+  return policyKeys.map(key => POLICY_TYPES[key].name);
+};
+
+/**
+ * Check if a backend can be deleted based on backend policy constraints
+ */
+export const canDeleteBackend = (route: Route, currentBackendCount: number): { canDelete: boolean; reason: string } => {
+  if (!hasBackendPolicies(route)) {
+    return { canDelete: true, reason: "" };
+  }
+  
+  // If there are backend policies, we need exactly 1 backend after deletion
+  const remainingBackends = currentBackendCount - 1;
+  if (remainingBackends !== 1) {
+    const policyTypes = getBackendPolicyTypes(route);
+    const action = remainingBackends === 0 ? "remove all backends" : 
+                  remainingBackends > 1 ? "have multiple backends" : "have this configuration";
+    
+    return {
+      canDelete: false,
+      reason: `Cannot ${action} when backend policies are configured. ` +
+              `The following policies require exactly 1 backend: ${policyTypes.join(", ")}. ` +
+              `Please remove these policies first.`
+    };
+  }
+  
+  return { canDelete: true, reason: "" };
 };

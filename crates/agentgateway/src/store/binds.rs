@@ -13,8 +13,10 @@ use tracing::{Level, instrument};
 use crate::cel::ContextBuilder;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::BackendTLS;
-use crate::http::{ext_authz, remoteratelimit};
+use crate::http::ext_proc::InferenceRouting;
+use crate::http::{ext_authz, ext_proc, remoteratelimit};
 use crate::mcp::rbac::{RuleSet, RuleSets};
+use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey,
@@ -54,6 +56,7 @@ pub struct BackendPolicies {
 	// bool represents "should use default settings for provider"
 	pub llm_provider: Option<(llm::AIProvider, bool)>,
 	pub llm: Option<llm::Policy>,
+	pub inference_routing: Option<InferenceRouting>,
 }
 
 impl BackendPolicies {
@@ -65,6 +68,15 @@ impl BackendPolicies {
 			a2a: other.a2a.or(self.a2a),
 			llm: other.llm.or(self.llm),
 			llm_provider: other.llm_provider.or(self.llm_provider),
+			inference_routing: other.inference_routing.or(self.inference_routing),
+		}
+	}
+	/// build the inference routing configuration. This may be a NO-OP config.
+	pub fn build_inference(&self, client: PolicyClient) -> ext_proc::InferencePoolRouter {
+		if let Some(inference) = &self.inference_routing {
+			inference.build(client)
+		} else {
+			ext_proc::InferencePoolRouter::default()
 		}
 	}
 }
@@ -155,102 +167,79 @@ impl Store {
 			.flatten()
 			.chain(route.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_name.get(n))
-			.collect_vec();
-		let local_rate_limit = rules.iter().find_map(|n| match &n.policy {
-			Policy::LocalRateLimit(lrl) => Some(lrl.clone()),
-			_ => None,
-		});
-		let jwt = rules.iter().find_map(|n| match &n.policy {
-			Policy::JwtAuth(lrl) => Some(lrl.clone()),
-			_ => None,
-		});
-		let ext_authz = rules.iter().find_map(|n| match &n.policy {
-			Policy::ExtAuthz(lrl) => Some(lrl.clone()),
-			_ => None,
-		});
-		let remote_rate_limit = rules.iter().find_map(|n| match &n.policy {
-			Policy::RemoteRateLimit(lrl) => Some(lrl.clone()),
-			_ => None,
-		});
-		let transformation = rules.iter().find_map(|n| match &n.policy {
-			Policy::Transformation(lrl) => Some(lrl.clone()),
-			_ => None,
-		});
-		RoutePolicies {
-			local_rate_limit: local_rate_limit.unwrap_or_default(),
-			remote_rate_limit,
-			jwt,
-			ext_authz,
-			transformation,
+			.filter_map(|n| self.policies_by_name.get(n));
+
+		let mut pol = RoutePolicies {
+			local_rate_limit: vec![],
+			remote_rate_limit: None,
+			jwt: None,
+			ext_authz: None,
+			transformation: None,
+		};
+		for rule in rules {
+			match &rule.policy {
+				Policy::LocalRateLimit(p) => {
+					if pol.local_rate_limit.is_empty() {
+						pol.local_rate_limit = p.clone();
+					}
+				},
+				Policy::ExtAuthz(p) => {
+					pol.ext_authz.get_or_insert_with(|| p.clone());
+				},
+				Policy::RemoteRateLimit(p) => {
+					pol.remote_rate_limit.get_or_insert_with(|| p.clone());
+				},
+				Policy::JwtAuth(p) => {
+					pol.jwt.get_or_insert_with(|| p.clone());
+				},
+				Policy::Transformation(p) => {
+					pol.transformation.get_or_insert_with(|| p.clone());
+				},
+				_ => {}, // others are not route policies
+			}
 		}
+
+		pol
 	}
 
 	pub fn backend_policies(&self, tgt: PolicyTarget) -> BackendPolicies {
-		let tls = self
-			// This is a terrible approach!
-			.policies_by_name
-			.values()
-			.filter_map(|p| {
-				if p.target != tgt {
-					return None;
-				};
-				match &p.policy {
-					Policy::BackendTLS(btls) => Some(btls.clone()),
-					_ => None,
-				}
-			})
-			.next();
-		let auth = self
-			// This is a terrible approach!
-			.policies_by_name
-			.values()
-			.filter_map(|p| {
-				if p.target != tgt {
-					return None;
-				};
-				match &p.policy {
-					Policy::BackendAuth(ba) => Some(ba.clone()),
-					_ => None,
-				}
-			})
-			.next();
-		let a2a = self
-			// This is a terrible approach!
-			.policies_by_name
-			.values()
-			.filter_map(|p| {
-				if p.target != tgt {
-					return None;
-				};
-				match &p.policy {
-					Policy::A2a(ba) => Some(ba.clone()),
-					_ => None,
-				}
-			})
-			.next();
-		let llm = self
-			// This is a terrible approach!
-			.policies_by_name
-			.values()
-			.filter_map(|p| {
-				if p.target != tgt {
-					return None;
-				};
-				match &p.policy {
-					Policy::AI(ba) => Some(ba.clone()),
-					_ => None,
-				}
-			})
-			.next();
-		BackendPolicies {
-			backend_tls: tls,
-			backend_auth: auth,
-			a2a,
-			llm,
+		let rules = self.policies_by_target.get(&tgt);
+		let rules = rules
+			.iter()
+			.copied()
+			.flatten()
+			.filter_map(|n| self.policies_by_name.get(n));
+
+		let mut pol = BackendPolicies {
+			backend_tls: None,
+			backend_auth: None,
+			a2a: None,
+			llm: None,
+			inference_routing: None,
 			// These are not attached policies but are represented in this struct for code organization
 			llm_provider: None,
+		};
+		for rule in rules {
+			match &rule.policy {
+				Policy::A2a(p) => {
+					pol.a2a.get_or_insert_with(|| p.clone());
+				},
+				Policy::BackendTLS(p) => {
+					pol.backend_tls.get_or_insert_with(|| p.clone());
+				},
+				Policy::BackendAuth(p) => {
+					pol.backend_auth.get_or_insert_with(|| p.clone());
+				},
+				Policy::AI(p) => {
+					pol.llm.get_or_insert_with(|| p.clone());
+				},
+				Policy::InferenceRouting(p) => {
+					pol.inference_routing.get_or_insert_with(|| p.clone());
+				},
+				_ => {},
+			}
 		}
+		pol
 	}
 
 	pub fn mcp_policies(&self, backend: BackendName) -> (RuleSets, Option<McpAuthentication>) {
@@ -511,6 +500,7 @@ impl Store {
 			Some(XdsKind::Listener(w)) => self.insert_xds_listener(w),
 			Some(XdsKind::Route(w)) => self.insert_xds_route(w),
 			Some(XdsKind::Backend(w)) => self.insert_xds_backend(w),
+			Some(XdsKind::Policy(w)) => self.insert_xds_policy(w),
 			_ => Err(anyhow::anyhow!("unknown resource type")),
 		}
 	}
@@ -537,7 +527,7 @@ impl Store {
 		Ok(())
 	}
 	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
-		let backend: (Backend) = (&raw).try_into()?;
+		let backend: Backend = (&raw).try_into()?;
 		self.insert_backend(backend);
 		Ok(())
 	}

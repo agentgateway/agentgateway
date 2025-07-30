@@ -42,6 +42,9 @@ pub trait OptionExt<T>: Sized {
 	fn display(&self) -> Option<ValueBag>
 	where
 		T: Display;
+	fn debug(&self) -> Option<ValueBag>
+	where
+		T: Debug;
 }
 
 impl<T: 'static> OptionExt<T> for Option<T> {
@@ -50,6 +53,12 @@ impl<T: 'static> OptionExt<T> for Option<T> {
 		T: Display,
 	{
 		self.as_ref().map(display)
+	}
+	fn debug(&self) -> Option<ValueBag>
+	where
+		T: Debug,
+	{
+		self.as_ref().map(debug)
 	}
 }
 

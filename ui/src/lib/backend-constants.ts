@@ -26,8 +26,8 @@ export const DEFAULT_BACKEND_FORM = {
     fullUrl: string;
     // Stdio fields
     cmd: string;
-    args: string;
-    env: string;
+    args: string[];
+    env: Record<string, string>;
     // OpenAPI schema placeholder
     schema: boolean;
   }>,
@@ -50,8 +50,8 @@ export const DEFAULT_MCP_TARGET = {
   path: "",
   fullUrl: "",
   cmd: "",
-  args: "",
-  env: "",
+  args: [] as string[],
+  env: {} as Record<string, string>,
   schema: true,
 };
 
