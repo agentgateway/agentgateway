@@ -1,6 +1,6 @@
 # agentgateway UI
 
-The agentgateway UI is a web-based interface for managing an Agent Gateway.
+The agentgateway UI is a web-based interface for managing an agentgateway.
 
 ## Development
 

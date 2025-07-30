@@ -115,7 +115,9 @@ reqwest = { version = "0.12", default-features = false, features = [
     "macos-system-configuration",
     "rustls-tls",
 ] }
-rmcp = { version = "0.3", features = [
+# Use release version once 0.3.2 comes out
+#rmcp = { version = "0.3", features = [
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", rev = "0a9a0a0b1f234bd296459fc98b41fd6215c8e3a9", features = [
     "client",
     "transport-sse-server",
     "transport-sse-client",

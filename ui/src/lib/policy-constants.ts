@@ -149,3 +149,22 @@ export const POLICY_TYPES: Record<PolicyType, PolicyTypeInfo> = {
     httpOnly: true,
   },
 };
+
+/**
+ * Backend policy types (policies that affect backend routing and require exactly 1 backend)
+ */
+export const BACKEND_POLICY_KEYS: readonly PolicyType[] = [
+  'mcpAuthentication',
+  'mcpAuthorization', 
+  'backendTLS',
+  'backendAuth',
+  'ai',
+  'a2a',
+] as const;
+
+/**
+ * Check if a policy type is a backend policy
+ */
+export const isBackendPolicy = (policyType: PolicyType): boolean => {
+  return BACKEND_POLICY_KEYS.includes(policyType);
+};

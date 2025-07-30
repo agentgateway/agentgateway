@@ -1053,8 +1053,7 @@
                                 "default": false
                               }
                             },
-                            "additionalProperties": false,
-                            "default": null
+                            "additionalProperties": false
                           },
                           "backendAuth": {
                             "description": "Authenticate to the backend.",

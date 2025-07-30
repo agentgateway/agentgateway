@@ -282,11 +282,6 @@ export async function createMcpTarget(
         name: target.name,
       };
 
-      // Only add filters if they exist and have content
-      if (target.filters && target.filters.length > 0) {
-        targetData.filters = target.filters;
-      }
-
       // Add the appropriate target type based on what's provided
       if (target.sse) {
         targetData.sse = target.sse;

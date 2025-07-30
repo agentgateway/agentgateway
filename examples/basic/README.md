@@ -37,6 +37,14 @@ targets:
     args: ["@modelcontextprotocol/server-everything"]
 ```
 
+> [!TIP]
+> If you don't have `npx`, you can also run with docker:
+> ```yaml
+> stdio:
+>   cmd: docker
+>   args: ["run", "--rm", "-i", "mcp/everything"]
+> ```
+
 When clients connect to the gateway, the `cmd` will be executed to serve the traffic.
 
 Now that we have the gateway running, we can use the [mcpinspector](https://github.com/modelcontextprotocol/inspector) to try it out.

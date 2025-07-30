@@ -170,7 +170,7 @@ export const RouteTable: React.FC<RouteTableProps> = ({
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
-                              {combinedRoute.listener.name || "unnamed"}
+                              {combinedRoute.listener.name || "unnamed listener"}
                             </Badge>
                           </TableCell>
                           <TableCell>

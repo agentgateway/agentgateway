@@ -66,7 +66,37 @@ message Route {
 message TrafficPolicy {
   google.protobuf.Duration backend_request_timeout = 1;
   google.protobuf.Duration request_timeout = 2;
+  Retry retry = 3;
 }
+
+message Retry {
+  repeated int32 retry_status_codes = 1;
+  int32 attempts = 2;
+  google.protobuf.Duration backoff = 3;
+}
+
+message BackendAuthPolicy {
+  oneof kind {
+    Passthrough passthrough = 1;
+    Key key = 2;
+    Gcp gcp = 3;
+    Aws aws = 4;
+  }
+}
+
+// No fields needed for passthrough authentication.
+message Passthrough {}
+
+// Contains a secret for authentication, e.g. an API key.
+message Key {
+  string secret = 1;
+}
+
+// GCP-specific backend authentication.
+message Gcp {}
+
+// AWS-specific backend authentication.
+message Aws {}
 
 message RouteMatch {
   PathMatch path = 1;
@@ -206,13 +236,30 @@ message PolicySpec {
   message A2a {
   }
   message InferenceRouting {
+    enum FailureMode {
+      UNKNOWN = 0;
+      FAIL_CLOSED = 1;
+      FAIL_OPEN = 2;
+    }
     BackendReference endpoint_picker = 1;
+    FailureMode failure_mode = 2;
+  }
+  message BackendTLS {
+    google.protobuf.BytesValue cert = 1;
+    google.protobuf.BytesValue key = 2;
+    // Root to verify. If not set, system certs will be used.
+    // If no verification is desired, use 'insecure'
+    google.protobuf.BytesValue root = 3;
+    // Disable all verification
+    google.protobuf.BoolValue insecure = 4;
   }
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;
     A2a a2a = 3;
     InferenceRouting inference_routing = 4;
+    BackendTLS backend_tls = 5;
+    BackendAuthPolicy auth = 6;
   }
 }
 

@@ -1,20 +1,5 @@
 use std::convert::Infallible;
 
-use ::http::Uri;
-use ::http::uri::Authority;
-use anyhow::anyhow;
-use bytes::Bytes;
-use http_body::Frame;
-use http_body_util::BodyStream;
-use itertools::Itertools;
-use minijinja::__context::build;
-use proto::body_mutation::Mutation;
-use proto::processing_request::Request;
-use proto::processing_response::Response;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
-
 use crate::client::{Client, Transport};
 use crate::control::AuthSource;
 use crate::http::backendtls::BackendTLS;
@@ -29,6 +14,22 @@ use crate::types::agent;
 use crate::types::agent::{Backend, SimpleBackendReference, Target};
 use crate::types::discovery::NamespacedHostname;
 use crate::*;
+use ::http::Uri;
+use ::http::uri::Authority;
+use anyhow::anyhow;
+use axum::body::to_bytes;
+use bytes::Bytes;
+use http_body::{Body, Frame};
+use http_body_util::BodyStream;
+use itertools::Itertools;
+use minijinja::__context::build;
+use proto::body_mutation::Mutation;
+use proto::processing_request::Request;
+use proto::processing_response::Response;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::Status;
 
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -36,10 +37,19 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.ext_proc.v3");
 }
 
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FailureMode {
+	#[default]
+	FailClosed,
+	FailOpen,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InferenceRouting {
 	pub target: Arc<SimpleBackendReference>,
+	pub failure_mode: FailureMode,
 }
 
 #[derive(Debug, Default)]
@@ -50,7 +60,7 @@ pub struct InferencePoolRouter {
 impl InferenceRouting {
 	pub fn build(&self, client: PolicyClient) -> InferencePoolRouter {
 		InferencePoolRouter {
-			ext_proc: Some(ExtProc::new(client, self.target.clone())),
+			ext_proc: Some(ExtProc::new(client, self.target.clone(), self.failure_mode)),
 		}
 	}
 }
@@ -67,7 +77,7 @@ impl InferencePoolRouter {
 		*req = ext_proc
 			.mutate_request(r)
 			.await
-			.context("ext_proc call")
+			.context("ext_proc request call")
 			.map_err(ProxyError::Processing)?;
 		let dest = req
 			.headers()
@@ -87,7 +97,7 @@ impl InferencePoolRouter {
 		*resp = ext_proc
 			.mutate_response(r)
 			.await
-			.context("ext_proc call")
+			.context("ext_proc response call")
 			.map_err(ProxyError::Processing)?;
 		Ok(())
 	}
@@ -96,12 +106,18 @@ impl InferencePoolRouter {
 // Very experimental support for ext_proc
 #[derive(Debug)]
 pub struct ExtProc {
+	failure_mode: FailureMode,
+	skipped: bool,
 	tx_req: Sender<ProcessingRequest>,
 	rx_resp: Receiver<ProcessingResponse>,
 }
 
 impl ExtProc {
-	pub fn new(client: PolicyClient, target: Arc<SimpleBackendReference>) -> ExtProc {
+	pub fn new(
+		client: PolicyClient,
+		target: Arc<SimpleBackendReference>,
+		failure_mode: FailureMode,
+	) -> ExtProc {
 		trace!("connecting to {:?}", target);
 		let chan = GrpcReferenceChannel { target, client };
 		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);
@@ -111,10 +127,12 @@ impl ExtProc {
 		tokio::task::spawn(async move {
 			// Spawn a task to handle processing requests.
 			// Incoming requests get send to tx_req and will be piped through here.
-			//
-			let Ok(responses) = c.process(req_stream).await else {
-				warn!("failed to initialize endpoint picker");
-				return;
+			let responses = match c.process(req_stream).await {
+				Ok(r) => r,
+				Err(e) => {
+					warn!(?failure_mode, "failed to initialize endpoint picker: {e:?}");
+					return;
+				},
 			};
 			trace!("initial stream established");
 			let mut responses = responses.into_inner();
@@ -123,7 +141,12 @@ impl ExtProc {
 				let _ = tx_resp.send(item).await;
 			}
 		});
-		Self { tx_req, rx_resp }
+		Self {
+			skipped: false,
+			failure_mode,
+			tx_req,
+			rx_resp,
+		}
 	}
 
 	async fn recv(&mut self) -> anyhow::Result<ProcessingResponse> {
@@ -145,11 +168,22 @@ impl ExtProc {
 		let headers = to_header_map(req.headers());
 		let (parts, body) = req.into_parts();
 
+		// For fail open we need a copy of the body. There is definitely a better way to do this, but for
+		// now its good enough?
+		let (body_copy, body) = if self.failure_mode == FailureMode::FailOpen {
+			let buffered = to_bytes(body, 2_097_152).await?;
+			(Some(buffered.clone()), http::Body::from(buffered))
+		} else {
+			(None, body)
+		};
+
+		let end_of_stream = body.is_end_stream();
 		let preq = processing_request(Request::RequestHeaders(HttpHeaders {
 			headers,
 			attributes: Default::default(),
-			end_of_stream: false,
+			end_of_stream,
 		}));
+		let had_body = !end_of_stream;
 
 		// Send the request headers to ext_proc.
 		self.send_request(preq).await?;
@@ -157,45 +191,62 @@ impl ExtProc {
 		// We will spin off a task that is going to pipe the body to the ext_proc server as we read it.
 		let tx = self.tx_req.clone();
 
-		tokio::task::spawn(async move {
-			let mut stream = BodyStream::new(body);
-			while let Some(Ok(frame)) = stream.next().await {
-				let preq = if frame.is_data() {
-					let frame = frame.into_data().expect("already checked");
-					processing_request(Request::RequestBody(HttpBody {
-						body: frame.into(),
-						end_of_stream: false,
-					}))
-				} else if frame.is_trailers() {
-					let frame = frame.into_trailers().expect("already checked");
-					processing_request(Request::RequestTrailers(HttpTrailers {
-						trailers: to_header_map(&frame),
-					}))
-				} else {
-					panic!("unknown type")
-				};
-				trace!("sending request body chunk...");
-				let Ok(()) = tx.send(preq).await else {
-					// TODO: on error here we need a way to signal to the outer task to fail fast
-					return;
-				};
-			}
-			// Now that the body is done, send end of stream
-			let preq = processing_request(Request::RequestBody(HttpBody {
-				body: Default::default(),
-				end_of_stream: true,
-			}));
-			let _ = tx.send(preq).await;
-			trace!("body request done");
-		});
+		if had_body {
+			tokio::task::spawn(async move {
+				let mut stream = BodyStream::new(body);
+				while let Some(Ok(frame)) = stream.next().await {
+					let preq = if frame.is_data() {
+						let frame = frame.into_data().expect("already checked");
+						processing_request(Request::RequestBody(HttpBody {
+							body: frame.into(),
+							end_of_stream: false,
+						}))
+					} else if frame.is_trailers() {
+						let frame = frame.into_trailers().expect("already checked");
+						processing_request(Request::RequestTrailers(HttpTrailers {
+							trailers: to_header_map(&frame),
+						}))
+					} else {
+						panic!("unknown type")
+					};
+					trace!("sending request body chunk...");
+					let Ok(()) = tx.send(preq).await else {
+						// TODO: on error here we need a way to signal to the outer task to fail fast
+						return;
+					};
+				}
+				// Now that the body is done, send end of stream
+				let preq = processing_request(Request::RequestBody(HttpBody {
+					body: Default::default(),
+					end_of_stream: true,
+				}));
+				let _ = tx.send(preq).await;
+
+				trace!("body request done");
+			});
+		}
 		// Now we need to build the new body. This is going to be streamed in from the ext_proc server.
 		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
 		let body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
 		let mut req = http::Request::from_parts(parts, http::Body::new(body));
 		loop {
 			// Loop through all the ext_proc responses and process them
-			let resp = self.recv().await?;
-			if handle_response_for_request_mutation(&mut req, &mut tx_chunk, resp).await? {
+			let resp = match self.recv().await {
+				Ok(r) => r,
+				Err(e) => {
+					if self.failure_mode == FailureMode::FailOpen {
+						self.skipped = true;
+						let (parts, _) = req.into_parts();
+						return Ok(http::Request::from_parts(
+							parts,
+							http::Body::from(body_copy.unwrap()),
+						));
+					} else {
+						return Err(e);
+					}
+				},
+			};
+			if handle_response_for_request_mutation(had_body, &mut req, &mut tx_chunk, resp).await? {
 				trace!("request complete!");
 				return Ok(req);
 			}
@@ -206,6 +257,9 @@ impl ExtProc {
 		&mut self,
 		mut req: http::Response,
 	) -> anyhow::Result<http::Response> {
+		if self.skipped {
+			return Ok(req);
+		}
 		let headers = to_header_map(req.headers());
 		let (parts, body) = req.into_parts();
 
@@ -269,13 +323,20 @@ impl ExtProc {
 
 // handle_response_for_request_mutation handles a single ext_proc response. If it returns 'true' we are done processing.
 async fn handle_response_for_request_mutation(
+	had_body: bool,
 	req: &mut http::Request,
 	body_tx: &mut Sender<Result<Frame<Bytes>, Infallible>>,
 	presp: ProcessingResponse,
 ) -> anyhow::Result<bool> {
 	let cr = match presp.response {
-		Some(Response::RequestHeaders(HeadersResponse { response: Some(cr) })) => cr,
-		Some(Response::RequestBody(BodyResponse { response: Some(cr) })) => cr,
+		Some(Response::RequestHeaders(HeadersResponse { response: Some(cr) })) => {
+			trace!("got request headers back");
+			cr
+		},
+		Some(Response::RequestBody(BodyResponse { response: Some(cr) })) => {
+			trace!("got request body back");
+			cr
+		},
 		msg => {
 			// In theory, there can trailers too. EPP never sends them
 			warn!("ignoring {msg:?}");
@@ -309,6 +370,7 @@ async fn handle_response_for_request_mutation(
 				let eos = bb.end_of_stream;
 				let by = bytes::Bytes::from(bb.body);
 				let _ = body_tx.send(Ok(Frame::data(by.clone()))).await;
+				trace!(eos, "got stream request body");
 				return Ok(eos);
 			},
 			Mutation::Body(_) => {
@@ -318,6 +380,9 @@ async fn handle_response_for_request_mutation(
 				warn!("ClearBody() not valid for streaming mode, skipping...");
 			},
 		}
+	} else if !had_body {
+		trace!("got headers back and do not expect body; we are done");
+		return Ok(true);
 	}
 	trace!("still waiting for response...");
 	Ok(false)

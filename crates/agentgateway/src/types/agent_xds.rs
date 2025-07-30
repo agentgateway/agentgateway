@@ -30,8 +30,8 @@ use crate::http::auth::BackendAuth;
 use crate::http::jwt::Jwt;
 use crate::http::localratelimit::RateLimit;
 use crate::http::{
-	HeaderName, HeaderValue, StatusCode, ext_proc, filters, localratelimit, retry, status, timeout,
-	uri,
+	HeaderName, HeaderValue, StatusCode, backendtls, ext_proc, filters, localratelimit, retry,
+	status, timeout, uri,
 };
 use crate::llm::{AIBackend, AIProvider};
 use crate::mcp::rbac::RuleSet;
@@ -42,6 +42,7 @@ use crate::types::proto;
 use crate::types::proto::ProtoError;
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::policy_spec::ExternalAuth;
+use crate::types::proto::agent::policy_spec::inference_routing::FailureMode;
 use crate::types::proto::agent::policy_spec::local_rate_limit::Type;
 use crate::*;
 
@@ -82,6 +83,20 @@ impl TryFrom<&proto::agent::RouteBackend> for RouteBackendReference {
 	}
 }
 
+impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
+	type Error = ProtoError;
+
+	fn try_from(s: proto::agent::BackendAuthPolicy) -> Result<Self, Self::Error> {
+		Ok(match s.kind {
+			Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuth::Passthrough {},
+			Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key(k.secret.into()),
+			Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => BackendAuth::Gcp {},
+			Some(proto::agent::backend_auth_policy::Kind::Aws(a)) => BackendAuth::Aws {},
+			None => return Err(ProtoError::MissingRequiredField),
+		})
+	}
+}
+
 impl TryFrom<proto::agent::TrafficPolicy> for TrafficPolicy {
 	type Error = ProtoError;
 
@@ -92,13 +107,34 @@ impl TryFrom<proto::agent::TrafficPolicy> for TrafficPolicy {
 			.map(|v| v.try_into())
 			.transpose()?;
 
+		let retry = s
+			.retry
+			.map(
+				|retry_proto| -> Result<crate::http::retry::Policy, ProtoError> {
+					let codes: Result<Vec<http::StatusCode>, _> = retry_proto
+						.retry_status_codes
+						.iter()
+						.map(|&v| {
+							http::StatusCode::from_u16(v as u16)
+								.map_err(|_| ProtoError::Generic(format!("invalid status code: {v}")))
+						})
+						.collect();
+					Ok(crate::http::retry::Policy {
+						codes: codes?.into_boxed_slice(),
+						attempts: std::num::NonZeroU8::new(retry_proto.attempts as u8)
+							.unwrap_or_else(|| std::num::NonZeroU8::new(1).unwrap()),
+						backoff: retry_proto.backoff.map(|v| v.try_into()).transpose()?,
+					})
+				},
+			)
+			.transpose()?;
+
 		Ok(Self {
 			timeout: crate::http::timeout::Policy {
 				request_timeout: req,
 				backend_request_timeout: backend,
 			},
-			// TODO: pass in XDS
-			retry: None,
+			retry,
 		})
 	}
 }
@@ -194,7 +230,11 @@ impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
 				.iter()
 				.map(RouteBackendReference::try_from)
 				.collect::<Result<Vec<_>, _>>()?,
-			policies: s.traffic_policy.map(TrafficPolicy::try_from).transpose()?,
+			policies: s
+				.traffic_policy
+				.clone()
+				.map(TrafficPolicy::try_from)
+				.transpose()?,
 		};
 		Ok((r, strng::new(&s.listener_key)))
 	}
@@ -205,14 +245,14 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 
 	fn try_from(s: &proto::agent::Backend) -> Result<Self, Self::Error> {
 		let name = BackendName::from(&s.name);
-		Ok(match &s.kind {
+		let backend = match &s.kind {
 			Some(proto::agent::backend::Kind::Static(s)) => Backend::Opaque(
-				name,
+				name.clone(),
 				Target::try_from((s.host.as_str(), s.port as u16))
 					.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
 			Some(proto::agent::backend::Kind::Ai(a)) => Backend::AI(
-				name,
+				name.clone(),
 				AIBackend {
 					host_override: a
 						.r#override
@@ -265,7 +305,7 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 				},
 			),
 			Some(proto::agent::backend::Kind::Mcp(m)) => Backend::MCP(
-				name,
+				name.clone(),
 				McpBackend {
 					targets: m
 						.targets
@@ -277,7 +317,8 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 			_ => {
 				return Err(ProtoError::Generic("unknown backend".to_string()));
 			},
-		})
+		};
+		Ok(backend)
 	}
 }
 
@@ -523,10 +564,31 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 				})
 			},
 			Some(proto::agent::policy_spec::Kind::A2a(a2a)) => Policy::A2a(A2aPolicy {}),
+			Some(proto::agent::policy_spec::Kind::BackendTls(btls)) => {
+				let tls = backendtls::ResolvedBackendTLS {
+					cert: btls.cert.clone(),
+					key: btls.key.clone(),
+					root: btls.root.clone(),
+					insecure: btls.insecure.unwrap_or_default(),
+					insecure_host: false,
+				}
+				.try_into()
+				.map_err(|e| ProtoError::Generic(e.to_string()))?;
+				Policy::BackendTLS(tls)
+			},
 			Some(proto::agent::policy_spec::Kind::InferenceRouting(ir)) => {
 				Policy::InferenceRouting(ext_proc::InferenceRouting {
 					target: Arc::new(resolve_simple_reference(ir.endpoint_picker.as_ref())?),
+					failure_mode: match proto::agent::policy_spec::inference_routing::FailureMode::try_from(
+						ir.failure_mode,
+					)? {
+						FailureMode::Unknown | FailureMode::FailClosed => ext_proc::FailureMode::FailClosed,
+						FailureMode::FailOpen => ext_proc::FailureMode::FailOpen,
+					},
 				})
+			},
+			Some(proto::agent::policy_spec::Kind::Auth(auth)) => {
+				Policy::BackendAuth(BackendAuth::try_from(auth.clone())?)
 			},
 			_ => return Err(ProtoError::EnumParse("unknown spec kind".to_string())),
 		};
