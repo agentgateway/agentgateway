@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # AgentGateway service for testing
+  agentgateway:
+    build:
+      context: ../../../..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../configs:/configs
+    command: >
+      sh -c "
+        echo 'Starting AgentGateway for benchmarking...' &&
+        /usr/local/bin/agentgateway --config /configs/http-proxy.yaml
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - benchmark-net
+
+  # Backend test server
+  test-server:
+    build:
+      context: ../../../..
+      dockerfile: crates/agentgateway/benches/traffic/docker/Dockerfile.test-server
+    ports:
+      - "3001:3001"
+    command: >
+      sh -c "
+        echo 'Starting test backend server...' &&
+        /usr/local/bin/test-server --port 3001
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - benchmark-net
+
+  # Fortio benchmarking service
+  fortio-benchmark:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.fortio
+    depends_on:
+      agentgateway:
+        condition: service_healthy
+      test-server:
+        condition: service_healthy
+    volumes:
+      - ../results:/benchmarks/results
+      - ../configs:/benchmarks/configs
+      - ../payloads:/benchmarks/payloads
+      - ../reports:/benchmarks/reports
+    environment:
+      - AGENTGATEWAY_URL=http://agentgateway:8080
+      - BACKEND_URL=http://test-server:3001
+      - FORTIO_DOCKER=true
+    networks:
+      - benchmark-net
+    profiles:
+      - benchmark
+
+  # Report generator service
+  report-generator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.fortio
+    depends_on:
+      - fortio-benchmark
+    volumes:
+      - ../results:/benchmarks/results
+      - ../reports:/benchmarks/reports
+    working_dir: /benchmarks
+    command: >
+      sh -c "
+        echo 'Generating benchmark reports...' &&
+        python3 reports/generate-comparison.py results/ --verbose &&
+        echo 'Reports generated successfully!'
+      "
+    networks:
+      - benchmark-net
+    profiles:
+      - reports
+
+networks:
+  benchmark-net:
+    driver: bridge
+
+volumes:
+  benchmark-results:
+    driver: local

@@ -1,0 +1,33 @@
+{
+  "type": "capability_exchange",
+  "from": "agent-benchmark-source",
+  "to": "agent-benchmark-target",
+  "exchange_id": "cap-exchange-12345",
+  "capabilities": {
+    "supported_formats": ["json", "xml", "yaml"],
+    "max_payload_size": 1048576,
+    "encryption": "tls",
+    "compression": ["gzip", "deflate"],
+    "protocols": ["http", "websocket", "grpc"],
+    "authentication": ["bearer", "oauth2", "api_key"],
+    "rate_limits": {
+      "requests_per_second": 100,
+      "burst_capacity": 200,
+      "concurrent_connections": 50
+    },
+    "features": {
+      "streaming": true,
+      "batch_processing": true,
+      "async_operations": true,
+      "file_transfer": true,
+      "real_time_updates": true
+    }
+  },
+  "requirements": {
+    "min_protocol_version": "2.0.0",
+    "required_features": ["streaming", "async_operations"],
+    "security_level": "high",
+    "compliance": ["gdpr", "hipaa"]
+  },
+  "timestamp": "2025-07-30T20:02:50Z"
+}

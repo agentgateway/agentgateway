@@ -1,0 +1,44 @@
+{
+  "type": "message",
+  "from": "agent-source-12345",
+  "to": "agent-destination-67890",
+  "message_id": "msg-route-benchmark-001",
+  "payload": {
+    "action": "process_data",
+    "data": {
+      "input_type": "text",
+      "content": "This is a benchmark message for testing A2A protocol routing performance. It contains various data types and structures to simulate real-world agent communication patterns.",
+      "metadata": {
+        "priority": "normal",
+        "category": "data_processing",
+        "tags": ["benchmark", "performance", "routing"],
+        "source_context": {
+          "agent_type": "data_processor",
+          "version": "1.2.3",
+          "capabilities": ["text_analysis", "data_transformation"]
+        }
+      },
+      "processing_instructions": {
+        "algorithm": "standard",
+        "output_format": "json",
+        "include_confidence": true,
+        "max_processing_time": 30000
+      }
+    }
+  },
+  "routing": {
+    "priority": "normal",
+    "timeout": 30,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff_strategy": "exponential",
+      "initial_delay": 1000
+    },
+    "delivery_requirements": {
+      "acknowledgment": true,
+      "encryption": true,
+      "compression": false
+    }
+  },
+  "timestamp": "2025-07-30T20:03:03Z"
+}

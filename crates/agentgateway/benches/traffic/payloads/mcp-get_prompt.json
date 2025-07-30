@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "prompts/get",
+  "params": {
+    "name": "code_review_prompt",
+    "arguments": {
+      "language": "rust",
+      "context": "performance optimization",
+      "code_snippet": "fn benchmark_function() {\n    let start = Instant::now();\n    // Some operation\n    let duration = start.elapsed();\n    println!(\"Duration: {:?}\", duration);\n}",
+      "focus_areas": [
+        "performance",
+        "memory_usage",
+        "error_handling",
+        "best_practices"
+      ]
+    }
+  }
+}

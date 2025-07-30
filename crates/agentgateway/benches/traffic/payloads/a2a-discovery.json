@@ -1,0 +1,25 @@
+{
+  "type": "discovery",
+  "agent_id": "benchmark-agent-12345",
+  "capabilities": [
+    "chat",
+    "search",
+    "analysis",
+    "code_generation",
+    "data_processing",
+    "file_operations"
+  ],
+  "metadata": {
+    "version": "2.1.0",
+    "protocol": "a2a",
+    "supported_formats": ["json", "msgpack", "protobuf"],
+    "max_payload_size": 10485760,
+    "encryption": ["tls", "aes256"],
+    "compression": ["gzip", "lz4"]
+  },
+  "endpoints": {
+    "primary": "https://agent.example.com:8443",
+    "fallback": "https://agent-backup.example.com:8443"
+  },
+  "discovery_timestamp": "2025-07-30T20:02:38Z"
+}

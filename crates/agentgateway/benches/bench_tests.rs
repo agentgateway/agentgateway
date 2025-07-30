@@ -1,4 +1,5 @@
 use std::time::Duration;
+use std::collections::HashMap;
 
 use agentgateway::*;
 use divan::Bencher;
@@ -14,112 +15,397 @@ fn main() {
 }
 
 // =============================================================================
-// FOUNDATION BENCHMARKS - Phase 1
+// ENHANCED MICROBENCHMARKS - Phase 1 (Real Operations, No Artificial Delays)
 // =============================================================================
 
-mod proxy_benchmarks {
+mod config_benchmarks {
     use super::*;
-    use bytes::Bytes;
-    use ::http::{Request, Response, StatusCode};
-    use http_body_util::Full;
-    use tokio::runtime::Runtime;
-    use base64::Engine;
-
-    /// Benchmark basic HTTP request/response latency
-    #[divan::bench(args = [1, 10, 100, 1000])]
-    fn http_request_latency(bencher: Bencher, _concurrent_requests: usize) {
-        let rt = Runtime::new().unwrap();
-        
+    use agentgateway::config::parse_config;
+    
+    /// Benchmark configuration parsing performance with real YAML parsing
+    #[divan::bench(args = ["simple", "complex", "multi_tenant"])]
+    fn config_parsing_performance(bencher: Bencher, config_type: &str) {
         bencher
             .with_inputs(|| {
-                // Setup mock HTTP request
-                Request::builder()
-                    .method("GET")
-                    .uri("http://localhost:8080/test")
-                    .header("content-type", "application/json")
-                    .body(Full::new(Bytes::from("{\"test\": \"data\"}")))
-                    .unwrap()
+                match config_type {
+                    "simple" => r#"
+config:
+  admin_addr: "127.0.0.1:15000"
+  stats_addr: "0.0.0.0:15020"
+  readiness_addr: "0.0.0.0:15021"
+  enable_ipv6: true
+  network: "default"
+  xds_address: "https://istiod.istio-system.svc:15010"
+  namespace: "default"
+  gateway: "gateway"
+"#.to_string(),
+                    "complex" => r#"
+config:
+  admin_addr: "127.0.0.1:15000"
+  stats_addr: "0.0.0.0:15020"
+  readiness_addr: "0.0.0.0:15021"
+  enable_ipv6: true
+  network: "production"
+  xds_address: "https://istiod.istio-system.svc:15010"
+  namespace: "production"
+  gateway: "production-gateway"
+  trust_domain: "cluster.local"
+  service_account: "default"
+  cluster_id: "Kubernetes"
+  connection_min_termination_deadline: "5s"
+  connection_termination_deadline: "30s"
+  http2:
+    window_size: 4194304
+    connection_window_size: 16777216
+    frame_size: 1048576
+    pool_max_streams_per_conn: 100
+    pool_unused_release_timeout: "300s"
+  tracing:
+    otlp_endpoint: "http://jaeger:14268/api/traces"
+    fields:
+      add:
+        custom_field: "request.headers['x-custom']"
+      remove:
+        - "sensitive_header"
+  logging:
+    filter: "level >= 'info'"
+    fields:
+      add:
+        request_id: "request.headers['x-request-id']"
+      remove:
+        - "authorization"
+"#.to_string(),
+                    "multi_tenant" => {
+                        let mut config = r#"
+config:
+  admin_addr: "127.0.0.1:15000"
+  stats_addr: "0.0.0.0:15020"
+  readiness_addr: "0.0.0.0:15021"
+  enable_ipv6: true
+  network: "multi-tenant"
+  xds_address: "https://istiod.istio-system.svc:15010"
+  namespace: "multi-tenant"
+  gateway: "multi-tenant-gateway"
+  trust_domain: "cluster.local"
+  service_account: "default"
+  cluster_id: "Kubernetes"
+  http2:
+    window_size: 8388608
+    connection_window_size: 33554432
+    frame_size: 2097152
+    pool_max_streams_per_conn: 200
+    pool_unused_release_timeout: "600s"
+"#.to_string();
+                        
+                        // Add multiple tenant configurations
+                        for i in 0..10 {
+                            config.push_str(&format!(r#"
+  tenant_{}:
+    namespace: "tenant-{}"
+    gateway: "tenant-{}-gateway"
+    network: "tenant-{}-network"
+"#, i, i, i, i));
+                        }
+                        config
+                    },
+                    _ => "config: {}".to_string()
+                }
             })
-            .bench_refs(|request| {
-                rt.block_on(async {
-                    // Simulate proxy processing
-                    let start = std::time::Instant::now();
-                    
-                    // Mock proxy logic - header processing, routing, etc.
-                    let _headers = request.headers();
-                    let _method = request.method();
-                    let _uri = request.uri();
-                    
-                    // Real proxy processing - no artificial delays
-                    // Actual latency measured from real operations
-                    
-                    let _elapsed = start.elapsed();
-                    
-                    // Return mock response
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .body(Full::new(Bytes::from("OK")))
-                        .unwrap()
-                });
+            .bench_refs(|config_yaml| {
+                // Real configuration parsing - no artificial delays
+                let result = parse_config(config_yaml.clone(), None);
+                // Force evaluation to ensure parsing actually happens
+                match result {
+                    Ok(_config) => {
+                        // Configuration parsed successfully
+                    },
+                    Err(_) => {
+                        // Handle parsing errors (expected for some test cases)
+                    }
+                }
             });
     }
+}
 
-    /// Benchmark throughput with different payload sizes
-    #[divan::bench(args = [1024, 10240, 102400, 1048576])] // 1KB, 10KB, 100KB, 1MB
-    fn payload_throughput(bencher: Bencher, payload_size: usize) {
-        let rt = Runtime::new().unwrap();
-        let payload = vec![b'x'; payload_size];
-        
+mod json_benchmarks {
+    use super::*;
+    use serde_json::Value;
+    
+    /// Benchmark JSON parsing and serialization for different message types
+    #[divan::bench(args = ["mcp_initialize", "mcp_list_resources", "mcp_call_tool", "a2a_discovery"])]
+    fn json_message_processing(bencher: Bencher, message_type: &str) {
         bencher
-            .with_inputs(|| Bytes::from(payload.clone()))
-            .bench_refs(|payload| {
-                rt.block_on(async {
-                    // Simulate proxy processing of different payload sizes
-                    let _size = payload.len();
-                    
-                    // Mock serialization/deserialization overhead
-                    let engine = base64::engine::general_purpose::STANDARD;
-                    let payload_len = payload.len();
-                    let _serialized = serde_json::to_vec(&serde_json::json!({
-                        "data": engine.encode(payload),
-                        "size": payload_len
-                    })).unwrap();
-                    
-                    // Real payload processing - measure actual serialization overhead
-                    // No artificial delays - actual performance measured
-                });
+            .with_inputs(|| {
+                match message_type {
+                    "mcp_initialize" => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {
+                                "roots": {"listChanged": true},
+                                "sampling": {},
+                                "logging": {},
+                                "prompts": {"listChanged": true},
+                                "resources": {"subscribe": true, "listChanged": true},
+                                "tools": {"listChanged": true}
+                            },
+                            "clientInfo": {
+                                "name": "agentgateway-benchmark",
+                                "version": "1.0.0"
+                            }
+                        }
+                    }),
+                    "mcp_list_resources" => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "resources/list",
+                        "params": {
+                            "cursor": null
+                        }
+                    }),
+                    "mcp_call_tool" => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": 3,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "web_search",
+                            "arguments": {
+                                "query": "AgentGateway performance benchmarks",
+                                "max_results": 10,
+                                "include_snippets": true
+                            }
+                        }
+                    }),
+                    "a2a_discovery" => serde_json::json!({
+                        "type": "discovery",
+                        "agent_id": "benchmark-agent-12345",
+                        "capabilities": [
+                            "chat", "search", "analysis", "code_generation", 
+                            "data_processing", "file_operations"
+                        ],
+                        "metadata": {
+                            "version": "2.1.0",
+                            "protocol": "a2a",
+                            "supported_formats": ["json", "msgpack", "protobuf"],
+                            "max_payload_size": 10485760,
+                            "encryption": ["tls", "aes256"],
+                            "compression": ["gzip", "lz4"]
+                        },
+                        "endpoints": {
+                            "primary": "https://agent.example.com:8443",
+                            "fallback": "https://agent-backup.example.com:8443"
+                        }
+                    }),
+                    _ => serde_json::json!({"error": "unknown message type"})
+                }
+            })
+            .bench_refs(|message| {
+                // Real JSON operations - no artificial delays
+                
+                // Serialize to string
+                let json_string = serde_json::to_string(message).unwrap();
+                
+                // Parse back to Value
+                let parsed: Value = serde_json::from_str(&json_string).unwrap();
+                
+                // Validate structure based on message type
+                match message_type {
+                    "mcp_initialize" | "mcp_list_resources" | "mcp_call_tool" => {
+                        // Validate JSON-RPC structure
+                        let _jsonrpc = parsed.get("jsonrpc").and_then(|v| v.as_str());
+                        let _id = parsed.get("id");
+                        let _method = parsed.get("method").and_then(|v| v.as_str());
+                        let _params = parsed.get("params");
+                    },
+                    "a2a_discovery" => {
+                        // Validate A2A structure
+                        let _msg_type = parsed.get("type").and_then(|v| v.as_str());
+                        let _agent_id = parsed.get("agent_id").and_then(|v| v.as_str());
+                        let _capabilities = parsed.get("capabilities").and_then(|v| v.as_array());
+                        let _metadata = parsed.get("metadata");
+                    },
+                    _ => {}
+                }
+                
+                // Return parsed size for verification
+                json_string.len()
             });
     }
+}
 
-    /// Benchmark memory usage patterns under load
-    #[divan::bench(args = [10, 100, 1000])]
-    fn memory_usage_under_load(bencher: Bencher, connection_count: usize) {
-        let rt = Runtime::new().unwrap();
-        
-        bencher.bench(|| {
-            rt.block_on(async {
-                // Simulate multiple concurrent connections
-                let mut handles = Vec::with_capacity(connection_count);
+mod crypto_benchmarks {
+    use super::*;
+    use base64::Engine;
+    use std::collections::HashMap;
+    
+    /// Benchmark JWT token validation simulation (header/payload parsing)
+    #[divan::bench(args = ["HS256", "RS256", "ES256"])]
+    fn jwt_parsing_performance(bencher: Bencher, algorithm: &str) {
+        bencher
+            .with_inputs(|| {
+                // Create realistic JWT tokens for different algorithms
+                let header = match algorithm {
+                    "HS256" => serde_json::json!({"typ": "JWT", "alg": "HS256"}),
+                    "RS256" => serde_json::json!({"typ": "JWT", "alg": "RS256", "kid": "rsa-key-1"}),
+                    "ES256" => serde_json::json!({"typ": "JWT", "alg": "ES256", "kid": "ec-key-1"}),
+                    _ => serde_json::json!({"typ": "JWT", "alg": "none"})
+                };
                 
-                for _ in 0..connection_count {
-                    let handle = tokio::spawn(async {
-                        // Mock connection state
-                        let _connection_state = vec![0u8; 1024]; // 1KB per connection
-                        
-                        // Real connection processing - no artificial delays
-                        // Measure actual memory allocation overhead
-                        
-                        _connection_state.len()
-                    });
-                    handles.push(handle);
+                let payload = serde_json::json!({
+                    "sub": "1234567890",
+                    "name": "AgentGateway Benchmark User",
+                    "admin": true,
+                    "iat": 1516239022,
+                    "exp": 1516242622,
+                    "aud": "agentgateway",
+                    "iss": "https://auth.example.com",
+                    "jti": "benchmark-token-12345",
+                    "scope": "read write admin",
+                    "roles": ["user", "admin", "developer"],
+                    "tenant": "benchmark-tenant",
+                    "custom_claims": {
+                        "department": "engineering",
+                        "team": "platform",
+                        "access_level": "full"
+                    }
+                });
+                
+                let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+                let header_b64 = engine.encode(serde_json::to_string(&header).unwrap());
+                let payload_b64 = engine.encode(serde_json::to_string(&payload).unwrap());
+                let signature_b64 = engine.encode("mock_signature_for_benchmark_testing");
+                
+                format!("{}.{}.{}", header_b64, payload_b64, signature_b64)
+            })
+            .bench_refs(|token| {
+                // Real JWT parsing operations - no artificial delays
+                
+                let parts: Vec<&str> = token.split('.').collect();
+                if parts.len() == 3 {
+                    let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+                    
+                    // Decode and parse header
+                    if let Ok(header_bytes) = engine.decode(parts[0]) {
+                        if let Ok(header_str) = String::from_utf8(header_bytes) {
+                            let _header: serde_json::Value = serde_json::from_str(&header_str).unwrap_or_default();
+                        }
+                    }
+                    
+                    // Decode and parse payload
+                    if let Ok(payload_bytes) = engine.decode(parts[1]) {
+                        if let Ok(payload_str) = String::from_utf8(payload_bytes) {
+                            let payload: serde_json::Value = serde_json::from_str(&payload_str).unwrap_or_default();
+                            
+                            // Extract common claims (real validation work)
+                            let _sub = payload.get("sub").and_then(|v| v.as_str());
+                            let _exp = payload.get("exp").and_then(|v| v.as_u64());
+                            let _iat = payload.get("iat").and_then(|v| v.as_u64());
+                            let _aud = payload.get("aud").and_then(|v| v.as_str());
+                            let _iss = payload.get("iss").and_then(|v| v.as_str());
+                            let _scope = payload.get("scope").and_then(|v| v.as_str());
+                            let _roles = payload.get("roles").and_then(|v| v.as_array());
+                            
+                            // Simulate expiration check
+                            if let Some(exp) = payload.get("exp").and_then(|v| v.as_u64()) {
+                                let now = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs();
+                                let _is_expired = exp < now;
+                            }
+                        }
+                    }
+                    
+                    // Decode signature (for completeness)
+                    let _signature_bytes = engine.decode(parts[2]).unwrap_or_default();
                 }
                 
-                // Wait for all connections to complete
-                for handle in handles {
-                    let _ = handle.await;
-                }
+                token.len()
             });
+    }
+}
+
+mod memory_benchmarks {
+    use super::*;
+    use std::collections::HashMap;
+    
+    /// Benchmark memory allocation patterns for connection management
+    #[divan::bench(args = [10, 100, 1000, 5000])]
+    fn connection_state_management(bencher: Bencher, connection_count: usize) {
+        bencher.bench(|| {
+            // Real memory allocation patterns - no artificial delays
+            
+            // Simulate connection pool management
+            let mut connections = HashMap::with_capacity(connection_count);
+            
+            for i in 0..connection_count {
+                // Realistic connection state structure
+                let connection_state = ConnectionState {
+                    id: format!("conn-{}", i),
+                    remote_addr: format!("192.168.1.{}", (i % 254) + 1),
+                    created_at: std::time::Instant::now(),
+                    last_activity: std::time::Instant::now(),
+                    bytes_sent: i as u64 * 1024,
+                    bytes_received: i as u64 * 512,
+                    request_count: i as u32,
+                    protocol: if i % 3 == 0 { "HTTP/2" } else { "HTTP/1.1" }.to_string(),
+                    tls_version: Some("TLSv1.3".to_string()),
+                    cipher_suite: Some("TLS_AES_256_GCM_SHA384".to_string()),
+                    headers: {
+                        let mut headers = HashMap::new();
+                        headers.insert("user-agent".to_string(), "AgentGateway/1.0".to_string());
+                        headers.insert("accept".to_string(), "application/json".to_string());
+                        headers.insert("content-type".to_string(), "application/json".to_string());
+                        if i % 5 == 0 {
+                            headers.insert("authorization".to_string(), format!("Bearer token-{}", i));
+                        }
+                        headers
+                    },
+                    metadata: {
+                        let mut metadata = HashMap::new();
+                        metadata.insert("tenant".to_string(), format!("tenant-{}", i % 10));
+                        metadata.insert("region".to_string(), "us-west-2".to_string());
+                        metadata.insert("environment".to_string(), "production".to_string());
+                        metadata
+                    }
+                };
+                
+                connections.insert(i, connection_state);
+            }
+            
+            // Simulate connection lookup operations
+            for i in (0..connection_count).step_by(10) {
+                if let Some(conn) = connections.get(&i) {
+                    // Simulate connection usage
+                    let _active_time = conn.last_activity.elapsed();
+                    let _throughput = conn.bytes_sent + conn.bytes_received;
+                }
+            }
+            
+            // Simulate cleanup of old connections
+            let cutoff = std::time::Instant::now() - Duration::from_secs(300);
+            connections.retain(|_, conn| conn.created_at > cutoff);
+            
+            connections.len()
         });
+    }
+    
+    #[derive(Clone)]
+    struct ConnectionState {
+        id: String,
+        remote_addr: String,
+        created_at: std::time::Instant,
+        last_activity: std::time::Instant,
+        bytes_sent: u64,
+        bytes_received: u64,
+        request_count: u32,
+        protocol: String,
+        tls_version: Option<String>,
+        cipher_suite: Option<String>,
+        headers: HashMap<String, String>,
+        metadata: HashMap<String, String>,
     }
 }
 
