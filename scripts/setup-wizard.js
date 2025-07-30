@@ -413,7 +413,7 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
                 description: 'Installing Rust, Node.js, and other required tools',
                 critical: true,
                 execute: async () => {
-                    await this.executeCommand('./scripts/setup-first-time.sh --dependencies-only');
+                    await this.executeCommand('../scripts/setup-first-time.sh --dependencies-only');
                 }
             });
         }
@@ -508,11 +508,10 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
             console.log(`\n${this.colors.cyan}🧪 Running quick test demo...${this.colors.reset}`);
             
             try {
-                await this.executeCommand('node scripts/test-e2e-minimal.js --quick');
-                console.log(`${this.colors.green}✅ Test demo completed successfully!${this.colors.reset}`);
+                await this.executeCommand('node ../scripts/test-e2e-minimal.js --resource-only');
+                console.log(`${this.colors.green}✅ Quick test demo completed${this.colors.reset}`);
             } catch (error) {
-                console.log(`${this.colors.yellow}⚠️  Test demo had issues: ${error.message}${this.colors.reset}`);
-                console.log(`${this.colors.yellow}   This might be normal for first-time setup${this.colors.reset}`);
+                console.log(`${this.colors.yellow}⚠️  Test demo failed, but setup is complete${this.colors.reset}`);
             }
         }
         
