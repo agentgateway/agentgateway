@@ -117,16 +117,32 @@ checkDesiredVersion() {
   fi
 }
 
-# checkAgentGatewayInstalledVersion checks which version of    is installed and
+# checkAgentGatewayInstalledVersion checks which version of agentgateway is installed and
 # if it needs to be changed.
 checkAgentGatewayInstalledVersion() {
   if [[ -f "${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    local version=$("${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" version --template="{{ .Version }}")
-    if [[ "$version" == "$TAG" ]]; then
-      echo "agentgateway ${version} is already ${DESIRED_VERSION:-latest}"
+    # Get the full version output from --version flag
+    local version_output=$("${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" --version 2>/dev/null || echo "")
+    
+    # Extract the GitTag from the version output
+    # The output format is: version.BuildInfo{..., GitTag:"v0.6.0", ...}
+    local installed_version=""
+    if [[ -n "$version_output" ]]; then
+      # Use sed to extract the GitTag value
+      installed_version=$(echo "$version_output" | sed -n 's/.*GitTag:"\([^"]*\)".*/\1/p')
+    fi
+    
+    # If we couldn't extract the version, fall back to checking if the binary exists
+    if [[ -z "$installed_version" ]]; then
+      echo "Could not determine installed agentgateway version, will reinstall"
+      return 1
+    fi
+    
+    if [[ "$installed_version" == "$TAG" ]]; then
+      echo "agentgateway ${installed_version} is already ${DESIRED_VERSION:-latest}"
       return 0
     else
-      echo "agentgateway ${TAG} is available. Changing from version ${version}."
+      echo "agentgateway ${TAG} is available. Changing from version ${installed_version}."
       return 1
     fi
   else

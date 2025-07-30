@@ -35,6 +35,15 @@ lint:
 test:
 	cargo test --all-targets
 
+# test install script
+.PHONY: test-install-script
+test-install-script:
+	./common/scripts/test-get-agentproxy.sh
+
+# test all (includes install script tests)
+.PHONY: test-all
+test-all: test test-install-script
+
 # clean
 .PHONY: clean
 clean:
