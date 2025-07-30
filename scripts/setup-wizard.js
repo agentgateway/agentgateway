@@ -413,7 +413,7 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
                 description: 'Installing Rust, Node.js, and other required tools',
                 critical: true,
                 execute: async () => {
-                    await this.executeCommand('../scripts/setup-first-time.sh --dependencies-only');
+                    await this.executeCommand('../scripts/setup-first-time.sh --skip-build --skip-resource-check');
                 }
             });
         }
