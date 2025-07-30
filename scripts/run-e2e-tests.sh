@@ -441,10 +441,25 @@ detect_optimal_settings() {
     return 0
 }
 
-# Function to validate setup
+# Function to validate setup with optional health check
 validate_setup() {
     print_status "Validating test environment setup..."
     
+    # Run health check if available and requested
+    if [[ -f "scripts/health-check-validator.js" ]] && [[ "$AUTO_DETECT" == "true" ]]; then
+        print_status "Running quick health check..."
+        
+        # Run health check without runtime checks (services not started yet)
+        if node scripts/health-check-validator.js > /dev/null 2>&1; then
+            print_success "Health check passed - system ready for testing"
+            return 0
+        else
+            print_warning "Health check detected issues, but continuing with basic validation"
+            # Fall through to basic validation
+        fi
+    fi
+    
+    # Basic validation
     local validation_warnings=()
     
     # Check if this looks like a first-time setup

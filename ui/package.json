@@ -37,6 +37,9 @@
     "test:e2e:auto-config": "node ../scripts/intelligent-test-config.js",
     "test:e2e:check-config": "node ../scripts/intelligent-test-config.js --check-only",
     "test:e2e:force-config": "node ../scripts/intelligent-test-config.js --force",
+    "test:e2e:health-check": "node ../scripts/health-check-validator.js",
+    "test:e2e:health-check:verbose": "node ../scripts/health-check-validator.js --verbose",
+    "test:e2e:health-check:runtime": "node ../scripts/health-check-validator.js --include-runtime --verbose",
     "test:setup-dirs": "node ../scripts/setup-test-directories.js",
     "test:setup-dirs:clean": "node ../scripts/setup-test-directories.js --clean"
   },

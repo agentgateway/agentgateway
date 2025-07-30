@@ -493,50 +493,91 @@ generate_intelligent_config() {
     return 0
 }
 
-# Function to validate setup
+# Function to validate setup using comprehensive health check
 validate_setup() {
     print_step "Validating Complete Setup"
     
-    local validation_errors=()
-    
-    # Check AgentGateway binary
-    if [[ -f "$PROJECT_ROOT/target/release/agentgateway" ]] || [[ "$DRY_RUN" == "true" ]]; then
-        print_status "AgentGateway binary: Available ✓"
-    else
-        validation_errors+=("AgentGateway binary not found")
-    fi
-    
-    # Check UI dependencies
-    if [[ -d "$PROJECT_ROOT/ui/node_modules" ]] || [[ "$DRY_RUN" == "true" ]]; then
-        print_status "UI dependencies: Available ✓"
-    else
-        validation_errors+=("UI dependencies not installed")
-    fi
-    
-    # Check test configuration
-    if [[ -f "$PROJECT_ROOT/test-config.yaml" ]]; then
-        print_status "Test configuration: Available ✓"
-    else
-        validation_errors+=("Test configuration not found")
-    fi
-    
-    # Check test runner scripts
-    if [[ -f "$PROJECT_ROOT/scripts/run-e2e-tests.sh" ]]; then
-        print_status "Test runner: Available ✓"
-    else
-        validation_errors+=("Test runner script not found")
-    fi
-    
-    # Report validation results
-    if [[ ${#validation_errors[@]} -eq 0 ]]; then
-        print_success "Setup validation passed! ✓"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_status "[DRY RUN] Would run comprehensive health check validation"
         return 0
+    fi
+    
+    # Run comprehensive health check
+    if [[ -f "$PROJECT_ROOT/scripts/health-check-validator.js" ]]; then
+        print_status "Running comprehensive health check validation..."
+        
+        if [[ "$VERBOSE" == "true" ]]; then
+            if node "$PROJECT_ROOT/scripts/health-check-validator.js" --verbose; then
+                print_success "Comprehensive health check passed! ✓"
+                return 0
+            else
+                print_error "Health check validation failed"
+                return 1
+            fi
+        else
+            # Capture output for summary
+            local health_output
+            if health_output=$(node "$PROJECT_ROOT/scripts/health-check-validator.js" 2>&1); then
+                print_success "Comprehensive health check passed! ✓"
+                
+                # Show summary if there were warnings
+                if echo "$health_output" | grep -q "Warnings:"; then
+                    print_warning "Health check completed with warnings:"
+                    echo "$health_output" | grep -A 10 "Warnings:"
+                fi
+                
+                return 0
+            else
+                print_error "Health check validation failed"
+                echo "$health_output"
+                return 1
+            fi
+        fi
     else
-        print_error "Setup validation failed:"
-        for error in "${validation_errors[@]}"; do
-            print_error "  - $error"
-        done
-        return 1
+        print_warning "Health check validator not found, using basic validation"
+        
+        # Fallback to basic validation
+        local validation_errors=()
+        
+        # Check AgentGateway binary
+        if [[ -f "$PROJECT_ROOT/target/release/agentgateway" ]]; then
+            print_status "AgentGateway binary: Available ✓"
+        else
+            validation_errors+=("AgentGateway binary not found")
+        fi
+        
+        # Check UI dependencies
+        if [[ -d "$PROJECT_ROOT/ui/node_modules" ]]; then
+            print_status "UI dependencies: Available ✓"
+        else
+            validation_errors+=("UI dependencies not installed")
+        fi
+        
+        # Check test configuration
+        if [[ -f "$PROJECT_ROOT/test-config.yaml" ]]; then
+            print_status "Test configuration: Available ✓"
+        else
+            validation_errors+=("Test configuration not found")
+        fi
+        
+        # Check test runner scripts
+        if [[ -f "$PROJECT_ROOT/scripts/run-e2e-tests.sh" ]]; then
+            print_status "Test runner: Available ✓"
+        else
+            validation_errors+=("Test runner script not found")
+        fi
+        
+        # Report validation results
+        if [[ ${#validation_errors[@]} -eq 0 ]]; then
+            print_success "Basic setup validation passed! ✓"
+            return 0
+        else
+            print_error "Setup validation failed:"
+            for error in "${validation_errors[@]}"; do
+                print_error "  - $error"
+            done
+            return 1
+        fi
     fi
 }
 
