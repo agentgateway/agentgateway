@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-          cache-dependency-path: ui/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            ui/package-lock.json
           
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
@@ -43,8 +45,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
             
-      - name: Install UI dependencies
+      - name: Install dependencies
         run: |
+          npm ci
           cd ui
           npm ci
           
