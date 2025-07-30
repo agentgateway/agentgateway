@@ -307,6 +307,12 @@ start_backend() {
     
     print_status "Using AgentGateway binary: $binary"
     
+    # Automatically set AGENTGATEWAY_BINARY environment variable for consistency
+    export AGENTGATEWAY_BINARY="$binary"
+    if [[ "$VERBOSE" == "true" ]]; then
+        print_status "Set AGENTGATEWAY_BINARY=$AGENTGATEWAY_BINARY"
+    fi
+    
     # Start the backend with test configuration
     if [[ "$VERBOSE" == "true" ]]; then
         "$binary" --file test-config.yaml &
