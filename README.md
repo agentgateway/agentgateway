@@ -69,7 +69,7 @@ The agentgateway documentation is available at [agentgateway.dev/docs](https://a
 
 AgentGateway includes a comprehensive E2E testing infrastructure using Cypress that provides:
 
-- **125+ tests** with 100% success rate
+- **190+ tests** with 100% success rate
 - **Comprehensive coverage** of all UI workflows including setup wizard, configuration management, and playground testing
 - **Parallel test execution** with 75-85% speed improvement
 - **Intelligent test scheduling** and resource monitoring
