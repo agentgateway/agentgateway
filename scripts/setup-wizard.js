@@ -29,6 +29,9 @@ class SetupWizard {
             output: process.stdout
         });
         
+        // Initialize working directory detection and correction
+        this.initializeWorkingDirectory();
+        
         this.smartDefaults = new SmartDefaultsSystem();
         this.setupConfig = {
             preferences: {},
@@ -47,6 +50,104 @@ class SetupWizard {
             magenta: '\x1b[35m',
             cyan: '\x1b[36m'
         };
+    }
+
+    /**
+     * Working Directory Detection and Correction Pattern
+     * 
+     * This pattern automatically detects the current working directory and
+     * adjusts all paths to work correctly regardless of where the script is run from.
+     * 
+     * Supports running from:
+     * - Project root: /path/to/agentgateway
+     * - UI directory: /path/to/agentgateway/ui
+     * - Scripts directory: /path/to/agentgateway/scripts
+     * 
+     * Pattern for reuse in other scripts:
+     * 1. Detect current working directory
+     * 2. Find project root by looking for key files (Cargo.toml, package.json)
+     * 3. Set up path helpers that work from any location
+     * 4. Use path helpers consistently throughout the script
+     */
+    initializeWorkingDirectory() {
+        const currentDir = process.cwd();
+        const scriptDir = path.dirname(__filename);
+        
+        // Detect project root by looking for key files
+        this.projectRoot = this.findProjectRoot(currentDir);
+        
+        if (!this.projectRoot) {
+            // Fallback: use script directory to find project root
+            this.projectRoot = this.findProjectRoot(path.dirname(scriptDir));
+        }
+        
+        if (!this.projectRoot) {
+            throw new Error('Could not find AgentGateway project root. Please run from project directory.');
+        }
+        
+        // Set up path helpers
+        this.paths = {
+            root: this.projectRoot,
+            scripts: path.join(this.projectRoot, 'scripts'),
+            ui: path.join(this.projectRoot, 'ui'),
+            target: path.join(this.projectRoot, 'target'),
+            
+            // Helper methods for consistent path resolution
+            toRoot: (relativePath) => path.join(this.projectRoot, relativePath),
+            toScripts: (relativePath) => path.join(this.projectRoot, 'scripts', relativePath),
+            toUI: (relativePath) => path.join(this.projectRoot, 'ui', relativePath),
+            
+            // Relative path helpers based on current working directory
+            relativeToRoot: (targetPath) => path.relative(currentDir, path.join(this.projectRoot, targetPath)),
+            relativeToScripts: (targetPath) => path.relative(currentDir, path.join(this.projectRoot, 'scripts', targetPath)),
+            relativeToUI: (targetPath) => path.relative(currentDir, path.join(this.projectRoot, 'ui', targetPath))
+        };
+        
+        console.log(`🔍 Working directory detection:`);
+        console.log(`   Current: ${currentDir}`);
+        console.log(`   Project root: ${this.projectRoot}`);
+        console.log(`   Running from: ${this.getRunningLocation()}`);
+    }
+    
+    /**
+     * Find project root by looking for key indicator files
+     */
+    findProjectRoot(startDir) {
+        const indicators = ['Cargo.toml', 'rust-toolchain.toml', '.gitignore'];
+        let currentDir = startDir;
+        
+        while (currentDir !== path.dirname(currentDir)) {
+            // Check if this directory contains project indicators
+            const hasIndicators = indicators.some(indicator => 
+                fs.existsSync(path.join(currentDir, indicator))
+            );
+            
+            // Additional check: ensure it's the AgentGateway project
+            const cargoToml = path.join(currentDir, 'Cargo.toml');
+            if (hasIndicators && fs.existsSync(cargoToml)) {
+                const cargoContent = fs.readFileSync(cargoToml, 'utf8');
+                if (cargoContent.includes('agentgateway') || cargoContent.includes('workspace')) {
+                    return currentDir;
+                }
+            }
+            
+            currentDir = path.dirname(currentDir);
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Get human-readable description of where script is running from
+     */
+    getRunningLocation() {
+        const currentDir = process.cwd();
+        const relativePath = path.relative(this.projectRoot, currentDir);
+        
+        if (relativePath === '') return 'project root';
+        if (relativePath === 'ui') return 'ui directory';
+        if (relativePath === 'scripts') return 'scripts directory';
+        return `${relativePath} directory`;
     }
 
     /**
@@ -413,7 +514,8 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
                 description: 'Installing Rust, Node.js, and other required tools',
                 critical: true,
                 execute: async () => {
-                    await this.executeCommand('../scripts/setup-first-time.sh --skip-build --skip-resource-check');
+                    const setupScript = this.paths.relativeToScripts('setup-first-time.sh');
+                    await this.executeCommand(`${setupScript} --skip-build --skip-resource-check`);
                 }
             });
         }
@@ -425,6 +527,8 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
                 description: 'Compiling the AgentGateway proxy server',
                 critical: true,
                 execute: async () => {
+                    // Change to project root for cargo build
+                    process.chdir(this.projectRoot);
                     await this.executeCommand('cargo build --release --bin agentgateway');
                 }
             });
@@ -436,7 +540,9 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
             description: 'Installing Node.js packages for the UI',
             critical: true,
             execute: async () => {
-                await this.executeCommand('cd ui && npm install');
+                // Change to UI directory for npm install
+                process.chdir(this.paths.ui);
+                await this.executeCommand('npm install');
             }
         });
         
@@ -447,7 +553,8 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
                 description: 'Validating system configuration and dependencies',
                 critical: false,
                 execute: async () => {
-                    await this.executeCommand('node scripts/health-check-validator.js --verbose');
+                    const healthScript = this.paths.relativeToScripts('health-check-validator.js');
+                    await this.executeCommand(`node ${healthScript} --verbose`);
                 }
             });
         }
@@ -625,12 +732,12 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
     
     async checkAgentGatewayBinary() {
         const binaryPaths = [
-            './target/release/agentgateway',
-            './target/debug/agentgateway'
+            this.paths.toRoot('target/release/agentgateway'),
+            this.paths.toRoot('target/debug/agentgateway')
         ];
         
-        for (const path of binaryPaths) {
-            if (fs.existsSync(path)) {
+        for (const binaryPath of binaryPaths) {
+            if (fs.existsSync(binaryPath)) {
                 return true;
             }
         }
@@ -639,11 +746,12 @@ ${this.colors.green}💡 You can exit anytime with Ctrl+C${this.colors.reset}
     }
     
     async checkUIDependencies() {
-        return fs.existsSync('./ui/node_modules');
+        return fs.existsSync(this.paths.toUI('node_modules'));
     }
     
     async checkTestConfiguration() {
-        return fs.existsSync('./smart-defaults.json') || fs.existsSync('./test-config-optimized.yaml');
+        return fs.existsSync(this.paths.toRoot('smart-defaults.json')) || 
+               fs.existsSync(this.paths.toRoot('test-config-optimized.yaml'));
     }
     
     async saveWizardConfiguration() {
