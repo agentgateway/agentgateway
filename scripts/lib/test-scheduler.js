@@ -17,6 +17,8 @@ class TestScheduler {
     this.baseDir = options.baseDir || 'ui/cypress/e2e';
     this.testHistory = options.testHistory || {};
     this.smokeOnly = options.smokeOnly || false;
+    this.journeyFilter = options.journeyFilter || null;
+    this.journeyPatterns = options.journeyPatterns || null;
     
     this.schedulingStrategy = options.strategy || 'balanced'; // balanced, fastest, priority
     this.maxWorkersPerGroup = options.maxWorkersPerGroup || 8;
@@ -80,6 +82,14 @@ class TestScheduler {
     if (this.smokeOnly) {
       console.log('🚀 Smoke test mode - only running smoke tests');
     }
+    if (this.journeyFilter) {
+      console.log(`🎯 Journey filter active: ${this.journeyFilter}`);
+    }
+    
+    // Use journey patterns if provided, otherwise use default test groups
+    if (this.journeyPatterns && this.journeyPatterns.length > 0) {
+      return await this.discoverJourneyTests();
+    }
     
     for (const [groupName, group] of Object.entries(this.testGroups)) {
       // Skip non-smoke groups if smokeOnly is enabled
@@ -105,6 +115,56 @@ class TestScheduler {
     
     console.log(`📁 Total discovered: ${testFiles.length} test files`);
     return testFiles;
+  }
+
+  /**
+   * Discover test files based on journey patterns
+   */
+  async discoverJourneyTests() {
+    const testFiles = [];
+    
+    console.log(`🎯 Discovering tests for journey patterns: ${this.journeyPatterns.join(', ')}`);
+    
+    for (const pattern of this.journeyPatterns) {
+      const fullPattern = path.join(this.baseDir, pattern);
+      console.log(`  Journey pattern: ${fullPattern}`);
+      const files = glob.sync(fullPattern);
+      console.log(`  Found ${files.length} files: ${files.join(', ')}`);
+      
+      for (const file of files) {
+        const relativePath = path.relative(process.cwd(), file);
+        
+        // Determine group based on file path
+        const groupName = this.determineGroupFromPath(relativePath);
+        const groupConfig = this.testGroups[groupName] || this.testGroups.medium; // Default to medium
+        
+        const testInfo = await this.analyzeTestFile(relativePath, groupName, groupConfig);
+        testFiles.push(testInfo);
+      }
+    }
+    
+    console.log(`📁 Total journey tests discovered: ${testFiles.length} test files`);
+    return testFiles;
+  }
+
+  /**
+   * Determine test group from file path
+   */
+  determineGroupFromPath(filePath) {
+    const pathLower = filePath.toLowerCase();
+    
+    if (pathLower.includes('smoke')) {
+      return 'smoke';
+    } else if (pathLower.includes('foundation') || pathLower.includes('navigation')) {
+      return 'fast';
+    } else if (pathLower.includes('setup-wizard') || pathLower.includes('configuration')) {
+      return 'medium';
+    } else if (pathLower.includes('integration') || pathLower.includes('playground') || pathLower.includes('error-handling')) {
+      return 'slow';
+    }
+    
+    // Default to medium for unknown paths
+    return 'medium';
   }
 
   /**

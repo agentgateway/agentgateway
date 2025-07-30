@@ -333,7 +333,7 @@ class JourneyManager {
   /**
    * Execute journeys using the existing parallel test runner
    */
-  executeJourneys(options) {
+  async executeJourneys(options) {
     const {
       journeySelection,
       customJourneys = '',
@@ -397,29 +397,15 @@ class JourneyManager {
         throw new Error(`Parallel test runner not found at ${parallelRunnerPath}`);
       }
       
-      const command = [
-        'node',
-        `"${parallelRunnerPath}"`,
-        `--workers=${finalWorkerCount}`,
-        `--memory-limit=${resources.memoryLimit}`,
-        `--browser=${browser}`,
-        executionMode === 'headed' ? '--headed' : '',
-        `--spec="${testPattern}"`,
-        '--ci'
-      ].filter(Boolean).join(' ');
-
-      this.log(`\n🔧 Executing command: ${command}`, 'blue');
-
-      execSync(command, { 
-        stdio: 'inherit',
-        cwd: this.projectRoot,
-        env: { 
-          ...process.env,
-          JOURNEY_SELECTION: journeySelection,
-          JOURNEY_LIST: journeyList.join(','),
-          EXECUTION_PROFILE: environmentProfile,
-          JOURNEY_MANAGER: 'true'
-        }
+      // Create a custom parallel test runner instance with journey support
+      await this.executeWithJourneySupport({
+        journeyList,
+        finalWorkerCount,
+        resources,
+        browser,
+        executionMode,
+        environmentProfile,
+        journeySelection
       });
       
       // Generate journey execution report
@@ -459,6 +445,65 @@ class JourneyManager {
       });
       
       process.exit(1);
+    }
+  }
+
+  /**
+   * Execute with journey support using the parallel test runner
+   */
+  async executeWithJourneySupport(options) {
+    const {
+      journeyList,
+      finalWorkerCount,
+      resources,
+      browser,
+      executionMode,
+      environmentProfile,
+      journeySelection
+    } = options;
+
+    try {
+      // Generate journey patterns for the test scheduler
+      const journeyPatterns = journeyList.map(journeyName => {
+        const journey = this.journeys[journeyName];
+        return journey ? journey.pattern : null;
+      }).filter(Boolean);
+
+      this.log(`🎯 Journey patterns: ${journeyPatterns.join(', ')}`, 'blue');
+
+      // Load and configure the parallel test runner
+      const ParallelTestRunner = require(this.paths.toScripts('parallel-test-runner.js'));
+      
+      const runner = new ParallelTestRunner({
+        baseDir: this.paths.ui,
+        maxWorkers: finalWorkerCount,
+        memoryLimit: resources.memoryLimit,
+        browser: browser,
+        headless: executionMode === 'headless',
+        video: true,
+        quiet: false,
+        debug: false,
+        ci: true,
+        journeyFilter: journeySelection,
+        journeyPatterns: journeyPatterns
+      });
+
+      // Initialize and run the tests
+      await runner.initialize();
+      const results = await runner.run();
+
+      this.log(`\n🎉 Journey execution completed!`, 'green');
+      this.log(`📊 Results: ${results.tests.passed}/${results.tests.total} tests passed`, 'green');
+
+      if (results.tests.failed > 0) {
+        throw new Error(`${results.tests.failed} test(s) failed`);
+      }
+
+      return results;
+
+    } catch (error) {
+      this.log(`❌ Journey execution failed: ${error.message}`, 'red');
+      throw error;
     }
   }
 
@@ -550,11 +595,12 @@ if (require.main === module) {
     }
   });
 
-  try {
-    const manager = new JourneyManager();
-    
-    if (options.help) {
-      console.log(`
+  async function main() {
+    try {
+      const manager = new JourneyManager();
+      
+      if (options.help) {
+        console.log(`
 Journey Manager for AgentGateway E2E Tests
 
 Usage:
@@ -581,29 +627,35 @@ Examples:
   node journey-manager.js --dry-run --journey-selection=custom --custom-journeys=smoke,foundation
   node journey-manager.js --list
 `);
-      process.exit(0);
-    }
-    
-    if (options.list) {
-      manager.displayAvailableOptions();
-      process.exit(0);
-    }
-    
-    if (options.validateOnly) {
-      manager.validateOnly(options);
-    } else if (options.execute) {
-      manager.executeJourneys(options);
-    } else if (options.dryRun) {
-      manager.executeJourneys({ ...options, dryRun: true });
-    } else {
-      console.log('Usage: node journey-manager.js --validate-only OR --execute OR --dry-run OR --list [options]');
-      console.log('Use --help for detailed usage information');
+        process.exit(0);
+      }
+      
+      if (options.list) {
+        manager.displayAvailableOptions();
+        process.exit(0);
+      }
+      
+      if (options.validateOnly) {
+        manager.validateOnly(options);
+      } else if (options.execute) {
+        await manager.executeJourneys(options);
+      } else if (options.dryRun) {
+        await manager.executeJourneys({ ...options, dryRun: true });
+      } else {
+        console.log('Usage: node journey-manager.js --validate-only OR --execute OR --dry-run OR --list [options]');
+        console.log('Use --help for detailed usage information');
+        process.exit(1);
+      }
+    } catch (error) {
+      console.error(`❌ Error: ${error.message}`);
       process.exit(1);
     }
-  } catch (error) {
-    console.error(`❌ Error: ${error.message}`);
-    process.exit(1);
   }
+
+  main().catch(error => {
+    console.error(`❌ Unhandled error: ${error.message}`);
+    process.exit(1);
+  });
 }
 
 module.exports = JourneyManager;

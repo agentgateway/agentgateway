@@ -69,7 +69,9 @@ class ParallelTestRunner {
     this.testScheduler = new TestScheduler({
       baseDir: 'cypress/e2e', // Relative to ui directory when script runs from ui
       strategy: this.options.strategy,
-      smokeOnly: this.options.smoke
+      smokeOnly: this.options.smoke,
+      journeyFilter: this.options.journeyFilter || null,
+      journeyPatterns: this.options.journeyPatterns || null
     });
     
     // Initialize worker manager
