@@ -33,6 +33,10 @@
     "test:e2e:conservative": "node ../scripts/parallel-test-runner.js --workers=2 --memory-limit=70",
     "test:e2e:sequential": "cypress run",
     "test:e2e:sequential:headed": "cypress run --headed",
+    "test:e2e:optimized": "node ../scripts/intelligent-test-config.js && ../scripts/run-e2e-tests.sh --config test-config-optimized.yaml",
+    "test:e2e:auto-config": "node ../scripts/intelligent-test-config.js",
+    "test:e2e:check-config": "node ../scripts/intelligent-test-config.js --check-only",
+    "test:e2e:force-config": "node ../scripts/intelligent-test-config.js --force",
     "test:setup-dirs": "node ../scripts/setup-test-directories.js",
     "test:setup-dirs:clean": "node ../scripts/setup-test-directories.js --clean"
   },

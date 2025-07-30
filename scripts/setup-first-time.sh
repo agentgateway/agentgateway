@@ -445,6 +445,54 @@ detect_optimal_settings() {
     return 0
 }
 
+# Function to generate intelligent test configuration
+generate_intelligent_config() {
+    print_step "Generating Intelligent Test Configuration"
+    
+    if [[ "$SKIP_RESOURCE_DETECTION" == "true" ]]; then
+        print_status "Skipping intelligent configuration (--skip-resource-check)"
+        return 0
+    fi
+    
+    cd "$PROJECT_ROOT"
+    
+    # Run intelligent test configuration script
+    if [[ -f "scripts/intelligent-test-config.js" ]]; then
+        print_status "Generating optimal test configuration for your system..."
+        
+        if [[ "$DRY_RUN" == "false" ]]; then
+            if [[ "$VERBOSE" == "true" ]]; then
+                node scripts/intelligent-test-config.js
+            else
+                node scripts/intelligent-test-config.js > /dev/null 2>&1
+            fi
+            
+            if [[ $? -eq 0 ]]; then
+                print_success "Intelligent test configuration generated successfully"
+                
+                # Check if configuration files were created
+                if [[ -f "test-config-optimized.yaml" ]]; then
+                    print_status "Configuration saved to: test-config-optimized.yaml"
+                fi
+                
+                if [[ -f "ui/.test-settings.json" ]]; then
+                    print_status "Settings saved to: ui/.test-settings.json"
+                fi
+            else
+                print_warning "Intelligent configuration generation failed, using defaults"
+                return 1
+            fi
+        else
+            print_status "[DRY RUN] Would generate intelligent test configuration"
+        fi
+    else
+        print_warning "Intelligent test configuration script not found"
+        return 1
+    fi
+    
+    return 0
+}
+
 # Function to validate setup
 validate_setup() {
     print_step "Validating Complete Setup"
@@ -531,10 +579,13 @@ show_next_steps() {
 ${GREEN}🎉 Congratulations! Your AgentGateway E2E testing environment is ready!${NC}
 
 ${CYAN}Quick Start Commands:${NC}
+  ${YELLOW}# Run tests with optimal configuration (recommended)${NC}
+  cd ui && npm run test:e2e:optimized
+
   ${YELLOW}# Run all E2E tests${NC}
   ./scripts/run-e2e-tests.sh
 
-  ${YELLOW}# Run tests in parallel (recommended)${NC}
+  ${YELLOW}# Run tests in parallel${NC}
   cd ui && npm run test:e2e:parallel
 
   ${YELLOW}# Run only smoke tests${NC}
@@ -545,6 +596,18 @@ ${CYAN}Quick Start Commands:${NC}
 
 ${CYAN}Configuration Files Created:${NC}
   - ${SETUP_CONFIG_FILE} (optimal settings for your system)
+  - test-config-optimized.yaml (intelligent test configuration)
+  - ui/.test-settings.json (persistent settings)
+
+${CYAN}Configuration Management:${NC}
+  ${YELLOW}# Check current configuration${NC}
+  cd ui && npm run test:e2e:check-config
+
+  ${YELLOW}# Regenerate configuration${NC}
+  cd ui && npm run test:e2e:force-config
+
+  ${YELLOW}# Auto-configure for current system${NC}
+  cd ui && npm run test:e2e:auto-config
 
 ${CYAN}Troubleshooting:${NC}
   - If tests fail, check: ./scripts/test-e2e-minimal.js --verbose
@@ -606,7 +669,12 @@ main() {
         print_warning "Resource detection had issues, but continuing with defaults"
     fi
     
-    # Step 5: Validate setup
+    # Step 5: Generate intelligent test configuration
+    if ! generate_intelligent_config; then
+        print_warning "Intelligent configuration generation had issues, but continuing"
+    fi
+    
+    # Step 6: Validate setup
     if ! validate_setup; then
         print_error "Setup validation failed"
         exit 1
