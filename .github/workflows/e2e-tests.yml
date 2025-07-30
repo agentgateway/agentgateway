@@ -34,6 +34,11 @@ jobs:
           profile: minimal
           override: true
           
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+            
       - name: Cache Rust dependencies
         uses: actions/cache@v3
         with:
