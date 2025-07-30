@@ -380,14 +380,91 @@ start_ui() {
     return 0
 }
 
-# Function to detect optimal settings
+# Function to detect optimal settings using Smart Defaults System
 detect_optimal_settings() {
     if [[ "$AUTO_DETECT" == "false" ]]; then
         print_status "Auto-detection disabled, using provided settings"
         return 0
     fi
     
-    print_status "Detecting optimal test configuration..."
+    print_status "Detecting optimal test configuration with Smart Defaults System..."
+    
+    # Try Smart Defaults System first (Phase 2 enhancement)
+    if [[ -f "scripts/smart-defaults-system.js" ]]; then
+        print_status "Running Smart Defaults System..."
+        
+        local smart_defaults_output
+        local smart_defaults_options=""
+        
+        # Add preference options based on environment
+        if [[ "$CI" == "true" ]]; then
+            smart_defaults_options="--prefer-stability"
+        fi
+        
+        # Run smart defaults system
+        if [[ "$VERBOSE" == "true" ]]; then
+            smart_defaults_output=$(node scripts/smart-defaults-system.js $smart_defaults_options 2>&1)
+            echo "$smart_defaults_output"
+        else
+            smart_defaults_output=$(node scripts/smart-defaults-system.js $smart_defaults_options --quiet 2>/dev/null || echo "")
+        fi
+        
+        # Check if smart defaults configuration was created
+        if [[ -f "smart-defaults.json" ]]; then
+            print_success "Smart defaults configuration generated"
+            
+            # Extract settings from smart defaults JSON (using jq if available, otherwise basic parsing)
+            if command -v jq &> /dev/null; then
+                local smart_workers=$(jq -r '.defaults.workers // empty' smart-defaults.json 2>/dev/null || echo "")
+                local smart_memory=$(jq -r '.defaults.memory_limit_mb // empty' smart-defaults.json 2>/dev/null || echo "")
+                local smart_timeout=$(jq -r '.defaults.timeout_ms // empty' smart-defaults.json 2>/dev/null || echo "")
+                local smart_mode=$(jq -r '.defaults.parallel_mode // empty' smart-defaults.json 2>/dev/null || echo "")
+                local environment_profile=$(jq -r '.environment.profile // empty' smart-defaults.json 2>/dev/null || echo "")
+                
+                # Apply smart defaults if using default values
+                if [[ -n "$smart_workers" ]] && [[ "$PARALLEL_WORKERS" == "4" ]]; then
+                    PARALLEL_WORKERS="$smart_workers"
+                    print_success "Smart defaults: workers = $PARALLEL_WORKERS"
+                fi
+                
+                if [[ -n "$smart_memory" ]] && [[ -z "$MEMORY_LIMIT" ]]; then
+                    MEMORY_LIMIT=$(echo "scale=0; $smart_memory / 10.24" | bc 2>/dev/null || echo "50")
+                    print_success "Smart defaults: memory limit = ${MEMORY_LIMIT}%"
+                fi
+                
+                if [[ -n "$smart_timeout" ]] && [[ "$TIMEOUT" == "60" ]]; then
+                    TIMEOUT=$(echo "scale=0; $smart_timeout / 1000" | bc 2>/dev/null || echo "60")
+                    print_success "Smart defaults: timeout = ${TIMEOUT}s"
+                fi
+                
+                if [[ -n "$environment_profile" ]]; then
+                    print_status "Environment profile: $environment_profile"
+                fi
+                
+            else
+                # Basic parsing without jq
+                local smart_workers=$(grep -o '"workers":[[:space:]]*[0-9]*' smart-defaults.json | grep -o '[0-9]*' || echo "")
+                local smart_memory=$(grep -o '"memory_limit_mb":[[:space:]]*[0-9]*' smart-defaults.json | grep -o '[0-9]*' || echo "")
+                
+                if [[ -n "$smart_workers" ]] && [[ "$PARALLEL_WORKERS" == "4" ]]; then
+                    PARALLEL_WORKERS="$smart_workers"
+                    print_success "Smart defaults: workers = $PARALLEL_WORKERS"
+                fi
+                
+                if [[ -n "$smart_memory" ]] && [[ -z "$MEMORY_LIMIT" ]]; then
+                    MEMORY_LIMIT=$(echo "scale=0; $smart_memory / 10.24" | bc 2>/dev/null || echo "50")
+                    print_success "Smart defaults: memory limit = ${MEMORY_LIMIT}%"
+                fi
+            fi
+            
+            return 0
+        else
+            print_warning "Smart defaults system did not generate configuration, falling back to legacy detection"
+        fi
+    fi
+    
+    # Fallback to legacy resource detection system
+    print_status "Using legacy resource detection system..."
     
     # Check if setup config exists from first-time setup
     if [[ -f "$SETUP_CONFIG_FILE" ]]; then
@@ -399,9 +476,9 @@ detect_optimal_settings() {
         return 0
     fi
     
-    # Run resource detection if available
+    # Run legacy resource detection if available
     if [[ -f "scripts/detect-system-resources.js" ]]; then
-        print_status "Running system resource detection..."
+        print_status "Running legacy system resource detection..."
         
         local resource_output
         resource_output=$(node scripts/detect-system-resources.js --quiet 2>/dev/null || echo "")
@@ -414,20 +491,20 @@ detect_optimal_settings() {
             if [[ -n "$recommended_workers" ]] && [[ "$recommended_workers" -gt 0 ]]; then
                 if [[ "$PARALLEL_WORKERS" == "4" ]]; then  # Only override if using default
                     PARALLEL_WORKERS="$recommended_workers"
-                    print_success "Auto-detected optimal workers: $PARALLEL_WORKERS"
+                    print_success "Legacy detection: optimal workers = $PARALLEL_WORKERS"
                 fi
             fi
             
             if [[ -n "$recommended_memory" ]] && [[ -z "$MEMORY_LIMIT" ]]; then
                 MEMORY_LIMIT="$recommended_memory"
-                print_success "Auto-detected memory limit: ${MEMORY_LIMIT}%"
+                print_success "Legacy detection: memory limit = ${MEMORY_LIMIT}%"
             fi
             
             if [[ "$VERBOSE" == "true" ]]; then
                 echo "$resource_output"
             fi
         else
-            print_warning "Resource detection failed, using conservative defaults"
+            print_warning "Legacy resource detection failed, using conservative defaults"
             # Apply conservative defaults for unknown environments
             if [[ "$PARALLEL_WORKERS" == "4" ]]; then  # Only override if using default
                 PARALLEL_WORKERS="2"
@@ -435,7 +512,12 @@ detect_optimal_settings() {
             fi
         fi
     else
-        print_warning "Resource detection script not found, using defaults"
+        print_warning "No resource detection systems found, using conservative defaults"
+        # Apply ultra-conservative defaults
+        if [[ "$PARALLEL_WORKERS" == "4" ]]; then  # Only override if using default
+            PARALLEL_WORKERS="1"
+            print_status "Using ultra-conservative worker count: $PARALLEL_WORKERS"
+        fi
     fi
     
     return 0

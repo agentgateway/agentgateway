@@ -75,47 +75,60 @@ AgentGateway includes a comprehensive E2E testing infrastructure using Cypress t
 - **Intelligent test scheduling** and resource monitoring
 - **Zero flaky tests** with defensive programming patterns
 
-#### Quick Start (New Developers)
+## 🚀 Usage Examples
 
-For first-time setup, use our automated setup script:
+### For New Developers
+
+```bash
+# Complete guided setup experience
+cd ui && npm run test:e2e:setup-wizard
+
+# Run tests with smart defaults
+cd ui && npm run test:e2e:smart
+
+# Get help with any issues
+cd ui && npm run test:e2e:error-recovery
+```
+
+### For Experienced Developers
+
+```bash
+# Quick expert setup
+cd ui && npm run test:e2e:setup-wizard:quick
+
+# Advanced configuration
+cd ui && npm run test:e2e:smart-defaults:template
+
+# Performance optimization
+cd ui && npm run test:e2e:smart-defaults:speed
+```
+
+### For System Administrators
+
+```bash
+# Comprehensive health checks
+cd ui && npm run test:e2e:health-check:verbose
+
+# System analysis and recommendations
+cd ui && npm run test:e2e:smart-defaults:check
+
+# Error analysis and recovery
+cd ui && npm run test:e2e:error-recovery:analyze
+```
+
+#### Traditional Setup (Alternative)
+
+For manual setup or legacy workflows:
 
 ```bash
 # One-command setup for new developers
 ./scripts/setup-first-time.sh
 
-# Or run with verbose output to see what's happening
-./scripts/setup-first-time.sh --verbose
-
-# For dry-run to see what would be installed
-./scripts/setup-first-time.sh --dry-run
-```
-
-This script will automatically:
-- ✅ Check and install all prerequisites (Rust, Node.js)
-- ✅ Build AgentGateway binary with optimal settings
-- ✅ Install UI dependencies
-- ✅ Detect optimal system resources and configure tests
-- ✅ Validate complete setup and run a test verification
-
-#### Manual Setup (Advanced Users)
-
-If you prefer manual setup or need custom configuration:
-
-```bash
-# Navigate to UI directory
-cd ui
-
-# Run all E2E tests
-npm run e2e
-
-# Run tests in parallel (recommended)
-npm run test:e2e:parallel
+# Run with enhanced test runner (auto-detects optimal settings)
+./scripts/run-e2e-tests.sh
 
 # Open interactive test runner
-npm run e2e:open
-
-# Run with enhanced test runner (auto-detects optimal settings)
-../scripts/run-e2e-tests.sh
+cd ui && npm run e2e:open
 ```
 
 #### System Requirements
