@@ -26,6 +26,16 @@
     "test:e2e:smart-defaults:check": "node ../scripts/smart-defaults-system.js --check-only",
     "test:e2e:error-recovery:analyze": "node ../scripts/enhanced-error-recovery.js --analyze-log",
 
+    "// Journey Management": "Manual CI/CD trigger support with journey selection",
+    "test:e2e:journey:list": "node ../scripts/journey-manager.js --list",
+    "test:e2e:journey:validate": "node ../scripts/journey-manager.js --validate-only --journey-selection=quick-validation",
+    "test:e2e:journey:dry-run": "node ../scripts/journey-manager.js --dry-run --journey-selection=quick-validation",
+    "test:e2e:journey:smoke": "node ../scripts/journey-manager.js --execute --journey-selection=smoke",
+    "test:e2e:journey:quick": "node ../scripts/journey-manager.js --execute --journey-selection=quick-validation",
+    "test:e2e:journey:feature": "node ../scripts/journey-manager.js --execute --journey-selection=feature-testing",
+    "test:e2e:journey:comprehensive": "node ../scripts/journey-manager.js --execute --journey-selection=comprehensive",
+    "test:e2e:journey:custom": "node ../scripts/journey-manager.js --execute --journey-selection=custom --custom-journeys=smoke,foundation",
+
     "// Traditional Setup (Alternative)": "Manual setup and legacy workflows",
     "e2e:open": "cypress open",
 

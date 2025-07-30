@@ -101,6 +101,9 @@ cd ui && npm run test:e2e:smart-defaults:template
 
 # Performance optimization
 cd ui && npm run test:e2e:smart-defaults:speed
+
+# Run tests fast
+cd ui && npm run test:e2e:parallel
 ```
 
 ### For System Administrators
