@@ -39,10 +39,10 @@ export function renderJwtAuthForm({ data, onChange }: FormRendererProps) {
       onChange({ ...data, jwks: { url: "" } });
       return;
     }
-    
+
     // Detect if it's a URL (starts with http/https) or a file path
     const isUrl = value.trim().startsWith("http://") || value.trim().startsWith("https://");
-    
+
     if (isUrl) {
       onChange({ ...data, jwks: { url: value } });
     } else {
@@ -1433,12 +1433,13 @@ export function renderA2aForm({ data, onChange }: FormRendererProps) {
           <div className="space-y-2">
             <h4 className="font-medium text-sm">Agent-to-Agent Policy</h4>
             <p className="text-sm text-muted-foreground">
-              This policy marks traffic as Agent-to-Agent (A2A) to enable A2A processing and telemetry. 
-              No additional configuration is required - simply enabling this policy will activate A2A features for this route.
+              This policy marks traffic as Agent-to-Agent (A2A) to enable A2A processing and
+              telemetry. No additional configuration is required - simply enabling this policy will
+              activate A2A features for this route.
             </p>
             <p className="text-sm text-muted-foreground">
-              Use this policy when you want to enable specialized handling for agent-to-agent communications, 
-              including enhanced telemetry, logging, and processing optimizations.
+              Use this policy when you want to enable specialized handling for agent-to-agent
+              communications, including enhanced telemetry, logging, and processing optimizations.
             </p>
           </div>
         </div>

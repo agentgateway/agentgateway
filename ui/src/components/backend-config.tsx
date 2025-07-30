@@ -88,10 +88,12 @@ export function BackendConfig() {
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
-        <Button onClick={() => {
-          resetBackendForm(binds);
-          openAddDialog();
-        }}>
+        <Button
+          onClick={() => {
+            resetBackendForm(binds);
+            openAddDialog();
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Backend
         </Button>

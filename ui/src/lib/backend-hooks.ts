@@ -108,7 +108,7 @@ export const useBackendFormState = () => {
         formWithDefaults.selectedRouteIndex = firstRoute.routeIndex.toString();
       }
     }
-    
+
     setBackendForm(formWithDefaults);
     setSelectedBackendType("mcp");
   };

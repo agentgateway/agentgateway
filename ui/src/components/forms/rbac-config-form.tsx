@@ -288,7 +288,12 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
         </Accordion>
       </div>
 
-      <Button variant="outline" className="w-full" onClick={handleAddRule} data-cy="rbac-add-rule-button">
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={handleAddRule}
+        data-cy="rbac-add-rule-button"
+      >
         <Plus className="h-4 w-4 mr-2" />
         Add Rule
       </Button>
@@ -297,7 +302,9 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
         <Button variant="outline" onClick={onCancel} data-cy="rbac-config-cancel-button">
           Cancel
         </Button>
-        <Button onClick={handleSave} data-cy="rbac-config-save-button">Save Changes</Button>
+        <Button onClick={handleSave} data-cy="rbac-config-save-button">
+          Save Changes
+        </Button>
       </div>
     </div>
   );

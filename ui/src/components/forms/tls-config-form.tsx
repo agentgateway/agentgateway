@@ -62,7 +62,9 @@ export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps
         <Button variant="outline" onClick={onCancel} data-cy="tls-config-cancel-button">
           Cancel
         </Button>
-        <Button onClick={handleSave} data-cy="tls-config-save-button">Save Changes</Button>
+        <Button onClick={handleSave} data-cy="tls-config-save-button">
+          Save Changes
+        </Button>
       </div>
     </div>
   );

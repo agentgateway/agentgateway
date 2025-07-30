@@ -13,13 +13,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { A2AClient } from "@a2a-js/sdk/client";
-import type { 
-  AgentSkill, 
-  Task, 
-  Message,
-  MessageSendParams,
-  AgentCard 
-} from "@a2a-js/sdk";
+import type { AgentSkill, Task, Message, MessageSendParams, AgentCard } from "@a2a-js/sdk";
 import { useServer } from "@/lib/server-context";
 import { Bind, Listener, Route, Backend, ListenerProtocol } from "@/lib/types";
 import { toast } from "sonner";
@@ -321,7 +315,7 @@ export default function PlaygroundPage() {
     // Don't allow selection of routes with no backends unless they have A2A policy
     const hasBackends = routeInfo.route.backends && routeInfo.route.backends.length > 0;
     const hasA2aPolicy = routeInfo.route.policies?.a2a;
-    
+
     if (!hasBackends && !hasA2aPolicy) {
       toast.error(
         "Cannot test route without backends or A2A policy. Please configure at least one backend or enable A2A policy for this route."
@@ -454,30 +448,32 @@ export default function PlaygroundPage() {
         );
 
         const headers: Record<string, string> = {
-          "Accept": "text/event-stream",
+          Accept: "text/event-stream",
           "Cache-Control": "no-cache",
           "mcp-protocol-version": "2024-11-05",
         };
-        
+
         // Only add auth header if token is provided and not empty
         if (connectionState.authToken && connectionState.authToken.trim()) {
           headers["Authorization"] = `Bearer ${connectionState.authToken}`;
         }
 
-        const sseUrl = selectedRoute.endpoint.endsWith('/') ? `${selectedRoute.endpoint}sse` : `${selectedRoute.endpoint}/sse`;
+        const sseUrl = selectedRoute.endpoint.endsWith("/")
+          ? `${selectedRoute.endpoint}sse`
+          : `${selectedRoute.endpoint}/sse`;
         const transport = new McpSseTransport(new URL(sseUrl), {
           eventSourceInit: {
             fetch: (url, init) => {
-              return fetch(url, { 
-                ...init, 
+              return fetch(url, {
+                ...init,
                 headers: headers as HeadersInit,
               });
             },
           },
-          requestInit: { 
+          requestInit: {
             headers: headers as HeadersInit,
-            credentials: 'omit',
-            mode: 'cors'
+            credentials: "omit",
+            mode: "cors",
           },
         });
 
@@ -505,38 +501,46 @@ export default function PlaygroundPage() {
         setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
         try {
           // Fetch the agent card to get available skills and capabilities
-          const baseUrl = connectUrl.endsWith('/') ? connectUrl.slice(0, -1) : connectUrl;
+          const baseUrl = connectUrl.endsWith("/") ? connectUrl.slice(0, -1) : connectUrl;
           const agentCardUrl = `${baseUrl}/.well-known/agent.json`;
           const response = await fetch(agentCardUrl);
-          
+
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
-          
+
           const agentCard: AgentCard = await response.json();
-          
+
           // Extract skills from the agent card
           const skills = agentCard.skills || [];
-          
+
           setA2aState((prev) => ({ ...prev, skills }));
-          toast.success(`Loaded A2A agent: ${agentCard.name} with ${skills.length} skill${skills.length !== 1 ? 's' : ''}`);
+          toast.success(
+            `Loaded A2A agent: ${agentCard.name} with ${skills.length} skill${skills.length !== 1 ? "s" : ""}`
+          );
         } catch (error: any) {
           console.error("Failed to load A2A capabilities:", error);
           // Don't fail the connection, just continue without skills
           setA2aState((prev) => ({ ...prev, skills: [] }));
-          
+
           // Provide specific guidance for CORS errors
           let errorMessage = "Unknown error loading agent card";
           if (error instanceof Error) {
-            if (error.message.includes("CORS") || error.message.includes("Access-Control-Allow-Origin")) {
+            if (
+              error.message.includes("CORS") ||
+              error.message.includes("Access-Control-Allow-Origin")
+            ) {
               errorMessage = "CORS error - A2A endpoint needs to allow cross-origin requests";
-            } else if (error.message.includes("NetworkError") || error.message.includes("Failed to fetch")) {
+            } else if (
+              error.message.includes("NetworkError") ||
+              error.message.includes("Failed to fetch")
+            ) {
               errorMessage = "Network error - check if A2A endpoint is reachable and allows CORS";
             } else {
               errorMessage = error.message;
             }
           }
-          
+
           toast.warning(`Connected to A2A endpoint but couldn't load agent card: ${errorMessage}`);
         }
       }
@@ -547,25 +551,29 @@ export default function PlaygroundPage() {
         message: error?.message,
         code: error?.code,
         stack: error?.stack,
-        cause: error?.cause
+        cause: error?.cause,
       });
-      
+
       const errorMessage =
         error instanceof McpError || error instanceof Error
           ? error.message
           : "Unknown connection error";
 
       // Enhanced error detection and messaging
-      if (errorMessage.includes("401") || (error?.code === 401)) {
+      if (errorMessage.includes("401") || error?.code === 401) {
         toast.error("❌ Unauthorized (401): Check bearer token or remove it if not needed");
-      } else if (errorMessage.includes("406") || (error?.code === 406)) {
-        toast.error("❌ Not Acceptable (406): Server rejected request headers - check CORS configuration");
+      } else if (errorMessage.includes("406") || error?.code === 406) {
+        toast.error(
+          "❌ Not Acceptable (406): Server rejected request headers - check CORS configuration"
+        );
       } else if (
         errorMessage.includes("Not Found") ||
         errorMessage.includes("404") ||
-        (error?.code === 404)
+        error?.code === 404
       ) {
-        toast.error(`❌ Not Found (404): Endpoint '${selectedRoute?.endpoint || 'unknown'}' not found`);
+        toast.error(
+          `❌ Not Found (404): Endpoint '${selectedRoute?.endpoint || "unknown"}' not found`
+        );
       } else if (
         errorMessage.includes("Failed to fetch") ||
         errorMessage.includes("NetworkError") ||
@@ -577,19 +585,22 @@ export default function PlaygroundPage() {
         detailedMessage += "• CORS: Server needs 'Access-Control-Allow-Origin' header\n";
         detailedMessage += "• Network: Server may be down or unreachable\n";
         detailedMessage += "• Headers: Missing required headers (Accept, mcp-protocol-version)\n";
-        detailedMessage += `• URL: Check if '${selectedRoute?.endpoint || 'unknown'}/sse' is correct\n`;
+        detailedMessage += `• URL: Check if '${selectedRoute?.endpoint || "unknown"}/sse' is correct\n`;
         detailedMessage += "• Config: Verify agentgateway is running with correct config";
-        
+
         console.error("CORS/Network error details:", {
-          url: `${selectedRoute?.endpoint || 'unknown'}/sse`,
+          url: `${selectedRoute?.endpoint || "unknown"}/sse`,
           headers: error?.headers,
-          mode: 'cors',
-          credentials: 'omit'
+          mode: "cors",
+          credentials: "omit",
         });
-        
+
         toast.error(detailedMessage, { duration: 8000 });
       } else if (errorMessage.includes("CORS") || errorMessage.includes("Access-Control")) {
-        toast.error(`❌ CORS Error: ${errorMessage}\n• Add '${window.location.origin}' to CORS allowOrigins\n• Check CORS headers in agentgateway config`, { duration: 6000 });
+        toast.error(
+          `❌ CORS Error: ${errorMessage}\n• Add '${window.location.origin}' to CORS allowOrigins\n• Check CORS headers in agentgateway config`,
+          { duration: 6000 }
+        );
       } else {
         toast.error(`❌ Connection failed: ${errorMessage}`);
       }

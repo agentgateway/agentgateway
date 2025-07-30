@@ -219,7 +219,12 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
                   onKeyPress={(e) => e.key === "Enter" && addHostname()}
                   data-cy="route-hostname-input"
                 />
-                <Button type="button" variant="outline" onClick={addHostname} data-cy="route-add-hostname-button">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addHostname}
+                  data-cy="route-add-hostname-button"
+                >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -246,7 +251,12 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
                   onKeyPress={(e) => e.key === "Enter" && addMethod()}
                   data-cy="route-method-input"
                 />
-                <Button type="button" variant="outline" onClick={addMethod} data-cy="route-add-method-button">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addMethod}
+                  data-cy="route-add-method-button"
+                >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>

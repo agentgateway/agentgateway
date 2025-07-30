@@ -38,7 +38,7 @@ export default function SimplePage() {
     <div data-cy="dashboard-content">
       <h1>AgentGateway Dashboard</h1>
       <p>Welcome to AgentGateway - your intelligent API gateway solution.</p>
-      
+
       {/* Dashboard Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 my-6">
         <div data-cy="dashboard-listeners-card" className="p-4 border rounded-lg">
@@ -58,7 +58,7 @@ export default function SimplePage() {
           <span data-cy="dashboard-binds-count">0</span>
         </div>
       </div>
-      
+
       <button data-cy="create-first-listener-button">Create First Listener</button>
       <button data-cy="run-setup-wizard-button" onClick={handleRunSetupWizard}>
         Run Setup Wizard
