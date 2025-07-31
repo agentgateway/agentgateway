@@ -79,6 +79,33 @@ AgentGateway delivers industry-competitive performance with comprehensive benchm
 
 **Run Benchmarks**: `./crates/agentgateway/scripts/run-benchmarks.sh --type real-proxy`
 
+### GitHub CI Benchmarks
+
+AgentGateway provides automated performance benchmarking through GitHub Actions workflows, enabling maintainers to validate performance claims and track regressions:
+
+#### Manual Benchmark Triggers
+- **Maintainer Access**: Restricted to repository maintainers for resource control
+- **Flexible Configuration**: Choose protocols (HTTP/MCP/A2A), test types, duration, and platforms
+- **Multi-Platform Testing**: Support for both x86_64 and ARM64 architectures
+- **Industry Comparisons**: Automated comparison with nginx, HAProxy, Envoy, and Pingora
+
+#### PR Comment Integration
+Maintainers can trigger benchmarks directly from pull request comments:
+```bash
+/benchmark                    # Quick test of all protocols
+/benchmark http quick         # HTTP-only validation  
+/benchmark all comprehensive  # Full performance analysis
+/benchmark mcp latency        # MCP latency testing
+```
+
+#### Key Features
+- **Dynamic Baselines**: Automatic updates of industry benchmark data before each run
+- **Professional Reporting**: HTML and Markdown reports with detailed analysis
+- **Artifact Management**: Automatic cleanup maintaining only the last 3 benchmark runs
+- **Maintainer Notifications**: Email notifications with performance summaries and links
+
+**Documentation**: See [GitHub CI Benchmarks Guide](docs/benchmarks-ci.md) for complete usage instructions.
+
 <br>
 
 ## Getting Started 

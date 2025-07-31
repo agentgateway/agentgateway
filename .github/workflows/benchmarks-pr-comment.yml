@@ -1,0 +1,231 @@
+name: Benchmark PR Comment
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  check-comment:
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/benchmark')
+    runs-on: ubuntu-latest
+    outputs:
+      is-maintainer: ${{ steps.check.outputs.is-maintainer }}
+      benchmark-params: ${{ steps.parse.outputs.params }}
+    steps:
+      - name: Check Maintainer Status
+        id: check
+        run: |
+          # Check if the commenter has admin or maintain permissions
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/collaborators/${{ github.event.comment.user.login }}/permission")
+          
+          PERMISSION=$(echo "$RESPONSE" | jq -r '.permission // "none"')
+          
+          if [[ "$PERMISSION" == "admin" || "$PERMISSION" == "maintain" ]]; then
+            echo "is-maintainer=true" >> $GITHUB_OUTPUT
+            echo "✅ User ${{ github.event.comment.user.login }} has $PERMISSION permissions"
+          else
+            echo "is-maintainer=false" >> $GITHUB_OUTPUT
+            echo "❌ User ${{ github.event.comment.user.login }} has $PERMISSION permissions (admin or maintain required)"
+          fi
+      
+      - name: Parse Benchmark Command
+        id: parse
+        run: |
+          COMMENT_BODY="${{ github.event.comment.body }}"
+          echo "Parsing comment: $COMMENT_BODY"
+          
+          # Default values
+          PROTOCOLS="all"
+          TEST_TYPE="quick"
+          DURATION="30s"
+          PLATFORM="ubuntu-latest"
+          
+          # Parse the command
+          # Examples:
+          # /benchmark -> all protocols, quick test, 30s, ubuntu-latest
+          # /benchmark http -> http protocol, quick test, 30s, ubuntu-latest
+          # /benchmark http quick -> http protocol, quick test, 30s, ubuntu-latest
+          # /benchmark all comprehensive 120s -> all protocols, comprehensive test, 120s, ubuntu-latest
+          # /benchmark mcp latency -> mcp protocol, latency test, 30s, ubuntu-latest
+          
+          # Remove /benchmark prefix and split into parts
+          PARTS=($(echo "$COMMENT_BODY" | sed 's|^/benchmark||' | xargs))
+          
+          # Parse arguments
+          if [ ${#PARTS[@]} -ge 1 ] && [ "${PARTS[0]}" != "" ]; then
+            case "${PARTS[0]}" in
+              "all"|"http"|"mcp"|"a2a")
+                PROTOCOLS="${PARTS[0]}"
+                ;;
+              *)
+                echo "⚠️ Unknown protocol '${PARTS[0]}', using 'all'"
+                ;;
+            esac
+          fi
+          
+          if [ ${#PARTS[@]} -ge 2 ]; then
+            case "${PARTS[1]}" in
+              "quick"|"comprehensive"|"latency"|"throughput")
+                TEST_TYPE="${PARTS[1]}"
+                ;;
+              "30s"|"60s"|"120s"|"300s")
+                DURATION="${PARTS[1]}"
+                ;;
+              *)
+                echo "⚠️ Unknown parameter '${PARTS[1]}', treating as test type"
+                TEST_TYPE="${PARTS[1]}"
+                ;;
+            esac
+          fi
+          
+          if [ ${#PARTS[@]} -ge 3 ]; then
+            case "${PARTS[2]}" in
+              "30s"|"60s"|"120s"|"300s")
+                DURATION="${PARTS[2]}"
+                ;;
+              "ubuntu-latest"|"ubuntu-22.04-arm"|"both")
+                PLATFORM="${PARTS[2]}"
+                ;;
+              *)
+                echo "⚠️ Unknown parameter '${PARTS[2]}', ignoring"
+                ;;
+            esac
+          fi
+          
+          if [ ${#PARTS[@]} -ge 4 ]; then
+            case "${PARTS[3]}" in
+              "ubuntu-latest"|"ubuntu-22.04-arm"|"both")
+                PLATFORM="${PARTS[3]}"
+                ;;
+              *)
+                echo "⚠️ Unknown parameter '${PARTS[3]}', ignoring"
+                ;;
+            esac
+          fi
+          
+          # Create JSON output
+          PARAMS=$(jq -n \
+            --arg protocols "$PROTOCOLS" \
+            --arg test_type "$TEST_TYPE" \
+            --arg duration "$DURATION" \
+            --arg platform "$PLATFORM" \
+            '{
+              protocols: $protocols,
+              test_type: $test_type,
+              duration: $duration,
+              platform: $platform,
+              notify_maintainers: true
+            }')
+          
+          echo "params=$PARAMS" >> $GITHUB_OUTPUT
+          
+          echo "📋 Parsed benchmark parameters:"
+          echo "  Protocols: $PROTOCOLS"
+          echo "  Test Type: $TEST_TYPE"
+          echo "  Duration: $DURATION"
+          echo "  Platform: $PLATFORM"
+  
+  run-benchmark:
+    needs: check-comment
+    if: needs.check-comment.outputs.is-maintainer == 'true'
+    uses: ./.github/workflows/benchmarks-manual.yml
+    with:
+      protocols: ${{ fromJson(needs.check-comment.outputs.benchmark-params).protocols }}
+      test_type: ${{ fromJson(needs.check-comment.outputs.benchmark-params).test_type }}
+      duration: ${{ fromJson(needs.check-comment.outputs.benchmark-params).duration }}
+      platform: ${{ fromJson(needs.check-comment.outputs.benchmark-params).platform }}
+      notify_maintainers: ${{ fromJson(needs.check-comment.outputs.benchmark-params).notify_maintainers }}
+  
+  comment-results:
+    needs: [check-comment, run-benchmark]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Comment Results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            
+            let commentBody = '';
+            
+            if ('${{ needs.check-comment.outputs.is-maintainer }}' !== 'true') {
+              commentBody = `❌ **Unauthorized Benchmark Request**
+              
+              Only repository maintainers can trigger benchmark workflows.
+              
+              **User:** @${{ github.event.comment.user.login }}
+              **Required Permission:** admin or maintain
+              
+              Please contact a repository maintainer if you need to run benchmarks.`;
+            } else {
+              const benchmarkStatus = '${{ needs.run-benchmark.result }}';
+              const runId = '${{ github.run_id }}';
+              const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+              
+              const params = JSON.parse('${{ needs.check-comment.outputs.benchmark-params }}');
+              
+              if (benchmarkStatus === 'success') {
+                commentBody = `✅ **Benchmark Completed Successfully**
+                
+                **Configuration:**
+                - Protocols: \`${params.protocols}\`
+                - Test Type: \`${params.test_type}\`
+                - Duration: \`${params.duration}\`
+                - Platform: \`${params.platform}\`
+                
+                **Results:** Check the [workflow run](${runUrl}) for detailed results and artifacts.
+                
+                **Triggered by:** @${{ github.event.comment.user.login }}`;
+              } else if (benchmarkStatus === 'failure') {
+                commentBody = `❌ **Benchmark Failed**
+                
+                **Configuration:**
+                - Protocols: \`${params.protocols}\`
+                - Test Type: \`${params.test_type}\`
+                - Duration: \`${params.duration}\`
+                - Platform: \`${params.platform}\`
+                
+                **Error Details:** Check the [workflow run](${runUrl}) for error details and logs.
+                
+                **Triggered by:** @${{ github.event.comment.user.login }}`;
+              } else {
+                commentBody = `⚠️ **Benchmark Cancelled or Skipped**
+                
+                **Configuration:**
+                - Protocols: \`${params.protocols}\`
+                - Test Type: \`${params.test_type}\`
+                - Duration: \`${params.duration}\`
+                - Platform: \`${params.platform}\`
+                
+                **Status:** ${benchmarkStatus}
+                **Details:** Check the [workflow run](${runUrl}) for more information.
+                
+                **Triggered by:** @${{ github.event.comment.user.login }}`;
+              }
+            }
+            
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: commentBody
+            });
+  
+  unauthorized-comment:
+    needs: check-comment
+    if: needs.check-comment.outputs.is-maintainer != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log Unauthorized Attempt
+        run: |
+          echo "❌ Unauthorized benchmark request"
+          echo "User: ${{ github.event.comment.user.login }}"
+          echo "Comment: ${{ github.event.comment.body }}"
+          echo "PR: ${{ github.event.issue.number }}"
+          echo "Required permission: admin or maintain"
