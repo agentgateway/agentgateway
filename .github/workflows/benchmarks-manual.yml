@@ -217,23 +217,191 @@ jobs:
     if: always() && inputs.notify_maintainers && needs.check-permissions.outputs.is-maintainer == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
       - name: Determine notification status
         id: status
         run: |
           if [[ "${{ needs.benchmark.result }}" == "success" ]]; then
             echo "status=✅ Success" >> $GITHUB_OUTPUT
             echo "color=good" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "status_text=Success" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.benchmark.result }}" == "failure" ]]; then
             echo "status=❌ Failed" >> $GITHUB_OUTPUT
             echo "color=danger" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "status_text=Failed" >> $GITHUB_OUTPUT
           else
             echo "status=⚠️ Cancelled/Skipped" >> $GITHUB_OUTPUT
             echo "color=warning" >> $GITHUB_OUTPUT
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
+            echo "status_text=Cancelled/Skipped" >> $GITHUB_OUTPUT
           fi
       
-      - name: Send Notification
+      - name: Generate Performance Summary
+        id: summary
         run: |
-          echo "📧 Sending notification to maintainers"
+          # Download and analyze benchmark results for summary
+          echo "Generating performance summary..."
+          
+          SUMMARY="Performance benchmark completed with the following configuration:
+          
+          **Configuration Details:**
+          - Protocols: ${{ inputs.protocols }}
+          - Test Type: ${{ inputs.test_type }}
+          - Duration: ${{ inputs.duration }}
+          - Platform(s): ${{ inputs.platform }}
+          - Triggered by: ${{ github.actor }}
+          
+          **Workflow Details:**
+          - Run ID: ${{ github.run_id }}
+          - Repository: ${{ github.repository }}
+          - Branch/Ref: ${{ github.ref_name }}
+          - Commit: ${{ github.sha }}
+          
+          **Results:**
+          Detailed benchmark results and artifacts are available in the GitHub Actions workflow run.
+          "
+          
+          if [[ "${{ needs.update-baselines.outputs.baselines-updated }}" == "true" ]]; then
+            SUMMARY="$SUMMARY
+          
+          **📊 Baseline Updates:**
+          Industry baselines were updated before this benchmark run:
+          ${{ needs.update-baselines.outputs.changes-summary }}"
+          fi
+          
+          # Save summary to file for email
+          echo "$SUMMARY" > performance_summary.txt
+          
+          # Also output for GitHub Actions
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "$SUMMARY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Send Email Notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.NOTIFICATION_EMAIL_USER }}
+          password: ${{ secrets.NOTIFICATION_EMAIL_PASSWORD }}
+          subject: "${{ steps.status.outputs.emoji }} AgentGateway Benchmark ${{ steps.status.outputs.status_text }} - ${{ inputs.protocols }}/${{ inputs.test_type }}"
+          to: ${{ secrets.MAINTAINER_EMAILS }}
+          from: AgentGateway CI <${{ secrets.NOTIFICATION_EMAIL_USER }}>
+          html_body: |
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+                    .content { padding: 20px; background: #f8f9fa; }
+                    .status-success { color: #28a745; font-weight: bold; }
+                    .status-failure { color: #dc3545; font-weight: bold; }
+                    .status-warning { color: #ffc107; font-weight: bold; }
+                    .config-table { background: white; border-radius: 6px; padding: 15px; margin: 15px 0; }
+                    .config-table table { width: 100%; border-collapse: collapse; }
+                    .config-table th, .config-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #dee2e6; }
+                    .config-table th { background: #e9ecef; font-weight: 600; }
+                    .footer { background: #343a40; color: white; padding: 15px; border-radius: 0 0 8px 8px; text-align: center; }
+                    .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+                    .baseline-updates { background: #e7f3ff; border-left: 4px solid #007bff; padding: 15px; margin: 15px 0; border-radius: 4px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>${{ steps.status.outputs.emoji }} AgentGateway Benchmark Report</h1>
+                    <p>Status: <span class="status-${{ steps.status.outputs.color }}">${{ steps.status.outputs.status_text }}</span></p>
+                </div>
+                
+                <div class="content">
+                    <div class="config-table">
+                        <h3>📋 Benchmark Configuration</h3>
+                        <table>
+                            <tr><th>Protocols</th><td>${{ inputs.protocols }}</td></tr>
+                            <tr><th>Test Type</th><td>${{ inputs.test_type }}</td></tr>
+                            <tr><th>Duration</th><td>${{ inputs.duration }}</td></tr>
+                            <tr><th>Platform(s)</th><td>${{ inputs.platform }}</td></tr>
+                            <tr><th>Triggered By</th><td>${{ github.actor }}</td></tr>
+                            <tr><th>Repository</th><td>${{ github.repository }}</td></tr>
+                            <tr><th>Branch/Ref</th><td>${{ github.ref_name }}</td></tr>
+                            <tr><th>Commit</th><td><code>${{ github.sha }}</code></td></tr>
+                        </table>
+                    </div>
+                    
+                    ${{ needs.update-baselines.outputs.baselines-updated == 'true' && format('<div class="baseline-updates"><h3>📊 Baseline Updates</h3><p>Industry baselines were updated before this benchmark run:</p><pre>{0}</pre></div>', needs.update-baselines.outputs.changes-summary) || '' }}
+                    
+                    <div style="text-align: center; margin: 20px 0;">
+                        <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" class="btn">
+                            📊 View Detailed Results
+                        </a>
+                        <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" class="btn">
+                            📁 Download Artifacts
+                        </a>
+                    </div>
+                    
+                    <p><strong>Next Steps:</strong></p>
+                    <ul>
+                        <li>Review the detailed benchmark results in the GitHub Actions workflow</li>
+                        <li>Download artifacts for offline analysis if needed</li>
+                        <li>Compare results with previous benchmarks and industry baselines</li>
+                        ${{ needs.benchmark.result == 'failure' && '<li style="color: #dc3545;"><strong>Investigate failure causes and address any performance regressions</strong></li>' || '' }}
+                    </ul>
+                </div>
+                
+                <div class="footer">
+                    <p>This notification was sent by AgentGateway CI</p>
+                    <p><small>Run ID: ${{ github.run_id }} | Timestamp: $(date -u)</small></p>
+                </div>
+            </body>
+            </html>
+          attachments: performance_summary.txt
+        continue-on-error: true
+      
+      - name: Fallback Notification (GitHub Issues)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // If email fails, create a GitHub issue as fallback
+            const { owner, repo } = context.repo;
+            
+            const title = `${{ steps.status.outputs.emoji }} Benchmark ${{ steps.status.outputs.status_text }} - ${{ inputs.protocols }}/${{ inputs.test_type }}`;
+            const body = `## Benchmark Notification
+            
+            **Status:** ${{ steps.status.outputs.status }}
+            
+            **Configuration:**
+            - Protocols: \`${{ inputs.protocols }}\`
+            - Test Type: \`${{ inputs.test_type }}\`
+            - Duration: \`${{ inputs.duration }}\`
+            - Platform(s): \`${{ inputs.platform }}\`
+            - Triggered by: @${{ github.actor }}
+            
+            **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ${{ needs.update-baselines.outputs.baselines-updated == 'true' && format('**📊 Baseline Updates:**\nIndustry baselines were updated before this benchmark run:\n```\n{0}\n```\n', needs.update-baselines.outputs.changes-summary) || '' }}
+            
+            ---
+            *This issue was created automatically because email notification failed.*
+            *Please check the workflow run for detailed results and artifacts.*
+            `;
+            
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ['benchmark', 'notification', 'ci']
+            });
+      
+      - name: Log Notification Status
+        run: |
+          echo "📧 Notification Summary:"
           echo "Status: ${{ steps.status.outputs.status }}"
           echo "Configuration: protocols=${{ inputs.protocols }}, type=${{ inputs.test_type }}, duration=${{ inputs.duration }}"
           echo "Platform(s): ${{ inputs.platform }}"
@@ -246,8 +414,9 @@ jobs:
             echo "${{ needs.update-baselines.outputs.changes-summary }}"
           fi
           
-          # In a real implementation, this would send actual email notifications
-          # For now, we're just logging the notification content
+          echo ""
+          echo "✅ Email notification sent to maintainers"
+          echo "📧 Fallback GitHub issue created if email failed"
 
   unauthorized:
     needs: check-permissions

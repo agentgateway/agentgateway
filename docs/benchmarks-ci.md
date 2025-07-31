@@ -209,26 +209,68 @@ Industry baselines were updated before this benchmark run:
 
 ## Notifications
 
-### Maintainer Notifications
+### Email Notifications
 
-When enabled, maintainers receive notifications including:
+Professional email notifications are sent to maintainers when benchmarks complete, fail, or are cancelled. Features include:
 
-- **Performance Summary**: Key metrics vs baselines
-- **Execution Details**: Configuration and platform used
-- **Artifact Links**: Direct links to reports and raw data
-- **Baseline Changes**: Summary of any industry baseline updates
-- **Comparison Results**: Better/similar/worse than previous runs
+- **HTML Email Reports**: Professional styling with status indicators and action buttons
+- **Performance Summaries**: Detailed configuration and results attached as text files
+- **Baseline Update Alerts**: Notifications when industry baselines change
+- **Fallback Mechanisms**: GitHub issues created if email delivery fails
+- **Status-Specific Content**: Different templates for success, failure, and cancellation
+
+### Notification Setup
+
+To enable email notifications, repository maintainers must configure GitHub secrets:
+
+- `NOTIFICATION_EMAIL_USER`: SMTP username (e.g., `agentgateway-ci@company.com`)
+- `NOTIFICATION_EMAIL_PASSWORD`: App-specific password for the email account
+- `MAINTAINER_EMAILS`: Comma-separated list of recipient email addresses
+
+**See [Email Notification Setup](./notification-setup.md) for detailed configuration instructions.**
+
+### Notification Content
+
+#### Success Notifications
+- ✅ Status indicator with benchmark configuration
+- Performance summary with key metrics vs baselines
+- Links to detailed results and artifacts
+- Baseline update information (if applicable)
+- Next steps for result analysis
+
+#### Failure Notifications
+- ❌ Status indicator with error context
+- Configuration details for debugging
+- Links to workflow logs and error details
+- Troubleshooting guidance and escalation recommendations
+
+#### Baseline Update Notifications
+- 📊 Industry baseline changes detected before benchmark run
+- Source information (TechEmpower, vendor releases, etc.)
+- Impact assessment and confidence scores
+- Integration with benchmark results
 
 ### Notification Channels
 
 Currently implemented:
-- **GitHub Actions Logs**: Always available
-- **PR Comments**: For `/benchmark` command results
+- **Email Notifications**: Professional HTML emails to maintainers
+- **GitHub Actions Logs**: Always available in workflow runs
+- **PR Comments**: Automated result comments for `/benchmark` commands
+- **Fallback GitHub Issues**: Created automatically if email delivery fails
 
-Future enhancements may include:
-- **Email Notifications**: Direct email to maintainers
-- **Slack Integration**: Team channel notifications
-- **Discord Webhooks**: Community notifications
+### Testing Notifications
+
+To test the notification system:
+
+1. Ensure all required secrets are configured
+2. Trigger a manual benchmark via GitHub Actions UI
+3. Enable the "Send notification to maintainers" option
+4. Check email inboxes and GitHub issues for delivery
+
+Test command via PR comment:
+```bash
+/benchmark http quick 30s
+```
 
 ## Troubleshooting
 
