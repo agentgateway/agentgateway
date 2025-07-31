@@ -144,6 +144,19 @@ export function PolicyConfig() {
 
       setRoutes(allRoutes);
 
+      if (selectedRoute) {
+        const updatedSelectedRoute = allRoutes.find(
+          (r) =>
+            r.bind.port === selectedRoute.bind.port &&
+            r.listener.name === selectedRoute.listener.name &&
+            r.routeIndex === selectedRoute.routeIndex &&
+            r.routeType === selectedRoute.routeType
+        );
+        if (updatedSelectedRoute) {
+          setSelectedRoute(updatedSelectedRoute);
+        }
+      }
+
       // Auto-expand binds with routes
       const bindsWithRoutes = new Set<number>();
       allRoutes.forEach(({ bind }) => bindsWithRoutes.add(bind.port));
