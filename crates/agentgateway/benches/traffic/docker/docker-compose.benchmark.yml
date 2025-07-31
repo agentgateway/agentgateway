@@ -10,7 +10,7 @@ services:
       - "8080:8080"
     volumes:
       - ../configs:/configs
-    command: ["--config", "/configs/http-proxy.yaml"]
+    command: ["--file", "/configs/http-proxy.yaml"]
     healthcheck:
       test: ["CMD", "/app/agentgateway", "--version"]
       interval: 5s
