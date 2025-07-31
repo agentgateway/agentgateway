@@ -19,7 +19,7 @@ config:
       
   backends:
     - name: "benchmark-backend"
-      address: "127.0.0.1:3001"
+      address: "test-server:3001"
       protocol: "http"
       health_check:
         enabled: false  # Disable for benchmarking

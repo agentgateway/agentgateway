@@ -30,7 +30,7 @@ services:
     command: >
       sh -c "
         echo 'Starting test backend server...' &&
-        /usr/local/bin/test-server --bind 0.0.0.0:3001
+        /usr/local/bin/test-server 0.0.0.0:3001
       "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
