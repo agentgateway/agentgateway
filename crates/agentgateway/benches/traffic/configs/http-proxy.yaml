@@ -1,41 +1,12 @@
-config:
-  admin_addr: "127.0.0.1:15000"
-  stats_addr: "0.0.0.0:15020"
-  readiness_addr: "0.0.0.0:15021"
-  enable_ipv6: false
-  network: "benchmark"
-  
-  # HTTP proxy configuration for benchmarking
+# yaml-language-server: $schema=../../../schema/local.json
+binds:
+- port: 8080
   listeners:
-    - name: "http-benchmark"
-      address: "0.0.0.0:8080"
-      protocol: "http"
-      
-  routes:
+  - protocol: HTTP
+    routes:
     - name: "benchmark-route"
-      match:
-        path: "/"
-      backend: "benchmark-backend"
-      
-  backends:
-    - name: "benchmark-backend"
-      address: "test-server:3001"
-      protocol: "http"
-      health_check:
-        enabled: false  # Disable for benchmarking
-        
-  # Optimize for performance testing
-  http2:
-    window_size: 4194304          # 4MB
-    connection_window_size: 16777216  # 16MB
-    frame_size: 1048576           # 1MB
-    pool_max_streams_per_conn: 100
-    pool_unused_release_timeout: "300s"
-    
-  # Disable logging for accurate performance measurement
-  logging:
-    filter: "level >= 'error'"
-    
-  # Disable tracing for benchmarking
-  tracing:
-    endpoint: null
+      matches:
+      - path:
+          pathPrefix: /
+      backends:
+      - host: test-server:3001
