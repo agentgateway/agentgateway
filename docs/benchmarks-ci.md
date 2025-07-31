@@ -296,12 +296,102 @@ Error Details: Docker build failed
 ```
 **Solution**: Check the workflow logs for specific Docker errors. This may indicate infrastructure issues.
 
+#### Email Notification Issues
+```
+❌ Email notification failed
+Error: Authentication failed
+```
+**Solutions**:
+- Verify `NOTIFICATION_EMAIL_USER` and `NOTIFICATION_EMAIL_PASSWORD` secrets are set correctly
+- Ensure app-specific passwords are used (not main account passwords)
+- Check SMTP server settings and port configuration
+- Review spam/junk folders for delivered emails
+- Check fallback GitHub issues if email delivery fails
+
+#### Baseline Update Failures
+```
+⚠️ Baseline update failed
+Error: Rate limit exceeded
+```
+**Solutions**:
+- Wait for rate limits to reset (typically 1 hour)
+- Check external API availability (TechEmpower, GitHub, RSS feeds)
+- Review baseline update logs for specific error details
+- Baseline updates are optional and won't prevent benchmark execution
+
+#### PR Comment Command Not Recognized
+```
+No response to /benchmark command
+```
+**Solutions**:
+- Ensure you have maintainer permissions (admin or maintain)
+- Check command syntax: `/benchmark [protocol] [type] [duration] [platform]`
+- Verify the comment is on a pull request (not an issue)
+- Wait a few minutes for workflow processing
+
+#### Artifact Access Issues
+```
+Artifacts not found or expired
+```
+**Solutions**:
+- Artifacts are retained for 30 days only
+- Only the last 3 benchmark runs are kept
+- Download artifacts immediately after benchmark completion
+- Check workflow run page for artifact availability
+
+### Advanced Troubleshooting
+
+#### Debugging Workflow Execution
+1. **Check Workflow Status**: Go to Actions → Manual Benchmarks → Latest run
+2. **Review Job Logs**: Expand each job to see detailed execution logs
+3. **Verify Permissions**: Ensure the `check-permissions` job shows success
+4. **Monitor Resource Usage**: Check if workflows are hitting resource limits
+
+#### Network and Connectivity Issues
+1. **Docker Network**: Verify Docker containers can communicate
+2. **External APIs**: Check if baseline update sources are accessible
+3. **GitHub API**: Ensure GitHub token has sufficient permissions
+4. **SMTP Connectivity**: Test email server connectivity and authentication
+
+#### Performance Debugging
+1. **System Resources**: Monitor CPU and memory usage during benchmarks
+2. **Concurrent Connections**: Verify Fortio can establish required connections
+3. **Baseline Comparisons**: Check if industry baseline data is current
+4. **Platform Differences**: Compare results between x86_64 and ARM64
+
 ### Getting Help
 
 1. **Check Workflow Logs**: Detailed execution logs are available in the GitHub Actions tab
-2. **Review Documentation**: This guide covers most common scenarios
-3. **Contact Maintainers**: Repository maintainers can help with access and configuration issues
-4. **Open Issues**: For bugs or feature requests, open a GitHub issue
+2. **Review Documentation**: This guide and [Email Notification Setup](./notification-setup.md) cover most scenarios
+3. **Test Configuration**: Use the notification setup guide to validate email configuration
+4. **Contact Maintainers**: Repository maintainers can help with access and configuration issues
+5. **Open Issues**: For bugs or feature requests, open a GitHub issue with:
+   - Workflow run URL
+   - Error messages and logs
+   - Configuration details (without sensitive information)
+   - Steps to reproduce the issue
+
+### Diagnostic Commands
+
+For local troubleshooting, you can run these commands:
+
+```bash
+# Test benchmark infrastructure locally
+cd crates/agentgateway/benches/traffic/docker
+./run-docker-benchmarks.sh --protocols http --type quick
+
+# Validate baseline update system
+cd crates/agentgateway/benches/traffic/reports
+python update-baselines.py --dry-run
+
+# Check Docker setup
+docker --version
+docker-compose --version
+docker ps
+
+# Verify Fortio installation
+fortio version
+```
 
 ## Advanced Usage
 
