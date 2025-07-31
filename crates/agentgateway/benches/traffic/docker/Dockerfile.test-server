@@ -1,5 +1,12 @@
 FROM rust:1.75 AS builder
 
+# Install build dependencies including protoc
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 

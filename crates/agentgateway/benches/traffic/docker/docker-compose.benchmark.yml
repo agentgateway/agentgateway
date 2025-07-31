@@ -4,19 +4,15 @@ services:
   # AgentGateway service for testing
   agentgateway:
     build:
-      context: ../../../..
+      context: ../../../../..
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
     volumes:
       - ../configs:/configs
-    command: >
-      sh -c "
-        echo 'Starting AgentGateway for benchmarking...' &&
-        /usr/local/bin/agentgateway --config /configs/http-proxy.yaml
-      "
+    command: ["/app/agentgateway", "--config", "/configs/http-proxy.yaml"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "/app/agentgateway", "--version"]
       interval: 5s
       timeout: 3s
       retries: 5
