@@ -119,6 +119,7 @@ tikv-jemallocator = {workspace = true, optional = true}
 jemalloc_pprof = {workspace = true, optional = true}
 frozen-collections = "0.8.0"
 value-bag = { workspace = true, features = ["value-bag-serde1"] }
+httpdate = "1.0"
 net2 = "0.2.39"
 core_affinity = "0.8.3"
 macro_rules_attribute = "0.2.2"
@@ -136,6 +137,9 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 wiremock.workspace = true
 which.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+num_cpus.workspace = true
 
 [lints.clippy]
 # This rule makes code more confusing
@@ -147,3 +151,20 @@ declare_interior_mutable_const = "allow"
 [[bench]]
 name = "bench_tests"
 harness = false
+
+[[bench]]
+name = "integration_test"
+harness = false
+
+[[bench]]
+name = "baseline_comparison"
+harness = false
+
+[[bench]]
+name = "real_proxy_benchmarks"
+harness = false
+required-features = ["internal_benches"]
+
+[[bin]]
+name = "test-server"
+path = "src/bin/test-server.rs"

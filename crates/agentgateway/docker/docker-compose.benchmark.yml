@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  agentgateway-benchmark:
+    build:
+      context: ../../..
+      dockerfile: crates/agentgateway/docker/benchmark.Dockerfile
+    container_name: agentgateway-benchmark
+    volumes:
+      # Mount the target directory to persist benchmark reports
+      - ../../../target:/app/target
+      # Mount the entire workspace to preserve structure
+      - ../../..:/app
+    ports:
+      - "3001:3001"  # Test server port
+      - "8080:8080"  # AgentGateway proxy port
+    environment:
+      - RUST_LOG=error
+      - RUST_BACKTRACE=1
+    # Enable process spawning and networking
+    privileged: false
+    network_mode: bridge
+    # Allocate a TTY for better output formatting
+    tty: true
+    # Keep container running for interactive use
+    stdin_open: true
+    # Override default command for specific benchmark runs
+    command: ["cargo", "bench", "--package", "agentgateway", "--features", "internal_benches"]
+
+  # Optional: Separate service for just real proxy benchmarks
+  real-proxy-benchmark:
+    build:
+      context: ../../..
+      dockerfile: crates/agentgateway/docker/benchmark.Dockerfile
+    container_name: agentgateway-real-proxy-benchmark
+    volumes:
+      # Mount the target directory to persist benchmark reports
+      - ../../../target:/app/target
+      # Mount the entire workspace to preserve structure
+      - ../../..:/app
+    ports:
+      - "3002:3001"  # Different port to avoid conflicts
+      - "8081:8080"
+    environment:
+      - RUST_LOG=error
+      - RUST_BACKTRACE=1
+    tty: true
+    stdin_open: true
+    # Run only the real proxy benchmarks
+    command: ["cargo", "bench", "--package", "agentgateway", "--features", "internal_benches", "--bench", "real_proxy_benchmarks"]
+
+networks:
+  default:
+    driver: bridge

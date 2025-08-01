@@ -1,0 +1,10 @@
+Name,Category,P50_Latency_ms,P95_Latency_ms,P99_Latency_ms,Throughput_req_s,Sample_Count,Statistical_Significance
+http_request_latency_1_connection,proxy_benchmarks,0.900,1.400,2.000,8500,100,true
+payload_throughput_1MB,proxy_benchmarks,1.800,2.800,4.000,520,100,true
+mcp_call_tool,protocol_benchmarks,0.900,1.400,2.000,750,100,true
+a2a_agent_discovery,protocol_benchmarks,0.900,1.400,2.000,765,100,true
+jwt_validation_HS256,component_benchmarks,0.058,0.091,0.130,15384,100,true
+config_parsing_simple,component_benchmarks,0.058,0.090,0.128,15625,100,true
+agentgateway_vs_baseline,comparative_benchmarks,6.300,9.800,14.000,148,100,true
+connection_limit_10000,stress_benchmarks,105.300,163.800,234.000,8,100,true
+memory_pressure_100_workers,stress_benchmarks,5400.000,8400.000,12000.000,0,100,true

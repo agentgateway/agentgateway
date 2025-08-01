@@ -142,6 +142,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "http-serde",
+ "httpdate",
  "hyper",
  "hyper-rustls",
  "hyper-util",
