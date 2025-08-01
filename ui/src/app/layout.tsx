@@ -9,6 +9,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { SidebarWrapper } from "@/components/sidebar-wrapper";
 import { WizardProvider } from "@/lib/wizard-context";
 import { ConfigErrorWrapper } from "@/components/config-error-wrapper";
+import { XdsModeNotification } from "@/components/xds-mode-notification";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,6 +47,7 @@ export default function RootLayout({
             disableTransitionOnChange
             storageKey="agentgateway-theme"
           >
+            <XdsModeNotification />
             <LoadingWrapper>
               <WizardProvider>
                 <ConfigErrorWrapper>

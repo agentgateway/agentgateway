@@ -50,7 +50,7 @@ export const MCP_TARGET_TYPES = [
 /**
  * Backend policy keys (subset of PolicyType that apply to backends)
  */
-export type BackendPolicyKey = typeof BACKEND_POLICY_KEYS[number];
+export type BackendPolicyKey = (typeof BACKEND_POLICY_KEYS)[number];
 
 /**
  * Default ports for different protocols
@@ -78,7 +78,7 @@ export function ensurePortInAddress(
 export const getBackendName = (backend: Backend): string => {
   if (backend.mcp) {
     if (backend.mcp.targets && backend.mcp.targets.length > 0) {
-      const targetNames = backend.mcp.targets.map(t => t.name).join(", ");
+      const targetNames = backend.mcp.targets.map((t) => t.name).join(", ");
       return `MCP: ${targetNames}`;
     }
     return "MCP Backend";
@@ -96,7 +96,7 @@ export const getBackendName = (backend: Backend): string => {
   }
   if (backend.service) return backend.service.name?.hostname || "";
   if (backend.host) {
-    return typeof backend.host === "string" ? backend.host : String(backend.host);
+    return typeof backend.host === "string" ? backend.host : String(backend.host.name ?? "Unknown");
   }
   if (backend.dynamic) return "Dynamic Backend";
   return "Unknown Backend";
@@ -168,15 +168,16 @@ export const getBackendDetails = (backend: Backend): { primary: string; secondar
   }
 
   if (backend.host) {
-    const hostStr = typeof backend.host === "string" ? backend.host : String(backend.host);
-    if (hostStr.includes(":")) {
-      const [hostname, port] = hostStr.split(":");
-      return {
-        primary: `Host: ${hostname}`,
-        secondary: `Port: ${port}`,
-      };
+    if (typeof backend.host === "string") {
+      return { primary: `Address: ${backend.host}` };
+    } else if (backend.host?.Hostname) {
+      const hostname = String(backend.host.Hostname?.[0] ?? "");
+      const port = String(backend.host.Hostname?.[1] ?? "");
+      return { primary: `Host: ${hostname}`, secondary: `Port: ${port}` };
+    } else if (backend.host?.Address) {
+      return { primary: `Address: ${backend.host.Address}` };
     }
-    return { primary: `Address: ${hostStr}` };
+    return { primary: `""` };
   }
 
   if (backend.dynamic) {
@@ -193,7 +194,7 @@ export const validateCommonFields = (
   backendType?: string
 ): boolean => {
   if (backendType !== "ai" && backendType !== "mcp" && !form.name.trim()) return false;
-  
+
   // Only validate route selection when adding (not editing)
   if (!editingBackend && (!form.selectedBindPort || form.selectedRouteIndex === "")) return false;
 
@@ -325,8 +326,14 @@ export const createMcpTarget = (target: any) => {
         stdio: {
           cmd: target.cmd,
           args: Array.isArray(target.args) ? target.args.filter((arg: string) => arg.trim()) : [],
-          env: typeof target.env === 'object' && target.env !== null && !Array.isArray(target.env) ? 
-            Object.fromEntries(Object.entries(target.env).filter(([key, value]) => typeof key === 'string' && key.trim() && String(value).trim())) : {},
+          env:
+            typeof target.env === "object" && target.env !== null && !Array.isArray(target.env)
+              ? Object.fromEntries(
+                  Object.entries(target.env).filter(
+                    ([key, value]) => typeof key === "string" && key.trim() && String(value).trim()
+                  )
+                )
+              : {},
         },
       };
     case "openapi":
@@ -486,7 +493,7 @@ export const populateFormFromBackend = (
   const backendType = getBackendType(backend);
 
   return {
-    name: (backendType === "ai" || backendType === "mcp") ? "" : getBackendName(backend) || "",
+    name: backendType === "ai" || backendType === "mcp" ? "" : getBackendName(backend) || "",
     weight: String(backend.weight || 1),
     selectedBindPort: String(bind.port),
     selectedListenerName: listener.name || "",
@@ -595,9 +602,9 @@ export const hasBackendPolicies = (route: Route) => {
  */
 export const getBackendPolicyKeys = (route: Route): BackendPolicyKey[] => {
   if (!route?.policies) return [];
-  
-  return BACKEND_POLICY_KEYS.filter(policyKey => 
-    route.policies![policyKey] !== undefined && route.policies![policyKey] !== null
+
+  return BACKEND_POLICY_KEYS.filter(
+    (policyKey) => route.policies![policyKey] !== undefined && route.policies![policyKey] !== null
   );
 };
 
@@ -606,31 +613,39 @@ export const getBackendPolicyKeys = (route: Route): BackendPolicyKey[] => {
  */
 export const getBackendPolicyTypes = (route: Route): string[] => {
   const policyKeys = getBackendPolicyKeys(route);
-  return policyKeys.map(key => POLICY_TYPES[key].name);
+  return policyKeys.map((key) => POLICY_TYPES[key].name);
 };
 
 /**
  * Check if a backend can be deleted based on backend policy constraints
  */
-export const canDeleteBackend = (route: Route, currentBackendCount: number): { canDelete: boolean; reason: string } => {
+export const canDeleteBackend = (
+  route: Route,
+  currentBackendCount: number
+): { canDelete: boolean; reason: string } => {
   if (!hasBackendPolicies(route)) {
     return { canDelete: true, reason: "" };
   }
-  
+
   // If there are backend policies, we need exactly 1 backend after deletion
   const remainingBackends = currentBackendCount - 1;
   if (remainingBackends !== 1) {
     const policyTypes = getBackendPolicyTypes(route);
-    const action = remainingBackends === 0 ? "remove all backends" : 
-                  remainingBackends > 1 ? "have multiple backends" : "have this configuration";
-    
+    const action =
+      remainingBackends === 0
+        ? "remove all backends"
+        : remainingBackends > 1
+          ? "have multiple backends"
+          : "have this configuration";
+
     return {
       canDelete: false,
-      reason: `Cannot ${action} when backend policies are configured. ` +
-              `The following policies require exactly 1 backend: ${policyTypes.join(", ")}. ` +
-              `Please remove these policies first.`
+      reason:
+        `Cannot ${action} when backend policies are configured. ` +
+        `The following policies require exactly 1 backend: ${policyTypes.join(", ")}. ` +
+        `Please remove these policies first.`,
     };
   }
-  
+
   return { canDelete: true, reason: "" };
 };

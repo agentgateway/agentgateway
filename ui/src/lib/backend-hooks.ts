@@ -109,7 +109,7 @@ export const useBackendFormState = () => {
         formWithDefaults.selectedRouteIndex = firstRoute.routeIndex.toString();
       }
     }
-    
+
     setBackendForm(formWithDefaults);
     setSelectedBackendType("mcp");
   };
@@ -328,7 +328,9 @@ export const useBackendOperations = () => {
 
       const errorMessage = err instanceof Error ? err.message : String(err);
       if (errorMessage.includes("backend policies currently only work with exactly 1 backend")) {
-        toast.error("Cannot delete backend: Backend policies require exactly 1 backend. Please remove backend policies first.");
+        toast.error(
+          "Cannot delete backend: Backend policies require exactly 1 backend. Please remove backend policies first."
+        );
       } else if (errorMessage.includes("backend policies")) {
         toast.error(errorMessage);
       } else {

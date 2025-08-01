@@ -18,7 +18,7 @@ export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps
   const [config, setConfig] = useState(() => {
     // Initialize with existing JWT config if available
     const existingJwt = listener?.routes?.[0]?.policies?.jwtAuth;
-    
+
     const getJwksInfo = (jwks: any) => {
       if (typeof jwks === "object" && jwks !== null) {
         if ("file" in jwks) {
@@ -30,9 +30,9 @@ export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps
       // Default to remote URL structure
       return { localJwksPath: "", remoteJwksUrl: "", jwksSource: "remote" as const };
     };
-    
+
     const jwksInfo = getJwksInfo(existingJwt?.jwks);
-    
+
     return {
       issuer: existingJwt?.issuer || "",
       audience: existingJwt?.audiences?.join(", ") || "",
@@ -71,7 +71,10 @@ export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps
         .split(",")
         .map((a) => a.trim())
         .filter((a) => a),
-      jwks: config.jwksSource === "local" ? { file: config.localJwksPath } : { url: config.remoteJwksUrl },
+      jwks:
+        config.jwksSource === "local"
+          ? { file: config.localJwksPath }
+          : { url: config.remoteJwksUrl },
     };
 
     // Apply JWT auth to all routes (or create a default route if none exist)

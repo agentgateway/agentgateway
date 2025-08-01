@@ -397,12 +397,14 @@ export const AddRouteDialog: React.FC<AddRouteDialogProps> = ({
             )}
             <div className="grid gap-2">
               {availableListeners.map((item, index) => {
-                const isSelected = selectedListener && 
-                  (selectedListener.listener.name || 'unnamed') === (item.listener.name || 'unnamed') &&
+                const isSelected =
+                  selectedListener &&
+                  (selectedListener.listener.name || "unnamed") ===
+                    (item.listener.name || "unnamed") &&
                   selectedListener.bind.port === item.bind.port;
                 return (
                   <Button
-                    key={`${item.bind.port}-${item.listener.name || 'unnamed'}`}
+                    key={`${item.bind.port}-${item.listener.name || "unnamed"}`}
                     variant={isSelected ? "default" : "outline"}
                     onClick={() => {
                       setSelectedListener(item);

@@ -248,6 +248,7 @@ export interface ServiceBackend {
 export interface HostBackend {
   Address?: string;
   Hostname?: [string, number]; // [hostname, port]
+  name?: string;
 }
 
 export interface DynamicBackend {

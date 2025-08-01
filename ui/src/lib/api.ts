@@ -1,31 +1,110 @@
 import { Target, Listener, LocalConfig, Bind, Backend, Route } from "./types";
 
+// Mapping utilities are centralized in configMapper
+import { configDumpToLocalConfig } from "./configMapper";
+
 const API_URL = process.env.NODE_ENV === "production" ? "" : "http://localhost:15000";
+
+let xdsMode = false;
+let xdsModeKnown = false;
+
+export function isXdsMode() {
+  return xdsMode;
+}
+
+export function isXdsModeKnown() {
+  return xdsModeKnown;
+}
+
+// If the mode has not yet been determined, makes a request to /config_dump
+// to establish it, broadcasting the result so that subscribers update as well.
+export async function ensureXdsModeLoaded(): Promise<boolean> {
+  if (xdsModeKnown) {
+    return xdsMode;
+  }
+
+  try {
+    const resp = await fetch(`${API_URL}/config_dump`);
+    if (resp.ok) {
+      const dumpJson = await resp.json();
+      const enabled = !!dumpJson?.config?.xds?.address;
+      setAndBroadcastXds(enabled);
+      return enabled;
+    }
+  } catch (err) {
+    console.error("Failed to determine whether XDS mode is enabled", err);
+  }
+
+  // If we could not determine the mode, assume whatever default we currently have
+  return xdsMode;
+}
+
+type XdsSubscriber = (val: boolean) => void;
+const xdsSubscribers: XdsSubscriber[] = [];
+
+function setAndBroadcastXds(val: boolean) {
+  if (xdsMode !== val) {
+    xdsMode = val;
+    xdsSubscribers.forEach((cb) => cb(val));
+  }
+  xdsModeKnown = true;
+}
+
+export function subscribeXdsMode(cb: XdsSubscriber) {
+  xdsSubscribers.push(cb);
+  return () => {
+    const idx = xdsSubscribers.indexOf(cb);
+    if (idx >= 0) xdsSubscribers.splice(idx, 1);
+  };
+}
 
 /**
  * Fetches the full configuration from the agentgateway server
  */
 export async function fetchConfig(): Promise<LocalConfig> {
   try {
-    const response = await fetch(`${API_URL}/config`);
-
-    if (!response.ok) {
-      if (response.status === 500) {
-        const errorText = await response.text();
-        const error = new Error(`Server configuration error: ${errorText}`);
-        (error as any).isConfigurationError = true;
-        (error as any).status = 500;
-        throw error;
-      }
-
-      throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`);
+    if (xdsModeKnown) {
+      return xdsMode ? fetchViaDump() : fetchViaConfig();
     }
 
-    const data: LocalConfig = await response.json();
-    return data;
+    const dumpResp = await fetch(`${API_URL}/config_dump`);
+    if (dumpResp.ok) {
+      const dumpJson = await dumpResp.json();
+      if (dumpJson?.config?.xds?.address) {
+        setAndBroadcastXds(true);
+        return configDumpToLocalConfig(dumpJson);
+      }
+
+      setAndBroadcastXds(false);
+      return fetchViaConfig();
+    }
+
+    setAndBroadcastXds(false);
+    return fetchViaConfig();
   } catch (error) {
     console.error("Error fetching config:", error);
     throw error;
+  }
+
+  async function fetchViaDump(): Promise<LocalConfig> {
+    const r = await fetch(`${API_URL}/config_dump`);
+    if (!r.ok) throw new Error(`Failed to fetch config dump: ${r.status}`);
+    return configDumpToLocalConfig(await r.json());
+  }
+
+  async function fetchViaConfig(): Promise<LocalConfig> {
+    const r = await fetch(`${API_URL}/config`);
+    if (!r.ok) {
+      if (r.status === 500) {
+        const txt = await r.text();
+        const err: any = new Error(`Server configuration error: ${txt}`);
+        err.isConfigurationError = true;
+        err.status = 500;
+        throw err;
+      }
+      throw new Error(`Failed to fetch config: ${r.status}`);
+    }
+    return (await r.json()) as LocalConfig;
   }
 }
 
@@ -99,6 +178,9 @@ function cleanupConfig(config: LocalConfig): LocalConfig {
  * Updates the configuration
  */
 export async function updateConfig(config: LocalConfig): Promise<void> {
+  if (await ensureXdsModeLoaded()) {
+    throw new Error("Configuration is managed by XDS and cannot be updated via the UI.");
+  }
   try {
     // Clean up the config before sending
     const cleanedConfig = cleanupConfig(config);
@@ -151,8 +233,8 @@ export async function fetchMcpTargets(): Promise<any[]> {
     config.binds.forEach((bind: Bind) => {
       bind.listeners.forEach((listener: Listener) => {
         listener.routes?.forEach((route: Route) => {
-          route.backends.forEach((backend: Backend) => {
-            if (backend.mcp) {
+          route.backends?.forEach((backend: Backend) => {
+            if (backend?.mcp) {
               mcpTargets.push(...backend.mcp.targets);
             }
           });
@@ -179,8 +261,8 @@ export async function fetchA2aTargets(): Promise<any[]> {
     config.binds.forEach((bind: Bind) => {
       bind.listeners.forEach((listener: Listener) => {
         listener.routes?.forEach((route: Route) => {
-          route.backends.forEach((backend: Backend) => {
-            if (backend.ai) {
+          route.backends?.forEach((backend: Backend) => {
+            if (backend?.ai) {
               a2aTargets.push(backend.ai);
             }
           });

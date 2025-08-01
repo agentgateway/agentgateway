@@ -174,11 +174,13 @@ export function PolicyConfig() {
   }, []);
 
   const getAvailablePolicyTypes = (routeType: "http" | "tcp") => {
-    return Object.entries(POLICY_TYPES).filter(([_, info]) => {
-      if (routeType === "http") return !info.tcpOnly;
-      if (routeType === "tcp") return !info.httpOnly;
-      return true;
-    }).sort((a, b) => a[1].name.localeCompare(b[1].name));
+    return Object.entries(POLICY_TYPES)
+      .filter(([_, info]) => {
+        if (routeType === "http") return !info.tcpOnly;
+        if (routeType === "tcp") return !info.httpOnly;
+        return true;
+      })
+      .sort((a, b) => a[1].name.localeCompare(b[1].name));
   };
 
   const hasPolicyType = (routeContext: RouteWithContext, type: PolicyType) => {

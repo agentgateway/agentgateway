@@ -154,12 +154,12 @@ export const POLICY_TYPES: Record<PolicyType, PolicyTypeInfo> = {
  * Backend policy types (policies that affect backend routing and require exactly 1 backend)
  */
 export const BACKEND_POLICY_KEYS: readonly PolicyType[] = [
-  'mcpAuthentication',
-  'mcpAuthorization', 
-  'backendTLS',
-  'backendAuth',
-  'ai',
-  'a2a',
+  "mcpAuthentication",
+  "mcpAuthorization",
+  "backendTLS",
+  "backendAuth",
+  "ai",
+  "a2a",
 ] as const;
 
 /**

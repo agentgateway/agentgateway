@@ -9,6 +9,7 @@ interface ConfigErrorWrapperProps {
 
 export function ConfigErrorWrapper({ children }: ConfigErrorWrapperProps) {
   const { configError } = useServer();
+
   if (configError) {
     return <ConfigError error={configError} />;
   }

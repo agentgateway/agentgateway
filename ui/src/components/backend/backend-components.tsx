@@ -11,12 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -74,7 +69,7 @@ import {
 } from "@/lib/backend-utils";
 
 const getEnvAsRecord = (env: unknown): Record<string, string> => {
-  return typeof env === 'object' && env !== null ? env as Record<string, string> : {};
+  return typeof env === "object" && env !== null ? (env as Record<string, string>) : {};
 };
 
 // Icon mapping
@@ -215,8 +210,10 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                               {(() => {
                                 const details = getBackendDetails(backendContext.backend);
                                 const hasPolicies = hasBackendPolicies(backendContext.route);
-                                const policyTypes = hasPolicies ? getBackendPolicyTypes(backendContext.route) : [];
-                                
+                                const policyTypes = hasPolicies
+                                  ? getBackendPolicyTypes(backendContext.route)
+                                  : [];
+
                                 return (
                                   <div className="space-y-1">
                                     <div>{details.primary}</div>
@@ -253,14 +250,18 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                                 </Button>
                                 {(() => {
                                   // Check if deletion is allowed
-                                  const totalBackendsInRoute = backendContexts.filter(bc => 
-                                    bc.bind.port === backendContext.bind.port &&
-                                    bc.listener.name === backendContext.listener.name &&
-                                    bc.routeIndex === backendContext.routeIndex
+                                  const totalBackendsInRoute = backendContexts.filter(
+                                    (bc) =>
+                                      bc.bind.port === backendContext.bind.port &&
+                                      bc.listener.name === backendContext.listener.name &&
+                                      bc.routeIndex === backendContext.routeIndex
                                   ).length;
-                                  
-                                  const deleteCheck = canDeleteBackend(backendContext.route, totalBackendsInRoute);
-                                  
+
+                                  const deleteCheck = canDeleteBackend(
+                                    backendContext.route,
+                                    totalBackendsInRoute
+                                  );
+
                                   if (!deleteCheck.canDelete) {
                                     return (
                                       <TooltipProvider>
@@ -287,7 +288,7 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                                       </TooltipProvider>
                                     );
                                   }
-                                  
+
                                   return (
                                     <Button
                                       variant="ghost"
@@ -358,10 +359,9 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {editingBackend 
+            {editingBackend
               ? `Edit Backend: ${getBackendName(editingBackend.backend)}`
-              : `Add ${selectedBackendType.toUpperCase()} Backend`
-            }
+              : `Add ${selectedBackendType.toUpperCase()} Backend`}
           </DialogTitle>
           <DialogDescription>
             {editingBackend
@@ -401,7 +401,13 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
           </div>
 
           {/* Common fields */}
-          <div className={selectedBackendType === "ai" || selectedBackendType === "mcp" ? "space-y-4" : "grid grid-cols-2 gap-4"}>
+          <div
+            className={
+              selectedBackendType === "ai" || selectedBackendType === "mcp"
+                ? "space-y-4"
+                : "grid grid-cols-2 gap-4"
+            }
+          >
             {/* Only show name input for backends that support custom names */}
             {selectedBackendType !== "ai" && selectedBackendType !== "mcp" && (
               <div className="space-y-2">
@@ -437,7 +443,8 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
             {editingBackend ? (
               <div className="p-3 bg-muted rounded-md">
                 <p className="text-sm">
-                  Port {editingBackend.bind.port} → {editingBackend.listener.name || "unnamed listener"} →{" "}
+                  Port {editingBackend.bind.port} →{" "}
+                  {editingBackend.listener.name || "unnamed listener"} →{" "}
                   {editingBackend.route.name || `Route ${editingBackend.routeIndex + 1}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -802,7 +809,9 @@ const McpBackendForm: React.FC<McpBackendFormProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            const newArgs = Array.isArray(target.args) ? target.args.filter((_, i: number) => i !== argIndex) : [];
+                            const newArgs = Array.isArray(target.args)
+                              ? target.args.filter((_, i: number) => i !== argIndex)
+                              : [];
                             updateMcpTarget(index, "args", newArgs);
                           }}
                           className="text-destructive hover:text-destructive"
@@ -883,7 +892,9 @@ const McpBackendForm: React.FC<McpBackendFormProps> = ({
                   </div>
                 ) : (
                   <div className="text-center py-4 border-2 border-dashed border-muted rounded-md">
-                    <p className="text-sm text-muted-foreground">No environment variables configured</p>
+                    <p className="text-sm text-muted-foreground">
+                      No environment variables configured
+                    </p>
                   </div>
                 )}
               </div>
