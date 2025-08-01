@@ -1,0 +1,81 @@
+binds:
+- listeners:
+  - routes:
+## ==========================================================
+## Stdio server: Backend and MCP Authentication
+## ==========================================================
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              args:
+              - '@modelcontextprotocol/server-everything'
+              cmd: npx
+      matches:
+      - path:
+          exact: /stdio/mcp
+      - path:
+          exact: /.well-known/oauth-protected-resource/stdio/mcp
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          audience: http://localhost:3000/stdio/mcp
+          issuer: http://localhost:9000
+          provider:
+            custom:
+              jwks_url: http://localhost:9000/.well-known/jwks.json
+          scopes:
+          - read:all
+          bearer_methods_supported:
+          - header
+          - body
+          - query
+          resource_documentation: http://localhost:3000/stdio/docs
+          resource_policy_uri: http://localhost:3000/stdio/policies
+
+## ==========================================================
+## Remote server: Backend and MCP Authentication
+## ==========================================================
+    - backends:
+      - mcp:
+          targets:
+          - mcp:
+              host: mcpbin.is.solo.io
+              path: /remote/mcp
+              port: 443
+            name: mcpbin
+      matches:
+      - path:
+          exact: /remote/mcp
+      - path:
+          exact: /.well-known/oauth-protected-resource/remote/mcp
+      policies:
+        backendTLS: {}
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          audience: http://localhost:3000/remote/mcp
+          issuer: http://localhost:9000
+          provider:
+            custom:
+              jwks_url: http://localhost:9000/.well-known/jwks.json
+          scopes:
+          - read:all
+          bearer_methods_supported:
+          - header
+          - body
+          - query
+          resource_documentation: http://localhost:3000/remote/docs
+          resource_policy_uri: http://localhost:3000/remote/policies
+
+  port: 3000

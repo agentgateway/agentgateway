@@ -4,6 +4,8 @@ use std::ops::IndexMut;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use bytes::Bytes;
+
 use a2a_sdk::SendTaskStreamingResponseResult::Status;
 use agent_core::drain::DrainWatcher;
 use agent_core::prelude::Strng;
@@ -149,6 +151,15 @@ impl App {
 		// MCP context is added later
 		req.extensions_mut().insert(Arc::new(ctx));
 
+		// Check if authentication is required and JWT token is missing
+		if let Some(auth) = &authn {
+			if req.extensions().get::<Claims>().is_none()
+				&& !Self::is_well_known_endpoint(req.uri().path())
+			{
+				return Self::create_auth_required_response(&req, auth).into_response();
+			}
+		}
+
 		match (req.uri().path(), req.method(), authn) {
 			("/sse", m, _) if m == Method::GET => Self::sse_get_handler(
 				self.sse_txs.clone(),
@@ -163,11 +174,11 @@ impl App {
 			.await
 			.into_response(),
 			("/sse", m, _) if m == Method::POST => self.sse_post_handler(req).await.into_response(),
-			("/.well-known/oauth-protected-resource", _, Some(auth)) => self
+			(path, _, Some(auth)) if path.starts_with("/.well-known/oauth-protected-resource") => self
 				.protected_resource_metadata(req, auth)
 				.await
 				.into_response(),
-			("/.well-known/oauth-authorization-server", _, Some(auth)) => self
+			(path, _, Some(auth)) if path.starts_with("/.well-known/oauth-authorization-server") => self
 				.authorization_server_metadata(req, auth, client.clone())
 				.await
 				.map_err(|e| {
@@ -204,6 +215,11 @@ impl App {
 			},
 		}
 	}
+
+	fn is_well_known_endpoint(path: &str) -> bool {
+		path.starts_with("/.well-known/oauth-protected-resource")
+			|| path.starts_with("/.well-known/oauth-authorization-server")
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -230,23 +246,57 @@ pub struct McpTarget {
 }
 
 impl App {
-	async fn protected_resource_metadata(
-		&self,
-		req: Request,
-		auth: McpAuthentication,
-	) -> Json<Value> {
-		let new_uri = Self::get_redirect_url(&req, "/.well-known/oauth-protected-resource");
+	fn create_auth_required_response(req: &Request, auth: &McpAuthentication) -> Response {
+		let request_path = req.uri().path();
+		let proxy_url = Self::get_redirect_url(req, request_path);
+		let www_authenticate_value = format!(
+			"Bearer resource_metadata=\"{proxy_url}/.well-known/oauth-protected-resource{request_path}\""
+		);
+
+		::http::Response::builder()
+			.status(StatusCode::UNAUTHORIZED)
+			.header("www-authenticate", www_authenticate_value)
+			.header("content-type", "application/json")
+			.body(axum::body::Body::from(Bytes::from(
+				r#"{"error":"unauthorized","error_description":"JWT token required"}"#,
+			)))
+			.unwrap_or_else(|_| {
+				::http::Response::builder()
+					.status(StatusCode::INTERNAL_SERVER_ERROR)
+					.body(axum::body::Body::empty())
+					.unwrap()
+			})
+	}
+
+	async fn protected_resource_metadata(&self, req: Request, auth: McpAuthentication) -> Response {
+		let new_uri = Self::strip_oauth_protected_resource_prefix(&req);
 		// We will unconditionally redirect them back to our own proxy -- not the Authorization Server.
-		Json(json!({
-			"resource": format!("{}/mcp", new_uri),
+		let json_body = json!({
+			"resource": format!("{new_uri}"),
 			// "authorization_servers": ["https://dev-d1dqcqi4qgzwvabi.us.auth0.com"],
-			"authorization_servers": [format!("{new_uri}")],
+			"authorization_servers": [auth.issuer],
 			"scopes_supported": auth.scopes,
 			"bearer_methods_supported": ["header"],
 			// "resource_documentation": "http://lo/docs",
 			"mcp_protocol_version": "2025-06-18",
 			"resource_type": "mcp-server"
-		}))
+		});
+
+		::http::Response::builder()
+			.status(StatusCode::OK)
+			.header("content-type", "application/json")
+			.header("access-control-allow-origin", "*")
+			.header("access-control-allow-methods", "GET, OPTIONS")
+			.header("access-control-allow-headers", "content-type")
+			.body(axum::body::Body::from(Bytes::from(
+				serde_json::to_string(&json_body).unwrap_or_default(),
+			)))
+			.unwrap_or_else(|_| {
+				::http::Response::builder()
+					.status(StatusCode::INTERNAL_SERVER_ERROR)
+					.body(axum::body::Body::empty())
+					.unwrap()
+			})
 	}
 
 	fn get_redirect_url(req: &Request, strip_base: &str) -> String {
@@ -263,12 +313,32 @@ impl App {
 			.unwrap_or(uri.to_string())
 	}
 
+	fn strip_oauth_protected_resource_prefix(req: &Request) -> String {
+		let uri = req
+			.extensions()
+			.get::<filters::OriginalUrl>()
+			.map(|u| u.0.clone())
+			.unwrap_or_else(|| req.uri().clone());
+
+		let path = uri.path();
+		const OAUTH_PREFIX: &str = "/.well-known/oauth-protected-resource";
+
+		// Remove the oauth-protected-resource prefix and keep the remaining path
+		if let Some(remaining_path) = path.strip_prefix(OAUTH_PREFIX) {
+			uri.to_string().replace(path, remaining_path)
+		} else {
+			// If the prefix is not found, return the original URI
+			uri.to_string()
+		}
+	}
+
+
 	async fn authorization_server_metadata(
 		&self,
 		req: Request,
 		auth: McpAuthentication,
 		client: PolicyClient,
-	) -> anyhow::Result<Json<Value>> {
+	) -> anyhow::Result<Response> {
 		let new_uri = Self::get_redirect_url(&req, "/.well-known/oauth-authorization-server");
 		let ureq = ::http::Request::builder()
 			.uri(format!(
@@ -306,7 +376,19 @@ impl App {
 			},
 			_ => {},
 		}
-		Ok(Json(resp))
+
+		let response = ::http::Response::builder()
+			.status(StatusCode::OK)
+			.header("content-type", "application/json")
+			.header("access-control-allow-origin", "*")
+			.header("access-control-allow-methods", "GET, OPTIONS")
+			.header("access-control-allow-headers", "content-type")
+			.body(axum::body::Body::from(Bytes::from(serde_json::to_string(
+				&resp,
+			)?)))
+			.map_err(|e| anyhow::anyhow!("Failed to build response: {}", e))?;
+
+		Ok(response)
 	}
 
 	async fn client_registration(
@@ -323,7 +405,21 @@ impl App {
 			))
 			.method(Method::POST)
 			.body(req.into_body())?;
-		let upstream = client.simple_call(ureq).await?;
+
+		let mut upstream = client.simple_call(ureq).await?;
+
+		// Add CORS headers to the response
+		let headers = upstream.headers_mut();
+		headers.insert("access-control-allow-origin", "*".parse().unwrap());
+		headers.insert(
+			"access-control-allow-methods",
+			"POST, OPTIONS".parse().unwrap(),
+		);
+		headers.insert(
+			"access-control-allow-headers",
+			"content-type".parse().unwrap(),
+		);
+
 		Ok(upstream)
 	}
 
