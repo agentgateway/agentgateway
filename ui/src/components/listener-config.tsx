@@ -391,7 +391,7 @@ export function ListenerConfig({
   return (
     <div className="space-y-6">
       <div className="flex gap-2">
-        <Button onClick={() => setIsAddingBind(true)} variant="outline">
+        <Button onClick={() => setIsAddingBind(true)} variant="outline" data-cy="add-bind-button">
           <Plus className="mr-2 h-4 w-4" />
           Add Bind
         </Button>
@@ -407,7 +407,7 @@ export function ListenerConfig({
       ) : (
         <div className="space-y-4">
           {binds.map((bind) => (
-            <Card key={bind.port}>
+            <Card key={bind.port} data-cy={`bind-card-${bind.port}`}>
               <Collapsible
                 open={expandedBinds.has(bind.port)}
                 onOpenChange={() => toggleBindExpansion(bind.port)}
@@ -446,6 +446,7 @@ export function ListenerConfig({
                             });
                           }}
                           className="text-destructive hover:text-destructive"
+                          data-cy={`delete-bind-button-${bind.port}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -464,6 +465,7 @@ export function ListenerConfig({
                         size="sm"
                         onClick={() => handleAddListenerToBind(bind.port)}
                         className="h-8"
+                        data-cy="add-listener-button"
                       >
                         <Plus className="mr-2 h-3 w-3" />
                         Add Listener
@@ -493,6 +495,7 @@ export function ListenerConfig({
                               <TableRow
                                 key={listener.name || listenerIndex}
                                 className="hover:bg-muted/30"
+                                data-cy={`listener-card-${listener.name || `unnamed-${listenerIndex}`}`}
                               >
                                 <TableCell className="font-medium">
                                   <div className="flex items-center space-x-2">
@@ -606,6 +609,7 @@ export function ListenerConfig({
                                       })
                                     }
                                     className="text-destructive hover:text-destructive"
+                                    data-cy={`delete-listener-button-${listener.name || `unnamed-${listenerIndex}`}`}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>

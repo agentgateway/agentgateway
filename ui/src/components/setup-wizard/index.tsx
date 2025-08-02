@@ -80,12 +80,15 @@ export function SetupWizard({ config, onConfigChange, onComplete, onSkip }: Setu
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-background via-background/95 to-muted/30">
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-background via-background/95 to-muted/30"
+      data-cy="setup-wizard-container"
+    >
       <div className="w-full max-w-4xl px-4">
         {renderStep()}
 
         {/* Progress indicator */}
-        <div className="flex justify-center mt-6">
+        <div className="flex justify-center mt-6" data-cy="wizard-progress-indicator">
           <div className="flex items-center">
             {Array.from({ length: totalSteps }).map((_, i) => {
               const stepNumber = i + 1;
@@ -103,6 +106,7 @@ export function SetupWizard({ config, onConfigChange, onComplete, onSkip }: Setu
                             ? "bg-primary/20 text-primary"
                             : "bg-muted text-muted-foreground"
                       }`}
+                      data-cy={`wizard-step-${stepNumber}`}
                     >
                       {stepNumber}
                     </div>

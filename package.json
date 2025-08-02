@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "test:e2e": "./scripts/run-e2e-tests.sh",
+    "test:e2e:parallel": "./scripts/run-e2e-tests.sh --mode parallel",
+    "test:e2e:sequential": "./scripts/run-e2e-tests.sh --mode sequential",
+    "test:e2e:interactive": "./scripts/run-e2e-tests.sh --mode interactive",
+    "test:e2e:ci": "./scripts/run-e2e-tests.sh --mode parallel --workers 8 --verbose"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "glob": "^11.0.3"
+  }
+}

@@ -1,0 +1,38 @@
+test_settings:
+  workers: 4
+  memory_limit_mb: 5529
+  timeout_ms: 30000
+  retry_attempts: 2
+  parallel_mode: "aggressive"
+browser_settings:
+  headless: false
+  viewport_width: 1280
+  viewport_height: 720
+  video: true
+  screenshots: true
+resource_limits:
+  max_cpu_percent: 70
+  max_memory_percent: 60
+  emergency_threshold_percent: 85
+environment:
+  type: "local"
+  ci: false
+  docker: false
+  wsl: true
+  detected_at: "2025-07-30T11:55:28.082Z"
+  system_info:
+    platform: "linux"
+    arch: "x64"
+    cpu_cores: 32
+    memory_gb: 62.6
+    memory_free_gb: 55
+    load_average:
+      - 0.19
+      - 0.32
+      - 0.28
+    uptime_hours: 108.1
+    cpu_model: "13th Gen Intel(R) Core(TM) i9-13900"
+    memory_available_gb: 55
+    node_memory_mb: 41
+  details:
+    wsl_version: "2"

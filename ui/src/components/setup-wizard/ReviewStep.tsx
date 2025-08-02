@@ -76,7 +76,7 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
   const summary = getConfigSummary();
 
   return (
-    <Card className="w-full max-w-3xl">
+    <Card className="w-full max-w-3xl" data-cy="wizard-review-step">
       <CardHeader>
         <div className="flex justify-center mb-6">
           <AgentgatewayLogo className="h-12" />
@@ -93,7 +93,7 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
         <div className="space-y-6">
           <div className="space-y-3">
             <h3 className="font-medium">Configuration Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-cy="configuration-summary">
               <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 border">
                 <Network className="h-5 w-5 text-blue-500" />
                 <div>
@@ -229,7 +229,7 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
-        <Button variant="outline" onClick={onPrevious}>
+        <Button variant="outline" onClick={onPrevious} data-cy="wizard-review-previous">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
@@ -237,6 +237,7 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
           onClick={handleComplete}
           disabled={isCompleting}
           className="bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
+          data-cy="wizard-complete"
         >
           {isCompleting ? "Completing..." : "Complete Setup"}
           <CheckCircle className="ml-2 h-4 w-4" />

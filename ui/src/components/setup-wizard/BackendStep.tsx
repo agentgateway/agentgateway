@@ -188,6 +188,7 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
               value={mcpName}
               onChange={(e) => setMcpName(e.target.value)}
               placeholder="e.g., default-mcp"
+              data-cy="backend-name-input"
             />
           </div>
 
@@ -197,6 +198,7 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
               value={targetType}
               onValueChange={(value) => setTargetType(value as "mcp" | "stdio" | "sse" | "openapi")}
               className="grid grid-cols-2 gap-4"
+              data-cy="backend-target-type-select"
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="mcp" id="mcp-target" />
@@ -224,6 +226,7 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
               value={targetName}
               onChange={(e) => setTargetName(e.target.value)}
               placeholder="e.g., default-target"
+              data-cy="backend-target-name-input"
             />
           </div>
 
@@ -378,7 +381,7 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
   };
 
   return (
-    <Card className="w-full max-w-3xl">
+    <Card className="w-full max-w-3xl" data-cy="wizard-backend-step">
       <CardHeader>
         <div className="flex justify-center mb-6">
           <AgentgatewayLogo className="h-12" />
@@ -409,6 +412,7 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
                 value={backendType}
                 onValueChange={(value) => setBackendType(value as "mcp" | "host" | "service")}
                 className="grid grid-cols-2 gap-4"
+                data-cy="backend-type-select"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="mcp" id="mcp-backend" />
@@ -452,11 +456,11 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
-        <Button variant="outline" onClick={onPrevious}>
+        <Button variant="outline" onClick={onPrevious} data-cy="wizard-backend-previous">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={handleNext} disabled={isUpdating}>
+        <Button onClick={handleNext} disabled={isUpdating} data-cy="wizard-backend-next">
           {isUpdating ? "Configuring..." : "Next"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
