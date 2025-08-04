@@ -1,0 +1,18 @@
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "web_search",
+    "arguments": {
+      "query": "AgentGateway performance benchmarks",
+      "max_results": 10,
+      "include_snippets": true,
+      "filters": {
+        "date_range": "last_month",
+        "content_type": "technical",
+        "language": "en"
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+FROM golang:1.21-alpine AS builder
+
+# Install compatible Fortio version
+RUN go install fortio.org/fortio@v1.60.3
+
+FROM alpine:latest
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    jq \
+    python3 \
+    py3-pip \
+    ca-certificates
+
+# Copy Fortio binary from builder
+COPY --from=builder /go/bin/fortio /usr/local/bin/fortio
+
+# Install Python dependencies for report generation
+# Note: statistics and pathlib are built-in modules in Python 3.4+
+RUN pip3 install --no-cache-dir --break-system-packages matplotlib || true
+
+# Create working directory
+WORKDIR /benchmarks
+
+# Copy benchmark scripts and configs
+COPY fortio-tests.sh /benchmarks/
+COPY configs/ /benchmarks/configs/
+COPY payloads/ /benchmarks/payloads/
+COPY reports/ /benchmarks/reports/
+
+# Make scripts executable
+RUN chmod +x /benchmarks/fortio-tests.sh
+RUN chmod +x /benchmarks/reports/generate-comparison.py
+
+# Create results directory
+RUN mkdir -p /benchmarks/results
+
+# Set environment variables
+ENV PATH="/benchmarks:$PATH"
+ENV FORTIO_DOCKER=true
+
+# Default command
+CMD ["./fortio-tests.sh", "--help"]

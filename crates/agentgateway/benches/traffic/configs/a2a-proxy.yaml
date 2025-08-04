@@ -1,0 +1,49 @@
+config:
+  admin_addr: "127.0.0.1:15000"
+  stats_addr: "0.0.0.0:15020"
+  readiness_addr: "0.0.0.0:15021"
+  enable_ipv6: false
+  network: "benchmark"
+  
+  # A2A proxy configuration for benchmarking
+  listeners:
+    - name: "a2a-benchmark"
+      address: "0.0.0.0:8080"
+      protocol: "a2a"
+      
+  routes:
+    - name: "a2a-benchmark-route"
+      match:
+        protocol: "a2a"
+      backend: "a2a-benchmark-backend"
+      
+  backends:
+    - name: "a2a-benchmark-backend"
+      address: "127.0.0.1:3003"
+      protocol: "a2a"
+      health_check:
+        enabled: false  # Disable for benchmarking
+        
+  # A2A-specific optimizations
+  a2a:
+    max_message_size: 5242880     # 5MB
+    discovery_timeout: "10s"
+    routing_timeout: "30s"
+    session_timeout: "300s"
+    max_hops: 5
+    
+  # Optimize for performance testing
+  http2:
+    window_size: 4194304          # 4MB
+    connection_window_size: 16777216  # 16MB
+    frame_size: 1048576           # 1MB
+    pool_max_streams_per_conn: 75  # Moderate streams for A2A
+    pool_unused_release_timeout: "300s"
+    
+  # Disable logging for accurate performance measurement
+  logging:
+    filter: "level >= 'error'"
+    
+  # Disable tracing for benchmarking
+  tracing:
+    endpoint: null

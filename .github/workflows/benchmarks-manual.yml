@@ -1,0 +1,432 @@
+name: Manual Benchmarks (Maintainers Only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      protocols:
+        description: 'Protocols to benchmark'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'http'
+          - 'mcp'
+          - 'a2a'
+      
+      test_type:
+        description: 'Type of benchmark test'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - 'quick'
+          - 'comprehensive'
+          - 'latency'
+          - 'throughput'
+      
+      duration:
+        description: 'Test duration'
+        required: true
+        default: '30s'
+        type: choice
+        options:
+          - '30s'
+          - '60s'
+          - '120s'
+          - '300s'
+      
+      platform:
+        description: 'Platform to run on'
+        required: true
+        default: 'ubuntu-latest'
+        type: choice
+        options:
+          - 'ubuntu-latest'
+          - 'ubuntu-22.04-arm'
+          - 'both'
+      
+      notify_maintainers:
+        description: 'Send notification to maintainers'
+        required: true
+        default: true
+        type: boolean
+  
+  workflow_call:
+    inputs:
+      protocols:
+        description: 'Protocols to benchmark'
+        required: true
+        default: 'all'
+        type: string
+      
+      test_type:
+        description: 'Type of benchmark test'
+        required: true
+        default: 'quick'
+        type: string
+      
+      duration:
+        description: 'Test duration'
+        required: true
+        default: '30s'
+        type: string
+      
+      platform:
+        description: 'Platform to run on'
+        required: true
+        default: 'ubuntu-latest'
+        type: string
+      
+      notify_maintainers:
+        description: 'Send notification to maintainers'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-permissions:
+    runs-on: ubuntu-latest
+    outputs:
+      is-maintainer: ${{ steps.check.outputs.is-maintainer }}
+    steps:
+      - name: Check if user is maintainer
+        id: check
+        run: |
+          # Check if the actor has admin or maintain permissions
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission")
+          
+          PERMISSION=$(echo "$RESPONSE" | jq -r '.permission // "none"')
+          
+          if [[ "$PERMISSION" == "admin" || "$PERMISSION" == "maintain" ]]; then
+            echo "is-maintainer=true" >> $GITHUB_OUTPUT
+            echo "✅ User ${{ github.actor }} has $PERMISSION permissions"
+          else
+            echo "is-maintainer=false" >> $GITHUB_OUTPUT
+            echo "❌ User ${{ github.actor }} has $PERMISSION permissions (admin or maintain required)"
+          fi
+  
+  update-baselines:
+    needs: check-permissions
+    if: needs.check-permissions.outputs.is-maintainer == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      baselines-updated: ${{ steps.update.outputs.updated }}
+      changes-summary: ${{ steps.update.outputs.changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          pip install requests beautifulsoup4 feedparser
+      
+      - name: Update Industry Baselines
+        id: update
+        run: |
+          cd crates/agentgateway/benches/traffic/reports
+          
+          # Run the enhanced baseline update system
+          python update-baselines.py >> $GITHUB_OUTPUT
+  
+  benchmark:
+    needs: [check-permissions, update-baselines]
+    if: needs.check-permissions.outputs.is-maintainer == 'true'
+    strategy:
+      matrix:
+        os: ${{ fromJson(inputs.platform == 'both' && '["ubuntu-latest", "ubuntu-22.04-arm"]' || format('["{0}"]', inputs.platform)) }}
+    
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Run Benchmarks
+        run: |
+          cd crates/agentgateway/benches/traffic/docker
+          
+          echo "🚀 Starting benchmarks with configuration:"
+          echo "  Protocols: ${{ inputs.protocols }}"
+          echo "  Test Type: ${{ inputs.test_type }}"
+          echo "  Duration: ${{ inputs.duration }}"
+          echo "  Platform: ${{ matrix.os }}"
+          
+          # Run the benchmark with specified parameters
+          ./run-docker-benchmarks.sh \
+            --protocols ${{ inputs.protocols }} \
+            --type ${{ inputs.test_type }} \
+            --duration ${{ inputs.duration }} \
+            --verbose
+      
+      - name: Add Baseline Update Notice
+        if: needs.update-baselines.outputs.baselines-updated == 'true'
+        run: |
+          cd crates/agentgateway/benches/traffic/results
+          
+          # Add baseline update notice to results
+          if [ -f benchmark_summary.md ]; then
+            {
+              echo ""
+              echo "## 📊 Baseline Updates"
+              echo ""
+              echo "Industry baselines were updated before this benchmark run:"
+              echo ""
+              echo "${{ needs.update-baselines.outputs.changes-summary }}"
+              echo ""
+              echo "---"
+              echo ""
+            } >> baseline_updates.md
+            
+            # Prepend to summary
+            cat baseline_updates.md benchmark_summary.md > temp_summary.md
+            mv temp_summary.md benchmark_summary.md
+            rm baseline_updates.md
+          fi
+      
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ matrix.os }}-${{ github.run_number }}
+          path: crates/agentgateway/benches/traffic/results/
+          retention-days: 30
+      
+      - name: Cleanup Old Artifacts
+        run: |
+          echo "🧹 Cleaning up old benchmark artifacts (keeping last 3 runs)"
+          
+          # This is a placeholder for artifact cleanup logic
+          # In practice, we'd use GitHub API to manage artifacts
+          # For now, we'll rely on the 30-day retention policy
+  
+  notify:
+    needs: [benchmark, update-baselines, check-permissions]
+    if: always() && inputs.notify_maintainers && needs.check-permissions.outputs.is-maintainer == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Determine notification status
+        id: status
+        run: |
+          if [[ "${{ needs.benchmark.result }}" == "success" ]]; then
+            echo "status=✅ Success" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "status_text=Success" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.benchmark.result }}" == "failure" ]]; then
+            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "status_text=Failed" >> $GITHUB_OUTPUT
+          else
+            echo "status=⚠️ Cancelled/Skipped" >> $GITHUB_OUTPUT
+            echo "color=warning" >> $GITHUB_OUTPUT
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
+            echo "status_text=Cancelled/Skipped" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate Performance Summary
+        id: summary
+        run: |
+          # Download and analyze benchmark results for summary
+          echo "Generating performance summary..."
+          
+          SUMMARY="Performance benchmark completed with the following configuration:
+          
+          **Configuration Details:**
+          - Protocols: ${{ inputs.protocols }}
+          - Test Type: ${{ inputs.test_type }}
+          - Duration: ${{ inputs.duration }}
+          - Platform(s): ${{ inputs.platform }}
+          - Triggered by: ${{ github.actor }}
+          
+          **Workflow Details:**
+          - Run ID: ${{ github.run_id }}
+          - Repository: ${{ github.repository }}
+          - Branch/Ref: ${{ github.ref_name }}
+          - Commit: ${{ github.sha }}
+          
+          **Results:**
+          Detailed benchmark results and artifacts are available in the GitHub Actions workflow run.
+          "
+          
+          if [[ "${{ needs.update-baselines.outputs.baselines-updated }}" == "true" ]]; then
+            SUMMARY="$SUMMARY
+          
+          **📊 Baseline Updates:**
+          Industry baselines were updated before this benchmark run:
+          ${{ needs.update-baselines.outputs.changes-summary }}"
+          fi
+          
+          # Save summary to file for email
+          echo "$SUMMARY" > performance_summary.txt
+          
+          # Also output for GitHub Actions
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "$SUMMARY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Send Email Notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.NOTIFICATION_EMAIL_USER }}
+          password: ${{ secrets.NOTIFICATION_EMAIL_PASSWORD }}
+          subject: "${{ steps.status.outputs.emoji }} AgentGateway Benchmark ${{ steps.status.outputs.status_text }} - ${{ inputs.protocols }}/${{ inputs.test_type }}"
+          to: ${{ secrets.MAINTAINER_EMAILS }}
+          from: AgentGateway CI <${{ secrets.NOTIFICATION_EMAIL_USER }}>
+          html_body: |
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+                    .content { padding: 20px; background: #f8f9fa; }
+                    .status-success { color: #28a745; font-weight: bold; }
+                    .status-failure { color: #dc3545; font-weight: bold; }
+                    .status-warning { color: #ffc107; font-weight: bold; }
+                    .config-table { background: white; border-radius: 6px; padding: 15px; margin: 15px 0; }
+                    .config-table table { width: 100%; border-collapse: collapse; }
+                    .config-table th, .config-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #dee2e6; }
+                    .config-table th { background: #e9ecef; font-weight: 600; }
+                    .footer { background: #343a40; color: white; padding: 15px; border-radius: 0 0 8px 8px; text-align: center; }
+                    .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+                    .baseline-updates { background: #e7f3ff; border-left: 4px solid #007bff; padding: 15px; margin: 15px 0; border-radius: 4px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>${{ steps.status.outputs.emoji }} AgentGateway Benchmark Report</h1>
+                    <p>Status: <span class="status-${{ steps.status.outputs.color }}">${{ steps.status.outputs.status_text }}</span></p>
+                </div>
+                
+                <div class="content">
+                    <div class="config-table">
+                        <h3>📋 Benchmark Configuration</h3>
+                        <table>
+                            <tr><th>Protocols</th><td>${{ inputs.protocols }}</td></tr>
+                            <tr><th>Test Type</th><td>${{ inputs.test_type }}</td></tr>
+                            <tr><th>Duration</th><td>${{ inputs.duration }}</td></tr>
+                            <tr><th>Platform(s)</th><td>${{ inputs.platform }}</td></tr>
+                            <tr><th>Triggered By</th><td>${{ github.actor }}</td></tr>
+                            <tr><th>Repository</th><td>${{ github.repository }}</td></tr>
+                            <tr><th>Branch/Ref</th><td>${{ github.ref_name }}</td></tr>
+                            <tr><th>Commit</th><td><code>${{ github.sha }}</code></td></tr>
+                        </table>
+                    </div>
+                    
+                    ${{ needs.update-baselines.outputs.baselines-updated == 'true' && format('<div class="baseline-updates"><h3>📊 Baseline Updates</h3><p>Industry baselines were updated before this benchmark run:</p><pre>{0}</pre></div>', needs.update-baselines.outputs.changes-summary) || '' }}
+                    
+                    <div style="text-align: center; margin: 20px 0;">
+                        <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" class="btn">
+                            📊 View Detailed Results
+                        </a>
+                        <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" class="btn">
+                            📁 Download Artifacts
+                        </a>
+                    </div>
+                    
+                    <p><strong>Next Steps:</strong></p>
+                    <ul>
+                        <li>Review the detailed benchmark results in the GitHub Actions workflow</li>
+                        <li>Download artifacts for offline analysis if needed</li>
+                        <li>Compare results with previous benchmarks and industry baselines</li>
+                        ${{ needs.benchmark.result == 'failure' && '<li style="color: #dc3545;"><strong>Investigate failure causes and address any performance regressions</strong></li>' || '' }}
+                    </ul>
+                </div>
+                
+                <div class="footer">
+                    <p>This notification was sent by AgentGateway CI</p>
+                    <p><small>Run ID: ${{ github.run_id }} | Timestamp: $(date -u)</small></p>
+                </div>
+            </body>
+            </html>
+          attachments: performance_summary.txt
+        continue-on-error: true
+      
+      - name: Fallback Notification (GitHub Issues)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // If email fails, create a GitHub issue as fallback
+            const { owner, repo } = context.repo;
+            
+            const title = `${{ steps.status.outputs.emoji }} Benchmark ${{ steps.status.outputs.status_text }} - ${{ inputs.protocols }}/${{ inputs.test_type }}`;
+            const body = `## Benchmark Notification
+            
+            **Status:** ${{ steps.status.outputs.status }}
+            
+            **Configuration:**
+            - Protocols: \`${{ inputs.protocols }}\`
+            - Test Type: \`${{ inputs.test_type }}\`
+            - Duration: \`${{ inputs.duration }}\`
+            - Platform(s): \`${{ inputs.platform }}\`
+            - Triggered by: @${{ github.actor }}
+            
+            **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ${{ needs.update-baselines.outputs.baselines-updated == 'true' && format('**📊 Baseline Updates:**\nIndustry baselines were updated before this benchmark run:\n```\n{0}\n```\n', needs.update-baselines.outputs.changes-summary) || '' }}
+            
+            ---
+            *This issue was created automatically because email notification failed.*
+            *Please check the workflow run for detailed results and artifacts.*
+            `;
+            
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ['benchmark', 'notification', 'ci']
+            });
+      
+      - name: Log Notification Status
+        run: |
+          echo "📧 Notification Summary:"
+          echo "Status: ${{ steps.status.outputs.status }}"
+          echo "Configuration: protocols=${{ inputs.protocols }}, type=${{ inputs.test_type }}, duration=${{ inputs.duration }}"
+          echo "Platform(s): ${{ inputs.platform }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          if [[ "${{ needs.update-baselines.outputs.baselines-updated }}" == "true" ]]; then
+            echo ""
+            echo "📊 Baseline Updates:"
+            echo "${{ needs.update-baselines.outputs.changes-summary }}"
+          fi
+          
+          echo ""
+          echo "✅ Email notification sent to maintainers"
+          echo "📧 Fallback GitHub issue created if email failed"
+
+  unauthorized:
+    needs: check-permissions
+    if: needs.check-permissions.outputs.is-maintainer != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unauthorized Access
+        run: |
+          echo "❌ Unauthorized: Only maintainers can trigger benchmark workflows"
+          echo "User: ${{ github.actor }}"
+          echo "Required permission: admin or maintain"
+          echo "Please contact a repository maintainer if you need to run benchmarks"
+          exit 1

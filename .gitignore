@@ -1,5 +1,9 @@
+
+/node_modules
 /target
+/target/benchmark_reports
 .vscode
 .idea
 .DS_Store
 .venv
+memory-bank/

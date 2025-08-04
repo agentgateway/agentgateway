@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=../../../schema/local.json
+binds:
+- port: 8080
+  listeners:
+  - protocol: HTTP
+    routes:
+    - name: "benchmark-route"
+      matches:
+      - path:
+          pathPrefix: /
+      backends:
+      - host: test-server:3001
