@@ -13,8 +13,13 @@ use crate::*;
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Provider {
-	pub model: Strng,  // TODO: allow getting from req
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub model: Option<Strng>, // Optional: use model from request if not specified
 	pub region: Strng, // TODO: allow defaulting
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub guardrail_identifier: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub guardrail_version: Option<Strng>,
 }
 
 impl super::Provider for Provider {
@@ -26,7 +31,10 @@ impl Provider {
 		&self,
 		mut req: universal::ChatCompletionRequest,
 	) -> Result<ConverseRequest, AIError> {
-		req.model = self.model.to_string();
+		// Use provider's model if configured, otherwise keep the request model
+		if let Some(provider_model) = &self.model {
+			req.model = provider_model.to_string();
+		}
 		let bedrock_request = translate_request(req);
 
 		Ok(bedrock_request)
@@ -52,7 +60,8 @@ impl Provider {
 
 	pub fn get_path_for_model(&self) -> Strng {
 		strng::format!("/model/{}/converse", self.model)
-	}
+  }
+
 	pub fn get_host(&self) -> Strng {
 		strng::format!("bedrock-runtime.{}.amazonaws.com", self.region)
 	}

@@ -320,6 +320,8 @@ message AIBackend {
   message Bedrock {
     google.protobuf.StringValue model = 1;
     string region = 2;
+    google.protobuf.StringValue guardrail_identifier = 3;
+    google.protobuf.StringValue guardrail_version = 4;
   }
   oneof provider {
     OpenAI openai = 2;

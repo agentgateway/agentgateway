@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, SecretString};
+use tracing::trace;
 
 use crate::http::Request;
 use crate::http::jwt::Claims;
@@ -142,12 +143,20 @@ mod aws {
 	use crate::*;
 
 	pub async fn sign_request(req: &mut http::Request) -> anyhow::Result<()> {
+		let config = sdk_config().await;
 		let creds = load_credentials().await?.into();
+
+		// Use the region from AWS config (which gets set from the provider configuration)
+		let region = config.region()
+			.map(|r| r.as_ref().to_string())
+			.unwrap_or_else(|| "us-west-2".to_string());
+
+		trace!("AWS signing with region: {}, service: bedrock", region);
 
 		// Sign the request
 		let signing_params = SigningParams::builder()
 			.identity(&creds)
-			.region("us-west-2")
+			.region(&region)
 			.name("bedrock")
 			.time(SystemTime::now())
 			.settings(aws_sigv4::http_request::SigningSettings::default())

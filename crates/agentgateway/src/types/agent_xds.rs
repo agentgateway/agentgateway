@@ -312,13 +312,10 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 						},
 						Some(proto::agent::ai_backend::Provider::Bedrock(bedrock)) => {
 							AIProvider::Bedrock(llm::bedrock::Provider {
-								model: strng::new(
-									bedrock
-										.model
-										.as_deref()
-										.ok_or_else(|| ProtoError::Generic("bedrock requires a model".to_string()))?,
-								),
+								model: bedrock.model.as_deref().map(strng::new),
 								region: strng::new(&bedrock.region),
+								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
+								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
 							})
 						},
 						None => {
