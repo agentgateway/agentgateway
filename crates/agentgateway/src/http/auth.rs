@@ -143,17 +143,15 @@ mod aws {
 	use crate::*;
 
 	pub async fn sign_request(req: &mut http::Request) -> anyhow::Result<()> {
-		let config = sdk_config().await;
 		let creds = load_credentials().await?.into();
 
 		// Get the region from request extensions (set by setup_request) or fall back to AWS config
 		let region = req.extensions()
 			.get::<agent_core::prelude::Strng>()
 			.map(|r| r.as_str().to_string())
-			.or_else(|| config.region().map(|r| r.as_ref().to_string()))
-			.unwrap_or_else(|| "us-west-2".to_string());
-
-		trace!("AWS signing with region: {}, service: bedrock", region);
+      .ok_or_else(|| anyhow::anyhow!("Region not found in request extensions - bedrock provider should set this"))?;
+		
+    trace!("AWS signing with region: {}, service: bedrock", region);
 
 		// Sign the request
 		let signing_params = SigningParams::builder()
