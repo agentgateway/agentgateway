@@ -215,8 +215,8 @@ impl AIProvider {
 						uri.authority = Some(Authority::from_str(&provider.get_host())?);
 						Ok(())
 					})?;
-          // Store the region in request extensions so AWS signing can use it
-          req.extensions_mut().insert(provider.region.clone());
+					// Store the region in request extensions so AWS signing can use it
+					req.extensions_mut().insert(provider.region.clone());
 					Ok(())
 				})
 			},

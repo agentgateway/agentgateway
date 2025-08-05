@@ -146,12 +146,15 @@ mod aws {
 		let creds = load_credentials().await?.into();
 
 		// Get the region from request extensions (set by setup_request) or fall back to AWS config
-		let region = req.extensions()
+		let region = req
+			.extensions()
 			.get::<agent_core::prelude::Strng>()
 			.map(|r| r.as_str().to_string())
-      .ok_or_else(|| anyhow::anyhow!("Region not found in request extensions - bedrock provider should set this"))?;
-		
-    trace!("AWS signing with region: {}, service: bedrock", region);
+			.ok_or_else(|| {
+				anyhow::anyhow!("Region not found in request extensions - bedrock provider should set this")
+			})?;
+
+		trace!("AWS signing with region: {}, service: bedrock", region);
 
 		// Sign the request
 		let signing_params = SigningParams::builder()

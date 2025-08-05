@@ -60,7 +60,7 @@ impl Provider {
 
 	pub fn get_path_for_model(&self) -> Strng {
 		strng::format!("/model/{}/converse", self.model)
-  }
+	}
 
 	pub fn get_host(&self) -> Strng {
 		strng::format!("bedrock-runtime.{}.amazonaws.com", self.region)
