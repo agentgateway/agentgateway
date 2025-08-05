@@ -9,6 +9,11 @@ use crate::llm::universal::ChatCompletionRequest;
 use crate::llm::{AIError, universal};
 use crate::*;
 
+#[derive(Debug, Clone)]
+pub struct AwsRegion {
+	pub region: String,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

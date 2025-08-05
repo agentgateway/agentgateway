@@ -4,6 +4,7 @@ use tracing::trace;
 
 use crate::http::Request;
 use crate::http::jwt::Claims;
+use crate::llm::bedrock::AwsRegion;
 use crate::proxy::ProxyError;
 use crate::serdes::deser_key_from_file;
 use crate::*;
@@ -148,8 +149,8 @@ mod aws {
 		// Get the region from request extensions (set by setup_request) or fall back to AWS config
 		let region = req
 			.extensions()
-			.get::<agent_core::prelude::Strng>()
-			.map(|r| r.as_str().to_string())
+			.get::<AwsRegion>()
+			.map(|r| r.region.clone())
 			.ok_or_else(|| {
 				anyhow::anyhow!("Region not found in request extensions - bedrock provider should set this")
 			})?;
@@ -160,7 +161,7 @@ mod aws {
 		let signing_params = SigningParams::builder()
 			.identity(&creds)
 			.region(&region)
-			.name("bedrock-runtime")
+			.name("bedrock")
 			.time(SystemTime::now())
 			.settings(aws_sigv4::http_request::SigningSettings::default())
 			.build()?
