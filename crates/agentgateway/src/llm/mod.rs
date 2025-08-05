@@ -216,7 +216,7 @@ impl AIProvider {
 						Ok(())
 					})?;
 					// Store the region in request extensions so AWS signing can use it
-					req.extensions_mut().insert(bedrock::AwsRegion {
+					req.extensions.insert(bedrock::AwsRegion {
 						region: provider.region.as_str().to_string(),
 					});
 					Ok(())

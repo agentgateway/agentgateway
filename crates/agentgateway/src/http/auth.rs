@@ -141,6 +141,7 @@ mod aws {
 	use http_body_util::BodyExt;
 	use tokio::sync::OnceCell;
 
+	use crate::llm::bedrock::AwsRegion;
 	use crate::*;
 
 	pub async fn sign_request(req: &mut http::Request) -> anyhow::Result<()> {

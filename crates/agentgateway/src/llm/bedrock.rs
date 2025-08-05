@@ -51,7 +51,7 @@ impl Provider {
 	) -> Result<universal::ChatCompletionResponse, AIError> {
 		let resp =
 			serde_json::from_slice::<ConverseResponse>(bytes).map_err(AIError::ResponseParsing)?;
-		translate_response(resp, &self.model)
+		translate_response(resp, self.model.as_ref())
 	}
 
 	pub async fn process_error(
@@ -89,7 +89,7 @@ pub(super) fn translate_error(
 
 pub(super) fn translate_response(
 	resp: ConverseResponse,
-	model: &Strng,
+	model: &Option<Strng>,
 ) -> Result<universal::ChatCompletionResponse, AIError> {
 	// Get the output content from the response
 	let output = resp.output.ok_or(AIError::IncompleteResponse)?;
