@@ -146,9 +146,11 @@ mod aws {
 		let config = sdk_config().await;
 		let creds = load_credentials().await?.into();
 
-		// Use the region from AWS config (which gets set from the provider configuration)
-		let region = config.region()
-			.map(|r| r.as_ref().to_string())
+		// Get the region from request extensions (set by setup_request) or fall back to AWS config
+		let region = req.extensions()
+			.get::<agent_core::prelude::Strng>()
+			.map(|r| r.as_str().to_string())
+			.or_else(|| config.region().map(|r| r.as_ref().to_string()))
 			.unwrap_or_else(|| "us-west-2".to_string());
 
 		trace!("AWS signing with region: {}, service: bedrock", region);
@@ -157,7 +159,7 @@ mod aws {
 		let signing_params = SigningParams::builder()
 			.identity(&creds)
 			.region(&region)
-			.name("bedrock")
+			.name("bedrock-runtime")
 			.time(SystemTime::now())
 			.settings(aws_sigv4::http_request::SigningSettings::default())
 			.build()?
