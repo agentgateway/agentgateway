@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use agent_core::strng;
 use serde::de::DeserializeOwned;
 
 use super::*;
@@ -72,6 +73,13 @@ fn test_bedrock() {
 	test_response::<bedrock::types::ConverseResponse>("basic_bedrock", response);
 
 	let request = |i| Ok(bedrock::translate_request(i));
+	let provider = bedrock::Provider {
+		model: Some(strng::new("test-model")),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+	let request = |i| Ok(bedrock::translate_request(i, &provider));
 	test_request("bedrock", "basic_input", request);
 	test_request("bedrock", "full_input", request);
 }

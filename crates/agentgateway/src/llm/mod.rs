@@ -208,7 +208,9 @@ impl AIProvider {
 			},
 			AIProvider::Bedrock(provider) => {
 				// For Bedrock, use a default model path - the actual model will be specified in the request body
-				let path = provider.get_path_for_model();
+				let path = provider
+					.get_path_for_model()
+					.map_err(|e| anyhow::anyhow!("Bedrock provider error: {}", e))?;
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
