@@ -48,15 +48,14 @@ impl Provider {
 
 	pub async fn process_response(
 		&self,
+		model: Strng,
 		bytes: &Bytes,
 	) -> Result<universal::ChatCompletionResponse, AIError> {
 		let resp =
 			serde_json::from_slice::<ConverseResponse>(bytes).map_err(AIError::ResponseParsing)?;
 
-		// During setup_request when model is None, so we can safely use a fallback here
-		let model = self.model.as_deref().unwrap_or("unknown");
-
-		translate_response(resp, self.model.as_ref())
+		// Bedrock response doesn't contain the model, so we pass through the model from the request into the response
+		translate_response(resp, model.as_str())
 	}
 
 	pub async fn process_error(
@@ -68,11 +67,8 @@ impl Provider {
 		translate_error(resp)
 	}
 
-	pub fn get_path_for_model(&self) -> Result<Strng, AIError> {
-		match &self.model {
-			Some(model) => Ok(strng::format!("/model/{}/converse", model)),
-			None => Err(AIError::MissingField(strng::literal!("model"))),
-		}
+	pub fn get_path_for_model(&self, model: &str) -> Strng {
+		strng::format!("/model/{}/converse", model)
 	}
 
 	pub fn get_host(&self) -> Strng {

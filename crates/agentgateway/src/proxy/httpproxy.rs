@@ -870,12 +870,8 @@ async fn make_backend_call(
 	if let a2a::RequestType::Call(method) = a2a_type {
 		log.add(|l| l.a2a_method = Some(method));
 	}
-	if let Some((llm, true, _)) = &policies.llm_provider {
-		llm
-			.setup_request(&mut req)
-			.map_err(ProxyError::Processing)?;
-	}
-	let (mut req, llm_request) = if let Some((llm, _, tokenize)) = &policies.llm_provider {
+
+	let (mut req, llm_request) = if let Some((llm, use_default_policies, tokenize)) = &policies.llm_provider {
 		let r = llm
 			.process_request(client, policies.llm.as_ref(), req, *tokenize, &mut log)
 			.await
@@ -884,6 +880,11 @@ async fn make_backend_call(
 			RequestResult::Success(r, lr) => (r, lr),
 			RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
 		};
+		if *use_default_policies {
+			llm
+				.setup_request(&mut req, &llm_request)
+				.map_err(ProxyError::Processing)?;
+		}
 		apply_llm_request_policies(route_policies, &llm_request)?;
 		log.add(|l| l.llm_request = Some(llm_request.clone()));
 		(req, Some(llm_request))

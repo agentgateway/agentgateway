@@ -71,8 +71,6 @@ fn test_request<T: Serialize>(
 fn test_bedrock() {
 	let response = |i| bedrock::translate_response(i, &strng::new("fake-model"));
 	test_response::<bedrock::types::ConverseResponse>("basic_bedrock", response);
-
-	let request = |i| Ok(bedrock::translate_request(i));
 	let provider = bedrock::Provider {
 		model: Some(strng::new("test-model")),
 		region: strng::new("us-east-1"),
