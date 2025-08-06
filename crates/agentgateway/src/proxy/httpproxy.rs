@@ -871,26 +871,27 @@ async fn make_backend_call(
 		log.add(|l| l.a2a_method = Some(method));
 	}
 
-	let (mut req, llm_request) = if let Some((llm, use_default_policies, tokenize)) = &policies.llm_provider {
-		let r = llm
-			.process_request(client, policies.llm.as_ref(), req, *tokenize, &mut log)
-			.await
-			.map_err(|e| ProxyError::Processing(e.into()))?;
-		let (mut req, llm_request) = match r {
-			RequestResult::Success(r, lr) => (r, lr),
-			RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
+	let (mut req, llm_request) =
+		if let Some((llm, use_default_policies, tokenize)) = &policies.llm_provider {
+			let r = llm
+				.process_request(client, policies.llm.as_ref(), req, *tokenize, &mut log)
+				.await
+				.map_err(|e| ProxyError::Processing(e.into()))?;
+			let (mut req, llm_request) = match r {
+				RequestResult::Success(r, lr) => (r, lr),
+				RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
+			};
+			if *use_default_policies {
+				llm
+					.setup_request(&mut req, &llm_request)
+					.map_err(ProxyError::Processing)?;
+			}
+			apply_llm_request_policies(route_policies, &llm_request)?;
+			log.add(|l| l.llm_request = Some(llm_request.clone()));
+			(req, Some(llm_request))
+		} else {
+			(req, None)
 		};
-		if *use_default_policies {
-			llm
-				.setup_request(&mut req, &llm_request)
-				.map_err(ProxyError::Processing)?;
-		}
-		apply_llm_request_policies(route_policies, &llm_request)?;
-		log.add(|l| l.llm_request = Some(llm_request.clone()));
-		(req, Some(llm_request))
-	} else {
-		(req, None)
-	};
 	// Some auth types (AWS) need to be applied after all request processing
 	auth::apply_late_backend_auth(policies.backend_auth.as_ref(), &mut req).await?;
 	let transport = build_transport(&inputs, &backend_call, policies.backend_tls.clone()).await?;
