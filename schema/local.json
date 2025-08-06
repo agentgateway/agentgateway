@@ -1954,14 +1954,28 @@
                                               "type": "object",
                                               "properties": {
                                                 "model": {
-                                                  "type": "string"
+                                                  "type": [
+                                                    "string",
+                                                    "null"
+                                                  ]
                                                 },
                                                 "region": {
                                                   "type": "string"
+                                                },
+                                                "guardrailIdentifier": {
+                                                  "type": [
+                                                    "string",
+                                                    "null"
+                                                  ]
+                                                },
+                                                "guardrailVersion": {
+                                                  "type": [
+                                                    "string",
+                                                    "null"
+                                                  ]
                                                 }
                                               },
                                               "required": [
-                                                "model",
                                                 "region"
                                               ]
                                             }

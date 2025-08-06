@@ -3697,11 +3697,13 @@ func (x *AIBackend_Anthropic) GetModel() *wrappers.StringValue {
 }
 
 type AIBackend_Bedrock struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Model         *wrappers.StringValue  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
-	Region        string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Model               *wrappers.StringValue  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Region              string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	GuardrailIdentifier *wrappers.StringValue  `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3" json:"guardrail_identifier,omitempty"`
+	GuardrailVersion    *wrappers.StringValue  `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3" json:"guardrail_version,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *AIBackend_Bedrock) Reset() {
@@ -3746,6 +3748,20 @@ func (x *AIBackend_Bedrock) GetRegion() string {
 		return x.Region
 	}
 	return ""
+}
+
+func (x *AIBackend_Bedrock) GetGuardrailIdentifier() *wrappers.StringValue {
+	if x != nil {
+		return x.GuardrailIdentifier
+	}
+	return nil
+}
+
+func (x *AIBackend_Bedrock) GetGuardrailVersion() *wrappers.StringValue {
+	if x != nil {
+		return x.GuardrailVersion
+	}
+	return nil
 }
 
 var File_resource_proto protoreflect.FileDescriptor
@@ -3948,7 +3964,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04kind\"7\n" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\x05R\x04port\"\x8e\a\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\"\xab\b\n" +
 	"\tAIBackend\x12I\n" +
 	"\boverride\x18\x01 \x01(\v2-.agentgateway.dev.resource.AIBackend.OverrideR\boverride\x12E\n" +
 	"\x06openai\x18\x02 \x01(\v2+.agentgateway.dev.resource.AIBackend.OpenAIH\x00R\x06openai\x12E\n" +
@@ -3969,10 +3985,12 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x03 \x01(\tR\tprojectId\x1a?\n" +
 	"\tAnthropic\x122\n" +
-	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x1aU\n" +
+	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x1a\xf1\x01\n" +
 	"\aBedrock\x122\n" +
 	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x16\n" +
-	"\x06region\x18\x02 \x01(\tR\x06regionB\n" +
+	"\x06region\x18\x02 \x01(\tR\x06region\x12O\n" +
+	"\x14guardrail_identifier\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\x13guardrailIdentifier\x12I\n" +
+	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersionB\n" +
 	"\n" +
 	"\bprovider\"\xd2\x01\n" +
 	"\n" +
@@ -4151,11 +4169,13 @@ var file_resource_proto_depIdxs = []int32{
 	56, // 71: agentgateway.dev.resource.AIBackend.Vertex.model:type_name -> google.protobuf.StringValue
 	56, // 72: agentgateway.dev.resource.AIBackend.Anthropic.model:type_name -> google.protobuf.StringValue
 	56, // 73: agentgateway.dev.resource.AIBackend.Bedrock.model:type_name -> google.protobuf.StringValue
-	74, // [74:74] is the sub-list for method output_type
-	74, // [74:74] is the sub-list for method input_type
-	74, // [74:74] is the sub-list for extension type_name
-	74, // [74:74] is the sub-list for extension extendee
-	0,  // [0:74] is the sub-list for field type_name
+	56, // 74: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_identifier:type_name -> google.protobuf.StringValue
+	56, // 75: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_version:type_name -> google.protobuf.StringValue
+	76, // [76:76] is the sub-list for method output_type
+	76, // [76:76] is the sub-list for method input_type
+	76, // [76:76] is the sub-list for extension type_name
+	76, // [76:76] is the sub-list for extension extendee
+	0,  // [0:76] is the sub-list for field type_name
 }
 
 func init() { file_resource_proto_init() }

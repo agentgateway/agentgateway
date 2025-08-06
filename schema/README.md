@@ -232,6 +232,8 @@ This defaults to 'true'.|
 |`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock`||
 |`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.model`||
 |`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.guardrailIdentifier`||
+|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.guardrailVersion`||
 |`binds[].listeners[].routes[].backends[].(1)ai.hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
 since we know (part of) the cost of the request upfront.
