@@ -12,8 +12,7 @@ cargo run -- -f examples/ratelimiting/config.yaml
 
 In addition to the basic configuration from the [basic](../basic) [authorization](../authorization) and [multiplex](../multiplex) examples, we have a few new fields:
 
-The `jwtAuth` indicates how to authenticate clients.
-This uses example JWT keys and tokens included for demonstration purposes only.
+The `localRateLimit` indicates how to configure local rate limiting.
 
 ```yaml
     - policies:
@@ -23,7 +22,7 @@ This uses example JWT keys and tokens included for demonstration purposes only.
             fillInterval: 60s
 ```
 
-To adjust rate limiting configuration, you may increase the `mexTokens` in the `config.yaml` as needed.
+To adjust rate limiting configuration, you may increase the `maxTokens` in the `config.yaml` as needed.
 
 To test the authorization, users will be required to pass a valid JWT token matching the criteria, refer to the [authorization](../authorization) for details.
 
