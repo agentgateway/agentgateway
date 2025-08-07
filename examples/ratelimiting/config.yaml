@@ -1,0 +1,43 @@
+config:
+  tracing:
+    otlpEndpoint: http://localhost:4317
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        localRateLimit:
+          - maxTokens: 10
+            tokensPerFill: 1
+            fillInterval: 60s
+        cors:
+          allowOrigins:
+            - "*"
+          allowHeaders:
+            - "*"
+        jwtAuth:
+          issuer: agentgateway.dev
+          audiences: [test.agentgateway.dev]
+          jwks:
+            # Relative to the folder the binary runs from, not the config file
+            file: ./manifests/jwt/pub-key
+        mcpAuthorization:
+          rules:
+          # Allow anyone to call 'echo'
+          - 'mcp.tool.name == "echo"'
+          # Only the test-user can call 'add' or 'get_current_time'
+          - 'jwt.sub == "test-user" && mcp.tool.name == "add"'
+          # - 'jwt.sub == "test-user" && mcp.tool.name == "get_current_time"'
+          # Any authenticated user with the claim `nested.key == value` can access 'printEnv'
+          - 'mcp.tool.name == "printEnv" && jwt.nested.key == "value"'
+      backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]
+          # - name: time
+          #   stdio:
+          #     cmd: uvx
+          #     args: ["mcp-server-time"]%
