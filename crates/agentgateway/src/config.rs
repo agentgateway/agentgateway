@@ -241,14 +241,14 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			random_sampling: raw
 				.tracing
 				.as_ref()
-				.and_then(|t| t.random_sampling.as_deref())
+				.and_then(|t| t.random_sampling.as_ref().map(|c| c.0.as_str()))
 				.map(cel::Expression::new)
 				.transpose()?
 				.map(Arc::new),
 			client_sampling: raw
 				.tracing
 				.as_ref()
-				.and_then(|t| t.client_sampling.as_deref())
+				.and_then(|t| t.client_sampling.as_ref().map(|c| c.0.as_str()))
 				.map(cel::Expression::new)
 				.transpose()?
 				.map(Arc::new),

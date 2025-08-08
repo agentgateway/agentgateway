@@ -165,6 +165,8 @@
               "description": "Expression to determine the amount of *random sampling*.\nRandom sampling will initiate a new trace span if the incoming request does not have a trace already.\nThis should evaluate to either a float between 0.0-1.0 (0-100%) or true/false.\nThis defaults to 'false'.",
               "type": [
                 "string",
+                "number",
+                "boolean",
                 "null"
               ]
             },
@@ -172,6 +174,8 @@
               "description": "Expression to determine the amount of *client sampling*.\nClient sampling determines whether to initiate a new trace span if the incoming request does have a trace already.\nThis should evaluate to either a float between 0.0-1.0 (0-100%) or true/false.\nThis defaults to 'true'.",
               "type": [
                 "string",
+                "number",
+                "boolean",
                 "null"
               ]
             }

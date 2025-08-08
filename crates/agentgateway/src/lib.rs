@@ -14,7 +14,7 @@ use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use indexmap::IndexMap;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
-use serde::de::Visitor;
+use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 pub use serdes::*;
 
@@ -126,12 +126,12 @@ pub struct RawTracing {
 	/// Random sampling will initiate a new trace span if the incoming request does not have a trace already.
 	/// This should evaluate to either a float between 0.0-1.0 (0-100%) or true/false.
 	/// This defaults to 'false'.
-	random_sampling: Option<String>,
+	random_sampling: Option<StringBoolFloat>,
 	/// Expression to determine the amount of *client sampling*.
 	/// Client sampling determines whether to initiate a new trace span if the incoming request does have a trace already.
 	/// This should evaluate to either a float between 0.0-1.0 (0-100%) or true/false.
 	/// This defaults to 'true'.
-	client_sampling: Option<String>,
+	client_sampling: Option<StringBoolFloat>,
 }
 
 #[apply(schema_de!)]
@@ -197,6 +197,62 @@ impl<'de> Deserialize<'de> for StringOrInt {
 		}
 
 		deserializer.deserialize_any(StringOrIntVisitor())
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct StringBoolFloat(String);
+
+impl<'de> Deserialize<'de> for StringBoolFloat {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct StringBoolFloatVisitor();
+
+		impl Visitor<'_> for StringBoolFloatVisitor {
+			type Value = StringBoolFloat;
+
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				formatter.write_str("string, bool, float, or int")
+			}
+
+			fn visit_str<E>(self, value: &str) -> Result<StringBoolFloat, E>
+			{
+				Ok(StringBoolFloat(value.to_owned()))
+			}
+
+			fn visit_f64<E>(self, value: f64) -> Result<StringBoolFloat, E> {
+				Ok(StringBoolFloat(value.to_string()))
+			}
+
+			fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
+				Ok(StringBoolFloat(v.to_string()))
+			}
+
+			fn visit_i64<E>(self, value: i64) -> Result<StringBoolFloat, E> {
+				Ok(StringBoolFloat(value.to_string()))
+			}
+		}
+
+		deserializer.deserialize_any(StringBoolFloatVisitor())
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for StringBoolFloat {
+	    fn schema_name() -> std::borrow::Cow<'static, str> {
+	        "StringBoolFloat".into()
+	    }
+
+	    fn schema_id() -> std::borrow::Cow<'static, str> {
+	        "StringBoolFloat".into()
+	    }
+
+	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": ["string", "number", "boolean"]
+		})
 	}
 }
 
