@@ -80,7 +80,7 @@ export function getDefaultPolicyData(type: PolicyType) {
     case "directResponse":
       return {
         body: "",
-        status: "200",
+        status: 200,
       };
     case "extAuthz":
       return {
