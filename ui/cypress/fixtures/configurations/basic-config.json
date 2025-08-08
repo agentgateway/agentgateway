@@ -1,0 +1,44 @@
+{
+  "listeners": [
+    {
+      "id": "test-listener-1",
+      "name": "Test HTTP Listener",
+      "port": 8080,
+      "protocol": "HTTP",
+      "hostname": "localhost"
+    },
+    {
+      "id": "test-listener-2", 
+      "name": "Test HTTPS Listener",
+      "port": 8443,
+      "protocol": "HTTPS",
+      "hostname": "localhost"
+    }
+  ],
+  "routes": [
+    {
+      "id": "test-route-1",
+      "name": "Test Route",
+      "path": "/api/test",
+      "matchType": "prefix",
+      "listenerId": "test-listener-1"
+    }
+  ],
+  "backends": [
+    {
+      "id": "test-backend-1",
+      "name": "Test Backend",
+      "type": "HTTP",
+      "url": "http://localhost:3001",
+      "routeId": "test-route-1"
+    }
+  ],
+  "policies": [
+    {
+      "id": "test-policy-1",
+      "name": "Test Policy",
+      "type": "rateLimit",
+      "routeId": "test-route-1"
+    }
+  ]
+}

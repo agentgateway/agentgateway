@@ -17,7 +17,7 @@ interface WelcomeStepProps {
 
 export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
   return (
-    <Card className="w-full max-w-3xl">
+    <Card className="w-full max-w-3xl" data-cy="wizard-welcome-step">
       <CardHeader>
         <div className="flex justify-center mb-6">
           <AgentgatewayLogo className="h-12" />
@@ -92,10 +92,10 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
-        <Button variant="outline" onClick={onSkip}>
+        <Button variant="outline" onClick={onSkip} data-cy="wizard-welcome-skip">
           Skip Wizard
         </Button>
-        <Button onClick={onNext} className="min-w-24">
+        <Button onClick={onNext} className="min-w-24" data-cy="wizard-welcome-next">
           Start Setup
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

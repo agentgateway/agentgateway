@@ -142,6 +142,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
                     size="icon"
                     onClick={(e) => handleRemoveRule(index, e)}
                     className="text-destructive hover:text-destructive hover:bg-transparent p-1 h-auto w-auto"
+                    data-cy={`rbac-remove-rule-button-${index}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -154,6 +155,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
                       <Label htmlFor={`rule-key-${index}`}>Claim Key</Label>
                       <Input
                         id={`rule-key-${index}`}
+                        data-cy={`rbac-rule-key-input-${index}`}
                         value={rule.key}
                         onChange={(e) => handleUpdateRule(index, { key: e.target.value })}
                         placeholder="e.g., role"
@@ -163,6 +165,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
                       <Label htmlFor={`rule-value-${index}`}>Claim Value</Label>
                       <Input
                         id={`rule-value-${index}`}
+                        data-cy={`rbac-rule-value-input-${index}`}
                         value={rule.value}
                         onChange={(e) => handleUpdateRule(index, { value: e.target.value })}
                         placeholder="e.g., admin"
@@ -205,6 +208,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
                             aria-expanded={popoverOpenStates[index] ?? false}
                             className="w-full justify-between font-normal hover:bg-transparent"
                             disabled={loadingTargets}
+                            data-cy={`rbac-resource-target-button-${index}`}
                           >
                             {rule.resource.target ||
                               (loadingTargets ? "Loading..." : "Select or type target...")}
@@ -266,6 +270,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
                       <Label htmlFor={`resource-id-${index}`}>Resource ID</Label>
                       <Input
                         id={`resource-id-${index}`}
+                        data-cy={`rbac-resource-id-input-${index}`}
                         value={rule.resource.id}
                         placeholder="e.g., echo-tool"
                         onChange={(e) =>
@@ -283,16 +288,23 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
         </Accordion>
       </div>
 
-      <Button variant="outline" className="w-full" onClick={handleAddRule}>
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={handleAddRule}
+        data-cy="rbac-add-rule-button"
+      >
         <Plus className="h-4 w-4 mr-2" />
         Add Rule
       </Button>
 
       <div className="flex justify-end space-x-2 pt-4">
-        <Button variant="outline" onClick={onCancel}>
+        <Button variant="outline" onClick={onCancel} data-cy="rbac-config-cancel-button">
           Cancel
         </Button>
-        <Button onClick={handleSave}>Save Changes</Button>
+        <Button onClick={handleSave} data-cy="rbac-config-save-button">
+          Save Changes
+        </Button>
       </div>
     </div>
   );

@@ -1,0 +1,9 @@
+{
+  "workers": 4,
+  "memory_limit_mb": 5529,
+  "timeout_ms": 30000,
+  "retry_attempts": 2,
+  "parallel_mode": "aggressive",
+  "generated_at": "2025-07-30T11:55:28.137Z",
+  "version": "1.0"
+}

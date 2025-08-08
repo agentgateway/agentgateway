@@ -103,7 +103,7 @@ export default function PoliciesPage() {
   }, []);
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-8 px-4" data-cy="policies-page">
       <div className="flex flex-row items-center justify-between mb-6">
         <div>
           <div className="flex items-center space-x-3">
