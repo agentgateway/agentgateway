@@ -28,19 +28,10 @@ fn main() -> Result<(), anyhow::Error> {
 		]);
 		c
 	};
+	let fds = protox::compile(&proto_files, &include_dirs)?;
 	tonic_prost_build::configure()
 		.build_server(true)
-		.compile_with_config(
-			config,
-			&proto_files
-				.iter()
-				.map(|path| path.to_str().unwrap())
-				.collect::<Vec<_>>(),
-			&include_dirs
-				.iter()
-				.map(|p| p.to_str().unwrap())
-				.collect::<Vec<_>>(),
-		)?;
+		.compile_fds_with_config(fds, config)?;
 
 	// This tells cargo to re-run this build script only when the proto files
 	// we're interested in change or the any of the proto directories were updated.

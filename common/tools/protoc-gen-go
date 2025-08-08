@@ -1,0 +1,4 @@
+#!/bin/sh
+WD=$(dirname "$0")
+WD=$(cd "$WD"; pwd)
+exec go tool -modfile=$WD/go.mod "google.golang.org/protobuf/cmd/protoc-gen-go" "$@"

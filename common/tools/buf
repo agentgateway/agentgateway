@@ -1,0 +1,4 @@
+#!/bin/sh
+WD=$(dirname "$0")
+WD=$(cd "$WD"; pwd)
+exec go tool -modfile=$WD/go.mod "github.com/bufbuild/buf/cmd/buf" "$@"

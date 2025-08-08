@@ -191,6 +191,7 @@ value-bag = { version = "1.11", features = ["serde", "value-bag-serde1"] }
 time = "0.3"
 tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
 jemalloc_pprof = { version = "0.8"}
+protox = "0.9"
 
 # Release optimized but without as many dependencies, suitable for incremental development
 [profile.quick-release]

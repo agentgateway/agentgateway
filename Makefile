@@ -49,10 +49,6 @@ clean:
 
 objects := $(wildcard examples/*/config.json)
 
-.PHONY: install-go-tools
-install-go-tools:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
-
 .PHONY: check-clean-repo
 check-clean-repo:
 	@common/scripts/check_clean_repo.sh
@@ -67,15 +63,8 @@ generate-schema:
 
 # Code generation for xds apis
 .PHONY: generate-apis
-generate-apis: install-go-tools
-	@protoc --proto_path=./crates/agentgateway/proto/ \
-		--go_out=./go/api \
-		--go_opt=paths=source_relative \
-		./crates/agentgateway/proto/resource.proto
-	@protoc --proto_path=./crates/agentgateway/proto/ \
-		--go_out=./go/api \
-		--go_opt=paths=source_relative \
-		./crates/agentgateway/proto/workload.proto
+generate-apis:
+	@PATH=./common/tools:$(PATH) buf generate --path crates/agentgateway/proto/resource.proto --path crates/agentgateway/proto/workload.proto
 
 .PHONY: run-validation-deps
 run-validation-deps:

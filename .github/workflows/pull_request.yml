@@ -48,10 +48,6 @@ jobs:
       with:
         targets: ${{ matrix.target }}
 
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build UI
       run: | 
         cd ui
@@ -84,11 +80,6 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        version: "31.1"
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Add Go bin to PATH
       run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
     - name: Test
