@@ -93,7 +93,7 @@ pub struct RawConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_min_termination_deadline: Option<Duration>,
 
-	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	worker_threads: Option<StringOrInt>,
 
 	tracing: Option<RawTracing>,

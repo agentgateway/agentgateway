@@ -109,7 +109,10 @@
           "default": null
         },
         "workerThreads": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "tracing": {
           "type": [
@@ -266,9 +269,6 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "workerThreads"
-      ],
       "default": null
     },
     "binds": {
