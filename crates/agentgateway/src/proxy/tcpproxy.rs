@@ -204,7 +204,7 @@ fn tcp_load_balance(
 		return None;
 	};
 
-	let endpoints = svc.endpoints.iter().filter_map(|ep| {
+	let endpoints = svc.endpoints.iter().filter_map(|(ep, _info)| {
 		let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
 			debug!("failed to fetch workload for {}", ep.workload_uid);
 			return None;

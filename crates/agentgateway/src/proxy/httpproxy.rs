@@ -191,7 +191,7 @@ fn load_balance(
 	svc: &Service,
 	svc_port: u16,
 	override_dest: Option<SocketAddr>,
-) -> Option<(&Endpoint, Arc<Workload>)> {
+) -> Option<(&Endpoint, &Arc<EndpointInfo>, Arc<Workload>)> {
 	let state = &pi.stores;
 	let workloads = &state.read_discovery().workloads;
 	let target_port = svc.ports.get(&svc_port).copied();
@@ -202,7 +202,7 @@ fn load_balance(
 		return None;
 	};
 
-	let endpoints = svc.endpoints.iter().filter_map(|ep| {
+	let endpoints = svc.endpoints.iter().filter_map(|(ep, ep_info)| {
 		let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
 			debug!("failed to fetch workload for {}", ep.workload_uid);
 			return None;
@@ -225,12 +225,12 @@ fn load_balance(
 			);
 			return None;
 		}
-		Some((ep, wl))
+		Some((ep, ep_info, wl))
 	});
 
 	let options = endpoints.collect_vec();
 	options
-		.choose_weighted(&mut rand::rng(), |(_, wl)| wl.capacity as u64)
+		.choose_weighted(&mut rand::rng(), |(_, _, wl)| wl.capacity as u64)
 		// This can fail if there are no weights, the sum is zero (not possible in our API), or if it overflows
 		// The API has u32 but we sum into an u64, so it would take ~4 billion entries of max weight to overflow
 		.ok()
@@ -768,7 +768,7 @@ async fn make_backend_call(
 		},
 		Backend::Service(svc, port) => {
 			let port = *port;
-			let (ep, wl) = load_balance(inputs.clone(), svc.as_ref(), port, override_dest)
+			let (ep, ep_info, wl) = load_balance(inputs.clone(), svc.as_ref(), port, override_dest)
 				.ok_or(ProxyError::NoHealthyEndpoints)?;
 			let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
 			let target_port = if let Some(&ep_target_port) = ep.port.get(&port) {
@@ -791,6 +791,8 @@ async fn make_backend_call(
 				return Err(ProxyResponse::from(ProxyError::NoHealthyEndpoints));
 			};
 			let dest = SocketAddr::from((*ip, target_port));
+			let handle = ep_info.start_request();
+			log.add(move |l| l.request_handle = Some(handle));
 			BackendCall {
 				target: Target::Address(dest),
 				http_version_override,
@@ -1178,13 +1180,13 @@ impl PolicyClient {
 trait OptLogger {
 	fn add<F>(&mut self, f: F)
 	where
-		F: Fn(&mut RequestLog);
+		F: FnOnce(&mut RequestLog);
 }
 
 impl OptLogger for Option<&mut RequestLog> {
 	fn add<F>(&mut self, f: F)
 	where
-		F: Fn(&mut RequestLog),
+		F: FnOnce(&mut RequestLog),
 	{
 		if let Some(log) = self.as_mut() {
 			f(log)

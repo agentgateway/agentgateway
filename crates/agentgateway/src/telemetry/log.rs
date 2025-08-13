@@ -26,6 +26,7 @@ use crate::types::agent::{
 	BackendName, BindName, GatewayName, ListenerName, RouteName, RouteRuleName, Target,
 };
 use crate::{cel, llm, mcp};
+use crate::types::discovery::ActiveHandle;
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -406,6 +407,7 @@ impl RequestLog {
 			llm_response: Default::default(),
 			a2a_method: None,
 			inference_pool: None,
+			request_handle: None,
 		}
 	}
 }
@@ -454,6 +456,8 @@ pub struct RequestLog {
 	pub a2a_method: Option<&'static str>,
 
 	pub inference_pool: Option<SocketAddr>,
+
+    pub request_handle: Option<ActiveHandle>
 }
 
 impl RequestLog {
@@ -513,6 +517,11 @@ impl Drop for DropOnLog {
 
 		let end_time = Instant::now();
 		let duration = end_time - log.start;
+		if let Some(rh) = log.request_handle.take() {
+			let status = log.status.unwrap_or(crate::http::StatusCode::INTERNAL_SERVER_ERROR);
+			let health = !status.is_server_error() && !status.is_client_error();
+			rh.finish_request(health, duration);
+		}
 
 		let llm_response = log.llm_response.take();
 		if let Some(llm_response) = &llm_response {

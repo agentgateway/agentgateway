@@ -98,11 +98,11 @@ impl Store {
 			.services
 			.get_by_namespaced_host(&service.namespaced_hostname())
 		{
-			for ep in prev.endpoints.iter() {
+			for (ep, _) in prev.endpoints.iter() {
 				if service.should_include_endpoint(ep.status) {
 					service
 						.endpoints
-						.insert(ep.workload_uid.clone(), ep.clone());
+						.insert(ep.clone());
 				}
 			}
 		}
@@ -280,7 +280,7 @@ impl ServiceStore {
 			let mut svc = Arc::unwrap_or_clone(svc);
 
 			// Clone the service and add the endpoint.
-			svc.endpoints.insert(ep_uid, ep);
+			svc.endpoints.insert(ep);
 
 			// Update the service.
 			self.insert_endpoint_update(svc);
@@ -390,9 +390,9 @@ impl ServiceStore {
 					"staged service found, inserting {} endpoints",
 					endpoints.len()
 				);
-				for (wip, ep) in endpoints {
+				for (_, ep) in endpoints {
 					if service.should_include_endpoint(ep.status) {
-						service.endpoints.insert(wip.clone(), ep);
+						service.endpoints.insert(ep);
 					}
 				}
 			}

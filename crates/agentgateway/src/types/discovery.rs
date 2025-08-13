@@ -1,15 +1,3 @@
-use std::collections::HashMap;
-use std::fmt;
-use std::fmt::{Formatter, Write};
-use std::net::IpAddr;
-use std::ops::Deref;
-use std::str::FromStr;
-
-use anyhow::anyhow;
-use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
-use serde::de::Visitor;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
 use crate::types::proto::workload::load_balancing::Scope as XdsScope;
 use crate::types::proto::workload::{
 	GatewayAddress as XdsGatewayAddress, Port, PortList, Service as XdsService,
@@ -17,6 +5,18 @@ use crate::types::proto::workload::{
 };
 use crate::types::proto::{ProtoError, workload};
 use crate::*;
+use anyhow::anyhow;
+use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
+use serde::de::Visitor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+use std::fmt;
+use std::fmt::{Formatter, Write};
+use std::hash::Hash;
+use std::net::IpAddr;
+use std::ops::Deref;
+use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -404,7 +404,7 @@ pub enum InboundProtocol {
 	LegacyIstioMtls,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Service {
 	pub name: Strng,
@@ -416,8 +416,8 @@ pub struct Service {
 	pub app_protocols: HashMap<u16, AppProtocol>,
 
 	/// Maps endpoint UIDs to service [Endpoint]s.
-	#[serde(default)]
-	pub endpoints: EndpointSet,
+	#[serde(default, skip_deserializing)]
+	pub endpoints: EndpointSet2<Endpoint>,
 	#[serde(default)]
 	pub subject_alt_names: Vec<Strng>,
 
@@ -529,6 +529,12 @@ pub struct Endpoint {
 	pub status: HealthStatus,
 }
 
+impl KeyFetcher for Endpoint {
+	fn get_key(&self) -> Strng {
+		self.workload_uid.clone()
+	}
+}
+
 /// EndpointSet is an abstraction over a set of endpoints.
 /// While this is currently not very useful, merely wrapping a HashMap, the intent is to make this future
 /// proofed to future enhancements, such as keeping track of load balancing information the ability
@@ -583,6 +589,174 @@ impl EndpointSet {
 
 	pub fn iter(&self) -> impl Iterator<Item = &Endpoint> {
 		self.inner.values().map(Arc::as_ref)
+	}
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ActiveCounter(Arc<()>);
+
+impl Serialize for ActiveCounter {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		self.count().serialize(serializer)
+	}
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ActiveHandle(Arc<EndpointInfo>, #[allow(dead_code)] Arc<()>);
+
+impl ActiveHandle {
+	pub fn finish_request(self, success: bool, latency: Duration) {
+		if success {
+			self.0.health.record(1.0);
+		} else {
+			self.0.health.record(0.0)
+		};
+		self.0.request_latency.record(latency.as_secs_f64());
+	}
+}
+
+impl ActiveCounter {
+	pub fn new(&self) -> ActiveCounter {
+		Default::default()
+	}
+	/// Count returns the number of active instances.
+	pub fn count(&self) -> usize {
+		// We have a count, so ignore that one
+		Arc::strong_count(&self.0) - 1
+	}
+}
+
+const ALPHA: f64 = 0.3;
+
+#[derive(Debug, Default, Serialize)]
+pub struct EndpointInfo {
+	/// health keeps track of the success rate for the endpoint.
+	health: Ewma,
+	/// request latency tracks the latency of requests
+	request_latency: Ewma,
+	/// pending_requests keeps track of the total number of pending requests.
+	pending_requests: ActiveCounter,
+	/// total_requests keeps track of the total number of requests.
+	total_requests: AtomicU64,
+}
+
+impl EndpointInfo {
+	pub fn new() -> Self {
+		Self::default()
+	}
+	pub fn start_request(self: &Arc<Self>) -> ActiveHandle {
+		self.total_requests.fetch_add(1, Ordering::Relaxed);
+		ActiveHandle(self.clone(), self.pending_requests.0.clone())
+	}
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct Ewma(atomic_float::AtomicF64);
+
+impl Ewma {
+	pub fn record(&self, nv: f64) {
+		let _ = self.0.fetch_update(
+			std::sync::atomic::Ordering::SeqCst,
+			std::sync::atomic::Ordering::Relaxed,
+			|old| {
+				Some(if old == 0.0 {
+					nv
+				} else {
+					ALPHA * nv + (1.0 - ALPHA) * old
+				})
+			},
+		);
+	}
+}
+
+#[diagnostic::on_unimplemented(
+	message = "You must implement `KeyFetcher` for `{Self}`",
+	label = "KeyFetcher is not implemented for type"
+)]
+pub trait KeyFetcher {
+	fn get_key(&self) -> Strng;
+}
+
+/// EndpointSet is an abstraction over a set of endpoints.
+/// While this is currently not very useful, merely wrapping a HashMap, the intent is to make this future
+/// proofed to future enhancements, such as keeping track of load balancing information the ability
+/// to incrementally update.
+#[derive(Debug, Clone)]
+pub struct EndpointSet2<T> {
+	pub inner: HashMap<Strng, EndpointWithInfo<T>>,
+}
+
+impl<T: KeyFetcher> Default for EndpointSet2<T> {
+	fn default() -> Self {
+		Self::from_list([])
+	}
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct EndpointWithInfo<T> {
+	pub endpoint: Arc<T>,
+	pub info: Arc<EndpointInfo>,
+}
+impl<T: KeyFetcher> EndpointSet2<T> {
+	pub fn from_list<const N: usize>(eps: [T; N]) -> EndpointSet2<T> {
+		let mut endpoints = HashMap::with_capacity(eps.len());
+		for ep in eps.into_iter() {
+			endpoints.insert(
+				ep.get_key(),
+				EndpointWithInfo {
+					endpoint: Arc::new(ep),
+					info: Arc::new(EndpointInfo::default()),
+				},
+			);
+		}
+		EndpointSet2 { inner: endpoints }
+	}
+
+	pub fn insert(&mut self, v: T) {
+		self.inner.insert(
+			v.get_key(),
+			EndpointWithInfo {
+				endpoint: Arc::new(v),
+				info: Arc::new(EndpointInfo::default()),
+			},
+		);
+	}
+
+	pub fn contains(&self, key: &Strng) -> bool {
+		self.inner.contains_key(key)
+	}
+
+	pub fn get(&self, key: &Strng) -> Option<(&T, &Arc<EndpointInfo>)> {
+		self
+			.inner
+			.get(key)
+			.map(|e| (e.endpoint.as_ref(), &e.info))
+	}
+
+	pub fn remove(&mut self, key: &Strng) {
+		self.inner.remove(key);
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item = (&T, &Arc<EndpointInfo>)> {
+		self
+			.inner
+			.values()
+			.map(|e| (e.endpoint.as_ref(), &e.info))
+	}
+}
+impl<T> serde::Serialize for EndpointSet2<T>
+where
+	T: KeyFetcher,
+	EndpointWithInfo<T>: Serialize,
+{
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		self.inner.serialize(serializer)
 	}
 }
 
