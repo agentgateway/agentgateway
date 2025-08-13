@@ -373,6 +373,7 @@ message MCPTarget {
   }
   string name = 1;
   BackendReference backend = 2;
+  string path = 3;
   Protocol protocol = 4;
 }
 
@@ -387,5 +388,5 @@ message BackendReference {
     string backend = 2;
   }
   // Port, used only with 'service' type
-  uint32 port = 3;
+  uint32 port = 4;
 }

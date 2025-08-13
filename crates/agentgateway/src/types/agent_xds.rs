@@ -366,17 +366,26 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 	fn try_from(s: &proto::agent::McpTarget) -> Result<Self, Self::Error> {
 		let proto = proto::agent::mcp_target::Protocol::try_from(s.protocol)?;
 		let backend = resolve_simple_reference(s.backend.as_ref())?;
+
 		Ok(Self {
 			name: strng::new(&s.name),
 			spec: match proto {
 				Protocol::Sse => McpTargetSpec::Sse(SseTargetSpec {
 					backend,
-					path: "/sse".to_string(),
+					path: if s.path.is_empty() {
+						"/sse".to_string()
+					} else {
+						s.path.clone()
+					},
 				}),
 				Protocol::Undefined | Protocol::StreamableHttp => {
 					McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 						backend,
-						path: "/mcp".to_string(),
+						path: if s.path.is_empty() {
+							"/mcp".to_string()
+						} else {
+							s.path.clone()
+						},
 					})
 				},
 			},
