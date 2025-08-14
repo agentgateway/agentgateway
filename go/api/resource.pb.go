@@ -3177,6 +3177,7 @@ type MCPTarget struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Backend       *BackendReference      `protobuf:"bytes,2,opt,name=backend,proto3" json:"backend,omitempty"`
+	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
 	Protocol      MCPTarget_Protocol     `protobuf:"varint,4,opt,name=protocol,proto3,enum=agentgateway.dev.resource.MCPTarget_Protocol" json:"protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3224,6 +3225,13 @@ func (x *MCPTarget) GetBackend() *BackendReference {
 		return x.Backend
 	}
 	return nil
+}
+
+func (x *MCPTarget) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
 }
 
 func (x *MCPTarget) GetProtocol() MCPTarget_Protocol {
@@ -4165,10 +4173,11 @@ const file_resource_proto_rawDesc = "" +
 	"\rstateful_mode\x18\x03 \x01(\x0e22.agentgateway.dev.resource.MCPBackend.StatefulModeR\fstatefulMode\"+\n" +
 	"\fStatefulMode\x12\f\n" +
 	"\bSTATEFUL\x10\x00\x12\r\n" +
-	"\tSTATELESS\x10\x01\"\xea\x01\n" +
+	"\tSTATELESS\x10\x01\"\xfe\x01\n" +
 	"\tMCPTarget\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12E\n" +
-	"\abackend\x18\x02 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackend\x12I\n" +
+	"\abackend\x18\x02 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackend\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x12I\n" +
 	"\bprotocol\x18\x04 \x01(\x0e2-.agentgateway.dev.resource.MCPTarget.ProtocolR\bprotocol\"7\n" +
 	"\bProtocol\x12\r\n" +
 	"\tUNDEFINED\x10\x00\x12\a\n" +
