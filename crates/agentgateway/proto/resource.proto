@@ -388,5 +388,5 @@ message BackendReference {
     string backend = 2;
   }
   // Port, used only with 'service' type
-  uint32 port = 4;
+  uint32 port = 3;
 }
