@@ -72,7 +72,6 @@ opentelemetry_sdk.workspace = true
 parking_lot.workspace = true
 phonenumber.workspace = true
 pin-project-lite.workspace = true
-pprof.workspace = true
 prometheus-client.workspace = true
 prost.workspace = true
 prost-types.workspace = true
@@ -125,6 +124,14 @@ core_affinity.workspace = true
 macro_rules_attribute.workspace = true
 heck.workspace = true
 async-compression.workspace = true
+
+# Linux only dependencies
+[target.'cfg(target_family = "unix")'.dependencies]
+pprof.workspace = true
+
+# Windows only dependencies
+[target.'cfg(target_family = "windows")'.dependencies]
+which.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true

@@ -27,6 +27,9 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             features: default
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+            features: default
 
     steps:
     - uses: actions/checkout@v4
@@ -65,7 +68,10 @@ jobs:
         CARGO_BUILD_ARGS: "--target ${{ matrix.target }} -F ${{ matrix.features }}"
 
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
@@ -78,6 +84,9 @@ jobs:
           ~/.cargo/git/db/
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install jq on Windows
+      if: runner.os == 'Windows'
+      run: choco install jq -y
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
     - name: Add Go bin to PATH

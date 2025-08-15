@@ -394,13 +394,14 @@ impl<K: Key> WorkloadHBONEPool<K> {
 		let mut s = DefaultHasher::new();
 		workload_key.hash(&mut s);
 		let hash_key = s.finish();
-		let pool_key = pingora_pool::ConnectionMeta::new(
-			hash_key,
-			self
-				.state
-				.pool_global_conn_count
-				.fetch_add(1, Ordering::SeqCst),
-		);
+		let id = self
+			.state
+			.pool_global_conn_count
+			.fetch_add(1, Ordering::SeqCst);
+		#[cfg(target_os = "windows")]
+		let id = id.try_into()?; // id is usize on windows so try and convert
+		let pool_key = pingora_pool::ConnectionMeta::new(hash_key, id);
+
 		// First, see if we can naively take an inner lock for our specific key, and get a connection.
 		// This should be the common case, except for the first establishment of a new connection/key.
 		// This will be done under outer readlock (nonexclusive)/inner keyed writelock (exclusive).

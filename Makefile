@@ -51,7 +51,12 @@ objects := $(wildcard examples/*/config.json)
 
 .PHONY: check-clean-repo
 check-clean-repo:
+ifeq ($(OS),Windows_NT)
+	@powershell -ExecutionPolicy Bypass -Command common/scripts/check_clean_repo.ps1
+else
 	@common/scripts/check_clean_repo.sh
+endif
+
 
 .PHONY: gen
 gen: generate-apis generate-schema fix-lint
@@ -68,11 +73,19 @@ generate-apis:
 
 .PHONY: run-validation-deps
 run-validation-deps:
+ifeq ($(OS),Windows_NT)
+	@powershell -ExecutionPolicy Bypass -Command common/scripts/manage-validation-deps.ps1 start
+else
 	@common/scripts/manage-validation-deps.sh start
+endif
 
 .PHONY: stop-validation-deps
 stop-validation-deps:
+ifeq ($(OS),Windows_NT)
+	@powershell -ExecutionPolicy Bypass -Command common/scripts/manage-validation-deps.ps1 stop
+else
 	@common/scripts/manage-validation-deps.sh stop
+endif
 
 CONFIG_FILES := $(wildcard examples/*/config.yaml)
 

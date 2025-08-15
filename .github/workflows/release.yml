@@ -258,6 +258,9 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             features: default
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            features: default
     steps:
     - name: Prepare
       run: |
@@ -294,7 +297,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: release-binary-${{ matrix.os }}
-        path: target/${{ matrix.target }}/release/agentgateway
+        path: |
+          target/${{ matrix.target }}/release/agentgateway
+          target/${{ matrix.target }}/release/agentgateway.exe
 
   release:
     needs:
@@ -320,6 +325,8 @@ jobs:
         sha256sum outputs/agentgateway-linux-amd64 > outputs/agentgateway-linux-amd64.sha256
         mv release-binary-ubuntu-22.04-arm/agentgateway outputs/agentgateway-linux-arm64
         sha256sum outputs/agentgateway-linux-arm64 > outputs/agentgateway-linux-arm64.sha256
+        mv release-binary-windows-latest/agentgateway.exe outputs/agentgateway-windows-amd64.exe
+        sha256sum outputs/agentgateway-windows-amd64.exe > outputs/agentgateway-windows-amd64.exe.sha256
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
