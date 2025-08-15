@@ -38,6 +38,7 @@ export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps
         <Label htmlFor="cert-file">Certificate File Path</Label>
         <Input
           id="cert-file"
+          data-cy="tls-cert-file-input"
           value={config.certFile}
           onChange={(e) => setConfig({ ...config, certFile: e.target.value })}
           placeholder="/path/to/cert.pem"
@@ -49,6 +50,7 @@ export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps
         <Label htmlFor="key-file">Key File Path</Label>
         <Input
           id="key-file"
+          data-cy="tls-key-file-input"
           value={config.keyFile}
           onChange={(e) => setConfig({ ...config, keyFile: e.target.value })}
           placeholder="/path/to/key.pem"
@@ -57,10 +59,12 @@ export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps
       </div>
 
       <div className="flex justify-end space-x-2 pt-4">
-        <Button variant="outline" onClick={onCancel}>
+        <Button variant="outline" onClick={onCancel} data-cy="tls-config-cancel-button">
           Cancel
         </Button>
-        <Button onClick={handleSave}>Save Changes</Button>
+        <Button onClick={handleSave} data-cy="tls-config-save-button">
+          Save Changes
+        </Button>
       </div>
     </div>
   );

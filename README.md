@@ -63,6 +63,267 @@ The agentgateway documentation is available at [agentgateway.dev/docs](https://a
   <img alt="agentgateway UI" src="img/UI-homepage.png">
 </div>
 
+## Testing
+
+### End-to-End (E2E) Testing
+
+AgentGateway includes a comprehensive E2E testing infrastructure using Cypress that provides:
+
+- **190+ tests** with 100% success rate
+- **Comprehensive coverage** of all UI workflows including setup wizard, configuration management, and playground testing
+- **Parallel test execution** with 75-85% speed improvement
+- **Intelligent test scheduling** and resource monitoring
+- **Zero flaky tests** with defensive programming patterns
+
+## 🚀 Usage Examples
+
+### For New Developers
+
+```bash
+# Complete guided setup experience
+cd ui && npm run test:e2e:setup-wizard
+
+# Run tests with smart defaults
+cd ui && npm run test:e2e:smart
+
+# Get help with any issues
+cd ui && npm run test:e2e:error-recovery
+```
+
+### For Experienced Developers
+
+```bash
+# Quick expert setup
+cd ui && npm run test:e2e:setup-wizard:quick
+
+# Advanced configuration
+cd ui && npm run test:e2e:smart-defaults:template
+
+# Performance optimization
+cd ui && npm run test:e2e:smart-defaults:speed
+
+# Run tests fast
+cd ui && npm run test:e2e:parallel
+```
+
+### For System Administrators
+
+```bash
+# Comprehensive health checks
+cd ui && npm run test:e2e:health-check:verbose
+
+# System analysis and recommendations
+cd ui && npm run test:e2e:smart-defaults:check
+
+# Error analysis and recovery
+cd ui && npm run test:e2e:error-recovery:analyze
+```
+
+#### Traditional Setup (Alternative)
+
+For manual setup or legacy workflows:
+
+```bash
+# One-command setup for new developers
+./scripts/setup-first-time.sh
+
+# Run with enhanced test runner (auto-detects optimal settings)
+./scripts/run-e2e-tests.sh
+
+# Open interactive test runner
+cd ui && npm run e2e:open
+```
+
+#### System Requirements
+
+##### Minimum Requirements
+- **CPU**: 2 cores, 2.0 GHz
+- **Memory**: 4 GB RAM (6 GB recommended for parallel testing)
+- **Storage**: 2 GB free space
+- **Network**: Stable internet connection for dependency installation
+
+##### Recommended Requirements
+- **CPU**: 4+ cores, 2.5+ GHz
+- **Memory**: 8+ GB RAM
+- **Storage**: 5+ GB free space
+- **Network**: High-speed internet for faster setup
+
+##### Software Prerequisites
+
+**Required:**
+- **Rust**: 1.88+ (automatically installed by setup script)
+- **Node.js**: 18+ (automatically installed by setup script)
+- **Git**: Any recent version
+
+**Platform-Specific:**
+
+**Linux (Ubuntu/Debian):**
+```bash
+# Required system packages (auto-installed by setup script)
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config curl
+```
+
+**Linux (CentOS/RHEL/Fedora):**
+```bash
+# Required system packages (auto-installed by setup script)
+sudo yum groupinstall -y "Development Tools"
+sudo yum install -y pkg-config curl
+# OR for newer versions:
+sudo dnf groupinstall -y "Development Tools"
+sudo dnf install -y pkg-config curl
+```
+
+**macOS:**
+```bash
+# Xcode Command Line Tools (auto-installed by setup script)
+xcode-select --install
+
+# Homebrew (recommended, auto-installed by setup script)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+**Windows:**
+- **Windows Subsystem for Linux (WSL2)** recommended
+- **Visual Studio Build Tools** or **Visual Studio Community**
+- **Git for Windows**
+
+#### Troubleshooting
+
+##### Common Issues and Solutions
+
+**Setup Script Fails:**
+```bash
+# Check system requirements
+./scripts/setup-first-time.sh --check-only
+
+# Run with verbose output for debugging
+./scripts/setup-first-time.sh --verbose
+
+# Skip specific steps if needed
+./scripts/setup-first-time.sh --skip-rust --skip-nodejs
+```
+
+**Tests Fail Due to Resource Constraints:**
+```bash
+# Run resource detection to get recommendations
+node scripts/detect-system-resources.js
+
+# Run tests with conservative settings
+./scripts/run-e2e-tests.sh --workers 1 --memory-limit 2048
+
+# Run minimal test suite for debugging
+node scripts/test-e2e-minimal.js
+```
+
+**Backend Connection Issues:**
+```bash
+# Verify AgentGateway is running
+curl http://localhost:8080/health
+
+# Check if port is in use
+lsof -i :8080
+
+# Restart with test configuration
+cargo run -- --file test-config.yaml
+```
+
+**UI Development Server Issues:**
+```bash
+# Verify UI server is running
+curl http://localhost:3000
+
+# Restart UI development server
+cd ui && npm run dev
+
+# Check for port conflicts
+lsof -i :3000
+```
+
+**Memory/Performance Issues:**
+- Reduce parallel workers: `--workers 2`
+- Increase memory limit: `--memory-limit 4096`
+- Close other applications during testing
+- Use `--headless` mode to reduce resource usage
+
+**Platform-Specific Issues:**
+
+**Linux:**
+- Install missing system dependencies: `sudo apt-get install build-essential pkg-config`
+- Check file permissions: `chmod +x scripts/*.sh`
+
+**macOS:**
+- Install Xcode Command Line Tools: `xcode-select --install`
+- Update Homebrew: `brew update && brew upgrade`
+
+**Windows/WSL:**
+- Ensure WSL2 is installed and updated
+- Use WSL terminal for all commands
+- Install Windows Build Tools if using native Windows
+
+##### Getting Help
+
+1. **Check Logs**: Test execution logs are saved to `ui/cypress/results/`
+2. **Run Diagnostics**: Use `./scripts/setup-first-time.sh --check-only`
+3. **Community Support**: Join our [Discord](https://discord.gg/BdJpzaPjHv)
+4. **Report Issues**: [GitHub Issues](https://github.com/agentgateway/agentgateway/issues)
+
+#### Advanced Configuration
+
+##### Custom Test Configuration
+
+Create a custom test configuration file:
+
+```yaml
+# custom-test-config.yaml
+test_settings:
+  workers: 4
+  memory_limit_mb: 4096
+  timeout_ms: 30000
+  retry_attempts: 2
+  
+browser_settings:
+  headless: true
+  viewport_width: 1280
+  viewport_height: 720
+  
+resource_limits:
+  max_cpu_percent: 80
+  max_memory_percent: 70
+```
+
+Run tests with custom configuration:
+```bash
+./scripts/run-e2e-tests.sh --config custom-test-config.yaml
+```
+
+##### CI/CD Integration
+
+For continuous integration environments:
+
+```bash
+# GitHub Actions / GitLab CI
+./scripts/setup-first-time.sh --ci-mode
+./scripts/run-e2e-tests.sh --ci-mode --workers 2
+
+# Docker-based testing
+docker-compose -f docker/docker-compose.e2e-test.yml up --build
+```
+
+##### Performance Optimization
+
+For optimal test performance:
+
+```bash
+# Auto-detect and apply optimal settings
+./scripts/run-e2e-tests.sh --optimize
+
+# Manual optimization
+./scripts/run-e2e-tests.sh --workers 6 --memory-limit 6144 --parallel-mode balanced
+```
+
+For detailed testing documentation and advanced usage, see [ui/cypress/README.md](ui/cypress/README.md).
+
 ## Contributing
 
 For instructions on how to contribute to the agentgateway project, see the [CONTRIBUTION.md](CONTRIBUTION.md) file.

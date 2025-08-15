@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  e2e-validation:
+    build:
+      context: ..
+      dockerfile: docker/e2e-test.Dockerfile
+    container_name: agentgateway-e2e-validation
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+      - TZ=UTC
+    volumes:
+      # Mount the project directory to allow for live testing
+      - ..:/home/developer/agentgateway:ro
+      # Mount validation script
+      - ./validate-e2e-setup.sh:/home/developer/validate-e2e-setup.sh:ro
+    working_dir: /home/developer/agentgateway
+    command: ["/home/developer/validate-e2e-setup.sh"]
+    
+  # Alternative service for interactive testing
+  e2e-interactive:
+    build:
+      context: ..
+      dockerfile: docker/e2e-test.Dockerfile
+    container_name: agentgateway-e2e-interactive
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+      - TZ=UTC
+    volumes:
+      - ..:/home/developer/agentgateway:ro
+      - ./validate-e2e-setup.sh:/home/developer/validate-e2e-setup.sh:ro
+    working_dir: /home/developer/agentgateway
+    command: ["/bin/bash"]
+    stdin_open: true
+    tty: true

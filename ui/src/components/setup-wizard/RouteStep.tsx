@@ -120,7 +120,7 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
   const commonMethods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
   return (
-    <Card className="w-full max-w-3xl">
+    <Card className="w-full max-w-3xl" data-cy="wizard-route-step">
       <CardHeader>
         <div className="flex justify-center mb-6">
           <AgentgatewayLogo className="h-12" />
@@ -152,6 +152,7 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
                 value={routeName}
                 onChange={(e) => setRouteName(e.target.value)}
                 placeholder="e.g., default"
+                data-cy="route-name-input"
               />
               <p className="text-xs text-muted-foreground">A unique name for this route.</p>
             </div>
@@ -162,6 +163,7 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
                 value={pathType}
                 onValueChange={(value) => setPathType(value as "exact" | "prefix" | "regex")}
                 className="grid grid-cols-3 gap-4"
+                data-cy="route-match-type-select"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="exact" id="exact-match" />
@@ -187,6 +189,7 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
                       ? "/api/"
                       : "/api/.+"
                 }
+                data-cy="route-path-input"
               />
               <p className="text-xs text-muted-foreground">
                 {pathType === "exact" && "Match the exact path"}
@@ -214,8 +217,14 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
                   onChange={(e) => setNewHostname(e.target.value)}
                   placeholder="e.g., api.example.com or *"
                   onKeyPress={(e) => e.key === "Enter" && addHostname()}
+                  data-cy="route-hostname-input"
                 />
-                <Button type="button" variant="outline" onClick={addHostname}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addHostname}
+                  data-cy="route-add-hostname-button"
+                >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -240,8 +249,14 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
                   onChange={(e) => setNewMethod(e.target.value)}
                   placeholder="Enter HTTP method"
                   onKeyPress={(e) => e.key === "Enter" && addMethod()}
+                  data-cy="route-method-input"
                 />
-                <Button type="button" variant="outline" onClick={addMethod}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addMethod}
+                  data-cy="route-add-method-button"
+                >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -287,11 +302,11 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
-        <Button variant="outline" onClick={onPrevious}>
+        <Button variant="outline" onClick={onPrevious} data-cy="wizard-route-previous">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={handleNext} disabled={isUpdating}>
+        <Button onClick={handleNext} disabled={isUpdating} data-cy="wizard-route-next">
           {isUpdating ? "Configuring..." : "Next"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

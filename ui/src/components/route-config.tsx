@@ -137,7 +137,7 @@ export function RouteConfig() {
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
-        <Button onClick={() => setIsAddRouteDialogOpen(true)}>
+        <Button onClick={() => setIsAddRouteDialogOpen(true)} data-cy="add-route-button">
           <Plus className="mr-2 h-4 w-4" />
           Add Route
         </Button>

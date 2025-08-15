@@ -90,7 +90,7 @@ export function ActionPanel({
   const description = isA2a ? a2aSelectedSkill?.description : mcpSelectedTool?.description;
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col" data-cy="action-panel">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
@@ -172,6 +172,7 @@ export function ActionPanel({
                             value={textareaValue}
                             onChange={handleObjectChange}
                             className={`font-mono text-sm h-40 overflow-auto ${jsonErrorKey === key ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                            data-cy={`tool-parameter-${key}`}
                           />
                           {jsonErrorKey === key && (
                             <p className="text-xs text-red-500 mt-1">Invalid JSON format.</p>
@@ -239,6 +240,7 @@ export function ActionPanel({
                             e.target.value === "" ? null : Number(e.target.value)
                           )
                         }
+                        data-cy={`tool-parameter-${key}`}
                       />
                     ) : (
                       <Input
@@ -246,6 +248,7 @@ export function ActionPanel({
                         placeholder={prop.description}
                         value={mcpParamValues[key] || ""}
                         onChange={(e) => onMcpParamChange(key, e.target.value)}
+                        data-cy={`tool-parameter-${key}`}
                       />
                     )}
                   </div>
@@ -272,6 +275,7 @@ export function ActionPanel({
           onClick={isA2a ? onRunA2aSkill : onRunMcpTool}
           disabled={isRequestRunning || (isA2a && !a2aMessage.trim()) ? true : undefined}
           className="w-full mt-auto"
+          data-cy="run-tool-button"
         >
           {isRequestRunning ? (
             <>

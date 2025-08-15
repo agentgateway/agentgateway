@@ -98,7 +98,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
   };
 
   return (
-    <Card className="w-full max-w-3xl">
+    <Card className="w-full max-w-3xl" data-cy="wizard-listener-step">
       <CardHeader>
         <div className="flex justify-center mb-6">
           <AgentgatewayLogo className="h-12" />
@@ -130,6 +130,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
                 value={listenerName}
                 onChange={(e) => setListenerName(e.target.value)}
                 placeholder="e.g., default"
+                data-cy="listener-name-input"
               />
               <p className="text-xs text-muted-foreground">A unique name for this listener.</p>
             </div>
@@ -140,6 +141,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
                 value={selectedProtocol}
                 onValueChange={(value) => setSelectedProtocol(value as ListenerProtocol)}
                 className="grid grid-cols-2 gap-4"
+                data-cy="listener-protocol-select"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value={ListenerProtocol.HTTP} id="http-protocol" />
@@ -174,6 +176,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
                 value={listenerHostname}
                 onChange={(e) => setListenerHostname(e.target.value)}
                 placeholder="e.g., localhost or *"
+                data-cy="listener-hostname-input"
               />
               <p className="text-xs text-muted-foreground">
                 The hostname the listener will bind to. Use * for all hostnames.
@@ -190,6 +193,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
                 type="number"
                 min="1"
                 max="65535"
+                data-cy="listener-port-input"
               />
               <p className="text-xs text-muted-foreground">
                 The port number the listener will use (1-65535).
@@ -209,11 +213,11 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
-        <Button variant="outline" onClick={onPrevious}>
+        <Button variant="outline" onClick={onPrevious} data-cy="wizard-listener-previous">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={handleNext} disabled={isUpdating}>
+        <Button onClick={handleNext} disabled={isUpdating} data-cy="wizard-listener-next">
           {isUpdating ? "Configuring..." : "Next"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

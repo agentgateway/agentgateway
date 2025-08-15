@@ -1,0 +1,321 @@
+name: E2E Tests (Manual Trigger)
+
+on:
+  workflow_dispatch:
+    inputs:
+      journey_selection:
+        description: 'Test Journey Selection'
+        required: true
+        default: 'quick-validation'
+        type: choice
+        options:
+          - 'all'
+          - 'smoke'
+          - 'foundation'
+          - 'setup-wizard'
+          - 'configuration'
+          - 'playground'
+          - 'integration'
+          - 'error-handling'
+          - 'navigation'
+          - 'quick-validation'
+          - 'feature-testing'
+          - 'comprehensive'
+          - 'core-functionality'
+          - 'protocol-focus'
+          - 'custom'
+      
+      custom_journeys:
+        description: 'Custom Journey Selection (comma-separated, only if "custom" selected above)'
+        required: false
+        default: ''
+        type: string
+      
+      browser:
+        description: 'Browser Selection'
+        required: true
+        default: 'chrome'
+        type: choice
+        options:
+          - 'chrome'
+          - 'firefox'
+          - 'edge'
+      
+      execution_mode:
+        description: 'Execution Mode'
+        required: true
+        default: 'headless'
+        type: choice
+        options:
+          - 'headless'
+          - 'headed'
+      
+      worker_count:
+        description: 'Parallel Workers'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - 'auto'
+          - '1'
+          - '2'
+          - '4'
+          - '8'
+      
+      environment_profile:
+        description: 'Environment Profile'
+        required: true
+        default: 'ci-optimized'
+        type: choice
+        options:
+          - 'ci-optimized'
+          - 'standard'
+          - 'conservative'
+          - 'high-performance'
+
+jobs:
+  validate-journey-selection:
+    runs-on: ubuntu-latest
+    outputs:
+      journey-list: ${{ steps.validate.outputs.journey-list }}
+      estimated-duration: ${{ steps.validate.outputs.estimated-duration }}
+      recommended-workers: ${{ steps.validate.outputs.recommended-workers }}
+      recommended-memory: ${{ steps.validate.outputs.recommended-memory }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+          
+      - name: Install UI dependencies
+        run: |
+          cd ui
+          npm ci
+          
+      - name: Validate Journey Selection
+        id: validate
+        run: |
+          echo "🔍 Validating journey selection: ${{ github.event.inputs.journey_selection }}"
+          
+          # Run journey manager validation
+          validation_output=$(node scripts/journey-manager.js \
+            --validate-only \
+            --journey-selection="${{ github.event.inputs.journey_selection }}" \
+            --custom-journeys="${{ github.event.inputs.custom_journeys }}" \
+            --environment-profile="${{ github.event.inputs.environment_profile }}" \
+            2>&1)
+          
+          echo "Validation output:"
+          echo "$validation_output"
+          
+          # Extract information for outputs (simplified parsing)
+          echo "journey-list=${{ github.event.inputs.journey_selection }}" >> $GITHUB_OUTPUT
+          echo "estimated-duration=5-30 minutes" >> $GITHUB_OUTPUT
+          echo "recommended-workers=${{ github.event.inputs.worker_count }}" >> $GITHUB_OUTPUT
+          echo "recommended-memory=70%" >> $GITHUB_OUTPUT
+
+  e2e-manual:
+    runs-on: ubuntu-latest
+    needs: validate-journey-selection
+    
+    strategy:
+      matrix:
+        node-version: [20]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+          
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+            
+      - name: Install UI dependencies
+        run: |
+          cd ui
+          npm ci
+          
+      - name: Build AgentGateway
+        run: |
+          echo "🔨 Building AgentGateway binary..."
+          cargo build --release --bin agentgateway
+          
+      - name: Display Journey Execution Plan
+        run: |
+          echo "🚀 Journey Execution Plan"
+          echo "========================"
+          echo "Journey Selection: ${{ github.event.inputs.journey_selection }}"
+          echo "Custom Journeys: ${{ github.event.inputs.custom_journeys }}"
+          echo "Browser: ${{ github.event.inputs.browser }}"
+          echo "Execution Mode: ${{ github.event.inputs.execution_mode }}"
+          echo "Worker Count: ${{ github.event.inputs.worker_count }}"
+          echo "Environment Profile: ${{ github.event.inputs.environment_profile }}"
+          echo "Estimated Duration: ${{ needs.validate-journey-selection.outputs.estimated-duration }}"
+          echo "========================"
+          
+      - name: Execute Selected Journeys
+        run: |
+          echo "▶️ Starting journey execution..."
+          node scripts/journey-manager.js \
+            --execute \
+            --journey-selection="${{ github.event.inputs.journey_selection }}" \
+            --custom-journeys="${{ github.event.inputs.custom_journeys }}" \
+            --browser="${{ github.event.inputs.browser }}" \
+            --execution-mode="${{ github.event.inputs.execution_mode }}" \
+            --worker-count="${{ github.event.inputs.worker_count }}" \
+            --environment-profile="${{ github.event.inputs.environment_profile }}"
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
+          JOURNEY_TRIGGER: manual
+          
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cypress-results-${{ github.event.inputs.journey_selection }}-${{ github.event.inputs.browser }}-${{ matrix.node-version }}
+          path: |
+            ui/cypress/videos/
+            ui/cypress/screenshots/
+            ui/cypress/results/
+          retention-days: 7
+          
+      - name: Upload journey reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: journey-reports-${{ github.event.inputs.journey_selection }}-${{ matrix.node-version }}
+          path: |
+            ui/cypress/reports/
+            journey-execution-report.json
+          retention-days: 7
+          
+      - name: Upload test configuration
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-config-${{ github.event.inputs.journey_selection }}-${{ matrix.node-version }}
+          path: |
+            test-config*.yaml
+            smart-defaults.json
+            test-overrides.json
+          retention-days: 3
+
+  e2e-manual-summary:
+    runs-on: ubuntu-latest
+    needs: [validate-journey-selection, e2e-manual]
+    if: always()
+    
+    steps:
+      - name: Download journey reports
+        uses: actions/download-artifact@v4
+        if: always()
+        with:
+          pattern: journey-reports-*
+          merge-multiple: true
+          
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          echo "# E2E Journey Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Journey Selection**: ${{ github.event.inputs.journey_selection }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Custom Journeys**: ${{ github.event.inputs.custom_journeys || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Browser**: ${{ github.event.inputs.browser }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Execution Mode**: ${{ github.event.inputs.execution_mode }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Worker Count**: ${{ github.event.inputs.worker_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment Profile**: ${{ github.event.inputs.environment_profile }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Estimated Duration**: ${{ needs.validate-journey-selection.outputs.estimated-duration }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.e2e-manual.result }}" == "success" ]]; then
+            echo "## ✅ Result: SUCCESS" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All selected journeys executed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Journey Details" >> $GITHUB_STEP_SUMMARY
+            echo "The following journeys were executed:" >> $GITHUB_STEP_SUMMARY
+            echo "- Journey selection: \`${{ github.event.inputs.journey_selection }}\`" >> $GITHUB_STEP_SUMMARY
+            
+            if [[ -f "journey-execution-report.json" ]]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Execution Report" >> $GITHUB_STEP_SUMMARY
+              echo "A detailed execution report has been generated and uploaded as an artifact." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "## ❌ Result: FAILURE" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Journey execution failed. Please check the logs for details." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Troubleshooting" >> $GITHUB_STEP_SUMMARY
+            echo "1. Check the journey execution logs above" >> $GITHUB_STEP_SUMMARY
+            echo "2. Verify journey selection is valid" >> $GITHUB_STEP_SUMMARY
+            echo "3. Consider using a more conservative environment profile" >> $GITHUB_STEP_SUMMARY
+            echo "4. Try reducing worker count or using headless mode" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Available Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Test results (videos, screenshots)" >> $GITHUB_STEP_SUMMARY
+          echo "- Journey execution reports" >> $GITHUB_STEP_SUMMARY
+          echo "- Test configuration files" >> $GITHUB_STEP_SUMMARY
+          
+      - name: Check Journey Execution Results
+        run: |
+          if [[ "${{ needs.e2e-manual.result }}" == "success" ]]; then
+            echo "✅ Selected journeys executed successfully!"
+            echo ""
+            echo "Configuration Summary:"
+            echo "  Journey Selection: ${{ github.event.inputs.journey_selection }}"
+            echo "  Browser: ${{ github.event.inputs.browser }}"
+            echo "  Execution Mode: ${{ github.event.inputs.execution_mode }}"
+            echo "  Environment Profile: ${{ github.event.inputs.environment_profile }}"
+            echo "  Estimated Duration: ${{ needs.validate-journey-selection.outputs.estimated-duration }}"
+            echo ""
+            echo "🎉 All tests passed! Check the artifacts for detailed results."
+          else
+            echo "❌ Journey execution failed"
+            echo ""
+            echo "Configuration that failed:"
+            echo "  Journey Selection: ${{ github.event.inputs.journey_selection }}"
+            echo "  Custom Journeys: ${{ github.event.inputs.custom_journeys }}"
+            echo "  Browser: ${{ github.event.inputs.browser }}"
+            echo "  Execution Mode: ${{ github.event.inputs.execution_mode }}"
+            echo "  Environment Profile: ${{ github.event.inputs.environment_profile }}"
+            echo ""
+            echo "💡 Troubleshooting suggestions:"
+            echo "  - Try using 'conservative' environment profile"
+            echo "  - Reduce worker count to 1 or 2"
+            echo "  - Use 'headless' execution mode"
+            echo "  - Try 'quick-validation' journey for faster feedback"
+            echo ""
+            exit 1
+          fi
