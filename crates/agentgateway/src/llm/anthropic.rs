@@ -4,7 +4,7 @@ use async_openai::types::{FinishReason, ReasoningEffort};
 use bytes::Bytes;
 use chrono;
 
-use crate::http::Response;
+use crate::http::{Body, Response};
 use crate::llm::anthropic::types::{
 	ContentBlock, ContentBlockDelta, MessagesErrorResponse, MessagesRequest, MessagesResponse,
 	MessagesStreamEvent, StopReason,
@@ -48,99 +48,7 @@ impl Provider {
 	}
 
 	pub async fn process_streaming(&self, log: AsyncLog<LLMResponse>, resp: Response) -> Response {
-		resp.map(|b| {
-			let mut message_id = None;
-			let mut model = String::new();
-			let created = chrono::Utc::now().timestamp() as u32;
-			// let mut finish_reason = None;
-			let mut input_tokens = 0;
-			let mut saw_token = false;
-			// https://docs.anthropic.com/en/docs/build-with-claude/streaming
-			parse::sse::json_transform::<MessagesStreamEvent, universal::StreamResponse>(b, move |f| {
-				let mk = |choices: Vec<universal::ChatChoiceStream>, usage: Option<universal::Usage>| {
-					Some(universal::StreamResponse {
-						id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
-						model: model.clone(),
-						object: "chat.completion.chunk".to_string(),
-						system_fingerprint: None,
-						service_tier: None,
-						created,
-						choices,
-						usage,
-					})
-				};
-				// ignore errors... what else can we do?
-				let f = f.ok()?;
-
-				// Extract info we need
-				match f {
-					MessagesStreamEvent::MessageStart { message } => {
-						message_id = Some(message.id);
-						model = message.model.clone();
-						input_tokens = message.usage.input_tokens;
-						log.non_atomic_mutate(|r| {
-							r.output_tokens = Some(message.usage.output_tokens as u64);
-							r.input_tokens_from_response = Some(message.usage.input_tokens as u64);
-							r.provider_model = Some(strng::new(&message.model))
-						});
-						// no need to respond with anything yet
-						None
-					},
-
-					MessagesStreamEvent::ContentBlockStart { .. } => {
-						// There is never(?) any content here
-						None
-					},
-					MessagesStreamEvent::ContentBlockDelta { delta, .. } => {
-						if !saw_token {
-							saw_token = true;
-							log.non_atomic_mutate(|r| {
-								r.first_token = Some(Instant::now());
-							});
-						}
-						let ContentBlockDelta::TextDelta { text } = delta;
-						let choice = universal::ChatChoiceStream {
-							index: 0,
-							logprobs: None,
-							delta: universal::StreamResponseDelta {
-								role: None,
-								content: Some(text),
-								refusal: None,
-								#[allow(deprecated)]
-								function_call: None,
-								tool_calls: None,
-							},
-							finish_reason: None,
-						};
-						mk(vec![choice], None)
-					},
-					MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
-						// TODO
-						// finish_reason = delta.stop_reason.as_ref().map(translate_stop_reason);
-						log.non_atomic_mutate(|r| {
-							r.output_tokens = Some(usage.output_tokens as u64);
-							if let Some(inp) = r.input_tokens_from_response {
-								r.total_tokens = Some(inp + usage.output_tokens as u64)
-							}
-						});
-						mk(
-							vec![],
-							Some(universal::Usage {
-								prompt_tokens: input_tokens as u32,
-								completion_tokens: usage.output_tokens as u32,
-								total_tokens: (input_tokens + usage.output_tokens) as u32,
-
-								prompt_tokens_details: None,
-								completion_tokens_details: None,
-							}),
-						)
-					},
-					MessagesStreamEvent::ContentBlockStop { .. } => None,
-					MessagesStreamEvent::MessageStop => None,
-					MessagesStreamEvent::Ping => None,
-				}
-			})
-		})
+		resp.map(|b| translate_stream(b, log))
 	}
 
 	pub async fn process_error(
@@ -345,6 +253,101 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 		metadata,
 		thinking,
 	}
+}
+
+pub(super) fn translate_stream(b: Body, log: AsyncLog<LLMResponse>) -> Body {
+	let mut message_id = None;
+	let mut model = String::new();
+	let created = chrono::Utc::now().timestamp() as u32;
+	// let mut finish_reason = None;
+	let mut input_tokens = 0;
+	let mut saw_token = false;
+	// https://docs.anthropic.com/en/docs/build-with-claude/streaming
+	parse::sse::json_transform::<MessagesStreamEvent, universal::StreamResponse>(b, move |f| {
+		let mk = |choices: Vec<universal::ChatChoiceStream>, usage: Option<universal::Usage>| {
+			Some(universal::StreamResponse {
+				id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
+				model: model.clone(),
+				object: "chat.completion.chunk".to_string(),
+				system_fingerprint: None,
+				service_tier: None,
+				created,
+				choices,
+				usage,
+			})
+		};
+		// ignore errors... what else can we do?
+		let f = f.ok()?;
+
+		// Extract info we need
+		match f {
+			MessagesStreamEvent::MessageStart { message } => {
+				message_id = Some(message.id);
+				model = message.model.clone();
+				input_tokens = message.usage.input_tokens;
+				log.non_atomic_mutate(|r| {
+					r.output_tokens = Some(message.usage.output_tokens as u64);
+					r.input_tokens_from_response = Some(message.usage.input_tokens as u64);
+					r.provider_model = Some(strng::new(&message.model))
+				});
+				// no need to respond with anything yet
+				None
+			},
+
+			MessagesStreamEvent::ContentBlockStart { .. } => {
+				// There is never(?) any content here
+				None
+			},
+			MessagesStreamEvent::ContentBlockDelta { delta, .. } => {
+				if !saw_token {
+					saw_token = true;
+					log.non_atomic_mutate(|r| {
+						r.first_token = Some(Instant::now());
+					});
+				}
+				let ContentBlockDelta::TextDelta { text } = delta;
+				let choice = universal::ChatChoiceStream {
+					index: 0,
+					logprobs: None,
+					delta: universal::StreamResponseDelta {
+						role: None,
+						content: Some(text),
+						refusal: None,
+						#[allow(deprecated)]
+						function_call: None,
+						tool_calls: None,
+					},
+					finish_reason: None,
+				};
+				mk(vec![choice], None)
+			},
+			MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
+				// TODO
+				// finish_reason = delta.stop_reason.as_ref().map(translate_stop_reason);
+				log.non_atomic_mutate(|r| {
+					r.output_tokens = Some(usage.output_tokens as u64);
+					if let Some(inp) = r.input_tokens_from_response {
+						r.total_tokens = Some(inp + usage.output_tokens as u64)
+					}
+				});
+				mk(
+					vec![],
+					Some(universal::Usage {
+						prompt_tokens: input_tokens as u32,
+						completion_tokens: usage.output_tokens as u32,
+
+						total_tokens: (input_tokens + usage.output_tokens) as u32,
+
+						prompt_tokens_details: None,
+						completion_tokens_details: None,
+					}),
+				)
+			},
+			MessagesStreamEvent::ContentBlockStop { .. } => None,
+			MessagesStreamEvent::MessageStop => None,
+			MessagesStreamEvent::Ping => None,
+		}
+	})
 }
 
 fn translate_stop_reason(resp: &types::StopReason) -> FinishReason {

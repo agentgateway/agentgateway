@@ -1,0 +1,21 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response_stream-anthropic_basic.json
+---
+event: 
+data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[{"index":0,"delta":{"content":"Hi there! How are","function_call":null,"tool_calls":null,"role":null,"refusal":null}}],"created":1755555650,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[{"index":0,"delta":{"content":" you doing today?","function_call":null,"tool_calls":null,"role":null,"refusal":null}}],"created":1755555650,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[{"index":0,"delta":{"content":" Is","function_call":null,"tool_calls":null,"role":null,"refusal":null}}],"created":1755555650,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[{"index":0,"delta":{"content":" there anything I can help","function_call":null,"tool_calls":null,"role":null,"refusal":null}}],"created":1755555650,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[{"index":0,"delta":{"content":" you with?","function_call":null,"tool_calls":null,"role":null,"refusal":null}}],"created":1755555650,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[],"created":1755555650,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":21,"completion_tokens":15,"total_tokens":36}}

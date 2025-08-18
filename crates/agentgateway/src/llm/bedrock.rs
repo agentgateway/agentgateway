@@ -7,7 +7,7 @@ use itertools::Itertools;
 use rand::Rng;
 use tracing::trace;
 
-use crate::http::Response;
+use crate::http::{Body, Response};
 use crate::llm::bedrock::types::{
 	ContentBlock, ContentBlockDelta, ConverseErrorResponse, ConverseRequest, ConverseResponse,
 	ConverseStreamOutput, StopReason,
@@ -89,125 +89,7 @@ impl Provider {
 			.get(http::x_headers::X_AMZN_REQUESTID)
 			.and_then(|s| s.to_str().ok().map(|s| s.to_owned()))
 			.unwrap_or_else(|| format!("{:016x}", rand::rng().random::<u64>()));
-		// This is static for all chunks!
-		let created = chrono::Utc::now().timestamp() as u32;
-		resp.map(move |b| {
-			let mut saw_token = false;
-			parse::aws_sse::transform::<universal::StreamResponse>(b, move |f| {
-				let res = types::ConverseStreamOutput::deserialize(f).ok()?;
-				let mk = |choices: Vec<universal::ChatChoiceStream>, usage: Option<universal::Usage>| {
-					Some(universal::StreamResponse {
-						id: message_id.clone(),
-						model: model.clone(),
-						object: "chat.completion.chunk".to_string(),
-						system_fingerprint: None,
-						service_tier: None,
-						created,
-						choices,
-						usage,
-					})
-				};
-
-				match res {
-					ConverseStreamOutput::ContentBlockDelta(d) => {
-						if !saw_token {
-							saw_token = true;
-							log.non_atomic_mutate(|r| {
-								r.first_token = Some(Instant::now());
-							});
-						}
-						match d.delta {
-							Some(ContentBlockDelta::Text(s)) => {
-								let choice = universal::ChatChoiceStream {
-									index: 0,
-									logprobs: None,
-									delta: universal::StreamResponseDelta {
-										role: None,
-										content: Some(s),
-										refusal: None,
-										#[allow(deprecated)]
-										function_call: None,
-										tool_calls: None,
-									},
-									finish_reason: None,
-								};
-								mk(vec![choice], None)
-							},
-							_ => None,
-						}
-					},
-					ConverseStreamOutput::ContentBlockStart(_) => {
-						// TODO support tool calls
-						None
-					},
-					ConverseStreamOutput::ContentBlockStop(_) => {
-						// No need to send anything here
-						None
-					},
-					ConverseStreamOutput::MessageStart(start) => {
-						// Just send a blob with the role
-						let choice = universal::ChatChoiceStream {
-							index: 0,
-							logprobs: None,
-							delta: universal::StreamResponseDelta {
-								role: Some(match start.role {
-									types::Role::Assistant => universal::Role::Assistant,
-									types::Role::User => universal::Role::User,
-								}),
-								content: None,
-								refusal: None,
-								#[allow(deprecated)]
-								function_call: None,
-								tool_calls: None,
-							},
-							finish_reason: None,
-						};
-						mk(vec![choice], None)
-					},
-					ConverseStreamOutput::MessageStop(stop) => {
-						let finish_reason = Some(translate_stop_reason(&stop.stop_reason));
-
-						// Just send a blob with the finish reason
-						let choice = universal::ChatChoiceStream {
-							index: 0,
-							logprobs: None,
-							delta: universal::StreamResponseDelta {
-								role: None,
-								content: None,
-								refusal: None,
-								#[allow(deprecated)]
-								function_call: None,
-								tool_calls: None,
-							},
-							finish_reason,
-						};
-						mk(vec![choice], None)
-					},
-					ConverseStreamOutput::Metadata(metadata) => {
-						if let Some(usage) = metadata.usage {
-							log.non_atomic_mutate(|r| {
-								r.output_tokens = Some(usage.output_tokens as u64);
-								r.input_tokens_from_response = Some(usage.input_tokens as u64);
-								r.total_tokens = Some(usage.total_tokens as u64);
-							});
-
-							mk(
-								vec![],
-								Some(universal::Usage {
-									prompt_tokens: usage.input_tokens as u32,
-									completion_tokens: usage.output_tokens as u32,
-									total_tokens: usage.total_tokens as u32,
-									prompt_tokens_details: None,
-									completion_tokens_details: None,
-								}),
-							)
-						} else {
-							None
-						}
-					},
-				}
-			})
-		})
+		resp.map(|b| translate_stream(b, log, model, message_id))
 	}
 
 	pub fn get_path_for_model(&self, streaming: bool, model: &str) -> Strng {
@@ -458,6 +340,131 @@ pub(super) fn translate_request(req: universal::Request, provider: &Provider) ->
 		request_metadata: metadata,
 		performance_config: None,
 	}
+}
+
+pub(super) fn translate_stream(
+	b: Body,
+	log: AsyncLog<LLMResponse>,
+	model: String,
+	message_id: String,
+) -> Body {
+	// This is static for all chunks!
+	let created = chrono::Utc::now().timestamp() as u32;
+	let mut saw_token = false;
+	parse::aws_sse::transform::<universal::StreamResponse>(b, move |f| {
+		let res = types::ConverseStreamOutput::deserialize(f).ok()?;
+		let mk = |choices: Vec<universal::ChatChoiceStream>, usage: Option<universal::Usage>| {
+			Some(universal::StreamResponse {
+				id: message_id.clone(),
+				model: model.clone(),
+				object: "chat.completion.chunk".to_string(),
+				system_fingerprint: None,
+				service_tier: None,
+				created,
+				choices,
+				usage,
+			})
+		};
+
+		match res {
+			ConverseStreamOutput::ContentBlockDelta(d) => {
+				if !saw_token {
+					saw_token = true;
+					log.non_atomic_mutate(|r| {
+						r.first_token = Some(Instant::now());
+					});
+				}
+				match d.delta {
+					Some(ContentBlockDelta::Text(s)) => {
+						let choice = universal::ChatChoiceStream {
+							index: 0,
+							logprobs: None,
+							delta: universal::StreamResponseDelta {
+								role: None,
+								content: Some(s),
+								refusal: None,
+								#[allow(deprecated)]
+								function_call: None,
+								tool_calls: None,
+							},
+							finish_reason: None,
+						};
+						mk(vec![choice], None)
+					},
+					_ => None,
+				}
+			},
+			ConverseStreamOutput::ContentBlockStart(_) => {
+				// TODO support tool calls
+				None
+			},
+			ConverseStreamOutput::ContentBlockStop(_) => {
+				// No need to send anything here
+				None
+			},
+			ConverseStreamOutput::MessageStart(start) => {
+				// Just send a blob with the role
+				let choice = universal::ChatChoiceStream {
+					index: 0,
+					logprobs: None,
+					delta: universal::StreamResponseDelta {
+						role: Some(match start.role {
+							types::Role::Assistant => universal::Role::Assistant,
+							types::Role::User => universal::Role::User,
+						}),
+						content: None,
+						refusal: None,
+						#[allow(deprecated)]
+						function_call: None,
+						tool_calls: None,
+					},
+					finish_reason: None,
+				};
+				mk(vec![choice], None)
+			},
+			ConverseStreamOutput::MessageStop(stop) => {
+				let finish_reason = Some(translate_stop_reason(&stop.stop_reason));
+
+				// Just send a blob with the finish reason
+				let choice = universal::ChatChoiceStream {
+					index: 0,
+					logprobs: None,
+					delta: universal::StreamResponseDelta {
+						role: None,
+						content: None,
+						refusal: None,
+						#[allow(deprecated)]
+						function_call: None,
+						tool_calls: None,
+					},
+					finish_reason,
+				};
+				mk(vec![choice], None)
+			},
+			ConverseStreamOutput::Metadata(metadata) => {
+				if let Some(usage) = metadata.usage {
+					log.non_atomic_mutate(|r| {
+						r.output_tokens = Some(usage.output_tokens as u64);
+						r.input_tokens_from_response = Some(usage.input_tokens as u64);
+						r.total_tokens = Some(usage.total_tokens as u64);
+					});
+
+					mk(
+						vec![],
+						Some(universal::Usage {
+							prompt_tokens: usage.input_tokens as u32,
+							completion_tokens: usage.output_tokens as u32,
+							total_tokens: usage.total_tokens as u32,
+							prompt_tokens_details: None,
+							completion_tokens_details: None,
+						}),
+					)
+				} else {
+					None
+				}
+			},
+		}
+	})
 }
 
 pub(super) mod types {
