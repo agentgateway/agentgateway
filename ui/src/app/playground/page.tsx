@@ -12,7 +12,11 @@ import {
   Tool as McpTool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { A2AClient } from "@a2a-js/sdk/client";
+import {
+  A2AClient,
+  createAuthenticatingFetchWithRetry,
+  type AuthenticationHandler,
+} from "@a2a-js/sdk/client";
 import type { AgentSkill, Task, Message, MessageSendParams, AgentCard } from "@a2a-js/sdk";
 import { useServer } from "@/lib/server-context";
 import { Bind, Listener, Route, Backend, ListenerProtocol } from "@/lib/types";
@@ -108,6 +112,7 @@ interface A2aState {
   client: A2AClient | null;
   targets: string[];
   selectedTarget: string | null;
+  agentCard: AgentCard | null;
   skills: AgentSkill[];
   selectedSkill: AgentSkill | null;
   message: string;
@@ -165,6 +170,7 @@ export default function PlaygroundPage() {
     client: null,
     targets: [],
     selectedTarget: null,
+    agentCard: null,
     skills: [],
     selectedSkill: null,
     message: "",
@@ -492,7 +498,32 @@ export default function PlaygroundPage() {
         setConnectionState((prev) => ({ ...prev, connectionType: "a2a" }));
         const connectUrl = selectedRoute.endpoint;
 
-        const client = new A2AClient(connectUrl);
+        let client: A2AClient;
+
+        if (connectionState.authToken && connectionState.authToken.trim()) {
+          // Create authentication handler for bearer token
+          const authHandler: AuthenticationHandler = {
+            headers: async () => ({
+              Authorization: `Bearer ${connectionState.authToken}`,
+            }),
+            shouldRetryWithHeaders: async (req: RequestInit, res: Response) => {
+              // Retry with auth headers on 401 or 403 responses
+              if (res.status === 401 || res.status === 403) {
+                return {
+                  Authorization: `Bearer ${connectionState.authToken}`,
+                };
+              }
+              return undefined;
+            },
+          };
+
+          const authenticatedFetch = createAuthenticatingFetchWithRetry(fetch, authHandler);
+          client = new A2AClient(connectUrl, {
+            fetchImpl: authenticatedFetch,
+          });
+        } else {
+          client = new A2AClient(connectUrl);
+        }
 
         setA2aState((prev) => ({ ...prev, client }));
         setConnectionState((prev) => ({ ...prev, isConnected: true }));
@@ -501,21 +532,14 @@ export default function PlaygroundPage() {
         // Load A2A capabilities
         setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
         try {
-          // Fetch the agent card to get available skills and capabilities
-          const baseUrl = connectUrl.endsWith("/") ? connectUrl.slice(0, -1) : connectUrl;
-          const agentCardUrl = `${baseUrl}/.well-known/agent.json`;
-          const response = await fetch(agentCardUrl);
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-
-          const agentCard: AgentCard = await response.json();
+          // Fetch the agent card using the client's built-in method
+          // The client already handles authentication via the fetchImpl we provided
+          const agentCard: AgentCard = await client.getAgentCard();
 
           // Extract skills from the agent card
           const skills = agentCard.skills || [];
 
-          setA2aState((prev) => ({ ...prev, skills }));
+          setA2aState((prev) => ({ ...prev, agentCard, skills }));
           toast.success(
             `Loaded A2A agent: ${agentCard.name} with ${skills.length} skill${skills.length !== 1 ? "s" : ""}`
           );
@@ -620,6 +644,22 @@ export default function PlaygroundPage() {
         console.error("Error closing MCP client:", e);
       }
     }
+
+    if (connectionState.connectionType === "a2a" && a2aState.client) {
+      try {
+        if ("close" in a2aState.client && typeof (a2aState.client as any).close === "function") {
+          await (a2aState.client as any).close();
+        } else if (
+          "disconnect" in a2aState.client &&
+          typeof (a2aState.client as any).disconnect === "function"
+        ) {
+          await (a2aState.client as any).disconnect();
+        }
+      } catch (e) {
+        console.error("Error closing A2A client:", e);
+      }
+    }
+
     resetFullStateAfterDisconnect();
     toast.info("Disconnected");
   };
@@ -637,6 +677,7 @@ export default function PlaygroundPage() {
     setA2aState((prev) => ({
       ...prev,
       client: null,
+      agentCard: null,
       skills: [],
       selectedSkill: null,
       message: "",
@@ -1402,39 +1443,40 @@ export default function PlaygroundPage() {
                     </div>
                   </div>
                 </div>
-
-                {connectionState.isConnected && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <CapabilitiesList
-                      mcpTools={mcpState.tools}
-                      a2aSkills={a2aState.skills}
-                      connectionType={connectionState.connectionType}
-                      isLoading={uiState.isLoadingCapabilities}
-                      selectedMcpToolName={mcpState.selectedTool?.name ?? null}
-                      selectedA2aSkillId={a2aState.selectedSkill?.id ?? null}
-                      onMcpToolSelect={handleMcpToolSelect}
-                      onA2aSkillSelect={handleA2aSkillSelect}
-                    />
-
-                    <ActionPanel
-                      connectionType={connectionState.connectionType}
-                      mcpSelectedTool={mcpState.selectedTool}
-                      a2aSelectedSkill={a2aState.selectedSkill}
-                      mcpParamValues={mcpState.paramValues}
-                      a2aMessage={a2aState.message}
-                      isRequestRunning={uiState.isRequestRunning}
-                      onMcpParamChange={handleMcpParamChange}
-                      onA2aMessageChange={handleA2aMessageChange}
-                      onRunMcpTool={runMcpTool}
-                      onRunA2aSkill={runA2aSkill}
-                    />
-                  </div>
-                )}
               </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {connectionState.connectionType !== "http" && connectionState.isConnected && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <CapabilitiesList
+            mcpTools={mcpState.tools}
+            a2aSkills={a2aState.skills}
+            a2aAgentCard={a2aState.agentCard}
+            connectionType={connectionState.connectionType}
+            isLoading={uiState.isLoadingCapabilities}
+            selectedMcpToolName={mcpState.selectedTool?.name ?? null}
+            selectedA2aSkillId={a2aState.selectedSkill?.id ?? null}
+            onMcpToolSelect={handleMcpToolSelect}
+            onA2aSkillSelect={handleA2aSkillSelect}
+          />
+
+          <ActionPanel
+            connectionType={connectionState.connectionType}
+            mcpSelectedTool={mcpState.selectedTool}
+            a2aSelectedSkill={a2aState.selectedSkill}
+            mcpParamValues={mcpState.paramValues}
+            a2aMessage={a2aState.message}
+            isRequestRunning={uiState.isRequestRunning}
+            onMcpParamChange={handleMcpParamChange}
+            onA2aMessageChange={handleA2aMessageChange}
+            onRunMcpTool={runMcpTool}
+            onRunA2aSkill={runA2aSkill}
+          />
+        </div>
+      )}
 
       {/* Response Panel */}
       {(response || mcpState.response || a2aState.response) && (

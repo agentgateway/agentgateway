@@ -141,6 +141,7 @@ export const updateHttpRoute = (
     hostnames: parseStringArray(routeForm.hostnames),
     matches: [match],
     backends: existingRoute.backends, // Keep existing backends
+    policies: existingRoute.policies,
   };
 
   if (routeForm.name) updatedRoute.name = routeForm.name;
@@ -157,6 +158,7 @@ export const updateTcpRoute = (
   const updatedTcpRoute: TcpRoute = {
     hostnames: parseStringArray(tcpRouteForm.hostnames),
     backends: existingRoute.backends, // Keep existing backends
+    policies: existingRoute.policies,
   };
 
   if (tcpRouteForm.name) updatedTcpRoute.name = tcpRouteForm.name;
