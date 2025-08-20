@@ -1,6 +1,6 @@
 # Local Development
 
-For instructions on how to run everything locally, see the [DEVELOPMENT.md](DEVELOPMENT.md) file.
+This page contains instructions on how to run everything locally.
 
 ## Build from Source
 
@@ -20,10 +20,9 @@ Build the agentgateway binary:
 
 ```bash
 cd ..
+CARGO_NET_GIT_FETCH_WITH_CLI=true
 make build
 ```
-
-If you encounter an authentication error to the schemars repo in GitHub, try set `CARGO_NET_GIT_FETCH_WITH_CLI=true` and rerun `make build`.
 
 Run the agentgateway binary:
 
