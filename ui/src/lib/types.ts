@@ -158,8 +158,13 @@ export interface CorsPolicy {
   maxAge?: string | null;
 }
 
+export interface McpAuthorizationRule {
+  allow?: string;
+  deny?: string;
+}
+
 export interface McpAuthorization {
-  rules: any;
+  rules: (string | McpAuthorizationRule)[];
 }
 
 export interface McpAuthentication {
