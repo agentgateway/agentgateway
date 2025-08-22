@@ -100,6 +100,8 @@ pub struct UrlRewrite {
 
 #[derive(Debug, Clone)]
 pub struct OriginalUrl(pub Uri);
+#[derive(Debug, Clone)]
+pub struct AutoHostname();
 
 impl UrlRewrite {
 	pub fn apply(&self, req: &mut Request, path_match: &PathMatch) -> Result<(), Error> {
@@ -109,6 +111,9 @@ impl UrlRewrite {
 		let scheme = req.uri().scheme().cloned().unwrap_or(Scheme::HTTP);
 
 		let new_authority = rewrite_host(authority, req.uri(), Some(&scheme), &scheme)?;
+		if matches!(authority, Some(HostRedirect::Auto)) {
+			req.extensions_mut().insert(AutoHostname());
+		}
 		let path_and_query = rewrite_path(path, path_match, req.uri())?;
 		let new = Uri::builder()
 			.scheme(scheme)
@@ -153,7 +158,8 @@ fn rewrite_host(
 	new_scheme: &Scheme,
 ) -> Result<http::uri::Authority, Error> {
 	match &rewrite {
-		None => orig.authority().cloned().ok_or(Error::InvalidURI),
+		// For Auto, we need to handle it later after we pick the backend!
+		None | Some(HostRedirect::Auto) => orig.authority().cloned().ok_or(Error::InvalidURI),
 		Some(HostRedirect::Full(hp)) => Ok(hp.as_str().try_into()?),
 		Some(HostRedirect::Host(h)) => {
 			if original_scheme == Some(&Scheme::HTTP) || original_scheme == Some(&Scheme::HTTPS) {

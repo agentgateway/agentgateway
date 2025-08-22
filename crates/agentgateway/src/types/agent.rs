@@ -157,9 +157,7 @@ pub type RouteKey = Strng;
 pub type RouteName = Strng;
 pub type RouteRuleName = Strng;
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_ser!)]
 pub struct TCPRoute {
 	// Internal name
 	pub key: RouteKey,
@@ -192,9 +190,7 @@ pub struct TCPRouteBackend {
 	pub backend: SimpleBackend,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct RouteMatch {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub headers: Vec<HeaderMatch>,
@@ -205,16 +201,12 @@ pub struct RouteMatch {
 	pub query: Vec<QueryMatch>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct MethodMatch {
 	pub method: Strng,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct HeaderMatch {
 	#[serde(serialize_with = "ser_display", deserialize_with = "de_parse")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
@@ -222,18 +214,14 @@ pub struct HeaderMatch {
 	pub value: HeaderValueMatch,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct QueryMatch {
 	#[serde(serialize_with = "ser_display")]
 	pub name: Strng,
 	pub value: QueryValueMatch,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub enum QueryValueMatch {
 	Exact(Strng),
 	Regex(
@@ -243,9 +231,7 @@ pub enum QueryValueMatch {
 	),
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub enum HeaderValueMatch {
 	Exact(
 		#[serde(serialize_with = "ser_bytes", deserialize_with = "de_parse")]
@@ -259,9 +245,7 @@ pub enum HeaderValueMatch {
 	),
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub enum PathMatch {
 	Exact(Strng),
 	PathPrefix(Strng),
@@ -294,18 +278,17 @@ pub struct TrafficPolicy {
 	pub retry: Option<retry::Policy>,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Eq, PartialEq)]
 pub enum HostRedirect {
 	Full(Strng),
 	Host(Strng),
 	Port(NonZeroU16),
+	Auto,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Eq, PartialEq)]
 pub enum PathRedirect {
 	Full(Strng),
 	Prefix(Strng),
@@ -1027,9 +1010,7 @@ pub struct A2aPolicy {}
 #[apply(schema!)]
 pub struct Authorization(pub RuleSet);
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct ResourceMetadata {
 	pub resource: String,
 	#[serde(flatten)]
