@@ -92,6 +92,19 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	)
 	.await
 	.context("admin server starts")?;
+	// Initialize admin JWT (if configured via nested config or env). Previously the field existed but
+	// we never converted LocalJwtConfig -> Jwt or installed it, so claims were not injected (has_claims=false).
+	if let Some(local_cfg) = config.admin_jwt.clone() {
+		match local_cfg.clone().try_into(client.clone()).await {
+			Ok(jwt) => {
+				admin_server.set_admin_jwt(jwt);
+				info!(issuer=%local_cfg.issuer, audiences=?local_cfg.audiences, "admin jwt configured");
+			},
+			Err(e) => {
+				warn!(error=?e, "failed to initialize admin jwt (admin surface will have no JWT claims)");
+			},
+		}
+	}
 	#[cfg(feature = "ui")]
 	admin_server.set_admin_handler(Arc::new(crate::ui::UiHandler::new(config.clone())));
 	#[cfg(feature = "ui")]
@@ -99,13 +112,16 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 
 	let sub_registry = metrics::sub_registry(&mut registry);
 	let tracer = trc::Tracer::new(&config.tracing)?;
-	let pi = ProxyInputs {
+	#[allow(unused_mut)]
+	let mut pi = ProxyInputs {
 		cfg: config.clone(),
 		stores: stores.clone(),
 		tracer: tracer.clone(),
 		metrics: Arc::new(crate::metrics::Metrics::new(sub_registry)),
 		upstream: client.clone(),
 		ca,
+		#[cfg(feature = "pat")]
+		db_pool: None, // initialized later if enabled
 
 		mcp_state: mcp::sse::App::new(
 			stores.clone(),
@@ -116,6 +132,59 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 			drain_rx.clone(),
 		),
 	};
+
+	#[cfg(feature = "pat")]
+	let mut pat_pool_for_admin: Option<Arc<sqlx::PgPool>> = None;
+	#[cfg(feature = "pat")]
+	if config.pat.enabled {
+		if let Some(db) = &config.database {
+			if let Some(url) = &db.url {
+				// Provide dedicated URL to PAT revocation listener before pool usage
+				crate::http::pat::set_pat_db_url(url);
+				// Retry loop to tolerate transient DB unavailability at startup
+				let max_attempts: u32 = std::env::var("PAT_DB_INIT_MAX_ATTEMPTS")
+					.ok()
+					.and_then(|v| v.parse().ok())
+					.unwrap_or(5);
+				let mut attempt = 0u32;
+				let mut last_err: Option<anyhow::Error> = None;
+				while attempt < max_attempts {
+					attempt += 1;
+					match sqlx::postgres::PgPoolOptions::new()
+						.max_connections(db.max_connections)
+						.connect(url)
+						.await
+					{
+						Ok(pool) => {
+							let arc_pool = Arc::new(pool);
+							pi.db_pool = Some(arc_pool.clone());
+							pat_pool_for_admin = Some(arc_pool.clone());
+							// Initialize global PAT auth singleton for cache sharing
+							crate::pat_global::init_global_pat_auth((*arc_pool).clone());
+							info!(attempt, "PAT db pool and global authenticator initialized");
+							last_err = None;
+							break;
+						},
+						Err(e) => {
+							warn!(attempt, error=?e, "failed to init PAT db pool (will retry)");
+							last_err = Some(e.into());
+							let backoff_ms = 200u64.saturating_mul(2u64.pow(attempt.min(6))); // up to ~12.8s
+							if attempt < max_attempts {
+								tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+							}
+						},
+					}
+				}
+				if last_err.is_some() {
+					warn!("giving up initializing PAT db pool");
+				}
+			}
+		}
+	}
+	#[cfg(feature = "pat")]
+	if let Some(p) = pat_pool_for_admin.clone() {
+		admin_server.set_pat_db(p);
+	}
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());
 

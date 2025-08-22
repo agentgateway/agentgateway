@@ -15,6 +15,7 @@ use crate::http::backendtls::LocalBackendTLS;
 use crate::http::{filters, retry, timeout};
 use crate::mcp::rbac::McpAuthorization;
 use crate::store::LocalWorkload;
+#[cfg(feature = "pat")]
 use crate::types::agent::PolicyTarget::RouteRule;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendName, BackendReference, Bind, BindName, GatewayName,
@@ -47,6 +48,7 @@ pub struct NormalizedLocalConfig {
 	// for now
 	pub workloads: Vec<LocalWorkload>,
 	pub services: Vec<Service>,
+	pub admin_jwt: Option<crate::http::jwt::Jwt>,
 }
 
 #[apply(schema_de!)]
@@ -63,6 +65,14 @@ pub struct LocalConfig {
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	services: Vec<Service>,
+	#[serde(default)]
+	admin: Option<LocalAdmin>,
+}
+
+#[apply(schema_de!)]
+struct LocalAdmin {
+	#[serde(rename = "jwtAuth")]
+	jwt_auth: crate::http::jwt::LocalJwtConfig,
 }
 
 #[apply(schema_de!)]
@@ -453,6 +463,10 @@ struct FilterOrPolicy {
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
+	/// Enable Personal Access Token authentication for this route.
+	#[cfg(feature = "pat")]
+	#[serde(default)]
+	pat: Option<bool>,
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
 	ext_authz: Option<LocalExtAuthz>,
@@ -491,6 +505,7 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 		binds,
 		workloads,
 		services,
+		admin,
 	} = i;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -511,12 +526,26 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 		};
 		all_binds.push(b)
 	}
+	// Admin jwt (optional)
+	let admin_jwt = if let Some(admin) = admin {
+		match admin.jwt_auth.try_into(client.clone()).await {
+			Ok(jwt) => Some(jwt),
+			Err(e) => {
+				warn!(error=?e, "failed to load admin.jwtAuth");
+				None
+			},
+		}
+	} else {
+		None
+	};
+
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
 		backends: all_backends,
 		workloads,
 		services,
+		admin_jwt,
 	})
 }
 
@@ -697,6 +726,8 @@ async fn convert_route(
 			local_rate_limit,
 			remote_rate_limit,
 			jwt_auth,
+			#[cfg(feature = "pat")]
+			pat,
 			transformations,
 			ext_authz,
 			timeout,
@@ -754,6 +785,10 @@ async fn convert_route(
 		}
 		if let Some(p) = jwt_auth {
 			external_policies.push(tgt(Policy::JwtAuth(p.try_into(client.clone()).await?)))
+		}
+		#[cfg(feature = "pat")]
+		if let Some(p) = pat {
+			external_policies.push(tgt(Policy::Pat(p)))
 		}
 		if let Some(p) = transformations {
 			external_policies.push(tgt(Policy::Transformation(p)))

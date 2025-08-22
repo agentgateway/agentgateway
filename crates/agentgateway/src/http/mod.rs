@@ -5,6 +5,8 @@ mod buflist;
 pub mod cors;
 pub mod jwt;
 pub mod localratelimit;
+#[cfg(feature = "pat")]
+pub mod pat;
 pub mod retry;
 pub mod route;
 

@@ -6,10 +6,12 @@ use axum_core::RequestExt;
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
+use base64::Engine; // for URL-safe base64 decoding
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet, KeyAlgorithm};
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
 use secrecy::SecretString;
 use serde_json::{Map, Value};
+use std::sync::OnceLock;
 
 use crate::client::Client;
 use crate::http::Request;
@@ -58,6 +60,7 @@ pub enum JwkError {
 pub struct Jwt {
 	mode: Mode,
 	keys: HashMap<String, Jwk>,
+	issuer: String, // expected issuer for diagnostics
 }
 
 // TODO: can we give anything useful here?
@@ -69,10 +72,12 @@ impl serde::Serialize for Jwt {
 		#[derive(serde::Serialize)]
 		pub struct Serde<'a> {
 			mode: Mode,
+			issuer: &'a str,
 			keys: Vec<&'a str>,
 		}
 		Serde {
 			mode: self.mode,
+			issuer: &self.issuer,
 			keys: self.keys.keys().map(|x| x.as_str()).collect::<Vec<_>>(),
 		}
 		.serialize(serializer)
@@ -171,6 +176,7 @@ impl LocalJwtConfig {
 		Ok(Jwt {
 			mode: self.mode,
 			keys,
+			issuer: self.issuer,
 		})
 	}
 }
@@ -201,18 +207,49 @@ impl Serialize for Claims {
 
 impl Jwt {
 	pub async fn apply(&self, log: &mut RequestLog, req: &mut Request) -> Result<(), TokenError> {
-		let Ok(TypedHeader(Authorization(bearer))) = req
+		// First attempt standard Authorization: Bearer header
+		let bearer_token: Option<String> = if let Ok(TypedHeader(Authorization(bearer))) = req
 			.extract_parts::<TypedHeader<Authorization<Bearer>>>()
 			.await
-		else {
-			// In strict mode, we require a token
+		{
+			Some(bearer.token().to_string())
+		} else {
+			// Fallback: additional headers defined in env JWT_ASSERTION_HEADERS (comma-separated)
+			static ADDITIONAL_JWT_HEADERS: OnceLock<Vec<http::header::HeaderName>> = OnceLock::new();
+			let headers = ADDITIONAL_JWT_HEADERS.get_or_init(|| {
+				std::env::var("JWT_ASSERTION_HEADERS")
+					.ok()
+					.map(|v| {
+						v.split(',')
+							.map(|s| s.trim())
+							.filter(|s| !s.is_empty())
+							.filter_map(|name| {
+								http::header::HeaderName::from_bytes(name.to_ascii_lowercase().as_bytes()).ok()
+							})
+							.collect()
+					})
+					.unwrap_or_default()
+			});
+			let mut found: Option<String> = None;
+			for h in headers.iter() {
+				if let Some(val) = req.headers().get(h) {
+					if let Ok(s) = val.to_str() {
+						if !s.is_empty() {
+							found = Some(s.to_string());
+							break;
+						}
+					}
+				}
+			}
+			found
+		};
+		let Some(token) = bearer_token else {
 			if self.mode == Mode::Strict {
 				return Err(TokenError::Missing);
 			}
-			// Otherwise with no, don't attempt to authenticate.
 			return Ok(());
 		};
-		let claims = match self.validate_claims(bearer.token()) {
+		let claims = match self.validate_claims(&token) {
 			Ok(claims) => claims,
 			Err(e) if self.mode == Mode::Permissive => {
 				debug!("token verification failed ({e}), continue due to permissive mode");
@@ -251,8 +288,15 @@ impl Jwt {
 
 		let decoded_token = decode::<Map<String, Value>>(token, &key.decoding, &key.validation)
 			.map_err(|error| {
+				// Extra issuer diagnostics
+				if matches!(error.kind(), jsonwebtoken::errors::ErrorKind::InvalidIssuer) {
+					if let Some(actual_iss) = decode_iss(token) {
+						debug!(expected_iss=%self.issuer, actual_iss, "JWT issuer mismatch");
+					} else {
+						debug!(expected_iss=%self.issuer, "JWT issuer mismatch; failed to extract actual iss");
+					}
+				}
 				debug!(?error, "Token is malformed or does not pass validation.");
-
 				TokenError::Invalid(error)
 			})?;
 
@@ -262,4 +306,79 @@ impl Jwt {
 		};
 		Ok(claims)
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::http::Request;
+	use ::http::header::HeaderName; // alias is Request = ::http::Request<Body>
+	// Lightweight constructor for tests
+	fn empty_jwt(mode: Mode) -> Jwt {
+		Jwt {
+			mode,
+			keys: HashMap::new(),
+			issuer: String::new(),
+		}
+	}
+
+	#[tokio::test]
+	async fn fallback_header_used_in_optional_mode() {
+		unsafe {
+			std::env::set_var("JWT_ASSERTION_HEADERS", "x-jwt-assertion");
+		}
+		let jwt = empty_jwt(Mode::Permissive);
+		// craft minimal 3-part token that decodes header with kid "k" so validate fails gracefully
+		let token = "eyJraWQiOiJrIiwiYWxnIjoiUlMyNTYifQ.eyJpc3MiOiJtZSJ9.sig"; // base64url parts
+		let mut req: Request = Request::new(crate::http::Body::empty());
+		*req.uri_mut() = "http://x".parse().unwrap();
+		req.headers_mut().insert(
+			HeaderName::from_static("x-jwt-assertion"),
+			::http::HeaderValue::from_str(token).unwrap(),
+		);
+		let cfg = crate::telemetry::log::Config {
+			filter: None,
+			fields: Default::default(),
+			metric_fields: Default::default(),
+		};
+		let tracing_cfg = crate::telemetry::trc::Config {
+			endpoint: None,
+			headers: Default::default(),
+			protocol: crate::telemetry::trc::Protocol::Grpc,
+			fields: Default::default(),
+			random_sampling: None,
+			client_sampling: None,
+		};
+		let cel = crate::telemetry::log::CelLogging::new(cfg, tracing_cfg);
+		let mut registry = prometheus_client::registry::Registry::default();
+		let metrics = Arc::new(crate::telemetry::metrics::Metrics::new(&mut registry));
+		let mut log = crate::telemetry::log::RequestLog::new(
+			cel,
+			metrics,
+			std::time::Instant::now(),
+			crate::transport::stream::TCPConnectionInfo {
+				local_addr: "127.0.0.1:1".parse().unwrap(),
+				peer_addr: "127.0.0.1:2".parse().unwrap(),
+				start: std::time::Instant::now(),
+			},
+		);
+		// Should not error despite unknown key, due to permissive mode
+		let res = jwt.apply(&mut log, &mut req).await;
+		assert!(res.is_ok());
+	}
+}
+
+// Lightweight helper to decode issuer claim without full validation (diagnostic only)
+fn decode_iss(token: &str) -> Option<String> {
+	let parts: Vec<&str> = token.split('.').collect();
+	if parts.len() != 3 {
+		return None;
+	}
+	let payload_b64 = parts[1];
+	let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+		.decode(payload_b64.as_bytes())
+		.ok()?;
+	let v: serde_json::Value = serde_json::from_slice(&payload_bytes).ok()?;
+	v.get("iss")
+		.and_then(|iss| iss.as_str().map(|s| s.to_string()))
 }

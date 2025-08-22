@@ -47,7 +47,58 @@ async fn apply_request_policies(
 	req: &mut Request,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
-	if let Some(j) = &policies.jwt {
+	#[cfg(feature = "pat")]
+	let mut pat_authenticated = false;
+
+	#[cfg(feature = "pat")]
+	if policies.pat {
+		tracing::debug!("PAT is required for this route");
+		// When PAT is enabled (true), it's REQUIRED
+		if let Some(pat_auth) = crate::pat_global::get_global_pat_auth() {
+			match try_pat(&pat_auth, log, req).await {
+				Ok(()) => {
+					pat_authenticated = true;
+				},
+				Err(e @ crate::http::pat::PatError::Internal(_)) => {
+					return Err(ProxyResponse::from(ProxyError::PatAuthServer(
+						e.to_string(),
+					)));
+				},
+				Err(crate::http::pat::PatError::Missing) => {
+					// No authorization header at all
+					tracing::debug!("PAT required but no authorization header provided");
+					return Err(ProxyResponse::from(ProxyError::PatAuthClient));
+				},
+				Err(crate::http::pat::PatError::NotPat) => {
+					// Authorization header exists but not a PAT token
+					tracing::debug!("PAT required but authorization header is not a PAT token");
+					return Err(ProxyResponse::from(ProxyError::PatAuthClient));
+				},
+				Err(_) => {
+					// Any other PAT error (invalid, expired, etc.)
+					return Err(ProxyResponse::from(ProxyError::PatAuthClient));
+				},
+			}
+		} else {
+			// PAT enabled but no auth object available - treat as misconfiguration
+			return Err(ProxyResponse::from(ProxyError::PatAuthServer(
+				"PAT auth not available".into(),
+			)));
+		}
+	}
+
+	// Skip JWT if PAT already succeeded
+	if !{
+		#[cfg(feature = "pat")]
+		{
+			pat_authenticated
+		}
+		#[cfg(not(feature = "pat"))]
+		{
+			false
+		}
+	} && let Some(j) = &policies.jwt
+	{
 		j.apply(log, req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
@@ -86,6 +137,29 @@ async fn apply_request_policies(
 			.map_err(|_| ProxyError::TransformationFailure)?;
 	}
 
+	Ok(())
+}
+
+#[cfg(feature = "pat")]
+async fn try_pat(
+	p: &crate::http::pat::PatAuth,
+	log: &mut RequestLog,
+	req: &mut Request,
+) -> Result<(), crate::http::pat::PatError> {
+	let hdr = req
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.and_then(|h| h.to_str().ok())
+		.ok_or(crate::http::pat::PatError::Missing)?;
+	let peer_ip = req.extensions().get::<SocketAddr>().map(|sa| sa.ip());
+	let (claims, _raw) = p.authenticate(hdr, peer_ip).await?;
+
+	// Store claims in request extensions and log context
+	log.cel.ctx().with_jwt(&claims);
+	req.extensions_mut().insert(claims);
+
+	// strip header so it doesn't reach upstreams
+	req.headers_mut().remove(http::header::AUTHORIZATION);
 	Ok(())
 }
 
@@ -397,12 +471,72 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
-		let route_policies = inputs.stores.read_binds().route_policies(
+		let mut route_policies = inputs.stores.read_binds().route_policies(
 			selected_route.rule_name.clone(),
 			selected_route.route_name.clone(),
 			selected_listener.key.clone(),
 			selected_listener.gateway_name.clone(),
 		);
+
+		// Check if PAT should be required for specific routes
+		#[cfg(feature = "pat")]
+		if self.inputs.cfg.pat.enabled && !route_policies.pat {
+			let route_name = selected_route.route_name.as_str();
+
+			// Check route pattern matching
+			let matches_pattern = self
+				.inputs
+				.cfg
+				.pat
+				.required_route_patterns
+				.iter()
+				.any(|pattern| {
+					// Simple wildcard matching (could be enhanced with regex)
+					if pattern.ends_with('*') {
+						let prefix = &pattern[..pattern.len() - 1];
+						route_name.starts_with(prefix)
+					} else {
+						route_name == pattern
+					}
+				});
+
+			if matches_pattern {
+				tracing::info!(
+					route = %selected_route.route_name,
+					"Enabling PAT authentication for route (matches PAT_REQUIRED_ROUTE_PATTERNS)"
+				);
+				route_policies.pat = true;
+			}
+			// For AI backend detection, check common AI route patterns
+			// (A more sophisticated check would require backend resolution which varies by implementation)
+			else if self.inputs.cfg.pat.require_for_ai_routes {
+				let ai_route_patterns = [
+					"openai",
+					"anthropic",
+					"gemini",
+					"claude",
+					"gpt",
+					"ai/",
+					"/ai/",
+					"chat",
+					"completions",
+					"messages",
+					"llm",
+				];
+
+				let is_likely_ai_route = ai_route_patterns
+					.iter()
+					.any(|pattern| route_name.to_lowercase().contains(pattern));
+
+				if is_likely_ai_route {
+					tracing::info!(
+						route = %selected_route.route_name,
+						"Enabling PAT authentication for likely AI route (PAT_REQUIRE_FOR_AI_ROUTES=true)"
+					);
+					route_policies.pat = true;
+				}
+			}
+		}
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible

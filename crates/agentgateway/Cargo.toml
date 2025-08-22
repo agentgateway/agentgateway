@@ -15,6 +15,7 @@ ui = []
 schema = ["schemars"]
 tls-ring = ["rustls/ring", "tokio-rustls/ring"]
 internal_benches = ["divan"]
+pat = ["dep:sqlx", "dep:argon2", "dep:moka", "dep:dashmap"]
 
 [dependencies]
 a2a-sdk.workspace = true
@@ -126,6 +127,10 @@ macro_rules_attribute.workspace = true
 heck.workspace = true
 async-compression.workspace = true
 bpe-openai = "0.3.0"
+argon2 = { version = "0.5", optional = true }
+moka = { version = "0.12", features = ["future"], optional = true }
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "uuid", "derive", "tls-rustls"], optional = true }
+dashmap = { version = "5", optional = true }
 
 [build-dependencies]
 anyhow.workspace = true

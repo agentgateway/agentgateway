@@ -1,0 +1,58 @@
+# Example: Require PAT for specific route patterns
+#
+# Set environment variables:
+#   PAT_ENABLED=true
+#   PAT_REQUIRED_ROUTE_PATTERNS="admin*,internal/*,v2/api/*"
+#
+# This will require PAT authentication for:
+# - Any route starting with "admin"
+# - Any route starting with "internal/"
+# - Any route starting with "v2/api/"
+
+binds:
+  - name: "main"
+    port: 8080
+    listeners:
+      - name: "api"
+        hostnames: ["*"]
+        routes:
+          # Will require PAT (matches "admin*" pattern)
+          - name: "admin-users"
+            hostnames: ["*"]
+            matches:
+              - path:
+                  prefix: "/admin/users"
+            backends:
+              - backend:
+                  upstream:
+                    host: "admin-service"
+                    port: 8080
+                    
+          # Will require PAT (matches "admin*" pattern)
+          - name: "admin-config"
+            hostnames: ["*"]
+            matches:
+              - path:
+                  prefix: "/admin/config"
+            backends:
+              - backend:
+                  upstream:
+                    host: "admin-service"
+                    port: 8080
+                    
+          # Will NOT require PAT (doesn't match any pattern)
+          - name: "public-api"
+            hostnames: ["*"]
+            matches:
+              - path:
+                  prefix: "/api/v1/public"
+            backends:
+              - backend:
+                  upstream:
+                    host: "public-service"
+                    port: 8080
+
+# Testing:
+# curl -H "Authorization: Bearer agpk_YOUR_TOKEN" http://gateway/admin/users  # Works
+# curl http://gateway/admin/users  # Returns 401
+# curl http://gateway/api/v1/public  # Works without PAT
