@@ -16,6 +16,7 @@ use crate::http::{ext_authz, ext_proc, remoteratelimit};
 use crate::mcp::rbac::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
+#[cfg(feature = "pat")]
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerSet,
 	McpAuthentication, Policy, PolicyName, PolicyTarget, Route, RouteKey, RouteName, RouteRuleName,
@@ -84,6 +85,8 @@ pub struct RoutePolicies {
 	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
 	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
 	pub jwt: Option<http::jwt::Jwt>,
+	#[cfg(feature = "pat")]
+	pub pat: bool, // PAT authentication enabled
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
 	pub llm: Option<Arc<llm::Policy>>,
@@ -195,6 +198,8 @@ impl Store {
 			local_rate_limit: vec![],
 			remote_rate_limit: None,
 			jwt: None,
+			#[cfg(feature = "pat")]
+			pat: false,
 			ext_authz: None,
 			transformation: None,
 			authorization: None,
@@ -202,6 +207,10 @@ impl Store {
 		};
 		for rule in rules {
 			match &rule.policy {
+				#[cfg(feature = "pat")]
+				Policy::Pat(enabled) => {
+					pol.pat = *enabled;
+				},
 				Policy::LocalRateLimit(p) => {
 					if pol.local_rate_limit.is_empty() {
 						pol.local_rate_limit = p.clone();
@@ -220,7 +229,6 @@ impl Store {
 					pol.transformation.get_or_insert_with(|| p.clone());
 				},
 				Policy::Authorization(p) => {
-					// Authorization policies merge, unlike others
 					authz.push(p.clone().0);
 				},
 				Policy::AI(p) => {
@@ -232,7 +240,6 @@ impl Store {
 		if !authz.is_empty() {
 			pol.authorization = Some(HTTPAuthorizationSet::new(authz.into()));
 		}
-
 		pol
 	}
 
@@ -464,6 +471,10 @@ impl Store {
         fields(pol=%pol.name),
     )]
 	pub fn insert_policy(&mut self, pol: TargetedPolicy) {
+		#[cfg(feature = "pat")]
+		if matches!(pol.policy, Policy::Pat(_)) {
+			tracing::info!(target="audit", action="pat.policy.insert", name=%pol.name, target=?pol.target, policy=?pol.policy, "Inserting PAT policy into store");
+		}
 		let pol = Arc::new(pol);
 		if let Some(old) = self.policies_by_name.insert(pol.name.clone(), pol.clone()) {
 			// Remove the old target. We may add it back, though.

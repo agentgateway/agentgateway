@@ -9,16 +9,24 @@ use std::time::Duration;
 use agent_core::drain::DrainWatcher;
 use agent_core::version::BuildInfo;
 use agent_core::{signal, telemetry};
+#[cfg(feature = "pat")]
+use http_body_util::BodyExt;
 use hyper::Request;
 use hyper::body::Incoming;
+#[cfg(feature = "pat")]
+use hyper::header::CACHE_CONTROL;
 use hyper::header::{CONTENT_TYPE, HeaderValue};
 use tokio::time;
-use tracing::{info, warn};
+#[cfg(feature = "pat")]
+use tracing::error;
+use tracing::{info, trace, warn}; // for .collect() on Incoming bodies (PAT token POST body parsing)
+// token exposure now via ZeroToken wrapper's expose() method
 use tracing_subscriber::filter;
 
 use super::hyper_helpers::{Server, empty_response, plaintext_response};
 use crate::Config;
-use crate::http::Response;
+use crate::client::Client;
+use crate::http::Response; // for admin JWT construction
 
 pub trait ConfigDumpHandler: Sync + Send {
 	fn key(&self) -> &'static str;
@@ -43,6 +51,12 @@ struct State {
 	shutdown_trigger: signal::ShutdownTrigger,
 	config_dump_handlers: Vec<Arc<dyn ConfigDumpHandler>>,
 	admin_fallback: Option<Arc<dyn AdminFallback>>,
+	#[cfg(feature = "pat")]
+	pat_db: Option<Arc<sqlx::PgPool>>, // optional PAT database pool for token CRUD
+	#[cfg(feature = "pat")]
+	pat_rate_limit: Arc<moka::future::Cache<String, Vec<std::time::Instant>>>, // rate limit cache
+	/// Optional JwtAuth policy targeting ONLY the admin server (PolicyTarget::Admin)
+	admin_jwt: Option<crate::http::jwt::Jwt>,
 }
 
 pub struct Service {
@@ -94,6 +108,15 @@ impl Service {
 				shutdown_trigger,
 				config_dump_handlers: vec![],
 				admin_fallback: None,
+				#[cfg(feature = "pat")]
+				pat_db: None,
+				#[cfg(feature = "pat")]
+				pat_rate_limit: Arc::new(
+					moka::future::Cache::builder()
+						.time_to_live(std::time::Duration::from_secs(60))
+						.build(),
+				),
+				admin_jwt: None,
 			},
 		)
 		.await
@@ -112,8 +135,80 @@ impl Service {
 		self.s.state_mut().admin_fallback = Some(handler);
 	}
 
+	#[cfg(feature = "pat")]
+	pub fn set_pat_db(&mut self, pool: Arc<sqlx::PgPool>) {
+		self.s.state_mut().pat_db = Some(pool);
+	}
+
+	pub fn set_admin_jwt(&mut self, jwt: crate::http::jwt::Jwt) {
+		self.s.state_mut().admin_jwt = Some(jwt);
+	}
+
 	pub fn spawn(self) {
-		self.s.spawn(|state, req| async move {
+		self.s.spawn(|state, mut req| async move {
+			// Apply admin-scoped JWT (separate from proxy listener) if configured
+			if let Some(jwt) = &state.admin_jwt {
+				// Attempt Authorization: Bearer first
+				let token_opt = req
+					.headers()
+					.get(http::header::AUTHORIZATION)
+					.and_then(|hv| hv.to_str().ok())
+					.and_then(|s| {
+						let (scheme, rest) = s.split_once(' ')?;
+						if scheme.eq_ignore_ascii_case("Bearer") {
+							Some(rest.to_string())
+						} else {
+							None
+						}
+					});
+				let token_opt = token_opt.or_else(|| {
+					use std::sync::OnceLock;
+					static ADDITIONAL_JWT_HEADERS: OnceLock<Vec<http::header::HeaderName>> = OnceLock::new();
+					let headers = ADDITIONAL_JWT_HEADERS.get_or_init(|| {
+						std::env::var("JWT_ASSERTION_HEADERS")
+							.ok()
+							.map(|v| {
+								v.split(',')
+									.map(|s| s.trim())
+									.filter(|s| !s.is_empty())
+									.filter_map(|name| {
+										http::header::HeaderName::from_bytes(name.to_ascii_lowercase().as_bytes()).ok()
+									})
+									.collect()
+							})
+							.unwrap_or_default()
+					});
+					for h in headers.iter() {
+						if let Some(val) = req.headers().get(h) {
+							if let Ok(s) = val.to_str() {
+								if !s.is_empty() {
+									return Some(s.to_string());
+								}
+							}
+						}
+					}
+					None
+				});
+				if let Some(token) = token_opt {
+					match jwt.validate_claims(&token) {
+						Ok(claims) => {
+							// Strip Authorization to avoid accidental propagation and insert claims
+							req.headers_mut().remove(http::header::AUTHORIZATION);
+							req.extensions_mut().insert(claims);
+						},
+						Err(e) => {
+							trace!(error=?e, "admin jwt validation failed");
+						},
+					}
+				} else {
+					trace!("no admin jwt present in request");
+				}
+			}
+			// Fast path: PAT token management endpoints (feature gated)
+			#[cfg(feature = "pat")]
+			if let Some(resp) = handle_pat_api(&state, &mut req).await {
+				return Ok(resp);
+			}
 			match req.uri().path() {
 				#[cfg(target_os = "linux")]
 				"/debug/pprof/profile" => handle_pprof(req).await,
@@ -151,6 +246,345 @@ impl Service {
 			}
 		})
 	}
+}
+
+#[cfg(feature = "pat")]
+#[derive(serde::Serialize)]
+struct PublicToken {
+	id: String, // internal identifier (not rendered in UI table)
+	token_prefix: String,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	scopes: Vec<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	creator_email: Option<String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	creator_groups: Vec<String>,
+	created_at: chrono::DateTime<chrono::Utc>,
+	expires_at: Option<chrono::DateTime<chrono::Utc>>,
+	revoked_at: Option<chrono::DateTime<chrono::Utc>>,
+	last_used_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[cfg(feature = "pat")]
+#[derive(serde::Deserialize)]
+struct CreateTokenRequest {
+	#[serde(default)]
+	scopes: Vec<String>,
+	#[serde(default)]
+	name: Option<String>,
+	#[serde(default)]
+	expires_at: Option<chrono::DateTime<chrono::Utc>>, // ISO8601
+	                                                   // tenant_id/user_id overrides removed for safety; identity derived from authenticated principal
+}
+
+#[cfg(feature = "pat")]
+async fn handle_pat_api(state: &State, req: &mut http::Request<Incoming>) -> Option<Response> {
+	use hyper::Method;
+	use hyper::header::AUTHORIZATION;
+	// Runtime check: PAT must be compiled in AND enabled in config AND database must be configured
+	if !state.config.pat.enabled || state.pat_db.is_none() {
+		return None;
+	}
+	let path = req.uri().path();
+	if !path.starts_with("/api/tokens") {
+		return None;
+	}
+	// Basic request instrumentation (doesn't log full token, only prefix for correlation)
+	let (has_authz, authz_prefix) = if let Some(h) = req
+		.headers()
+		.get(AUTHORIZATION)
+		.and_then(|v| v.to_str().ok())
+	{
+		if let Some(rest) = h.strip_prefix("Bearer ") {
+			(true, rest.chars().take(8).collect::<String>())
+		} else {
+			(true, "<non-bearer>".into())
+		}
+	} else {
+		(false, String::new())
+	};
+	let has_claims = req.extensions().get::<crate::http::jwt::Claims>().is_some();
+	tracing::debug!(target="audit", action="pat.api.req", path=%path, method=%req.method(), has_authz, authz_prefix=%authz_prefix, has_claims, "PAT API request");
+	// Ensure DB availability
+	let Some(pool) = state.pat_db.clone() else {
+		return Some(plaintext_response(
+			hyper::StatusCode::SERVICE_UNAVAILABLE,
+			"token management unavailable".into(),
+		));
+	};
+	// Derive identity from JWT claims if present (works for both JWT and PAT auth)
+	let (tenant_id, user_id, creator_email, creator_groups) = if let Some(claims) =
+		req.extensions().get::<crate::http::jwt::Claims>()
+	{
+		let tenant = claims
+			.inner
+			.get("tenant_id")
+			.and_then(|v| v.as_str())
+			.unwrap_or("default")
+			.to_string();
+		let user = match claims.inner.get("sub").and_then(|v| v.as_str()) {
+			Some(u) => u,
+			None => {
+				tracing::warn!(target="audit", action="pat.api.auth", reason="missing_subject", has_authz, authz_prefix=%authz_prefix, "PAT API unauthorized: missing subject claim");
+				return Some(json_error(
+					hyper::StatusCode::UNAUTHORIZED,
+					"missing subject in claims",
+				));
+			},
+		};
+		let email = claims
+			.inner
+			.get("email")
+			.and_then(|v| v.as_str())
+			.map(|s| s.to_string());
+		let groups = claims
+			.inner
+			.get("groups")
+			.and_then(|v| v.as_array())
+			.map(|arr| {
+				arr
+					.iter()
+					.filter_map(|v| v.as_str().map(|s| s.to_string()))
+					.collect()
+			})
+			.unwrap_or_default();
+		(tenant, user.to_string(), email, groups)
+	} else {
+		// Fallback to headers for backwards compatibility
+		let tenant = req
+			.headers()
+			.get("x-tenant-id")
+			.and_then(|v| v.to_str().ok())
+			.unwrap_or("default")
+			.to_string();
+		let user = match req.headers().get("x-user-id").and_then(|v| v.to_str().ok()) {
+			Some(u) => u,
+			None => {
+				tracing::warn!(target="audit", action="pat.api.auth", reason="missing_user_header", has_authz, authz_prefix=%authz_prefix, has_claims, "PAT API unauthorized: missing x-user-id header (no JWT claims)");
+				return Some(json_error(
+					hyper::StatusCode::UNAUTHORIZED,
+					"missing user identity",
+				));
+			},
+		};
+		(tenant, user.to_string(), None, vec![])
+	};
+
+	// Authorization: currently any authenticated principal for the tenant may manage its own tokens.
+	// (Future: add per-user or role-based restrictions here if needed.)
+	const MAX_CREATES_PER_MIN: usize = 10;
+
+	if path == "/api/tokens" && req.method() == Method::GET {
+		// Query params: limit, offset, search
+		let qp: HashMap<String, String> = req
+			.uri()
+			.query()
+			.map(|v| {
+				url::form_urlencoded::parse(v.as_bytes())
+					.into_owned()
+					.collect()
+			})
+			.unwrap_or_default();
+		let limit = qp
+			.get("limit")
+			.and_then(|v| v.parse::<i64>().ok())
+			.unwrap_or(50);
+		let offset = qp
+			.get("offset")
+			.and_then(|v| v.parse::<i64>().ok())
+			.unwrap_or(0);
+		let search = qp.get("search").map(|s| s.as_str());
+		let repo = crate::http::pat::TokenRepo::new(pool.as_ref().clone());
+		match repo
+			.list_public(&tenant_id, &user_id, limit, offset, search)
+			.await
+		{
+			Ok(rows) => {
+				let body: Vec<PublicToken> = rows
+					.into_iter()
+					.map(|r| PublicToken {
+						id: r.id.to_string(),
+						token_prefix: r.token_prefix,
+						scopes: r.scopes,
+						creator_email: r.creator_email,
+						creator_groups: r.creator_groups,
+						created_at: r.created_at,
+						expires_at: r.expires_at,
+						revoked_at: r.revoked_at,
+						last_used_at: r.last_used_at,
+					})
+					.collect();
+				let bytes = serde_json::to_vec(&body).unwrap();
+				let resp = ::http::Response::builder()
+					.status(hyper::StatusCode::OK)
+					.header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+					.header(CACHE_CONTROL, HeaderValue::from_static("no-store"))
+					.header(hyper::header::PRAGMA, HeaderValue::from_static("no-cache"))
+					.body(bytes.into())
+					.expect("valid response");
+				return Some(resp);
+			},
+			Err(_e) => {
+				return Some(json_error(
+					hyper::StatusCode::INTERNAL_SERVER_ERROR,
+					"list failed",
+				));
+			},
+		}
+	} else if path == "/api/tokens" && req.method() == Method::POST {
+		// Rate limit check using moka cache
+		{
+			let key = format!("{tenant_id}:{user_id}");
+			let now = std::time::Instant::now();
+			let window_start = now - std::time::Duration::from_secs(60);
+
+			let mut attempts = state.pat_rate_limit.get(&key).await.unwrap_or_default();
+			attempts.retain(|t| *t >= window_start);
+
+			if attempts.len() >= MAX_CREATES_PER_MIN {
+				return Some(json_error(
+					hyper::StatusCode::TOO_MANY_REQUESTS,
+					"rate limit exceeded",
+				));
+			}
+
+			attempts.push(now);
+			state.pat_rate_limit.insert(key, attempts).await;
+		}
+		// Parse request body using axum's built-in JSON extraction
+		let body_bytes = match req.body_mut().collect().await {
+			Ok(collected) => collected.to_bytes(),
+			Err(_) => return Some(json_error(hyper::StatusCode::BAD_REQUEST, "invalid body")),
+		};
+
+		// Size limit check
+		if body_bytes.len() > 64 * 1024 {
+			return Some(json_error(
+				hyper::StatusCode::PAYLOAD_TOO_LARGE,
+				"body too large",
+			));
+		}
+
+		let payload: CreateTokenRequest = match serde_json::from_slice(&body_bytes) {
+			Ok(p) => p,
+			Err(e) => {
+				return Some(json_error(
+					hyper::StatusCode::BAD_REQUEST,
+					&format!("invalid JSON: {}", e),
+				));
+			},
+		};
+		// Expiration policy: enforce maximum horizon from config
+		let max_days = state.config.pat.max_expiry_days;
+		if let Some(exp) = payload.expires_at {
+			if exp > chrono::Utc::now() + chrono::Duration::days(max_days) {
+				return Some(json_error(
+					hyper::StatusCode::BAD_REQUEST,
+					&format!("expires_at exceeds maximum of {} days", max_days),
+				));
+			}
+		}
+		let repo = crate::http::pat::TokenRepo::new(pool.as_ref().clone());
+		let t = &tenant_id;
+		let u = &user_id;
+		// Creator metadata already captured from claims above
+		let params = crate::http::pat::CreateTokenParams {
+			creator: u,
+			creator_email: creator_email.as_deref(),
+			creator_groups: &creator_groups,
+			tenant_id: t,
+			user_id: u,
+			name: payload.name.as_deref(),
+			scopes: &payload.scopes,
+			expires_at: payload.expires_at,
+		};
+		match repo.create(params).await {
+			Ok((token, row)) => {
+				#[derive(serde::Serialize)]
+				struct CreateTokenResponse<'a> {
+					token: &'a str,
+					token_record: PublicToken,
+				}
+				let pub_row = PublicToken {
+					id: row.id.to_string(),
+					token_prefix: row.token_prefix,
+					scopes: row.scopes,
+					creator_email: row.creator_email,
+					creator_groups: row.creator_groups,
+					created_at: row.created_at,
+					expires_at: row.expires_at,
+					revoked_at: row.revoked_at,
+					last_used_at: row.last_used_at,
+				};
+				info!(target: "audit", action = "pat.create", tenant = %t, user = %u, token_prefix = %pub_row.token_prefix, scopes = ?pub_row.scopes, expires_at = ?pub_row.expires_at, name = ?payload.name, "personal access token created");
+				let json = serde_json::to_string(&CreateTokenResponse {
+					token: token.expose(),
+					token_record: pub_row,
+				})
+				.unwrap();
+				let mut resp = plaintext_response(hyper::StatusCode::OK, json);
+				resp
+					.headers_mut()
+					.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+				resp
+					.headers_mut()
+					.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+				resp
+					.headers_mut()
+					.insert(hyper::header::PRAGMA, HeaderValue::from_static("no-cache"));
+				return Some(resp);
+			},
+			Err(e) => {
+				error!(target: "audit", action = "pat.create", tenant = %t, user = %u, error = %e, "failed to create personal access token");
+				return Some(json_error(
+					hyper::StatusCode::INTERNAL_SERVER_ERROR,
+					"create failed",
+				));
+			},
+		}
+	} else if let Some(id) = path.strip_prefix("/api/tokens/")
+		&& req.method() == Method::DELETE
+	{
+		if let Ok(uuid) = id.parse::<sqlx::types::Uuid>() {
+			let repo = crate::http::pat::TokenRepo::new(pool.as_ref().clone());
+			match repo.revoke(&tenant_id, uuid).await {
+				Ok(Some(prefix)) => {
+					crate::http::pat::mark_pat_revoked(&prefix);
+					info!(target: "audit", action = "pat.revoke", tenant = %tenant_id, user = %user_id, token_id = %uuid, token_prefix=%prefix, status = "revoked", "personal access token revoked");
+				},
+				Ok(None) => {
+					info!(target: "audit", action = "pat.revoke", tenant = %tenant_id, user = %user_id, token_id = %uuid, status = "not_found", "personal access token revoke attempted (not found)");
+				},
+				Err(e) => {
+					error!(target: "audit", action = "pat.revoke", tenant = %tenant_id, user = %user_id, token_id = %uuid, status = "error", error = %e, "personal access token revoke failed");
+				},
+			}
+		} else {
+			warn!(target: "audit", action = "pat.revoke", tenant = %tenant_id, user = %user_id, token_id = %id, status = "invalid_id", "personal access token revoke attempted with invalid id");
+		}
+		let mut resp = plaintext_response(hyper::StatusCode::NO_CONTENT, "".into());
+		resp
+			.headers_mut()
+			.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+		resp
+			.headers_mut()
+			.insert(hyper::header::PRAGMA, HeaderValue::from_static("no-cache"));
+		return Some(resp);
+	}
+	None
+}
+
+#[cfg(feature = "pat")]
+fn json_error(status: hyper::StatusCode, msg: &str) -> Response {
+	let body = serde_json::json!({"error": msg}).to_string();
+	let mut resp = plaintext_response(status, body);
+	resp
+		.headers_mut()
+		.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+	resp
+		.headers_mut()
+		.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+	resp
 }
 
 async fn handle_dashboard(_req: Request<Incoming>) -> Response {
@@ -346,6 +780,7 @@ fn change_log_level(reset: bool, level: &str) -> Response {
 }
 
 #[cfg(all(feature = "jemalloc", target_os = "linux"))]
+#[cfg(all(target_os = "linux"))]
 async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Result<Response> {
 	let Some(prof_ctrl) = jemalloc_pprof::PROF_CTL.as_ref() else {
 		return Ok(
@@ -381,4 +816,71 @@ async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Resul
 			.body("jemalloc not enabled".into())
 			.expect("builder with known status code should not fail"),
 	)
+}
+
+/// Load admin JWT from environment variables (optional).
+/// This is intentionally separate from the proxy listener JWT to allow
+/// differing audiences/issuer for the admin surface if desired.
+pub async fn load_local_admin_jwt() -> Option<crate::http::jwt::Jwt> {
+	let enabled = std::env::var("AG_ADMIN_JWT_ENABLED").unwrap_or_default();
+	if enabled.is_empty()
+		|| !matches!(
+			enabled.to_ascii_lowercase().as_str(),
+			"1" | "true" | "yes" | "on"
+		) {
+		return None;
+	}
+	let issuer = match std::env::var("AG_ADMIN_JWT_ISSUER") {
+		Ok(v) if !v.is_empty() => v,
+		_ => return None,
+	};
+	let audiences = std::env::var("AG_ADMIN_JWT_AUDIENCES")
+		.unwrap_or_default()
+		.split(',')
+		.map(|s| s.trim())
+		.filter(|s| !s.is_empty())
+		.map(|s| s.to_string())
+		.collect::<Vec<_>>();
+	if audiences.is_empty() {
+		return None;
+	}
+	let mode = match std::env::var("AG_ADMIN_JWT_MODE")
+		.unwrap_or_else(|_| "strict".into())
+		.to_ascii_lowercase()
+		.as_str()
+	{
+		"strict" => crate::http::jwt::Mode::Strict,
+		"optional" => crate::http::jwt::Mode::Optional,
+		"permissive" => crate::http::jwt::Mode::Permissive,
+		_ => crate::http::jwt::Mode::Strict,
+	};
+	let jwks_inline = std::env::var("AG_ADMIN_JWT_JWKS_INLINE").ok();
+	let jwks_file = std::env::var("AG_ADMIN_JWT_JWKS_FILE").ok();
+	let jwks = if let Some(inline) = jwks_inline.filter(|s| !s.is_empty()) {
+		crate::serdes::FileInlineOrRemote::Inline(inline.into())
+	} else if let Some(file) = jwks_file.filter(|s| !s.is_empty()) {
+		crate::serdes::FileInlineOrRemote::File { file: file.into() }
+	} else {
+		return None;
+	};
+	let cfg = crate::http::jwt::LocalJwtConfig {
+		mode,
+		issuer,
+		audiences,
+		jwks,
+	};
+	// Construct a basic DNS client config. We cannot use Default on client::Config (not implemented),
+	// so mirror the pattern used elsewhere by pulling from hickory_resolver defaults.
+	let dns_cfg = crate::client::Config {
+		resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+		resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+	};
+	let client = Client::new(&dns_cfg, None);
+	match cfg.try_into(client).await {
+		Ok(jwt) => Some(jwt),
+		Err(e) => {
+			warn!(error=?e, "failed to build admin jwt from env");
+			None
+		},
+	}
 }

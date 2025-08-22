@@ -1,0 +1,52 @@
+# Example: Automatically require PAT for AI/LLM routes
+# 
+# Set environment variables:
+#   PAT_ENABLED=true
+#   PAT_REQUIRE_FOR_AI_ROUTES=true
+#
+# This configuration will automatically require PAT authentication
+# for routes that appear to be AI endpoints (openai, anthropic, etc.)
+
+binds:
+  - name: "main"
+    port: 8080
+    listeners:
+      - name: "api"
+        hostnames: ["*"]
+        routes:
+          # These routes will automatically require PAT when
+          # PAT_REQUIRE_FOR_AI_ROUTES=true is set
+          - name: "openai-chat"
+            hostnames: ["*"]
+            matches:
+              - path:
+                  prefix: "/openai/v1/chat/completions"
+            backends:
+              - backend:
+                  ai:
+                    provider: "openai"
+                    
+          - name: "anthropic-messages"
+            hostnames: ["*"]
+            matches:
+              - path:
+                  prefix: "/anthropic/v1/messages"
+            backends:
+              - backend:
+                  ai:
+                    provider: "anthropic"
+                    
+          # This non-AI route won't require PAT
+          - name: "health"
+            hostnames: ["*"]
+            matches:
+              - path:
+                  exact: "/health"
+            backends:
+              - backend:
+                  upstream:
+                    host: "health-service"
+                    port: 8080
+
+# Note: No need to explicitly set `pat: true` on each route.
+# The PAT_REQUIRE_FOR_AI_ROUTES environment variable handles it dynamically.

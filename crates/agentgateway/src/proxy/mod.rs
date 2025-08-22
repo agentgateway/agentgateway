@@ -50,6 +50,12 @@ pub enum ProxyError {
 	BackendUnsupportedMirror,
 	#[error("authentication failure: {0}")]
 	JwtAuthenticationFailure(http::jwt::TokenError),
+	#[cfg(feature = "pat")]
+	#[error("PAT authentication client failure")]
+	PatAuthClient,
+	#[cfg(feature = "pat")]
+	#[error("PAT authentication server failure: {0}")]
+	PatAuthServer(String),
 	#[error("transformation failed")]
 	TransformationFailure,
 	#[error("service not found")]
@@ -114,6 +120,10 @@ impl ProxyError {
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::FORBIDDEN,
+			#[cfg(feature = "pat")]
+			ProxyError::PatAuthClient => StatusCode::UNAUTHORIZED,
+			#[cfg(feature = "pat")]
+			ProxyError::PatAuthServer(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,

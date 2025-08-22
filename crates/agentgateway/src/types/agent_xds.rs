@@ -608,6 +608,9 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 			_ => return Err(ProtoError::EnumParse("unknown target kind".to_string())),
 		};
 		let policy = match &spec.kind {
+			// PAT policy translation (feature gated)
+			#[cfg(feature = "pat")]
+			Some(proto::agent::policy_spec::Kind::Pat(p)) => Policy::Pat(p.enabled),
 			Some(proto::agent::policy_spec::Kind::LocalRateLimit(lrl)) => {
 				let t = proto::agent::policy_spec::local_rate_limit::Type::try_from(lrl.r#type)?;
 				Policy::LocalRateLimit(vec![

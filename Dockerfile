@@ -61,7 +61,7 @@ RUN --mount=type=cache,id=cargo,target=/usr/local/cargo/registry \
     cargo fetch --locked
 RUN --mount=type=cache,target=/app/target \
     --mount=type=cache,id=cargo,target=/usr/local/cargo/registry \
-    cargo build --features ui  --target "$(cat /build/target)"  --profile ${PROFILE} && \
+    cargo build --features ui,pat  --target "$(cat /build/target)"  --profile ${PROFILE} && \
     mkdir /out && \
     mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
 

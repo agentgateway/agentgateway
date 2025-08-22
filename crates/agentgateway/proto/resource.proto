@@ -36,7 +36,6 @@ message Listener {
   Protocol protocol = 6;
   TLSConfig tls = 7;
 }
-
 message TLSConfig {
   bytes cert = 1;
   bytes private_key = 2;
@@ -384,6 +383,10 @@ message PolicySpec {
     repeated string allow = 1;
     repeated string deny = 2;
   }
+  // Personal Access Token (PAT) policy configuration.
+  message Pat {
+    bool enabled = 1; // When true, PAT authentication is required for this route
+  }
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;
@@ -394,6 +397,7 @@ message PolicySpec {
     RBAC authorization = 7;
     RBAC mcp_authorization = 8;
     Ai ai = 9;
+    Pat pat = 10;
   }
 }
 

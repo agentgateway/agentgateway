@@ -176,6 +176,65 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		.transpose()?
 		.unwrap_or(Address::SocketAddr(SocketAddr::new(bind_wildcard, 15021)));
 
+	// Admin JWT auth precedence: config admin.jwtAuth > env (AG_ADMIN_JWT_*) > none
+	let admin_jwt = if let Some(ad) = raw.admin.as_ref() {
+		ad.jwt_auth.clone()
+	} else {
+		let enabled = std::env::var("AG_ADMIN_JWT_ENABLED").unwrap_or_default();
+		if enabled.is_empty()
+			|| !matches!(
+				enabled.to_ascii_lowercase().as_str(),
+				"1" | "true" | "yes" | "on"
+			) {
+			None
+		} else {
+			let issuer = match std::env::var("AG_ADMIN_JWT_ISSUER") {
+				Ok(v) if !v.is_empty() => v,
+				_ => String::new(),
+			};
+			let audiences: Vec<String> = std::env::var("AG_ADMIN_JWT_AUDIENCES")
+				.unwrap_or_default()
+				.split(',')
+				.map(|s| s.trim())
+				.filter(|s| !s.is_empty())
+				.map(|s| s.to_string())
+				.collect();
+			if issuer.is_empty() || audiences.is_empty() {
+				None
+			} else {
+				let mode = match std::env::var("AG_ADMIN_JWT_MODE")
+					.unwrap_or_else(|_| "strict".into())
+					.to_ascii_lowercase()
+					.as_str()
+				{
+					"strict" => crate::http::jwt::Mode::Strict,
+					"optional" => crate::http::jwt::Mode::Optional,
+					"permissive" => crate::http::jwt::Mode::Permissive,
+					_ => crate::http::jwt::Mode::Strict,
+				};
+				let jwks_inline = std::env::var("AG_ADMIN_JWT_JWKS_INLINE").ok();
+				let jwks_file = std::env::var("AG_ADMIN_JWT_JWKS_FILE").ok();
+				if let Some(inline) = jwks_inline.filter(|s| !s.is_empty()) {
+					Some(crate::http::jwt::LocalJwtConfig {
+						mode,
+						issuer,
+						audiences,
+						jwks: crate::serdes::FileInlineOrRemote::Inline(inline.into()),
+					})
+				} else if let Some(file) = jwks_file.filter(|s| !s.is_empty()) {
+					Some(crate::http::jwt::LocalJwtConfig {
+						mode,
+						issuer,
+						audiences,
+						jwks: crate::serdes::FileInlineOrRemote::File { file: file.into() },
+					})
+				} else {
+					None
+				}
+			}
+		}
+	};
+
 	let threading_mode = if parse::<String>("THREADING_MODE")?.as_deref() == Some("thread_per_core") {
 		ThreadingMode::ThreadPerCore
 	} else {
@@ -345,7 +404,111 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				)
 				.unwrap_or(Duration::from_secs(60 * 5)),
 		}),
+		#[cfg(feature = "pat")]
+		pat: {
+			let enabled = parse::<bool>("PAT_ENABLED")?.unwrap_or(false);
+			let max_days = parse::<i64>("PAT_MAX_EXPIRY_DAYS")?
+				.unwrap_or_else(|| default_pat_max_expiry_days())
+				.max(0);
+			let strict_jwt = parse::<bool>("PAT_STRICT_JWT")?.unwrap_or(true);
+			let require_for_ai_routes = parse::<bool>("PAT_REQUIRE_FOR_AI_ROUTES")?.unwrap_or(false);
+			let required_route_patterns = parse::<String>("PAT_REQUIRED_ROUTE_PATTERNS")?
+				.map(|s| s.split(',').map(|p| p.trim().to_string()).collect())
+				.unwrap_or_default();
+			crate::config::PatConfig {
+				enabled,
+				max_expiry_days: if max_days == 0 {
+					default_pat_max_expiry_days()
+				} else {
+					max_days
+				},
+				strict_jwt,
+				require_for_ai_routes,
+				required_route_patterns,
+			}
+		},
+		#[cfg(feature = "pat")]
+		database: parse_database_config()?,
+		admin_jwt,
 	})
+}
+
+// ===== PAT feature optional config pieces =====
+#[cfg(feature = "pat")]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DatabaseConfig {
+	pub url: Option<String>,
+	#[serde(default = "default_max_connections")]
+	pub max_connections: u32,
+}
+#[cfg(feature = "pat")]
+fn default_max_connections() -> u32 {
+	10
+}
+
+#[cfg(feature = "pat")]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct PatConfig {
+	pub enabled: bool,
+	/// Maximum number of days a PAT can be valid for
+	#[serde(default = "default_pat_max_expiry_days")]
+	pub max_expiry_days: i64,
+	/// If true (default), PAT endpoints require a valid JWT regardless of route binding mode.
+	#[serde(default = "default_strict_jwt")]
+	pub strict_jwt: bool,
+	/// If true, require PAT authentication for AI backend routes by default
+	#[serde(default)]
+	pub require_for_ai_routes: bool,
+	/// List of route name patterns that require PAT authentication
+	#[serde(default)]
+	pub required_route_patterns: Vec<String>,
+}
+
+#[cfg(feature = "pat")]
+fn default_strict_jwt() -> bool {
+	true
+}
+
+#[cfg(feature = "pat")]
+fn default_pat_max_expiry_days() -> i64 {
+	365
+}
+
+#[cfg(feature = "pat")]
+fn parse_database_config() -> anyhow::Result<Option<DatabaseConfig>> {
+	use std::env;
+	if let Ok(url) = env::var("DATABASE_URL") {
+		return Ok(Some(DatabaseConfig {
+			url: Some(url),
+			max_connections: env::var("DB_MAX_CONNECTIONS")
+				.ok()
+				.and_then(|c| c.parse().ok())
+				.unwrap_or(10),
+		}));
+	}
+	let host = env::var("DB_HOST").ok();
+	let user = env::var("DB_USER").ok();
+	let pass = env::var("DB_PASSWORD").ok();
+	let name = env::var("DB_NAME").ok();
+	if let (Some(host), Some(user), Some(pass), Some(name)) = (host, user, pass, name) {
+		let port = env::var("DB_PORT")
+			.ok()
+			.and_then(|p| p.parse().ok())
+			.unwrap_or(5432);
+		let ssl = env::var("DB_SSL_MODE").unwrap_or_else(|_| "prefer".into());
+		let url = format!(
+			"postgres://{}:{}@{}:{}/{}?sslmode={}",
+			user, pass, host, port, name, ssl
+		);
+		return Ok(Some(DatabaseConfig {
+			url: Some(url),
+			max_connections: env::var("DB_MAX_CONNECTIONS")
+				.ok()
+				.and_then(|c| c.parse().ok())
+				.unwrap_or(10),
+		}));
+	}
+	Ok(None)
 }
 
 fn parse<T: FromStr>(env: &str) -> anyhow::Result<Option<T>>

@@ -31,6 +31,8 @@ pub mod llm;
 pub mod management;
 pub mod mcp;
 pub mod parse;
+#[cfg(feature = "pat")]
+pub mod pat_global;
 pub mod proxy;
 pub mod serdes;
 pub mod state_manager;
@@ -81,6 +83,9 @@ pub struct RawConfig {
 	/// Readiness probe server address in the format "ip:port"
 	readiness_addr: Option<String>,
 
+	/// Optional nested admin object (backwards compatibility + jwtAuth)
+	admin: Option<RawAdmin>,
+
 	auth_token: Option<String>,
 
 	#[serde(default, with = "serde_dur_option")]
@@ -98,6 +103,15 @@ pub struct RawConfig {
 	metrics: Option<RawMetrics>,
 
 	http2: Option<RawHTTP2>,
+}
+
+#[derive(serde::Deserialize, Default, Clone, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct RawAdmin {
+	/// Optional admin JWT auth configuration
+	#[serde(rename = "jwtAuth")]
+	pub jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
 }
 
 #[apply(schema_de!)]
@@ -276,6 +290,17 @@ pub struct Config {
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
+	/// PAT configuration - requires 'pat' feature at compile time
+	/// AND pat.enabled=true AND database configuration at runtime
+	#[cfg(feature = "pat")]
+	pub pat: crate::config::PatConfig,
+	/// Database configuration for PAT storage
+	/// If not provided, PAT feature will be disabled even if api_key.enabled=true
+	#[cfg(feature = "pat")]
+	pub database: Option<crate::config::DatabaseConfig>,
+	/// Optional admin JWT auth configuration (not serialized to avoid dumping JWKS inline)
+	#[serde(skip_serializing)]
+	pub admin_jwt: Option<crate::http::jwt::LocalJwtConfig>,
 }
 
 #[derive(serde::Serialize, Copy, PartialOrd, PartialEq, Eq, Clone, Debug, Default)]
@@ -349,6 +374,8 @@ pub struct ProxyInputs {
 
 	mcp_state: mcp::sse::App,
 	ca: Option<Arc<CaClient>>,
+	#[cfg(feature = "pat")]
+	pub db_pool: Option<Arc<sqlx::PgPool>>,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]
