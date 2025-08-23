@@ -56,11 +56,29 @@ impl Recognizer for PhoneRecognizer {
 				}
 			}
 		}
-		// Remove duplicates (same span)
-		results.sort_by_key(|r| (r.start, r.end));
-		results.dedup_by_key(|r| (r.start, r.end));
-		results.dedup_by_key(|r| (r.start, r.end));
-		results
+		// Merge overlapping and adjacent matches
+		if !results.is_empty() {
+			results.sort_by_key(|r| (r.start, r.end));
+			let mut merged = Vec::new();
+			let mut current = results[0].clone();
+			
+			for result in results.into_iter().skip(1) {
+				// Check if overlapping or adjacent (within 1 character)
+				if result.start <= current.end + 1 {
+					current.end = current.end.max(result.end);
+					if current.start < text.len() && current.end <= text.len() {
+						current.matched = text[current.start..current.end].to_string();
+					}
+				} else {
+					merged.push(current);
+					current = result;
+				}
+			}
+			merged.push(current);
+			merged
+		} else {
+			results
+		}
 	}
 	fn name(&self) -> &str {
 		"PHONE_NUMBER"
