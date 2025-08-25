@@ -474,7 +474,7 @@ pub struct ClientWrapper {
 impl ClientWrapper {
 	pub fn insert_headers(&self, req: &mut crate::http::Request) {
 		for (k, v) in &self.headers {
-			if req.headers_mut().get(k).is_none() {
+			if !req.headers().contains_key(k) {
 				req.headers_mut().insert(k.clone(), v.clone());
 			}
 		}
