@@ -1,5 +1,15 @@
+use super::*;
+use crate::http::{Body, Error as HttpError, Response};
+use crate::mcp::sse::McpTarget;
+use crate::proxy::ProxyError;
+use crate::proxy::httpproxy::PolicyClient;
+use crate::store::BackendPolicies;
+use crate::types::agent::{McpTargetSpec, SimpleBackend};
+use crate::{ProxyInputs, json};
 use agent_core::prelude::*;
 use anyhow::anyhow;
+use arc_swap::ArcSwapOption;
+use axum_core::BoxError;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use http::Uri;
@@ -13,21 +23,15 @@ use rmcp::transport::common::http_header::{
 };
 use rmcp::transport::sse_client::{SseClient, SseClientConfig, SseTransportError};
 use rmcp::transport::streamable_http_client::{
-	StreamableHttpClient, StreamableHttpClientTransportConfig, StreamableHttpError,
-	StreamableHttpPostResponse,
+	StreamableHttpClient, StreamableHttpClientTransportConfig, StreamableHttpClientWorker,
+	StreamableHttpError, StreamableHttpPostResponse,
 };
-use rmcp::transport::{SseClientTransport, StreamableHttpClientTransport};
+use rmcp::transport::worker::{Worker, WorkerContext, WorkerQuitReason};
+use rmcp::transport::{SseClientTransport, StreamableHttpClientTransport, WorkerTransport};
 use rmcp::{ClientHandler, ServiceError};
 use sse_stream::{Error as SseError, Sse, SseStream};
-
-use super::*;
-use crate::http::{Body, Error as HttpError, Response};
-use crate::mcp::sse::McpTarget;
-use crate::proxy::ProxyError;
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::{McpTargetSpec, SimpleBackend};
-use crate::{ProxyInputs, json};
+use std::mem::transmute;
+use tokio::task::JoinError;
 
 type McpError = ErrorData;
 
@@ -37,6 +41,54 @@ pub(crate) struct ConnectionPool {
 	client: PolicyClient,
 	by_name: HashMap<Strng, upstream::UpstreamTarget>,
 	stateful: bool,
+}
+
+struct WorkerErrorWrapper {
+	inner: StreamableHttpClientWorker<ClientWrapper>,
+	worker_err: Arc<ArcSwapOption<http::StatusCode>>,
+}
+
+impl WorkerErrorWrapper {
+	fn new(inner: StreamableHttpClientWorker<ClientWrapper>) -> Self {
+		Self {
+			inner,
+			worker_err: Arc::new(ArcSwapOption::default()),
+		}
+	}
+	pub fn error(&self) -> Arc<ArcSwapOption<http::StatusCode>> {
+		self.worker_err.clone()
+	}
+}
+
+impl Worker for WorkerErrorWrapper {
+	type Error = <StreamableHttpClientWorker<ClientWrapper> as Worker>::Error;
+	type Role = <StreamableHttpClientWorker<ClientWrapper> as Worker>::Role;
+
+	fn err_closed() -> Self::Error {
+		<StreamableHttpClientWorker<ClientWrapper> as Worker>::err_closed()
+	}
+
+	fn err_join(e: JoinError) -> Self::Error {
+		<StreamableHttpClientWorker<ClientWrapper> as Worker>::err_join(e)
+	}
+
+	fn run(
+		self,
+		context: WorkerContext<Self>,
+	) -> impl Future<Output = Result<(), WorkerQuitReason<Self::Error>>> + Send {
+		let context = unsafe { transmute(context) };
+		async move {
+			let res = self.inner.run(context).await;
+			match &res {
+				Err(WorkerQuitReason::Fatal {
+					error: StreamableHttpError::Client(ClientError::Status(s)),
+					..
+				}) => self.worker_err.store(Some(Arc::new(s.clone()))),
+				_ => {},
+			}
+			res
+		}
+	}
 }
 
 impl ConnectionPool {
@@ -245,26 +297,38 @@ impl ConnectionPool {
 					rq_ctx.headers.clone(),
 					rq_ctx.identity.claims.clone(),
 				);
-				let transport = StreamableHttpClientTransport::with_client(
-					client,
-					StreamableHttpClientTransportConfig {
-						uri: path.into(),
-						..Default::default()
+				let config = StreamableHttpClientTransportConfig {
+					uri: path.into(),
+					..Default::default()
+				};
+				let worker = WorkerErrorWrapper::new(StreamableHttpClientWorker::new(client, config));
+				let worker_err = worker.error();
+				let transport = WorkerTransport::spawn(worker);
+
+				let stream = match serve_client_with_ct(
+					PeerClientHandler {
+						peer: peer.clone(),
+						init_request,
 					},
-				);
+					transport,
+					ct.child_token(),
+				)
+				.await
+				{
+					Ok(stream) => stream,
+					Err(e) => {
+						// This gets 401 into the error. A bunch of clients will literally parse the log message for
+						// error.contains("401") which is probably terrible.
+						// To make this properly handled, we will need to customize StreamableHttpService handle_post,
+						// such that when it gets an Ok(ServerJsonRpcMessage::Error(our_error_type)) we return a 401.
+						// Our error type can include opaque `data` we match on
+						tracing::error!("howardjohn: got worker error {:?}", worker_err.clone());
+						return Err(anyhow::anyhow!("{}: {:?}", e, worker_err.clone()));
+					},
+				};
 
 				upstream::UpstreamTarget {
-					spec: upstream::UpstreamTargetSpec::Mcp(
-						serve_client_with_ct(
-							PeerClientHandler {
-								peer: peer.clone(),
-								init_request,
-							},
-							transport,
-							ct.child_token(),
-						)
-						.await?,
-					),
+					spec: upstream::UpstreamTargetSpec::Mcp(stream),
 				}
 			},
 			McpTargetSpec::Stdio { cmd, args, env } => {
@@ -514,12 +578,26 @@ impl ClientWrapper {
 					.map(|p| p.as_str().to_string())
 					.unwrap_or_default()
 			})
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))
+			.map_err(ClientError::new_client)
+	}
+}
+
+#[derive(thiserror::Error, Clone, Debug)]
+pub enum ClientError {
+	#[error("http request failed: {0}")]
+	Status(http::StatusCode),
+	#[error("http request failed: {0}")]
+	General(Arc<HttpError>),
+}
+
+impl ClientError {
+	pub fn new_client(error: impl Into<BoxError>) -> StreamableHttpError<Self> {
+		StreamableHttpError::Client(Self::General(Arc::new(HttpError::new(error.into()))))
 	}
 }
 
 impl StreamableHttpClient for ClientWrapper {
-	type Error = HttpError;
+	type Error = ClientError;
 
 	async fn post_message(
 		&self,
@@ -532,8 +610,7 @@ impl StreamableHttpClient for ClientWrapper {
 
 		let uri = "http://".to_string() + &self.backend.hostport() + &Self::parse_uri(uri)?;
 
-		let body =
-			serde_json::to_vec(&message).map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+		let body = serde_json::to_vec(&message).map_err(ClientError::new_client)?;
 
 		let mut req = http::Request::builder()
 			.uri(uri)
@@ -541,7 +618,7 @@ impl StreamableHttpClient for ClientWrapper {
 			.header(CONTENT_TYPE, "application/json")
 			.header(ACCEPT, [EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE].join(", "))
 			.body(body.into())
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+			.map_err(ClientError::new_client)?;
 
 		if let Some(session_id) = session_id {
 			req.headers_mut().insert(
@@ -549,7 +626,7 @@ impl StreamableHttpClient for ClientWrapper {
 				session_id
 					.as_ref()
 					.parse()
-					.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?,
+					.map_err(ClientError::new_client)?,
 			);
 		}
 		self.insert_headers(&mut req);
@@ -557,17 +634,16 @@ impl StreamableHttpClient for ClientWrapper {
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
 			.await
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+			.map_err(ClientError::new_client)?;
 
 		if resp.status() == http::StatusCode::ACCEPTED {
 			return Ok(StreamableHttpPostResponse::Accepted);
 		}
 
 		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(StreamableHttpError::Client(HttpError::new(anyhow!(
-				"received status code {}",
-				resp.status()
-			))));
+			return Err(StreamableHttpError::Client(ClientError::Status(
+				resp.status(),
+			)));
 		}
 
 		let content_type = resp.headers().get(CONTENT_TYPE);
@@ -585,7 +661,7 @@ impl StreamableHttpClient for ClientWrapper {
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
 				let message = json::from_body::<ServerJsonRpcMessage>(resp.into_body())
 					.await
-					.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+					.map_err(ClientError::new_client)?;
 				Ok(StreamableHttpPostResponse::Json(message, session_id))
 			},
 			_ => {
@@ -612,13 +688,13 @@ impl StreamableHttpClient for ClientWrapper {
 			.method(http::Method::DELETE)
 			.header(HEADER_SESSION_ID, session_id.as_ref())
 			.body(Body::empty())
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+			.map_err(ClientError::new_client)?;
 		self.insert_headers(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
 			.await
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+			.map_err(ClientError::new_client)?;
 
 		// If method not allowed, that's ok
 		if resp.status() == http::StatusCode::METHOD_NOT_ALLOWED {
@@ -627,10 +703,9 @@ impl StreamableHttpClient for ClientWrapper {
 		}
 
 		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(StreamableHttpError::Client(HttpError::new(anyhow!(
-				"received status code {}",
-				resp.status()
-			))));
+			return Err(StreamableHttpError::Client(ClientError::Status(
+				resp.status(),
+			)));
 		}
 
 		Ok(())
@@ -657,25 +732,22 @@ impl StreamableHttpClient for ClientWrapper {
 			reqb = reqb.header(HEADER_LAST_EVENT_ID, last_event_id);
 		}
 
-		let mut req = reqb
-			.body(Body::empty())
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+		let mut req = reqb.body(Body::empty()).map_err(ClientError::new_client)?;
 		self.insert_headers(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
 			.await
-			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+			.map_err(ClientError::new_client)?;
 
 		if resp.status() == http::StatusCode::METHOD_NOT_ALLOWED {
 			return Err(StreamableHttpError::ServerDoesNotSupportSse);
 		}
 
 		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(StreamableHttpError::Client(HttpError::new(anyhow!(
-				"received status code {}",
-				resp.status()
-			))));
+			return Err(StreamableHttpError::Client(ClientError::Status(
+				resp.status(),
+			)));
 		}
 
 		match resp.headers().get(CONTENT_TYPE) {
