@@ -34,8 +34,6 @@ async fn test_basic_proxy_comparison() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-// TODO: why does this fail on windows?
-#[cfg(target_family = "unix")]
 async fn test_basic_routes() -> anyhow::Result<()> {
 	let mock = wiremock::MockServer::start().await;
 	Mock::given(wiremock::matchers::path_regex("/.*"))

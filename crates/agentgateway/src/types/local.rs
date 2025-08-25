@@ -504,9 +504,15 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
 		}
+		let sockaddr = if cfg!(target_family = "unix") {
+			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), b.port)
+		} else {
+			// Windows and IPv6 don't mix well apparently?
+			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), b.port)
+		};
 		let b = Bind {
 			key: bind_name,
-			address: SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), b.port),
+			address: sockaddr,
 			listeners: ls,
 		};
 		all_binds.push(b)
