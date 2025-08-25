@@ -2755,6 +2755,7 @@
       }
     },
     "policies": {
+      "description": "policies defines additional policies that can be attached to various other configurations.\nThis is an advanced feature; users should typically use the inline `policies` field under route.",
       "type": "array",
       "items": {
         "type": "object",

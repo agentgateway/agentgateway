@@ -311,7 +311,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].tcpRoutes[].backends[].backend.(1)service.name.hostname`||
 |`binds[].listeners[].tcpRoutes[].backends[].backend.(1)service.port`||
 |`binds[].listeners[].tcpRoutes[].backends[].backend.(1)host`||
-|`policies`||
+|`policies`|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route.|
 |`policies[].name`||
 |`policies[].target`||
 |`policies[].target.(1)gateway`||
