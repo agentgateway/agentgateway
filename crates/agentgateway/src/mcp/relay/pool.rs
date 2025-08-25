@@ -93,6 +93,7 @@ impl ConnectionPool {
 	pub(crate) async fn initialize(
 		&mut self,
 		peer: &Peer<RoleServer>,
+		rq_ctx: &RqCtx,
 		request: InitializeRequestParam,
 	) -> anyhow::Result<Vec<(Strng, &upstream::UpstreamTarget)>> {
 		for tgt in self.backend.targets.clone() {
@@ -102,7 +103,7 @@ impl ConnectionPool {
 			let ct = tokio_util::sync::CancellationToken::new(); //TODO
 			debug!("initializing target: {}", tgt.name);
 			self
-				.connect(&ct, &tgt, peer, request.clone())
+				.connect(&ct, rq_ctx, &tgt, peer, request.clone())
 				.await
 				.map_err(|e| {
 					error!("Failed to connect target {}: {}", tgt.name, e);
@@ -161,6 +162,7 @@ impl ConnectionPool {
 	pub(crate) async fn stateless_connect(
 		&self,
 		ct: &tokio_util::sync::CancellationToken,
+		rq_ctx: &RqCtx,
 		service_name: &str,
 		peer: &Peer<RoleServer>,
 		init_request: InitializeRequestParam,
@@ -172,12 +174,15 @@ impl ConnectionPool {
 			.find(|tgt| tgt.name == service_name)
 			.ok_or_else(|| McpError::invalid_request(format!("Target {service_name} not found"), None))?;
 
-		self.inner_connect(ct, target, peer, init_request).await
+		self
+			.inner_connect(ct, rq_ctx, target, peer, init_request)
+			.await
 	}
 
 	async fn inner_connect(
 		&self,
 		ct: &tokio_util::sync::CancellationToken,
+		rq_ctx: &RqCtx,
 		target: &McpTarget,
 		peer: &Peer<RoleServer>,
 		init_request: InitializeRequestParam,
@@ -192,8 +197,12 @@ impl ConnectionPool {
 				};
 				let be = crate::proxy::resolve_simple_backend(&sse.backend, &self.pi)?;
 				let hostport = be.hostport();
-				let client =
-					ClientWrapper::new_with_client(be, self.client.clone(), target.backend_policies.clone());
+				let client = ClientWrapper::new_with_client(
+					be,
+					self.client.clone(),
+					target.backend_policies.clone(),
+					rq_ctx.headers.clone(),
+				);
 				let transport = SseClientTransport::start_with_client(
 					client,
 					SseClientConfig {
@@ -228,8 +237,12 @@ impl ConnectionPool {
 					_ => mcp.path.as_str(),
 				};
 				let be = crate::proxy::resolve_simple_backend(&mcp.backend, &self.pi)?;
-				let client =
-					ClientWrapper::new_with_client(be, self.client.clone(), target.backend_policies.clone());
+				let client = ClientWrapper::new_with_client(
+					be,
+					self.client.clone(),
+					target.backend_policies.clone(),
+					rq_ctx.headers.clone(),
+				);
 				let transport = StreamableHttpClientTransport::with_client(
 					client,
 					StreamableHttpClientTransportConfig {
@@ -320,6 +333,7 @@ impl ConnectionPool {
 	pub(crate) async fn connect(
 		&mut self,
 		ct: &tokio_util::sync::CancellationToken,
+		rq_ctx: &RqCtx,
 		target: &McpTarget,
 		peer: &Peer<RoleServer>,
 		init_request: InitializeRequestParam,
@@ -331,7 +345,9 @@ impl ConnectionPool {
 			return Ok(());
 		}
 
-		let transport = self.inner_connect(ct, target, peer, init_request).await?;
+		let transport = self
+			.inner_connect(ct, rq_ctx, target, peer, init_request)
+			.await?;
 
 		// In stateless mode, this just overwrites the existing entry
 		self.by_name.insert(target.name.clone(), transport);
@@ -452,6 +468,17 @@ pub struct ClientWrapper {
 	backend: Arc<SimpleBackend>,
 	client: PolicyClient,
 	policies: BackendPolicies,
+	headers: http::HeaderMap,
+}
+
+impl ClientWrapper {
+	pub fn insert_headers(&self, req: &mut crate::http::Request) {
+		for (k, v) in &self.headers {
+			if req.headers_mut().get(k).is_none() {
+				req.headers_mut().insert(k.clone(), v.clone());
+			}
+		}
+	}
 }
 
 impl ClientWrapper {
@@ -459,11 +486,16 @@ impl ClientWrapper {
 		backend: SimpleBackend,
 		client: PolicyClient,
 		policies: BackendPolicies,
+		mut headers: HeaderMap,
 	) -> Self {
+		// Remove headers we do not want to propagate to the backend
+		headers.remove(http::header::CONTENT_ENCODING);
+		headers.remove(http::header::CONTENT_LENGTH);
 		Self {
 			backend: Arc::new(backend),
 			client,
 			policies,
+			headers,
 		}
 	}
 
@@ -515,6 +547,7 @@ impl StreamableHttpClient for ClientWrapper {
 					.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?,
 			);
 		}
+		self.insert_headers(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
@@ -569,12 +602,13 @@ impl StreamableHttpClient for ClientWrapper {
 
 		let uri = "http://".to_string() + &self.backend.hostport() + &Self::parse_uri(uri)?;
 
-		let req = http::Request::builder()
+		let mut req = http::Request::builder()
 			.uri(uri)
 			.method(http::Method::DELETE)
 			.header(HEADER_SESSION_ID, session_id.as_ref())
 			.body(Body::empty())
 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+		self.insert_headers(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
@@ -618,9 +652,10 @@ impl StreamableHttpClient for ClientWrapper {
 			reqb = reqb.header(HEADER_LAST_EVENT_ID, last_event_id);
 		}
 
-		let req = reqb
+		let mut req = reqb
 			.body(Body::empty())
 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
+		self.insert_headers(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
@@ -676,6 +711,7 @@ impl SseClient for ClientWrapper {
 			.header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
 			.body(body.into())
 			.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
+		self.insert_headers(&mut req);
 
 		if let JsonRpcMessage::Request(request) = &message {
 			match request.request.extensions().get::<RqCtx>() {
@@ -729,9 +765,10 @@ impl SseClient for ClientWrapper {
 			if let Some(last_event_id) = last_event_id {
 				reqb = reqb.header(HEADER_LAST_EVENT_ID, last_event_id);
 			}
-			let req = reqb
+			let mut req = reqb
 				.body(Body::empty())
 				.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
+			self.insert_headers(&mut req);
 
 			let resp: Result<Response, ProxyError> = self
 				.client

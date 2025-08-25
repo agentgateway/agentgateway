@@ -9,8 +9,8 @@ use agent_core::metrics::Recorder;
 use agent_core::prelude::Strng;
 use agent_core::trcng;
 use agent_core::version::BuildInfo;
-use http::HeaderValue;
 use http::request::Parts;
+use http::{HeaderMap, HeaderValue};
 use itertools::Itertools;
 use opentelemetry::global::BoxedSpan;
 use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState, Tracer};
@@ -61,6 +61,7 @@ static AGW_INITIALIZE: LazyLock<InitializeRequestParam> =
 pub struct RqCtx {
 	identity: Identity,
 	context: Context,
+	headers: http::HeaderMap,
 }
 
 impl Default for RqCtx {
@@ -68,13 +69,18 @@ impl Default for RqCtx {
 		Self {
 			identity: Identity::default(),
 			context: Context::new(),
+			headers: Default::default(),
 		}
 	}
 }
 
 impl RqCtx {
-	pub fn new(identity: Identity, context: Context) -> Self {
-		Self { identity, context }
+	pub fn new(identity: Identity, context: Context, headers: HeaderMap) -> Self {
+		Self {
+			identity,
+			context,
+			headers,
+		}
 	}
 }
 
@@ -181,7 +187,9 @@ impl Relay {
 			.cloned()
 			.expect("CelContextBuilder must be set");
 
-		let rq_ctx = RqCtx::new(Identity::new(claims.cloned(), id), ctx);
+		let headers = http.headers.clone();
+
+		let rq_ctx = RqCtx::new(Identity::new(claims.cloned(), id), ctx, headers);
 
 		let tracer = trcng::get_tracer();
 		let _span = trcng::start_span(span_name.to_string(), &rq_ctx.identity)
@@ -192,6 +200,7 @@ impl Relay {
 
 	async fn list_conns<'a>(
 		&self,
+		rq_ctx: &RqCtx,
 		context: &RequestContext<RoleServer>,
 		pool: &'a mut ConnectionPool,
 	) -> Result<Vec<(Strng, &'a upstream::UpstreamTarget)>, McpError> {
@@ -205,7 +214,7 @@ impl Relay {
 				// Since we're not proxying the downstream client's initialize capabilities, we use
 				// agentgateway's capabilities instead.
 				pool
-					.initialize(&context.peer, AGW_INITIALIZE.clone())
+					.initialize(&context.peer, rq_ctx, AGW_INITIALIZE.clone())
 					.await
 					.map_err(|e| {
 						McpError::internal_error(
@@ -239,7 +248,13 @@ impl Relay {
 				// agentgateway's capabilities instead.
 				let ct = tokio_util::sync::CancellationToken::new(); //TODO
 				let svc = pool
-					.stateless_connect(&ct, service_name, &context.peer, AGW_INITIALIZE.clone())
+					.stateless_connect(
+						&ct,
+						rq_ctx,
+						service_name,
+						&context.peer,
+						AGW_INITIALIZE.clone(),
+					)
 					.await
 					.map_err(|_e| {
 						McpError::invalid_request(format!("Service {service_name} not found"), None)
@@ -303,13 +318,13 @@ impl ServerHandler for Relay {
 		request: InitializeRequestParam,
 		context: RequestContext<RoleServer>,
 	) -> Result<InitializeResult, McpError> {
-		let (_span, _) = Self::setup_request(&context.extensions, "initialize")?;
+		let (_span, rq_ctx) = Self::setup_request(&context.extensions, "initialize")?;
 
 		// List servers and initialize the ones that are not initialized
 		let mut pool = self.pool.write().await;
 		// Initialize all targets
 		let _ = pool
-			.initialize(&context.peer, request)
+			.initialize(&context.peer, &rq_ctx, request)
 			.await
 			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {e}"), None))?;
 
@@ -327,7 +342,7 @@ impl ServerHandler for Relay {
 	) -> std::result::Result<ListResourcesResult, McpError> {
 		let (_span, ref rq_ctx) = Self::setup_request(&context.extensions, "list_resources")?;
 		let mut pool = self.pool.write().await;
-		let connections = self.list_conns(&context, pool.deref_mut()).await?;
+		let connections = self.list_conns(rq_ctx, &context, pool.deref_mut()).await?;
 		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
 			async move {
@@ -359,7 +374,7 @@ impl ServerHandler for Relay {
 		let (_span, ref rq_ctx) = Self::setup_request(&context.extensions, "list_resource_templates")?;
 
 		let mut pool = self.pool.write().await;
-		let connections = self.list_conns(&context, pool.deref_mut()).await?;
+		let connections = self.list_conns(rq_ctx, &context, pool.deref_mut()).await?;
 		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
 			async move {
@@ -398,7 +413,7 @@ impl ServerHandler for Relay {
 		let (_span, ref rq_ctx) = Self::setup_request(&context.extensions, "list_prompts")?;
 
 		let mut pool = self.pool.write().await;
-		let connections = self.list_conns(&context, pool.deref_mut()).await?;
+		let connections = self.list_conns(rq_ctx, &context, pool.deref_mut()).await?;
 
 		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
@@ -541,7 +556,7 @@ impl ServerHandler for Relay {
 	) -> std::result::Result<ListToolsResult, McpError> {
 		let (_span, ref rq_ctx, _, cel) = Self::setup_request_log(&context.extensions, "list_tools")?;
 		let mut pool = self.pool.write().await;
-		let connections = self.list_conns(&context, pool.deref_mut()).await?;
+		let connections = self.list_conns(rq_ctx, &context, pool.deref_mut()).await?;
 		let all = connections.into_iter().map(|(_name, svc_arc)| {
 			let request = request.clone();
 			let cel = cel.clone();
