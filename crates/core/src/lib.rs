@@ -9,3 +9,4 @@ pub mod strng;
 pub mod telemetry;
 pub mod trcng;
 pub mod version;
+mod arc;
