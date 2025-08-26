@@ -532,31 +532,21 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 	}
 
 	for p in policies {
-		let res = split_policies(
-			client.clone(),
-			&p.name,
-			&mut all_backends,
-			|_| {
-				Err(anyhow::anyhow!(
-					"'policies' may not contain backend policies"
-				))
-			},
-			p.policy,
-		)
-		.await?;
+		let res = split_policies(client.clone(), &p.name, &mut all_backends, p.policy).await?;
 		if !res.filters.is_empty() {
 			anyhow::bail!("'policies' may not contain filters")
-		}
-		if !res.policies.is_empty() {
-			anyhow::bail!("'policies' may not contain backend policies")
 		}
 		if res.traffic_policy != TrafficPolicy::default() {
 			anyhow::bail!("'policies' may not contain traffic policies")
 		}
-		if res.inline_policies.len() != 1 {
+		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
 			anyhow::bail!("'policies' must contain exactly 1 policy")
 		}
-		let tp = res.inline_policies[0].clone();
+		let tp = res
+			.route_policies
+			.first()
+			.unwrap_or_else(|| res.backend_policies.first().unwrap())
+			.clone();
 		let tgt_policy = TargetedPolicy {
 			name: p.name,
 			target: p.target,
@@ -716,12 +706,16 @@ async fn convert_route(
 	};
 
 	let resolved = if let Some(pol) = policies {
-		split_policies(client, &key, &mut external_backends, backend_tgt, pol).await?
+		split_policies(client, &key, &mut external_backends, pol).await?
 	} else {
 		ResolvedPolicies::default()
 	};
-	let mut external_policies = resolved.policies;
-	external_policies.extend_from_slice(&backend_policies);
+	let external_policies = resolved
+		.backend_policies
+		.into_iter()
+		.map(backend_tgt)
+		.chain(backend_policies.into_iter().map(Ok))
+		.collect::<Result<Vec<_>, _>>()?;
 	let route = Route {
 		key,
 		route_name,
@@ -731,7 +725,7 @@ async fn convert_route(
 		filters: resolved.filters,
 		backends: backend_refs,
 		policies: Some(resolved.traffic_policy),
-		inline_policies: resolved.inline_policies,
+		inline_policies: resolved.route_policies,
 	};
 	Ok((route, external_policies, external_backends))
 }
@@ -739,8 +733,8 @@ async fn convert_route(
 #[derive(Default)]
 struct ResolvedPolicies {
 	filters: Vec<RouteFilter>,
-	policies: Vec<TargetedPolicy>,
-	inline_policies: Vec<Policy>,
+	backend_policies: Vec<Policy>,
+	route_policies: Vec<Policy>,
 	traffic_policy: TrafficPolicy,
 }
 
@@ -748,14 +742,13 @@ async fn split_policies(
 	client: Client,
 	key: &Strng,
 	external_backends: &mut Vec<Backend>,
-	mut backend_tgt: impl FnMut(Policy) -> Result<TargetedPolicy, Error>,
 	pol: FilterOrPolicy,
 ) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
 		filters,
-		policies,
-		inline_policies,
+		backend_policies,
+		route_policies,
 		traffic_policy,
 	} = &mut resolved;
 	let FilterOrPolicy {
@@ -815,35 +808,35 @@ async fn split_policies(
 
 	// Backend policies
 	if let Some(p) = mcp_authorization {
-		policies.push(backend_tgt(Policy::McpAuthorization(p))?)
+		backend_policies.push(Policy::McpAuthorization(p))
 	}
 	if let Some(p) = mcp_authentication {
 		let jp = p.as_jwt()?;
-		policies.push(backend_tgt(Policy::McpAuthentication(p))?);
-		inline_policies.push(Policy::JwtAuth(jp.try_into(client.clone()).await?));
+		backend_policies.push(Policy::McpAuthentication(p));
+		route_policies.push(Policy::JwtAuth(jp.try_into(client.clone()).await?));
 	}
 	if let Some(p) = a2a {
-		policies.push(backend_tgt(Policy::A2a(p))?)
+		backend_policies.push(Policy::A2a(p))
 	}
 	if let Some(p) = ai {
-		policies.push(backend_tgt(Policy::AI(Arc::new(p)))?)
+		backend_policies.push(Policy::AI(Arc::new(p)))
 	}
 	if let Some(p) = backend_tls {
-		policies.push(backend_tgt(Policy::BackendTLS(p.try_into()?))?)
+		backend_policies.push(Policy::BackendTLS(p.try_into()?))
 	}
 	if let Some(p) = backend_auth {
-		policies.push(backend_tgt(Policy::BackendAuth(p))?)
+		backend_policies.push(Policy::BackendAuth(p))
 	}
 
 	// Route policies
 	if let Some(p) = jwt_auth {
-		inline_policies.push(Policy::JwtAuth(p.try_into(client.clone()).await?));
+		route_policies.push(Policy::JwtAuth(p.try_into(client.clone()).await?));
 	}
 	if let Some(p) = transformations {
-		inline_policies.push(Policy::Transformation(p));
+		route_policies.push(Policy::Transformation(p));
 	}
 	if let Some(p) = authorization {
-		inline_policies.push(Policy::Authorization(p))
+		route_policies.push(Policy::Authorization(p))
 	}
 	if let Some(p) = ext_authz {
 		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/extauthz", key), &p.target);
@@ -854,10 +847,10 @@ async fn split_policies(
 		backend
 			.into_iter()
 			.for_each(|backend| external_backends.push(backend));
-		inline_policies.push(Policy::ExtAuthz(pol))
+		route_policies.push(Policy::ExtAuthz(pol))
 	}
 	if !local_rate_limit.is_empty() {
-		inline_policies.push(Policy::LocalRateLimit(local_rate_limit))
+		route_policies.push(Policy::LocalRateLimit(local_rate_limit))
 	}
 	if let Some(p) = remote_rate_limit {
 		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/ratelimit", key), &p.target);
@@ -869,7 +862,7 @@ async fn split_policies(
 		backend
 			.into_iter()
 			.for_each(|backend| external_backends.push(backend));
-		inline_policies.push(Policy::RemoteRateLimit(pol))
+		route_policies.push(Policy::RemoteRateLimit(pol))
 	}
 
 	// Traffic policies
