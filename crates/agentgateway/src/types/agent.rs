@@ -1010,7 +1010,10 @@ pub struct A2aPolicy {}
 #[apply(schema!)]
 pub struct Authorization(pub RuleSet);
 
-#[apply(schema!)]
+// Do not use schema! as it will reject the `extra` field
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct ResourceMetadata {
 	pub resource: String,
 	#[serde(flatten)]

@@ -1099,10 +1099,10 @@
                                     "type": "string"
                                   }
                                 },
-                                "additionalProperties": false,
                                 "required": [
                                   "resource"
-                                ]
+                                ],
+                                "additionalProperties": true
                               }
                             },
                             "additionalProperties": false,
@@ -3397,10 +3397,10 @@
                         "type": "string"
                       }
                     },
-                    "additionalProperties": false,
                     "required": [
                       "resource"
-                    ]
+                    ],
+                    "additionalProperties": true
                   }
                 },
                 "additionalProperties": false,
