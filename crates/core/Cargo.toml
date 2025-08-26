@@ -9,6 +9,7 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [dependencies]
+arc-swap.workspace = true
 anyhow.workspace = true
 arcstr.workspace = true
 bytes.workspace = true

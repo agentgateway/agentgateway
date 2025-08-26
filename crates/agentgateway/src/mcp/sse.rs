@@ -17,11 +17,11 @@ use http::Method;
 use itertools::Itertools;
 use rmcp::model::{ClientJsonRpcMessage, GetExtensions};
 use rmcp::service::serve_server_with_ct;
+use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::transport::common::server_side_http::session_id as generate_streamable_session_id;
 use rmcp::transport::sse_server::PostEventQuery;
 use rmcp::transport::streamable_http_server::SessionId;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
-use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use tokio::io::{self};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -32,6 +32,7 @@ use crate::http::*;
 use crate::json::from_body;
 use crate::mcp::relay;
 use crate::mcp::relay::Relay;
+use crate::mcp::streamablehttp::{SessionManager, StreamableHttpService};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
@@ -53,14 +54,14 @@ pub struct App {
 	state: Stores,
 	metrics: Arc<relay::metrics::Metrics>,
 	_drain: DrainWatcher,
-	session: Arc<LocalSessionManager>,
+	session: Arc<SessionManager>,
 
 	sse_txs: SseTxs,
 }
 
 impl App {
 	pub fn new(state: Stores, metrics: Arc<relay::metrics::Metrics>, drain: DrainWatcher) -> Self {
-		let session: Arc<LocalSessionManager> = Arc::new(Default::default());
+		let session: Arc<SessionManager> = Arc::new(Default::default());
 		Self {
 			state,
 			metrics,
@@ -140,20 +141,26 @@ impl App {
 		}
 
 		match (req.uri().path(), req.method(), authn) {
-			("/sse", m, _) if m == Method::GET => Self::sse_get_handler(
-				self.sse_txs.clone(),
-				Relay::new(
+			("/sse", m, _) if m == Method::GET => {
+				let Ok(relay) = Relay::new(
 					pi.clone(),
 					backends.clone(),
 					metrics.clone(),
 					authorization_policies.clone(),
 					client.clone(),
 					backend.stateful,
-				),
-			)
-			.await
-			.into_response(),
-			("/sse", m, _) if m == Method::POST => self.sse_post_handler(req).await.into_response(),
+				) else {
+					return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+				};
+				todo!()
+				// Self::sse_get_handler(self.sse_txs.clone(), relay)
+				// 	.await
+				// 	.into_response()
+			},
+			("/sse", m, _) if m == Method::POST => {
+				todo!()
+				// self.sse_post_handler(req).await.into_response()
+			},
 			(path, _, Some(auth)) if path.ends_with("client-registration") => self
 				.client_registration(req, auth, client.clone())
 				.await
@@ -178,14 +185,15 @@ impl App {
 				// Assume this is streamable HTTP otherwise
 				let streamable = StreamableHttpService::new(
 					move || {
-						Ok(Relay::new(
+						Relay::new(
 							pi.clone(),
 							backends.clone(),
 							metrics.clone(),
 							authorization_policies.clone(),
 							client.clone(),
 							backend.stateful,
-						))
+						)
+						.map_err(|e| Error::new(e.to_string()))
 					},
 					sm,
 					StreamableHttpServerConfig {
@@ -409,91 +417,91 @@ impl App {
 		Ok(upstream)
 	}
 
-	async fn sse_post_handler(&self, req: Request) -> Result<StatusCode, StatusCode> {
-		// Extract query parameters
-		let Query(PostEventQuery { session_id }) =
-			Query::<PostEventQuery>::try_from_uri(req.uri()).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-		let (part, body) = req.into_parts();
-		let parts = part.clone();
-		let req = Request::from_parts(part, body);
-		let Json(mut message) = Json::<ClientJsonRpcMessage>::from_request(req, &())
-			.await
-			.map_err(|_| StatusCode::BAD_REQUEST)?;
-		if let ClientJsonRpcMessage::Request(req) = &mut message {
-			req.request.extensions_mut().insert(parts);
-		}
-		tracing::info!(session_id, ?message, "new client message for /sse");
-		let tx = {
-			let rg = self.sse_txs.read().expect("mutex poisoned");
-			rg.get(session_id.as_str())
-				.ok_or(StatusCode::NOT_FOUND)?
-				.clone()
-		};
-
-		if tx.send(message).await.is_err() {
-			tracing::error!("send message error");
-			return Err(StatusCode::GONE);
-		}
-		Ok(StatusCode::ACCEPTED)
-	}
-
-	async fn sse_get_handler(
-		sse_txs: SseTxs,
-		relay: Relay,
-	) -> Result<Sse<impl Stream<Item = Result<Event, io::Error>>>, StatusCode> {
-		// it's 4KB
-
-		let session = generate_streamable_session_id();
-		tracing::debug!(%session,  "sse connection");
-
-		use tokio_stream::wrappers::ReceiverStream;
-		use tokio_util::sync::PollSender;
-		let (from_client_tx, from_client_rx) = tokio::sync::mpsc::channel(64);
-		let (to_client_tx, to_client_rx) = tokio::sync::mpsc::channel(64);
-		sse_txs
-			.write()
-			.expect("mutex poisoned")
-			.insert(session.clone(), from_client_tx);
-		{
-			let session = session.clone();
-			let sse_txs = sse_txs.clone();
-			let ct = CancellationToken::new();
-			tokio::spawn(async move {
-				let stream = ReceiverStream::new(from_client_rx);
-				let sink = PollSender::new(to_client_tx.clone()).sink_map_err(std::io::Error::other);
-				let result = serve_server_with_ct(relay.clone(), (sink, stream), ct.child_token())
-					.await
-					.inspect_err(|e| {
-						tracing::error!("serving error: {:?}", e);
-					});
-
-				if let Err(e) = result {
-					tracing::error!(error = ?e, "initialize error");
-					sse_txs.write().expect("mutex poisoned").remove(&session);
-					return;
-				}
-				// Add a listener drain channel here.
-				tokio::select! {
-					_ = to_client_tx.closed() =>{
-						tracing::info!("client disconnected");
-					}
-				};
-				sse_txs.write().expect("mutex poisoned").remove(&session);
-			});
-		}
-
-		let stream = futures::stream::once(futures::future::ok(
-			Event::default()
-				.event("endpoint")
-				.data(format!("?sessionId={session}")),
-		))
-		.chain(ReceiverStream::new(to_client_rx).map(|message| {
-			match serde_json::to_string(&message) {
-				Ok(bytes) => Ok(Event::default().event("message").data(&bytes)),
-				Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
-			}
-		}));
-		Ok(Sse::new(stream))
-	}
+	// async fn sse_post_handler(&self, req: Request) -> Result<StatusCode, StatusCode> {
+	// 	// Extract query parameters
+	// 	let Query(PostEventQuery { session_id }) =
+	// 		Query::<PostEventQuery>::try_from_uri(req.uri()).map_err(|_| StatusCode::BAD_REQUEST)?;
+	//
+	// 	let (part, body) = req.into_parts();
+	// 	let parts = part.clone();
+	// 	let req = Request::from_parts(part, body);
+	// 	let Json(mut message) = Json::<ClientJsonRpcMessage>::from_request(req, &())
+	// 		.await
+	// 		.map_err(|_| StatusCode::BAD_REQUEST)?;
+	// 	if let ClientJsonRpcMessage::Request(req) = &mut message {
+	// 		req.request.extensions_mut().insert(parts);
+	// 	}
+	// 	tracing::info!(session_id, ?message, "new client message for /sse");
+	// 	let tx = {
+	// 		let rg = self.sse_txs.read().expect("mutex poisoned");
+	// 		rg.get(session_id.as_str())
+	// 			.ok_or(StatusCode::NOT_FOUND)?
+	// 			.clone()
+	// 	};
+	//
+	// 	if tx.send(message).await.is_err() {
+	// 		tracing::error!("send message error");
+	// 		return Err(StatusCode::GONE);
+	// 	}
+	// 	Ok(StatusCode::ACCEPTED)
+	// }
+	//
+	// async fn sse_get_handler(
+	// 	sse_txs: SseTxs,
+	// 	relay: Relay,
+	// ) -> Result<Sse<impl Stream<Item = Result<Event, io::Error>>>, StatusCode> {
+	// 	// it's 4KB
+	//
+	// 	let session = generate_streamable_session_id();
+	// 	tracing::debug!(%session,  "sse connection");
+	//
+	// 	use tokio_stream::wrappers::ReceiverStream;
+	// 	use tokio_util::sync::PollSender;
+	// 	let (from_client_tx, from_client_rx) = tokio::sync::mpsc::channel(64);
+	// 	let (to_client_tx, to_client_rx) = tokio::sync::mpsc::channel(64);
+	// 	sse_txs
+	// 		.write()
+	// 		.expect("mutex poisoned")
+	// 		.insert(session.clone(), from_client_tx);
+	// 	{
+	// 		let session = session.clone();
+	// 		let sse_txs = sse_txs.clone();
+	// 		let ct = CancellationToken::new();
+	// 		tokio::spawn(async move {
+	// 			let stream = ReceiverStream::new(from_client_rx);
+	// 			let sink = PollSender::new(to_client_tx.clone()).sink_map_err(std::io::Error::other);
+	// 			let result = serve_server_with_ct(relay.clone(), (sink, stream), ct.child_token())
+	// 				.await
+	// 				.inspect_err(|e| {
+	// 					tracing::error!("serving error: {:?}", e);
+	// 				});
+	//
+	// 			if let Err(e) = result {
+	// 				tracing::error!(error = ?e, "initialize error");
+	// 				sse_txs.write().expect("mutex poisoned").remove(&session);
+	// 				return;
+	// 			}
+	// 			// Add a listener drain channel here.
+	// 			tokio::select! {
+	// 				_ = to_client_tx.closed() =>{
+	// 					tracing::info!("client disconnected");
+	// 				}
+	// 			};
+	// 			sse_txs.write().expect("mutex poisoned").remove(&session);
+	// 		});
+	// 	}
+	//
+	// 	let stream = futures::stream::once(futures::future::ok(
+	// 		Event::default()
+	// 			.event("endpoint")
+	// 			.data(format!("?sessionId={session}")),
+	// 	))
+	// 	.chain(ReceiverStream::new(to_client_rx).map(|message| {
+	// 		match serde_json::to_string(&message) {
+	// 			Ok(bytes) => Ok(Event::default().event("message").data(&bytes)),
+	// 			Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+	// 		}
+	// 	}));
+	// 	Ok(Sse::new(stream))
+	// }
 }
