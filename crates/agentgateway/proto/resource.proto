@@ -360,8 +360,23 @@ message PolicySpec {
     PromptEnrichment prompts = 4;
   }
   message ExternalAuth {
+    enum FailureMode {
+      DENY = 0;
+      ALLOW = 1;
+      DENY_WITH_STATUS = 2;
+    }
+    message BodyOptions {
+      uint32 max_request_bytes = 1;
+      bool allow_partial_message = 2;
+      bool pack_as_bytes = 3;
+    }
     BackendReference target = 1;
     map<string, string> context = 2;
+    FailureMode failure_mode = 3;
+    repeated string include_request_headers = 4;
+    BodyOptions include_request_body = 5;
+    google.protobuf.Duration timeout = 6;
+    google.protobuf.UInt32Value status_on_error = 7;
   }
   message A2a {
   }

@@ -52,6 +52,7 @@ pub const LLM_COMPLETION_ATTRIBUTE: &str = "llm.completion";
 pub const RESPONSE_ATTRIBUTE: &str = "response";
 pub const JWT_ATTRIBUTE: &str = "jwt";
 pub const MCP_ATTRIBUTE: &str = "mcp";
+pub const EXTAUTHZ_ATTRIBUTE: &str = "extauthz";
 pub const ALL_ATTRIBUTES: &[&str] = &[
 	SOURCE_ATTRIBUTE,
 	REQUEST_ATTRIBUTE,
@@ -62,6 +63,7 @@ pub const ALL_ATTRIBUTES: &[&str] = &[
 	RESPONSE_ATTRIBUTE,
 	JWT_ATTRIBUTE,
 	MCP_ATTRIBUTE,
+	EXTAUTHZ_ATTRIBUTE,
 ];
 
 pub struct Expression {
@@ -157,6 +159,23 @@ impl ContextBuilder {
 		self.context.jwt = Some(info.clone())
 	}
 
+	pub fn with_extauthz(&mut self, req: &crate::http::Request) {
+		if !self.attributes.contains(EXTAUTHZ_ATTRIBUTE) {
+			return;
+		}
+
+		// Extract dynamic metadata from ext_authz if present
+		if let Some(ext_authz_metadata) = req
+			.extensions()
+			.get::<Arc<crate::http::ext_authz::ExtAuthzDynamicMetadata>>()
+		{
+			// Direct access to extauthz.field - metadata is already stored flat
+			if !ext_authz_metadata.metadata.is_empty() {
+				self.context.extauthz = Some(ext_authz_metadata.metadata.clone());
+			}
+		}
+	}
+
 	pub fn with_source(&mut self, tcp: &TCPConnectionInfo, tls: Option<&TLSConnectionInfo>) {
 		if !self.attributes.contains(SOURCE_ATTRIBUTE) {
 			return;
@@ -240,6 +259,7 @@ impl ContextBuilder {
 			llm,
 			source,
 			mcp: _,
+			extauthz,
 		} = &self.context;
 
 		ctx.add_variable_from_value(REQUEST_ATTRIBUTE, opt_to_value(request)?);
@@ -248,6 +268,7 @@ impl ContextBuilder {
 		ctx.add_variable_from_value(MCP_ATTRIBUTE, opt_to_value(&mcp)?);
 		ctx.add_variable_from_value(LLM_ATTRIBUTE, opt_to_value(llm)?);
 		ctx.add_variable_from_value(SOURCE_ATTRIBUTE, opt_to_value(source)?);
+		ctx.add_variable_from_value(EXTAUTHZ_ATTRIBUTE, opt_to_value(extauthz)?);
 
 		Ok(Executor { ctx })
 	}
@@ -298,6 +319,7 @@ impl Expression {
 					LLM_ATTRIBUTE.to_string(),
 					LLM_COMPLETION_ATTRIBUTE.to_string(),
 				],
+				["extauthz", ..] => vec![EXTAUTHZ_ATTRIBUTE.to_string()],
 				[first, ..] => vec![first.to_string()],
 				_ => Vec::default(),
 			})
@@ -332,6 +354,8 @@ pub struct ExpressionContext {
 	/// `mcp` contains attributes about the MCP request.
 	// This is only included for schema generation; see build_with_mcp.
 	pub mcp: Option<crate::mcp::rbac::ResourceType>,
+	/// `extauthz` contains dynamic metadata from ext_authz filters
+	pub extauthz: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 #[apply(schema_ser!)]

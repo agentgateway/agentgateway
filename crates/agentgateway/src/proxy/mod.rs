@@ -59,7 +59,7 @@ pub enum ProxyError {
 	#[error("no healthy backends")]
 	NoHealthyEndpoints,
 	#[error("authorization failed")]
-	AuthorizationFailed,
+	AuthorizationFailed(Option<StatusCode>),
 	#[error("backend authentication failed: {0}")]
 	BackendAuthenticationFailed(anyhow::Error),
 	#[error("upstream call failed: {0:?}")]
@@ -114,7 +114,7 @@ impl ProxyError {
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::FORBIDDEN,
-			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
+			ProxyError::AuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoHealthyEndpoints => StatusCode::SERVICE_UNAVAILABLE,

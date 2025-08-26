@@ -622,9 +622,42 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 			},
 			Some(proto::agent::policy_spec::Kind::ExtAuthz(ea)) => {
 				let target = resolve_simple_reference(ea.target.as_ref())?;
+				let failure_mode =
+					match proto::agent::policy_spec::external_auth::FailureMode::try_from(ea.failure_mode) {
+						Ok(proto::agent::policy_spec::external_auth::FailureMode::Allow) => {
+							http::ext_authz::FailureMode::Allow
+						},
+						Ok(proto::agent::policy_spec::external_auth::FailureMode::Deny) => {
+							http::ext_authz::FailureMode::Deny
+						},
+						Ok(proto::agent::policy_spec::external_auth::FailureMode::DenyWithStatus) => {
+							let status = ea.status_on_error.unwrap_or(403) as u16;
+							http::ext_authz::FailureMode::DenyWithStatus(status)
+						},
+						_ => http::ext_authz::FailureMode::Deny, // Default fallback
+					};
+
+				let include_request_body =
+					ea.include_request_body
+						.as_ref()
+						.map(|body_opts| http::ext_authz::BodyOptions {
+							max_request_bytes: body_opts.max_request_bytes,
+							allow_partial_message: body_opts.allow_partial_message,
+							pack_as_bytes: body_opts.pack_as_bytes,
+						});
+
+				let timeout = ea.timeout.as_ref().map(|d| {
+					std::time::Duration::from_secs(d.seconds as u64)
+						+ std::time::Duration::from_nanos(d.nanos as u64)
+				});
+
 				Policy::ExtAuthz(http::ext_authz::ExtAuthz {
 					target: Arc::new(target),
 					context: Some(ea.context.clone()),
+					failure_mode,
+					include_request_headers: ea.include_request_headers.clone(),
+					include_request_body,
+					timeout,
 				})
 			},
 			Some(proto::agent::policy_spec::Kind::A2a(_)) => Policy::A2a(A2aPolicy {}),

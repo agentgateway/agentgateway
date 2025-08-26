@@ -538,3 +538,4 @@ This folder contains JSON schemas for various parts of the project
 |`mcp.(any)(1)resource`||
 |`mcp.(any)(1)resource.target`|The target of the resource|
 |`mcp.(any)(1)resource.name`|The name of the resource|
+|`extauthz`|`extauthz` contains dynamic metadata from ext_authz filters|

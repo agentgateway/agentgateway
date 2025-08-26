@@ -113,8 +113,12 @@ pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 }
 
 pub async fn inspect_body(body: &mut Body) -> anyhow::Result<Bytes> {
+	inspect_body_with_limit(body, 2_097_152).await
+}
+
+pub async fn inspect_body_with_limit(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {
 	let orig = std::mem::replace(body, Body::empty());
-	let bytes = to_bytes(orig, 2_097_152).await?;
+	let bytes = to_bytes(orig, limit).await?;
 	*body = Body::from(bytes.clone());
 	Ok(bytes)
 }

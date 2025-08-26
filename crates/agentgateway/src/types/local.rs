@@ -840,9 +840,21 @@ async fn split_policies(
 	}
 	if let Some(p) = ext_authz {
 		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/extauthz", key), &p.target);
+		// Convert to FailureMode
+		let failure_mode = match (p.fail_open, p.status_on_error) {
+			(Some(true), _) => crate::http::ext_authz::FailureMode::Allow,
+			(Some(false), Some(code)) => crate::http::ext_authz::FailureMode::DenyWithStatus(code),
+			(Some(false), None) | (None, None) => crate::http::ext_authz::FailureMode::Deny,
+			(None, Some(code)) => crate::http::ext_authz::FailureMode::DenyWithStatus(code),
+		};
+
 		let pol = http::ext_authz::ExtAuthz {
 			target: Arc::new(bref),
 			context: p.context,
+			failure_mode,
+			include_request_headers: vec![],
+			include_request_body: None,
+			timeout: None,
 		};
 		backend
 			.into_iter()
@@ -993,7 +1005,12 @@ pub struct LocalExtAuthz {
 	#[serde(flatten)]
 	pub target: SimpleLocalBackend,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub context: Option<HashMap<String, String>>, // TODO: gRPC vs HTTP, fail open, include body,
+	pub context: Option<HashMap<String, String>>,
+	// Backwards compatibility: support both old and new failure handling approaches
+	#[serde(default)]
+	pub fail_open: Option<bool>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub status_on_error: Option<u16>,
 }
 
 #[apply(schema_de!)]

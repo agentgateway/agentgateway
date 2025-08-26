@@ -59,6 +59,9 @@ async fn apply_request_policies(
 	}
 	.apply(response_policies.headers())?;
 
+	// Extract dynamic metadata for CEL context
+	log.cel.ctx().with_extauthz(req);
+
 	let exec = log
 		.cel
 		.ctx()
@@ -67,7 +70,7 @@ async fn apply_request_policies(
 
 	if let Some(j) = &policies.authorization {
 		j.apply(&exec)
-			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
+			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed(None)))?;
 	}
 
 	for lrl in &policies.local_rate_limit {

@@ -363,6 +363,14 @@
           "type": "null"
         }
       ]
+    },
+    "extauthz": {
+      "description": "`extauthz` contains dynamic metadata from ext_authz filters",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
     }
   },
   "additionalProperties": false

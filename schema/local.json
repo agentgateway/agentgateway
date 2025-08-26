@@ -1951,6 +1951,22 @@
                                     "additionalProperties": {
                                       "type": "string"
                                     }
+                                  },
+                                  "failOpen": {
+                                    "type": [
+                                      "boolean",
+                                      "null"
+                                    ],
+                                    "default": null
+                                  },
+                                  "statusOnError": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "format": "uint16",
+                                    "minimum": 0,
+                                    "maximum": 65535
                                   }
                                 },
                                 "unevaluatedProperties": false,
@@ -4249,6 +4265,22 @@
                         "additionalProperties": {
                           "type": "string"
                         }
+                      },
+                      "failOpen": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ],
+                        "default": null
+                      },
+                      "statusOnError": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "format": "uint16",
+                        "minimum": 0,
+                        "maximum": 65535
                       }
                     },
                     "unevaluatedProperties": false,
