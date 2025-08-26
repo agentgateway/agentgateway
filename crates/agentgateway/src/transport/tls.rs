@@ -17,8 +17,14 @@ pub fn provider() -> Arc<CryptoProvider> {
 	Arc::new(CryptoProvider {
 		// Limit to only the subset of ciphers that are FIPS compatible
 		cipher_suites: vec![
+			// TLS 1.3 cipher suites
 			rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
 			rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256,
+			// TLS 1.2 cipher suites
+			rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 		],
 		..rustls::crypto::aws_lc_rs::default_provider()
 	})
