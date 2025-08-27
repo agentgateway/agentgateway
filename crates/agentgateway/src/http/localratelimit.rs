@@ -8,28 +8,30 @@ use crate::*;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "schema", schemars(with = "RateLimitSerde"))]
+#[derive(serde::Serialize)]
 pub struct RateLimit {
+	#[serde(skip_serializing)]
 	ratelimit: Arc<ratelimit::Ratelimiter>,
+	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,
 	// Store original config values for serialization
+	#[serde(rename = "maxTokens")]
 	pub max_tokens: u64,
+	#[serde(rename = "tokensPerFill")]
 	pub tokens_per_fill: u64,
+	#[serde(rename = "fillInterval", serialize_with = "serialize_duration")]
 	pub fill_interval: Duration,
 }
 
-impl serde::Serialize for RateLimit {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		let mut map = serializer.serialize_map(Some(4))?;
-		map.serialize_entry("type", &self.limit_type)?;
-		map.serialize_entry("maxTokens", &self.max_tokens)?;
-		map.serialize_entry("tokensPerFill", &self.tokens_per_fill)?;
-		map.serialize_entry("fillInterval", &(self.fill_interval.as_secs().to_string() + "s"))?;
-		map.end()
-	}
+// Helper function to serialize Duration as "Xs" format
+fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	serializer.serialize_str(&(duration.as_secs().to_string() + "s"))
 }
+
+
 
 impl<'de> serde::Deserialize<'de> for RateLimit {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
