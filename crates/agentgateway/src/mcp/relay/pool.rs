@@ -298,21 +298,18 @@ pub struct ClientWrapper {
 	idp: Arc<AtomicU32Provider>,
 	client: PolicyClient,
 	policies: BackendPolicies,
-    headers: http::HeaderMap,
+	headers: http::HeaderMap,
 	session_id: AtomicOption<String>,
 }
 
 impl ClientWrapper {
-    pub fn insert_headers(&self, req: &mut crate::http::Request) {
-        for (k, v) in &self.headers {
-            if !req.headers().contains_key(k) {
-                req.headers_mut().insert(k.clone(), v.clone());
-            }
-        }
-    if let Some(claims) = self.claims.as_ref() {
-			req.extensions_mut().insert(claims.clone());
-		}
-	}
+	pub fn insert_headers(&self, req: &mut crate::http::Request) {
+      for (k, v) in &self.headers {
+          if !req.headers().contains_key(k) {
+              req.headers_mut().insert(k.clone(), v.clone());
+          }
+      }
+  }
 }
 
 #[derive(Error, Debug)]
@@ -348,7 +345,7 @@ impl ClientWrapper {
 			client,
 			policies,
 			headers,
-        session_id: Default::default(),
+			session_id: Default::default(),
 		}
 	}
 	pub fn set_session_id(&self, s: String) {
@@ -405,19 +402,23 @@ impl ClientWrapper {
 			StreamableHttpPostResponse::Json(r, sid) => {
 				Ok(futures::stream::once(async { Ok(r) }).boxed())
 			},
-			StreamableHttpPostResponse::Sse(mut sse, sid) => Ok(sse.filter_map(|item| async {
-				item
-					.map_err(ClientError::new)
-					.and_then(|item| {
+			StreamableHttpPostResponse::Sse(mut sse, sid) => Ok(
+				sse
+					.filter_map(|item| async {
 						item
-							.data
-							.map(|data| {
-								serde_json::from_str::<ServerJsonRpcMessage>(&data).map_err(ClientError::new)
+							.map_err(ClientError::new)
+							.and_then(|item| {
+								item
+									.data
+									.map(|data| {
+										serde_json::from_str::<ServerJsonRpcMessage>(&data).map_err(ClientError::new)
+									})
+									.transpose()
 							})
 							.transpose()
 					})
-					.transpose()
-			}).boxed()),
+					.boxed(),
+			),
 		}
 	}
 

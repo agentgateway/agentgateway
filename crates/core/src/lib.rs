@@ -1,3 +1,4 @@
+mod arc;
 pub mod bow;
 pub mod copy;
 pub mod drain;
@@ -9,4 +10,3 @@ pub mod strng;
 pub mod telemetry;
 pub mod trcng;
 pub mod version;
-mod arc;
