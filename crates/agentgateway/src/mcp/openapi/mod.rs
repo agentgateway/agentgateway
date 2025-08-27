@@ -681,12 +681,16 @@ impl Handler {
 
 		// Read response body
 		let status = response.status();
-		let body = json::from_body::<serde_json::Value>(response.into_body()).await?;
-
 		// Check if the request was successful
 		if status.is_success() {
+			let body = json::from_body::<serde_json::Value>(response.into_body()).await?;
 			Ok(body)
 		} else {
+			let body = String::from_utf8(
+				axum::body::to_bytes(response.into_body(), 2_097_152)
+				.await?
+				.to_vec(),
+			)?;
 			Err(anyhow::anyhow!(
 				"Upstream API call for tool '{}' failed with status {}: {}",
 				name,
