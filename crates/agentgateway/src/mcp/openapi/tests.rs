@@ -447,12 +447,13 @@ async fn test_call_tool_invalid_path_param_value() {
 	// If server returns 404 for the literal path:
 	assert!(result.is_err());
 	assert!(
-		result.as_ref()
+		result
+			.as_ref()
 			.unwrap_err()
 			.to_string()
-			.contains("failed with status 404 Not Found"), "{}", result
-		.unwrap_err()
-		.to_string()
+			.contains("failed with status 404 Not Found"),
+		"{}",
+		result.unwrap_err().to_string()
 	);
 
 	// If the request *itself* failed before sending (e.g., invalid URL formed),
