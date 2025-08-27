@@ -70,7 +70,7 @@ async fn local_ratelimit() {
 		name: strng::new("rl"),
 		target: PolicyTarget::Route("route".into()),
 		policy: Policy::LocalRateLimit(vec![
-			http::localratelimit::RateLimitSerde {
+			http::localratelimit::RateLimitSpec {
 				max_tokens: 1,
 				tokens_per_fill: 1,
 				fill_interval: Duration::from_secs(1),

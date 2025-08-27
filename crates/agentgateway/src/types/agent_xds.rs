@@ -604,7 +604,7 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 			Some(proto::agent::policy_spec::Kind::LocalRateLimit(lrl)) => {
 				let t = proto::agent::policy_spec::local_rate_limit::Type::try_from(lrl.r#type)?;
 				Policy::LocalRateLimit(vec![
-					localratelimit::RateLimitSerde {
+					localratelimit::RateLimitSpec {
 						max_tokens: lrl.max_tokens,
 						tokens_per_fill: lrl.tokens_per_fill,
 						fill_interval: lrl

@@ -114,7 +114,7 @@ impl From<RoutePolicies> for LLMRequestPolicies {
 			local_rate_limit: value
 				.local_rate_limit
 				.iter()
-				.filter(|r| r.limit_type == http::localratelimit::RateLimitType::Tokens)
+				.filter(|r| r.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
 				.cloned()
 				.collect(),
 			llm: value.llm.clone(),
