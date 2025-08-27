@@ -34,6 +34,7 @@ type McpError = ErrorData;
 pub mod metrics;
 mod pool;
 pub mod upstream;
+mod mergestream;
 
 const DELIMITER: &str = "_";
 

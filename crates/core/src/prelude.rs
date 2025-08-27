@@ -10,6 +10,6 @@ pub use bytes::Bytes;
 pub use tokio::sync::Mutex as AsyncMutex;
 pub use tracing::{Instrument, debug, error, info, trace, warn};
 
+pub use crate::arc::AtomicOption;
 pub use crate::strng;
 pub use crate::strng::Strng;
-pub use crate::arc::AtomicOption;
