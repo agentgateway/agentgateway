@@ -182,6 +182,26 @@ impl Upstream {
 		}
 	}
 
+	pub(crate) async fn list_tools2(
+		&self,
+		request: Option<PaginatedRequestParam>,
+	) -> Result<mergestream::Messages, UpstreamError> {
+		match &self {
+			Upstream::McpStdio(m) => todo!(),
+			Upstream::McpHttp(c) => {
+				let res = c
+					.send_message(ClientRequest::ListToolsRequest(ListToolsRequest {
+						method: ListToolsRequestMethod,
+						params: request,
+						extensions: Default::default(),
+					}))
+					.await?;
+				res.try_into().map_err(Into::into)
+			},
+			Upstream::OpenAPI(m) => todo!(),
+		}
+	}
+
 	pub(crate) async fn get_prompt(
 		&self,
 		request: GetPromptRequestParam,
@@ -287,7 +307,8 @@ impl Upstream {
 						.into(),
 					)
 					.await?;
-				let (resp, session_id) = ClientWrapper::expect_stream(res).await?;
+				todo!()
+				// let (resp, session_id) = ClientWrapper::expect_stream(res).await?;
 			},
 			Upstream::McpStdio(m) => Ok(m.call_tool(request).await?),
 			Upstream::OpenAPI(m) => {
