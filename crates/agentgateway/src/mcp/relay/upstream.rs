@@ -332,7 +332,7 @@ impl UpstreamTarget {
 			},
 			UpstreamTargetSpec::OpenAPI(m) => {
 				let res = m
-					.call_tool(request.name.as_ref(), request.arguments)
+					.call_tool(request.name.as_ref(), request.arguments, &rq_ctx.headers)
 					.await?;
 				Ok(CallToolResult {
 					content: vec![],

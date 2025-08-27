@@ -2,18 +2,18 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use http::Method;
+use crate::json;
+use crate::proxy::httpproxy::PolicyClient;
+use crate::store::BackendPolicies;
+use crate::types::agent::SimpleBackend;
 use http::header::{ACCEPT, CONTENT_TYPE};
+use http::{HeaderMap, Method};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use reqwest::header::{HeaderName, HeaderValue};
 use rmcp::model::{JsonObject, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::instrument;
-
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -529,7 +529,8 @@ impl Handler {
 		&self,
 		name: &str,
 		args: Option<JsonObject>,
-	) -> Result<String, anyhow::Error> {
+		user_headers: &HeaderMap,
+	) -> Result<serde_json::Value, anyhow::Error> {
 		let (_tool, info) = self
 			.tools
 			.iter()
@@ -663,9 +664,14 @@ impl Handler {
 		};
 
 		// Build the final request
-		let request = rb
+		let mut request = rb
 			.body(body.into())
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
+		for (k, v) in user_headers {
+			if !request.headers().contains_key(k) {
+				request.headers_mut().insert(k.clone(), v.clone());
+			}
+		}
 
 		// Make the request
 		let response = self
@@ -675,11 +681,7 @@ impl Handler {
 
 		// Read response body
 		let status = response.status();
-		let body = String::from_utf8(
-			axum::body::to_bytes(response.into_body(), 2_097_152)
-				.await?
-				.to_vec(),
-		)?;
+		let body = json::from_body::<serde_json::Value>(response.into_body()).await?;
 
 		// Check if the request was successful
 		if status.is_success() {
