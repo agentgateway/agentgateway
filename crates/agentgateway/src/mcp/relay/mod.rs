@@ -75,7 +75,10 @@ impl Default for RqCtx {
 }
 
 impl RqCtx {
-	pub fn new(identity: Identity, context: Context, headers: HeaderMap) -> Self {
+	pub fn new(identity: Identity, context: Context, mut headers: HeaderMap) -> Self {
+		// Remove headers we do not want to propagate to the backend
+		headers.remove(http::header::CONTENT_ENCODING);
+		headers.remove(http::header::CONTENT_LENGTH);
 		Self {
 			identity,
 			context,

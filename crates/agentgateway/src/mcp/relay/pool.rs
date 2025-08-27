@@ -486,11 +486,8 @@ impl ClientWrapper {
 		backend: SimpleBackend,
 		client: PolicyClient,
 		policies: BackendPolicies,
-		mut headers: HeaderMap,
+		headers: HeaderMap,
 	) -> Self {
-		// Remove headers we do not want to propagate to the backend
-		headers.remove(http::header::CONTENT_ENCODING);
-		headers.remove(http::header::CONTENT_LENGTH);
 		Self {
 			backend: Arc::new(backend),
 			client,
