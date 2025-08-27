@@ -22,6 +22,10 @@ impl serde::Serialize for RateLimit {
 	where
 		S: serde::Serializer,
 	{
+		let mut map = serializer.serialize_map(Some(4))?;
+		map.serialize_entry("type", &self.limit_type)?;
+		map.serialize_entry("maxTokens", &self.max_tokens)?;
+		map.serialize_entry("tokensPerFill", &self.tokens_per_fill)?;
 		map.serialize_entry("fillInterval", &(self.fill_interval.as_secs().to_string() + "s"))?;
 		map.end()
 	}
