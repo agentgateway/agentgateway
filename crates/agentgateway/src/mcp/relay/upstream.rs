@@ -335,9 +335,8 @@ impl UpstreamTarget {
 					.call_tool(request.name.as_ref(), request.arguments)
 					.await?;
 				Ok(CallToolResult {
-					content: vec![Content::text(res)],
-					// TODO: for JSON responses, return structured_content
-					structured_content: None,
+					content: vec![],
+					structured_content: Some(res),
 					is_error: None,
 				})
 			},
