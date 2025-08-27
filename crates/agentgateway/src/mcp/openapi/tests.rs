@@ -174,6 +174,7 @@ async fn test_call_tool_get_simple_success() {
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 
@@ -203,6 +204,7 @@ async fn test_call_tool_get_with_query() {
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 
@@ -231,6 +233,7 @@ async fn test_call_tool_get_with_header() {
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 
@@ -258,6 +261,7 @@ async fn test_call_tool_post_with_body() {
 			"create_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 
@@ -293,6 +297,7 @@ async fn test_call_tool_post_all_params() {
 			"create_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 
@@ -310,6 +315,7 @@ async fn test_call_tool_tool_not_found() {
 			"nonexistent_tool",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 
@@ -341,6 +347,7 @@ async fn test_call_tool_upstream_error() {
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 
@@ -375,6 +382,7 @@ async fn test_call_tool_invalid_header_value() {
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 	assert!(result.is_ok()); // Check that the call still succeeds despite the bad header
@@ -407,6 +415,7 @@ async fn test_call_tool_invalid_query_param_value() {
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 	assert!(result.is_ok());
@@ -440,6 +449,7 @@ async fn test_call_tool_invalid_path_param_value() {
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&HeaderMap::new(),
+			None,
 		)
 		.await;
 

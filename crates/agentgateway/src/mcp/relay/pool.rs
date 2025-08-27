@@ -202,6 +202,7 @@ impl ConnectionPool {
 					self.client.clone(),
 					target.backend_policies.clone(),
 					rq_ctx.headers.clone(),
+					rq_ctx.identity.claims.clone(),
 				);
 				let transport = SseClientTransport::start_with_client(
 					client,
@@ -242,6 +243,7 @@ impl ConnectionPool {
 					self.client.clone(),
 					target.backend_policies.clone(),
 					rq_ctx.headers.clone(),
+					rq_ctx.identity.claims.clone(),
 				);
 				let transport = StreamableHttpClientTransport::with_client(
 					client,
@@ -469,6 +471,7 @@ pub struct ClientWrapper {
 	client: PolicyClient,
 	policies: BackendPolicies,
 	headers: http::HeaderMap,
+	claims: Option<Claims>,
 }
 
 impl ClientWrapper {
@@ -477,6 +480,9 @@ impl ClientWrapper {
 			if !req.headers().contains_key(k) {
 				req.headers_mut().insert(k.clone(), v.clone());
 			}
+		}
+		if let Some(claims) = self.claims.as_ref() {
+			req.extensions_mut().insert(claims.clone());
 		}
 	}
 }
@@ -487,12 +493,14 @@ impl ClientWrapper {
 		client: PolicyClient,
 		policies: BackendPolicies,
 		headers: HeaderMap,
+		claims: Option<Claims>,
 	) -> Self {
 		Self {
 			backend: Arc::new(backend),
 			client,
 			policies,
 			headers,
+			claims,
 		}
 	}
 

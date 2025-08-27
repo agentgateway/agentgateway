@@ -14,6 +14,7 @@ use rmcp::model::{JsonObject, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::instrument;
+use crate::http::jwt::Claims;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -548,6 +549,7 @@ impl Handler {
 		name: &str,
 		args: Option<JsonObject>,
 		user_headers: &HeaderMap,
+		claims: Option<Claims>,
 	) -> Result<serde_json::Value, anyhow::Error> {
 		let (_tool, info) = self
 			.tools
@@ -690,6 +692,9 @@ impl Handler {
 			if !request.headers().contains_key(k) {
 				request.headers_mut().insert(k.clone(), v.clone());
 			}
+		}
+		if let Some(claims) = claims.as_ref() {
+			request.extensions_mut().insert(claims.clone());
 		}
 
 		// Make the request

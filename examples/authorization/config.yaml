@@ -9,6 +9,8 @@ binds:
           - "*"
           allowHeaders:
           - "*"
+        backendAuth:
+          passthrough: {}
         jwtAuth:
           issuer: agentgateway.dev
           audiences: [test.agentgateway.dev]
@@ -26,7 +28,6 @@ binds:
       backends:
       - mcp:
           targets:
-          - name: everything
-            stdio:
-              cmd: npx
-              args: ["@modelcontextprotocol/server-everything"]
+          - name: mcp2
+            mcp:
+              host: http://localhost:3001/mcp
