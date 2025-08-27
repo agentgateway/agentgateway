@@ -4,11 +4,11 @@ use crate::mcp::relay::upstream::UpstreamError;
 use crate::*;
 use ::http::StatusCode;
 use ::http::request::Parts;
-use futures_util::SinkExt;
+use futures_util::{SinkExt, StreamExt};
 use http_body::Body;
 use http_body_util::Full;
 use http_body_util::combinators::BoxBody;
-use rmcp::ServerHandler;
+use rmcp::{ErrorData, ServerHandler};
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientRequest, JsonRpcMessage, RequestId, ServerJsonRpcMessage,
 	ServerNotification, ServerRequest, ServerResult,
@@ -57,7 +57,7 @@ impl LocalSession {
 				match req {
 					ClientRequest::InitializeRequest(r) => stream(self.relay.initialize(r).await?, req_id),
 					ClientRequest::ListToolsRequest(r) => {
-						stream(self.relay.list_tools(r, &cel).await?, req_id)
+						merge_to_response(self.relay.list_tools2(r, &cel).await?)
 					},
 					ClientRequest::CallToolRequest(r) => {
 						stream(self.relay.call_tool(r, &cel, log).await?, req_id);
@@ -81,6 +81,22 @@ fn stream(resp: impl Into<ServerResult>, req_id: RequestId) -> Result<Response, 
 		ServerSseMessage {
 			event_id: None,
 			message: Arc::new(rpc),
+		}
+	});
+	Ok(sse_stream_response(stream, None))
+}
+
+fn merge_to_response(stream: super::mergestream::MergeStream) -> Result<Response, UpstreamError> {
+	let stream = stream.map(|rpc| {
+		let r = match rpc {
+			Ok(rpc) => rpc,
+			// TODO: do not hardcode number
+			Err(e) => ServerJsonRpcMessage::error(ErrorData::internal_error(e.to_string(), None), RequestId::Number(2))
+		};
+		// TODO: is it ok to have no event_id here?
+		ServerSseMessage {
+			event_id: None,
+			message: Arc::new(r),
 		}
 	});
 	Ok(sse_stream_response(stream, None))
@@ -254,7 +270,7 @@ fn http_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
 }
 
 fn sse_stream_response(
-	stream: impl futures::Stream<Item = ServerSseMessage> + Send + Sync + 'static,
+	stream: impl futures::Stream<Item = ServerSseMessage> + Send + 'static,
 	keep_alive: Option<Duration>,
 ) -> Response {
 	use futures::StreamExt;

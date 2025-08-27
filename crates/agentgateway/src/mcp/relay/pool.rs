@@ -298,17 +298,11 @@ pub struct ClientWrapper {
 	idp: Arc<AtomicU32Provider>,
 	client: PolicyClient,
 	policies: BackendPolicies,
-	headers: http::HeaderMap,
 	session_id: AtomicOption<String>,
 }
 
 impl ClientWrapper {
 	pub fn insert_headers(&self, req: &mut crate::http::Request) {
-		for (k, v) in &self.headers {
-			if !req.headers().contains_key(k) {
-				req.headers_mut().insert(k.clone(), v.clone());
-			}
-		}
 	}
 }
 
@@ -332,7 +326,6 @@ impl ClientWrapper {
 		path: Strng,
 		client: PolicyClient,
 		policies: BackendPolicies,
-		headers: HeaderMap,
 	) -> Self {
 		let hp = backend.hostport();
 		Self {
@@ -343,7 +336,6 @@ impl ClientWrapper {
 			idp: Arc::new(AtomicU32Provider::default()),
 			client,
 			policies,
-			headers,
 			session_id: Default::default(),
 		}
 	}

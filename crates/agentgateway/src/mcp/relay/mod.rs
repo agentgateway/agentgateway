@@ -8,19 +8,18 @@ use agent_core::prelude::Strng;
 use agent_core::trcng;
 use agent_core::version::BuildInfo;
 use http::request::Parts;
-use http::{HeaderMap, HeaderValue};
 use itertools::Itertools;
 use opentelemetry::global::BoxedSpan;
 use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
 use rmcp::model::{CallToolRequestParam, *};
 use rmcp::service::{RequestContext, RunningService};
-use rmcp::{RoleClient, RoleServer, model};
+use rmcp::{model, RoleClient, RoleServer};
 
 use crate::ProxyInputs;
 use crate::cel::ContextBuilder;
 use crate::http::jwt::Claims;
-use crate::mcp::rbac;
+use crate::mcp::{mergestream, rbac};
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
 use crate::mcp::relay::upstream::UpstreamError;
 use crate::mcp::sse::{MCPInfo, McpBackendGroup};
@@ -28,13 +27,12 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::TLSConnectionInfo;
-
+pub use pool::ClientError;
 type McpError = ErrorData;
 
 pub mod metrics;
 mod pool;
 pub mod upstream;
-mod mergestream;
 
 const DELIMITER: &str = "_";
 
@@ -55,7 +53,6 @@ static AGW_INITIALIZE: LazyLock<InitializeRequestParam> =
 pub struct RqCtx {
 	identity: Identity,
 	context: Context,
-	headers: http::HeaderMap,
 }
 
 impl Default for RqCtx {
@@ -63,21 +60,13 @@ impl Default for RqCtx {
 		Self {
 			identity: Identity::default(),
 			context: Context::new(),
-			headers: Default::default(),
 		}
 	}
 }
 
 impl RqCtx {
-	pub fn new(identity: Identity, context: Context, mut headers: HeaderMap) -> Self {
-		// Remove headers we do not want to propagate to the backend
-		headers.remove(http::header::CONTENT_ENCODING);
-		headers.remove(http::header::CONTENT_LENGTH);
-		Self {
-			identity,
-			context,
-			headers,
-		}
+	pub fn new(identity: Identity, context: Context) -> Self {
+		Self { identity, context }
 	}
 }
 
@@ -184,9 +173,7 @@ impl Relay {
 			.cloned()
 			.expect("CelContextBuilder must be set");
 
-		let headers = http.headers.clone();
-
-		let rq_ctx = RqCtx::new(Identity::new(claims.cloned(), id), ctx, headers);
+		let rq_ctx = RqCtx::new(Identity::new(claims.cloned(), id), ctx);
 
 		let tracer = trcng::get_tracer();
 		let _span = trcng::start_span(span_name.to_string(), &rq_ctx.identity)
@@ -247,6 +234,17 @@ impl Relay {
 			tools,
 			next_cursor: None,
 		})
+	}
+	pub async fn list_tools2(
+		&self,
+		r: ListToolsRequest,
+		cel: &ContextBuilder,
+	) -> Result<mergestream::MergeStream, UpstreamError> {
+		let mut streams = Vec::new();
+		for (name, con) in self.pool.iter_named() {
+			streams.push(con.list_tools2(r.params.clone()).await?);
+		}
+		Ok(mergestream::MergeStream::new(streams))
 	}
 	pub async fn call_tool(
 		&self,
