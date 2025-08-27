@@ -600,7 +600,9 @@ impl Handler {
 		let normalized_path = normalize_url_path(&self.prefix, &path);
 		let base_url = format!(
 			"{}://{}{}",
-			"http", self.backend.hostport(),normalized_path
+			"http",
+			self.backend.hostport(),
+			normalized_path
 		);
 
 		// --- Request Building ---
