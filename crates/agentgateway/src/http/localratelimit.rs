@@ -11,6 +11,10 @@ use crate::*;
 pub struct RateLimit {
 	ratelimit: Arc<ratelimit::Ratelimiter>,
 	pub limit_type: RateLimitType,
+	// Store original config values for serialization
+	pub max_tokens: u64,
+	pub tokens_per_fill: u64,
+	pub fill_interval: Duration,
 }
 
 impl serde::Serialize for RateLimit {
@@ -18,7 +22,12 @@ impl serde::Serialize for RateLimit {
 	where
 		S: serde::Serializer,
 	{
-		serializer.serialize_map(None)?.end()
+		let mut map = serializer.serialize_map(Some(4))?;
+		map.serialize_entry("type", &self.limit_type)?;
+		map.serialize_entry("maxTokens", &self.max_tokens)?;
+		map.serialize_entry("tokensPerFill", &self.tokens_per_fill)?;
+		map.serialize_entry("fillInterval", &format!("{}s", self.fill_interval.as_secs()))?;
+		map.end()
 	}
 }
 
@@ -66,6 +75,9 @@ impl TryFrom<RateLimitSerde> for RateLimit {
 		Ok(RateLimit {
 			ratelimit: Arc::new(rl),
 			limit_type: value.limit_type,
+			max_tokens: value.max_tokens,
+			tokens_per_fill: value.tokens_per_fill,
+			fill_interval: value.fill_interval,
 		})
 	}
 }
