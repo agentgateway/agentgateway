@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::http::jwt::Claims;
 use crate::json;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
@@ -14,7 +15,6 @@ use rmcp::model::{JsonObject, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::instrument;
-use crate::http::jwt::Claims;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
