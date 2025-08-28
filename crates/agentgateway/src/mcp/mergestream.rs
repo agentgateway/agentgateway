@@ -50,15 +50,21 @@ pub struct MergeStream {
 	streams: Vec<Option<Messages>>,
 	terminal_messages: Vec<Option<ServerResult>>,
 	complete: bool,
+	merge:
+		Box<dyn Fn(Vec<ServerResult>) -> Result<ServerResult, ClientError> + Send + Sync + 'static>,
 }
 
 impl MergeStream {
-	pub fn new(streams: Vec<Messages>) -> Self {
+	pub fn new<F>(streams: Vec<Messages>, merge: F) -> Self
+	where
+		F: Fn(Vec<ServerResult>) -> Result<ServerResult, ClientError> + Send + Sync + 'static,
+	{
 		let terminal_messages = streams.iter().map(|s| None).collect::<Vec<_>>();
 		Self {
 			streams: streams.into_iter().map(Some).collect_vec(),
 			terminal_messages,
 			complete: false,
+			merge: Box::new(merge),
 		}
 	}
 }
@@ -67,15 +73,13 @@ impl MergeStream {
 	fn merge_terminal_messages(
 		mut self: Pin<&mut Self>,
 	) -> Result<ServerJsonRpcMessage, ClientError> {
-		dbg!(&self.terminal_messages.iter().map(|m| m.is_some()).collect::<Vec<_>>());
 		let msgs = self
 			.terminal_messages
 			.iter_mut()
 			.map(Option::take)
 			.flatten()
 			.collect_vec();
-		// TODO: really merge!
-		let res = msgs.into_iter().next().unwrap();
+		let res = (self.merge)(msgs)?;
 		Ok(ServerJsonRpcMessage::response(
 			res.into(),
 			RequestId::Number(1),
@@ -93,7 +97,13 @@ impl Stream for MergeStream {
 		// Poll all active streams
 		let mut any_pending = false;
 
-		dbg!(&self.terminal_messages.iter().map(|m| m.is_some()).collect::<Vec<_>>());
+		dbg!(
+			&self
+				.terminal_messages
+				.iter()
+				.map(|m| m.is_some())
+				.collect::<Vec<_>>()
+		);
 		dbg!(&self.streams.iter().map(|m| m.is_some()).collect::<Vec<_>>());
 		dbg!(&self.complete);
 		for i in 0..self.streams.len() {
@@ -115,7 +125,13 @@ impl Stream for MergeStream {
 							drop = true;
 							self.terminal_messages[i] = Some(r.result);
 							tracing::error!("howardjohn: set {i}");
-							dbg!(&self.terminal_messages.iter().map(|m| m.is_some()).collect::<Vec<_>>());
+							dbg!(
+								&self
+									.terminal_messages
+									.iter()
+									.map(|m| m.is_some())
+									.collect::<Vec<_>>()
+							);
 							// This stream is done, never look at it again
 						},
 						Err(e) => {
