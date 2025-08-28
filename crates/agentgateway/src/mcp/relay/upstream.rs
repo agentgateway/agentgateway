@@ -1,8 +1,8 @@
 use super::*;
-use crate::mcp::relay::pool::{ClientError, ClientWrapper};
+use crate::mcp::relay::pool::ClientWrapper;
 #[allow(unused_imports)]
 use crate::*;
-use anyhow::anyhow;
+use ::http::HeaderMap;
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use serde::Serialize;
 use thiserror::Error;
@@ -126,91 +126,95 @@ pub(crate) enum Upstream {
 }
 
 impl Upstream {
-	pub(crate) async fn initialize(
-		&self,
-		param: InitializeRequestParam,
-	) -> Result<InitializeResult, UpstreamError> {
-		match &self {
-			Upstream::McpStdio(m) => todo!(),
-			Upstream::McpHttp(c) => {
-				let res = c
-					.send_message(ClientRequest::InitializeRequest(InitializeRequest::new(
-						param,
-					)))
-					.await?;
-				let (resp, session_id) = ClientWrapper::expect_single_response(res).await?;
-				if let Some(session_id) = session_id {
-					c.set_session_id(session_id);
-				}
-				match resp {
-					ServerResult::InitializeResult(ir) => Ok(ir),
-					_ => Err(UpstreamError::Http(ClientError::new(anyhow!(
-						"expected InitializeResult"
-					)))),
-				}
-			},
-			Upstream::OpenAPI(m) => todo!(),
-		}
-	}
+	// pub(crate) async fn initialize(
+	// 	&self,
+	// 	param: InitializeRequestParam,
+	// ) -> Result<InitializeResult, UpstreamError> {
+	// 	match &self {
+	// 		Upstream::McpStdio(m) => todo!(),
+	// 		Upstream::McpHttp(c) => {
+	// 			let res = c
+	// 				.send_message(ClientRequest::InitializeRequest(InitializeRequest::new(
+	// 										param,
+	// 									)),
+	// 				)
+	// 				.await?;
+	// 			let (resp, session_id) = ClientWrapper::expect_single_response(res).await?;
+	// 			if let Some(session_id) = session_id {
+	// 				c.set_session_id(session_id);
+	// 			}
+	// 			match resp {
+	// 				ServerResult::InitializeResult(ir) => Ok(ir),
+	// 				_ => Err(UpstreamError::Http(ClientError::new(anyhow!(
+	// 					"expected InitializeResult"
+	// 				)))),
+	// 			}
+	// 		},
+	// 		Upstream::OpenAPI(m) => todo!(),
+	// 	}
+	// }
 
-	pub(crate) async fn list_tools(
-		&self,
-		request: Option<PaginatedRequestParam>,
-	) -> Result<ListToolsResult, UpstreamError> {
-		match &self {
-			Upstream::McpStdio(m) => Ok(m.list_tools(request).await?),
-			Upstream::McpHttp(c) => {
-				let res = c
-					.send_message(ClientRequest::ListToolsRequest(ListToolsRequest {
-						method: ListToolsRequestMethod,
-						params: request,
-						extensions: Default::default(),
-					}))
-					.await?;
-				let (resp, session_id) = ClientWrapper::expect_single_response(res).await?;
-				match resp {
-					ServerResult::ListToolsResult(ltr) => Ok(ltr),
-					_ => Err(UpstreamError::Http(ClientError::new(anyhow!(
-						"expected ListToolsResult"
-					)))),
-				}
-			},
-			Upstream::OpenAPI(m) => Ok(ListToolsResult {
-				next_cursor: None,
-				tools: m.tools(),
-			}),
-		}
-	}
+	// pub(crate) async fn list_tools(
+	// 	&self,
+	// 	request: Option<PaginatedRequestParam>,
+	// ) -> Result<ListToolsResult, UpstreamError> {
+	// 	match &self {
+	// 		Upstream::McpStdio(m) => Ok(m.list_tools(request).await?),
+	// 		Upstream::McpHttp(c) => {
+	// 			let res = c
+	// 				.send_message(ClientRequest::ListToolsRequest(ListToolsRequest {
+	// 										method: ListToolsRequestMethod,
+	// 										params: request,
+	// 										extensions: Default::default(),
+	// 									}),
+	// 				)
+	// 				.await?;
+	// 			let (resp, session_id) = ClientWrapper::expect_single_response(res).await?;
+	// 			match resp {
+	// 				ServerResult::ListToolsResult(ltr) => Ok(ltr),
+	// 				_ => Err(UpstreamError::Http(ClientError::new(anyhow!(
+	// 					"expected ListToolsResult"
+	// 				)))),
+	// 			}
+	// 		},
+	// 		Upstream::OpenAPI(m) => Ok(ListToolsResult {
+	// 			next_cursor: None,
+	// 			tools: m.tools(),
+	// 		}),
+	// 	}
+	// }
 
-	pub(crate) async fn list_tools2(
+	// pub(crate) async fn list_tools2(
+	// 	&self,
+	// 	request: Option<PaginatedRequestParam>,
+	// ) -> Result<mergestream::Messages, UpstreamError> {
+	// 	match &self {
+	// 		Upstream::McpStdio(m) => todo!(),
+	// 		Upstream::McpHttp(c) => {
+	// 			let res = c
+	// 				.send_message(ClientRequest::ListToolsRequest(ListToolsRequest {
+	// 										method: ListToolsRequestMethod,
+	// 										params: request,
+	// 										extensions: Default::default(),
+	// 									}),
+	// 				)
+	// 				.await?;
+	// 			res.try_into().map_err(Into::into)
+	// 		},
+	// 		Upstream::OpenAPI(m) => todo!(),
+	// 	}
+	// }
+
+	pub(crate) async fn generic_stream(
 		&self,
-		request: Option<PaginatedRequestParam>,
+		request: JsonRpcRequest<ClientRequest>,
+		user_headers: &http::HeaderMap,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
 			Upstream::McpStdio(m) => todo!(),
 			Upstream::McpHttp(c) => {
-				let res = c
-					.send_message(ClientRequest::ListToolsRequest(ListToolsRequest {
-						method: ListToolsRequestMethod,
-						params: request,
-						extensions: Default::default(),
-					}))
-					.await?;
-				res.try_into().map_err(Into::into)
-			},
-			Upstream::OpenAPI(m) => todo!(),
-		}
-	}
-
-	pub(crate) async fn generic(
-		&self,
-		request: ClientRequest,
-	) -> Result<mergestream::Messages, UpstreamError> {
-		match &self {
-			Upstream::McpStdio(m) => todo!(),
-			Upstream::McpHttp(c) => {
-				let is_init = matches!(&request, &ClientRequest::InitializeRequest(_));
-				let res = c.send_message(request).await?;
+				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
+				let res = c.send_message(request, user_headers).await?;
 				if is_init {
 					let sid = match &res {
 						StreamableHttpPostResponse::Accepted => None,
@@ -222,6 +226,21 @@ impl Upstream {
 					}
 				}
 				res.try_into().map_err(Into::into)
+			},
+			Upstream::OpenAPI(m) => todo!(),
+		}
+	}
+
+	pub(crate) async fn generic_notification(
+		&self,
+		request: ClientNotification,
+		user_headers: &http::HeaderMap,
+	) -> Result<(), UpstreamError> {
+		match &self {
+			Upstream::McpStdio(m) => todo!(),
+			Upstream::McpHttp(c) => {
+				c.send_notification(request, user_headers).await?;
+				Ok(())
 			},
 			Upstream::OpenAPI(m) => todo!(),
 		}
@@ -307,7 +326,11 @@ impl Upstream {
 		match &self {
 			Upstream::McpHttp(c) => {
 				let res = c
-					.send_message2(ClientJsonRpcMessage::notification(request))
+					// TODO
+					.send_message2(
+						ClientJsonRpcMessage::notification(request),
+						&HeaderMap::new(),
+					)
 					.await?;
 				ClientWrapper::expect_accepted(res).await?;
 				Ok(())
@@ -316,38 +339,39 @@ impl Upstream {
 			Upstream::OpenAPI(m) => Ok(()),
 		}
 	}
-	pub(crate) async fn call_tool(
-		&self,
-		request: CallToolRequestParam,
-	) -> Result<CallToolResult, UpstreamError> {
-		match &self {
-			Upstream::McpHttp(c) => {
-				let res = c
-					.send_message(
-						CallToolRequest {
-							method: CallToolRequestMethod,
-							params: request,
-							extensions: Default::default(),
-						}
-						.into(),
-					)
-					.await?;
-				todo!()
-				// let (resp, session_id) = ClientWrapper::expect_stream(res).await?;
-			},
-			Upstream::McpStdio(m) => Ok(m.call_tool(request).await?),
-			Upstream::OpenAPI(m) => {
-				todo!()
-				// let res =
-				// 	Box::pin(async move { m.call_tool(request.name.as_ref(), request.arguments).await })
-				// 		.await?;
-				// Ok(CallToolResult {
-				// 	content: vec![Content::text(res)],
-				// 	// TODO: for JSON responses, return structured_content
-				// 	structured_content: None,
-				// 	is_error: None,
-				// })
-			},
-		}
-	}
+	// pub(crate) async fn call_tool(
+	// 	&self,
+	// 	request: CallToolRequestParam,
+	// ) -> Result<CallToolResult, UpstreamError> {
+	// 	match &self {
+	// 		Upstream::McpHttp(c) => {
+	// 			let res = c
+	// 				.send_message(
+	// 					CallToolRequest {
+	// 									method: CallToolRequestMethod,
+	// 									params: request,
+	// 									extensions: Default::default(),
+	// 								}
+	// 								.into(),
+	// 					,
+	// 				)
+	// 				.await?;
+	// 			todo!()
+	// 			// let (resp, session_id) = ClientWrapper::expect_stream(res).await?;
+	// 		},
+	// 		Upstream::McpStdio(m) => Ok(m.call_tool(request).await?),
+	// 		Upstream::OpenAPI(m) => {
+	// 			todo!()
+	// 			// let res =
+	// 			// 	Box::pin(async move { m.call_tool(request.name.as_ref(), request.arguments).await })
+	// 			// 		.await?;
+	// 			// Ok(CallToolResult {
+	// 			// 	content: vec![Content::text(res)],
+	// 			// 	// TODO: for JSON responses, return structured_content
+	// 			// 	structured_content: None,
+	// 			// 	is_error: None,
+	// 			// })
+	// 		},
+	// 	}
+	// }
 }
