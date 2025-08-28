@@ -114,21 +114,10 @@ impl Stream for MergeStream {
 		// Poll all active streams
 		let mut any_pending = false;
 
-		dbg!(
-			&self
-				.terminal_messages
-				.iter()
-				.map(|m| m.is_some())
-				.collect::<Vec<_>>()
-		);
-		dbg!(&self.streams.iter().map(|m| m.is_some()).collect::<Vec<_>>());
-		dbg!(&self.complete);
 		for i in 0..self.streams.len() {
-			tracing::error!("howardjohn: iter {i}");
 			let (k, res) = {
 				let msg_idx = self.streams[i].as_mut();
 				let Some(msg_stream) = msg_idx else {
-					tracing::error!("howardjohn: skip {i}");
 					continue;
 				};
 				(msg_stream.0.clone(), msg_stream.1.0.as_mut().poll_next(cx))
@@ -141,14 +130,6 @@ impl Stream for MergeStream {
 						Ok(ServerJsonRpcMessage::Response(r)) => {
 							drop = true;
 							self.terminal_messages[i] = Some((k, r.result));
-							tracing::error!("howardjohn: set {i}");
-							dbg!(
-								&self
-									.terminal_messages
-									.iter()
-									.map(|m| m.is_some())
-									.collect::<Vec<_>>()
-							);
 							// This stream is done, never look at it again
 						},
 						Err(e) => {
@@ -162,7 +143,6 @@ impl Stream for MergeStream {
 					// Stream ended without terminal message (shouldn't happen in this design)
 					// Not much we can do here I guess.
 					drop = true;
-					tracing::error!("howardjohn: end early");
 				},
 				Poll::Pending => {
 					any_pending = true;
@@ -170,11 +150,7 @@ impl Stream for MergeStream {
 			}
 			if drop {
 				self.streams[i] = None;
-				tracing::error!("howardjohn: end early.. now={}", self.streams[i].is_some());
-				// msg_idx.take();
 			}
-
-			tracing::error!("howardjohn: iter done {i}");
 		}
 		if any_pending {
 			// Still waiting for some
