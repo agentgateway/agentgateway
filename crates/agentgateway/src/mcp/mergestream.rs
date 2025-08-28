@@ -50,12 +50,13 @@ pub struct MergeStream {
 	streams: Vec<Option<Messages>>,
 	terminal_messages: Vec<Option<ServerResult>>,
 	complete: bool,
+	req_id: RequestId,
 	merge:
 		Box<dyn Fn(Vec<ServerResult>) -> Result<ServerResult, ClientError> + Send + Sync + 'static>,
 }
 
 impl MergeStream {
-	pub fn new<F>(streams: Vec<Messages>, merge: F) -> Self
+	pub fn new<F>(streams: Vec<Messages>, req_id: RequestId, merge: F) -> Self
 	where
 		F: Fn(Vec<ServerResult>) -> Result<ServerResult, ClientError> + Send + Sync + 'static,
 	{
@@ -63,6 +64,7 @@ impl MergeStream {
 		Self {
 			streams: streams.into_iter().map(Some).collect_vec(),
 			terminal_messages,
+			req_id,
 			complete: false,
 			merge: Box::new(merge),
 		}
@@ -80,10 +82,7 @@ impl MergeStream {
 			.flatten()
 			.collect_vec();
 		let res = (self.merge)(msgs)?;
-		Ok(ServerJsonRpcMessage::response(
-			res.into(),
-			RequestId::Number(1),
-		))
+		Ok(ServerJsonRpcMessage::response(res.into(), self.req_id.clone()))
 	}
 }
 
@@ -114,7 +113,7 @@ impl Stream for MergeStream {
 					tracing::error!("howardjohn: skip {i}");
 					continue;
 				};
-				dbg!(msg_stream.0.as_mut().poll_next(cx))
+				msg_stream.0.as_mut().poll_next(cx)
 			};
 
 			let mut drop = false;
