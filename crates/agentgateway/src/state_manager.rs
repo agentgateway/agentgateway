@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, absolute};
 use std::time::Duration;
 
 use agent_core::prelude::*;
@@ -107,8 +107,12 @@ impl LocalClient {
 			.map_err(|e| anyhow::anyhow!("Failed to create file watcher: {}", e))?;
 
 		// Watch the config file
+		let abspath = absolute(path)?;
+		let parent = abspath.parent().ok_or(anyhow::anyhow!(
+			"Failed to get the parent of the config file"
+		))?;
 		watcher
-			.watch(path, RecursiveMode::NonRecursive)
+			.watch(parent, RecursiveMode::NonRecursive)
 			.map_err(|e| anyhow::anyhow!("Failed to watch config file: {}", e))?;
 
 		info!("Watching config file: {}", path.display());
@@ -121,7 +125,9 @@ impl LocalClient {
 				// Only process if we have actual content changes
 				if events
 					.iter()
-					.any(|e| matches!(e.kind, EventKind::Modify(_) | EventKind::Create(_)))
+					.any(|e| matches!(
+						e.kind,
+						EventKind::Modify(_) | EventKind::Create(_) if e.paths.last().is_some_and(|p| p == &abspath)))
 				{
 					info!("Config file changed, reloading...");
 					match lc.reload_config(next_state.clone()).await {
