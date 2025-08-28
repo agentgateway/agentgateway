@@ -748,9 +748,9 @@ async fn make_backend_call(
 	};
 
 	let policies = inputs
-	.stores
-	.read_binds()
-	.backend_policies(backend.name(), service);
+		.stores
+		.read_binds()
+		.backend_policies(backend.name(), service);
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
 	let override_dest = maybe_inference.mutate_request(&mut req).await?;
 	log.add(|l| l.inference_pool = override_dest);

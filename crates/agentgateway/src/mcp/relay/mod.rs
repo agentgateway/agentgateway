@@ -16,17 +16,17 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::TLSConnectionInfo;
-use agent_core::metrics::Recorder;
 use agent_core::prelude::Strng;
 use agent_core::trcng;
 use agent_core::version::BuildInfo;
+use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
 use opentelemetry::global::BoxedSpan;
 use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
 pub use pool::ClientError;
-use rmcp::model::{CallToolRequestParam, *};
+use rmcp::model::*;
 use rmcp::service::{RequestContext, RunningService};
 use rmcp::transport::common::server_side_http::ServerSseMessage;
 use rmcp::{RoleClient, RoleServer, model};
@@ -201,50 +201,50 @@ impl Relay {
 		}
 		Ok(())
 	}
-	pub async fn initialize(&self, r: InitializeRequest) -> Result<InitializeResult, UpstreamError> {
-		// List servers and initialize the ones that are not initialized
-		// Initialize all targets
-		for con in self.pool.iter() {
-			let _res = con.initialize(r.params.clone()).await?;
-		}
-		// For now, return static info about ourselves
-		// In the future, merge the results from each upstream.
-		let res = self.get_info();
-		Ok(res)
-	}
-	pub async fn list_tools(
-		&self,
-		r: ListToolsRequest,
-		cel: &ContextBuilder,
-	) -> Result<ListToolsResult, UpstreamError> {
-		let mut tools = Vec::new();
-		for (name, con) in self.pool.iter_named() {
-			let res = con.list_tools(r.params.clone()).await?;
-			res
-				.tools
-				.into_iter()
-				.filter(|t| {
-					self.policies.validate(
-						&rbac::ResourceType::Tool(rbac::ResourceId::new(name.to_string(), t.name.to_string())),
-						cel,
-					)
-				})
-				.for_each(|i| tools.push(i));
-		}
-
-		self.metrics.clone().record(
-			metrics::ListCall {
-				resource_type: "tool".to_string(),
-				params: vec![],
-			},
-			(),
-		);
-
-		Ok(ListToolsResult {
-			tools,
-			next_cursor: None,
-		})
-	}
+	// pub async fn initialize(&self, r: InitializeRequest) -> Result<InitializeResult, UpstreamError> {
+	// 	// List servers and initialize the ones that are not initialized
+	// 	// Initialize all targets
+	// 	for con in self.pool.iter() {
+	// 		let _res = con.initialize(r.params.clone()).await?;
+	// 	}
+	// 	// For now, return static info about ourselves
+	// 	// In the future, merge the results from each upstream.
+	// 	let res = self.get_info();
+	// 	Ok(res)
+	// }
+	// pub async fn list_tools(
+	// 	&self,
+	// 	r: ListToolsRequest,
+	// 	cel: &ContextBuilder,
+	// ) -> Result<ListToolsResult, UpstreamError> {
+	// 	let mut tools = Vec::new();
+	// 	for (name, con) in self.pool.iter_named() {
+	// 		let res = con.list_tools(r.params.clone()).await?;
+	// 		res
+	// 			.tools
+	// 			.into_iter()
+	// 			.filter(|t| {
+	// 				self.policies.validate(
+	// 					&rbac::ResourceType::Tool(rbac::ResourceId::new(name.to_string(), t.name.to_string())),
+	// 					cel,
+	// 				)
+	// 			})
+	// 			.for_each(|i| tools.push(i));
+	// 	}
+	//
+	// 	self.metrics.clone().record(
+	// 		metrics::ListCall {
+	// 			resource_type: "tool".to_string(),
+	// 			params: vec![],
+	// 		},
+	// 		(),
+	// 	);
+	//
+	// 	Ok(ListToolsResult {
+	// 		tools,
+	// 		next_cursor: None,
+	// 	})
+	// }
 	pub fn merge_tools(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();
@@ -298,6 +298,7 @@ impl Relay {
 	pub async fn send_single(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
+		user_headers: http::HeaderMap,
 		service_name: &str,
 	) -> Result<Response, UpstreamError> {
 		let Ok(us) = self.pool.get(service_name) else {
@@ -305,22 +306,40 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let stream = us.generic(r.request).await?;
+		let stream = us.generic_stream(r, &user_headers).await?;
 
 		messages_to_response(stream)
 	}
 	pub async fn send_fanout(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
+		user_headers: http::HeaderMap,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
 		for (name, con) in self.pool.iter_named() {
-			streams.push((name, con.generic(r.request.clone()).await?));
+			streams.push((name, con.generic_stream(r.clone(), &user_headers).await?));
 		}
 
 		let ms = mergestream::MergeStream::new(streams, r.id, merge);
 		merge_to_response(ms)
+	}
+	pub async fn send_notification(
+		&self,
+		r: JsonRpcNotification<ClientNotification>,
+		user_headers: http::HeaderMap,
+	) -> Result<Response, UpstreamError> {
+		let mut streams = Vec::new();
+		for (name, con) in self.pool.iter_named() {
+			streams.push((
+				name,
+				con
+					.generic_notification(r.notification.clone(), &user_headers)
+					.await?,
+			));
+		}
+
+		Ok(accepted_response())
 	}
 	// pub async fn list_tools2(
 	// 	&self,
@@ -377,59 +396,59 @@ impl Relay {
 	// 		},
 	// 	))
 	// }
-	pub async fn call_tool(
-		&self,
-		r: CallToolRequest,
-		cel: &ContextBuilder,
-		log: AsyncLog<MCPInfo>,
-	) -> Result<CallToolResult, UpstreamError> {
-		let request = r.params;
-		let tool_name = request.name.to_string();
-		let (service_name, tool) = self.parse_resource_name(&tool_name)?;
-		log.non_atomic_mutate(|l| {
-			l.tool_call_name = Some(tool.to_string());
-			l.target_name = Some(service_name.to_string());
-		});
-		if !self.policies.validate(
-			&rbac::ResourceType::Tool(rbac::ResourceId::new(
-				service_name.to_string(),
-				tool.to_string(),
-			)),
-			cel,
-		) {
-			return Err(UpstreamError::Authorization);
-		}
-		let con = self.pool.get(service_name)?;
-		let req = CallToolRequestParam {
-			name: Cow::Owned(tool.to_string()),
-			arguments: request.arguments,
-		};
-		self.metrics.record(
-			metrics::ToolCall {
-				server: service_name.to_string(),
-				name: tool.to_string(),
-				params: vec![],
-			},
-			(),
-		);
-		con.call_tool(req).await;
-		// match con.call_tool(req).await {
-		// 	Ok(r) => Ok(r),
-		// 	Err(e) => {
-		// 		self.metrics.record(
-		// 			metrics::ToolCallError {
-		// 				server: service_name.to_string(),
-		// 				name: tool.to_string(),
-		// 				error_type: e.error_code(),
-		// 				params: vec![],
-		// 			},
-		// 			(),
-		// 		);
-		// 		Err(e.into())
-		// 	},
-		// };
-		todo!()
-	}
+	// pub async fn call_tool(
+	// 	&self,
+	// 	r: CallToolRequest,
+	// 	cel: &ContextBuilder,
+	// 	log: AsyncLog<MCPInfo>,
+	// ) -> Result<CallToolResult, UpstreamError> {
+	// 	let request = r.params;
+	// 	let tool_name = request.name.to_string();
+	// 	let (service_name, tool) = self.parse_resource_name(&tool_name)?;
+	// 	log.non_atomic_mutate(|l| {
+	// 		l.tool_call_name = Some(tool.to_string());
+	// 		l.target_name = Some(service_name.to_string());
+	// 	});
+	// 	if !self.policies.validate(
+	// 		&rbac::ResourceType::Tool(rbac::ResourceId::new(
+	// 			service_name.to_string(),
+	// 			tool.to_string(),
+	// 		)),
+	// 		cel,
+	// 	) {
+	// 		return Err(UpstreamError::Authorization);
+	// 	}
+	// 	let con = self.pool.get(service_name)?;
+	// 	let req = CallToolRequestParam {
+	// 		name: Cow::Owned(tool.to_string()),
+	// 		arguments: request.arguments,
+	// 	};
+	// 	self.metrics.record(
+	// 		metrics::ToolCall {
+	// 			server: service_name.to_string(),
+	// 			name: tool.to_string(),
+	// 			params: vec![],
+	// 		},
+	// 		(),
+	// 	);
+	// 	con.call_tool(req).await;
+	// 	// match con.call_tool(req).await {
+	// 	// 	Ok(r) => Ok(r),
+	// 	// 	Err(e) => {
+	// 	// 		self.metrics.record(
+	// 	// 			metrics::ToolCallError {
+	// 	// 				server: service_name.to_string(),
+	// 	// 				name: tool.to_string(),
+	// 	// 				error_type: e.error_code(),
+	// 	// 				params: vec![],
+	// 	// 			},
+	// 	// 			(),
+	// 	// 		);
+	// 	// 		Err(e.into())
+	// 	// 	},
+	// 	// };
+	// 	todo!()
+	// }
 
 	fn get_info(&self) -> ServerInfo {
 		ServerInfo {
@@ -912,4 +931,11 @@ fn messages_to_response(stream: super::mergestream::Messages) -> Result<Response
 	Ok(crate::mcp::streamablehttp::sse_stream_response(
 		stream, None,
 	))
+}
+
+fn accepted_response() -> Response {
+	::http::Response::builder()
+		.status(StatusCode::ACCEPTED)
+		.body(crate::http::Body::empty())
+		.expect("valid response")
 }

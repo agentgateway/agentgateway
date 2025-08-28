@@ -34,12 +34,9 @@ impl LocalSession {
 			.send_internal(parts, message)
 			.await
 			.unwrap_or_else(|e| {
-				match e {
-					UpstreamError::Http(ClientError::Status(resp)) => {
-						// Forward response as-is
-						return resp;
-					},
-					_ => {},
+				if let UpstreamError::Http(ClientError::Status(resp)) = e {
+					// Forward response as-is
+					return resp;
 				}
 				http_error(
 					StatusCode::INTERNAL_SERVER_ERROR,
@@ -62,13 +59,13 @@ impl LocalSession {
 					ClientRequest::InitializeRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, self.relay.merge_initialize())
+							.send_fanout(r, parts.headers, self.relay.merge_initialize())
 							.await
 					},
 					ClientRequest::ListToolsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, self.relay.merge_tools(cel.clone()))
+							.send_fanout(r, parts.headers, self.relay.merge_tools(cel.clone()))
 							.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
@@ -98,14 +95,15 @@ impl LocalSession {
 						);
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
-						self.relay.send_single(r, service_name).await
+						self.relay.send_single(r, parts.headers, service_name).await
 					},
 					_ => todo!(),
 				}
 			},
-			ClientJsonRpcMessage::Notification(not) => {
-				self.relay.notify(not.notification).await?;
-				Ok(accepted_response())
+			ClientJsonRpcMessage::Notification(r) => {
+				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
+				// however, we don't have a way to map to the correct service yet
+				self.relay.send_notification(r, parts.headers).await
 			},
 			_ => todo!(),
 		}
@@ -199,12 +197,12 @@ impl StreamableHttpService {
 			(http::Method::DELETE, true) => self.handle_delete(request).await,
 			_ => {
 				// Handle other methods or return an error
-				let response = ::http::Response::builder()
+
+				::http::Response::builder()
 					.status(http::StatusCode::METHOD_NOT_ALLOWED)
 					.header(http::header::ALLOW, allowed_methods)
 					.body(http::Body::from("Method Not Allowed"))
-					.expect("valid response");
-				response
+					.expect("valid response")
 			},
 		}
 	}

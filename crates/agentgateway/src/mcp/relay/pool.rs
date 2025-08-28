@@ -11,11 +11,11 @@ use axum_core::BoxError;
 use frozen_collections::MapIteration;
 use futures::StreamExt;
 use futures::stream::BoxStream;
-use http::Uri;
 use http::header::CONTENT_TYPE;
+use http::{HeaderMap, Uri};
 use reqwest::header::ACCEPT;
 use rmcp::model::{ClientJsonRpcMessage, ServerJsonRpcMessage};
-use rmcp::service::{AtomicU32Provider, NotificationContext, Peer, RequestIdProvider};
+use rmcp::service::{AtomicU32Provider, NotificationContext, Peer};
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
@@ -402,26 +402,39 @@ impl ClientWrapper {
 
 	pub async fn send_message(
 		&self,
-		req: ClientRequest,
+		req: JsonRpcRequest<ClientRequest>,
+		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let message = ClientJsonRpcMessage::request(req, self.idp.next_request_id());
-		Box::pin(self.internal_send_message(message)).await
+		let message = ClientJsonRpcMessage::Request(req);
+		Box::pin(self.internal_send_message(message, user_headers)).await
+	}
+
+	pub async fn send_notification(
+		&self,
+		req: ClientNotification,
+		user_headers: &HeaderMap,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		let message = ClientJsonRpcMessage::notification(req);
+		Box::pin(self.internal_send_message(message, user_headers)).await
 	}
 	pub async fn send_message2(
 		&self,
 		req: ClientJsonRpcMessage,
+		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		Box::pin(self.internal_send_message(req)).await
+		Box::pin(self.internal_send_message(req, user_headers)).await
 	}
-	fn internal_send_message(
-		&self,
+	fn internal_send_message<'a>(
+		&'a self,
 		req: ClientJsonRpcMessage,
+		user_headers: &'a HeaderMap,
 	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
-		Box::pin(self.internal_send_message2(req))
+		Box::pin(self.internal_send_message2(req, user_headers))
 	}
 	async fn internal_send_message2(
 		&self,
 		message: ClientJsonRpcMessage,
+		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let client = self.client.clone();
 
@@ -440,6 +453,16 @@ impl ClientWrapper {
 				HEADER_SESSION_ID,
 				session_id.as_ref().parse().map_err(ClientError::new)?,
 			);
+		}
+
+		for (k, v) in user_headers {
+			// Remove headers we do not want to propagate to the backend
+			if k == http::header::CONTENT_ENCODING || k == http::header::CONTENT_LENGTH {
+				continue;
+			}
+			if !req.headers().contains_key(k) {
+				req.headers_mut().insert(k.clone(), v.clone());
+			}
 		}
 
 		let resp = client
