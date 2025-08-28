@@ -1,7 +1,7 @@
 use crate::http::{Request, Response};
 use crate::mcp::rbac;
-use crate::mcp::relay::Relay;
 use crate::mcp::relay::upstream::UpstreamError;
+use crate::mcp::relay::{ClientError, Relay};
 use crate::*;
 use ::http::StatusCode;
 use ::http::request::Parts;
@@ -34,6 +34,13 @@ impl LocalSession {
 			.send_internal(parts, message)
 			.await
 			.unwrap_or_else(|e| {
+				match e {
+					UpstreamError::Http(ClientError::Status(resp)) => {
+						// Forward response as-is
+						return resp;
+					},
+					_ => {},
+				}
 				http_error(
 					StatusCode::INTERNAL_SERVER_ERROR,
 					format!("failed to send message: {e}",),
