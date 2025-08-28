@@ -41,9 +41,7 @@ fn test_build_agent_path() {
 	];
 
 	for (input_url, expected_output) in test_cases {
-		let uri: Uri = input_url
-			.parse()
-			.expect(&format!("Failed to parse URI: {}", input_url));
+		let uri: Uri = input_url.parse().expect("Failed to parse URI");
 		let result = build_agent_path(uri);
 		assert_eq!(result, expected_output, "Failed for input: {}", input_url);
 	}
