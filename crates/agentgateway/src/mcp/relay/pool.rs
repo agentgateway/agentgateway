@@ -8,25 +8,19 @@ use crate::{ProxyInputs, json};
 use agent_core::prelude::*;
 use anyhow::anyhow;
 use axum_core::BoxError;
-use frozen_collections::MapIteration;
 use futures::StreamExt;
-use futures::stream::BoxStream;
 use http::header::CONTENT_TYPE;
 use http::{HeaderMap, Uri};
 use indexmap::IndexMap;
 use reqwest::header::ACCEPT;
 use rmcp::model::{ClientJsonRpcMessage, ServerJsonRpcMessage};
-use rmcp::service::{AtomicU32Provider, NotificationContext, Peer};
+use rmcp::service::AtomicU32Provider;
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
-use rmcp::{ClientHandler, ServiceError};
 use sse_stream::SseStream;
 use thiserror::Error;
-use tracing_subscriber::filter::FilterExt;
-
-type McpError = ErrorData;
 
 #[derive(Debug)]
 pub(crate) struct ConnectionPool {
@@ -57,7 +51,6 @@ impl ConnectionPool {
 
 	pub(crate) fn setup_connections(&mut self) -> anyhow::Result<()> {
 		for tgt in &self.backend.targets {
-			let ct = tokio_util::sync::CancellationToken::new(); //TODO
 			debug!("initializing target: {}", tgt.name);
 			let transport = self.setup_upstream(tgt.as_ref())?;
 			self.by_name.insert(tgt.name.clone(), Arc::new(transport));
@@ -82,7 +75,7 @@ impl ConnectionPool {
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, anyhow::Error> {
 		trace!("connecting to target: {}", target.name);
 		let target = match &target.spec {
-			McpTargetSpec::Sse(sse) => {
+			McpTargetSpec::Sse(_) => {
 				todo!()
 			},
 			McpTargetSpec::Mcp(mcp) => {
@@ -102,13 +95,9 @@ impl ConnectionPool {
 					target.backend_policies.clone(),
 				);
 
-				// client
-				// 	.send_message(ClientRequest::InitializeRequest(InitializeRequest::new(init_request)))
-				// 	.await?;
-
 				upstream::Upstream::McpHttp(client)
 			},
-			McpTargetSpec::Stdio { cmd, args, env } => {
+			McpTargetSpec::Stdio { .. } => {
 				todo!()
 				// debug!("starting stdio transport for target: {}", target.name);
 				// #[cfg(target_os = "windows")]
@@ -173,113 +162,6 @@ impl ConnectionPool {
 	}
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct PeerClientHandler {
-	peer: Peer<RoleServer>,
-	init_request: InitializeRequestParam,
-}
-
-impl ClientHandler for PeerClientHandler {
-	async fn create_message(
-		&self,
-		params: CreateMessageRequestParam,
-		_context: RequestContext<RoleClient>,
-	) -> Result<CreateMessageResult, McpError> {
-		self.peer.create_message(params).await.map_err(|e| match e {
-			ServiceError::McpError(e) => e,
-			_ => McpError::internal_error(e.to_string(), None),
-		})
-	}
-
-	async fn list_roots(
-		&self,
-		_context: RequestContext<RoleClient>,
-	) -> Result<ListRootsResult, McpError> {
-		self.peer.list_roots().await.map_err(|e| match e {
-			ServiceError::McpError(e) => e,
-			_ => McpError::internal_error(e.to_string(), None),
-		})
-	}
-
-	async fn on_cancelled(
-		&self,
-		params: CancelledNotificationParam,
-		_context: NotificationContext<RoleClient>,
-	) {
-		let _ = self.peer.notify_cancelled(params).await.inspect_err(|e| {
-			error!("Failed to notify cancelled: {}", e);
-		});
-	}
-
-	async fn on_progress(
-		&self,
-		params: ProgressNotificationParam,
-		_context: NotificationContext<RoleClient>,
-	) {
-		let _ = self.peer.notify_progress(params).await.inspect_err(|e| {
-			error!("Failed to notify progress: {}", e);
-		});
-	}
-
-	async fn on_logging_message(
-		&self,
-		params: LoggingMessageNotificationParam,
-		_context: NotificationContext<RoleClient>,
-	) {
-		let _ = self
-			.peer
-			.notify_logging_message(params)
-			.await
-			.inspect_err(|e| {
-				error!("Failed to notify logging message: {}", e);
-			});
-	}
-
-	async fn on_prompt_list_changed(&self, _context: NotificationContext<RoleClient>) {
-		let _ = self
-			.peer
-			.notify_prompt_list_changed()
-			.await
-			.inspect_err(|e| {
-				error!("Failed to notify prompt list changed: {}", e);
-			});
-	}
-
-	async fn on_resource_list_changed(&self, _context: NotificationContext<RoleClient>) {
-		let _ = self
-			.peer
-			.notify_resource_list_changed()
-			.await
-			.inspect_err(|e| {
-				error!("Failed to notify resource list changed: {}", e);
-			});
-	}
-
-	async fn on_tool_list_changed(&self, _context: NotificationContext<RoleClient>) {
-		let _ = self.peer.notify_tool_list_changed().await.inspect_err(|e| {
-			error!("Failed to notify tool list changed: {}", e);
-		});
-	}
-
-	async fn on_resource_updated(
-		&self,
-		params: ResourceUpdatedNotificationParam,
-		_context: NotificationContext<RoleClient>,
-	) {
-		let _ = self
-			.peer
-			.notify_resource_updated(params)
-			.await
-			.inspect_err(|e| {
-				error!("Failed to notify resource updated: {}", e);
-			});
-	}
-
-	fn get_info(&self) -> ClientInfo {
-		self.init_request.get_info()
-	}
-}
-
 #[derive(Clone, Debug)]
 pub struct ClientWrapper {
 	backend: Arc<SimpleBackend>,
@@ -290,14 +172,10 @@ pub struct ClientWrapper {
 	session_id: AtomicOption<String>,
 }
 
-impl ClientWrapper {
-	pub fn insert_headers(&self, req: &mut crate::http::Request) {}
-}
-
 #[derive(Error, Debug)]
 pub enum ClientError {
 	#[error("http request failed with code: {}", .0.status())]
-	Status(crate::http::Response),
+	Status(Box<crate::http::Response>),
 	#[error("http request failed: {0}")]
 	General(Arc<HttpError>),
 }
@@ -341,65 +219,6 @@ impl ClientWrapper {
 			},
 		}
 	}
-	pub async fn expect_single_response(
-		res: StreamableHttpPostResponse,
-	) -> Result<(ServerResult, Option<String>), ClientError> {
-		match res {
-			StreamableHttpPostResponse::Accepted => {
-				Err(ClientError::new(anyhow!("unexpected 'accepted' response")))
-			},
-			StreamableHttpPostResponse::Json(r, sid) => r
-				.into_response()
-				.ok_or_else(|| ClientError::new(anyhow!("unexpected 'json' response")))
-				.map(|t| (t.0, sid)),
-			StreamableHttpPostResponse::Sse(mut sse, sid) => {
-				loop {
-					// Look for the first item
-					let Some(item) = tokio_stream::StreamExt::next(&mut sse).await else {
-						return Err(ClientError::new(anyhow!("no response on SSE stream")));
-					};
-					let item = item.map_err(ClientError::new)?;
-					let Some(data) = item.data else { continue };
-					let rpc =
-						serde_json::from_str::<ServerJsonRpcMessage>(&data).map_err(ClientError::new)?;
-					return rpc
-						.into_response()
-						.ok_or_else(|| ClientError::new(anyhow!("unexpected 'sse' response")))
-						.map(|t| (t.0, sid));
-				}
-			},
-		}
-	}
-
-	pub async fn expect_stream(
-		res: StreamableHttpPostResponse,
-	) -> Result<BoxStream<'static, Result<ServerJsonRpcMessage, ClientError>>, ClientError> {
-		match res {
-			StreamableHttpPostResponse::Accepted => {
-				Err(ClientError::new(anyhow!("unexpected 'accepted' response")))
-			},
-			StreamableHttpPostResponse::Json(r, sid) => {
-				Ok(futures::stream::once(async { Ok(r) }).boxed())
-			},
-			StreamableHttpPostResponse::Sse(sse, sid) => Ok(
-				sse
-					.filter_map(|item| async {
-						item
-							.map_err(ClientError::new)
-							.and_then(|item| {
-								item
-									.data
-									.map(|data| {
-										serde_json::from_str::<ServerJsonRpcMessage>(&data).map_err(ClientError::new)
-									})
-									.transpose()
-							})
-							.transpose()
-					})
-					.boxed(),
-			),
-		}
-	}
 
 	pub async fn send_message(
 		&self,
@@ -428,7 +247,7 @@ impl ClientWrapper {
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		self.internal_delete(user_headers).await
+		self.internal_get_event_stream(user_headers).await
 	}
 	pub async fn send_message2(
 		&self,
@@ -488,7 +307,7 @@ impl ClientWrapper {
 		}
 
 		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(ClientError::Status(resp));
+			return Err(ClientError::Status(Box::new(resp)));
 		}
 
 		let content_type = resp.headers().get(CONTENT_TYPE);
@@ -562,7 +381,7 @@ impl ClientWrapper {
 			.map_err(ClientError::new)?;
 
 		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(ClientError::Status(resp));
+			return Err(ClientError::Status(Box::new(resp)));
 		}
 		Ok(StreamableHttpPostResponse::Accepted)
 	}
@@ -601,295 +420,8 @@ impl ClientWrapper {
 			.map_err(ClientError::new)?;
 
 		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(ClientError::Status(resp));
+			return Err(ClientError::Status(Box::new(resp)));
 		}
 		Ok(StreamableHttpPostResponse::Accepted)
 	}
 }
-
-// impl StreamableHttpClient for ClientWrapper {
-// 	type Error = HttpError;
-//
-// 	async fn post_message(
-// 		&self,
-// 		uri: Arc<str>,
-// 		message: ClientJsonRpcMessage,
-// 		session_id: Option<Arc<str>>,
-// 		_auth_header: Option<String>,
-// 	) -> Result<StreamableHttpPostResponse, StreamableHttpError<Self::Error>> {
-// 		let client = self.client.clone();
-//
-// 		let uri = "http://".to_string() + &self.backend.hostport() + &Self::parse_uri(uri)?;
-//
-// 		let body =
-// 			serde_json::to_vec(&message).map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-//
-// 		let mut req = http::Request::builder()
-// 			.uri(uri)
-// 			.method(http::Method::POST)
-// 			.header(CONTENT_TYPE, "application/json")
-// 			.header(ACCEPT, [EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE].join(", "))
-// 			.body(body.into())
-// 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-//
-// 		if let Some(session_id) = session_id {
-// 			req.headers_mut().insert(
-// 				HEADER_SESSION_ID,
-// 				session_id
-// 					.as_ref()
-// 					.parse()
-// 					.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?,
-// 			);
-// 		}
-//
-// 		let resp = client
-// 			.call_with_default_policies(req, &self.backend, self.policies.clone())
-// 			.await
-// 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-//
-// 		if resp.status() == http::StatusCode::ACCEPTED {
-// 			return Ok(StreamableHttpPostResponse::Accepted);
-// 		}
-//
-// 		if resp.status().is_client_error() || resp.status().is_server_error() {
-// 			return Err(StreamableHttpError::Client(HttpError::new(anyhow!(
-// 				"received status code {}",
-// 				resp.status()
-// 			))));
-// 		}
-//
-// 		let content_type = resp.headers().get(CONTENT_TYPE);
-// 		let session_id = resp
-// 			.headers()
-// 			.get(HEADER_SESSION_ID)
-// 			.and_then(|v| v.to_str().ok())
-// 			.map(|s| s.to_string());
-//
-// 		match content_type {
-// 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
-// 				let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
-// 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
-// 			},
-// 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
-// 				let message = json::from_body::<ServerJsonRpcMessage>(resp.into_body())
-// 					.await
-// 					.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-// 				Ok(StreamableHttpPostResponse::Json(message, session_id))
-// 			},
-// 			_ => {
-// 				tracing::error!("unexpected content type: {:?}", content_type);
-// 				Err(StreamableHttpError::UnexpectedContentType(
-// 					content_type.map(|ct| String::from_utf8_lossy(ct.as_bytes()).to_string()),
-// 				))
-// 			},
-// 		}
-// 	}
-//
-// 	async fn delete_session(
-// 		&self,
-// 		uri: Arc<str>,
-// 		session_id: Arc<str>,
-// 		_auth_header: Option<String>,
-// 	) -> Result<(), StreamableHttpError<Self::Error>> {
-// 		let client = self.client.clone();
-//
-// 		let uri = "http://".to_string() + &self.backend.hostport() + &Self::parse_uri(uri)?;
-//
-// 		let req = http::Request::builder()
-// 			.uri(uri)
-// 			.method(http::Method::DELETE)
-// 			.header(HEADER_SESSION_ID, session_id.as_ref())
-// 			.body(Body::empty())
-// 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-//
-// 		let resp = client
-// 			.call_with_default_policies(req, &self.backend, self.policies.clone())
-// 			.await
-// 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-//
-// 		// If method not allowed, that's ok
-// 		if resp.status() == http::StatusCode::METHOD_NOT_ALLOWED {
-// 			tracing::debug!("this server doesn't support deleting session");
-// 			return Ok(());
-// 		}
-//
-// 		if resp.status().is_client_error() || resp.status().is_server_error() {
-// 			return Err(StreamableHttpError::Client(HttpError::new(anyhow!(
-// 				"received status code {}",
-// 				resp.status()
-// 			))));
-// 		}
-//
-// 		Ok(())
-// 	}
-//
-// 	async fn get_stream(
-// 		&self,
-// 		uri: Arc<str>,
-// 		session_id: Arc<str>,
-// 		last_event_id: Option<String>,
-// 		_auth_header: Option<String>,
-// 	) -> Result<BoxStream<'static, Result<Sse, SseError>>, StreamableHttpError<Self::Error>> {
-// 		let client = self.client.clone();
-//
-// 		let uri = "http://".to_string() + &self.backend.hostport() + &Self::parse_uri(uri)?;
-//
-// 		let mut reqb = http::Request::builder()
-// 			.uri(uri)
-// 			.method(http::Method::GET)
-// 			.header(ACCEPT, EVENT_STREAM_MIME_TYPE)
-// 			.header(HEADER_SESSION_ID, session_id.as_ref());
-//
-// 		if let Some(last_event_id) = last_event_id {
-// 			reqb = reqb.header(HEADER_LAST_EVENT_ID, last_event_id);
-// 		}
-//
-// 		let req = reqb
-// 			.body(Body::empty())
-// 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-//
-// 		let resp = client
-// 			.call_with_default_policies(req, &self.backend, self.policies.clone())
-// 			.await
-// 			.map_err(|e| StreamableHttpError::Client(HttpError::new(e)))?;
-//
-// 		if resp.status() == http::StatusCode::METHOD_NOT_ALLOWED {
-// 			return Err(StreamableHttpError::ServerDoesNotSupportSse);
-// 		}
-//
-// 		if resp.status().is_client_error() || resp.status().is_server_error() {
-// 			return Err(StreamableHttpError::Client(HttpError::new(anyhow!(
-// 				"received status code {}",
-// 				resp.status()
-// 			))));
-// 		}
-//
-// 		match resp.headers().get(CONTENT_TYPE) {
-// 			Some(ct) => {
-// 				if !ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) {
-// 					return Err(StreamableHttpError::UnexpectedContentType(Some(
-// 						String::from_utf8_lossy(ct.as_bytes()).to_string(),
-// 					)));
-// 				}
-// 			},
-// 			None => {
-// 				return Err(StreamableHttpError::UnexpectedContentType(None));
-// 			},
-// 		}
-//
-// 		let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
-// 		Ok(event_stream)
-// 	}
-// }
-//
-// impl SseClient for ClientWrapper {
-// 	type Error = HttpError;
-//
-// 	async fn post_message(
-// 		&self,
-// 		uri: Uri,
-// 		message: ClientJsonRpcMessage,
-// 		_auth_token: Option<String>,
-// 	) -> Result<(), SseTransportError<Self::Error>> {
-// 		let uri = "http://".to_string()
-// 			+ &self.backend.hostport()
-// 			+ uri.path_and_query().map(|p| p.as_str()).unwrap_or_default();
-// 		let body =
-// 			serde_json::to_vec(&message).map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
-// 		let mut req = http::Request::builder()
-// 			.uri(uri)
-// 			.method(http::Method::POST)
-// 			.header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
-// 			.body(body.into())
-// 			.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
-//
-// 		if let JsonRpcMessage::Request(request) = &message {
-// 			match request.request.extensions().get::<RqCtx>() {
-// 				Some(rq_ctx) => {
-// 					let tracer = trcng::get_tracer();
-// 					let _span = tracer
-// 						.span_builder("sse_post")
-// 						.with_kind(SpanKind::Client)
-// 						.start_with_context(tracer, &rq_ctx.context);
-// 					trcng::add_context_to_request(req.headers_mut(), &rq_ctx.context);
-// 				},
-// 				None => {
-// 					trace!("No RqCtx found in extensions");
-// 				},
-// 			}
-// 		}
-//
-// 		self
-// 			.client
-// 			.call_with_default_policies(req, &self.backend, self.policies.clone())
-// 			.await
-// 			.map_err(|e| SseTransportError::Client(HttpError::new(e)))
-// 			.and_then(|resp| {
-// 				if resp.status().is_client_error() || resp.status().is_server_error() {
-// 					Err(SseTransportError::Client(HttpError::new(anyhow!(
-// 						"received status code {}",
-// 						resp.status()
-// 					))))
-// 				} else {
-// 					Ok(resp)
-// 				}
-// 			})
-// 			.map(drop)
-// 	}
-//
-// 	fn get_stream(
-// 		&self,
-// 		uri: Uri,
-// 		last_event_id: Option<String>,
-// 		_auth_token: Option<String>,
-// 	) -> impl Future<Output = Result<BoxedSseResponse, SseTransportError<Self::Error>>> + Send + '_ {
-// 		Box::pin(async move {
-// 			let uri = "http://".to_string()
-// 				+ &self.backend.hostport()
-// 				+ uri.path_and_query().map(|p| p.as_str()).unwrap_or_default();
-//
-// 			let mut reqb = http::Request::builder()
-// 				.uri(uri)
-// 				.method(http::Method::GET)
-// 				.header(ACCEPT, EVENT_STREAM_MIME_TYPE);
-// 			if let Some(last_event_id) = last_event_id {
-// 				reqb = reqb.header(HEADER_LAST_EVENT_ID, last_event_id);
-// 			}
-// 			let req = reqb
-// 				.body(Body::empty())
-// 				.map_err(|e| SseTransportError::Client(HttpError::new(e)))?;
-//
-// 			let resp: Result<Response, ProxyError> = self
-// 				.client
-// 				.call_with_default_policies(req, &self.backend, self.policies.clone())
-// 				.await;
-//
-// 			let resp = resp
-// 				.map_err(|e| SseTransportError::Client(HttpError::new(e)))
-// 				.and_then(|resp| {
-// 					if resp.status().is_client_error() || resp.status().is_server_error() {
-// 						Err(SseTransportError::Client(HttpError::new(anyhow!(
-// 							"received status code {}",
-// 							resp.status()
-// 						))))
-// 					} else {
-// 						Ok(resp)
-// 					}
-// 				})?;
-// 			match resp.headers().get(CONTENT_TYPE) {
-// 				Some(ct) => {
-// 					if !ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) {
-// 						return Err(SseTransportError::UnexpectedContentType(Some(ct.clone())));
-// 					}
-// 				},
-// 				None => {
-// 					return Err(SseTransportError::UnexpectedContentType(None));
-// 				},
-// 			}
-//
-// 			let event_stream =
-// 				sse_stream::SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
-// 			Ok(event_stream)
-// 		})
-// 	}
-// }

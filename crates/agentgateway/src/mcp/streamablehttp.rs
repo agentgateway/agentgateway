@@ -1,4 +1,4 @@
-use crate::http::{Body, Request, Response};
+use crate::http::{Request, Response};
 use crate::mcp::rbac;
 use crate::mcp::relay::upstream::UpstreamError;
 use crate::mcp::relay::{ClientError, Relay};
@@ -6,8 +6,7 @@ use crate::*;
 use ::http::StatusCode;
 use ::http::request::Parts;
 use agent_core::metrics::Recorder;
-use futures_util::{SinkExt, StreamExt};
-use http_body_util::Full;
+use futures_util::StreamExt;
 use rmcp::ErrorData;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientRequest, ErrorCode, JsonRpcError, RequestId, ServerJsonRpcMessage,
@@ -61,7 +60,7 @@ impl LocalSession {
 		move |e| {
 			if let UpstreamError::Http(ClientError::Status(resp)) = e {
 				// Forward response as-is
-				return resp;
+				return *resp;
 			}
 			let err = if let Some(req_id) = req_id {
 				serde_json::to_string(&JsonRpcError {
@@ -92,7 +91,7 @@ impl LocalSession {
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method();
-				let (_span, ref rq_ctx, log, cel) = mcp::relay::setup_request_log2(&parts, method);
+				let (_span, _, log, cel) = mcp::relay::setup_request_log2(&parts, method);
 
 				match &mut r.request {
 					ClientRequest::InitializeRequest(_) => {
@@ -149,46 +148,16 @@ impl LocalSession {
 	}
 }
 
-fn stream(resp: impl Into<ServerResult>, req_id: RequestId) -> Result<Response, UpstreamError> {
-	let rpc = ServerJsonRpcMessage::response(resp.into(), req_id);
-	let stream = futures::stream::once(async {
-		ServerSseMessage {
-			event_id: None,
-			message: Arc::new(rpc),
-		}
-	});
-	Ok(sse_stream_response(stream, None))
-}
-
-fn merge_to_response(stream: super::mergestream::MergeStream) -> Result<Response, UpstreamError> {
-	let stream = stream.map(|rpc| {
-		let r = match rpc {
-			Ok(rpc) => rpc,
-			// TODO: do not hardcode number
-			Err(e) => ServerJsonRpcMessage::error(
-				ErrorData::internal_error(e.to_string(), None),
-				RequestId::Number(2),
-			),
-		};
-		// TODO: is it ok to have no event_id here?
-		ServerSseMessage {
-			event_id: None,
-			message: Arc::new(r),
-		}
-	});
-	Ok(sse_stream_response(stream, None))
-}
-
 #[derive(Default, Debug)]
 pub struct SessionManager {
-	sessions: std::sync::RwLock<HashMap<String, LocalSession>>,
+	sessions: RwLock<HashMap<String, LocalSession>>,
 }
 
 impl SessionManager {
-	pub fn get_session(&self, id: &str) -> Option<LocalSession> {
+	fn get_session(&self, id: &str) -> Option<LocalSession> {
 		self.sessions.read().ok()?.get(id).cloned()
 	}
-	pub fn create_session(&self, relay: Relay) -> LocalSession {
+	fn create_session(&self, relay: Relay) -> LocalSession {
 		let id = session_id();
 		let sess = LocalSession {
 			id: id.clone(),
@@ -358,7 +327,7 @@ impl StreamableHttpService {
 			return http_error(http::StatusCode::NOT_FOUND, "Session not found");
 		};
 
-		let (parts, body) = request.into_parts();
+		let (parts, _) = request.into_parts();
 		session.get_stream(parts).await
 	}
 
@@ -378,7 +347,7 @@ impl StreamableHttpService {
 		let Some(session) = self.session_manager.get_session(session_id) else {
 			return http_error(http::StatusCode::NOT_FOUND, "Session not found");
 		};
-		let (parts, body) = request.into_parts();
+		let (parts, _) = request.into_parts();
 		session.delete_session(parts).await
 	}
 }
@@ -444,12 +413,7 @@ impl sse_stream::Timer for TokioSseTimer {
 		this.sleep.reset(tokio::time::Instant::from_std(when));
 	}
 }
-fn accepted_response() -> Response {
-	::http::Response::builder()
-		.status(StatusCode::ACCEPTED)
-		.body(http::Body::empty())
-		.expect("valid response")
-}
+
 
 fn internal_error_response(context: &str) -> Response {
 	::http::Response::builder()
