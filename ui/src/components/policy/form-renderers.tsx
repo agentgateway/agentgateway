@@ -639,36 +639,36 @@ export function renderMcpAuthenticationForm({ data, onChange }: FormRendererProp
 
 export function renderMcpAuthorizationForm({ data, onChange }: FormRendererProps) {
   type McpRule = string | McpAuthorizationRule;
-  type RuleType = 'string' | 'allow' | 'deny';
+  type RuleType = "string" | "allow" | "deny";
 
   const isRuleObject = (rule: McpRule): rule is McpAuthorizationRule => {
-    return typeof rule === 'object' && rule !== null;
+    return typeof rule === "object" && rule !== null;
   };
 
   const getRuleType = (rule: McpRule): RuleType => {
-    if (typeof rule === 'string') return 'string';
+    if (typeof rule === "string") return "string";
     if (isRuleObject(rule)) {
-      if ('allow' in rule) return 'allow';
-      if ('deny' in rule) return 'deny';
+      if ("allow" in rule) return "allow";
+      if ("deny" in rule) return "deny";
     }
-    return 'string';
+    return "string";
   };
 
   const getRuleValue = (rule: McpRule): string => {
-    if (typeof rule === 'string') return rule;
+    if (typeof rule === "string") return rule;
     if (isRuleObject(rule)) {
-      return rule.allow ?? rule.deny ?? '';
+      return rule.allow ?? rule.deny ?? "";
     }
-    return '';
+    return "";
   };
 
   const updateRule = (index: number, type: RuleType, value: string) => {
     const newRules: McpRule[] = [...(data.rules || [])];
-    if (type === 'string') {
+    if (type === "string") {
       newRules[index] = value;
-    } else if (type === 'allow') {
+    } else if (type === "allow") {
       newRules[index] = { allow: value };
-    } else if (type === 'deny') {
+    } else if (type === "deny") {
       newRules[index] = { deny: value };
     }
     onChange({ ...data, rules: newRules });
@@ -679,7 +679,8 @@ export function renderMcpAuthorizationForm({ data, onChange }: FormRendererProps
       <div className="space-y-3">
         <Label>CEL Authorization Rules</Label>
         <p className="text-sm text-muted-foreground">
-          Define CEL policy rules for MCP authorization. Rules can be simple expressions or explicit allow/deny policies.
+          Define CEL policy rules for MCP authorization. Rules can be simple expressions or explicit
+          allow/deny policies.
         </p>
         {(data.rules || []).map((rule: McpRule, index: number) => {
           const ruleType = getRuleType(rule);
@@ -707,9 +708,7 @@ export function renderMcpAuthorizationForm({ data, onChange }: FormRendererProps
                   <Label htmlFor={`rule-type-${index}`}>Rule Type</Label>
                   <Select
                     value={ruleType}
-                    onValueChange={(value: RuleType) =>
-                      updateRule(index, value, ruleValue)
-                    }
+                    onValueChange={(value: RuleType) => updateRule(index, value, ruleValue)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -729,9 +728,9 @@ export function renderMcpAuthorizationForm({ data, onChange }: FormRendererProps
                     value={ruleValue}
                     onChange={(e) => updateRule(index, ruleType, e.target.value)}
                     placeholder={
-                      ruleType === 'string'
+                      ruleType === "string"
                         ? `mcp.tool.name == "echo"`
-                        : ruleType === 'allow'
+                        : ruleType === "allow"
                           ? `mcp.tool.name in ["search_code", "get_file_contents"]`
                           : `jwt.sub != "blocked-user"`
                     }
@@ -741,12 +740,11 @@ export function renderMcpAuthorizationForm({ data, onChange }: FormRendererProps
                 </div>
               </div>
 
-              {ruleType !== 'string' && (
+              {ruleType !== "string" && (
                 <div className="text-xs text-muted-foreground">
-                  {ruleType === 'allow'
-                    ? 'This rule explicitly allows access when the condition is true.'
-                    : 'This rule explicitly denies access when the condition is true.'
-                  }
+                  {ruleType === "allow"
+                    ? "This rule explicitly allows access when the condition is true."
+                    : "This rule explicitly denies access when the condition is true."}
                 </div>
               )}
             </div>
