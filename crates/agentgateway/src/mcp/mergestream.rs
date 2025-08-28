@@ -22,12 +22,12 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 	fn try_from(value: StreamableHttpPostResponse) -> Result<Self, Self::Error> {
 		match value {
 			StreamableHttpPostResponse::Accepted => {
-				Err(ClientError::new(anyhow!("unexpected 'accepted' response")).into())
+				Err(ClientError::new(anyhow!("unexpected 'accepted' response")))
 			},
 			StreamableHttpPostResponse::Json(r, sid) => {
 				Ok(Messages(futures::stream::once(async { Ok(r) }).boxed()))
 			},
-			StreamableHttpPostResponse::Sse(mut sse, sid) => Ok(Messages(
+			StreamableHttpPostResponse::Sse(sse, sid) => Ok(Messages(
 				sse
 					.filter_map(|item| async {
 						item
@@ -84,17 +84,13 @@ impl MergeStream {
 		let msgs = self
 			.terminal_messages
 			.iter_mut()
-			.map(Option::take)
-			.flatten()
+			.filter_map(Option::take)
 			.collect_vec();
 		let res = self
 			.merge
 			.take()
 			.expect("merge_terminal_messages called twice")(msgs)?;
-		Ok(ServerJsonRpcMessage::response(
-			res.into(),
-			self.req_id.clone(),
-		))
+		Ok(ServerJsonRpcMessage::response(res, self.req_id.clone()))
 	}
 }
 
@@ -120,7 +116,7 @@ impl Stream for MergeStream {
 		for i in 0..self.streams.len() {
 			tracing::error!("howardjohn: iter {i}");
 			let (k, res) = {
-				let mut msg_idx = self.streams[i].as_mut();
+				let msg_idx = self.streams[i].as_mut();
 				let Some(msg_stream) = msg_idx else {
 					tracing::error!("howardjohn: skip {i}");
 					continue;

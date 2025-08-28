@@ -1,39 +1,27 @@
 use super::*;
-use crate::http::{Body, Error as HttpError, Response};
+use crate::http::Error as HttpError;
 use crate::mcp::sse::McpTarget;
-use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
 use crate::types::agent::{McpTargetSpec, SimpleBackend};
 use crate::{ProxyInputs, json};
 use agent_core::prelude::*;
 use anyhow::anyhow;
-use arc_swap::ArcSwapOption;
 use axum_core::BoxError;
 use frozen_collections::MapIteration;
 use futures::StreamExt;
 use futures::stream::BoxStream;
-use futures_core::Stream;
-use futures_util::SinkExt;
 use http::Uri;
 use http::header::CONTENT_TYPE;
 use reqwest::header::ACCEPT;
 use rmcp::model::{ClientJsonRpcMessage, ServerJsonRpcMessage};
-use rmcp::service::{
-	AtomicU32Provider, NotificationContext, Peer, RequestIdProvider, serve_client_with_ct,
-};
-use rmcp::transport::common::client_side_sse::BoxedSseResponse;
+use rmcp::service::{AtomicU32Provider, NotificationContext, Peer, RequestIdProvider};
 use rmcp::transport::common::http_header::{
-	EVENT_STREAM_MIME_TYPE, HEADER_LAST_EVENT_ID, HEADER_SESSION_ID, JSON_MIME_TYPE,
+	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
-use rmcp::transport::sse_client::{SseClient, SseClientConfig, SseTransportError};
-use rmcp::transport::streamable_http_client::{
-	StreamableHttpClient, StreamableHttpClientTransportConfig, StreamableHttpError,
-	StreamableHttpPostResponse,
-};
-use rmcp::transport::{SseClientTransport, StreamableHttpClientTransport};
+use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use rmcp::{ClientHandler, ServiceError};
-use sse_stream::{Error as SseError, Sse, SseStream};
+use sse_stream::SseStream;
 use thiserror::Error;
 use tracing_subscriber::filter::FilterExt;
 
@@ -302,8 +290,7 @@ pub struct ClientWrapper {
 }
 
 impl ClientWrapper {
-	pub fn insert_headers(&self, req: &mut crate::http::Request) {
-	}
+	pub fn insert_headers(&self, req: &mut crate::http::Request) {}
 }
 
 #[derive(Error, Debug)]
@@ -346,10 +333,10 @@ impl ClientWrapper {
 		match res {
 			StreamableHttpPostResponse::Accepted => Ok(()),
 			StreamableHttpPostResponse::Json(_, _) => {
-				Err(ClientError::new(anyhow!("unexpected 'json' response")).into())
+				Err(ClientError::new(anyhow!("unexpected 'json' response")))
 			},
 			StreamableHttpPostResponse::Sse(_, _) => {
-				Err(ClientError::new(anyhow!("unexpected 'sse' response")).into())
+				Err(ClientError::new(anyhow!("unexpected 'sse' response")))
 			},
 		}
 	}
@@ -358,7 +345,7 @@ impl ClientWrapper {
 	) -> Result<(ServerResult, Option<String>), ClientError> {
 		match res {
 			StreamableHttpPostResponse::Accepted => {
-				Err(ClientError::new(anyhow!("unexpected 'accepted' response")).into())
+				Err(ClientError::new(anyhow!("unexpected 'accepted' response")))
 			},
 			StreamableHttpPostResponse::Json(r, sid) => r
 				.into_response()
@@ -388,12 +375,12 @@ impl ClientWrapper {
 	) -> Result<BoxStream<'static, Result<ServerJsonRpcMessage, ClientError>>, ClientError> {
 		match res {
 			StreamableHttpPostResponse::Accepted => {
-				Err(ClientError::new(anyhow!("unexpected 'accepted' response")).into())
+				Err(ClientError::new(anyhow!("unexpected 'accepted' response")))
 			},
 			StreamableHttpPostResponse::Json(r, sid) => {
 				Ok(futures::stream::once(async { Ok(r) }).boxed())
 			},
-			StreamableHttpPostResponse::Sse(mut sse, sid) => Ok(
+			StreamableHttpPostResponse::Sse(sse, sid) => Ok(
 				sse
 					.filter_map(|item| async {
 						item

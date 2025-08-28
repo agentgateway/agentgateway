@@ -1,25 +1,21 @@
 use crate::http::{Request, Response};
+use crate::mcp::rbac;
 use crate::mcp::relay::Relay;
 use crate::mcp::relay::upstream::UpstreamError;
-use crate::mcp::{mergestream, rbac};
 use crate::*;
 use ::http::StatusCode;
 use ::http::request::Parts;
 use agent_core::metrics::Recorder;
 use futures_util::{SinkExt, StreamExt};
-use http_body::Body;
-use http_body_util::Full;
-use http_body_util::combinators::BoxBody;
+use rmcp::ErrorData;
 use rmcp::model::{
-	ClientJsonRpcMessage, ClientRequest, JsonRpcMessage, RequestId, ServerJsonRpcMessage,
-	ServerNotification, ServerRequest, ServerResult,
+	ClientJsonRpcMessage, ClientRequest, RequestId, ServerJsonRpcMessage, ServerResult,
 };
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
-use rmcp::{ErrorData, ServerHandler};
 use sse_stream::{KeepAlive, Sse, SseBody};
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -51,11 +47,11 @@ impl LocalSession {
 		message: ClientJsonRpcMessage,
 	) -> Result<Response, UpstreamError> {
 		match message {
-			ClientJsonRpcMessage::Request(r) => {
+			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method();
 				let (_span, ref rq_ctx, log, cel) = mcp::relay::setup_request_log2(&parts, method);
 
-				match &r.request {
+				match &mut r.request {
 					ClientRequest::InitializeRequest(_) => {
 						self
 							.relay
@@ -93,7 +89,9 @@ impl LocalSession {
 							},
 							(),
 						);
-						self.relay.send_single(r, &service_name).await
+						let tn = tool.to_string();
+						ctr.params.name = tn.into();
+						self.relay.send_single(r, service_name).await
 					},
 					_ => todo!(),
 				}
@@ -186,7 +184,8 @@ impl StreamableHttpService {
 			true => "GET, POST, DELETE",
 			false => "POST",
 		};
-		let result = match (method, self.config.stateful_mode) {
+
+		match (method, self.config.stateful_mode) {
 			(http::Method::POST, _) => self.handle_post(request).await,
 			// if we're not in stateful mode, we don't support GET or DELETE because there is no session
 			(http::Method::GET, true) => self.handle_get(request).await,
@@ -198,10 +197,9 @@ impl StreamableHttpService {
 					.header(http::header::ALLOW, allowed_methods)
 					.body(http::Body::from("Method Not Allowed"))
 					.expect("valid response");
-				return response;
+				response
 			},
-		};
-		result
+		}
 	}
 
 	pub async fn handle_post(&self, request: Request) -> Response {
@@ -255,13 +253,13 @@ impl StreamableHttpService {
 				(session, false)
 			} else {
 				// No session header... we need to create one, if it is an initialize
-				if let ClientJsonRpcMessage::Request(req) = &message {
-					if !matches!(req.request, ClientRequest::InitializeRequest(_)) {
-						return http_error(
-							StatusCode::UNPROCESSABLE_ENTITY,
-							"session header is required for non-initialize requests",
-						);
-					}
+				if let ClientJsonRpcMessage::Request(req) = &message
+					&& !matches!(req.request, ClientRequest::InitializeRequest(_))
+				{
+					return http_error(
+						StatusCode::UNPROCESSABLE_ENTITY,
+						"session header is required for non-initialize requests",
+					);
 				}
 				let relay = match (self.service_factory)() {
 					Ok(r) => r,

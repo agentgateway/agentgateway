@@ -8,7 +8,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub(crate) enum UpstreamError {
+pub enum UpstreamError {
 	#[error("unauthorized tool call")]
 	Authorization,
 	#[error("invalid request: {0}")]
@@ -209,7 +209,18 @@ impl Upstream {
 		match &self {
 			Upstream::McpStdio(m) => todo!(),
 			Upstream::McpHttp(c) => {
+				let is_init = matches!(&request, &ClientRequest::InitializeRequest(_));
 				let res = c.send_message(request).await?;
+				if is_init {
+					let sid = match &res {
+						StreamableHttpPostResponse::Accepted => None,
+						StreamableHttpPostResponse::Json(_, sid) => sid.as_ref(),
+						StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
+					};
+					if let Some(sid) = sid {
+						c.set_session_id(sid.clone())
+					}
+				}
 				res.try_into().map_err(Into::into)
 			},
 			Upstream::OpenAPI(m) => todo!(),
