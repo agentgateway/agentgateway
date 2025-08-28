@@ -1,14 +1,15 @@
 use crate::http::{Request, Response};
 use crate::mcp::relay::Relay;
 use crate::mcp::relay::upstream::UpstreamError;
+use crate::mcp::{mergestream, rbac};
 use crate::*;
 use ::http::StatusCode;
 use ::http::request::Parts;
+use agent_core::metrics::Recorder;
 use futures_util::{SinkExt, StreamExt};
 use http_body::Body;
 use http_body_util::Full;
 use http_body_util::combinators::BoxBody;
-use rmcp::{ErrorData, ServerHandler};
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientRequest, JsonRpcMessage, RequestId, ServerJsonRpcMessage,
 	ServerNotification, ServerRequest, ServerResult,
@@ -18,6 +19,7 @@ use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
+use rmcp::{ErrorData, ServerHandler};
 use sse_stream::{KeepAlive, Sse, SseBody};
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -50,18 +52,48 @@ impl LocalSession {
 	) -> Result<Response, UpstreamError> {
 		match message {
 			ClientJsonRpcMessage::Request(r) => {
-				let req = r.request;
-				let req_id = r.id;
-				let method = req.method();
+				let method = r.request.method();
 				let (_span, ref rq_ctx, log, cel) = mcp::relay::setup_request_log2(&parts, method);
-				match req {
-					ClientRequest::InitializeRequest(r) => stream(self.relay.initialize(r).await?, req_id),
-					ClientRequest::ListToolsRequest(r) => {
-						merge_to_response(self.relay.list_tools2(r,req_id, cel.clone()).await?)
+
+				match &r.request {
+					ClientRequest::InitializeRequest(_) => {
+						self
+							.relay
+							.send_fanout(r, self.relay.merge_initialize())
+							.await
 					},
-					ClientRequest::CallToolRequest(r) => {
-						stream(self.relay.call_tool(r, &cel, log).await?, req_id);
-						todo!()
+					ClientRequest::ListToolsRequest(_) => {
+						self
+							.relay
+							.send_fanout(r, self.relay.merge_tools(cel.clone()))
+							.await
+					},
+					ClientRequest::CallToolRequest(ctr) => {
+						let name = ctr.params.name.clone();
+						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
+						log.non_atomic_mutate(|l| {
+							l.tool_call_name = Some(tool.to_string());
+							l.target_name = Some(service_name.to_string());
+						});
+						if !self.relay.policies.validate(
+							&rbac::ResourceType::Tool(rbac::ResourceId::new(
+								service_name.to_string(),
+								tool.to_string(),
+							)),
+							cel.as_ref(),
+						) {
+							return Err(UpstreamError::Authorization);
+						}
+
+						self.relay.metrics.record(
+							crate::mcp::relay::metrics::ToolCall {
+								server: service_name.to_string(),
+								name: tool.to_string(),
+								params: vec![],
+							},
+							(),
+						);
+						self.relay.send_single(r, &service_name).await
 					},
 					_ => todo!(),
 				}
@@ -91,7 +123,10 @@ fn merge_to_response(stream: super::mergestream::MergeStream) -> Result<Response
 		let r = match rpc {
 			Ok(rpc) => rpc,
 			// TODO: do not hardcode number
-			Err(e) => ServerJsonRpcMessage::error(ErrorData::internal_error(e.to_string(), None), RequestId::Number(2))
+			Err(e) => ServerJsonRpcMessage::error(
+				ErrorData::internal_error(e.to_string(), None),
+				RequestId::Number(2),
+			),
 		};
 		// TODO: is it ok to have no event_id here?
 		ServerSseMessage {
@@ -269,7 +304,7 @@ fn http_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
 		.expect("valid response")
 }
 
-fn sse_stream_response(
+pub(crate) fn sse_stream_response(
 	stream: impl futures::Stream<Item = ServerSseMessage> + Send + 'static,
 	keep_alive: Option<Duration>,
 ) -> Response {
