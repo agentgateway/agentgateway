@@ -238,14 +238,38 @@ impl Relay {
 	pub async fn list_tools2(
 		&self,
 		r: ListToolsRequest,
-		cel: &ContextBuilder,
+		req_id: RequestId,
+		cel: Arc<ContextBuilder>,
 	) -> Result<mergestream::MergeStream, UpstreamError> {
 		let mut streams = Vec::new();
 		for (name, con) in self.pool.iter_named() {
 			streams.push(con.list_tools2(r.params.clone()).await?);
 		}
-		Ok(mergestream::MergeStream::new(streams, |streams| {
-			Ok(streams.into_iter().next().unwrap())
+		let policies = self.policies.clone();
+		Ok(mergestream::MergeStream::new(streams, req_id,move |streams| {
+			let tools = streams
+				.into_iter()
+				.flat_map(|s| match s {
+					ServerResult::ListToolsResult(ltr) => ltr.tools,
+					_ => vec![],
+				})
+				.filter(|t| {
+					policies.validate(
+						&rbac::ResourceType::Tool(rbac::ResourceId::new(
+							"TODO name".to_string(),
+							t.name.to_string(),
+						)),
+						&cel,
+					)
+				})
+				.collect_vec();
+			Ok(
+				ListToolsResult {
+					tools,
+					next_cursor: None,
+				}
+				.into(),
+			)
 		}))
 	}
 	pub async fn call_tool(
@@ -304,20 +328,20 @@ impl Relay {
 
 	fn get_info(&self) -> ServerInfo {
 		ServerInfo {
-			protocol_version: ProtocolVersion::V_2025_03_26,
-			capabilities: ServerCapabilities {
-				completions: None,
-				experimental: None,
-				logging: None,
-				prompts: Some(PromptsCapability::default()),
-				resources: Some(ResourcesCapability::default()),
-				tools: Some(ToolsCapability::default()),
-			},
-			server_info: Implementation::from_build_env(),
-			instructions: Some(
-				"This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
-			),
-		}
+            protocol_version: ProtocolVersion::V_2025_03_26,
+            capabilities: ServerCapabilities {
+                completions: None,
+                experimental: None,
+                logging: None,
+                prompts: Some(PromptsCapability::default()),
+                resources: Some(ResourcesCapability::default()),
+                tools: Some(ToolsCapability::default()),
+            },
+            server_info: Implementation::from_build_env(),
+            instructions: Some(
+                "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
+            ),
+        }
 	}
 }
 

@@ -57,7 +57,7 @@ impl LocalSession {
 				match req {
 					ClientRequest::InitializeRequest(r) => stream(self.relay.initialize(r).await?, req_id),
 					ClientRequest::ListToolsRequest(r) => {
-						merge_to_response(self.relay.list_tools2(r, &cel).await?)
+						merge_to_response(self.relay.list_tools2(r,req_id, cel.clone()).await?)
 					},
 					ClientRequest::CallToolRequest(r) => {
 						stream(self.relay.call_tool(r, &cel, log).await?, req_id);
