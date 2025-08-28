@@ -149,11 +149,17 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		parse_duration("CONNECTION_TERMINATION_DEADLINE")?.or(raw.connection_termination_deadline);
 	let otlp = empty_to_none(parse("OTLP_ENDPOINT")?)
 		.or(raw.tracing.as_ref().map(|t| t.otlp_endpoint.clone()));
-	let otlp_headers = raw
+	
+	let mut otlp_headers = raw
 		.tracing
 		.as_ref()
 		.map(|t| t.headers.clone())
 		.unwrap_or_default();
+	
+	if let Some(env_headers) = parse_otlp_headers("OTLP_HEADERS")? {
+		otlp_headers.extend(env_headers);
+	}
+	
 	let otlp_protocol = parse_serde("OTLP_PROTOCOL")?
 		.or(raw.tracing.as_ref().map(|t| t.otlp_protocol))
 		.unwrap_or_default();
@@ -437,6 +443,32 @@ fn parse_worker_threads(cfg: Option<StringOrInt>) -> anyhow::Result<usize> {
 	}
 }
 
+fn parse_otlp_headers(env_key: &str) -> anyhow::Result<Option<std::collections::HashMap<String, String>>> {
+	match env::var(env_key) {
+		Ok(raw) => {
+			let s = raw.trim();
+			if s.starts_with('{') {
+				let map: std::collections::HashMap<String, String> = serde_json::from_str(s)
+					.map_err(|e| anyhow::anyhow!("invalid {} JSON: {}", env_key, e))?;
+				Ok(Some(map))
+			} else {
+				let mut headers = std::collections::HashMap::new();
+				for pair in s.split(',') {
+					let pair = pair.trim();
+					if pair.is_empty() { continue; }
+					
+					let (key, value) = pair.split_once('=')
+						.ok_or_else(|| anyhow::anyhow!("invalid {}: expected key=value format", env_key))?;
+					headers.insert(key.trim().to_string(), value.trim().to_string());
+				}
+				Ok(Some(headers))
+			}
+		},
+		Err(env::VarError::NotPresent) => Ok(None),
+		Err(e) => Err(anyhow::anyhow!("error reading {}: {}", env_key, e)),
+	}
+}
+
 fn get_cpu_count() -> anyhow::Result<usize> {
 	// Allow overriding the count with an env var. This can be used to pass the CPU limit on Kubernetes
 	// from the downward API.
@@ -447,5 +479,49 @@ fn get_cpu_count() -> anyhow::Result<usize> {
 		Some(limit) => Ok(limit),
 		// This is *logical cores*
 		None => Ok(num_cpus::get()),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_parse_otlp_headers() {
+		use std::env;
+		
+		unsafe {
+			// Test JSON format
+			env::set_var("TEST_OTLP_HEADERS", r#"{"content-type": "application/json", "x-api-key": "secret"}"#);
+		}
+		let json_result = parse_otlp_headers("TEST_OTLP_HEADERS").unwrap().unwrap();
+		assert_eq!(json_result.get("content-type"), Some(&"application/json".to_string()));
+		assert_eq!(json_result.get("x-api-key"), Some(&"secret".to_string()));
+
+		unsafe {
+			// Test comma-delimited format
+			env::set_var("TEST_OTLP_HEADERS", "authorization=Bearer token,x-trace-id=abc123");
+		}
+		let comma_result = parse_otlp_headers("TEST_OTLP_HEADERS").unwrap().unwrap();
+		assert_eq!(comma_result.get("authorization"), Some(&"Bearer token".to_string()));
+		assert_eq!(comma_result.get("x-trace-id"), Some(&"abc123".to_string()));
+
+		unsafe {
+			// Test error cases  
+			env::set_var("TEST_OTLP_HEADERS", "{invalid json");
+		}
+		assert!(parse_otlp_headers("TEST_OTLP_HEADERS").is_err());
+		
+		unsafe {
+			env::set_var("TEST_OTLP_HEADERS", "missing_equals");
+		}
+		assert!(parse_otlp_headers("TEST_OTLP_HEADERS").is_err());
+		
+		unsafe {
+			env::remove_var("TEST_OTLP_HEADERS");
+		}
+		
+		// Test missing env var
+		assert_eq!(parse_otlp_headers("NONEXISTENT_VAR").unwrap(), None);
 	}
 }
