@@ -116,8 +116,8 @@ fn build_agent_path(uri: Uri) -> String {
 	let path = path
 		.strip_suffix("/.well-known/agent-card.json")
 		.unwrap_or(path);
-	let new_uri = uri.to_string().replace(uri.path(), path);
-	new_uri
+
+	uri.to_string().replace(uri.path(), path)
 }
 
 #[cfg(test)]
