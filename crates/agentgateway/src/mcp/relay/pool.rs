@@ -421,7 +421,7 @@ impl ClientWrapper {
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		Box::pin(self.internal_delete(user_headers)).await
+		self.internal_delete(user_headers).await
 	}
 	pub async fn send_message2(
 		&self,
@@ -508,9 +508,9 @@ impl ClientWrapper {
 			))),
 		}
 	}
-	async fn internal_delete(
-		&self,
-		user_headers: &HeaderMap,
+	fn internal_delete<'a>(
+		&'a self,
+		user_headers: &'a HeaderMap,
 	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
 		Box::pin(self.internal_delete2(user_headers))
 	}
