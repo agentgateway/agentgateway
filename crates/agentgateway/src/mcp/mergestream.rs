@@ -10,6 +10,13 @@ use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 
 pub(crate) struct Messages(BoxStream<'static, Result<ServerJsonRpcMessage, ClientError>>);
 
+impl Stream for Messages {
+	type Item = Result<ServerJsonRpcMessage, ClientError>;
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		self.0.poll_next_unpin(cx)
+	}
+}
+
 impl TryFrom<StreamableHttpPostResponse> for Messages {
 	type Error = ClientError;
 	fn try_from(value: StreamableHttpPostResponse) -> Result<Self, Self::Error> {
@@ -45,33 +52,32 @@ fn assert() {
 	// is_send_sync::<MergeStream>();
 }
 
+pub type MergeFn = dyn FnOnce(Vec<(Strng, ServerResult)>) -> Result<ServerResult, ClientError>
+	+ Send
+	+ Sync
+	+ 'static;
+
 // Custom stream that merges multiple streams with terminal message handling
 pub struct MergeStream {
-	streams: Vec<Option<Messages>>,
-	terminal_messages: Vec<Option<ServerResult>>,
+	streams: Vec<Option<(Strng, Messages)>>,
+	terminal_messages: Vec<Option<(Strng, ServerResult)>>,
 	complete: bool,
 	req_id: RequestId,
-	merge:
-		Box<dyn Fn(Vec<ServerResult>) -> Result<ServerResult, ClientError> + Send + Sync + 'static>,
+	merge: Option<Box<MergeFn>>,
 }
 
 impl MergeStream {
-	pub fn new<F>(streams: Vec<Messages>, req_id: RequestId, merge: F) -> Self
-	where
-		F: Fn(Vec<ServerResult>) -> Result<ServerResult, ClientError> + Send + Sync + 'static,
-	{
+	pub fn new(streams: Vec<(Strng, Messages)>, req_id: RequestId, merge: Box<MergeFn>) -> Self {
 		let terminal_messages = streams.iter().map(|s| None).collect::<Vec<_>>();
 		Self {
 			streams: streams.into_iter().map(Some).collect_vec(),
 			terminal_messages,
 			req_id,
 			complete: false,
-			merge: Box::new(merge),
+			merge: Some(merge),
 		}
 	}
-}
 
-impl MergeStream {
 	fn merge_terminal_messages(
 		mut self: Pin<&mut Self>,
 	) -> Result<ServerJsonRpcMessage, ClientError> {
@@ -81,8 +87,14 @@ impl MergeStream {
 			.map(Option::take)
 			.flatten()
 			.collect_vec();
-		let res = (self.merge)(msgs)?;
-		Ok(ServerJsonRpcMessage::response(res.into(), self.req_id.clone()))
+		let res = self
+			.merge
+			.take()
+			.expect("merge_terminal_messages called twice")(msgs)?;
+		Ok(ServerJsonRpcMessage::response(
+			res.into(),
+			self.req_id.clone(),
+		))
 	}
 }
 
@@ -107,13 +119,13 @@ impl Stream for MergeStream {
 		dbg!(&self.complete);
 		for i in 0..self.streams.len() {
 			tracing::error!("howardjohn: iter {i}");
-			let res = {
+			let (k, res) = {
 				let mut msg_idx = self.streams[i].as_mut();
 				let Some(msg_stream) = msg_idx else {
 					tracing::error!("howardjohn: skip {i}");
 					continue;
 				};
-				msg_stream.0.as_mut().poll_next(cx)
+				(msg_stream.0.clone(), msg_stream.1.0.as_mut().poll_next(cx))
 			};
 
 			let mut drop = false;
@@ -122,7 +134,7 @@ impl Stream for MergeStream {
 					match msg {
 						Ok(ServerJsonRpcMessage::Response(r)) => {
 							drop = true;
-							self.terminal_messages[i] = Some(r.result);
+							self.terminal_messages[i] = Some((k, r.result));
 							tracing::error!("howardjohn: set {i}");
 							dbg!(
 								&self

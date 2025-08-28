@@ -202,6 +202,20 @@ impl Upstream {
 		}
 	}
 
+	pub(crate) async fn generic(
+		&self,
+		request: ClientRequest,
+	) -> Result<mergestream::Messages, UpstreamError> {
+		match &self {
+			Upstream::McpStdio(m) => todo!(),
+			Upstream::McpHttp(c) => {
+				let res = c.send_message(request).await?;
+				res.try_into().map_err(Into::into)
+			},
+			Upstream::OpenAPI(m) => todo!(),
+		}
+	}
+
 	pub(crate) async fn get_prompt(
 		&self,
 		request: GetPromptRequestParam,

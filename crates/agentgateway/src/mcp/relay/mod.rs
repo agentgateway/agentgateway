@@ -3,6 +3,19 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, LazyLock};
 
+use crate::ProxyInputs;
+use crate::cel::ContextBuilder;
+use crate::http::Response;
+use crate::http::jwt::Claims;
+use crate::mcp::mergestream::MergeFn;
+use crate::mcp::rbac::{Identity, McpAuthorizationSet};
+use crate::mcp::relay::upstream::UpstreamError;
+use crate::mcp::sse::{MCPInfo, McpBackendGroup};
+use crate::mcp::{mergestream, rbac};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::AsyncLog;
+use crate::telemetry::trc::TraceParent;
+use crate::transport::stream::TLSConnectionInfo;
 use agent_core::metrics::Recorder;
 use agent_core::prelude::Strng;
 use agent_core::trcng;
@@ -12,22 +25,12 @@ use itertools::Itertools;
 use opentelemetry::global::BoxedSpan;
 use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
+pub use pool::ClientError;
 use rmcp::model::{CallToolRequestParam, *};
 use rmcp::service::{RequestContext, RunningService};
+use rmcp::transport::common::server_side_http::ServerSseMessage;
 use rmcp::{RoleClient, RoleServer, model};
 
-use crate::ProxyInputs;
-use crate::cel::ContextBuilder;
-use crate::http::jwt::Claims;
-use crate::mcp::rbac::{Identity, McpAuthorizationSet};
-use crate::mcp::relay::upstream::UpstreamError;
-use crate::mcp::sse::{MCPInfo, McpBackendGroup};
-use crate::mcp::{mergestream, rbac};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::AsyncLog;
-use crate::telemetry::trc::TraceParent;
-use crate::transport::stream::TLSConnectionInfo;
-pub use pool::ClientError;
 type McpError = ErrorData;
 
 pub mod metrics;
@@ -36,6 +39,13 @@ pub mod upstream;
 
 const DELIMITER: &str = "_";
 
+fn resource_name(default_target_name: Option<&String>, target: &str, name: &str) -> String {
+	if default_target_name.is_none() {
+		format!("{target}{DELIMITER}{name}")
+	} else {
+		name.to_string()
+	}
+}
 static AGW_INITIALIZE: LazyLock<InitializeRequestParam> =
 	LazyLock::new(|| InitializeRequestParam {
 		protocol_version: ProtocolVersion::V_2025_03_26,
@@ -73,8 +83,8 @@ impl RqCtx {
 #[derive(Debug, Clone)]
 pub struct Relay {
 	pool: Arc<pool::ConnectionPool>,
-	metrics: Arc<metrics::Metrics>,
-	policies: McpAuthorizationSet,
+	pub metrics: Arc<metrics::Metrics>,
+	pub policies: McpAuthorizationSet,
 	// If we have 1 target only, we don't prefix everything with 'target_'.
 	// Else this is empty
 	default_target_name: Option<String>,
@@ -104,7 +114,7 @@ impl Relay {
 		})
 	}
 
-	fn parse_resource_name<'a, 'b: 'a>(
+	pub fn parse_resource_name<'a, 'b: 'a>(
 		&'a self,
 		res: &'b str,
 	) -> Result<(&'a str, &'b str), UpstreamError> {
@@ -235,32 +245,37 @@ impl Relay {
 			next_cursor: None,
 		})
 	}
-	pub async fn list_tools2(
-		&self,
-		r: ListToolsRequest,
-		req_id: RequestId,
-		cel: Arc<ContextBuilder>,
-	) -> Result<mergestream::MergeStream, UpstreamError> {
-		let mut streams = Vec::new();
-		for (name, con) in self.pool.iter_named() {
-			streams.push(con.list_tools2(r.params.clone()).await?);
-		}
+	pub fn merge_tools(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		Ok(mergestream::MergeStream::new(streams, req_id,move |streams| {
+		let default_target_name = self.default_target_name.clone();
+		Box::new(move |streams| {
 			let tools = streams
 				.into_iter()
-				.flat_map(|s| match s {
-					ServerResult::ListToolsResult(ltr) => ltr.tools,
-					_ => vec![],
-				})
-				.filter(|t| {
-					policies.validate(
-						&rbac::ResourceType::Tool(rbac::ResourceId::new(
-							"TODO name".to_string(),
-							t.name.to_string(),
-						)),
-						&cel,
-					)
+				.flat_map(|(server_name, s)| {
+					let tools = match s {
+						ServerResult::ListToolsResult(ltr) => ltr.tools,
+						_ => vec![],
+					};
+					tools
+						.into_iter()
+						.filter(|t| {
+							policies.validate(
+								&rbac::ResourceType::Tool(rbac::ResourceId::new(
+									server_name.to_string(),
+									t.name.to_string(),
+								)),
+								&cel,
+							)
+						})
+						.map(|t| Tool {
+							name: Cow::Owned(resource_name(
+								default_target_name.as_ref(),
+								server_name.as_str(),
+								&t.name,
+							)),
+							..t
+						})
+						.collect_vec()
 				})
 				.collect_vec();
 			Ok(
@@ -270,8 +285,98 @@ impl Relay {
 				}
 				.into(),
 			)
-		}))
+		})
 	}
+	pub fn merge_initialize(&self) -> Box<MergeFn> {
+		let info = self.get_info();
+		Box::new(move |streams| {
+			// For now, we just send our own info. In the future, we should merge the results from each upstream.
+			// TODO: set session info
+			Ok(info.into())
+		})
+	}
+	pub async fn send_single(
+		&self,
+		r: JsonRpcRequest<ClientRequest>,
+		service_name: &str,
+	) -> Result<Response, UpstreamError> {
+		let Ok(us) = self.pool.get(service_name) else {
+			return Err(UpstreamError::InvalidRequest(format!(
+				"unknown service {service_name}"
+			)));
+		};
+		let stream = us.generic(r.request).await?;
+
+		messages_to_response(stream)
+	}
+	pub async fn send_fanout(
+		&self,
+		r: JsonRpcRequest<ClientRequest>,
+		merge: Box<MergeFn>,
+	) -> Result<Response, UpstreamError> {
+		let mut streams = Vec::new();
+		for (name, con) in self.pool.iter_named() {
+			streams.push((name, con.generic(r.request.clone()).await?));
+		}
+
+		let ms = mergestream::MergeStream::new(streams, r.id, merge);
+		merge_to_response(ms)
+	}
+	// pub async fn list_tools2(
+	// 	&self,
+	// 	r: ListToolsRequest,
+	// 	req_id: RequestId,
+	// 	cel: Arc<ContextBuilder>,
+	// ) -> Result<mergestream::MergeStream, UpstreamError> {
+	// 	let mut streams = Vec::new();
+	// 	for (name, con) in self.pool.iter_named() {
+	// 		streams.push((name, con.list_tools2(r.params.clone()).await?));
+	// 	}
+	// 	let policies = self.policies.clone();
+	// 	let default_target_name = self.default_target_name.clone();
+	// 	Ok(mergestream::MergeStream::new(
+	// 		streams,
+	// 		req_id,
+	// 		move |streams| {
+	// 			let tools = streams
+	// 				.into_iter()
+	// 				.flat_map(|(server_name, s)| {
+	// 					let tools = match s {
+	// 						ServerResult::ListToolsResult(ltr) => ltr.tools,
+	// 						_ => vec![],
+	// 					};
+	// 					tools
+	// 						.into_iter()
+	// 						.filter(|t| {
+	// 							policies.validate(
+	// 								&rbac::ResourceType::Tool(rbac::ResourceId::new(
+	// 									server_name.to_string(),
+	// 									t.name.to_string(),
+	// 								)),
+	// 								&cel,
+	// 							)
+	// 						})
+	// 						.map(|t| Tool {
+	// 							name: Cow::Owned(resource_name(
+	// 								default_target_name.as_ref(),
+	// 								server_name.as_str(),
+	// 								&t.name,
+	// 							)),
+	// 							..t
+	// 						})
+	// 						.collect_vec()
+	// 				})
+	// 				.collect_vec();
+	// 			Ok(
+	// 				ListToolsResult {
+	// 					tools,
+	// 					next_cursor: None,
+	// 				}
+	// 				.into(),
+	// 			)
+	// 		},
+	// 	))
+	// }
 	pub async fn call_tool(
 		&self,
 		r: CallToolRequest,
@@ -764,4 +869,47 @@ pub fn setup_request_log2(
 		.with_kind(SpanKind::Server)
 		.start_with_context(tracer, &rq_ctx.context);
 	(_span, rq_ctx, log, cel)
+}
+
+fn merge_to_response(stream: super::mergestream::MergeStream) -> Result<Response, UpstreamError> {
+	use futures_util::StreamExt;
+	let stream = stream.map(|rpc| {
+		let r = match rpc {
+			Ok(rpc) => rpc,
+			// TODO: do not hardcode number
+			Err(e) => ServerJsonRpcMessage::error(
+				ErrorData::internal_error(e.to_string(), None),
+				RequestId::Number(2),
+			),
+		};
+		// TODO: is it ok to have no event_id here?
+		ServerSseMessage {
+			event_id: None,
+			message: Arc::new(r),
+		}
+	});
+	Ok(crate::mcp::streamablehttp::sse_stream_response(
+		stream, None,
+	))
+}
+fn messages_to_response(stream: super::mergestream::Messages) -> Result<Response, UpstreamError> {
+	use futures_util::StreamExt;
+	let stream = stream.map(|rpc| {
+		let r = match rpc {
+			Ok(rpc) => rpc,
+			// TODO: do not hardcode number
+			Err(e) => ServerJsonRpcMessage::error(
+				ErrorData::internal_error(e.to_string(), None),
+				RequestId::Number(2),
+			),
+		};
+		// TODO: is it ok to have no event_id here?
+		ServerSseMessage {
+			event_id: None,
+			message: Arc::new(r),
+		}
+	});
+	Ok(crate::mcp::streamablehttp::sse_stream_response(
+		stream, None,
+	))
 }
