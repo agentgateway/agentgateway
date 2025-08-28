@@ -310,6 +310,15 @@ impl Relay {
 
 		messages_to_response(stream)
 	}
+	pub async fn send_fanout_deletion(
+		&self,
+		user_headers: http::HeaderMap,
+	) -> Result<Response, UpstreamError> {
+		for (_, con) in self.pool.iter_named() {
+			con.delete(&user_headers).await?;
+		}
+		Ok(accepted_response())
+	}
 	pub async fn send_fanout(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,

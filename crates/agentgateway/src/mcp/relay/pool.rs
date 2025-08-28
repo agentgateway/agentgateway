@@ -417,6 +417,12 @@ impl ClientWrapper {
 		let message = ClientJsonRpcMessage::notification(req);
 		Box::pin(self.internal_send_message(message, user_headers)).await
 	}
+	pub async fn send_delete(
+		&self,
+		user_headers: &HeaderMap,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		Box::pin(self.internal_delete(user_headers)).await
+	}
 	pub async fn send_message2(
 		&self,
 		req: ClientJsonRpcMessage,
@@ -501,6 +507,51 @@ impl ClientWrapper {
 				content_type
 			))),
 		}
+	}
+	async fn internal_delete(
+		&self,
+		user_headers: &HeaderMap,
+	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
+		Box::pin(self.internal_delete2(user_headers))
+	}
+	async fn internal_delete2(
+		&self,
+		user_headers: &HeaderMap,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		let client = self.client.clone();
+
+		let mut req = http::Request::builder()
+			.uri(&self.uri)
+			.method(http::Method::DELETE)
+			.body(crate::http::Body::empty())
+			.map_err(ClientError::new)?;
+
+		if let Some(session_id) = self.session_id.load().clone() {
+			req.headers_mut().insert(
+				HEADER_SESSION_ID,
+				session_id.as_ref().parse().map_err(ClientError::new)?,
+			);
+		}
+
+		for (k, v) in user_headers {
+			// Remove headers we do not want to propagate to the backend
+			if k == http::header::CONTENT_ENCODING || k == http::header::CONTENT_LENGTH {
+				continue;
+			}
+			if !req.headers().contains_key(k) {
+				req.headers_mut().insert(k.clone(), v.clone());
+			}
+		}
+
+		let resp = client
+			.call_with_default_policies(req, &self.backend, self.policies.clone())
+			.await
+			.map_err(ClientError::new)?;
+
+		if resp.status().is_client_error() || resp.status().is_server_error() {
+			return Err(ClientError::Status(resp));
+		}
+		Ok(StreamableHttpPostResponse::Accepted)
 	}
 }
 
