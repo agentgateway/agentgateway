@@ -8,10 +8,7 @@ use ::http::request::Parts;
 use agent_core::metrics::Recorder;
 use futures_util::StreamExt;
 use rmcp::ErrorData;
-use rmcp::model::{
-	ClientJsonRpcMessage, ClientRequest, ErrorCode, JsonRpcError, RequestId, ServerJsonRpcMessage,
-	ServerResult,
-};
+use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ErrorCode, JsonRpcError, RequestId};
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
@@ -413,7 +410,6 @@ impl sse_stream::Timer for TokioSseTimer {
 		this.sleep.reset(tokio::time::Instant::from_std(when));
 	}
 }
-
 
 fn internal_error_response(context: &str) -> Response {
 	::http::Response::builder()
