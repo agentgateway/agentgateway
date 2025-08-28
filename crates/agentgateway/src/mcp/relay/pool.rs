@@ -295,8 +295,8 @@ impl ClientWrapper {
 
 #[derive(Error, Debug)]
 pub enum ClientError {
-	#[error("http request failed with code: {0}")]
-	Status(http::StatusCode),
+	#[error("http request failed with code: {}", .0.status)]
+	Status(http::response::Parts),
 	#[error("http request failed: {0}")]
 	General(Arc<HttpError>),
 }
@@ -452,7 +452,8 @@ impl ClientWrapper {
 		}
 
 		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(ClientError::Status(resp.status()));
+			let (parts, _) = resp.into_parts();
+			return Err(ClientError::Status(parts));
 		}
 
 		let content_type = resp.headers().get(CONTENT_TYPE);
