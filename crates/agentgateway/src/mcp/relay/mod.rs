@@ -201,50 +201,6 @@ impl Relay {
 		}
 		Ok(())
 	}
-	// pub async fn initialize(&self, r: InitializeRequest) -> Result<InitializeResult, UpstreamError> {
-	// 	// List servers and initialize the ones that are not initialized
-	// 	// Initialize all targets
-	// 	for con in self.pool.iter() {
-	// 		let _res = con.initialize(r.params.clone()).await?;
-	// 	}
-	// 	// For now, return static info about ourselves
-	// 	// In the future, merge the results from each upstream.
-	// 	let res = self.get_info();
-	// 	Ok(res)
-	// }
-	// pub async fn list_tools(
-	// 	&self,
-	// 	r: ListToolsRequest,
-	// 	cel: &ContextBuilder,
-	// ) -> Result<ListToolsResult, UpstreamError> {
-	// 	let mut tools = Vec::new();
-	// 	for (name, con) in self.pool.iter_named() {
-	// 		let res = con.list_tools(r.params.clone()).await?;
-	// 		res
-	// 			.tools
-	// 			.into_iter()
-	// 			.filter(|t| {
-	// 				self.policies.validate(
-	// 					&rbac::ResourceType::Tool(rbac::ResourceId::new(name.to_string(), t.name.to_string())),
-	// 					cel,
-	// 				)
-	// 			})
-	// 			.for_each(|i| tools.push(i));
-	// 	}
-	//
-	// 	self.metrics.clone().record(
-	// 		metrics::ListCall {
-	// 			resource_type: "tool".to_string(),
-	// 			params: vec![],
-	// 		},
-	// 		(),
-	// 	);
-	//
-	// 	Ok(ListToolsResult {
-	// 		tools,
-	// 		next_cursor: None,
-	// 	})
-	// }
 	pub fn merge_tools(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();
@@ -318,6 +274,18 @@ impl Relay {
 			con.delete(&user_headers).await?;
 		}
 		Ok(accepted_response())
+	}
+	pub async fn send_fanout_get(
+		&self,
+		user_headers: http::HeaderMap,
+	) -> Result<Response, UpstreamError> {
+		let mut streams = Vec::new();
+		for (name, con) in self.pool.iter_named() {
+			streams.push((name, con.get_event_stream(&user_headers).await?));
+		}
+
+		let ms = mergestream::MergeStream::new_without_merge(streams);
+		merge_to_response(ms)
 	}
 	pub async fn send_fanout(
 		&self,

@@ -67,14 +67,24 @@ pub struct MergeStream {
 }
 
 impl MergeStream {
+	pub fn new_without_merge(streams: Vec<(Strng, Messages)>) -> Self {
+		Self::new_internal(streams, RequestId::Number(0), None)
+	}
 	pub fn new(streams: Vec<(Strng, Messages)>, req_id: RequestId, merge: Box<MergeFn>) -> Self {
+		Self::new_internal(streams, req_id, Some(merge))
+	}
+	fn new_internal(
+		streams: Vec<(Strng, Messages)>,
+		req_id: RequestId,
+		merge: Option<Box<MergeFn>>,
+	) -> Self {
 		let terminal_messages = streams.iter().map(|s| None).collect::<Vec<_>>();
 		Self {
 			streams: streams.into_iter().map(Some).collect_vec(),
 			terminal_messages,
 			req_id,
 			complete: false,
-			merge: Some(merge),
+			merge,
 		}
 	}
 
@@ -172,6 +182,11 @@ impl Stream for MergeStream {
 		}
 
 		self.complete = true;
-		Poll::Ready(Some(self.merge_terminal_messages()))
+
+		if self.merge.is_some() {
+			Poll::Ready(Some(self.merge_terminal_messages()))
+		} else {
+			Poll::Ready(None)
+		}
 	}
 }

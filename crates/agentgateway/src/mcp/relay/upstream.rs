@@ -215,6 +215,20 @@ impl Upstream {
 			Upstream::OpenAPI(m) => todo!(),
 		}
 	}
+	pub(crate) async fn get_event_stream(
+		&self,
+		user_headers: &http::HeaderMap,
+	) -> Result<mergestream::Messages, UpstreamError> {
+		match &self {
+			Upstream::McpStdio(m) => todo!(),
+			Upstream::McpHttp(c) => c
+				.get_event_stream(user_headers)
+				.await?
+				.try_into()
+				.map_err(Into::into),
+			Upstream::OpenAPI(m) => todo!(),
+		}
+	}
 	pub(crate) async fn generic_stream(
 		&self,
 		request: JsonRpcRequest<ClientRequest>,

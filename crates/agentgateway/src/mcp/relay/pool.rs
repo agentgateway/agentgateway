@@ -13,6 +13,7 @@ use futures::StreamExt;
 use futures::stream::BoxStream;
 use http::header::CONTENT_TYPE;
 use http::{HeaderMap, Uri};
+use indexmap::IndexMap;
 use reqwest::header::ACCEPT;
 use rmcp::model::{ClientJsonRpcMessage, ServerJsonRpcMessage};
 use rmcp::service::{AtomicU32Provider, NotificationContext, Peer};
@@ -32,7 +33,7 @@ pub(crate) struct ConnectionPool {
 	pi: Arc<ProxyInputs>,
 	backend: McpBackendGroup,
 	client: PolicyClient,
-	by_name: HashMap<Strng, Arc<upstream::Upstream>>,
+	by_name: IndexMap<Strng, Arc<upstream::Upstream>>,
 	stateful: bool,
 }
 
@@ -47,7 +48,7 @@ impl ConnectionPool {
 			backend,
 			client,
 			pi,
-			by_name: HashMap::new(),
+			by_name: IndexMap::new(),
 			stateful,
 		};
 		s.setup_connections()?;
@@ -423,6 +424,12 @@ impl ClientWrapper {
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		self.internal_delete(user_headers).await
 	}
+	pub async fn get_event_stream(
+		&self,
+		user_headers: &HeaderMap,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		self.internal_delete(user_headers).await
+	}
 	pub async fn send_message2(
 		&self,
 		req: ClientJsonRpcMessage,
@@ -514,7 +521,52 @@ impl ClientWrapper {
 	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
 		Box::pin(self.internal_delete2(user_headers))
 	}
+	fn internal_get_event_stream<'a>(
+		&'a self,
+		user_headers: &'a HeaderMap,
+	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
+		Box::pin(self.internal_get_event_stream2(user_headers))
+	}
 	async fn internal_delete2(
+		&self,
+		user_headers: &HeaderMap,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		let client = self.client.clone();
+
+		let mut req = http::Request::builder()
+			.uri(&self.uri)
+			.method(http::Method::DELETE)
+			.body(crate::http::Body::empty())
+			.map_err(ClientError::new)?;
+
+		if let Some(session_id) = self.session_id.load().clone() {
+			req.headers_mut().insert(
+				HEADER_SESSION_ID,
+				session_id.as_ref().parse().map_err(ClientError::new)?,
+			);
+		}
+
+		for (k, v) in user_headers {
+			// Remove headers we do not want to propagate to the backend
+			if k == http::header::CONTENT_ENCODING || k == http::header::CONTENT_LENGTH {
+				continue;
+			}
+			if !req.headers().contains_key(k) {
+				req.headers_mut().insert(k.clone(), v.clone());
+			}
+		}
+
+		let resp = client
+			.call_with_default_policies(req, &self.backend, self.policies.clone())
+			.await
+			.map_err(ClientError::new)?;
+
+		if resp.status().is_client_error() || resp.status().is_server_error() {
+			return Err(ClientError::Status(resp));
+		}
+		Ok(StreamableHttpPostResponse::Accepted)
+	}
+	async fn internal_get_event_stream2(
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
