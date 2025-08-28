@@ -10,7 +10,8 @@ use futures_util::{SinkExt, StreamExt};
 use http_body_util::Full;
 use rmcp::ErrorData;
 use rmcp::model::{
-	ClientJsonRpcMessage, ClientRequest, RequestId, ServerJsonRpcMessage, ServerResult,
+	ClientJsonRpcMessage, ClientRequest, ErrorCode, JsonRpcError, RequestId, ServerJsonRpcMessage,
+	ServerResult,
 };
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::transport::common::http_header::{
@@ -30,10 +31,14 @@ struct LocalSession {
 
 impl LocalSession {
 	pub async fn send(&self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
+		let req_id = match &message {
+			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
+			_ => None,
+		};
 		self
 			.send_internal(parts, message)
 			.await
-			.unwrap_or_else(Self::handle_error)
+			.unwrap_or_else(Self::handle_error(req_id))
 	}
 
 	pub async fn delete_session(&self, parts: Parts) -> Response {
@@ -41,7 +46,7 @@ impl LocalSession {
 			.relay
 			.send_fanout_deletion(parts.headers)
 			.await
-			.unwrap_or_else(Self::handle_error)
+			.unwrap_or_else(Self::handle_error(None))
 	}
 
 	pub async fn get_stream(&self, parts: Parts) -> Response {
@@ -49,18 +54,34 @@ impl LocalSession {
 			.relay
 			.send_fanout_get(parts.headers)
 			.await
-			.unwrap_or_else(Self::handle_error)
+			.unwrap_or_else(Self::handle_error(None))
 	}
 
-	fn handle_error(e: UpstreamError) -> Response {
-		if let UpstreamError::Http(ClientError::Status(resp)) = e {
-			// Forward response as-is
-			return resp;
+	fn handle_error(req_id: Option<RequestId>) -> impl FnOnce(UpstreamError) -> Response {
+		move |e| {
+			if let UpstreamError::Http(ClientError::Status(resp)) = e {
+				// Forward response as-is
+				return resp;
+			}
+			let err = if let Some(req_id) = req_id {
+				serde_json::to_string(&JsonRpcError {
+					jsonrpc: Default::default(),
+					id: req_id,
+					error: ErrorData {
+						code: ErrorCode::INTERNAL_ERROR,
+						message: format!("failed to send message: {e}",).into(),
+						data: None,
+					},
+				})
+				.ok()
+			} else {
+				None
+			};
+			http_error(
+				StatusCode::INTERNAL_SERVER_ERROR,
+				err.unwrap_or_else(|| format!("failed to send message: {e}")),
+			)
 		}
-		http_error(
-			StatusCode::INTERNAL_SERVER_ERROR,
-			format!("failed to send message: {e}",),
-		)
 	}
 
 	async fn send_internal(
