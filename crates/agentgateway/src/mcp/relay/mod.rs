@@ -197,7 +197,7 @@ impl Relay {
 	pub async fn notify(&self, not: ClientNotification) -> Result<(), UpstreamError> {
 		for con in self.pool.iter() {
 			// TODO: For Progress and Cancel we need to route these to the correct destination!
-			let _res = con.notify(not.clone()).await?;
+			con.notify(not.clone()).await?;
 		}
 		Ok(())
 	}

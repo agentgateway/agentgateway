@@ -3,27 +3,15 @@ use std::sync::Arc;
 
 use agent_core::drain::DrainWatcher;
 use agent_core::prelude::Strng;
-use anyhow::Result;
-use axum::Json;
-use axum::extract::Query;
 use axum::http::StatusCode;
-use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
-use axum_core::extract::FromRequest;
 use bytes::Bytes;
-use futures::stream::Stream;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use http::Method;
 use itertools::Itertools;
 use rmcp::model::{ClientJsonRpcMessage, GetExtensions};
-use rmcp::service::serve_server_with_ct;
 use rmcp::transport::StreamableHttpServerConfig;
-use rmcp::transport::common::server_side_http::session_id as generate_streamable_session_id;
-use rmcp::transport::sse_server::PostEventQuery;
 use rmcp::transport::streamable_http_server::SessionId;
-use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
-use tokio::io::{self};
-use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use crate::cel::ContextBuilder;
