@@ -14,15 +14,15 @@ use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
 use rmcp::model::{CallToolRequestParam, *};
 use rmcp::service::{RequestContext, RunningService};
-use rmcp::{model, RoleClient, RoleServer};
+use rmcp::{RoleClient, RoleServer, model};
 
 use crate::ProxyInputs;
 use crate::cel::ContextBuilder;
 use crate::http::jwt::Claims;
-use crate::mcp::{mergestream, rbac};
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
 use crate::mcp::relay::upstream::UpstreamError;
 use crate::mcp::sse::{MCPInfo, McpBackendGroup};
+use crate::mcp::{mergestream, rbac};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
@@ -244,7 +244,9 @@ impl Relay {
 		for (name, con) in self.pool.iter_named() {
 			streams.push(con.list_tools2(r.params.clone()).await?);
 		}
-		Ok(mergestream::MergeStream::new(streams))
+		Ok(mergestream::MergeStream::new(streams, |streams| {
+			Ok(streams.into_iter().next().unwrap())
+		}))
 	}
 	pub async fn call_tool(
 		&self,
