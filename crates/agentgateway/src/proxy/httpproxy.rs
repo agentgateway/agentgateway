@@ -728,10 +728,29 @@ async fn make_backend_call(
 		Backend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
 		_ => None,
 	};
+
+	// The MCP backend aggregates multiple backends into a single backend.
+	// In some cases, we want to treat this as a normal backend, so we swap it out.
+	let backend = match backend {
+		Backend::MCP(name, mcp_backend) => {
+			if let Some(be) = inputs
+				.clone()
+				.mcp_state
+				.should_passthrough(name.clone(), mcp_backend, &req)
+			{
+				let target = super::resolve_simple_backend(&be, inputs.as_ref())?;
+				&Backend::from(target)
+			} else {
+				backend
+			}
+		},
+		_ => backend,
+	};
+
 	let policies = inputs
-		.stores
-		.read_binds()
-		.backend_policies(backend.name(), service);
+	.stores
+	.read_binds()
+	.backend_policies(backend.name(), service);
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
 	let override_dest = maybe_inference.mutate_request(&mut req).await?;
 	log.add(|l| l.inference_pool = override_dest);
