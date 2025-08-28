@@ -205,6 +205,16 @@ impl Upstream {
 	// 	}
 	// }
 
+	pub(crate) async fn delete(&self, user_headers: &http::HeaderMap) -> Result<(), UpstreamError> {
+		match &self {
+			Upstream::McpStdio(m) => todo!(),
+			Upstream::McpHttp(c) => {
+				c.send_delete(user_headers).await?;
+				Ok(())
+			},
+			Upstream::OpenAPI(m) => todo!(),
+		}
+	}
 	pub(crate) async fn generic_stream(
 		&self,
 		request: JsonRpcRequest<ClientRequest>,

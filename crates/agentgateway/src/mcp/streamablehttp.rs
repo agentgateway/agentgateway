@@ -1,4 +1,4 @@
-use crate::http::{Request, Response};
+use crate::http::{Body, Request, Response};
 use crate::mcp::rbac;
 use crate::mcp::relay::upstream::UpstreamError;
 use crate::mcp::relay::{ClientError, Relay};
@@ -7,6 +7,7 @@ use ::http::StatusCode;
 use ::http::request::Parts;
 use agent_core::metrics::Recorder;
 use futures_util::{SinkExt, StreamExt};
+use http_body_util::Full;
 use rmcp::ErrorData;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientRequest, RequestId, ServerJsonRpcMessage, ServerResult,
@@ -29,20 +30,29 @@ struct LocalSession {
 
 impl LocalSession {
 	pub async fn send(&self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
-		// TODO: propagate errors better
 		self
 			.send_internal(parts, message)
 			.await
-			.unwrap_or_else(|e| {
-				if let UpstreamError::Http(ClientError::Status(resp)) = e {
-					// Forward response as-is
-					return resp;
-				}
-				http_error(
-					StatusCode::INTERNAL_SERVER_ERROR,
-					format!("failed to send message: {e}",),
-				)
-			})
+			.unwrap_or_else(Self::handle_error)
+	}
+
+	pub async fn delete_session(&self, parts: Parts) -> Response {
+		self
+			.relay
+			.send_fanout_deletion(parts.headers)
+			.await
+			.unwrap_or_else(Self::handle_error)
+	}
+
+	fn handle_error(e: UpstreamError) -> Response {
+		if let UpstreamError::Http(ClientError::Status(resp)) = e {
+			// Forward response as-is
+			return resp;
+		}
+		http_error(
+			StatusCode::INTERNAL_SERVER_ERROR,
+			format!("failed to send message: {e}",),
+		)
 	}
 
 	async fn send_internal(
@@ -295,8 +305,25 @@ impl StreamableHttpService {
 	pub async fn handle_get(&self, request: Request) -> Response {
 		todo!()
 	}
+
 	pub async fn handle_delete(&self, request: Request) -> Response {
-		todo!()
+		// check session id
+		let session_id = request
+			.headers()
+			.get(HEADER_SESSION_ID)
+			.and_then(|v| v.to_str().ok());
+		let Some(session_id) = session_id else {
+			// unauthorized
+			return http_error(
+				StatusCode::UNAUTHORIZED,
+				"Unauthorized: Session ID is required",
+			);
+		};
+		let Some(session) = self.session_manager.get_session(session_id) else {
+			return http_error(http::StatusCode::NOT_FOUND, "Session not found");
+		};
+		let (parts, body) = request.into_parts();
+		session.delete_session(parts).await
 	}
 }
 
