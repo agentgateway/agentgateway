@@ -123,12 +123,11 @@ impl LocalClient {
 			// Handle file change events
 			while let Some(Ok(events)) = rx.recv().await {
 				// Only process if we have actual content changes
-				if events
-					.iter()
-					.any(|e| matches!(
+				if events.iter().any(|e| {
+					matches!(
 						e.kind,
-						EventKind::Modify(_) | EventKind::Create(_) if e.paths.last().is_some_and(|p| p == &abspath)))
-				{
+						EventKind::Modify(_) | EventKind::Create(_) if e.paths.last().is_some_and(|p| p == &abspath))
+				}) {
 					info!("Config file changed, reloading...");
 					match lc.reload_config(next_state.clone()).await {
 						Ok(nxt) => {
