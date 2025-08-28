@@ -24,10 +24,10 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 			StreamableHttpPostResponse::Accepted => {
 				Err(ClientError::new(anyhow!("unexpected 'accepted' response")))
 			},
-			StreamableHttpPostResponse::Json(r, sid) => {
+			StreamableHttpPostResponse::Json(r, _) => {
 				Ok(Messages(futures::stream::once(async { Ok(r) }).boxed()))
 			},
-			StreamableHttpPostResponse::Sse(sse, sid) => Ok(Messages(
+			StreamableHttpPostResponse::Sse(sse, _) => Ok(Messages(
 				sse
 					.filter_map(|item| async {
 						item
@@ -46,10 +46,6 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 			)),
 		}
 	}
-}
-fn is_send_sync<T: Send + Sync>() {}
-fn assert() {
-	// is_send_sync::<MergeStream>();
 }
 
 pub type MergeFn = dyn FnOnce(Vec<(Strng, ServerResult)>) -> Result<ServerResult, ClientError>
@@ -78,7 +74,7 @@ impl MergeStream {
 		req_id: RequestId,
 		merge: Option<Box<MergeFn>>,
 	) -> Self {
-		let terminal_messages = streams.iter().map(|s| None).collect::<Vec<_>>();
+		let terminal_messages = streams.iter().map(|_| None).collect::<Vec<_>>();
 		Self {
 			streams: streams.into_iter().map(Some).collect_vec(),
 			terminal_messages,

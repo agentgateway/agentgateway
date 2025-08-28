@@ -1,7 +1,6 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use crate::ProxyInputs;
 use crate::cel::ContextBuilder;
@@ -18,7 +17,6 @@ use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::TLSConnectionInfo;
 use agent_core::prelude::Strng;
 use agent_core::trcng;
-use agent_core::version::BuildInfo;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
@@ -26,12 +24,9 @@ use opentelemetry::global::BoxedSpan;
 use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
 pub use pool::ClientError;
+use rmcp::model;
 use rmcp::model::*;
-use rmcp::service::{RequestContext, RunningService};
 use rmcp::transport::common::server_side_http::ServerSseMessage;
-use rmcp::{RoleClient, RoleServer, model};
-
-type McpError = ErrorData;
 
 pub mod metrics;
 mod pool;
@@ -46,18 +41,6 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 		name.to_string()
 	}
 }
-static AGW_INITIALIZE: LazyLock<InitializeRequestParam> =
-	LazyLock::new(|| InitializeRequestParam {
-		protocol_version: ProtocolVersion::V_2025_03_26,
-		capabilities: ClientCapabilities {
-			// TODO(keithmattix): where do we document these?
-			..Default::default()
-		},
-		client_info: Implementation {
-			name: "agentgateway".to_string(),
-			version: BuildInfo::new().version.to_string(),
-		},
-	});
 
 #[derive(Clone, Debug)]
 pub struct RqCtx {
@@ -140,16 +123,16 @@ impl Relay {
 	fn setup_request(
 		ext: &model::Extensions,
 		span_name: &str,
-	) -> Result<(BoxedSpan, RqCtx), McpError> {
+	) -> Result<(BoxedSpan, RqCtx), ErrorData> {
 		let (s, rq, _, _) = Self::setup_request_log(ext, span_name)?;
 		Ok((s, rq))
 	}
 	fn setup_request_log(
 		ext: &model::Extensions,
 		span_name: &str,
-	) -> Result<(BoxedSpan, RqCtx, AsyncLog<MCPInfo>, Arc<ContextBuilder>), McpError> {
+	) -> Result<(BoxedSpan, RqCtx, AsyncLog<MCPInfo>, Arc<ContextBuilder>), ErrorData> {
 		let Some(http) = ext.get::<Parts>() else {
-			return Err(McpError::internal_error(
+			return Err(ErrorData::internal_error(
 				"failed to extract parts".to_string(),
 				None,
 			));
@@ -245,7 +228,7 @@ impl Relay {
 	}
 	pub fn merge_initialize(&self) -> Box<MergeFn> {
 		let info = self.get_info();
-		Box::new(move |streams| {
+		Box::new(move |_| {
 			// For now, we just send our own info. In the future, we should merge the results from each upstream.
 			// TODO: set session info
 			Ok(info.into())

@@ -6,10 +6,9 @@ use agent_core::prelude::Strng;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
-use futures::StreamExt;
 use http::Method;
 use itertools::Itertools;
-use rmcp::model::{ClientJsonRpcMessage, GetExtensions};
+use rmcp::model::ClientJsonRpcMessage;
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::transport::streamable_http_server::SessionId;
 use tracing::warn;
@@ -154,26 +153,6 @@ impl App {
 		}
 
 		match (req.uri().path(), req.method(), authn) {
-			("/sse", m, _) if m == Method::GET => {
-				let Ok(relay) = Relay::new(
-					pi.clone(),
-					backends.clone(),
-					metrics.clone(),
-					authorization_policies.clone(),
-					client.clone(),
-					backend.stateful,
-				) else {
-					return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-				};
-				todo!()
-				// Self::sse_get_handler(self.sse_txs.clone(), relay)
-				// 	.await
-				// 	.into_response()
-			},
-			("/sse", m, _) if m == Method::POST => {
-				todo!()
-				// self.sse_post_handler(req).await.into_response()
-			},
 			(path, _, Some(auth)) if path.ends_with("client-registration") => self
 				.client_registration(req, auth, client.clone())
 				.await
