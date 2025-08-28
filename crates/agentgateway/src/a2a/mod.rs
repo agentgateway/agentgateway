@@ -1,4 +1,4 @@
-use http::{Request, header};
+use http::{Request, Uri, header};
 use serde_json::Value;
 use tracing::warn;
 
@@ -77,14 +77,7 @@ pub async fn apply_to_response(
 			let Some(url_field) = json::traverse_mut(&mut agent_card, &["url"]) else {
 				anyhow::bail!("agent card missing URL");
 			};
-			// Keep the original URL the found the agent at, but strip the agent card suffix.
-			// Note: this won't work in the case they are hosting their agent in other locations.
-			let path = uri.path();
-			let path = path.strip_suffix("/.well-known/agent.json").unwrap_or(path);
-			let path = path
-				.strip_suffix("/.well-known/agent-card.json")
-				.unwrap_or(path);
-			let new_uri = uri.to_string().replace(uri.path(), path);
+			let new_uri = build_agent_path(uri);
 
 			*url_field = Value::String(new_uri);
 
@@ -114,3 +107,19 @@ pub async fn apply_to_response(
 		RequestType::Unknown => Ok(()),
 	}
 }
+
+fn build_agent_path(uri: Uri) -> String {
+	// Keep the original URL the found the agent at, but strip the agent card suffix.
+	// Note: this won't work in the case they are hosting their agent in other locations.
+	let path = uri.path();
+	let path = path.strip_suffix("/.well-known/agent.json").unwrap_or(path);
+	let path = path
+		.strip_suffix("/.well-known/agent-card.json")
+		.unwrap_or(path);
+	let new_uri = uri.to_string().replace(uri.path(), path);
+	new_uri
+}
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;
