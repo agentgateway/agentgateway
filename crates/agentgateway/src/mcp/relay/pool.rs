@@ -19,8 +19,10 @@ use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
+use rmcp::transport::TokioChildProcess;
 use sse_stream::SseStream;
 use thiserror::Error;
+use tokio::process::Command;
 
 #[derive(Debug)]
 pub(crate) struct ConnectionPool {
@@ -97,36 +99,24 @@ impl ConnectionPool {
 
 				upstream::Upstream::McpHttp(client)
 			},
-			McpTargetSpec::Stdio { .. } => {
-				todo!()
-				// debug!("starting stdio transport for target: {}", target.name);
-				// #[cfg(target_os = "windows")]
-				// // Command has some weird behavior on Windows where it expects the executable extension to be
-				// // .exe. The which create will resolve the actual command for us.
-				// // See https://github.com/rust-lang/rust/issues/37519#issuecomment-1694507663
-				// // for more context.
-				// let cmd = which::which(cmd)?;
-				// #[cfg(target_family = "unix")]
-				// let mut c = Command::new(cmd);
-				// #[cfg(target_os = "windows")]
-				// let mut c = Command::new(&cmd);
-				// c.args(args);
-				// for (k, v) in env {
-				// 	c.env(k, v);
-				// }
-				// upstream::Upstream {
-				// 	spec: upstream::UpstreamTargetSpec::Mcp(
-				// 		serve_client_with_ct(
-				// 			PeerClientHandler {
-				// 				peer: peer.clone(),
-				// 				init_request,
-				// 			},
-				// 			TokioChildProcess::new(c).context(format!("failed to run command '{:?}'", &cmd))?,
-				// 			ct.child_token(),
-				// 		)
-				// 		.await?,
-				// 	),
-				// }
+			McpTargetSpec::Stdio { cmd, args, env } => {
+				debug!("starting stdio transport for target: {}", target.name);
+				#[cfg(target_os = "windows")]
+				// Command has some weird behavior on Windows where it expects the executable extension to be
+				// .exe. The which create will resolve the actual command for us.
+				// See https://github.com/rust-lang/rust/issues/37519#issuecomment-1694507663
+				// for more context.
+				let cmd = which::which(cmd)?;
+				#[cfg(target_family = "unix")]
+				let mut c = Command::new(cmd);
+				#[cfg(target_os = "windows")]
+				let mut c = Command::new(&cmd);
+				c.args(args);
+				for (k, v) in env {
+					c.env(k, v);
+				}
+				let proc = TokioChildProcess::new(c).context(format!("failed to run command '{:?}'", &cmd))?;
+				upstream::Upstream::McpStdio(upstream::Stdio::new(proc))
 			},
 			McpTargetSpec::OpenAPI(open) => {
 				// Renamed for clarity
