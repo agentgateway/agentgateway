@@ -28,6 +28,8 @@ pub enum UpstreamError {
 	Http(#[from] mcp::ClientError),
 	#[error("openapi upstream error: {0}")]
 	OpenAPIError(#[from] anyhow::Error),
+	#[error("stdio upstream error: {0}")]
+	Stdio(#[from] io::Error),
 }
 
 // UpstreamTarget defines a source for MCP information.
@@ -69,7 +71,9 @@ impl Upstream {
 		user_headers: &http::HeaderMap,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
-			Upstream::McpStdio(_m) => todo!(),
+			Upstream::McpStdio(c) => {
+				c.send_message(request).await?
+			},
 			Upstream::McpHttp(c) => {
 				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
 				let res = c.send_message(request, user_headers).await?;
