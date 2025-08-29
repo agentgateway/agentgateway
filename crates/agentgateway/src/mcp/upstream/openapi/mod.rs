@@ -1,8 +1,13 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::http::Request;
 use crate::json;
+use crate::mcp::mergestream::Messages;
+use crate::mcp::upstream::UpstreamError;
+use crate::mcp::{ClientError, mergestream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
 use crate::types::agent::SimpleBackend;
@@ -10,7 +15,8 @@ use http::header::{ACCEPT, CONTENT_TYPE};
 use http::{HeaderMap, Method};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use reqwest::header::{HeaderName, HeaderValue};
-use rmcp::model::{JsonObject, Tool};
+use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
+use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::instrument;
@@ -525,6 +531,99 @@ pub struct Handler {
 }
 
 impl Handler {
+	pub async fn send_message(
+		&self,
+		request: JsonRpcRequest<ClientRequest>,
+		user_headers: &crate::http::HeaderMap,
+	) -> Result<mergestream::Messages, UpstreamError> {
+		use rmcp::model::*;
+		let method = request.request.method();
+		let id = request.id;
+		let res = match request.request {
+			ClientRequest::InitializeRequest(_) => Messages::from_result(
+				id,
+				ServerInfo {
+					capabilities: ServerCapabilities::builder().enable_tools().build(),
+					..Default::default()
+				},
+			),
+			ClientRequest::GetPromptRequest(_) => Messages::from_result(
+				id,
+				GetPromptResult {
+					description: None,
+					messages: vec![],
+				},
+			),
+			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
+				id,
+				ListPromptsResult {
+					next_cursor: None,
+					prompts: vec![],
+				},
+			),
+			ClientRequest::ListResourcesRequest(_) => Messages::from_result(
+				id,
+				ListResourcesResult {
+					next_cursor: None,
+					resources: vec![],
+				},
+			),
+			ClientRequest::ListResourceTemplatesRequest(_) => Messages::from_result(
+				id,
+				ListResourceTemplatesResult {
+					next_cursor: None,
+					resource_templates: vec![],
+				},
+			),
+			ClientRequest::ReadResourceRequest(_) => {
+				Messages::from_result(id, ReadResourceResult { contents: vec![] })
+			},
+			ClientRequest::PingRequest(_)
+			| ClientRequest::SetLevelRequest(_)
+			| ClientRequest::SubscribeRequest(_)
+			| ClientRequest::UnsubscribeRequest(_) => Messages::empty(),
+			ClientRequest::CompleteRequest(r) => {
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			},
+			ClientRequest::CallToolRequest(ctr) => {
+				let res = self
+					.call_tool(
+						ctr.params.name.as_ref(),
+						ctr.params.arguments,
+						user_headers,
+						// TODO: add claims!!
+						// rq_ctx.identity.claims.clone(),
+					)
+					.await?;
+				Messages::from_result(
+					id,
+					CallToolResult {
+						content: vec![],
+						structured_content: Some(res),
+						is_error: None,
+					},
+				)
+			},
+			ClientRequest::ListToolsRequest(_) => Messages::from_result(
+				id,
+				ListToolsResult {
+					next_cursor: None,
+					tools: self.tools(),
+				},
+			),
+		};
+		Ok(res)
+	}
+
+	pub fn call_tool<'a>(
+		&'a self,
+		name: &'a str,
+		args: Option<JsonObject>,
+		user_headers: &'a HeaderMap,
+	) -> Pin<Box<dyn Future<Output = Result<serde_json::Value, anyhow::Error>> + Send + '_>> {
+		Box::pin(self.call_tool_internal(name, args, user_headers))
+	}
+
 	/// We need to use the parse the schema to get the correct args.
 	/// They are in the json schema under the "properties" key.
 	/// Body is under the "body" key.
@@ -536,14 +635,7 @@ impl Handler {
 	/// Headers need to be added to the request headers.
 	/// Body needs to be added to the request body.
 	/// Path params need to be added to the template params in the path.
-	#[instrument(
-		level = "debug",
-		skip_all,
-		fields(
-			name=%name,
-		),
-	)]
-	pub async fn call_tool(
+	async fn call_tool_internal(
 		&self,
 		name: &str,
 		args: Option<JsonObject>,
@@ -686,11 +778,8 @@ impl Handler {
 		let mut request = rb
 			.body(body.into())
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
-		for (k, v) in user_headers {
-			if !request.headers().contains_key(k) {
-				request.headers_mut().insert(k.clone(), v.clone());
-			}
-		}
+
+		insert_user_headers(user_headers, &mut request);
 
 		// Make the request
 		let response = self
@@ -721,6 +810,18 @@ impl Handler {
 
 	pub fn tools(&self) -> Vec<Tool> {
 		self.tools.clone().into_iter().map(|(t, _)| t).collect()
+	}
+}
+
+fn insert_user_headers(user_headers: &HeaderMap, req: &mut Request) {
+	for (k, v) in user_headers {
+		// Remove headers we do not want to propagate to the backend
+		if k == crate::http::header::CONTENT_ENCODING || k == crate::http::header::CONTENT_LENGTH {
+			continue;
+		}
+		if !req.headers().contains_key(k) {
+			req.headers_mut().insert(k.clone(), v.clone());
+		}
 	}
 }
 
