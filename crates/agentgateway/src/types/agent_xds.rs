@@ -612,16 +612,16 @@ impl TryFrom<&proto::agent::policy_spec::TransformationPolicy> for Transformatio
 
 			if let Some(t) = t {
 				for h in &t.add {
-					add.push((h.name.clone().into(), h.value.clone().into()));
+					add.push((h.name.clone().into(), h.expression.clone().into()));
 				}
 				for h in &t.set {
-					set.push((h.name.clone().into(), h.value.clone().into()));
+					set.push((h.name.clone().into(), h.expression.clone().into()));
 				}
 				for r in &t.remove {
 					remove.push(r.clone().into());
 				}
 				if let Some(b) = &t.body {
-					body = Some(b.content.clone().into());
+					body = Some(b.expression.clone().into());
 				}
 			}
 

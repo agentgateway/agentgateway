@@ -446,11 +446,11 @@ message PolicySpec {
 
   message HeaderTransformation {
     string name = 1;
-    string value = 2;
+    string expression = 2;
   }
 
   message BodyTransformation {
-    string content = 1;
+    string expression = 1;
   }
   
   oneof kind {

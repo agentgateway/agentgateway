@@ -4249,7 +4249,7 @@ func (x *PolicySpec_TransformationPolicy) GetResponse() *PolicySpec_Transformati
 type PolicySpec_HeaderTransformation struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Value         string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Expression    string                 `protobuf:"bytes,2,opt,name=expression,proto3" json:"expression,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4291,16 +4291,16 @@ func (x *PolicySpec_HeaderTransformation) GetName() string {
 	return ""
 }
 
-func (x *PolicySpec_HeaderTransformation) GetValue() string {
+func (x *PolicySpec_HeaderTransformation) GetExpression() string {
 	if x != nil {
-		return x.Value
+		return x.Expression
 	}
 	return ""
 }
 
 type PolicySpec_BodyTransformation struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Content       string                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	Expression    string                 `protobuf:"bytes,1,opt,name=expression,proto3" json:"expression,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4335,9 +4335,9 @@ func (*PolicySpec_BodyTransformation) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{30, 10}
 }
 
-func (x *PolicySpec_BodyTransformation) GetContent() string {
+func (x *PolicySpec_BodyTransformation) GetExpression() string {
 	if x != nil {
-		return x.Content
+		return x.Expression
 	}
 	return ""
 }
@@ -5621,7 +5621,7 @@ const file_resource_proto_rawDesc = "" +
 	"route_rule\x18\x04 \x01(\tH\x00R\trouteRule\x12\x1a\n" +
 	"\abackend\x18\x05 \x01(\tH\x00R\abackend\x12\x1a\n" +
 	"\aservice\x18\x06 \x01(\tH\x00R\aserviceB\x06\n" +
-	"\x04kind\"\xdf-\n" +
+	"\x04kind\"\xef-\n" +
 	"\n" +
 	"PolicySpec\x12`\n" +
 	"\x10local_rate_limit\x18\x01 \x01(\v24.agentgateway.dev.resource.PolicySpec.LocalRateLimitH\x00R\x0elocalRateLimit\x12Q\n" +
@@ -5767,12 +5767,16 @@ const file_resource_proto_rawDesc = "" +
 	"\x03set\x18\x01 \x03(\v2:.agentgateway.dev.resource.PolicySpec.HeaderTransformationR\x03set\x12L\n" +
 	"\x03add\x18\x02 \x03(\v2:.agentgateway.dev.resource.PolicySpec.HeaderTransformationR\x03add\x12\x16\n" +
 	"\x06remove\x18\x03 \x03(\tR\x06remove\x12L\n" +
-	"\x04body\x18\x04 \x01(\v28.agentgateway.dev.resource.PolicySpec.BodyTransformationR\x04body\x1a@\n" +
+	"\x04body\x18\x04 \x01(\v28.agentgateway.dev.resource.PolicySpec.BodyTransformationR\x04body\x1aJ\n" +
 	"\x14HeaderTransformation\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\x1a.\n" +
-	"\x12BodyTransformation\x12\x18\n" +
-	"\acontent\x18\x01 \x01(\tR\acontentB\x06\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1e\n" +
+	"\n" +
+	"expression\x18\x02 \x01(\tR\n" +
+	"expression\x1a4\n" +
+	"\x12BodyTransformation\x12\x1e\n" +
+	"\n" +
+	"expression\x18\x01 \x01(\tR\n" +
+	"expressionB\x06\n" +
 	"\x04kind\"\x98\x01\n" +
 	"\x06Policy\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12?\n" +
