@@ -1,173 +1,19 @@
 use crate::http::{Request, Response};
-use crate::mcp::rbac;
-use crate::mcp::relay::upstream::UpstreamError;
-use crate::mcp::relay::{ClientError, Relay};
+use crate::mcp::handler::Relay;
+use crate::mcp::session::SessionManager;
 use crate::*;
 use ::http::StatusCode;
-use ::http::request::Parts;
-use agent_core::metrics::Recorder;
 use futures_util::StreamExt;
-use rmcp::ErrorData;
-use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ErrorCode, JsonRpcError, RequestId};
+use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
-use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
+use rmcp::transport::common::server_side_http::ServerSseMessage;
 use sse_stream::{KeepAlive, Sse, SseBody};
-use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
-struct LocalSession {
-	relay: Arc<Relay>,
-	pub id: Arc<str>,
-}
-
-impl LocalSession {
-	pub async fn send(&self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
-		let req_id = match &message {
-			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
-			_ => None,
-		};
-		self
-			.send_internal(parts, message)
-			.await
-			.unwrap_or_else(Self::handle_error(req_id))
-	}
-
-	pub async fn delete_session(&self, parts: Parts) -> Response {
-		self
-			.relay
-			.send_fanout_deletion(parts.headers)
-			.await
-			.unwrap_or_else(Self::handle_error(None))
-	}
-
-	pub async fn get_stream(&self, parts: Parts) -> Response {
-		self
-			.relay
-			.send_fanout_get(parts.headers)
-			.await
-			.unwrap_or_else(Self::handle_error(None))
-	}
-
-	fn handle_error(req_id: Option<RequestId>) -> impl FnOnce(UpstreamError) -> Response {
-		move |e| {
-			if let UpstreamError::Http(ClientError::Status(resp)) = e {
-				// Forward response as-is
-				return *resp;
-			}
-			let err = if let Some(req_id) = req_id {
-				serde_json::to_string(&JsonRpcError {
-					jsonrpc: Default::default(),
-					id: req_id,
-					error: ErrorData {
-						code: ErrorCode::INTERNAL_ERROR,
-						message: format!("failed to send message: {e}",).into(),
-						data: None,
-					},
-				})
-				.ok()
-			} else {
-				None
-			};
-			http_error(
-				StatusCode::INTERNAL_SERVER_ERROR,
-				err.unwrap_or_else(|| format!("failed to send message: {e}")),
-			)
-		}
-	}
-
-	async fn send_internal(
-		&self,
-		parts: Parts,
-		message: ClientJsonRpcMessage,
-	) -> Result<Response, UpstreamError> {
-		match message {
-			ClientJsonRpcMessage::Request(mut r) => {
-				let method = r.request.method();
-				let (_span, _, log, cel) = mcp::relay::setup_request_log2(&parts, method);
-
-				match &mut r.request {
-					ClientRequest::InitializeRequest(_) => {
-						self
-							.relay
-							.send_fanout(r, parts.headers, self.relay.merge_initialize())
-							.await
-					},
-					ClientRequest::ListToolsRequest(_) => {
-						self
-							.relay
-							.send_fanout(r, parts.headers, self.relay.merge_tools(cel.clone()))
-							.await
-					},
-					ClientRequest::CallToolRequest(ctr) => {
-						let name = ctr.params.name.clone();
-						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
-						log.non_atomic_mutate(|l| {
-							l.tool_call_name = Some(tool.to_string());
-							l.target_name = Some(service_name.to_string());
-						});
-						if !self.relay.policies.validate(
-							&rbac::ResourceType::Tool(rbac::ResourceId::new(
-								service_name.to_string(),
-								tool.to_string(),
-							)),
-							cel.as_ref(),
-						) {
-							return Err(UpstreamError::Authorization);
-						}
-
-						self.relay.metrics.record(
-							crate::mcp::relay::metrics::ToolCall {
-								server: service_name.to_string(),
-								name: tool.to_string(),
-								params: vec![],
-							},
-							(),
-						);
-						let tn = tool.to_string();
-						ctr.params.name = tn.into();
-						self.relay.send_single(r, parts.headers, service_name).await
-					},
-					_ => todo!(),
-				}
-			},
-			ClientJsonRpcMessage::Notification(r) => {
-				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
-				// however, we don't have a way to map to the correct service yet
-				self.relay.send_notification(r, parts.headers).await
-			},
-			_ => todo!(),
-		}
-	}
-}
-
-#[derive(Default, Debug)]
-pub struct SessionManager {
-	sessions: RwLock<HashMap<String, LocalSession>>,
-}
-
-impl SessionManager {
-	fn get_session(&self, id: &str) -> Option<LocalSession> {
-		self.sessions.read().ok()?.get(id).cloned()
-	}
-	fn create_session(&self, relay: Relay) -> LocalSession {
-		let id = session_id();
-		let sess = LocalSession {
-			id: id.clone(),
-			relay: Arc::new(relay),
-		};
-		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(id.to_string(), sess.clone());
-		sess
-	}
-}
-
-#[allow(dead_code)]
-fn require_send<T: Send>() {}
 pub struct StreamableHttpService {
 	config: StreamableHttpServerConfig,
 	session_manager: Arc<SessionManager>,
@@ -180,7 +26,6 @@ impl StreamableHttpService {
 		session_manager: Arc<SessionManager>,
 		config: StreamableHttpServerConfig,
 	) -> Self {
-		require_send::<StreamableHttpService>();
 		Self {
 			config,
 			session_manager,

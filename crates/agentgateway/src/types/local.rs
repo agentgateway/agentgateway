@@ -14,7 +14,7 @@ use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::{filters, retry, timeout};
-use crate::mcp::rbac::McpAuthorization;
+use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::PolicyTarget::RouteRule;
 use crate::types::agent::{
