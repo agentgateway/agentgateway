@@ -9,7 +9,10 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
 use anyhow::anyhow;
-use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
+use rmcp::model::ClientRequest::GetPromptRequest;
+use rmcp::model::{
+	ClientNotification, ClientRequest, InitializeResult, JsonRpcRequest, ServerResult,
+};
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use std::io;
@@ -22,6 +25,8 @@ pub enum UpstreamError {
 	Authorization,
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
+	#[error("unsupported method: {0}")]
+	InvalidMethod(String),
 	#[error("stdio upstream error: {0}")]
 	ServiceError(#[from] rmcp::ServiceError),
 	#[error("http upstream error: {0}")]
@@ -99,9 +104,7 @@ impl Upstream {
 				}
 				res.try_into().map_err(Into::into)
 			},
-			Upstream::OpenAPI(c) => {
-				c.call_tool()
-			}
+			Upstream::OpenAPI(c) => Ok(c.send_message(request, user_headers).await?),
 		}
 	}
 
@@ -117,7 +120,7 @@ impl Upstream {
 			Upstream::McpHttp(c) => {
 				c.send_notification(request, user_headers).await?;
 			},
-			Upstream::OpenAPI(_m) => todo!(),
+			Upstream::OpenAPI(_) => {},
 		}
 		Ok(())
 	}

@@ -15,6 +15,14 @@ impl Messages {
 	pub fn pending() -> Self {
 		Messages(futures::stream::pending().boxed())
 	}
+	/// empty returns a stream that never returns any messages. It immediately returns none.
+	pub fn empty() -> Self {
+		Messages(futures::stream::empty().boxed())
+	}
+
+	pub fn from_result<T: Into<ServerResult>>(id: RequestId, result: T) -> Self {
+		Self::from(ServerJsonRpcMessage::response(result.into(), id))
+	}
 }
 
 impl Stream for Messages {

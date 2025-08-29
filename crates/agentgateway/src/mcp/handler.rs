@@ -291,20 +291,20 @@ impl Relay {
 	}
 	fn get_info(&self) -> ServerInfo {
 		ServerInfo {
-            protocol_version: ProtocolVersion::V_2025_03_26,
-            capabilities: ServerCapabilities {
-                completions: None,
-                experimental: None,
-                logging: None,
-                prompts: Some(PromptsCapability::default()),
-                resources: Some(ResourcesCapability::default()),
-                tools: Some(ToolsCapability::default()),
-            },
-            server_info: Implementation::from_build_env(),
-            instructions: Some(
-                "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
-            ),
-        }
+			protocol_version: ProtocolVersion::V_2025_03_26,
+			capabilities: ServerCapabilities {
+				completions: None,
+				experimental: None,
+				logging: None,
+				prompts: Some(PromptsCapability::default()),
+				resources: Some(ResourcesCapability::default()),
+				tools: Some(ToolsCapability::default()),
+			},
+			server_info: Implementation::from_build_env(),
+			instructions: Some(
+				"This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
+			),
+		}
 	}
 }
 
