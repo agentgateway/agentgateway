@@ -138,7 +138,7 @@ impl Session {
 				// however, we don't have a way to map to the correct service yet
 				self.relay.send_notification(r, parts.headers).await
 			},
-			
+
 			_ => todo!(),
 		}
 	}

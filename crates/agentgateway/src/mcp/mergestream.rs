@@ -10,6 +10,13 @@ use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 
 pub(crate) struct Messages(BoxStream<'static, Result<ServerJsonRpcMessage, ClientError>>);
 
+impl Messages {
+	/// pending returns a stream that never returns any messages. It is not an empty stream that closes immediately; it hangs forever.
+	pub fn pending() -> Self {
+		Messages(futures::stream::pending().boxed())
+	}
+}
+
 impl Stream for Messages {
 	type Item = Result<ServerJsonRpcMessage, ClientError>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
