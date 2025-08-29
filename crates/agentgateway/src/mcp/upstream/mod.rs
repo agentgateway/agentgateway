@@ -7,12 +7,13 @@ use crate::mcp::{ClientError, mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
-use ::http::HeaderMap;
 use anyhow::anyhow;
-use rmcp::model::{ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest};
+use rmcp::model::{
+	ClientNotification, ClientRequest, JsonRpcRequest,
+};
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
-use std::fmt::Formatter;
+use std::io;
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -30,6 +31,10 @@ pub enum UpstreamError {
 	OpenAPIError(#[from] anyhow::Error),
 	#[error("stdio upstream error: {0}")]
 	Stdio(#[from] io::Error),
+	#[error("upstream closed on send")]
+	Send,
+	#[error("upstream closed on receive")]
+	Recv,
 }
 
 // UpstreamTarget defines a source for MCP information.
@@ -43,20 +48,22 @@ pub(crate) enum Upstream {
 impl Upstream {
 	pub(crate) async fn delete(&self, user_headers: &http::HeaderMap) -> Result<(), UpstreamError> {
 		match &self {
-			Upstream::McpStdio(_m) => todo!(),
+			Upstream::McpStdio(c) => {
+				c.stop().await?;
+			},
 			Upstream::McpHttp(c) => {
 				c.send_delete(user_headers).await?;
-				Ok(())
 			},
 			Upstream::OpenAPI(_m) => todo!(),
 		}
+		Ok(())
 	}
 	pub(crate) async fn get_event_stream(
 		&self,
 		user_headers: &http::HeaderMap,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
-			Upstream::McpStdio(_m) => todo!(),
+			Upstream::McpStdio(c) => Ok(c.get_event_stream().await),
 			Upstream::McpHttp(c) => c
 				.get_event_stream(user_headers)
 				.await?
@@ -72,7 +79,9 @@ impl Upstream {
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => {
-				c.send_message(request).await?
+				let receiver = c.send_message(request).await?;
+				let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
+				Ok(mergestream::Messages::from(response))
 			},
 			Upstream::McpHttp(c) => {
 				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
@@ -99,30 +108,15 @@ impl Upstream {
 		user_headers: &http::HeaderMap,
 	) -> Result<(), UpstreamError> {
 		match &self {
-			Upstream::McpStdio(_m) => todo!(),
+			Upstream::McpStdio(c) => {
+				c.send_notification(request).await?;
+			},
 			Upstream::McpHttp(c) => {
 				c.send_notification(request, user_headers).await?;
-				Ok(())
 			},
 			Upstream::OpenAPI(_m) => todo!(),
 		}
-	}
-
-	pub(crate) async fn notify(&self, request: ClientNotification) -> Result<(), UpstreamError> {
-		match &self {
-			Upstream::McpHttp(c) => {
-				let res = c
-					.send_message2(
-						ClientJsonRpcMessage::notification(request),
-						&HeaderMap::new(),
-					)
-					.await?;
-				expect_accepted(res).await?;
-				Ok(())
-			},
-			Upstream::McpStdio(_m) => todo!(),
-			Upstream::OpenAPI(_m) => Ok(()),
-		}
+		Ok(())
 	}
 }
 

@@ -1,4 +1,4 @@
-use crate::http::{Error as HttpError, Request};
+use crate::http::Request;
 use crate::json;
 use crate::mcp::ClientError;
 use crate::proxy::httpproxy::PolicyClient;
@@ -7,9 +7,7 @@ use crate::types::agent::SimpleBackend;
 use crate::*;
 use ::http::header::CONTENT_TYPE;
 use ::http::{HeaderMap, Uri};
-use agent_core::prelude::*;
 use anyhow::anyhow;
-use axum_core::BoxError;
 use futures::StreamExt;
 use reqwest::header::ACCEPT;
 use rmcp::model::{
@@ -21,7 +19,6 @@ use rmcp::transport::common::http_header::{
 };
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::SseStream;
-use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub struct Client {
