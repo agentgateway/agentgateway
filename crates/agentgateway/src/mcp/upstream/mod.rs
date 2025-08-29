@@ -2,15 +2,14 @@ mod openapi;
 mod stdio;
 mod streamablehttp;
 
+use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::{ClientError, mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
 use anyhow::anyhow;
-use rmcp::model::{
-	ClientNotification, ClientRequest, JsonRpcRequest,
-};
+use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use std::io;
@@ -54,7 +53,9 @@ impl Upstream {
 			Upstream::McpHttp(c) => {
 				c.send_delete(user_headers).await?;
 			},
-			Upstream::OpenAPI(_m) => todo!(),
+			Upstream::OpenAPI(c) => {
+				// No need to do anything here
+			},
 		}
 		Ok(())
 	}
@@ -69,7 +70,7 @@ impl Upstream {
 				.await?
 				.try_into()
 				.map_err(Into::into),
-			Upstream::OpenAPI(_m) => todo!(),
+			Upstream::OpenAPI(_m) => Ok(Messages::pending()),
 		}
 	}
 	pub(crate) async fn generic_stream(
@@ -98,7 +99,9 @@ impl Upstream {
 				}
 				res.try_into().map_err(Into::into)
 			},
-			Upstream::OpenAPI(_m) => todo!(),
+			Upstream::OpenAPI(c) => {
+				c.call_tool()
+			}
 		}
 	}
 
