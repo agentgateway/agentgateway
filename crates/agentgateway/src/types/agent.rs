@@ -25,7 +25,7 @@ use crate::http::authorization::RuleSet;
 use crate::http::{
 	HeaderName, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
 };
-use crate::mcp::rbac::McpAuthorization;
+use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::*;
 

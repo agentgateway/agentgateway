@@ -229,7 +229,7 @@ impl ContextBuilder {
 
 	pub fn build_with_mcp(
 		&self,
-		mcp: Option<&crate::mcp::rbac::ResourceType>,
+		mcp: Option<&crate::mcp::ResourceType>,
 	) -> Result<Executor<'static>, Error> {
 		let mut ctx: Context<'static> = ROOT_CONTEXT.new_inner_scope();
 
@@ -331,7 +331,7 @@ pub struct ExpressionContext {
 	pub source: Option<SourceContext>,
 	/// `mcp` contains attributes about the MCP request.
 	// This is only included for schema generation; see build_with_mcp.
-	pub mcp: Option<crate::mcp::rbac::ResourceType>,
+	pub mcp: Option<crate::mcp::ResourceType>,
 }
 
 #[apply(schema_ser!)]

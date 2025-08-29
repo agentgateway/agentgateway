@@ -8,6 +8,7 @@ use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use http::Method;
 use itertools::Itertools;
+use prometheus_client::registry::Registry;
 use rmcp::model::ClientJsonRpcMessage;
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::transport::streamable_http_server::SessionId;
@@ -17,9 +18,10 @@ use crate::cel::ContextBuilder;
 use crate::http::jwt::Claims;
 use crate::http::*;
 use crate::json::from_body;
-use crate::mcp::relay;
-use crate::mcp::relay::Relay;
-use crate::mcp::streamablehttp::{SessionManager, StreamableHttpService};
+use crate::mcp::MCPInfo;
+use crate::mcp::handler::Relay;
+use crate::mcp::session::SessionManager;
+use crate::mcp::streamablehttp::StreamableHttpService;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
@@ -27,21 +29,15 @@ use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
 	BackendName, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, SimpleBackendReference,
 };
-use crate::{ProxyInputs, json};
+use crate::{ProxyInputs, json, mcp};
 
 type SseTxs =
 	Arc<std::sync::RwLock<HashMap<SessionId, tokio::sync::mpsc::Sender<ClientJsonRpcMessage>>>>;
 
-#[derive(Debug, Default, Clone)]
-pub struct MCPInfo {
-	pub tool_call_name: Option<String>,
-	pub target_name: Option<String>,
-}
-
 #[derive(Debug, Clone)]
 pub struct App {
 	state: Stores,
-	metrics: Arc<relay::metrics::Metrics>,
+	metrics: Arc<mcp::metrics::Metrics>,
 	_drain: DrainWatcher,
 	session: Arc<SessionManager>,
 
@@ -49,8 +45,11 @@ pub struct App {
 }
 
 impl App {
-	pub fn new(state: Stores, metrics: Arc<relay::metrics::Metrics>, drain: DrainWatcher) -> Self {
+	pub fn new(state: Stores, registry: &mut Registry, drain: DrainWatcher) -> Self {
 		let session: Arc<SessionManager> = Arc::new(Default::default());
+		let metrics = Arc::new(crate::mcp::metrics::Metrics::new(
+			registry, None, // TODO custom tags
+		));
 		Self {
 			state,
 			metrics,

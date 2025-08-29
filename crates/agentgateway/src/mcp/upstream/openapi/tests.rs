@@ -40,12 +40,9 @@ async fn setup() -> (MockServer, Handler) {
 		upstream: client.clone(),
 		ca: None,
 
-		mcp_state: mcp::sse::App::new(
+		mcp_state: mcp::router::App::new(
 			stores.clone(),
-			Arc::new(crate::mcp::relay::metrics::Metrics::new(
-				&mut Registry::default(),
-				None, // TODO custom tags
-			)),
+			&mut Registry::default(),
 			drain_rx.clone(),
 		),
 	});

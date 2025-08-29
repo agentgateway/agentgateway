@@ -1,4 +1,4 @@
-use crate::mcp::relay::ClientError;
+use crate::mcp::ClientError;
 use crate::*;
 use anyhow::anyhow;
 use futures_core::Stream;

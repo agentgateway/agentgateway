@@ -347,7 +347,7 @@ pub struct ProxyInputs {
 	metrics: Arc<metrics::Metrics>,
 	tracer: Option<trc::Tracer>,
 
-	mcp_state: mcp::sse::App,
+	mcp_state: mcp::App,
 	ca: Option<Arc<CaClient>>,
 }
 

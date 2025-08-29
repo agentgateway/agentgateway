@@ -8,7 +8,7 @@ use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, SimpleBackendAuth};
 use crate::http::{StatusCode, authorization, backendtls, ext_proc, filters, localratelimit, uri};
 use crate::llm::{AIBackend, AIProvider};
-use crate::mcp::rbac::McpAuthorization;
+use crate::mcp::McpAuthorization;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto;
 use crate::types::proto::ProtoError;

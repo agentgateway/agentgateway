@@ -1,21 +1,16 @@
-use std::borrow::Cow;
-use std::fmt::Debug;
-use std::sync::Arc;
-
 use crate::ProxyInputs;
 use crate::cel::ContextBuilder;
 use crate::http::Response;
 use crate::http::jwt::Claims;
 use crate::mcp::mergestream::MergeFn;
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
-use crate::mcp::relay::upstream::UpstreamError;
-use crate::mcp::sse::{MCPInfo, McpBackendGroup};
-use crate::mcp::{mergestream, rbac};
+use crate::mcp::router::McpBackendGroup;
+use crate::mcp::upstream::UpstreamError;
+use crate::mcp::{MCPInfo, mergestream, metrics, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::TLSConnectionInfo;
-use agent_core::prelude::Strng;
 use agent_core::trcng;
 use http::StatusCode;
 use http::request::Parts;
@@ -23,14 +18,14 @@ use itertools::Itertools;
 use opentelemetry::global::BoxedSpan;
 use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
-pub use pool::ClientError;
-use rmcp::model;
-use rmcp::model::*;
-use rmcp::transport::common::server_side_http::ServerSseMessage;
-
-pub mod metrics;
-mod pool;
-pub mod upstream;
+use rmcp::model::{
+	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
+	ListToolsResult, PromptsCapability, ProtocolVersion, ResourcesCapability, ServerCapabilities,
+	ServerInfo, ServerResult, Tool, ToolsCapability,
+};
+use rmcp::{ErrorData, model};
+use std::borrow::Cow;
+use std::sync::Arc;
 
 const DELIMITER: &str = "_";
 
@@ -65,7 +60,7 @@ impl RqCtx {
 
 #[derive(Debug, Clone)]
 pub struct Relay {
-	pool: Arc<pool::ConnectionPool>,
+	upstreams: Arc<upstream::UpstreamGroup>,
 	pub metrics: Arc<metrics::Metrics>,
 	pub policies: McpAuthorizationSet,
 	// If we have 1 target only, we don't prefix everything with 'target_'.
@@ -89,7 +84,7 @@ impl Relay {
 			Some(backend.targets[0].name.to_string())
 		};
 		Ok(Self {
-			pool: Arc::new(pool::ConnectionPool::new(pi, client, backend, stateful)?),
+			upstreams: Arc::new(upstream::UpstreamGroup::new(pi, client, backend, stateful)?),
 			metrics,
 			policies,
 			default_target_name,
@@ -178,7 +173,7 @@ impl Relay {
 
 impl Relay {
 	pub async fn notify(&self, not: ClientNotification) -> Result<(), UpstreamError> {
-		for con in self.pool.iter() {
+		for con in self.upstreams.iter() {
 			// TODO: For Progress and Cancel we need to route these to the correct destination!
 			con.notify(not.clone()).await?;
 		}
@@ -240,7 +235,7 @@ impl Relay {
 		user_headers: http::HeaderMap,
 		service_name: &str,
 	) -> Result<Response, UpstreamError> {
-		let Ok(us) = self.pool.get(service_name) else {
+		let Ok(us) = self.upstreams.get(service_name) else {
 			return Err(UpstreamError::InvalidRequest(format!(
 				"unknown service {service_name}"
 			)));
@@ -253,7 +248,7 @@ impl Relay {
 		&self,
 		user_headers: http::HeaderMap,
 	) -> Result<Response, UpstreamError> {
-		for (_, con) in self.pool.iter_named() {
+		for (_, con) in self.upstreams.iter_named() {
 			con.delete(&user_headers).await?;
 		}
 		Ok(accepted_response())
@@ -263,7 +258,7 @@ impl Relay {
 		user_headers: http::HeaderMap,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
-		for (name, con) in self.pool.iter_named() {
+		for (name, con) in self.upstreams.iter_named() {
 			streams.push((name, con.get_event_stream(&user_headers).await?));
 		}
 
@@ -277,7 +272,7 @@ impl Relay {
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
-		for (name, con) in self.pool.iter_named() {
+		for (name, con) in self.upstreams.iter_named() {
 			streams.push((name, con.generic_stream(r.clone(), &user_headers).await?));
 		}
 
@@ -290,7 +285,7 @@ impl Relay {
 		user_headers: http::HeaderMap,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
-		for (name, con) in self.pool.iter_named() {
+		for (name, con) in self.upstreams.iter_named() {
 			streams.push((
 				name,
 				con
@@ -364,6 +359,8 @@ pub fn setup_request_log2(
 
 fn merge_to_response(stream: super::mergestream::MergeStream) -> Result<Response, UpstreamError> {
 	use futures_util::StreamExt;
+	use rmcp::model::{RequestId, ServerJsonRpcMessage};
+	use rmcp::transport::common::server_side_http::ServerSseMessage;
 	let stream = stream.map(|rpc| {
 		let r = match rpc {
 			Ok(rpc) => rpc,
@@ -379,12 +376,13 @@ fn merge_to_response(stream: super::mergestream::MergeStream) -> Result<Response
 			message: Arc::new(r),
 		}
 	});
-	Ok(crate::mcp::streamablehttp::sse_stream_response(
-		stream, None,
-	))
+	Ok(crate::mcp::session::sse_stream_response(stream, None))
 }
+
 fn messages_to_response(stream: super::mergestream::Messages) -> Result<Response, UpstreamError> {
 	use futures_util::StreamExt;
+	use rmcp::model::{RequestId, ServerJsonRpcMessage};
+	use rmcp::transport::common::server_side_http::ServerSseMessage;
 	let stream = stream.map(|rpc| {
 		let r = match rpc {
 			Ok(rpc) => rpc,
@@ -400,9 +398,7 @@ fn messages_to_response(stream: super::mergestream::Messages) -> Result<Response
 			message: Arc::new(r),
 		}
 	});
-	Ok(crate::mcp::streamablehttp::sse_stream_response(
-		stream, None,
-	))
+	Ok(crate::mcp::session::sse_stream_response(stream, None))
 }
 
 fn accepted_response() -> Response {
