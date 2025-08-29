@@ -1,9 +1,11 @@
+use std::fmt::Formatter;
 use super::*;
 use crate::mcp::relay::pool::ClientWrapper;
 #[allow(unused_imports)]
 use crate::*;
 use ::http::HeaderMap;
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
+use rmcp::transport::TokioChildProcess;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -24,7 +26,7 @@ pub enum UpstreamError {
 #[derive(Debug)]
 pub(crate) enum Upstream {
 	McpHttp(ClientWrapper),
-	McpStdio(()),
+	McpStdio(Stdio),
 	OpenAPI(Box<crate::mcp::openapi::Handler>),
 }
 
@@ -109,5 +111,22 @@ impl Upstream {
 			Upstream::McpStdio(_m) => todo!(),
 			Upstream::OpenAPI(_m) => Ok(()),
 		}
+	}
+}
+
+
+pub struct Stdio {
+	inner: TokioChildProcess,
+}
+
+impl Stdio {
+	pub fn new(inner: TokioChildProcess) -> Self {
+		Self { inner }
+	}
+}
+
+impl Debug for Stdio {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Stdio").finish()
 	}
 }
