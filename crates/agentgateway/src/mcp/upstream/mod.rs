@@ -1,6 +1,7 @@
 mod openapi;
 mod stdio;
 mod streamablehttp;
+mod sse;
 
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
@@ -44,7 +45,8 @@ pub enum UpstreamError {
 // UpstreamTarget defines a source for MCP information.
 #[derive(Debug)]
 pub(crate) enum Upstream {
-	McpHttp(streamablehttp::Client),
+	McpStreamable(streamablehttp::Client),
+	McpSSE(sse::Client),
 	McpStdio(stdio::Process),
 	OpenAPI(Box<openapi::Handler>),
 }
@@ -55,7 +57,10 @@ impl Upstream {
 			Upstream::McpStdio(c) => {
 				c.stop().await?;
 			},
-			Upstream::McpHttp(c) => {
+			Upstream::McpStreamable(c) => {
+				c.send_delete(user_headers).await?;
+			},
+			Upstream::McpSSE(c) => {
 				c.send_delete(user_headers).await?;
 			},
 			Upstream::OpenAPI(c) => {
@@ -70,7 +75,8 @@ impl Upstream {
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => Ok(c.get_event_stream().await),
-			Upstream::McpHttp(c) => c
+			Upstream::McpSSE(c) => Ok(c.get_event_stream().await),
+			Upstream::McpStreamable(c) => c
 				.get_event_stream(user_headers)
 				.await?
 				.try_into()
@@ -89,7 +95,12 @@ impl Upstream {
 				let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
 				Ok(mergestream::Messages::from(response))
 			},
-			Upstream::McpHttp(c) => {
+			Upstream::McpSSE(c) => {
+				let receiver = c.send_message(request).await?;
+				let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
+				Ok(mergestream::Messages::from(response))
+			},
+			Upstream::McpStreamable(c) => {
 				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
 				let res = c.send_message(request, user_headers).await?;
 				if is_init {
@@ -117,7 +128,10 @@ impl Upstream {
 			Upstream::McpStdio(c) => {
 				c.send_notification(request).await?;
 			},
-			Upstream::McpHttp(c) => {
+			Upstream::McpSSE(c) => {
+				c.send_notification(request).await?;
+			},
+			Upstream::McpStreamable(c) => {
 				c.send_notification(request, user_headers).await?;
 			},
 			Upstream::OpenAPI(_) => {},
@@ -199,7 +213,7 @@ impl UpstreamGroup {
 					target.backend_policies.clone(),
 				);
 
-				upstream::Upstream::McpHttp(client)
+				upstream::Upstream::McpStreamable(client)
 			},
 			McpTargetSpec::Stdio { cmd, args, env } => {
 				debug!("starting stdio transport for target: {}", target.name);
