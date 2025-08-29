@@ -148,12 +148,11 @@ impl StreamableHttpService {
 			.headers()
 			.get(http::header::ACCEPT)
 			.and_then(|header| header.to_str().ok())
-			.is_some_and(|header| {
-				header.contains(JSON_MIME_TYPE) && header.contains(EVENT_STREAM_MIME_TYPE)
-			}) {
+			.is_some_and(|header| header.contains(EVENT_STREAM_MIME_TYPE))
+		{
 			return http_error(
 				StatusCode::NOT_ACCEPTABLE,
-				"Not Acceptable: Client must accept both application/json and text/event-stream",
+				"Not Acceptable: Client must accept text/event-stream",
 			);
 		}
 
@@ -187,7 +186,8 @@ impl StreamableHttpService {
 			);
 		};
 		let Some(session) = self.session_manager.get_session(session_id) else {
-			return http_error(http::StatusCode::NOT_FOUND, "Session not found");
+			// Its ok if the session is not found, we just return accepted
+			return accepted_response();
 		};
 		let (parts, _) = request.into_parts();
 		session.delete_session(parts).await
@@ -262,5 +262,12 @@ fn internal_error_response(context: &str) -> Response {
 		.body(http::Body::from(format!(
 			"Encounter an error when {context}"
 		)))
+		.expect("valid response")
+}
+
+fn accepted_response() -> Response {
+	::http::Response::builder()
+		.status(StatusCode::ACCEPTED)
+		.body(crate::http::Body::empty())
 		.expect("valid response")
 }

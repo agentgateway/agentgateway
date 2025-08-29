@@ -17,6 +17,22 @@ impl Stream for Messages {
 	}
 }
 
+impl From<ServerJsonRpcMessage> for Messages {
+	fn from(value: ServerJsonRpcMessage) -> Self {
+		Messages(futures::stream::once(async { Ok(value) }).boxed())
+	}
+}
+
+impl From<tokio::sync::mpsc::Receiver<ServerJsonRpcMessage>> for Messages {
+	fn from(value: tokio::sync::mpsc::Receiver<ServerJsonRpcMessage>) -> Self {
+		Messages(
+			tokio_stream::wrappers::ReceiverStream::new(value)
+				.map(Ok)
+				.boxed(),
+		)
+	}
+}
+
 impl TryFrom<StreamableHttpPostResponse> for Messages {
 	type Error = ClientError;
 	fn try_from(value: StreamableHttpPostResponse) -> Result<Self, Self::Error> {
@@ -24,9 +40,7 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 			StreamableHttpPostResponse::Accepted => {
 				Err(ClientError::new(anyhow!("unexpected 'accepted' response")))
 			},
-			StreamableHttpPostResponse::Json(r, _) => {
-				Ok(Messages(futures::stream::once(async { Ok(r) }).boxed()))
-			},
+			StreamableHttpPostResponse::Json(r, _) => Ok(r.into()),
 			StreamableHttpPostResponse::Sse(sse, _) => Ok(Messages(
 				sse
 					.filter_map(|item| async {

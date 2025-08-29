@@ -13,8 +13,8 @@ use thiserror::Error;
 
 pub use rbac::McpAuthorization;
 pub use rbac::McpAuthorizationSet;
-pub use rbac::ResourceType;
 pub use rbac::ResourceId;
+pub use rbac::ResourceType;
 pub use router::App;
 
 #[derive(Error, Debug)]

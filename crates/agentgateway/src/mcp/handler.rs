@@ -172,13 +172,6 @@ impl Relay {
 }
 
 impl Relay {
-	pub async fn notify(&self, not: ClientNotification) -> Result<(), UpstreamError> {
-		for con in self.upstreams.iter() {
-			// TODO: For Progress and Cancel we need to route these to the correct destination!
-			con.notify(not.clone()).await?;
-		}
-		Ok(())
-	}
 	pub fn merge_tools(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();

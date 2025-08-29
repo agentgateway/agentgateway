@@ -40,11 +40,7 @@ async fn setup() -> (MockServer, Handler) {
 		upstream: client.clone(),
 		ca: None,
 
-		mcp_state: mcp::router::App::new(
-			stores.clone(),
-			&mut Registry::default(),
-			drain_rx.clone(),
-		),
+		mcp_state: mcp::router::App::new(stores.clone(), &mut Registry::default(), drain_rx.clone()),
 	});
 
 	let client = PolicyClient { inputs: pi };
