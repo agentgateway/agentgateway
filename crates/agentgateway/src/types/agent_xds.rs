@@ -6,6 +6,7 @@ use rustls::ServerConfig;
 
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, SimpleBackendAuth};
+use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{StatusCode, authorization, backendtls, ext_proc, filters, localratelimit, uri};
 use crate::llm::{AIBackend, AIProvider};
 use crate::mcp::rbac::McpAuthorization;
@@ -597,6 +598,48 @@ impl TryFrom<&proto::agent::policy_spec::Rbac> for McpAuthorization {
 	}
 }
 
+impl TryFrom<&proto::agent::policy_spec::TransformationPolicy> for Transformation {
+	type Error = anyhow::Error;
+
+	fn try_from(spec: &proto::agent::policy_spec::TransformationPolicy) -> Result<Self, Self::Error> {
+		fn convert_transform(
+			t: &Option<proto::agent::policy_spec::transformation_policy::Transform>,
+		) -> Result<LocalTransform, anyhow::Error> {
+			let mut add = Vec::new();
+			let mut set = Vec::new();
+			let mut remove = Vec::new();
+			let mut body = None;
+
+			if let Some(t) = t {
+				for h in &t.add {
+					add.push((h.name.clone().into(), h.value.clone().into()));
+				}
+				for h in &t.set {
+					set.push((h.name.clone().into(), h.value.clone().into()));
+				}
+				for r in &t.remove {
+					remove.push(r.clone().into());
+				}
+				if let Some(b) = &t.body {
+					body = Some(b.content.clone().into());
+				}
+			}
+
+			Ok(LocalTransform {
+				add,
+				set,
+				remove,
+				body,
+			})
+		}
+
+		let request = Some(convert_transform(&spec.request)?);
+		let response = Some(convert_transform(&spec.response)?);
+		let config = LocalTransformationConfig { request, response };
+		Transformation::try_from(config)
+	}
+}
+
 impl TryFrom<&proto::agent::PolicySpec> for Policy {
 	type Error = ProtoError;
 	fn try_from(spec: &proto::agent::PolicySpec) -> Result<Self, Self::Error> {
@@ -721,6 +764,12 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 						.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
 
 				Policy::JwtAuth(jwt_auth)
+			},
+			Some(proto::agent::policy_spec::Kind::Transformation(transformation)) => {
+				Policy::Transformation(
+					Transformation::try_from(transformation)
+						.map_err(|e| ProtoError::Generic(e.to_string()))?,
+				)
 			},
 			Some(proto::agent::policy_spec::Kind::Ai(ai)) => {
 				let prompt_guard = ai.prompt_guard.as_ref().and_then(|pg| {

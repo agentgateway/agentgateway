@@ -432,6 +432,26 @@ message PolicySpec {
       string inline = 4;
     }
   }
+
+  message TransformationPolicy {
+    message Transform {
+      repeated HeaderTransformation set = 1;
+      repeated HeaderTransformation add = 2;
+      repeated string remove = 3;
+      BodyTransformation body = 4;
+    }
+    Transform request = 1;
+    Transform response = 2;
+  }
+
+  message HeaderTransformation {
+    string name = 1;
+    string value = 2;
+  }
+
+  message BodyTransformation {
+    string content = 1;
+  }
   
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
@@ -444,6 +464,7 @@ message PolicySpec {
     RBAC mcp_authorization = 8;
     Ai ai = 9;
     JWT jwt = 10;
+    TransformationPolicy transformation = 11;
   }
 }
 
