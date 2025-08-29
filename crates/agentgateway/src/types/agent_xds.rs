@@ -599,12 +599,12 @@ impl TryFrom<&proto::agent::policy_spec::Rbac> for McpAuthorization {
 }
 
 impl TryFrom<&proto::agent::policy_spec::TransformationPolicy> for Transformation {
-	type Error = anyhow::Error;
+	type Error = ProtoError;
 
 	fn try_from(spec: &proto::agent::policy_spec::TransformationPolicy) -> Result<Self, Self::Error> {
 		fn convert_transform(
 			t: &Option<proto::agent::policy_spec::transformation_policy::Transform>,
-		) -> Result<LocalTransform, anyhow::Error> {
+		) -> Result<LocalTransform, ProtoError> {
 			let mut add = Vec::new();
 			let mut set = Vec::new();
 			let mut remove = Vec::new();
@@ -636,7 +636,7 @@ impl TryFrom<&proto::agent::policy_spec::TransformationPolicy> for Transformatio
 		let request = Some(convert_transform(&spec.request)?);
 		let response = Some(convert_transform(&spec.response)?);
 		let config = LocalTransformationConfig { request, response };
-		Transformation::try_from(config)
+		Transformation::try_from(config).map_err(|e| ProtoError::Generic(e.to_string()))
 	}
 }
 
@@ -766,10 +766,7 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 				Policy::JwtAuth(jwt_auth)
 			},
 			Some(proto::agent::policy_spec::Kind::Transformation(transformation)) => {
-				Policy::Transformation(
-					Transformation::try_from(transformation)
-						.map_err(|e| ProtoError::Generic(e.to_string()))?,
-				)
+				Policy::Transformation(Transformation::try_from(transformation)?)
 			},
 			Some(proto::agent::policy_spec::Kind::Ai(ai)) => {
 				let prompt_guard = ai.prompt_guard.as_ref().and_then(|pg| {
