@@ -326,10 +326,9 @@ impl ServerHandler for Relay {
 		// List servers and initialize the ones that are not initialized
 		let mut pool = self.pool.write().await;
 		// Initialize all targets
-		let _ = pool
-			.initialize(&context.peer, &rq_ctx, request)
-			.await
-			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {e}"), None))?;
+		let _ = pool.initialize(&context.peer, &rq_ctx, request).await.map_err(|e| {
+			McpError::internal_error(format!("Failed to initialize connection: {e}"), None)
+		})?;
 
 		// Return static server info about ourselves
 		// TODO: we should actually perform an intersection of what the downstream and we support. The problem
