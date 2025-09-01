@@ -67,16 +67,16 @@ export default function TargetItem({
       <div className="flex items-center gap-2">
         <div className="flex flex-wrap items-center gap-1">
           {target.listeners === undefined ? (
-            <Badge variant="secondary" className="text-xs">
+            <Badge className="text-xs">
               All listeners
             </Badge>
           ) : target.listeners.length === 0 ? (
-            <Badge variant="secondary" className="text-xs bg-muted">
+            <Badge className="text-xs bg-muted">
               No listeners
             </Badge>
           ) : (
             target.listeners.map((listener) => (
-              <Badge key={listener} variant="secondary" className="text-xs">
+              <Badge key={listener} className="text-xs">
                 {listener}
               </Badge>
             ))

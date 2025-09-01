@@ -298,17 +298,17 @@ export function PolicyStep({ onNext, onPrevious, config, onConfigChange }: Polic
             <h4 className="font-medium text-sm mb-2">Active Policies</h4>
             <div className="flex flex-wrap gap-2">
               {enableJwt && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge className="text-xs">
                   JWT Authentication
                 </Badge>
               )}
               {enableCors && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge className="text-xs">
                   CORS Headers
                 </Badge>
               )}
               {enableTimeout && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge className="text-xs">
                   Request Timeout
                 </Badge>
               )}

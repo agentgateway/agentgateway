@@ -104,7 +104,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
           <AgentgatewayLogo className="h-12" />
         </div>
         <CardTitle className="text-center flex items-center justify-center gap-2">
-          <Network className="h-5 w-5 text-blue-500" />
+          <Network className="h-5 w-5 text-primary" />
           Configure Listener
         </CardTitle>
         <CardDescription className="text-center">

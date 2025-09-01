@@ -81,7 +81,7 @@ export default function BackendsPage() {
       <div className="flex flex-row items-center justify-between mb-6">
         <div>
           <div className="flex items-center space-x-3">
-            <Target className="h-8 w-8 text-purple-500" />
+            <Target className="h-8 w-8 text-primary" />
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Backends</h1>
               <p className="text-muted-foreground mt-1">
@@ -93,7 +93,7 @@ export default function BackendsPage() {
           {!isLoading && backendStats.totalBackends > 0 && (
             <div className="mt-4 flex items-center space-x-6 text-sm text-muted-foreground">
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-primary rounded-full"></div>
                 <span>
                   {backendStats.totalBackends} total backend
                   {backendStats.totalBackends !== 1 ? "s" : ""}
@@ -101,7 +101,7 @@ export default function BackendsPage() {
               </div>
               {backendStats.mcpBackends > 0 && (
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div className="w-2 h-2 bg-primary rounded-full"></div>
                   <span>{backendStats.mcpBackends} MCP</span>
                 </div>
               )}

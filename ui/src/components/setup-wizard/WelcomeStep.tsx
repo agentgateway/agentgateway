@@ -46,7 +46,7 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
           <h3 className="font-medium">What you&apos;ll configure:</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
-              <Network className="h-5 w-5 text-blue-500 mt-0.5" />
+              <Network className="h-5 w-5 text-primary mt-0.5" />
               <div>
                 <h4 className="font-medium text-sm">Listeners</h4>
                 <p className="text-xs text-muted-foreground">
