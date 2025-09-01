@@ -329,7 +329,6 @@ export const AddRouteDialog: React.FC<AddRouteDialogProps> = ({
                   {isTcpListener(selectedListener.listener) ? (
                     <>
                       <Server className="h-4 w-4 text-primary" />
-                      <Server className="h-4 w-4 text-primary" />
                       <span className="font-medium">TCP Route</span>
                     </>
                   ) : (

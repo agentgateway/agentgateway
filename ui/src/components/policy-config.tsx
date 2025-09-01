@@ -479,7 +479,7 @@ export function PolicyConfig() {
                     <p className="text-sm text-muted-foreground mb-3">{info.description}</p>
                     <div className="flex items-center space-x-2">
                       <Button
-                        variant={hasPolicy ? "outline" : "outline"}
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           if (hasPolicy) {
