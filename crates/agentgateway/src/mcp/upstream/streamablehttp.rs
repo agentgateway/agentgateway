@@ -53,50 +53,23 @@ impl Client {
 		self.session_id.store(Some(Arc::new(s)));
 	}
 
-	pub async fn send_message(
+	pub async fn send_request(
 		&self,
 		req: JsonRpcRequest<ClientRequest>,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let message = ClientJsonRpcMessage::Request(req);
-		Box::pin(self.internal_send_message(message, user_headers)).await
+		self.send_message(message, user_headers).await
 	}
-
 	pub async fn send_notification(
 		&self,
 		req: ClientNotification,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let message = ClientJsonRpcMessage::notification(req);
-		Box::pin(self.internal_send_message(message, user_headers)).await
+		self.send_message(message, user_headers).await
 	}
-	pub async fn send_delete(
-		&self,
-		user_headers: &HeaderMap,
-	) -> Result<StreamableHttpPostResponse, ClientError> {
-		self.internal_delete(user_headers).await
-	}
-	pub async fn get_event_stream(
-		&self,
-		user_headers: &HeaderMap,
-	) -> Result<StreamableHttpPostResponse, ClientError> {
-		self.internal_get_event_stream(user_headers).await
-	}
-	pub async fn send_message2(
-		&self,
-		req: ClientJsonRpcMessage,
-		user_headers: &HeaderMap,
-	) -> Result<StreamableHttpPostResponse, ClientError> {
-		Box::pin(self.internal_send_message(req, user_headers)).await
-	}
-	fn internal_send_message<'a>(
-		&'a self,
-		req: ClientJsonRpcMessage,
-		user_headers: &'a HeaderMap,
-	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
-		Box::pin(self.internal_send_message2(req, user_headers))
-	}
-	async fn internal_send_message2(
+	async fn send_message(
 		&self,
 		message: ClientJsonRpcMessage,
 		user_headers: &HeaderMap,
@@ -154,19 +127,7 @@ impl Client {
 			))),
 		}
 	}
-	fn internal_delete<'a>(
-		&'a self,
-		user_headers: &'a HeaderMap,
-	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
-		Box::pin(self.internal_delete2(user_headers))
-	}
-	fn internal_get_event_stream<'a>(
-		&'a self,
-		user_headers: &'a HeaderMap,
-	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
-		Box::pin(self.internal_get_event_stream2(user_headers))
-	}
-	async fn internal_delete2(
+	pub async fn send_delete(
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
@@ -192,7 +153,7 @@ impl Client {
 		}
 		Ok(StreamableHttpPostResponse::Accepted)
 	}
-	async fn internal_get_event_stream2(
+	pub async fn get_event_stream(
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {

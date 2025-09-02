@@ -75,28 +75,7 @@ impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
 }
 
 impl ClientCore {
-	pub async fn send_message(
-		&self,
-		message: ClientJsonRpcMessage,
-		user_headers: &HeaderMap,
-	) -> Result<(), ClientError> {
-		Box::pin(self.internal_send_message(message, user_headers)).await
-	}
-	pub async fn send_message2(
-		&self,
-		req: ClientJsonRpcMessage,
-		user_headers: &HeaderMap,
-	) -> Result<(), ClientError> {
-		Box::pin(self.internal_send_message(req, user_headers)).await
-	}
-	fn internal_send_message<'a>(
-		&'a self,
-		req: ClientJsonRpcMessage,
-		user_headers: &'a HeaderMap,
-	) -> Pin<Box<dyn Future<Output = Result<(), ClientError>> + Send + '_>> {
-		Box::pin(self.internal_send_message2(req, user_headers))
-	}
-	async fn internal_send_message2(
+	async fn send_message(
 		&self,
 		message: ClientJsonRpcMessage,
 		user_headers: &HeaderMap,
@@ -170,7 +149,7 @@ impl Client {
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<(Uri, BoxedSseStream), ClientError> {
-		let res = Box::pin(self.client.internal_establish_sse(user_headers)).await?;
+		let res = Box::pin(self.client.establish_sse(user_headers)).await?;
 		let mut s = match res {
 			StreamableHttpPostResponse::Sse(s, _) => s,
 			_ => return Err(ClientError::new(anyhow!("unexpected return typ"))),
@@ -191,13 +170,7 @@ impl Client {
 	}
 }
 impl ClientCore {
-	fn internal_establish_sse<'a>(
-		&'a self,
-		user_headers: &'a HeaderMap,
-	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
-		Box::pin(self.internal_establish_sse2(user_headers))
-	}
-	async fn internal_establish_sse2(
+	async fn establish_sse(
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
@@ -270,30 +243,6 @@ impl ClientCore {
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		self.internal_delete(user_headers).await
-	}
-	pub async fn get_event_stream(
-		&self,
-		user_headers: &HeaderMap,
-	) -> Result<StreamableHttpPostResponse, ClientError> {
-		self.internal_get_event_stream(user_headers).await
-	}
-	fn internal_delete<'a>(
-		&'a self,
-		user_headers: &'a HeaderMap,
-	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
-		Box::pin(self.internal_delete2(user_headers))
-	}
-	fn internal_get_event_stream<'a>(
-		&'a self,
-		user_headers: &'a HeaderMap,
-	) -> Pin<Box<dyn Future<Output = Result<StreamableHttpPostResponse, ClientError>> + Send + '_>> {
-		Box::pin(self.internal_get_event_stream2(user_headers))
-	}
-	async fn internal_delete2(
-		&self,
-		user_headers: &HeaderMap,
-	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let client = self.client.clone();
 
 		let mut req = ::http::Request::builder()
@@ -314,7 +263,7 @@ impl ClientCore {
 		}
 		Ok(StreamableHttpPostResponse::Accepted)
 	}
-	async fn internal_get_event_stream2(
+	async fn get_event_stream(
 		&self,
 		user_headers: &HeaderMap,
 	) -> Result<StreamableHttpPostResponse, ClientError> {

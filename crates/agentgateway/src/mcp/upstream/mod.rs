@@ -101,7 +101,7 @@ impl Upstream {
 			)),
 			Upstream::McpStreamable(c) => {
 				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
-				let res = c.send_message(request, user_headers).await?;
+				let res = c.send_request(request, user_headers).await?;
 				if is_init {
 					let sid = match &res {
 						StreamableHttpPostResponse::Accepted => None,
