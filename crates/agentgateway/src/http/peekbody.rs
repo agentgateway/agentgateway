@@ -1,81 +1,81 @@
 use crate::http::Body;
 use crate::http::buflist::BufList;
-use axum_core::Error;
 use bytes::{Buf, Bytes};
-use http_body::Frame;
-use http_body_util::{BodyExt, LengthLimitError, Limited};
+use http::HeaderMap;
+use http_body::{Body as _, Frame};
+use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 use std::cmp;
 use std::pin::Pin;
-use std::task::{Context, Poll, ready};
+use std::task::{Context, Poll};
 
 pin_project! {
-	struct PeekBody {
-		limit: usize,
-		sender: Option<tokio::sync::oneshot::Sender<Bytes>>,
+	struct PartiallyBufferedBody {
 		buffer: BufList,
+		trailers: Option<HeaderMap>,
 		#[pin]
 		inner: Body,
 	}
 }
 
-impl http_body::Body for PeekBody {
+impl http_body::Body for PartiallyBufferedBody {
 	type Data = Bytes;
 	type Error = crate::http::Error;
 
 	fn poll_frame(
-		self: Pin<&mut Self>,
+		mut self: Pin<&mut Self>,
 		cx: &mut Context<'_>,
 	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+		if let Some(br) = self.buffer.pop_front() {
+			return Poll::Ready(Some(Ok(Frame::data(br))));
+		}
+		if let Some(br) = self.trailers.take() {
+			return Poll::Ready(Some(Ok(Frame::trailers(br))));
+		}
 		let this = self.project();
-		let res = match ready!(this.inner.poll_frame(cx)) {
-			None => {
-				let want = cmp::min(this.buffer.remaining(), *this.limit);
-
-				// We are done! Send the buffer to the sender and return None
-				let _ = this
-					.sender
-					.take()
-					.expect("polled None twice")
-					.send(this.buffer.copy_to_bytes(want));
-				None
-			},
-			Some(Ok(frame)) => {
-				if let Some(data) = frame.data_ref() {
-					if this.sender.is_some() {
-						let want = cmp::min(*this.limit - this.buffer.remaining(), data.len());
-						// We are still trying to peek
-						this.buffer.push(data.slice(0..want));
-						if this.buffer.remaining() >= *this.limit {
-							let _ = this
-								.sender
-								.take()
-								.expect("polled None twice")
-								.send(this.buffer.copy_to_bytes(*this.limit));
-						}
-					}
-					Some(Ok(frame))
-				} else {
-					Some(Ok(frame))
-				}
-			},
-			Some(Err(err)) => Some(Err(err)),
-		};
-		Poll::Ready(res)
+		this.inner.poll_frame(cx)
 	}
 }
 
+/// inspect_body inspects up to `limit` bytes from the Body. The original body (should be) unchanged.
+/// Warning: you MUST poll the returned future to completion, or the original body will be missing data.
 pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {
-	let (sender, receiver) = tokio::sync::oneshot::channel();
-	let orig = std::mem::replace(body, Body::empty());
-	let pb = PeekBody {
-		limit,
-		sender: Some(sender),
-		buffer: Default::default(),
+	let mut orig = std::mem::replace(body, Body::empty());
+	let mut buffer = BufList::default();
+	let mut trailers: Option<HeaderMap> = None;
+	let mut want = limit;
+	loop {
+		match orig.frame().await {
+			Some(Ok(frame)) => {
+				if let Some(data) = frame.data_ref() {
+					let want_this_read = cmp::min(data.len(), want);
+					buffer.push(data.clone());
+					want -= cmp::max(want_this_read, 0);
+					if want == 0 {
+						break;
+					}
+				} else {
+					trailers = Some(frame.into_trailers().unwrap())
+				}
+			},
+			Some(Err(err)) => {
+				return Err(err.into());
+			},
+			None => break,
+		}
+	}
+
+	// Despite the name, 'copy_to_bytes' takes the data, not copies it.
+	// So we send a clone.
+	let mut blc = buffer.clone();
+	let ret = blc.copy_to_bytes(cmp::min(buffer.remaining(), limit));
+	let nb = PartiallyBufferedBody {
+		buffer,
+		trailers: None,
 		inner: orig,
 	};
-	*body = Body::new(pb);
-	receiver.await.map_err(Into::into)
+	*body = Body::new(nb);
+	Ok(ret)
 }
 
 #[cfg(test)]

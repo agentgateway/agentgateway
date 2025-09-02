@@ -21,6 +21,11 @@ impl<T: Buf> BufList<T> {
 	pub fn get_chunk(&mut self, idx: usize) -> Option<&T> {
 		self.bufs.get(idx)
 	}
+
+	#[inline]
+	pub fn pop_front(&mut self) -> Option<T> {
+		self.bufs.pop_front()
+	}
 }
 
 impl<T: Buf> Buf for BufList<T> {
