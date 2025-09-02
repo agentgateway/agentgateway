@@ -117,7 +117,7 @@ mod tests {
 	#[tokio::test]
 	async fn inspect_partial() {
 		// 100 repeated 'a' bytes
-		let payload = Bytes::from_iter(std::iter::repeat(b'a').take(100));
+		let payload = Bytes::from_iter(std::iter::repeat_n(b'a', 100));
 		let mut original = Body::from(payload.clone());
 
 		let inspected = inspect_body(&mut original, 99).await.unwrap();
@@ -130,11 +130,10 @@ mod tests {
 	async fn trailers_buffered() {
 		use http_body_util::BodyExt;
 		// 10 repeated 'a' bytes, each their own chunk, with trailers
-		let payload = Bytes::from_iter(std::iter::repeat(b'a').take(10));
+		let payload = Bytes::from_iter(std::iter::repeat_n(b'a', 10));
 		let trailers =
 			HeaderMap::try_from(&HashMap::from([("k".to_string(), "v".to_string())])).unwrap();
-		let frames = std::iter::repeat(b'a')
-			.take(10)
+		let frames = std::iter::repeat_n(b'a', 10)
 			.map(|msg| Ok::<_, std::io::Error>(http_body::Frame::data(Bytes::copy_from_slice(&[msg]))))
 			.chain(std::iter::once(Ok::<_, std::io::Error>(
 				http_body::Frame::trailers(trailers.clone()),
@@ -156,11 +155,10 @@ mod tests {
 	async fn inspect_long_body_multiple_chunks() {
 		use http_body_util::BodyExt;
 		// 100 repeated 'a' bytes, each their own chunk, with trailers
-		let payload = Bytes::from_iter(std::iter::repeat(b'a').take(100));
+		let payload = Bytes::from_iter(std::iter::repeat_n(b'a', 100));
 		let trailers =
 			HeaderMap::try_from(&HashMap::from([("k".to_string(), "v".to_string())])).unwrap();
-		let frames = std::iter::repeat(b'a')
-			.take(100)
+		let frames = std::iter::repeat_n(b'a', 100)
 			.map(|msg| Ok::<_, std::io::Error>(http_body::Frame::data(Bytes::copy_from_slice(&[msg]))))
 			.chain(std::iter::once(Ok::<_, std::io::Error>(
 				http_body::Frame::trailers(trailers.clone()),
