@@ -20,8 +20,9 @@ use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
-	ListToolsResult, PromptsCapability, ProtocolVersion, ResourcesCapability, ServerCapabilities,
-	ServerInfo, ServerResult, Tool, ToolsCapability,
+	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Prompt,
+	PromptsCapability, ProtocolVersion, RawResource, RawResourceTemplate, Resource, ResourceTemplate,
+	ResourcesCapability, ServerCapabilities, ServerInfo, ServerResult, Tool, ToolsCapability,
 };
 use rmcp::{ErrorData, model};
 use std::borrow::Cow;
@@ -172,6 +173,12 @@ impl Relay {
 }
 
 impl Relay {
+	pub fn is_multiplexing(&self) -> bool {
+		self.default_target_name.is_some()
+	}
+	pub fn default_target_name(&self) -> Option<String> {
+		self.default_target_name.clone()
+	}
 	pub fn merge_tools(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();
@@ -222,6 +229,117 @@ impl Relay {
 			Ok(info.into())
 		})
 	}
+	pub fn merge_prompts(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
+		let policies = self.policies.clone();
+		let default_target_name = self.default_target_name.clone();
+		Box::new(move |streams| {
+			let prompts = streams
+				.into_iter()
+				.flat_map(|(server_name, s)| {
+					let prompts = match s {
+						ServerResult::ListPromptsResult(lpr) => lpr.prompts,
+						_ => vec![],
+					};
+					prompts
+						.into_iter()
+						.filter(|p| {
+							policies.validate(
+								&rbac::ResourceType::Prompt(rbac::ResourceId::new(
+									server_name.to_string(),
+									p.name.to_string(),
+								)),
+								&cel,
+							)
+						})
+						.map(|p| Prompt {
+							name: resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name),
+							..p
+						})
+						.collect_vec()
+				})
+				.collect_vec();
+			Ok(
+				ListPromptsResult {
+					prompts,
+					next_cursor: None,
+				}
+				.into(),
+			)
+		})
+	}
+	pub fn merge_resources(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
+		let policies = self.policies.clone();
+		Box::new(move |streams| {
+			let resources = streams
+				.into_iter()
+				.flat_map(|(server_name, s)| {
+					let resources = match s {
+						ServerResult::ListResourcesResult(lrr) => lrr.resources,
+						_ => vec![],
+					};
+					resources
+						.into_iter()
+						.filter(|r| {
+							policies.validate(
+								&rbac::ResourceType::Resource(rbac::ResourceId::new(
+									server_name.to_string(),
+									r.uri.to_string(),
+								)),
+								&cel,
+							)
+						})
+						// TODO(https://github.com/agentgateway/agentgateway/issues/404) map this to the service name,
+						// if we add support for multiple services.
+						.collect_vec()
+				})
+				.collect_vec();
+			Ok(
+				ListResourcesResult {
+					resources,
+					next_cursor: None,
+				}
+				.into(),
+			)
+		})
+	}
+	pub fn merge_resource_templates(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
+		let policies = self.policies.clone();
+		Box::new(move |streams| {
+			let resource_templates = streams
+				.into_iter()
+				.flat_map(|(server_name, s)| {
+					let resource_templates = match s {
+						ServerResult::ListResourceTemplatesResult(lrr) => lrr.resource_templates,
+						_ => vec![],
+					};
+					resource_templates
+						.into_iter()
+						.filter(|rt| {
+							policies.validate(
+								&rbac::ResourceType::Resource(rbac::ResourceId::new(
+									server_name.to_string(),
+									rt.uri_template.to_string(),
+								)),
+								&cel,
+							)
+						})
+						// TODO(https://github.com/agentgateway/agentgateway/issues/404) map this to the service name,
+						// if we add support for multiple services.
+						.collect_vec()
+				})
+				.collect_vec();
+			Ok(
+				ListResourceTemplatesResult {
+					resource_templates,
+					next_cursor: None,
+				}
+				.into(),
+			)
+		})
+	}
+	pub fn merge_empty(&self) -> Box<MergeFn> {
+		Box::new(move |_| Ok(rmcp::model::ServerResult::empty(())))
+	}
 	pub async fn send_single(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
@@ -236,6 +354,18 @@ impl Relay {
 		let stream = us.generic_stream(r, &user_headers).await?;
 
 		messages_to_response(stream)
+	}
+	// For some requests, we don't have a sane mapping of incoming requests to a specific
+	// downstream service when multiplexing. Only forward when we have only one backend.
+	pub async fn send_single_without_multiplexing(
+		&self,
+		r: JsonRpcRequest<ClientRequest>,
+		user_headers: http::HeaderMap,
+	) -> Result<Response, UpstreamError> {
+		let Some(service_name) = &self.default_target_name else {
+			return Err(UpstreamError::InvalidMethod(r.request.method().to_string()));
+		};
+		self.send_single(r, user_headers, service_name).await
 	}
 	pub async fn send_fanout_deletion(
 		&self,

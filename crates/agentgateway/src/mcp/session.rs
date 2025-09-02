@@ -9,7 +9,12 @@ use ::http::request::Parts;
 use agent_core::metrics::Recorder;
 use futures_util::StreamExt;
 use rmcp::ErrorData;
-use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ErrorCode, JsonRpcError, RequestId};
+use rmcp::model::{
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, CompleteRequest, ErrorCode,
+	GetPromptRequest, JsonRpcError, ListPromptsRequest, ListResourceTemplatesRequest,
+	ListResourcesRequest, PingRequest, ReadResourceRequest, RequestId, SetLevelRequest,
+	SubscribeRequest, UnsubscribeRequest,
+};
 use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
 use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
 use sse_stream::{KeepAlive, Sse, SseBody};
@@ -101,6 +106,50 @@ impl Session {
 							.send_fanout(r, parts.headers, self.relay.merge_tools(cel.clone()))
 							.await
 					},
+					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
+						self
+							.relay
+							.send_fanout(r, parts.headers, self.relay.merge_empty())
+							.await
+					},
+					ClientRequest::ListPromptsRequest(_) => {
+						self
+							.relay
+							.send_fanout(r, parts.headers, self.relay.merge_prompts(cel.clone()))
+							.await
+					},
+					ClientRequest::ListResourcesRequest(_) => {
+						if !self.relay.is_multiplexing() {
+							self
+								.relay
+								.send_fanout(r, parts.headers, self.relay.merge_resources(cel.clone()))
+								.await
+						} else {
+							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
+							// Find a mapping of URL
+							Err(UpstreamError::InvalidMethodWithMultiplexing(
+								r.request.method().to_string(),
+							))
+						}
+					},
+					ClientRequest::ListResourceTemplatesRequest(_) => {
+						if !self.relay.is_multiplexing() {
+							self
+								.relay
+								.send_fanout(
+									r,
+									parts.headers,
+									self.relay.merge_resource_templates(cel.clone()),
+								)
+								.await
+						} else {
+							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
+							// Find a mapping of URL
+							Err(UpstreamError::InvalidMethodWithMultiplexing(
+								r.request.method().to_string(),
+							))
+						}
+					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
 						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
@@ -130,7 +179,63 @@ impl Session {
 						ctr.params.name = tn.into();
 						self.relay.send_single(r, parts.headers, service_name).await
 					},
-					_ => todo!(),
+					ClientRequest::GetPromptRequest(gpr) => {
+						let name = gpr.params.name.clone();
+						let (service_name, prompt) = self.relay.parse_resource_name(&name)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+						});
+						if !self.relay.policies.validate(
+							&rbac::ResourceType::Prompt(rbac::ResourceId::new(
+								service_name.to_string(),
+								prompt.to_string(),
+							)),
+							cel.as_ref(),
+						) {
+							return Err(UpstreamError::Authorization);
+						}
+						gpr.params.name = prompt.to_string();
+						self.relay.send_single(r, parts.headers, service_name).await
+					},
+					ClientRequest::ReadResourceRequest(rrr) => {
+						if let Some(service_name) = self.relay.default_target_name() {
+							let uri = rrr.params.uri.clone();
+							log.non_atomic_mutate(|l| {
+								l.target_name = Some(service_name.to_string());
+							});
+							if !self.relay.policies.validate(
+								&rbac::ResourceType::Resource(rbac::ResourceId::new(
+									service_name.to_string(),
+									uri.to_string(),
+								)),
+								cel.as_ref(),
+							) {
+								return Err(UpstreamError::Authorization);
+							}
+							self
+								.relay
+								.send_single_without_multiplexing(r, parts.headers)
+								.await
+						} else {
+							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
+							// Find a mapping of URL
+							Err(UpstreamError::InvalidMethodWithMultiplexing(
+								r.request.method().to_string(),
+							))
+						}
+					},
+					ClientRequest::SubscribeRequest(_) | ClientRequest::UnsubscribeRequest(_) => {
+						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
+						return Err(UpstreamError::InvalidMethod(r.request.method().to_string()));
+					},
+					ClientRequest::CompleteRequest(_) => {
+						// For now, we don't have a sane mapping of incoming requests to a specific
+						// downstream service when multiplexing. Only forward when we have only one backend.
+						self
+							.relay
+							.send_single_without_multiplexing(r, parts.headers)
+							.await
+					},
 				}
 			},
 			ClientJsonRpcMessage::Notification(r) => {
@@ -139,7 +244,9 @@ impl Session {
 				self.relay.send_notification(r, parts.headers).await
 			},
 
-			_ => todo!(),
+			_ => Err(UpstreamError::InvalidRequest(
+				"unsupported message type".to_string(),
+			)),
 		}
 	}
 }

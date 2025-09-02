@@ -28,6 +28,8 @@ pub enum UpstreamError {
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]
 	InvalidMethod(String),
+	#[error("method {0} is unsupported with multiplexing")]
+	InvalidMethodWithMultiplexing(String),
 	#[error("stdio upstream error: {0}")]
 	ServiceError(#[from] rmcp::ServiceError),
 	#[error("http upstream error: {0}")]
