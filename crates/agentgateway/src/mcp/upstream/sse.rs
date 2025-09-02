@@ -11,6 +11,7 @@ use crate::*;
 use ::http::header::CONTENT_TYPE;
 use ::http::{HeaderMap, Uri};
 use anyhow::anyhow;
+use futures_core::Stream;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
 use reqwest::header::ACCEPT;
@@ -51,23 +52,36 @@ struct SseClient {
 
 impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
 	async fn receive(&mut self) -> Option<ServerJsonRpcMessage> {
-		// TODO: parse
-		todo!()
-		// self.events.next().await?.ok()
+		loop {
+			let raw = self.events.next().await?.ok()?;
+			let Some(data) = raw.data else {
+				continue;
+			};
+			match serde_json::from_str::<ServerJsonRpcMessage>(&data) {
+				Err(e) => {
+					// Not a hard error, for now?
+					tracing::warn!("failed to deserialize server message: {e}");
+					continue;
+				},
+				Ok(message) => {
+					return Some(message);
+				},
+			};
+		}
 	}
 	fn send(
 		&mut self,
 		item: ClientJsonRpcMessage,
 		user_headers: &HeaderMap,
 	) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
-		// let client = self.client.clone();
-		// let uri = self.uri.clone();
-		// self.send_message(item, user_headers).map_err(Into::into)
-		async {
-			todo!();
-			Ok(())
-		}
-		// async move { client(uri, item, None).await }
+		let headers = user_headers.clone();
+		let client = self.client.clone();
+		Box::pin(async move {
+			client
+				.send_message(item, &headers)
+				.map_err(Into::into)
+				.await
+		})
 	}
 	async fn close(&mut self) -> Result<(), UpstreamError> {
 		todo!()
