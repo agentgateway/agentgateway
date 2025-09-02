@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ::http::{HeaderMap, header};
 use anyhow::anyhow;
-use futures_util::FutureExt;
+use futures_util::{FutureExt, TryFutureExt};
 use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
@@ -11,6 +11,7 @@ use hyper_util::rt::TokioIo;
 use itertools::Itertools;
 use rand::Rng;
 use rand::seq::IndexedRandom;
+use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -23,6 +24,7 @@ use crate::http::{
 	auth, filters, get_host, merge_in_headers, retry,
 };
 use crate::llm::{LLMRequest, RequestResult};
+use crate::mcp::ClientError;
 use crate::proxy::{ProxyError, ProxyResponse, resolve_simple_backend};
 use crate::store::{BackendPolicies, LLMRequestPolicies, LLMResponsePolicies};
 use crate::telemetry::log;
@@ -1168,13 +1170,25 @@ impl PolicyClient {
 		.map_err(ProxyResponse::downcast)?
 		.await
 	}
+
 	pub async fn call_with_default_policies(
 		&self,
 		req: Request,
 		backend: &SimpleBackend,
 		defaults: BackendPolicies,
 	) -> Result<Response, ProxyError> {
-		Box::pin(
+		self
+			.internal_call_with_default_policies(req, backend, defaults)
+			.await
+	}
+
+	pub fn internal_call_with_default_policies<'a>(
+		&'a self,
+		req: Request,
+		backend: &'a SimpleBackend,
+		defaults: BackendPolicies,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		Box::pin(async move {
 			make_backend_call(
 				self.inputs.clone(),
 				Arc::new(LLMRequestPolicies::default()),
@@ -1185,9 +1199,9 @@ impl PolicyClient {
 				&mut Default::default(),
 			)
 			.await
-			.map_err(ProxyResponse::downcast)?,
-		)
-		.await
+			.map_err(ProxyResponse::downcast)?
+			.await
+		})
 	}
 
 	pub async fn simple_call(&self, req: Request) -> Result<Response, ProxyError> {

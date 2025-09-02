@@ -1,22 +1,28 @@
+use crate::mcp::ClientError;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::UpstreamError;
 use agent_core::prelude::*;
 use futures::StreamExt;
+use futures_util::TryFutureExt;
+use http::HeaderMap;
+use rmcp::RoleClient;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcMessage, JsonRpcRequest,
 	RequestId, ServerJsonRpcMessage,
 };
+use rmcp::service::{RxJsonRpcMessage, TxJsonRpcMessage};
 use rmcp::transport::{TokioChildProcess, Transport};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
+use std::io::Error;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, warn};
 
 pub struct Process {
-	sender: mpsc::Sender<ClientJsonRpcMessage>,
+	sender: mpsc::Sender<(ClientJsonRpcMessage, HeaderMap)>,
 	shutdown_tx: agent_core::responsechannel::Sender<(), Option<UpstreamError>>,
 	event_stream: AtomicOption<mpsc::Sender<ServerJsonRpcMessage>>,
 	pending_requests: Arc<Mutex<HashMap<RequestId, oneshot::Sender<ServerJsonRpcMessage>>>>,
@@ -38,7 +44,8 @@ impl Process {
 	pub async fn send_message(
 		&self,
 		req: JsonRpcRequest<ClientRequest>,
-	) -> Result<oneshot::Receiver<ServerJsonRpcMessage>, UpstreamError> {
+		user_headers: &crate::http::HeaderMap,
+	) -> Result<ServerJsonRpcMessage, UpstreamError> {
 		let req_id = req.id.clone();
 		let (sender, receiver) = oneshot::channel();
 
@@ -46,21 +53,26 @@ impl Process {
 
 		self
 			.sender
-			.send(JsonRpcMessage::Request(req))
+			.send((JsonRpcMessage::Request(req), user_headers.clone()))
 			.await
 			.map_err(|_| UpstreamError::Send)?;
 
-		Ok(receiver)
+		let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
+		Ok(response)
 	}
 	pub async fn get_event_stream(&self) -> Messages {
 		let (tx, rx) = tokio::sync::mpsc::channel(10);
 		self.event_stream.store(Some(Arc::new(tx)));
 		Messages::from(rx)
 	}
-	pub async fn send_notification(&self, req: ClientNotification) -> Result<(), UpstreamError> {
+	pub async fn send_notification(
+		&self,
+		req: ClientNotification,
+		user_headers: &crate::http::HeaderMap,
+	) -> Result<(), UpstreamError> {
 		self
 			.sender
-			.send(JsonRpcMessage::notification(req))
+			.send((JsonRpcMessage::notification(req), user_headers.clone()))
 			.await
 			.map_err(|_| UpstreamError::Send)?;
 		Ok(())
@@ -68,8 +80,8 @@ impl Process {
 }
 
 impl Process {
-	pub fn new(mut proc: TokioChildProcess) -> Self {
-		let (sender_tx, mut sender_rx) = mpsc::channel::<ClientJsonRpcMessage>(10);
+	pub fn new(mut proc: impl MCPTransport) -> Self {
+		let (sender_tx, mut sender_rx) = mpsc::channel::<(ClientJsonRpcMessage, HeaderMap)>(10);
 		let (shutdown_tx, mut shutdown_rx) =
 			agent_core::responsechannel::new::<(), Option<UpstreamError>>(10);
 		let pending_requests = Arc::new(Mutex::new(HashMap::<
@@ -83,8 +95,8 @@ impl Process {
 		tokio::spawn(async move {
 			loop {
 				tokio::select! {
-					Some(msg) = sender_rx.recv() => {
-						if let Err(e) = proc.send(msg).await {
+					Some((msg, headers)) = sender_rx.recv() => {
+						if let Err(e) = proc.send(msg, &headers).await {
 							error!("Error sending message to stdio process: {:?}", e);
 							break;
 						}
@@ -105,7 +117,7 @@ impl Process {
 						}
 					},
 					Some((_, resp)) = shutdown_rx.recv() => {
-						let err = proc.graceful_shutdown().await;
+						let err = proc.close().await;
 						if let Err(e) = &err {
 							warn!("Error shutting down stdio process: {:?}", e);
 						}
@@ -113,7 +125,7 @@ impl Process {
 						return;
 					},
 					else => {
-						let err = proc.graceful_shutdown().await;
+						let err = proc.close().await;
 						if let Err(e) = err {
 							warn!("Error shutting down stdio process: {:?}", e);
 						}
@@ -130,19 +142,47 @@ impl Process {
 			pending_requests,
 		}
 	}
-
-	// pub async fn notify(&self, notif: ClientNotification) -> Result<(), UpstreamError> {
-	// 	self
-	// 		.sender
-	// 		.send(JsonRpcMessage::Notification(notif.into()))
-	// 		.await
-	// 		.map_err(|_| UpstreamError::InvalidRequest("TODO".to_string()))?;
-	// 	Ok(())
-	// }
 }
 
 impl Debug for Process {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		f.debug_struct("Process").finish()
+	}
+}
+
+pub trait MCPTransport: Send + 'static {
+	/// Send a message to the transport
+	///
+	/// Notice that the future returned by this function should be `Send` and `'static`.
+	/// It's because the sending message could be executed concurrently.
+	///
+	fn send(
+		&mut self,
+		item: ClientJsonRpcMessage,
+		user_headers: &HeaderMap,
+	) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static;
+
+	/// Receive a message from the transport, this operation is sequential.
+	fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send;
+
+	/// Close the transport
+	fn close(&mut self) -> impl Future<Output = Result<(), UpstreamError>> + Send;
+}
+
+impl MCPTransport for TokioChildProcess {
+	fn send(
+		&mut self,
+		item: ClientJsonRpcMessage,
+		_: &HeaderMap,
+	) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
+		Transport::send(self, item).map_err(Into::into)
+	}
+
+	fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send {
+		Transport::receive(self)
+	}
+
+	fn close(&mut self) -> impl Future<Output = Result<(), UpstreamError>> + Send {
+		Transport::close(self).map_err(Into::into)
 	}
 }

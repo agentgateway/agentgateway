@@ -1,7 +1,7 @@
 mod openapi;
+mod sse;
 mod stdio;
 mod streamablehttp;
-mod sse;
 
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
@@ -63,7 +63,8 @@ impl Upstream {
 				c.send_delete(user_headers).await?;
 			},
 			Upstream::McpSSE(c) => {
-				c.send_delete(user_headers).await?;
+				todo!()
+				// c.send_delete(user_headers).await?;
 			},
 			Upstream::OpenAPI(c) => {
 				// No need to do anything here
@@ -77,7 +78,7 @@ impl Upstream {
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => Ok(c.get_event_stream().await),
-			Upstream::McpSSE(c) => Ok(c.get_event_stream().await),
+			Upstream::McpSSE(c) => c.connect_to_event_stream(user_headers).await,
 			Upstream::McpStreamable(c) => c
 				.get_event_stream(user_headers)
 				.await?
@@ -92,16 +93,12 @@ impl Upstream {
 		user_headers: &http::HeaderMap,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
-			Upstream::McpStdio(c) => {
-				let receiver = c.send_message(request).await?;
-				let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
-				Ok(mergestream::Messages::from(response))
-			},
-			Upstream::McpSSE(c) => {
-				let receiver = c.send_message(request).await?;
-				let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
-				Ok(mergestream::Messages::from(response))
-			},
+			Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
+				c.send_message(request, user_headers).await?,
+			)),
+			Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
+				c.send_message(request, user_headers).await?,
+			)),
 			Upstream::McpStreamable(c) => {
 				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
 				let res = c.send_message(request, user_headers).await?;
@@ -128,10 +125,10 @@ impl Upstream {
 	) -> Result<(), UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => {
-				c.send_notification(request).await?;
+				c.send_notification(request, user_headers).await?;
 			},
 			Upstream::McpSSE(c) => {
-				c.send_notification(request).await?;
+				c.send_notification(request, user_headers).await?;
 			},
 			Upstream::McpStreamable(c) => {
 				c.send_notification(request, user_headers).await?;
