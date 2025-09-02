@@ -2,7 +2,7 @@ use crate::http::Body;
 use crate::http::buflist::BufList;
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
-use http_body::{Body as _, Frame};
+use http_body::Frame;
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 use std::cmp;
@@ -71,7 +71,7 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 	let ret = blc.copy_to_bytes(cmp::min(buffer.remaining(), limit));
 	let nb = PartiallyBufferedBody {
 		buffer,
-		trailers: None,
+		trailers,
 		inner: orig,
 	};
 	*body = Body::new(nb);
@@ -124,6 +124,32 @@ mod tests {
 
 		assert_eq!(inspected, payload.slice(0..99));
 		assert_eq!(read(original).await, payload);
+	}
+
+	#[tokio::test]
+	async fn trailers_buffered() {
+		use http_body_util::BodyExt;
+		// 10 repeated 'a' bytes, each their own chunk, with trailers
+		let payload = Bytes::from_iter(std::iter::repeat(b'a').take(10));
+		let trailers =
+			HeaderMap::try_from(&HashMap::from([("k".to_string(), "v".to_string())])).unwrap();
+		let frames = std::iter::repeat(b'a')
+			.take(10)
+			.map(|msg| Ok::<_, std::io::Error>(http_body::Frame::data(Bytes::copy_from_slice(&[msg]))))
+			.chain(std::iter::once(Ok::<_, std::io::Error>(
+				http_body::Frame::trailers(trailers.clone()),
+			)));
+		let mut original = crate::http::Body::new(http_body_util::StreamBody::new(
+			futures_util::stream::iter(frames),
+		));
+
+		let inspected = inspect_body(&mut original, 99).await.unwrap();
+
+		assert_eq!(inspected, payload);
+
+		let result = original.collect().await.unwrap();
+		assert_eq!(Some(&trailers), result.trailers());
+		assert_eq!(result.to_bytes(), payload);
 	}
 
 	#[tokio::test]
