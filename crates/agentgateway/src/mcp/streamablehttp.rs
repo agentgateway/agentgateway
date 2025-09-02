@@ -3,15 +3,11 @@ use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
 use crate::*;
 use ::http::StatusCode;
-use futures_util::StreamExt;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
 use rmcp::transport::StreamableHttpServerConfig;
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
-use rmcp::transport::common::server_side_http::ServerSseMessage;
-use sse_stream::{KeepAlive, Sse, SseBody};
-use std::convert::Infallible;
 use std::sync::Arc;
 
 pub struct StreamableHttpService {
@@ -136,7 +132,6 @@ impl StreamableHttpService {
 				resp.headers_mut().insert(HEADER_SESSION_ID, sid);
 			}
 			resp
-		// todo!()
 		} else {
 			todo!()
 		}
@@ -199,61 +194,6 @@ fn http_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
 		.status(status)
 		.body(body.into())
 		.expect("valid response")
-}
-
-pub(crate) fn sse_stream_response(
-	stream: impl futures::Stream<Item = ServerSseMessage> + Send + 'static,
-	keep_alive: Option<Duration>,
-) -> Response {
-	use futures::StreamExt;
-	let stream = SseBody::new(stream.map(|message| {
-		let data = serde_json::to_string(&message.message).expect("valid message");
-		let mut sse = Sse::default().data(data);
-		sse.id = message.event_id;
-		Result::<Sse, Infallible>::Ok(sse)
-	}));
-	let stream = match keep_alive {
-		Some(duration) => {
-			http::Body::new(stream.with_keep_alive::<TokioSseTimer>(KeepAlive::new().interval(duration)))
-		},
-		None => http::Body::new(stream),
-	};
-	::http::Response::builder()
-		.status(StatusCode::OK)
-		.header(http::header::CONTENT_TYPE, EVENT_STREAM_MIME_TYPE)
-		.header(http::header::CACHE_CONTROL, "no-cache")
-		.body(stream)
-		.expect("valid response")
-}
-
-pin_project_lite::pin_project! {
-		struct TokioSseTimer {
-				#[pin]
-				sleep: tokio::time::Sleep,
-		}
-}
-impl Future for TokioSseTimer {
-	type Output = ();
-
-	fn poll(
-		self: std::pin::Pin<&mut Self>,
-		cx: &mut std::task::Context<'_>,
-	) -> std::task::Poll<Self::Output> {
-		let this = self.project();
-		this.sleep.poll(cx)
-	}
-}
-impl sse_stream::Timer for TokioSseTimer {
-	fn from_duration(duration: Duration) -> Self {
-		Self {
-			sleep: tokio::time::sleep(duration),
-		}
-	}
-
-	fn reset(self: std::pin::Pin<&mut Self>, when: std::time::Instant) {
-		let this = self.project();
-		this.sleep.reset(tokio::time::Instant::from_std(when));
-	}
 }
 
 fn internal_error_response(context: &str) -> Response {

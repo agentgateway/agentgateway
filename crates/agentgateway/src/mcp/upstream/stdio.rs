@@ -1,21 +1,16 @@
-use crate::mcp::ClientError;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::UpstreamError;
 use agent_core::prelude::*;
-use futures::StreamExt;
 use futures_util::TryFutureExt;
 use http::HeaderMap;
-use rmcp::RoleClient;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcMessage, JsonRpcRequest,
 	RequestId, ServerJsonRpcMessage,
 };
-use rmcp::service::{RxJsonRpcMessage, TxJsonRpcMessage};
 use rmcp::transport::{TokioChildProcess, Transport};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
-use std::io::Error;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot};
@@ -121,7 +116,7 @@ impl Process {
 						if let Err(e) = &err {
 							warn!("Error shutting down stdio process: {:?}", e);
 						}
-						let _ = resp.send(err.err().map(Into::into));
+						let _ = resp.send(err.err());
 						return;
 					},
 					else => {

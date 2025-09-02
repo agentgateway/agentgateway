@@ -18,13 +18,13 @@ use itertools::Itertools;
 use opentelemetry::global::BoxedSpan;
 use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
+use rmcp::ErrorData;
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
 	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Prompt,
-	PromptsCapability, ProtocolVersion, RawResource, RawResourceTemplate, Resource, ResourceTemplate,
-	ResourcesCapability, ServerCapabilities, ServerInfo, ServerResult, Tool, ToolsCapability,
+	PromptsCapability, ProtocolVersion, ResourcesCapability, ServerCapabilities, ServerInfo,
+	ServerResult, Tool, ToolsCapability,
 };
-use rmcp::{ErrorData, model};
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -107,74 +107,11 @@ impl Relay {
 				))
 		}
 	}
-
-	fn resource_name(&self, target: &str, name: &str) -> String {
-		if self.default_target_name.is_none() {
-			format!("{target}{DELIMITER}{name}")
-		} else {
-			name.to_string()
-		}
-	}
-
-	fn setup_request(
-		ext: &model::Extensions,
-		span_name: &str,
-	) -> Result<(BoxedSpan, RqCtx), ErrorData> {
-		let (s, rq, _, _) = Self::setup_request_log(ext, span_name)?;
-		Ok((s, rq))
-	}
-	fn setup_request_log(
-		ext: &model::Extensions,
-		span_name: &str,
-	) -> Result<(BoxedSpan, RqCtx, AsyncLog<MCPInfo>, Arc<ContextBuilder>), ErrorData> {
-		let Some(http) = ext.get::<Parts>() else {
-			return Err(ErrorData::internal_error(
-				"failed to extract parts".to_string(),
-				None,
-			));
-		};
-		let traceparent = http.extensions.get::<TraceParent>();
-		let mut ctx = Context::new();
-		if let Some(tp) = traceparent {
-			ctx = ctx.with_remote_span_context(SpanContext::new(
-				tp.trace_id.into(),
-				tp.span_id.into(),
-				TraceFlags::new(tp.flags),
-				true,
-				TraceState::default(),
-			));
-		}
-		let claims = http.extensions.get::<Claims>();
-		let tls = http.extensions.get::<TLSConnectionInfo>();
-		let id = tls
-			.and_then(|tls| tls.src_identity.as_ref())
-			.map(|src_id| src_id.to_string());
-
-		let log = http
-			.extensions
-			.get::<AsyncLog<MCPInfo>>()
-			.cloned()
-			.unwrap_or_default();
-
-		let cel = http
-			.extensions
-			.get::<Arc<ContextBuilder>>()
-			.cloned()
-			.expect("CelContextBuilder must be set");
-
-		let rq_ctx = RqCtx::new(Identity::new(claims.cloned(), id), ctx);
-
-		let tracer = trcng::get_tracer();
-		let _span = trcng::start_span(span_name.to_string(), &rq_ctx.identity)
-			.with_kind(SpanKind::Server)
-			.start_with_context(tracer, &rq_ctx.context);
-		Ok((_span, rq_ctx, log, cel))
-	}
 }
 
 impl Relay {
 	pub fn is_multiplexing(&self) -> bool {
-		self.default_target_name.is_some()
+		self.default_target_name.is_none()
 	}
 	pub fn default_target_name(&self) -> Option<String> {
 		self.default_target_name.clone()

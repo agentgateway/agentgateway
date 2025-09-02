@@ -1,5 +1,4 @@
 use crate::http::Request;
-use crate::json;
 use crate::mcp::ClientError;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::UpstreamError;
@@ -11,19 +10,13 @@ use crate::*;
 use ::http::header::CONTENT_TYPE;
 use ::http::{HeaderMap, Uri};
 use anyhow::anyhow;
-use futures_core::Stream;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
 use reqwest::header::ACCEPT;
-use rmcp::RoleClient;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
-use rmcp::service::AtomicU32Provider;
-use rmcp::transport::Transport;
-use rmcp::transport::common::http_header::{
-	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
-};
+use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
 use rmcp::transport::streamable_http_client::{SseError, StreamableHttpPostResponse};
 use sse_stream::{Sse, SseStream};
 
@@ -84,7 +77,7 @@ impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
 		})
 	}
 	async fn close(&mut self) -> Result<(), UpstreamError> {
-		todo!()
+		Ok(())
 	}
 }
 
@@ -119,70 +112,6 @@ impl ClientCore {
 	}
 }
 
-impl Client {
-	pub fn new(
-		backend: SimpleBackend,
-		path: Strng,
-		client: PolicyClient,
-		policies: BackendPolicies,
-	) -> Self {
-		let hp = backend.hostport();
-		Self {
-			client: ClientCore {
-				backend: Arc::new(backend),
-				uri: ("http://".to_string() + &hp + path.as_str())
-					.parse()
-					.expect("TODO"),
-				policies,
-				client,
-			},
-			active_stream: Default::default(),
-		}
-	}
-
-	async fn get_stream(&self, user_headers: &HeaderMap) -> Result<Arc<Process>, UpstreamError> {
-		let mut stream = self.active_stream.lock().await;
-		if let Some(s) = stream.clone() {
-			Ok(s)
-		} else {
-			let (post_uri, sse) = self.establish_sse(user_headers).await?;
-			let transport = SseClient {
-				client: ClientCore {
-					uri: post_uri,
-					..self.client.clone()
-				},
-				events: sse,
-			};
-
-			let proc = Arc::new(Process::new(transport));
-			*stream = Some(proc.clone());
-			Ok(proc)
-		}
-	}
-	async fn establish_sse(
-		&self,
-		user_headers: &HeaderMap,
-	) -> Result<(Uri, BoxedSseStream), ClientError> {
-		let res = Box::pin(self.client.establish_sse(user_headers)).await?;
-		let mut s = match res {
-			StreamableHttpPostResponse::Sse(s, _) => s,
-			_ => return Err(ClientError::new(anyhow!("unexpected return typ"))),
-		};
-		let parsed = loop {
-			let sse = futures_util::StreamExt::next(&mut s)
-				.await
-				.ok_or_else(|| ClientError::new(anyhow!("unexpected empty stream")))?
-				.map_err(ClientError::new)?;
-			let Some("endpoint") = sse.event.as_deref() else {
-				continue;
-			};
-			let ep = sse.data.unwrap_or_default();
-			let parsed = message_endpoint(self.client.uri.clone(), ep).map_err(ClientError::new)?;
-			break parsed;
-		};
-		Ok((parsed, s))
-	}
-}
 impl ClientCore {
 	async fn establish_sse(
 		&self,
@@ -227,6 +156,75 @@ impl ClientCore {
 	}
 }
 impl Client {
+	pub fn new(
+		backend: SimpleBackend,
+		path: Strng,
+		client: PolicyClient,
+		policies: BackendPolicies,
+	) -> Self {
+		let hp = backend.hostport();
+		Self {
+			client: ClientCore {
+				backend: Arc::new(backend),
+				uri: ("http://".to_string() + &hp + path.as_str())
+					.parse()
+					.expect("TODO"),
+				policies,
+				client,
+			},
+			active_stream: Default::default(),
+		}
+	}
+	pub async fn stop(&self) -> Result<(), UpstreamError> {
+		let mut stream = self.active_stream.lock().await;
+		if let Some(s) = stream.as_ref() {
+			s.stop().await?;
+		}
+		*stream = None;
+		Ok(())
+	}
+	async fn get_stream(&self, user_headers: &HeaderMap) -> Result<Arc<Process>, UpstreamError> {
+		let mut stream = self.active_stream.lock().await;
+		if let Some(s) = stream.clone() {
+			Ok(s)
+		} else {
+			let (post_uri, sse) = self.establish_sse(user_headers).await?;
+			let transport = SseClient {
+				client: ClientCore {
+					uri: post_uri,
+					..self.client.clone()
+				},
+				events: sse,
+			};
+
+			let proc = Arc::new(Process::new(transport));
+			*stream = Some(proc.clone());
+			Ok(proc)
+		}
+	}
+	async fn establish_sse(
+		&self,
+		user_headers: &HeaderMap,
+	) -> Result<(Uri, BoxedSseStream), ClientError> {
+		let res = Box::pin(self.client.establish_sse(user_headers)).await?;
+		let mut s = match res {
+			StreamableHttpPostResponse::Sse(s, _) => s,
+			_ => return Err(ClientError::new(anyhow!("unexpected return typ"))),
+		};
+		let parsed = loop {
+			let sse = futures_util::StreamExt::next(&mut s)
+				.await
+				.ok_or_else(|| ClientError::new(anyhow!("unexpected empty stream")))?
+				.map_err(ClientError::new)?;
+			let Some("endpoint") = sse.event.as_deref() else {
+				continue;
+			};
+			let ep = sse.data.unwrap_or_default();
+			let parsed = message_endpoint(self.client.uri.clone(), ep).map_err(ClientError::new)?;
+			break parsed;
+		};
+		Ok((parsed, s))
+	}
 	pub async fn connect_to_event_stream(
 		&self,
 		user_headers: &HeaderMap,
@@ -252,57 +250,6 @@ impl Client {
 		stream.send_notification(req, user_headers).await
 	}
 }
-impl ClientCore {
-	pub async fn send_delete(
-		&self,
-		user_headers: &HeaderMap,
-	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
-		let mut req = ::http::Request::builder()
-			.uri(&self.uri)
-			.method(http::Method::DELETE)
-			.body(crate::http::Body::empty())
-			.map_err(ClientError::new)?;
-
-		insert_user_headers(user_headers, &mut req);
-
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
-
-		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(ClientError::Status(Box::new(resp)));
-		}
-		Ok(StreamableHttpPostResponse::Accepted)
-	}
-	async fn get_event_stream(
-		&self,
-		user_headers: &HeaderMap,
-	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
-		let mut req = ::http::Request::builder()
-			.uri(&self.uri)
-			.method(http::Method::DELETE)
-			.body(crate::http::Body::empty())
-			.map_err(ClientError::new)?;
-
-		insert_user_headers(user_headers, &mut req);
-
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
-
-		if resp.status().is_client_error() || resp.status().is_server_error() {
-			return Err(ClientError::Status(Box::new(resp)));
-		}
-		Ok(StreamableHttpPostResponse::Accepted)
-	}
-}
-
 fn insert_user_headers(user_headers: &HeaderMap, req: &mut Request) {
 	for (k, v) in user_headers {
 		// Remove headers we do not want to propagate to the backend

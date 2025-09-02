@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use agent_core::drain::DrainWatcher;
@@ -9,9 +8,7 @@ use bytes::Bytes;
 use http::Method;
 use itertools::Itertools;
 use prometheus_client::registry::Registry;
-use rmcp::model::ClientJsonRpcMessage;
 use rmcp::transport::StreamableHttpServerConfig;
-use rmcp::transport::streamable_http_server::SessionId;
 use tracing::warn;
 
 use crate::cel::ContextBuilder;
@@ -31,17 +28,12 @@ use crate::types::agent::{
 };
 use crate::{ProxyInputs, json, mcp};
 
-type SseTxs =
-	Arc<std::sync::RwLock<HashMap<SessionId, tokio::sync::mpsc::Sender<ClientJsonRpcMessage>>>>;
-
 #[derive(Debug, Clone)]
 pub struct App {
 	state: Stores,
 	metrics: Arc<mcp::metrics::Metrics>,
 	_drain: DrainWatcher,
 	session: Arc<SessionManager>,
-
-	sse_txs: SseTxs,
 }
 
 impl App {
@@ -55,7 +47,6 @@ impl App {
 			metrics,
 			_drain: drain,
 			session,
-			sse_txs: Default::default(),
 		}
 	}
 
@@ -205,18 +196,7 @@ impl App {
 
 #[derive(Debug, Clone)]
 pub struct McpBackendGroup {
-	pub name: BackendName,
 	pub targets: Vec<Arc<McpTarget>>,
-}
-
-impl McpBackendGroup {
-	pub fn find(&self, name: &str) -> Option<Arc<McpTarget>> {
-		self
-			.targets
-			.iter()
-			.find(|target| target.name.as_str() == name)
-			.cloned()
-	}
 }
 
 #[derive(Debug)]

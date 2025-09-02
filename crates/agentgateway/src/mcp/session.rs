@@ -7,14 +7,8 @@ use crate::*;
 use ::http::StatusCode;
 use ::http::request::Parts;
 use agent_core::metrics::Recorder;
-use futures_util::StreamExt;
 use rmcp::ErrorData;
-use rmcp::model::{
-	ClientJsonRpcMessage, ClientNotification, ClientRequest, CompleteRequest, ErrorCode,
-	GetPromptRequest, JsonRpcError, ListPromptsRequest, ListResourceTemplatesRequest,
-	ListResourcesRequest, PingRequest, ReadResourceRequest, RequestId, SetLevelRequest,
-	SubscribeRequest, UnsubscribeRequest,
-};
+use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ErrorCode, JsonRpcError, RequestId};
 use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
 use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
 use sse_stream::{KeepAlive, Sse, SseBody};
@@ -226,7 +220,7 @@ impl Session {
 					},
 					ClientRequest::SubscribeRequest(_) | ClientRequest::UnsubscribeRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-						return Err(UpstreamError::InvalidMethod(r.request.method().to_string()));
+						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
 					},
 					ClientRequest::CompleteRequest(_) => {
 						// For now, we don't have a sane mapping of incoming requests to a specific
@@ -332,13 +326,4 @@ impl sse_stream::Timer for TokioSseTimer {
 		let this = self.project();
 		this.sleep.reset(tokio::time::Instant::from_std(when));
 	}
-}
-
-fn internal_error_response(context: &str) -> Response {
-	::http::Response::builder()
-		.status(StatusCode::INTERNAL_SERVER_ERROR)
-		.body(http::Body::from(format!(
-			"Encounter an error when {context}"
-		)))
-		.expect("valid response")
 }

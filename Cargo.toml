@@ -2,7 +2,7 @@
 schemars = {git = "https://github.com/howardjohn/schemars", rev = "4364354fa41897a0c2001d891c0a9a38eafedb82"}
 # Remove after v0.29.2
 async-openai = {git = "https://github.com/howardjohn/async-openai", rev = "c95098beac2c65132c8a7b7c7bf39a9ad6479acb"}
-rmcp = {path = "/home/john/git/rmcp/crates/rmcp"}
+#rmcp = {path = "/home/john/git/rmcp/crates/rmcp"}
 
 [workspace]
 resolver = "2"
@@ -120,7 +120,8 @@ reqwest = { version = "0.12", default-features = false, features = [
     "macos-system-configuration",
     "rustls-tls",
 ] }
-rmcp = { version = "0.6", features = [
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", rev = "7d46b39b4988f0fe49b6b923f83a68f9b98d7b7f", features = [
+#rmcp = { version = "0.6", features = [
     "client",
     "transport-sse-server",
     "transport-sse-client",

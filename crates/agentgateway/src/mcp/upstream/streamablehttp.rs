@@ -13,7 +13,6 @@ use reqwest::header::ACCEPT;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
-use rmcp::service::AtomicU32Provider;
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
@@ -24,7 +23,6 @@ use sse_stream::SseStream;
 pub struct Client {
 	backend: Arc<SimpleBackend>,
 	uri: Uri,
-	idp: Arc<AtomicU32Provider>,
 	client: PolicyClient,
 	policies: BackendPolicies,
 	session_id: AtomicOption<String>,
@@ -43,7 +41,6 @@ impl Client {
 			uri: ("http://".to_string() + &hp + path.as_str())
 				.parse()
 				.expect("TODO"),
-			idp: Arc::new(AtomicU32Provider::default()),
 			client,
 			policies,
 			session_id: Default::default(),

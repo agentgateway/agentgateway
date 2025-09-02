@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ::http::{HeaderMap, header};
 use anyhow::anyhow;
-use futures_util::{FutureExt, TryFutureExt};
+use futures_util::FutureExt;
 use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
@@ -11,7 +11,6 @@ use hyper_util::rt::TokioIo;
 use itertools::Itertools;
 use rand::Rng;
 use rand::seq::IndexedRandom;
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -24,7 +23,6 @@ use crate::http::{
 	auth, filters, get_host, merge_in_headers, retry,
 };
 use crate::llm::{LLMRequest, RequestResult};
-use crate::mcp::ClientError;
 use crate::proxy::{ProxyError, ProxyResponse, resolve_simple_backend};
 use crate::store::{BackendPolicies, LLMRequestPolicies, LLMResponsePolicies};
 use crate::telemetry::log;

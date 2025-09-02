@@ -6,9 +6,9 @@ use std::sync::Arc;
 use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::json;
+use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::UpstreamError;
-use crate::mcp::{ClientError, mergestream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
 use crate::types::agent::SimpleBackend;
@@ -17,10 +17,8 @@ use http::{HeaderMap, Method};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use reqwest::header::{HeaderName, HeaderValue};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::instrument;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -31,10 +29,6 @@ pub struct UpstreamOpenAPICall {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
-	#[error("missing fields")]
-	MissingFields,
-	#[error("missing schema")]
-	MissingSchema,
 	#[error("missing components")]
 	MissingComponents,
 	#[error("invalid reference: {0}")]
@@ -49,24 +43,8 @@ pub enum ParseError {
 	SerdeError(#[from] serde_json::Error),
 	#[error("io error: {0}")]
 	IoError(#[from] std::io::Error),
-	#[error("HTTP request failed: {0}")]
-	HttpError(#[from] reqwest::Error),
 	#[error("Invalid URL: {0}")]
 	InvalidUrl(#[from] url::ParseError),
-	#[error("Schema source not specified in OpenAPI target")]
-	SchemaSourceMissing,
-	#[error(
-		"Unsupported schema format or content type from URL {0}. Only JSON and YAML are supported."
-	)]
-	UnsupportedSchemaFormat(String), // Added URL to message
-	#[error("Local schema file path not specified")]
-	LocalPathMissing,
-	#[error("Local schema inline content not specified or empty")]
-	LocalInlineMissing, // Added for inline content
-	#[error("Invalid header name or value")]
-	InvalidHeader,
-	#[error("Header value source not supported (e.g. env_value)")]
-	HeaderValueSourceNotSupported(String),
 }
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
@@ -583,7 +561,7 @@ impl Handler {
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)
 			| ClientRequest::UnsubscribeRequest(_) => Messages::empty(),
-			ClientRequest::CompleteRequest(r) => {
+			ClientRequest::CompleteRequest(_) => {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
 			ClientRequest::CallToolRequest(ctr) => {
@@ -602,6 +580,7 @@ impl Handler {
 						content: vec![],
 						structured_content: Some(res),
 						is_error: None,
+						meta: None,
 					},
 				)
 			},

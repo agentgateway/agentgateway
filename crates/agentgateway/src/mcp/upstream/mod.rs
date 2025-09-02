@@ -5,15 +5,11 @@ mod streamablehttp;
 
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
-use crate::mcp::{ClientError, mergestream, upstream};
+use crate::mcp::{mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
-use anyhow::anyhow;
-use rmcp::model::ClientRequest::GetPromptRequest;
-use rmcp::model::{
-	ClientNotification, ClientRequest, InitializeResult, JsonRpcRequest, ServerResult,
-};
+use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use std::io;
@@ -63,10 +59,9 @@ impl Upstream {
 				c.send_delete(user_headers).await?;
 			},
 			Upstream::McpSSE(c) => {
-				todo!()
-				// c.send_delete(user_headers).await?;
+				c.stop().await?;
 			},
-			Upstream::OpenAPI(c) => {
+			Upstream::OpenAPI(_) => {
 				// No need to do anything here
 			},
 		}
@@ -175,9 +170,6 @@ impl UpstreamGroup {
 		Ok(())
 	}
 
-	pub(crate) fn iter(&self) -> impl Iterator<Item = Arc<upstream::Upstream>> {
-		self.by_name.values().cloned()
-	}
 	pub(crate) fn iter_named(&self) -> impl Iterator<Item = (Strng, Arc<upstream::Upstream>)> {
 		self.by_name.iter().map(|(k, v)| (k.clone(), v.clone()))
 	}
@@ -192,8 +184,24 @@ impl UpstreamGroup {
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, anyhow::Error> {
 		trace!("connecting to target: {}", target.name);
 		let target = match &target.spec {
-			McpTargetSpec::Sse(_) => {
-				todo!()
+			McpTargetSpec::Sse(sse) => {
+				debug!(
+					"starting streamable http transport for target: {}",
+					target.name
+				);
+				let path = match sse.path.as_str() {
+					"" => "/sse",
+					_ => sse.path.as_str(),
+				};
+				let be = crate::proxy::resolve_simple_backend(&sse.backend, &self.pi)?;
+				let client = sse::Client::new(
+					be,
+					path.into(),
+					self.client.clone(),
+					target.backend_policies.clone(),
+				);
+
+				upstream::Upstream::McpSSE(client)
 			},
 			McpTargetSpec::Mcp(mcp) => {
 				debug!(
@@ -265,17 +273,5 @@ impl UpstreamGroup {
 		};
 
 		Ok(target)
-	}
-}
-
-pub async fn expect_accepted(res: StreamableHttpPostResponse) -> Result<(), ClientError> {
-	match res {
-		StreamableHttpPostResponse::Accepted => Ok(()),
-		StreamableHttpPostResponse::Json(_, _) => {
-			Err(ClientError::new(anyhow!("unexpected 'json' response")))
-		},
-		StreamableHttpPostResponse::Sse(_, _) => {
-			Err(ClientError::new(anyhow!("unexpected 'sse' response")))
-		},
 	}
 }
