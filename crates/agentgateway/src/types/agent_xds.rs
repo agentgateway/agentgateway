@@ -651,6 +651,53 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 					.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))?,
 				])
 			},
+			Some(proto::agent::policy_spec::Kind::RemoteRateLimit(rrl)) => {
+				// Build descriptors (CEL expressions for values)
+				let descriptors = rrl
+					.descriptors
+					.iter()
+					.map(|d| {
+						let entries: Result<Vec<_>, ProtoError> = d
+							.entries
+							.iter()
+							.map(|e| {
+								cel::Expression::new(e.value.clone())
+									.map_err(|e| ProtoError::Generic(format!("invalid descriptor value: {e}")))
+									.map(|expr| http::remoteratelimit::Descriptor(e.key.clone(), expr))
+							})
+							.collect();
+						let entries = entries?;
+
+						Ok::<http::remoteratelimit::DescriptorEntry, ProtoError>(
+							http::remoteratelimit::DescriptorEntry {
+								entries: Arc::new(entries),
+								limit_type: match d.r#type.as_str() {
+									"tokens" => localratelimit::RateLimitType::Tokens,
+									_ => localratelimit::RateLimitType::Requests, // default
+								},
+							},
+						)
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+
+				// Prefer a structured BackendReference (service/backend), like ExtAuthz does.
+				let target = if let Some(t) = rrl.target.as_ref() {
+					resolve_simple_reference(Some(t))?
+				} else if !rrl.host.is_empty() {
+					// Legacy fallback: accept literal host:port in .host
+					SimpleBackendReference::Backend(strng::new(&rrl.host))
+				} else {
+					return Err(ProtoError::Generic(
+						"remote_rate_limit: either 'target' or legacy 'host' must be set".into(),
+					));
+				};
+
+				Policy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
+					domain: rrl.domain.clone(),
+					target: Arc::new(target),
+					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
+				})
+			},
 			Some(proto::agent::policy_spec::Kind::ExtAuthz(ea)) => {
 				let target = resolve_simple_reference(ea.target.as_ref())?;
 				let failure_mode =

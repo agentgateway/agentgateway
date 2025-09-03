@@ -1,0 +1,15 @@
+domain: agentgateway
+descriptors:
+  - key: user
+    value: "test-user"
+    descriptors:
+      - key: tool
+        value: "echo"
+        rate_limit:
+          unit: minute
+          requests_per_unit: 5
+  - key: tool
+    value: "echo"
+    rate_limit:
+      unit: minute
+      requests_per_unit: 20

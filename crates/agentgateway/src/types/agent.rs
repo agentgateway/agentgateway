@@ -990,13 +990,11 @@ pub enum Policy {
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	Authorization(Authorization),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	LocalRateLimit(Vec<crate::http::localratelimit::RateLimit>),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
-	ExtAuthz(ext_authz::ExtAuthz),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	RemoteRateLimit(remoteratelimit::RemoteRateLimit),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
+	ExtAuthz(ext_authz::ExtAuthz),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	JwtAuth(crate::http::jwt::Jwt),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
