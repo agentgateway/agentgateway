@@ -9,6 +9,9 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [dependencies]
+go-parse-duration.workspace = true
+durationfmt.workspace = true
+arc-swap.workspace = true
 anyhow.workspace = true
 arcstr.workspace = true
 bytes.workspace = true

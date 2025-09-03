@@ -31,9 +31,12 @@ name = "agent-core"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "arcstr",
  "bytes",
  "crossbeam-channel",
+ "durationfmt",
+ "go-parse-duration",
  "http 1.3.1",
  "hyper-util",
  "itertools 0.14.0",
@@ -133,12 +136,12 @@ dependencies = [
  "core_affinity",
  "crossbeam",
  "divan",
- "duration-str",
  "frozen-collections",
  "fs-err",
  "futures",
  "futures-core",
  "futures-util",
+ "go-parse-duration",
  "google-cloud-auth",
  "headers",
  "heck 0.4.1",
@@ -148,6 +151,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "http-serde",
+ "httpdate",
  "hyper",
  "hyper-rustls",
  "hyper-util",
@@ -410,12 +414,6 @@ name = "arrayvec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
-
-[[package]]
-name = "arrayvec"
-version = "0.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "asn1-rs"
@@ -1906,18 +1904,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
-name = "duration-str"
-version = "0.17.0"
+name = "durationfmt"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9add086174f60bcbcfde7175e71dcfd99da24dfd12f611d0faf74f4f26e15a06"
-dependencies = [
- "chrono",
- "rust_decimal",
- "serde",
- "thiserror 2.0.16",
- "time",
- "winnow",
-]
+checksum = "232860130f75128af6852aef5105ee3813539258f2ce74d0f0ec2dca9b69e22d"
 
 [[package]]
 name = "dyn-clone"
@@ -2343,6 +2333,12 @@ name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
+name = "go-parse-duration"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "558b88954871f5e5b2af0e62e2e176c8bde7a6c2c4ed41b13d138d96da2e2cbd"
 
 [[package]]
 name = "google-cloud-auth"
@@ -3179,7 +3175,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6607c62aa161d23d17a9072cc5da0be67cdfc89d3afb1e8d9c842bebc2525ffe"
 dependencies = [
- "arrayvec 0.5.2",
+ "arrayvec",
  "bitflags 1.3.2",
  "cfg-if",
  "ryu",
@@ -4885,16 +4881,6 @@ dependencies = [
  "quote",
  "serde_json",
  "syn",
-]
-
-[[package]]
-name = "rust_decimal"
-version = "1.37.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b203a6425500a03e0919c42d3c47caca51e79f1132046626d2c8871c5092035d"
-dependencies = [
- "arrayvec 0.7.6",
- "num-traits",
 ]
 
 [[package]]
@@ -6893,15 +6879,6 @@ name = "windows_x86_64_msvc"
 version = "0.53.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "271414315aff87387382ec3d271b52d7ae78726f5d44ac98b4f4030c91880486"
-
-[[package]]
-name = "winnow"
-version = "0.7.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21a0236b59786fed61e2a80582dd500fe61f18b5dca67a4a067d0bc9039339cf"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "winreg"

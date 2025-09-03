@@ -30,6 +30,7 @@ use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::loadbalancer::EndpointInfo;
 use crate::{ProxyInputs, store, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
@@ -292,6 +293,7 @@ impl HTTPProxy {
 		// We will also record trailer info there.
 		log.with(|l| {
 			l.status = Some(resp.status());
+			l.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
 			l.cel.ctx().with_response(&resp)
 		});
 

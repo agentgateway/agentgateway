@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, ready};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use agent_core::metrics::CustomField;
 use agent_core::strng;
@@ -25,8 +25,8 @@ use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
 	BackendName, BindName, GatewayName, ListenerName, RouteName, RouteRuleName, Target,
 };
+use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
-use crate::types::discovery::ActiveHandle;
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -396,6 +396,7 @@ impl RequestLog {
 			path: None,
 			version: None,
 			status: None,
+			retry_after: None,
 			jwt_sub: None,
 			retry_attempt: None,
 			error: None,
@@ -438,6 +439,7 @@ pub struct RequestLog {
 	pub path: Option<String>,
 	pub version: Option<::http::Version>,
 	pub status: Option<crate::http::StatusCode>,
+	pub retry_after: Option<Duration>,
 
 	pub jwt_sub: Option<String>,
 
@@ -457,7 +459,7 @@ pub struct RequestLog {
 
 	pub inference_pool: Option<SocketAddr>,
 
-    pub request_handle: Option<ActiveHandle>
+	pub request_handle: Option<ActiveHandle>,
 }
 
 impl RequestLog {
@@ -518,9 +520,11 @@ impl Drop for DropOnLog {
 		let end_time = Instant::now();
 		let duration = end_time - log.start;
 		if let Some(rh) = log.request_handle.take() {
-			let status = log.status.unwrap_or(crate::http::StatusCode::INTERNAL_SERVER_ERROR);
+			let status = log
+				.status
+				.unwrap_or(crate::http::StatusCode::INTERNAL_SERVER_ERROR);
 			let health = !status.is_server_error() && !status.is_client_error();
-			rh.finish_request(health, duration);
+			rh.finish_request(health, duration, log.retry_after);
 		}
 
 		let llm_response = log.llm_response.take();

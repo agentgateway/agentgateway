@@ -100,9 +100,7 @@ impl Store {
 		{
 			for (ep, _) in prev.endpoints.iter() {
 				if service.should_include_endpoint(ep.status) {
-					service
-						.endpoints
-						.insert(ep.clone());
+					service.endpoints.insert(ep.clone());
 				}
 			}
 		}

@@ -19,6 +19,7 @@ pub mod backendtls;
 pub mod compression;
 pub mod ext_authz;
 pub mod ext_proc;
+pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
 pub mod transformation_cel;
@@ -44,6 +45,15 @@ pub mod x_headers {
 	pub const X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 	pub const X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
 	pub const X_AMZN_REQUESTID: HeaderName = HeaderName::from_static("x-amzn-requestid");
+
+	pub const X_RATELIMIT_RESET_REQUESTS: HeaderName =
+		HeaderName::from_static("x-ratelimit-reset-requests");
+	pub const X_RATELIMIT_RESET_TOKENS: HeaderName =
+		HeaderName::from_static("x-ratelimit-reset-tokens");
+	pub const X_RATELIMIT_RESET_REQUESTS_DAY: HeaderName =
+		HeaderName::from_static("x-ratelimit-reset-requests-day");
+	pub const X_RATELIMIT_RESET_TOKENS_MINUTE: HeaderName =
+		HeaderName::from_static("x-ratelimit-reset-tokens-minute");
 }
 
 pub fn modify_req(

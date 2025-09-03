@@ -18,6 +18,7 @@ internal_benches = ["divan"]
 testing = []
 
 [dependencies]
+go-parse-duration.workspace = true
 a2a-sdk.workspace = true
 agent-core.workspace = true
 agent-hbone.workspace = true
@@ -39,7 +40,6 @@ chrono.workspace = true
 clocksource.workspace = true
 crossbeam.workspace = true
 divan = { workspace = true, optional = true }
-duration-str.workspace = true
 fs-err = { workspace = true }
 futures.workspace = true
 futures-core.workspace = true
@@ -51,6 +51,7 @@ hickory-resolver.workspace = true
 http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
+httpdate.workspace = true
 hyper.workspace = true
 hyper-rustls.workspace = true
 hyper-util.workspace = true
@@ -150,7 +151,9 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 wiremock.workspace = true
 which.workspace = true
-agentgateway = { version = "0.7.0", path = ".", default-features = false, features = ["testing"] }
+agentgateway = { version = "0.7.0", path = ".", default-features = false, features = [
+    "testing",
+] }
 
 [lints.clippy]
 # This rule makes code more confusing
