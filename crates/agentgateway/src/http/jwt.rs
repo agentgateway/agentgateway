@@ -57,6 +57,12 @@ pub enum JwkError {
 #[derive(Clone)]
 pub struct Jwt {
 	mode: Mode,
+	providers: Vec<Provider>,
+}
+
+#[derive(Clone)]
+struct Provider {
+	issuer: String,
 	keys: HashMap<String, Jwk>,
 }
 
@@ -69,10 +75,28 @@ impl serde::Serialize for Jwt {
 		#[derive(serde::Serialize)]
 		pub struct Serde<'a> {
 			mode: Mode,
-			keys: Vec<&'a str>,
+			providers: &'a Vec<Provider>,
 		}
 		Serde {
 			mode: self.mode,
+			providers: &self.providers,
+		}
+		.serialize(serializer)
+	}
+}
+
+impl serde::Serialize for Provider {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		#[derive(serde::Serialize)]
+		pub struct Serde<'a> {
+			issuer: &'a str,
+			keys: Vec<&'a str>,
+		}
+		Serde {
+			issuer: &self.issuer,
 			keys: self.keys.keys().map(|x| x.as_str()).collect::<Vec<_>>(),
 		}
 		.serialize(serializer)
@@ -86,11 +110,27 @@ impl Debug for Jwt {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged, rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum LocalJwtConfig {
+	Multi {
+		#[serde(default)]
+		mode: Mode,
+		providers: Vec<ProviderConfig>,
+	},
+	Single {
+		#[serde(default)]
+		mode: Mode,
+		issuer: String,
+		audiences: Vec<String>,
+		jwks: serdes::FileInlineOrRemote,
+	},
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct LocalJwtConfig {
-	#[serde(default)]
-	pub mode: Mode,
+pub struct ProviderConfig {
 	pub issuer: String,
 	pub audiences: Vec<String>,
 	pub jwks: serdes::FileInlineOrRemote,
@@ -114,23 +154,43 @@ pub enum Mode {
 
 impl LocalJwtConfig {
 	pub async fn try_into(self, client: Client) -> Result<Jwt, JwkError> {
-		let jwks: JwkSet = self
-			.jwks
-			.load::<JwkSet>(client)
-			.await
-			.map_err(JwkError::JwkLoadError)?;
+		let (mode, providers_cfg) = match self {
+			LocalJwtConfig::Multi { mode, providers } => (mode, providers),
+			LocalJwtConfig::Single {
+				mode,
+				issuer,
+				audiences,
+				jwks,
+			} => (
+				mode,
+				vec![ProviderConfig {
+					issuer,
+					audiences,
+					jwks,
+				}],
+			),
+		};
 
-		Jwt::from_jwks(jwks, self.mode, self.issuer, self.audiences)
+		let mut providers = Vec::with_capacity(providers_cfg.len());
+		for pc in providers_cfg {
+			let jwks: JwkSet = pc
+				.jwks
+				.load::<JwkSet>(client.clone())
+				.await
+				.map_err(JwkError::JwkLoadError)?;
+			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences)?;
+			providers.push(provider);
+		}
+		Ok(Jwt { mode, providers })
 	}
 }
 
-impl Jwt {
+impl Provider {
 	pub fn from_jwks(
 		jwks: JwkSet,
-		mode: Mode,
 		issuer: String,
 		audiences: Vec<String>,
-	) -> Result<Jwt, JwkError> {
+	) -> Result<Provider, JwkError> {
 		let mut keys = HashMap::new();
 		let to_supported_alg = |key_algorithm: Option<KeyAlgorithm>| match key_algorithm {
 			Some(key_alg) => jsonwebtoken::Algorithm::from_str(key_alg.to_string().as_str()).ok(),
@@ -179,7 +239,22 @@ impl Jwt {
 			}
 		}
 
-		Ok(Jwt { mode, keys })
+		Ok(Provider { issuer, keys })
+	}
+}
+
+impl Jwt {
+	pub fn from_jwks(
+		jwks: JwkSet,
+		mode: Mode,
+		issuer: String,
+		audiences: Vec<String>,
+	) -> Result<Jwt, JwkError> {
+		let provider = Provider::from_jwks(jwks, issuer, audiences)?;
+		Ok(Jwt {
+			mode,
+			providers: vec![provider],
+		})
 	}
 }
 
@@ -251,7 +326,16 @@ impl Jwt {
 			TokenError::MissingKeyId
 		})?;
 
-		let key = self.keys.get(kid).ok_or_else(|| {
+		// Search for the key across all providers
+		let mut key_found = None;
+		for provider in &self.providers {
+			if let Some(key) = provider.keys.get(kid) {
+				key_found = Some(key);
+				break;
+			}
+		}
+
+		let key = key_found.ok_or_else(|| {
 			debug!(%kid, "Token refers to an unknown key.");
 
 			TokenError::UnknownKeyId(kid.to_owned())

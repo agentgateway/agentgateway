@@ -1866,75 +1866,164 @@
                           },
                           "jwtAuth": {
                             "description": "Authenticate incoming JWT requests.",
-                            "type": [
-                              "object",
-                              "null"
-                            ],
-                            "properties": {
-                              "mode": {
-                                "oneOf": [
-                                  {
-                                    "description": "A valid token, issued by a configured issuer, must be present.",
-                                    "type": "string",
-                                    "const": "strict"
-                                  },
-                                  {
-                                    "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
-                                    "type": "string",
-                                    "const": "optional"
-                                  },
-                                  {
-                                    "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
-                                    "type": "string",
-                                    "const": "permissive"
-                                  }
-                                ],
-                                "default": "optional"
-                              },
-                              "issuer": {
-                                "type": "string"
-                              },
-                              "audiences": {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              },
-                              "jwks": {
+                            "anyOf": [
+                              {
                                 "anyOf": [
                                   {
                                     "type": "object",
                                     "properties": {
-                                      "file": {
-                                        "type": "string"
+                                      "mode": {
+                                        "oneOf": [
+                                          {
+                                            "description": "A valid token, issued by a configured issuer, must be present.",
+                                            "type": "string",
+                                            "const": "strict"
+                                          },
+                                          {
+                                            "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                            "type": "string",
+                                            "const": "optional"
+                                          },
+                                          {
+                                            "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                            "type": "string",
+                                            "const": "permissive"
+                                          }
+                                        ],
+                                        "default": "optional"
+                                      },
+                                      "providers": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "issuer": {
+                                              "type": "string"
+                                            },
+                                            "audiences": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "jwks": {
+                                              "anyOf": [
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "file": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "file"
+                                                  ]
+                                                },
+                                                {
+                                                  "type": "string"
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "url": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "url"
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          },
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "issuer",
+                                            "audiences",
+                                            "jwks"
+                                          ]
+                                        }
                                       }
                                     },
+                                    "additionalProperties": false,
                                     "required": [
-                                      "file"
+                                      "providers"
                                     ]
-                                  },
-                                  {
-                                    "type": "string"
                                   },
                                   {
                                     "type": "object",
                                     "properties": {
-                                      "url": {
+                                      "mode": {
+                                        "oneOf": [
+                                          {
+                                            "description": "A valid token, issued by a configured issuer, must be present.",
+                                            "type": "string",
+                                            "const": "strict"
+                                          },
+                                          {
+                                            "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                            "type": "string",
+                                            "const": "optional"
+                                          },
+                                          {
+                                            "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                            "type": "string",
+                                            "const": "permissive"
+                                          }
+                                        ],
+                                        "default": "optional"
+                                      },
+                                      "issuer": {
                                         "type": "string"
+                                      },
+                                      "audiences": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "jwks": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "file": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "file"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "url": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "url"
+                                            ]
+                                          }
+                                        ]
                                       }
                                     },
+                                    "additionalProperties": false,
                                     "required": [
-                                      "url"
+                                      "issuer",
+                                      "audiences",
+                                      "jwks"
                                     ]
                                   }
                                 ]
+                              },
+                              {
+                                "type": "null"
                               }
-                            },
-                            "additionalProperties": false,
-                            "required": [
-                              "issuer",
-                              "audiences",
-                              "jwks"
                             ]
                           },
                           "extAuthz": {
@@ -4180,75 +4269,164 @@
               },
               "jwtAuth": {
                 "description": "Authenticate incoming JWT requests.",
-                "type": [
-                  "object",
-                  "null"
-                ],
-                "properties": {
-                  "mode": {
-                    "oneOf": [
-                      {
-                        "description": "A valid token, issued by a configured issuer, must be present.",
-                        "type": "string",
-                        "const": "strict"
-                      },
-                      {
-                        "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
-                        "type": "string",
-                        "const": "optional"
-                      },
-                      {
-                        "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
-                        "type": "string",
-                        "const": "permissive"
-                      }
-                    ],
-                    "default": "optional"
-                  },
-                  "issuer": {
-                    "type": "string"
-                  },
-                  "audiences": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "jwks": {
+                "anyOf": [
+                  {
                     "anyOf": [
                       {
                         "type": "object",
                         "properties": {
-                          "file": {
-                            "type": "string"
+                          "mode": {
+                            "oneOf": [
+                              {
+                                "description": "A valid token, issued by a configured issuer, must be present.",
+                                "type": "string",
+                                "const": "strict"
+                              },
+                              {
+                                "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                "type": "string",
+                                "const": "optional"
+                              },
+                              {
+                                "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                "type": "string",
+                                "const": "permissive"
+                              }
+                            ],
+                            "default": "optional"
+                          },
+                          "providers": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "issuer": {
+                                  "type": "string"
+                                },
+                                "audiences": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "jwks": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "file": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "file"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "url": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "url"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "issuer",
+                                "audiences",
+                                "jwks"
+                              ]
+                            }
                           }
                         },
+                        "additionalProperties": false,
                         "required": [
-                          "file"
+                          "providers"
                         ]
-                      },
-                      {
-                        "type": "string"
                       },
                       {
                         "type": "object",
                         "properties": {
-                          "url": {
+                          "mode": {
+                            "oneOf": [
+                              {
+                                "description": "A valid token, issued by a configured issuer, must be present.",
+                                "type": "string",
+                                "const": "strict"
+                              },
+                              {
+                                "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                "type": "string",
+                                "const": "optional"
+                              },
+                              {
+                                "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                "type": "string",
+                                "const": "permissive"
+                              }
+                            ],
+                            "default": "optional"
+                          },
+                          "issuer": {
                             "type": "string"
+                          },
+                          "audiences": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "jwks": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "file": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "file"
+                                ]
+                              },
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "url": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "url"
+                                ]
+                              }
+                            ]
                           }
                         },
+                        "additionalProperties": false,
                         "required": [
-                          "url"
+                          "issuer",
+                          "audiences",
+                          "jwks"
                         ]
                       }
                     ]
+                  },
+                  {
+                    "type": "null"
                   }
-                },
-                "additionalProperties": false,
-                "required": [
-                  "issuer",
-                  "audiences",
-                  "jwks"
                 ]
               },
               "extAuthz": {

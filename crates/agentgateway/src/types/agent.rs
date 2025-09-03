@@ -1068,7 +1068,7 @@ pub struct McpAuthentication {
 
 impl McpAuthentication {
 	pub fn as_jwt(&self) -> anyhow::Result<http::jwt::LocalJwtConfig> {
-		Ok(http::jwt::LocalJwtConfig {
+		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: http::jwt::Mode::Optional,
 			issuer: self.issuer.clone(),
 			audiences: vec![self.audience.clone()],

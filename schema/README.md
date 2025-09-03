@@ -212,12 +212,19 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)host`||
 |`binds[].listeners[].routes[].policies.jwtAuth`|Authenticate incoming JWT requests.|
-|`binds[].listeners[].routes[].policies.jwtAuth.mode`||
-|`binds[].listeners[].routes[].policies.jwtAuth.issuer`||
-|`binds[].listeners[].routes[].policies.jwtAuth.audiences`||
-|`binds[].listeners[].routes[].policies.jwtAuth.jwks`||
-|`binds[].listeners[].routes[].policies.jwtAuth.jwks.(any)file`||
-|`binds[].listeners[].routes[].policies.jwtAuth.jwks.(any)url`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].issuer`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].audiences`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)issuer`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)audiences`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)file`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)url`||
 |`binds[].listeners[].routes[].policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.name`||
@@ -456,12 +463,19 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.remoteRateLimit.(any)(1)service.port`||
 |`policies[].policy.remoteRateLimit.(any)(1)host`||
 |`policies[].policy.jwtAuth`|Authenticate incoming JWT requests.|
-|`policies[].policy.jwtAuth.mode`||
-|`policies[].policy.jwtAuth.issuer`||
-|`policies[].policy.jwtAuth.audiences`||
-|`policies[].policy.jwtAuth.jwks`||
-|`policies[].policy.jwtAuth.jwks.(any)file`||
-|`policies[].policy.jwtAuth.jwks.(any)url`||
+|`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)providers`||
+|`policies[].policy.jwtAuth.(any)(any)providers[].issuer`||
+|`policies[].policy.jwtAuth.(any)(any)providers[].audiences`||
+|`policies[].policy.jwtAuth.(any)(any)providers[].jwks`||
+|`policies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)file`||
+|`policies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)issuer`||
+|`policies[].policy.jwtAuth.(any)(any)audiences`||
+|`policies[].policy.jwtAuth.(any)(any)jwks`||
+|`policies[].policy.jwtAuth.(any)(any)jwks.(any)file`||
+|`policies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
 |`policies[].policy.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`policies[].policy.extAuthz.(any)(1)service`||
 |`policies[].policy.extAuthz.(any)(1)service.name`||
