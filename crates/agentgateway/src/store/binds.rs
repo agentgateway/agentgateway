@@ -13,7 +13,7 @@ use crate::http::authorization::{HTTPAuthorizationSet, RuleSets};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
 use crate::http::{ext_authz, ext_proc, remoteratelimit};
-use crate::mcp::rbac::McpAuthorizationSet;
+use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{

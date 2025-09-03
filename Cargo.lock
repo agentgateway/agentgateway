@@ -31,6 +31,7 @@ name = "agent-core"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "arcstr",
  "bytes",
  "crossbeam-channel",
@@ -4831,9 +4832,8 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb21cd3555f1059f27e4813827338dec44429a08ecd0011acc41d9907b160c00"
+version = "0.6.1"
+source = "git+https://github.com/modelcontextprotocol/rust-sdk?rev=7d46b39b4988f0fe49b6b923f83a68f9b98d7b7f#7d46b39b4988f0fe49b6b923f83a68f9b98d7b7f"
 dependencies = [
  "axum",
  "base64",
@@ -4866,9 +4866,8 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5d16ae1ff3ce2c5fd86c37047b2869b75bec795d53a4b1d8257b15415a2354"
+version = "0.6.1"
+source = "git+https://github.com/modelcontextprotocol/rust-sdk?rev=7d46b39b4988f0fe49b6b923f83a68f9b98d7b7f#7d46b39b4988f0fe49b6b923f83a68f9b98d7b7f"
 dependencies = [
  "darling 0.21.3",
  "proc-macro2",

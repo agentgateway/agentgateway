@@ -1,75 +1,78 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use agent_core::drain::DrainWatcher;
 use agent_core::prelude::Strng;
-use anyhow::Result;
-use axum::Json;
-use axum::extract::Query;
 use axum::http::StatusCode;
-use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
-use axum_core::extract::FromRequest;
 use bytes::Bytes;
-use futures::stream::Stream;
-use futures::{SinkExt, StreamExt};
 use http::Method;
 use itertools::Itertools;
-use rmcp::model::{ClientJsonRpcMessage, GetExtensions};
-use rmcp::service::serve_server_with_ct;
-use rmcp::transport::common::server_side_http::session_id as generate_streamable_session_id;
-use rmcp::transport::sse_server::PostEventQuery;
-use rmcp::transport::streamable_http_server::SessionId;
-use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
-use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
-use tokio::io::{self};
-use tokio_util::sync::CancellationToken;
+use prometheus_client::registry::Registry;
+use rmcp::transport::StreamableHttpServerConfig;
 use tracing::warn;
 
 use crate::cel::ContextBuilder;
 use crate::http::jwt::Claims;
 use crate::http::*;
 use crate::json::from_body;
-use crate::mcp::relay;
-use crate::mcp::relay::Relay;
+use crate::mcp::MCPInfo;
+use crate::mcp::handler::Relay;
+use crate::mcp::session::SessionManager;
+use crate::mcp::streamablehttp::StreamableHttpService;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::{BackendName, McpAuthentication, McpBackend, McpIDP};
-use crate::{ProxyInputs, json};
-
-type SseTxs =
-	Arc<std::sync::RwLock<HashMap<SessionId, tokio::sync::mpsc::Sender<ClientJsonRpcMessage>>>>;
-
-#[derive(Debug, Default, Clone)]
-pub struct MCPInfo {
-	pub tool_call_name: Option<String>,
-	pub target_name: Option<String>,
-}
+use crate::types::agent::{
+	BackendName, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, SimpleBackendReference,
+};
+use crate::{ProxyInputs, json, mcp};
 
 #[derive(Debug, Clone)]
 pub struct App {
 	state: Stores,
-	metrics: Arc<relay::metrics::Metrics>,
+	metrics: Arc<mcp::metrics::Metrics>,
 	_drain: DrainWatcher,
-	session: Arc<LocalSessionManager>,
-
-	sse_txs: SseTxs,
+	session: Arc<SessionManager>,
 }
 
 impl App {
-	pub fn new(state: Stores, metrics: Arc<relay::metrics::Metrics>, drain: DrainWatcher) -> Self {
-		let session: Arc<LocalSessionManager> = Arc::new(Default::default());
+	pub fn new(state: Stores, registry: &mut Registry, drain: DrainWatcher) -> Self {
+		let session: Arc<SessionManager> = Arc::new(Default::default());
+		let metrics = Arc::new(crate::mcp::metrics::Metrics::new(
+			registry, None, // TODO custom tags
+		));
 		Self {
 			state,
 			metrics,
 			_drain: drain,
 			session,
-			sse_txs: Default::default(),
 		}
 	}
 
+	pub fn should_passthrough(
+		&self,
+		name: BackendName,
+		backend: &McpBackend,
+		req: &Request,
+	) -> Option<SimpleBackendReference> {
+		if backend.targets.len() != 1 {
+			return None;
+		}
+
+		let binds = self.state.read_binds();
+		let (_, authn) = binds.mcp_policies(name.clone());
+		if authn.is_some() {
+			return None;
+		}
+		if !req.uri().path().contains("/.well-known/") {
+			return None;
+		}
+		match backend.targets.first().map(|t| &t.spec) {
+			Some(McpTargetSpec::Mcp(s)) => Some(s.backend.clone()),
+			_ => None,
+		}
+	}
 	pub async fn serve(
 		&self,
 		pi: Arc<ProxyInputs>,
@@ -94,10 +97,7 @@ impl App {
 				})
 				.collect_vec();
 			(
-				McpBackendGroup {
-					name: name.clone(),
-					targets: nt,
-				},
+				McpBackendGroup { targets: nt },
 				authorization_policies,
 				authn,
 			)
@@ -140,20 +140,6 @@ impl App {
 		}
 
 		match (req.uri().path(), req.method(), authn) {
-			("/sse", m, _) if m == Method::GET => Self::sse_get_handler(
-				self.sse_txs.clone(),
-				Relay::new(
-					pi.clone(),
-					backends.clone(),
-					metrics.clone(),
-					authorization_policies.clone(),
-					client.clone(),
-					backend.stateful,
-				),
-			)
-			.await
-			.into_response(),
-			("/sse", m, _) if m == Method::POST => self.sse_post_handler(req).await.into_response(),
 			(path, _, Some(auth)) if path.ends_with("client-registration") => self
 				.client_registration(req, auth, client.clone())
 				.await
@@ -178,14 +164,15 @@ impl App {
 				// Assume this is streamable HTTP otherwise
 				let streamable = StreamableHttpService::new(
 					move || {
-						Ok(Relay::new(
+						Relay::new(
 							pi.clone(),
 							backends.clone(),
 							metrics.clone(),
 							authorization_policies.clone(),
 							client.clone(),
 							backend.stateful,
-						))
+						)
+						.map_err(|e| Error::new(e.to_string()))
 					},
 					sm,
 					StreamableHttpServerConfig {
@@ -206,18 +193,7 @@ impl App {
 
 #[derive(Debug, Clone)]
 pub struct McpBackendGroup {
-	pub name: BackendName,
 	pub targets: Vec<Arc<McpTarget>>,
-}
-
-impl McpBackendGroup {
-	pub fn find(&self, name: &str) -> Option<Arc<McpTarget>> {
-		self
-			.targets
-			.iter()
-			.find(|target| target.name.as_str() == name)
-			.cloned()
-	}
 }
 
 #[derive(Debug)]
@@ -407,93 +383,5 @@ impl App {
 		);
 
 		Ok(upstream)
-	}
-
-	async fn sse_post_handler(&self, req: Request) -> Result<StatusCode, StatusCode> {
-		// Extract query parameters
-		let Query(PostEventQuery { session_id }) =
-			Query::<PostEventQuery>::try_from_uri(req.uri()).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-		let (part, body) = req.into_parts();
-		let parts = part.clone();
-		let req = Request::from_parts(part, body);
-		let Json(mut message) = Json::<ClientJsonRpcMessage>::from_request(req, &())
-			.await
-			.map_err(|_| StatusCode::BAD_REQUEST)?;
-		if let ClientJsonRpcMessage::Request(req) = &mut message {
-			req.request.extensions_mut().insert(parts);
-		}
-		tracing::info!(session_id, ?message, "new client message for /sse");
-		let tx = {
-			let rg = self.sse_txs.read().expect("mutex poisoned");
-			rg.get(session_id.as_str())
-				.ok_or(StatusCode::NOT_FOUND)?
-				.clone()
-		};
-
-		if tx.send(message).await.is_err() {
-			tracing::error!("send message error");
-			return Err(StatusCode::GONE);
-		}
-		Ok(StatusCode::ACCEPTED)
-	}
-
-	async fn sse_get_handler(
-		sse_txs: SseTxs,
-		relay: Relay,
-	) -> Result<Sse<impl Stream<Item = Result<Event, io::Error>>>, StatusCode> {
-		// it's 4KB
-
-		let session = generate_streamable_session_id();
-		tracing::debug!(%session,  "sse connection");
-
-		use tokio_stream::wrappers::ReceiverStream;
-		use tokio_util::sync::PollSender;
-		let (from_client_tx, from_client_rx) = tokio::sync::mpsc::channel(64);
-		let (to_client_tx, to_client_rx) = tokio::sync::mpsc::channel(64);
-		sse_txs
-			.write()
-			.expect("mutex poisoned")
-			.insert(session.clone(), from_client_tx);
-		{
-			let session = session.clone();
-			let sse_txs = sse_txs.clone();
-			let ct = CancellationToken::new();
-			tokio::spawn(async move {
-				let stream = ReceiverStream::new(from_client_rx);
-				let sink = PollSender::new(to_client_tx.clone()).sink_map_err(std::io::Error::other);
-				let result = serve_server_with_ct(relay.clone(), (sink, stream), ct.child_token())
-					.await
-					.inspect_err(|e| {
-						tracing::error!("serving error: {:?}", e);
-					});
-
-				if let Err(e) = result {
-					tracing::error!(error = ?e, "initialize error");
-					sse_txs.write().expect("mutex poisoned").remove(&session);
-					return;
-				}
-				// Add a listener drain channel here.
-				tokio::select! {
-					_ = to_client_tx.closed() =>{
-						tracing::info!("client disconnected");
-					}
-				};
-				sse_txs.write().expect("mutex poisoned").remove(&session);
-			});
-		}
-
-		let stream = futures::stream::once(futures::future::ok(
-			Event::default()
-				.event("endpoint")
-				.data(format!("?sessionId={session}")),
-		))
-		.chain(ReceiverStream::new(to_client_rx).map(|message| {
-			match serde_json::to_string(&message) {
-				Ok(bytes) => Ok(Event::default().event("message").data(&bytes)),
-				Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
-			}
-		}));
-		Ok(Sse::new(stream))
 	}
 }

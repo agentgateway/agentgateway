@@ -83,13 +83,6 @@ impl agent_core::trcng::Claim for Identity {
 }
 
 impl Identity {
-	pub fn empty() -> Self {
-		Self {
-			claims: None,
-			connection_id: None,
-		}
-	}
-
 	pub fn new(claims: Option<Claims>, connection_id: Option<String>) -> Self {
 		Self {
 			claims,
