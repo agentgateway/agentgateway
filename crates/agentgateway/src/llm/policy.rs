@@ -1,5 +1,7 @@
 use ::http::HeaderMap;
-use async_openai::types::{ChatCompletionRequestMessage, CreateChatCompletionRequest};
+use async_openai::types::{
+	ChatCompletionRequestMessage, CreateChatCompletionRequest, CreateChatCompletionResponse,
+};
 use bytes::Bytes;
 
 use crate::http::auth::{BackendAuth, SimpleBackendAuth};
@@ -166,74 +168,15 @@ impl Policy {
 				continue;
 			};
 
-			if let Some(rgx) = &g.regex {
-				let mut current_content = original_content.to_string();
-				let mut content_modified = false;
-
-				// Process each rule sequentially, updating the content as we go
-				for r in &rgx.rules {
-					match r {
-						RegexRule::Builtin { builtin } => {
-							let rec = match builtin {
-								Builtin::Ssn => &*pii::SSN,
-								Builtin::CreditCard => &*pii::CC,
-								Builtin::PhoneNumber => &*pii::PHONE,
-								Builtin::Email => &*pii::EMAIL,
-							};
-							let results = pii::recognizer(rec, &current_content);
-
-							if !results.is_empty() {
-								match &rgx.action {
-									Action::Reject { response } => {
-										return Ok(Some(response.as_response()));
-									},
-									Action::Mask => {
-										// Sort in reverse to avoid index shifting during replacement
-										let mut sorted_results = results;
-										sorted_results.sort_by(|a, b| b.start.cmp(&a.start));
-
-										for result in sorted_results {
-											current_content.replace_range(
-												result.start..result.end,
-												&format!("<{}>", result.entity_type.to_uppercase()),
-											);
-										}
-										content_modified = true;
-									},
-								}
-							}
-						},
-						RegexRule::Regex { pattern, name } => {
-							let ranges: Vec<std::ops::Range<usize>> = pattern
-								.find_iter(&current_content)
-								.map(|m| m.range())
-								.collect();
-
-							if !ranges.is_empty() {
-								match &rgx.action {
-									Action::Reject { response } => {
-										return Ok(Some(response.as_response()));
-									},
-									Action::Mask => {
-										// Process matches in reverse order to avoid index shifting
-										for range in ranges.into_iter().rev() {
-											current_content.replace_range(range, &format!("<{name}>"));
-										}
-										content_modified = true;
-									},
-								}
-							}
-						},
-					}
-				}
-
-				// Only update the message if content was actually modified
-				if content_modified {
-					*msg = Self::convert_message(Message {
-						role: universal::message_role(msg).to_string(),
-						content: current_content,
-					});
-				}
+			let (res, modified_content) = Self::apply_prompt_guard_regex(original_content, &g.regex);
+			if let Some(content) = modified_content {
+				*msg = Self::convert_message(Message {
+					role: universal::message_role(msg).to_string(),
+					content,
+				});
+			}
+			if res.is_some() {
+				return Ok(res);
 			}
 		}
 		Ok(None)
@@ -256,6 +199,101 @@ impl Policy {
 			}),
 			_ => universal::RequestMessage::from(universal::RequestUserMessage::from(r.content)),
 		}
+	}
+
+	fn apply_prompt_guard_regex(
+		original_content: &str,
+		regex: &Option<RegexRules>,
+	) -> (Option<Response>, Option<String>) {
+		if let Some(rgx) = regex {
+			let mut current_content = original_content.to_string();
+			let mut content_modified = false;
+
+			// Process each rule sequentially, updating the content as we go
+			for r in &rgx.rules {
+				match r {
+					RegexRule::Builtin { builtin } => {
+						let rec = match builtin {
+							Builtin::Ssn => &*pii::SSN,
+							Builtin::CreditCard => &*pii::CC,
+							Builtin::PhoneNumber => &*pii::PHONE,
+							Builtin::Email => &*pii::EMAIL,
+						};
+						let results = pii::recognizer(rec, &current_content);
+
+						if !results.is_empty() {
+							match &rgx.action {
+								Action::Reject { response } => {
+									return (Some(response.as_response()), None);
+								},
+								Action::Mask => {
+									// Sort in reverse to avoid index shifting during replacement
+									let mut sorted_results = results;
+									sorted_results.sort_by(|a, b| b.start.cmp(&a.start));
+
+									for result in sorted_results {
+										current_content.replace_range(
+											result.start..result.end,
+											&format!("<{}>", result.entity_type.to_uppercase()),
+										);
+									}
+									content_modified = true;
+								},
+							}
+						}
+					},
+					RegexRule::Regex { pattern, name } => {
+						let ranges: Vec<std::ops::Range<usize>> = pattern
+							.find_iter(&current_content)
+							.map(|m| m.range())
+							.collect();
+
+						if !ranges.is_empty() {
+							match &rgx.action {
+								Action::Reject { response } => {
+									return (Some(response.as_response()), None);
+								},
+								Action::Mask => {
+									// Process matches in reverse order to avoid index shifting
+									for range in ranges.into_iter().rev() {
+										current_content.replace_range(range, &format!("<{name}>"));
+									}
+									content_modified = true;
+								},
+							}
+						}
+					},
+				}
+			}
+			// Only update the message if content was actually modified
+			if content_modified {
+				return (None, Some(current_content));
+			}
+		}
+		(None, None)
+	}
+
+	pub async fn apply_response_prompt_guard(
+		resp: &mut CreateChatCompletionResponse,
+		g: &Option<ResponseGuard>,
+	) -> anyhow::Result<Option<Response>> {
+		let Some(guard) = g else {
+			return Ok(None);
+		};
+		for msg in resp.choices.iter_mut() {
+			let Some(original_content) = msg.message.content.as_deref() else {
+				continue;
+			};
+
+			let (res, modified_content) = Self::apply_prompt_guard_regex(original_content, &guard.regex);
+			if let Some(content) = modified_content {
+				msg.message.content = Some(content);
+			}
+			if res.is_some() {
+				return Ok(res);
+			}
+		}
+		Ok(None)
 	}
 }
 

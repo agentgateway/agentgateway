@@ -1,0 +1,32 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+              regex:
+                action:
+                  reject:
+                    response:
+                      body: "Request rejected due to inappropriate content"
+                rules:
+                - pattern: SSN
+                  name: SSN
+                - pattern: Social Security
+                  name: Social Security
+            response:
+              regex:
+                action:
+                  reject:
+                    response:
+                      body: "Response rejected due to inappropriate content"
+                rules:
+                - builtin: email

@@ -124,6 +124,11 @@ async fn apply_llm_request_policies(
 	Ok(store::LLMResponsePolicies {
 		local_rate_limit: policies.local_rate_limit.clone(),
 		remote_rate_limit: response,
+		prompt_guard: policies
+			.llm
+			.as_deref()
+			.and_then(|llm| llm.prompt_guard.as_ref())
+			.and_then(|g| g.response.clone()),
 	})
 }
 

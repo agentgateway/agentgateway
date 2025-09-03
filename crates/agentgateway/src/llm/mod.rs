@@ -339,7 +339,7 @@ impl AIProvider {
 				})
 			});
 		let (llm_resp, body) = match openai_response {
-			Ok(success) => {
+			Ok(mut success) => {
 				let llm_resp = LLMResponse {
 					request: req,
 					input_tokens_from_response: success.usage.as_ref().map(|u| u.prompt_tokens as u64),
@@ -359,6 +359,17 @@ impl AIProvider {
 					},
 					first_token: Default::default(),
 				};
+				// Apply response prompt guard
+				if let Some(dr) =
+					Policy::apply_response_prompt_guard(&mut success, &rate_limit.prompt_guard)
+						.await
+						.map_err(|e| {
+							warn!("failed to apply response prompt guard: {e}");
+							AIError::PromptWebhookError
+						})? {
+					return Ok(dr);
+				}
+
 				let body = serde_json::to_vec(&success).map_err(AIError::ResponseMarshal)?;
 				(llm_resp, body)
 			},

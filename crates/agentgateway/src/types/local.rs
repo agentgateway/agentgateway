@@ -818,9 +818,6 @@ async fn split_policies(
 	if let Some(p) = a2a {
 		backend_policies.push(Policy::A2a(p))
 	}
-	if let Some(p) = ai {
-		backend_policies.push(Policy::AI(Arc::new(p)))
-	}
 	if let Some(p) = backend_tls {
 		backend_policies.push(Policy::BackendTLS(p.try_into()?))
 	}
@@ -829,6 +826,9 @@ async fn split_policies(
 	}
 
 	// Route policies
+	if let Some(p) = ai {
+		route_policies.push(Policy::AI(Arc::new(p)))
+	}
 	if let Some(p) = jwt_auth {
 		route_policies.push(Policy::JwtAuth(p.try_into(client.clone()).await?));
 	}

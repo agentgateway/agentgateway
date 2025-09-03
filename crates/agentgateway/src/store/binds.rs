@@ -13,6 +13,7 @@ use crate::http::authorization::{HTTPAuthorizationSet, RuleSets};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
 use crate::http::{ext_authz, ext_proc, remoteratelimit};
+use crate::llm::policy::ResponseGuard;
 use crate::mcp::rbac::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
@@ -133,6 +134,7 @@ pub struct LLMRequestPolicies {
 pub struct LLMResponsePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
+	pub prompt_guard: Option<ResponseGuard>,
 }
 
 impl Default for Store {
