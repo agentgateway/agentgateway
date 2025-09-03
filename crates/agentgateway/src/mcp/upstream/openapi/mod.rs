@@ -1,19 +1,16 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::http::Request;
-use crate::http::jwt::Claims;
 use crate::json;
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::UpstreamError;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
 use crate::types::agent::SimpleBackend;
+use http::Method;
 use http::header::{ACCEPT, CONTENT_TYPE};
-use http::{HeaderMap, Method};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use reqwest::header::{HeaderName, HeaderValue};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
@@ -513,7 +510,7 @@ impl Handler {
 	pub async fn send_message(
 		&self,
 		request: JsonRpcRequest<ClientRequest>,
-		user_headers: &crate::http::HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		use rmcp::model::*;
 		let method = request.request.method();
@@ -566,13 +563,7 @@ impl Handler {
 			},
 			ClientRequest::CallToolRequest(ctr) => {
 				let res = self
-					.call_tool(
-						ctr.params.name.as_ref(),
-						ctr.params.arguments,
-						user_headers,
-						// TODO: add claims!!
-						// rq_ctx.identity.claims.clone(),
-					)
+					.call_tool(ctr.params.name.as_ref(), ctr.params.arguments, ctx)
 					.await?;
 				Messages::from_result(
 					id,
@@ -595,15 +586,6 @@ impl Handler {
 		Ok(res)
 	}
 
-	pub fn call_tool<'a>(
-		&'a self,
-		name: &'a str,
-		args: Option<JsonObject>,
-		user_headers: &'a HeaderMap,
-	) -> Pin<Box<dyn Future<Output = Result<serde_json::Value, anyhow::Error>> + Send + '_>> {
-		Box::pin(self.call_tool_internal(name, args, user_headers))
-	}
-
 	/// We need to use the parse the schema to get the correct args.
 	/// They are in the json schema under the "properties" key.
 	/// Body is under the "body" key.
@@ -615,12 +597,11 @@ impl Handler {
 	/// Headers need to be added to the request headers.
 	/// Body needs to be added to the request body.
 	/// Path params need to be added to the template params in the path.
-	async fn call_tool_internal(
+	pub async fn call_tool(
 		&self,
 		name: &str,
 		args: Option<JsonObject>,
-		user_headers: &HeaderMap,
-		claims: Option<Claims>,
+		ctx: &IncomingRequestContext,
 	) -> Result<serde_json::Value, anyhow::Error> {
 		let (_tool, info) = self
 			.tools
@@ -760,7 +741,7 @@ impl Handler {
 			.body(body.into())
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
 
-		insert_user_headers(user_headers, &mut request);
+		ctx.apply(&mut request);
 
 		// Make the request
 		let response = self
@@ -791,18 +772,6 @@ impl Handler {
 
 	pub fn tools(&self) -> Vec<Tool> {
 		self.tools.clone().into_iter().map(|(t, _)| t).collect()
-	}
-}
-
-fn insert_user_headers(user_headers: &HeaderMap, req: &mut Request) {
-	for (k, v) in user_headers {
-		// Remove headers we do not want to propagate to the backend
-		if k == crate::http::header::CONTENT_ENCODING || k == crate::http::header::CONTENT_LENGTH {
-			continue;
-		}
-		if !req.headers().contains_key(k) {
-			req.headers_mut().insert(k.clone(), v.clone());
-		}
 	}
 }
 

@@ -97,10 +97,7 @@ impl App {
 				})
 				.collect_vec();
 			(
-				McpBackendGroup {
-					name: name.clone(),
-					targets: nt,
-				},
+				McpBackendGroup { targets: nt },
 				authorization_policies,
 				authn,
 			)

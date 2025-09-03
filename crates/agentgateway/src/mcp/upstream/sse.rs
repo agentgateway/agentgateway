@@ -1,14 +1,13 @@
-use crate::http::Request;
 use crate::mcp::ClientError;
 use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::UpstreamError;
 use crate::mcp::upstream::stdio::Process;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
 use crate::types::agent::SimpleBackend;
 use crate::*;
+use ::http::Uri;
 use ::http::header::CONTENT_TYPE;
-use ::http::{HeaderMap, Uri};
 use anyhow::anyhow;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
@@ -65,16 +64,11 @@ impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
 	fn send(
 		&mut self,
 		item: ClientJsonRpcMessage,
-		user_headers: &HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
-		let headers = user_headers.clone();
+		let ctx = ctx.clone();
 		let client = self.client.clone();
-		Box::pin(async move {
-			client
-				.send_message(item, &headers)
-				.map_err(Into::into)
-				.await
-		})
+		Box::pin(async move { client.send_message(item, &ctx).map_err(Into::into).await })
 	}
 	async fn close(&mut self) -> Result<(), UpstreamError> {
 		Ok(())
@@ -85,7 +79,7 @@ impl ClientCore {
 	async fn send_message(
 		&self,
 		message: ClientJsonRpcMessage,
-		user_headers: &HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<(), ClientError> {
 		let client = self.client.clone();
 
@@ -98,7 +92,7 @@ impl ClientCore {
 			.body(body.into())
 			.map_err(ClientError::new)?;
 
-		insert_user_headers(user_headers, &mut req);
+		ctx.apply(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
@@ -115,7 +109,7 @@ impl ClientCore {
 impl ClientCore {
 	async fn establish_sse(
 		&self,
-		user_headers: &HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let client = self.client.clone();
 
@@ -126,7 +120,7 @@ impl ClientCore {
 			.body(http::Body::empty())
 			.map_err(ClientError::new)?;
 
-		insert_user_headers(user_headers, &mut req);
+		ctx.apply(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
@@ -183,12 +177,12 @@ impl Client {
 		*stream = None;
 		Ok(())
 	}
-	async fn get_stream(&self, user_headers: &HeaderMap) -> Result<Arc<Process>, UpstreamError> {
+	async fn get_stream(&self, ctx: &IncomingRequestContext) -> Result<Arc<Process>, UpstreamError> {
 		let mut stream = self.active_stream.lock().await;
 		if let Some(s) = stream.clone() {
 			Ok(s)
 		} else {
-			let (post_uri, sse) = self.establish_sse(user_headers).await?;
+			let (post_uri, sse) = self.establish_sse(ctx).await?;
 			let transport = SseClient {
 				client: ClientCore {
 					uri: post_uri,
@@ -204,9 +198,9 @@ impl Client {
 	}
 	async fn establish_sse(
 		&self,
-		user_headers: &HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<(Uri, BoxedSseStream), ClientError> {
-		let res = Box::pin(self.client.establish_sse(user_headers)).await?;
+		let res = Box::pin(self.client.establish_sse(ctx)).await?;
 		let mut s = match res {
 			StreamableHttpPostResponse::Sse(s, _) => s,
 			_ => return Err(ClientError::new(anyhow!("unexpected return typ"))),
@@ -227,38 +221,27 @@ impl Client {
 	}
 	pub async fn connect_to_event_stream(
 		&self,
-		user_headers: &HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<Messages, UpstreamError> {
-		let stream = self.get_stream(user_headers).await?;
+		let stream = self.get_stream(ctx).await?;
 		Ok(stream.get_event_stream().await)
 	}
 	pub async fn send_message(
 		&self,
 		req: JsonRpcRequest<ClientRequest>,
-		user_headers: &HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<ServerJsonRpcMessage, UpstreamError> {
-		let stream = self.get_stream(user_headers).await?;
-		stream.send_message(req, user_headers).await
+		let stream = self.get_stream(ctx).await?;
+		stream.send_message(req, ctx).await
 	}
 
 	pub async fn send_notification(
 		&self,
 		req: ClientNotification,
-		user_headers: &HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError> {
-		let stream = self.get_stream(user_headers).await?;
-		stream.send_notification(req, user_headers).await
-	}
-}
-fn insert_user_headers(user_headers: &HeaderMap, req: &mut Request) {
-	for (k, v) in user_headers {
-		// Remove headers we do not want to propagate to the backend
-		if k == http::header::CONTENT_ENCODING || k == http::header::CONTENT_LENGTH {
-			continue;
-		}
-		if !req.headers().contains_key(k) {
-			req.headers_mut().insert(k.clone(), v.clone());
-		}
+		let stream = self.get_stream(ctx).await?;
+		stream.send_notification(req, ctx).await
 	}
 }
 

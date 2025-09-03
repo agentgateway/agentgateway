@@ -1,12 +1,13 @@
 use crate::http::Request;
 use crate::json;
 use crate::mcp::ClientError;
+use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
 use crate::types::agent::SimpleBackend;
 use crate::*;
+use ::http::Uri;
 use ::http::header::CONTENT_TYPE;
-use ::http::{HeaderMap, Uri};
 use anyhow::anyhow;
 use futures::StreamExt;
 use reqwest::header::ACCEPT;
@@ -53,23 +54,26 @@ impl Client {
 	pub async fn send_request(
 		&self,
 		req: JsonRpcRequest<ClientRequest>,
-		user_headers: &HeaderMap,
+
+		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let message = ClientJsonRpcMessage::Request(req);
-		self.send_message(message, user_headers).await
+		self.send_message(message, ctx).await
 	}
 	pub async fn send_notification(
 		&self,
 		req: ClientNotification,
-		user_headers: &HeaderMap,
+
+		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let message = ClientJsonRpcMessage::notification(req);
-		self.send_message(message, user_headers).await
+		self.send_message(message, ctx).await
 	}
 	async fn send_message(
 		&self,
 		message: ClientJsonRpcMessage,
-		user_headers: &HeaderMap,
+
+		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let client = self.client.clone();
 
@@ -85,7 +89,7 @@ impl Client {
 
 		self.maybe_insert_session_id(&mut req)?;
 
-		Self::insert_user_headers(user_headers, &mut req);
+		ctx.apply(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
@@ -126,7 +130,8 @@ impl Client {
 	}
 	pub async fn send_delete(
 		&self,
-		user_headers: &HeaderMap,
+
+		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let client = self.client.clone();
 
@@ -138,7 +143,7 @@ impl Client {
 
 		self.maybe_insert_session_id(&mut req)?;
 
-		Self::insert_user_headers(user_headers, &mut req);
+		ctx.apply(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
@@ -152,7 +157,8 @@ impl Client {
 	}
 	pub async fn get_event_stream(
 		&self,
-		user_headers: &HeaderMap,
+
+		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let client = self.client.clone();
 
@@ -164,7 +170,7 @@ impl Client {
 
 		self.maybe_insert_session_id(&mut req)?;
 
-		Self::insert_user_headers(user_headers, &mut req);
+		ctx.apply(&mut req);
 
 		let resp = client
 			.call_with_default_policies(req, &self.backend, self.policies.clone())
@@ -175,18 +181,6 @@ impl Client {
 			return Err(ClientError::Status(Box::new(resp)));
 		}
 		Ok(StreamableHttpPostResponse::Accepted)
-	}
-
-	fn insert_user_headers(user_headers: &HeaderMap, req: &mut Request) {
-		for (k, v) in user_headers {
-			// Remove headers we do not want to propagate to the backend
-			if k == http::header::CONTENT_ENCODING || k == http::header::CONTENT_LENGTH {
-				continue;
-			}
-			if !req.headers().contains_key(k) {
-				req.headers_mut().insert(k.clone(), v.clone());
-			}
-		}
 	}
 
 	fn maybe_insert_session_id(&self, req: &mut Request) -> Result<(), ClientError> {

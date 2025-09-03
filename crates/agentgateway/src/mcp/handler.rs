@@ -5,7 +5,7 @@ use crate::http::jwt::Claims;
 use crate::mcp::mergestream::MergeFn;
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
-use crate::mcp::upstream::UpstreamError;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{MCPInfo, mergestream, metrics, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
@@ -280,7 +280,7 @@ impl Relay {
 	pub async fn send_single(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
-		user_headers: http::HeaderMap,
+		ctx: IncomingRequestContext,
 		service_name: &str,
 	) -> Result<Response, UpstreamError> {
 		let Ok(us) = self.upstreams.get(service_name) else {
@@ -288,7 +288,7 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let stream = us.generic_stream(r, &user_headers).await?;
+		let stream = us.generic_stream(r, &ctx).await?;
 
 		messages_to_response(stream)
 	}
@@ -297,29 +297,29 @@ impl Relay {
 	pub async fn send_single_without_multiplexing(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
-		user_headers: http::HeaderMap,
+		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
 		let Some(service_name) = &self.default_target_name else {
 			return Err(UpstreamError::InvalidMethod(r.request.method().to_string()));
 		};
-		self.send_single(r, user_headers, service_name).await
+		self.send_single(r, ctx, service_name).await
 	}
 	pub async fn send_fanout_deletion(
 		&self,
-		user_headers: http::HeaderMap,
+		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
 		for (_, con) in self.upstreams.iter_named() {
-			con.delete(&user_headers).await?;
+			con.delete(&ctx).await?;
 		}
 		Ok(accepted_response())
 	}
 	pub async fn send_fanout_get(
 		&self,
-		user_headers: http::HeaderMap,
+		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
-			streams.push((name, con.get_event_stream(&user_headers).await?));
+			streams.push((name, con.get_event_stream(&ctx).await?));
 		}
 
 		let ms = mergestream::MergeStream::new_without_merge(streams);
@@ -328,12 +328,12 @@ impl Relay {
 	pub async fn send_fanout(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
-		user_headers: http::HeaderMap,
+		ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
-			streams.push((name, con.generic_stream(r.clone(), &user_headers).await?));
+			streams.push((name, con.generic_stream(r.clone(), &ctx).await?));
 		}
 
 		let ms = mergestream::MergeStream::new(streams, r.id, merge);
@@ -342,14 +342,14 @@ impl Relay {
 	pub async fn send_notification(
 		&self,
 		r: JsonRpcNotification<ClientNotification>,
-		user_headers: http::HeaderMap,
+		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
 			streams.push((
 				name,
 				con
-					.generic_notification(r.notification.clone(), &user_headers)
+					.generic_notification(r.notification.clone(), &ctx)
 					.await?,
 			));
 		}

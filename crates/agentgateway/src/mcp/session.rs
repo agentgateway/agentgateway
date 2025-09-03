@@ -1,7 +1,7 @@
 use crate::http::Response;
 use crate::mcp;
 use crate::mcp::handler::Relay;
-use crate::mcp::upstream::UpstreamError;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, rbac};
 use crate::*;
 use ::http::StatusCode;
@@ -35,17 +35,19 @@ impl Session {
 	}
 
 	pub async fn delete_session(&self, parts: Parts) -> Response {
+		let ctx = IncomingRequestContext::new(parts);
 		self
 			.relay
-			.send_fanout_deletion(parts.headers)
+			.send_fanout_deletion(ctx)
 			.await
 			.unwrap_or_else(Self::handle_error(None))
 	}
 
 	pub async fn get_stream(&self, parts: Parts) -> Response {
+		let ctx = IncomingRequestContext::new(parts);
 		self
 			.relay
-			.send_fanout_get(parts.headers)
+			.send_fanout_get(ctx)
 			.await
 			.unwrap_or_else(Self::handle_error(None))
 	}
@@ -87,36 +89,37 @@ impl Session {
 				let method = r.request.method();
 				let (_span, _, log, cel) = mcp::handler::setup_request_log2(&parts, method);
 
+				let ctx = IncomingRequestContext::new(parts);
 				match &mut r.request {
 					ClientRequest::InitializeRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, parts.headers, self.relay.merge_initialize())
+							.send_fanout(r, ctx, self.relay.merge_initialize())
 							.await
 					},
 					ClientRequest::ListToolsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, parts.headers, self.relay.merge_tools(cel.clone()))
+							.send_fanout(r, ctx, self.relay.merge_tools(cel.clone()))
 							.await
 					},
 					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, parts.headers, self.relay.merge_empty())
+							.send_fanout(r, ctx, self.relay.merge_empty())
 							.await
 					},
 					ClientRequest::ListPromptsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, parts.headers, self.relay.merge_prompts(cel.clone()))
+							.send_fanout(r, ctx, self.relay.merge_prompts(cel.clone()))
 							.await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
 						if !self.relay.is_multiplexing() {
 							self
 								.relay
-								.send_fanout(r, parts.headers, self.relay.merge_resources(cel.clone()))
+								.send_fanout(r, ctx, self.relay.merge_resources(cel.clone()))
 								.await
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
@@ -130,11 +133,7 @@ impl Session {
 						if !self.relay.is_multiplexing() {
 							self
 								.relay
-								.send_fanout(
-									r,
-									parts.headers,
-									self.relay.merge_resource_templates(cel.clone()),
-								)
+								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel.clone()))
 								.await
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
@@ -171,7 +170,7 @@ impl Session {
 						);
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
-						self.relay.send_single(r, parts.headers, service_name).await
+						self.relay.send_single(r, ctx, service_name).await
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
@@ -189,7 +188,7 @@ impl Session {
 							return Err(UpstreamError::Authorization);
 						}
 						gpr.params.name = prompt.to_string();
-						self.relay.send_single(r, parts.headers, service_name).await
+						self.relay.send_single(r, ctx, service_name).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						if let Some(service_name) = self.relay.default_target_name() {
@@ -206,10 +205,7 @@ impl Session {
 							) {
 								return Err(UpstreamError::Authorization);
 							}
-							self
-								.relay
-								.send_single_without_multiplexing(r, parts.headers)
-								.await
+							self.relay.send_single_without_multiplexing(r, ctx).await
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 							// Find a mapping of URL
@@ -225,17 +221,15 @@ impl Session {
 					ClientRequest::CompleteRequest(_) => {
 						// For now, we don't have a sane mapping of incoming requests to a specific
 						// downstream service when multiplexing. Only forward when we have only one backend.
-						self
-							.relay
-							.send_single_without_multiplexing(r, parts.headers)
-							.await
+						self.relay.send_single_without_multiplexing(r, ctx).await
 					},
 				}
 			},
 			ClientJsonRpcMessage::Notification(r) => {
+				let ctx = IncomingRequestContext::new(parts);
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
-				self.relay.send_notification(r, parts.headers).await
+				self.relay.send_notification(r, ctx).await
 			},
 
 			_ => Err(UpstreamError::InvalidRequest(

@@ -3,6 +3,7 @@ mod sse;
 mod stdio;
 mod streamablehttp;
 
+use crate::http::jwt::Claims;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::{mergestream, upstream};
@@ -15,6 +16,36 @@ use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use std::io;
 use thiserror::Error;
 use tokio::process::Command;
+
+#[derive(Debug, Clone)]
+pub struct IncomingRequestContext {
+	headers: http::HeaderMap,
+	claims: Option<Claims>,
+}
+
+impl IncomingRequestContext {
+	pub fn new(parts: ::http::request::Parts) -> Self {
+		let claims = parts.extensions.get::<Claims>().cloned();
+		Self {
+			headers: parts.headers,
+			claims,
+		}
+	}
+	pub fn apply(&self, req: &mut http::Request) {
+		for (k, v) in &self.headers {
+			// Remove headers we do not want to propagate to the backend
+			if k == http::header::CONTENT_ENCODING || k == http::header::CONTENT_LENGTH {
+				continue;
+			}
+			if !req.headers().contains_key(k) {
+				req.headers_mut().insert(k.clone(), v.clone());
+			}
+		}
+		if let Some(claims) = self.claims.as_ref() {
+			req.extensions_mut().insert(claims.clone());
+		}
+	}
+}
 
 #[derive(Debug, Error)]
 pub enum UpstreamError {
@@ -50,13 +81,13 @@ pub(crate) enum Upstream {
 }
 
 impl Upstream {
-	pub(crate) async fn delete(&self, user_headers: &http::HeaderMap) -> Result<(), UpstreamError> {
+	pub(crate) async fn delete(&self, ctx: &IncomingRequestContext) -> Result<(), UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => {
 				c.stop().await?;
 			},
 			Upstream::McpStreamable(c) => {
-				c.send_delete(user_headers).await?;
+				c.send_delete(ctx).await?;
 			},
 			Upstream::McpSSE(c) => {
 				c.stop().await?;
@@ -69,13 +100,13 @@ impl Upstream {
 	}
 	pub(crate) async fn get_event_stream(
 		&self,
-		user_headers: &http::HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => Ok(c.get_event_stream().await),
-			Upstream::McpSSE(c) => c.connect_to_event_stream(user_headers).await,
+			Upstream::McpSSE(c) => c.connect_to_event_stream(ctx).await,
 			Upstream::McpStreamable(c) => c
-				.get_event_stream(user_headers)
+				.get_event_stream(ctx)
 				.await?
 				.try_into()
 				.map_err(Into::into),
@@ -85,18 +116,18 @@ impl Upstream {
 	pub(crate) async fn generic_stream(
 		&self,
 		request: JsonRpcRequest<ClientRequest>,
-		user_headers: &http::HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
-				c.send_message(request, user_headers).await?,
+				c.send_message(request, ctx).await?,
 			)),
 			Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
-				c.send_message(request, user_headers).await?,
+				c.send_message(request, ctx).await?,
 			)),
 			Upstream::McpStreamable(c) => {
 				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
-				let res = c.send_request(request, user_headers).await?;
+				let res = c.send_request(request, ctx).await?;
 				if is_init {
 					let sid = match &res {
 						StreamableHttpPostResponse::Accepted => None,
@@ -109,24 +140,24 @@ impl Upstream {
 				}
 				res.try_into().map_err(Into::into)
 			},
-			Upstream::OpenAPI(c) => Ok(c.send_message(request, user_headers).await?),
+			Upstream::OpenAPI(c) => Ok(c.send_message(request, ctx).await?),
 		}
 	}
 
 	pub(crate) async fn generic_notification(
 		&self,
 		request: ClientNotification,
-		user_headers: &http::HeaderMap,
+		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => {
-				c.send_notification(request, user_headers).await?;
+				c.send_notification(request, ctx).await?;
 			},
 			Upstream::McpSSE(c) => {
-				c.send_notification(request, user_headers).await?;
+				c.send_notification(request, ctx).await?;
 			},
 			Upstream::McpStreamable(c) => {
-				c.send_notification(request, user_headers).await?;
+				c.send_notification(request, ctx).await?;
 			},
 			Upstream::OpenAPI(_) => {},
 		}
