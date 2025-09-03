@@ -327,19 +327,15 @@ impl Jwt {
 		})?;
 
 		// Search for the key across all providers
-		let mut key_found = None;
-		for provider in &self.providers {
-			if let Some(key) = provider.keys.get(kid) {
-				key_found = Some(key);
-				break;
-			}
-		}
+		let key = self
+			.providers
+			.iter()
+			.find_map(|provider| provider.keys.get(kid))
+			.ok_or_else(|| {
+				debug!(%kid, "Token refers to an unknown key.");
 
-		let key = key_found.ok_or_else(|| {
-			debug!(%kid, "Token refers to an unknown key.");
-
-			TokenError::UnknownKeyId(kid.to_owned())
-		})?;
+				TokenError::UnknownKeyId(kid.to_owned())
+			})?;
 
 		let decoded_token = decode::<Map<String, Value>>(token, &key.decoding, &key.validation)
 			.map_err(|error| {
