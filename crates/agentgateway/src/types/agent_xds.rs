@@ -17,6 +17,7 @@ use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::policy_spec::inference_routing::FailureMode;
 use crate::types::proto::agent::policy_spec::local_rate_limit::Type;
 use crate::*;
+use proto::agent::policy_spec::remote_rate_limit::Type as RlType;
 
 impl TryFrom<&proto::agent::TlsConfig> for TLSConfig {
 	type Error = anyhow::Error;
@@ -652,45 +653,40 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 				])
 			},
 			Some(proto::agent::policy_spec::Kind::RemoteRateLimit(rrl)) => {
-				// Build descriptors (CEL expressions for values)
+				// Build descriptors
 				let descriptors = rrl
 					.descriptors
 					.iter()
-					.map(|d| {
-						let entries: Result<Vec<_>, ProtoError> = d
-							.entries
-							.iter()
-							.map(|e| {
-								cel::Expression::new(e.value.clone())
-									.map_err(|e| ProtoError::Generic(format!("invalid descriptor value: {e}")))
-									.map(|expr| http::remoteratelimit::Descriptor(e.key.clone(), expr))
-							})
-							.collect();
-						let entries = entries?;
+					.map(
+						|d| -> Result<http::remoteratelimit::DescriptorEntry, ProtoError> {
+							let entries: Result<Vec<_>, ProtoError> = d
+								.entries
+								.iter()
+								.map(|e| {
+									cel::Expression::new(e.value.clone())
+										.map_err(|e| ProtoError::Generic(format!("invalid descriptor value: {e}")))
+										.map(|expr| http::remoteratelimit::Descriptor(e.key.clone(), expr))
+								})
+								.collect();
 
-						Ok::<http::remoteratelimit::DescriptorEntry, ProtoError>(
-							http::remoteratelimit::DescriptorEntry {
-								entries: Arc::new(entries),
-								limit_type: match d.r#type.as_str() {
-									"tokens" => localratelimit::RateLimitType::Tokens,
-									_ => localratelimit::RateLimitType::Requests, // default
+							Ok(http::remoteratelimit::DescriptorEntry {
+								entries: Arc::new(entries?),
+								limit_type: match RlType::try_from(d.r#type).unwrap_or(RlType::Requests) {
+									RlType::Requests => localratelimit::RateLimitType::Requests,
+									RlType::Tokens => localratelimit::RateLimitType::Tokens,
 								},
-							},
-						)
-					})
+							})
+						},
+					)
 					.collect::<Result<Vec<_>, _>>()?;
 
-				// Prefer a structured BackendReference (service/backend), like ExtAuthz does.
-				let target = if let Some(t) = rrl.target.as_ref() {
-					resolve_simple_reference(Some(t))?
-				} else if !rrl.host.is_empty() {
-					// Legacy fallback: accept literal host:port in .host
-					SimpleBackendReference::Backend(strng::new(&rrl.host))
-				} else {
+				// Require target (no legacy host)
+				let target = resolve_simple_reference(rrl.target.as_ref())?;
+				if matches!(target, SimpleBackendReference::Invalid) {
 					return Err(ProtoError::Generic(
-						"remote_rate_limit: either 'target' or legacy 'host' must be set".into(),
+						"remote_rate_limit: target must be set".into(),
 					));
-				};
+				}
 
 				Policy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),

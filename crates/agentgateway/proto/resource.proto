@@ -258,19 +258,18 @@ message PolicyTarget {
 message PolicySpec {
   message RemoteRateLimit {
     string domain = 1;
-    string host = 2;
-    repeated RateLimitDescriptor descriptors = 3;
-    BackendReference target = 4;
-  }
-  
-  message RateLimitDescriptor {
-    repeated RateLimitDescriptorEntry entries = 1;
-    string type = 2; // "requests" or "tokens"
-  }
-  
-  message RateLimitDescriptorEntry {
-    string key = 1;
-    string value = 2;
+    repeated Descriptor descriptors = 2;
+    BackendReference target = 3;
+
+    enum Type { REQUESTS = 0; TOKENS = 1; }
+    message Descriptor {
+      repeated Entry entries = 1;
+      Type type = 2;
+    }
+    message Entry {
+      string key = 1;
+      string value = 2; // CEL expr
+    }
   }
   message LocalRateLimit {
     enum Type {
@@ -481,7 +480,7 @@ message PolicySpec {
     Ai ai = 9;
     JWT jwt = 10;
     TransformationPolicy transformation = 11;
-    RemoteRateLimit remote_rate_limit = 12; 
+    RemoteRateLimit remote_rate_limit = 12;
   }
 }
 
