@@ -167,9 +167,10 @@ pub enum LocalBackend {
 }
 
 #[apply(schema_de!)]
+#[serde(untagged)]
 pub enum LocalAIBackend {
 	Provider(NamedAIProvider),
-	Providers(Vec<NamedAIProvider>),
+	Providers { providers: Vec<NamedAIProvider> },
 }
 
 impl From<LocalAIBackend> for AIBackend {
@@ -178,7 +179,7 @@ impl From<LocalAIBackend> for AIBackend {
 			LocalAIBackend::Provider(p) => {
 				vec![p]
 			},
-			LocalAIBackend::Providers(p) => p,
+			LocalAIBackend::Providers { providers } => providers,
 		};
 		let eps = providers
 			.into_iter()
