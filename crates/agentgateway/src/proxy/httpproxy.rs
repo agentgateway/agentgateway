@@ -30,7 +30,7 @@ use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::loadbalancer::EndpointInfo;
+use crate::types::loadbalancer::{ActiveHandle, EndpointInfo};
 use crate::{ProxyInputs, store, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
@@ -192,7 +192,7 @@ fn load_balance(
 	svc: &Service,
 	svc_port: u16,
 	override_dest: Option<SocketAddr>,
-) -> Option<(&Endpoint, &Arc<EndpointInfo>, Arc<Workload>)> {
+) -> Option<(Endpoint, ActiveHandle, Arc<Workload>)> {
 	let state = &pi.stores;
 	let workloads = &state.read_discovery().workloads;
 	let target_port = svc.ports.get(&svc_port).copied();
@@ -203,7 +203,8 @@ fn load_balance(
 		return None;
 	};
 
-	let endpoints = svc.endpoints.iter().filter_map(|(ep, ep_info)| {
+	let iter = svc.endpoints.iter();
+	let endpoints = iter.iter().filter_map(|(ep, ep_info)| {
 		let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
 			debug!("failed to fetch workload for {}", ep.workload_uid);
 			return None;
@@ -236,6 +237,7 @@ fn load_balance(
 		// The API has u32 but we sum into an u64, so it would take ~4 billion entries of max weight to overflow
 		.ok()
 		.cloned()
+		.map(|(ep, ep_info, wl)| (ep.clone(), svc.endpoints.start_request(ep.workload_uid.clone(), ep_info), wl))
 }
 
 #[derive(Clone)]
@@ -770,7 +772,7 @@ async fn make_backend_call(
 		},
 		Backend::Service(svc, port) => {
 			let port = *port;
-			let (ep, ep_info, wl) = load_balance(inputs.clone(), svc.as_ref(), port, override_dest)
+			let (ep, handle, wl) = load_balance(inputs.clone(), svc.as_ref(), port, override_dest)
 				.ok_or(ProxyError::NoHealthyEndpoints)?;
 			let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
 			let target_port = if let Some(&ep_target_port) = ep.port.get(&port) {
@@ -793,7 +795,6 @@ async fn make_backend_call(
 				return Err(ProxyResponse::from(ProxyError::NoHealthyEndpoints));
 			};
 			let dest = SocketAddr::from((*ip, target_port));
-			let handle = ep_info.start_request();
 			log.add(move |l| l.request_handle = Some(handle));
 			BackendCall {
 				target: Target::Address(dest),

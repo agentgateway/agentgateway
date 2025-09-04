@@ -191,7 +191,7 @@ fn tcp_load_balance(
 	svc: &crate::types::discovery::Service,
 	svc_port: u16,
 ) -> Option<(
-	&crate::types::discovery::Endpoint,
+	crate::types::discovery::Endpoint,
 	Arc<crate::types::discovery::Workload>,
 )> {
 	let state = &pi.stores;
@@ -204,7 +204,8 @@ fn tcp_load_balance(
 		return None;
 	};
 
-	let endpoints = svc.endpoints.iter().filter_map(|(ep, _info)| {
+	let iter = svc.endpoints.iter();
+	let endpoints = iter.iter().filter_map(|(ep, _info)| {
 		let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
 			debug!("failed to fetch workload for {}", ep.workload_uid);
 			return None;
@@ -227,4 +228,5 @@ fn tcp_load_balance(
 		// The API has u32 but we sum into an u64, so it would take ~4 billion entries of max weight to overflow
 		.ok()
 		.cloned()
+		.map(|(ep, wl)| (ep.clone(), wl.clone()))
 }

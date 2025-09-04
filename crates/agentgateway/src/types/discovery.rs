@@ -17,6 +17,7 @@ use std::hash::Hash;
 use std::net::IpAddr;
 use std::ops::Deref;
 use std::str::FromStr;
+use crate::types::loadbalancer;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -417,7 +418,7 @@ pub struct Service {
 
 	/// Maps endpoint UIDs to service [Endpoint]s.
 	#[serde(default, skip_deserializing)]
-	pub endpoints: EndpointSet2<Endpoint>,
+	pub endpoints: loadbalancer::EndpointSet<Endpoint>,
 	#[serde(default)]
 	pub subject_alt_names: Vec<Strng>,
 
@@ -608,6 +609,7 @@ pub trait KeyFetcher {
 pub struct EndpointSet2<T> {
 	pub inner: HashMap<Strng, EndpointWithInfo<T>>,
 }
+
 
 impl<T: KeyFetcher> Default for EndpointSet2<T> {
 	fn default() -> Self {
