@@ -1,11 +1,9 @@
-use crate::types::discovery::{Endpoint, EndpointSet2, KeyFetcher};
+use crate::types::discovery::Endpoint;
 use crate::*;
-use agent_core::responsechannel;
 use indexmap::IndexMap;
 use std::collections::BinaryHeap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
-use tokio::sync::oneshot::error::RecvError;
 use tokio::time::sleep_until;
 
 type EndpointKey = Strng;
@@ -43,7 +41,6 @@ impl<T> Default for EndpointGroup<T> {
 #[derive(Debug, Clone)]
 pub struct EndpointSet<T> {
 	bucket: Atomic<EndpointGroup<T>>,
-	tx: responsechannel::AckSender<EndpointEvent<T>>,
 	tx_eviction: mpsc::Sender<EvictionEvent>,
 
 	// Updates to `bucket` are atomically swapped to make read actions fast.
@@ -77,13 +74,11 @@ impl<T: Clone + Sync + Send + 'static> Default for EndpointSet<T> {
 
 impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 	pub fn new() -> Self {
-		let (tx, rx) = responsechannel::new(10);
 		let (tx_eviction, rx_eviction) = mpsc::channel(10);
 		let bucket: Atomic<EndpointGroup<T>> = Default::default();
-		Self::worker(rx, rx_eviction, bucket.clone());
+		Self::worker(rx_eviction, bucket.clone());
 		Self {
 			bucket,
-			tx,
 			tx_eviction,
 			action_mutex: Arc::new(Mutex::new(())),
 		}
@@ -118,11 +113,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		}
 		self.bucket.store(Arc::new(eps));
 	}
-	fn worker(
-		mut events: responsechannel::AckReceiver<EndpointEvent<T>>,
-		mut eviction_events: mpsc::Receiver<EvictionEvent>,
-		bucket: Atomic<EndpointGroup<T>>,
-	) {
+	fn worker(mut eviction_events: mpsc::Receiver<EvictionEvent>, bucket: Atomic<EndpointGroup<T>>) {
 		tokio::task::spawn(async move {
 			let mut uneviction_heap: BinaryHeap<(Instant, EndpointKey)> = Default::default();
 			let handle_eviction = |uneviction_heap: &mut BinaryHeap<(Instant, EndpointKey)>| {
@@ -135,25 +126,6 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					eps.active.insert(key, ep);
 				}
 				bucket.store(Arc::new(eps));
-			};
-			let handle_recv = |o: Option<(EndpointEvent<T>, tokio::sync::oneshot::Sender<()>)>| {
-				let Some((item, resp)) = o else {
-					return;
-				};
-
-				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				match item {
-					EndpointEvent::Add(key, ep) => {
-						eps.rejected.swap_remove(&key);
-						eps.active.insert(key, ep);
-					},
-					EndpointEvent::Delete(key) => {
-						eps.active.swap_remove(&key);
-						eps.rejected.swap_remove(&key);
-					},
-				}
-				bucket.store(Arc::new(eps));
-				let _ = resp.send(());
 			};
 			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<(Instant, EndpointKey)>,
 			                         o: Option<EvictionEvent>| {
@@ -174,12 +146,8 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			};
 			loop {
 				let evict_at = uneviction_heap.peek().map(|x| x.0);
-				tracing::error!("howardjohn: un-evict at {:?}", evict_at.map(|t| t
-					.checked_duration_since(Instant::now())
-					.unwrap_or(Duration::ZERO)));
 				tokio::select! {
 					true = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
-					item = events.recv() => handle_recv(item),
 					item = eviction_events.recv() => handle_recv_evict(&mut uneviction_heap, item)
 				}
 			}
@@ -348,6 +316,6 @@ impl<T> ActiveEndpointsIter<T> {
 			.0
 			.active
 			.iter()
-			.map(|(k, v)| (v.endpoint.as_ref(), &v.info))
+			.map(|(_k, v)| (v.endpoint.as_ref(), &v.info))
 	}
 }

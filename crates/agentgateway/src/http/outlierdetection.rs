@@ -1,6 +1,6 @@
 use crate::http::x_headers;
 use agent_core::durfmt;
-use http::{HeaderMap, HeaderName, header, StatusCode};
+use http::{HeaderMap, HeaderName, StatusCode, header};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -24,10 +24,7 @@ pub fn retry_after(status: StatusCode, h: &HeaderMap) -> Option<std::time::Durat
 
 /// Some APIs may return rate limit information via response headers.
 /// There is no single standard for this, so we must check a few common implementations.
-fn process_rate_limit_headers(
-	h: &HeaderMap,
-	now: SystemTime,
-) -> Option<std::time::Duration> {
+fn process_rate_limit_headers(h: &HeaderMap, now: SystemTime) -> Option<std::time::Duration> {
 	// `Retry-After`: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
 	// Value may be in seconds, or an HTTP date.
 	// This is the only standardized header we can use.

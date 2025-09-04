@@ -30,7 +30,7 @@ use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::loadbalancer::{ActiveHandle, EndpointInfo};
+use crate::types::loadbalancer::ActiveHandle;
 use crate::{ProxyInputs, store, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
@@ -237,7 +237,15 @@ fn load_balance(
 		// The API has u32 but we sum into an u64, so it would take ~4 billion entries of max weight to overflow
 		.ok()
 		.cloned()
-		.map(|(ep, ep_info, wl)| (ep.clone(), svc.endpoints.start_request(ep.workload_uid.clone(), ep_info), wl))
+		.map(|(ep, ep_info, wl)| {
+			(
+				ep.clone(),
+				svc
+					.endpoints
+					.start_request(ep.workload_uid.clone(), ep_info),
+				wl,
+			)
+		})
 }
 
 #[derive(Clone)]

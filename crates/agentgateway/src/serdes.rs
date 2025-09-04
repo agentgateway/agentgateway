@@ -94,7 +94,8 @@ pub mod serde_dur {
 	{
 		let input = String::deserialize(deserializer)?;
 
-		durfmt::parse(&input).map_err(|e| serde::de::Error::custom("failed to parse duration"))
+		durfmt::parse(&input)
+			.map_err(|e| serde::de::Error::custom(format!("failed to parse duration: {e:?}")))
 	}
 }
 

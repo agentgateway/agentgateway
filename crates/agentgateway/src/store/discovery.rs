@@ -359,7 +359,7 @@ impl ServiceStore {
 		self.insert_internal(service, false)
 	}
 
-	fn insert_internal(&mut self, mut service: Service, endpoint_update_only: bool) {
+	fn insert_internal(&mut self, service: Service, endpoint_update_only: bool) {
 		let namespaced_hostname = service.namespaced_hostname();
 		// If we're replacing an existing service, remove the old one from all data structures.
 		if !endpoint_update_only {
@@ -372,7 +372,7 @@ impl ServiceStore {
 				);
 				for (_, ep) in endpoints {
 					if service.should_include_endpoint(ep.status) {
-						let _ = service.endpoints.insert(ep);
+						service.endpoints.insert(ep);
 					}
 				}
 			}

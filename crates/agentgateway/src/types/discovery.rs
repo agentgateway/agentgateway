@@ -1,3 +1,4 @@
+use crate::types::loadbalancer;
 use crate::types::loadbalancer::{EndpointInfo, EndpointWithInfo};
 use crate::types::proto::workload::load_balancing::Scope as XdsScope;
 use crate::types::proto::workload::{
@@ -17,7 +18,6 @@ use std::hash::Hash;
 use std::net::IpAddr;
 use std::ops::Deref;
 use std::str::FromStr;
-use crate::types::loadbalancer;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -609,7 +609,6 @@ pub trait KeyFetcher {
 pub struct EndpointSet2<T> {
 	pub inner: HashMap<Strng, EndpointWithInfo<T>>,
 }
-
 
 impl<T: KeyFetcher> Default for EndpointSet2<T> {
 	fn default() -> Self {
