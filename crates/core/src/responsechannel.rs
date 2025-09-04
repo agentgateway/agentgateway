@@ -27,17 +27,6 @@ where
 	T: Send + 'static,
 	R: Send + 'static,
 {
-	pub fn blocking_send_and_wait(&self, request: T) -> Result<R, oneshot::error::RecvError> {
-		let tx = self.tx.clone();
-		// TODO: this is unacceptable
-		std::thread::spawn(move || {
-			let (response_tx, response_rx) = oneshot::channel();
-			tx.blocking_send((request, response_tx)).unwrap();
-			response_rx.blocking_recv()
-		})
-		.join()
-		.unwrap()
-	}
 	pub async fn send_and_wait(&self, request: T) -> Result<R, oneshot::error::RecvError> {
 		let (response_tx, response_rx) = oneshot::channel();
 		self.tx.send((request, response_tx)).await.unwrap();
