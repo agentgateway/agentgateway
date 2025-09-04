@@ -8,6 +8,7 @@ use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 use itertools::Itertools;
 pub use policy::Policy;
+use rand::Rng;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
@@ -18,6 +19,7 @@ use crate::llm::universal::{ChatCompletionError, ChatCompletionErrorResponse};
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::Target;
+use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::{client, *};
 
 pub mod anthropic;
@@ -31,10 +33,41 @@ mod tests;
 pub mod universal;
 pub mod vertex;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+// #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct AIBackend {
+	pub providers: crate::types::loadbalancer::EndpointSet<NamedAIProvider>,
+}
+
+impl AIBackend {
+	pub fn select_provider(&self) -> Option<(Arc<NamedAIProvider>, ActiveHandle)> {
+		let iter = self.providers.iter();
+		let index = iter.index();
+		if index.is_empty() {
+			return None;
+		}
+		// Intentionally allow `rand::seq::index::sample` so we can pick the same element twice
+		// This avoids starvation where the worst endpoint gets 0 traffic
+		let a = rand::rng().random_range(0..index.len());
+		let b = rand::rng().random_range(0..index.len());
+		let best = [a, b]
+			.into_iter()
+			.filter_map(|idx| {
+				let (_, EndpointWithInfo { endpoint, info }) =
+					index.get_index(idx).expect("index already checked");
+				Some((endpoint.clone(), info))
+			})
+			.max_by(|(_, a), (_, b)| a.score().total_cmp(&b.score()));
+		let (ep, ep_info) = best?;
+		let handle = self.providers.start_request(ep.name.clone(), ep_info);
+		Some((ep, handle))
+	}
+}
+
+#[apply(schema!)]
+pub struct NamedAIProvider {
+	pub name: Strng,
 	pub provider: AIProvider,
 	pub host_override: Option<Target>,
 	/// Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
@@ -44,9 +77,7 @@ pub struct AIBackend {
 	pub tokenize: bool,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub enum AIProvider {
 	OpenAI(openai::Provider),
 	Gemini(gemini::Provider),

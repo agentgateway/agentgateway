@@ -468,7 +468,7 @@ impl Store {
 	pub fn insert_backend(&mut self, b: Backend) {
 		let name = b.name();
 		if let Backend::AI(_, t) = &b
-			&& t.tokenize
+			&& t.providers.any(|p| p.tokenize)
 		{
 			preload_tokenizers()
 		}

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Error, anyhow, bail};
+use itertools::Itertools;
 use macro_rules_attribute::apply;
 use openapiv3::OpenAPI;
 use rustls::ServerConfig;
@@ -14,6 +15,7 @@ use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::{filters, retry, timeout};
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::rbac::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::PolicyTarget::RouteRule;
@@ -160,8 +162,31 @@ pub enum LocalBackend {
 	#[serde(rename = "mcp")]
 	MCP(LocalMcpBackend),
 	#[serde(rename = "ai")]
-	AI(crate::llm::AIBackend),
+	AI(LocalAIBackend),
 	Invalid,
+}
+
+#[apply(schema_de!)]
+pub enum LocalAIBackend {
+	Provider(NamedAIProvider),
+	Providers(Vec<NamedAIProvider>),
+}
+
+impl From<LocalAIBackend> for AIBackend {
+	fn from(value: LocalAIBackend) -> Self {
+		let providers = match value {
+			LocalAIBackend::Provider(p) => {
+				vec![p]
+			},
+			LocalAIBackend::Providers(p) => p,
+		};
+		let eps = providers
+			.into_iter()
+			.map(|p| vec![(p.name.clone(), p)])
+			.collect_vec();
+		let es = types::loadbalancer::EndpointSet::new(eps);
+		AIBackend { providers: es }
+	}
 }
 
 impl LocalBackend {
@@ -241,7 +266,7 @@ impl LocalBackend {
 				backends.push(Backend::MCP(name, m));
 				(backends, policies)
 			},
-			LocalBackend::AI(tgt) => (vec![Backend::AI(name, tgt.clone())], vec![]),
+			LocalBackend::AI(tgt) => (vec![Backend::AI(name, tgt.clone().into())], vec![]),
 			LocalBackend::Invalid => (vec![Backend::Invalid], vec![]),
 		})
 	}

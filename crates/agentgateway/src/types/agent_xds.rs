@@ -8,14 +8,15 @@ use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, SimpleBackendAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{StatusCode, authorization, backendtls, ext_proc, filters, localratelimit, uri};
-use crate::llm::{AIBackend, AIProvider};
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::rbac::McpAuthorization;
+use crate::transport::tls::provider;
 use crate::types::discovery::NamespacedHostname;
-use crate::types::proto;
 use crate::types::proto::ProtoError;
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::policy_spec::inference_routing::FailureMode;
 use crate::types::proto::agent::policy_spec::local_rate_limit::Type;
+use crate::types::{loadbalancer, proto};
 use crate::*;
 use proto::agent::policy_spec::remote_rate_limit::Type as RlType;
 
@@ -265,9 +266,47 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 				Target::try_from((s.host.as_str(), s.port as u16))
 					.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
-			Some(proto::agent::backend::Kind::Ai(a)) => Backend::AI(
-				name.clone(),
-				AIBackend {
+			Some(proto::agent::backend::Kind::Ai(a)) => {
+				let provider = match &a.provider {
+					Some(proto::agent::ai_backend::Provider::Openai(openai)) => {
+						AIProvider::OpenAI(llm::openai::Provider {
+							model: openai.model.as_deref().map(strng::new),
+						})
+					},
+					Some(proto::agent::ai_backend::Provider::Gemini(gemini)) => {
+						AIProvider::Gemini(llm::gemini::Provider {
+							model: gemini.model.as_deref().map(strng::new),
+						})
+					},
+					Some(proto::agent::ai_backend::Provider::Vertex(vertex)) => {
+						AIProvider::Vertex(llm::vertex::Provider {
+							model: vertex.model.as_deref().map(strng::new),
+							region: Some(strng::new(&vertex.region)),
+							project_id: strng::new(&vertex.project_id),
+						})
+					},
+					Some(proto::agent::ai_backend::Provider::Anthropic(anthropic)) => {
+						AIProvider::Anthropic(llm::anthropic::Provider {
+							model: anthropic.model.as_deref().map(strng::new),
+						})
+					},
+					Some(proto::agent::ai_backend::Provider::Bedrock(bedrock)) => {
+						AIProvider::Bedrock(llm::bedrock::Provider {
+							model: bedrock.model.as_deref().map(strng::new),
+							region: strng::new(&bedrock.region),
+							guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
+							guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+						})
+					},
+					None => {
+						return Err(ProtoError::Generic(
+							"AI backend provider is required".to_string(),
+						));
+					},
+				};
+				let np = NamedAIProvider {
+					name: name.clone(),
+					provider,
 					tokenize: false,
 					host_override: a
 						.r#override
@@ -277,45 +316,10 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 								.map_err(|e| ProtoError::Generic(e.to_string()))
 						})
 						.transpose()?,
-					provider: match &a.provider {
-						Some(proto::agent::ai_backend::Provider::Openai(openai)) => {
-							AIProvider::OpenAI(llm::openai::Provider {
-								model: openai.model.as_deref().map(strng::new),
-							})
-						},
-						Some(proto::agent::ai_backend::Provider::Gemini(gemini)) => {
-							AIProvider::Gemini(llm::gemini::Provider {
-								model: gemini.model.as_deref().map(strng::new),
-							})
-						},
-						Some(proto::agent::ai_backend::Provider::Vertex(vertex)) => {
-							AIProvider::Vertex(llm::vertex::Provider {
-								model: vertex.model.as_deref().map(strng::new),
-								region: Some(strng::new(&vertex.region)),
-								project_id: strng::new(&vertex.project_id),
-							})
-						},
-						Some(proto::agent::ai_backend::Provider::Anthropic(anthropic)) => {
-							AIProvider::Anthropic(llm::anthropic::Provider {
-								model: anthropic.model.as_deref().map(strng::new),
-							})
-						},
-						Some(proto::agent::ai_backend::Provider::Bedrock(bedrock)) => {
-							AIProvider::Bedrock(llm::bedrock::Provider {
-								model: bedrock.model.as_deref().map(strng::new),
-								region: strng::new(&bedrock.region),
-								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
-								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-							})
-						},
-						None => {
-							return Err(ProtoError::Generic(
-								"AI backend provider is required".to_string(),
-							));
-						},
-					},
-				},
-			),
+				};
+				let es = crate::types::loadbalancer::EndpointSet::new(vec![vec![(name.clone(), np)]]);
+				Backend::AI(name.clone(), AIBackend { providers: es })
+			},
 			Some(proto::agent::backend::Kind::Mcp(m)) => Backend::MCP(
 				name.clone(),
 				McpBackend {

@@ -695,7 +695,9 @@ async fn make_backend_call(
 
 	let backend_call = match backend {
 		Backend::AI(_, ai) => {
-			let (target, default_policies) = match &ai.host_override {
+			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
+			log.add(move |l| l.request_handle = Some(handle));
+			let (target, default_policies) = match &provider.host_override {
 				Some(target) => (
 					target.clone(),
 					Some(BackendPolicies {
@@ -704,12 +706,12 @@ async fn make_backend_call(
 						a2a: None,
 						inference_routing: None,
 						// Attach LLM provider, but don't use default setup
-						llm_provider: Some((ai.provider.clone(), false, ai.tokenize)),
+						llm_provider: Some((provider.provider.clone(), false, provider.tokenize)),
 					}),
 				),
 				None => {
-					let (tgt, mut pol) = ai.provider.default_connector();
-					pol.llm_provider = Some((ai.provider.clone(), true, ai.tokenize));
+					let (tgt, mut pol) = provider.provider.default_connector();
+					pol.llm_provider = Some((provider.provider.clone(), true, provider.tokenize));
 					(tgt, Some(pol))
 				},
 			};

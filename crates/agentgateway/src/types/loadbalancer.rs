@@ -1,10 +1,10 @@
-use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering};
-
+use arc_swap::ArcSwap;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::Rng;
 use serde::ser::SerializeSeq;
+use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
@@ -173,14 +173,31 @@ pub enum EvictionEvent {
 
 impl<T: Clone + Sync + Send + 'static> Default for EndpointSet<T> {
 	fn default() -> Self {
-		Self::new(1)
+		Self::new_empty(1)
 	}
 }
 
 impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
-	pub fn new(priority_levels: usize) -> Self {
+	pub fn new(initial_set: Vec<Vec<(EndpointKey, T)>>) -> Self {
+		let buckets = initial_set
+			.into_iter()
+			.map(|items| {
+				let mut eg = EndpointGroup::default();
+				eg.active = IndexMap::from_iter(
+					items
+						.into_iter()
+						.map(|(k, v)| (k, EndpointWithInfo::new(v))),
+				);
+				Arc::new(ArcSwap::new(Arc::new(eg)))
+			})
+			.collect_vec();
+		Self::new_with_buckets(buckets)
+	}
+	pub fn new_empty(priority_levels: usize) -> Self {
+		Self::new_with_buckets(vec![Default::default(); priority_levels])
+	}
+	fn new_with_buckets(buckets: Vec<Atomic<EndpointGroup<T>>>) -> Self {
 		let (tx_eviction, rx_eviction) = mpsc::channel(10);
-		let buckets = vec![Default::default(); priority_levels];
 		Self::worker(rx_eviction, buckets.clone());
 		Self {
 			buckets,
@@ -229,6 +246,26 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			})
 			// TODO: allow selecting across multiple buckets.
 			.unwrap_or_else(|| self.buckets[0].load_full())
+	}
+
+	pub fn any<F>(&self, mut f: F) -> bool
+	where
+		F: FnMut(&T) -> bool,
+	{
+		for b in self.buckets.iter() {
+			let bb = b.load_full();
+			if bb.active.iter().any(|(k, info)| f(info.endpoint.as_ref())) {
+				return true;
+			};
+			if bb
+				.rejected
+				.iter()
+				.any(|(k, info)| f(info.endpoint.as_ref()))
+			{
+				return true;
+			};
+		}
+		false
 	}
 
 	pub fn iter(&self) -> ActiveEndpointsIter<T> {

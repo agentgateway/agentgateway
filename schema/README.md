@@ -221,6 +221,12 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)service.name.hostname`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)domain`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries[].key`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries[].value`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].type`||
 |`binds[].listeners[].routes[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers`||
@@ -242,6 +248,9 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.name.hostname`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)context`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)failOpen`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)statusOnError`||
 |`binds[].listeners[].routes[].policies.transformations`|Modify requests and responses|
 |`binds[].listeners[].routes[].policies.transformations.request`||
 |`binds[].listeners[].routes[].policies.transformations.request.add`||
@@ -287,26 +296,50 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.port`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.path`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.schema`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].name`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.statefulMode`||
 |`binds[].listeners[].routes[].backends[].(1)ai`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)openAI`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)openAI.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)gemini`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)gemini.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)vertex`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)vertex.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)vertex.region`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)vertex.projectId`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)anthropic`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)anthropic.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.region`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.guardrailIdentifier`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.guardrailVersion`||
-|`binds[].listeners[].routes[].backends[].(1)ai.hostOverride`||
-|`binds[].listeners[].routes[].backends[].(1)ai.tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)openAI`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)openAI.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)gemini`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)gemini.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)vertex`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)vertex.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)vertex.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)vertex.projectId`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)anthropic`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)anthropic.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)bedrock`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)bedrock.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)bedrock.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)bedrock.guardrailIdentifier`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.hostOverride`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)provider.tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)openAI`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)openAI.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)gemini`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)gemini.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)vertex`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)vertex.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)vertex.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)vertex.projectId`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)anthropic`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)anthropic.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)bedrock`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)bedrock.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)bedrock.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)bedrock.guardrailIdentifier`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].hostOverride`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(1)providers[].tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].weight`||
 |`binds[].listeners[].tcpRoutes`||
 |`binds[].listeners[].tcpRoutes[].name`||
 |`binds[].listeners[].tcpRoutes[].ruleName`||
@@ -482,6 +515,12 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.remoteRateLimit.(any)(1)service.name.hostname`||
 |`policies[].policy.remoteRateLimit.(any)(1)service.port`||
 |`policies[].policy.remoteRateLimit.(any)(1)host`||
+|`policies[].policy.remoteRateLimit.(any)domain`||
+|`policies[].policy.remoteRateLimit.(any)descriptors`||
+|`policies[].policy.remoteRateLimit.(any)descriptors[].entries`||
+|`policies[].policy.remoteRateLimit.(any)descriptors[].entries[].key`||
+|`policies[].policy.remoteRateLimit.(any)descriptors[].entries[].value`||
+|`policies[].policy.remoteRateLimit.(any)descriptors[].type`||
 |`policies[].policy.jwtAuth`|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.(any)(any)mode`||
 |`policies[].policy.jwtAuth.(any)(any)providers`||
@@ -503,6 +542,9 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)(1)service.name.hostname`||
 |`policies[].policy.extAuthz.(any)(1)service.port`||
 |`policies[].policy.extAuthz.(any)(1)host`||
+|`policies[].policy.extAuthz.(any)context`||
+|`policies[].policy.extAuthz.(any)failOpen`||
+|`policies[].policy.extAuthz.(any)statusOnError`||
 |`policies[].policy.transformations`|Modify requests and responses|
 |`policies[].policy.transformations.request`||
 |`policies[].policy.transformations.request.add`||

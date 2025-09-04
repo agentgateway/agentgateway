@@ -1,11 +1,15 @@
 def schema_paths(prefix):
-  if .oneOf then
+  (if .oneOf then
     .oneOf[] | schema_paths(prefix + "(1)")
   elif .anyOf then
     .anyOf[] | schema_paths(prefix + "(any)")
   elif .allOf then
     .allOf[] | schema_paths(prefix + "(all)")
-  elif (.type // [] | if type == "array" then . else [.] end | contains(["object"])) and .properties then
+  else
+    empty
+  end),
+
+  (if (.type // [] | if type == "array" then . else [.] end | contains(["object"])) and .properties then
     .properties | to_entries[] |
     (prefix + .key) as $path |
     [$path, (.value.description? // "" | sub("\n"; "<br>"; "g"))] as $entry |
@@ -21,6 +25,6 @@ def schema_paths(prefix):
     (.value | schema_paths($path + "."))
   else
     empty
-  end;
+  end);
 
 [schema_paths("")] | .[]  | ["|`" + .[0] + "`|" + .[1] + "|"] | join(",")

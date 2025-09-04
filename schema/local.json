@@ -2624,157 +2624,346 @@
                               "type": "object",
                               "properties": {
                                 "ai": {
-                                  "type": "object",
-                                  "properties": {
-                                    "provider": {
-                                      "oneOf": [
-                                        {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "provider": {
                                           "type": "object",
                                           "properties": {
-                                            "openAI": {
-                                              "type": "object",
-                                              "properties": {
-                                                "model": {
-                                                  "type": [
-                                                    "string",
-                                                    "null"
-                                                  ]
-                                                }
-                                              },
-                                              "additionalProperties": false
-                                            }
-                                          },
-                                          "required": [
-                                            "openAI"
-                                          ],
-                                          "additionalProperties": false
-                                        },
-                                        {
-                                          "type": "object",
-                                          "properties": {
-                                            "gemini": {
-                                              "type": "object",
-                                              "properties": {
-                                                "model": {
-                                                  "type": [
-                                                    "string",
-                                                    "null"
-                                                  ]
-                                                }
-                                              }
-                                            }
-                                          },
-                                          "required": [
-                                            "gemini"
-                                          ],
-                                          "additionalProperties": false
-                                        },
-                                        {
-                                          "type": "object",
-                                          "properties": {
-                                            "vertex": {
-                                              "type": "object",
-                                              "properties": {
-                                                "model": {
-                                                  "type": [
-                                                    "string",
-                                                    "null"
-                                                  ]
+                                            "name": {
+                                              "type": "string"
+                                            },
+                                            "provider": {
+                                              "oneOf": [
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "openAI": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "model": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        }
+                                                      },
+                                                      "additionalProperties": false
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "openAI"
+                                                  ],
+                                                  "additionalProperties": false
                                                 },
-                                                "region": {
-                                                  "type": [
-                                                    "string",
-                                                    "null"
-                                                  ]
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "gemini": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "model": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "gemini"
+                                                  ],
+                                                  "additionalProperties": false
                                                 },
-                                                "projectId": {
-                                                  "type": "string"
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "vertex": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "model": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "region": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "projectId": {
+                                                          "type": "string"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "projectId"
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "vertex"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "anthropic": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "model": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "anthropic"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "bedrock": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "model": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "region": {
+                                                          "type": "string"
+                                                        },
+                                                        "guardrailIdentifier": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "guardrailVersion": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "region"
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "bedrock"
+                                                  ],
+                                                  "additionalProperties": false
                                                 }
-                                              },
-                                              "required": [
-                                                "projectId"
                                               ]
-                                            }
-                                          },
-                                          "required": [
-                                            "vertex"
-                                          ],
-                                          "additionalProperties": false
-                                        },
-                                        {
-                                          "type": "object",
-                                          "properties": {
-                                            "anthropic": {
-                                              "type": "object",
-                                              "properties": {
-                                                "model": {
-                                                  "type": [
-                                                    "string",
-                                                    "null"
-                                                  ]
-                                                }
-                                              }
-                                            }
-                                          },
-                                          "required": [
-                                            "anthropic"
-                                          ],
-                                          "additionalProperties": false
-                                        },
-                                        {
-                                          "type": "object",
-                                          "properties": {
-                                            "bedrock": {
-                                              "type": "object",
-                                              "properties": {
-                                                "model": {
-                                                  "type": [
-                                                    "string",
-                                                    "null"
-                                                  ]
-                                                },
-                                                "region": {
-                                                  "type": "string"
-                                                },
-                                                "guardrailIdentifier": {
-                                                  "type": [
-                                                    "string",
-                                                    "null"
-                                                  ]
-                                                },
-                                                "guardrailVersion": {
-                                                  "type": [
-                                                    "string",
-                                                    "null"
-                                                  ]
-                                                }
-                                              },
-                                              "required": [
-                                                "region"
+                                            },
+                                            "hostOverride": {
+                                              "type": [
+                                                "string",
+                                                "null"
                                               ]
+                                            },
+                                            "tokenize": {
+                                              "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
+                                              "type": "boolean",
+                                              "default": false
                                             }
                                           },
+                                          "additionalProperties": false,
                                           "required": [
-                                            "bedrock"
-                                          ],
-                                          "additionalProperties": false
+                                            "name",
+                                            "provider"
+                                          ]
                                         }
-                                      ]
+                                      },
+                                      "required": [
+                                        "provider"
+                                      ],
+                                      "additionalProperties": false
                                     },
-                                    "hostOverride": {
-                                      "type": [
-                                        "string",
-                                        "null"
-                                      ]
-                                    },
-                                    "tokenize": {
-                                      "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
-                                      "type": "boolean",
-                                      "default": false
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "providers": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "name": {
+                                                "type": "string"
+                                              },
+                                              "provider": {
+                                                "oneOf": [
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "openAI": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "model": {
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
+                                                          }
+                                                        },
+                                                        "additionalProperties": false
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "openAI"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "gemini": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "model": {
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "gemini"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "vertex": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "model": {
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
+                                                          },
+                                                          "region": {
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
+                                                          },
+                                                          "projectId": {
+                                                            "type": "string"
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "projectId"
+                                                        ]
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "vertex"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "anthropic": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "model": {
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "anthropic"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "bedrock": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "model": {
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
+                                                          },
+                                                          "region": {
+                                                            "type": "string"
+                                                          },
+                                                          "guardrailIdentifier": {
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
+                                                          },
+                                                          "guardrailVersion": {
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "region"
+                                                        ]
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "bedrock"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  }
+                                                ]
+                                              },
+                                              "hostOverride": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "tokenize": {
+                                                "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
+                                                "type": "boolean",
+                                                "default": false
+                                              }
+                                            },
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "name",
+                                              "provider"
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "providers"
+                                      ],
+                                      "additionalProperties": false
                                     }
-                                  },
-                                  "required": [
-                                    "provider"
                                   ]
                                 }
                               },
