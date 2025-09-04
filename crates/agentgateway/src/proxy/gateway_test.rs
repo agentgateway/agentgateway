@@ -18,7 +18,7 @@ use tokio::io::DuplexStream;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::{Body, Response};
-use crate::llm::{AIBackend, AIProvider, NamedAIProvider, openai};
+use crate::llm::{AIProvider, NamedAIProvider, openai};
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
