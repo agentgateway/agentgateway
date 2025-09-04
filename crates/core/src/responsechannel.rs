@@ -27,10 +27,16 @@ where
 	T: Send + 'static,
 	R: Send + 'static,
 {
-	pub async fn send_and_wait(&self, request: T) -> Result<R, oneshot::error::RecvError> {
+	pub async fn send_and_wait(&self, request: T) -> anyhow::Result<R> {
 		let (response_tx, response_rx) = oneshot::channel();
-		self.tx.send((request, response_tx)).await.unwrap();
-		response_rx.await
+		self
+			.tx
+			.send((request, response_tx))
+			.await
+			.map_err(|_| anyhow::anyhow!("tx channel closed"))?;
+		response_rx
+			.await
+			.map_err(|_| anyhow::anyhow!("rx channel closed"))
 	}
 	pub async fn send_ignore(&self, request: T) -> Result<(), SendError<(T, oneshot::Sender<R>)>> {
 		let (response_tx, _) = oneshot::channel();

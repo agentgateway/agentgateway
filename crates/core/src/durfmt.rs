@@ -56,8 +56,8 @@ mod tests {
 		assert_eq!("1ns", format(Duration::new(0, 1)));
 		assert_eq!("1.1µs", format(Duration::new(0, 1100)));
 		assert_eq!("12.345µs", format(Duration::new(0, 12345)));
-		assert_eq!("2.2ms", format(Duration::new(0, 2200_000)));
-		assert_eq!("2.212ms", format(Duration::new(0, 2212_345)));
+		assert_eq!("2.2ms", format(Duration::new(0, 2_200_000)));
+		assert_eq!("2.212ms", format(Duration::new(0, 2_212_345)));
 		assert_eq!("100.567ms", format(Duration::new(0, 100_567_123)));
 		assert_eq!("3.3s", format(Duration::new(3, 300_000_000)));
 		assert_eq!("9m13.123s", format(Duration::new(553, 123_456_789)));
@@ -77,19 +77,19 @@ mod tests {
 		);
 		assert_eq!(
 			"5124095576030431h0m15s",
-			format(Duration::new(std::u64::MAX, 0))
+			format(Duration::new(u64::MAX, 0))
 		);
 		assert_eq!(
 			"5124095576030431h0m15s",
-			format(Duration::new(std::u64::MAX, 999_999_999))
+			format(Duration::new(u64::MAX, 999_999_999))
 		);
 		assert_eq!(
 			"5124095576030431h0m15s",
-			format(Duration::new(std::u64::MAX, 1_000))
+			format(Duration::new(u64::MAX, 1_000))
 		);
 		assert_eq!(
 			"5124095576030431h0m15.001s",
-			format(Duration::new(std::u64::MAX, 1_000_000))
+			format(Duration::new(u64::MAX, 1_000_000))
 		);
 	}
 }
