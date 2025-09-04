@@ -128,11 +128,13 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			let handle_eviction = |uneviction_heap: &mut BinaryHeap<(Instant, EndpointKey)>| {
 				let (_, key) = uneviction_heap.pop().expect("heap is empty");
 
+				trace!(%key, "unevict");
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
 				if let Some(ep) = eps.rejected.swap_remove(&key) {
 					ep.info.evicted_until.store(None);
 					eps.active.insert(key, ep);
 				}
+				bucket.store(Arc::new(eps));
 			};
 			let handle_recv = |o: Option<(EndpointEvent<T>, tokio::sync::oneshot::Sender<()>)>| {
 				let Some((item, resp)) = o else {
@@ -172,6 +174,9 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			};
 			loop {
 				let evict_at = uneviction_heap.peek().map(|x| x.0);
+				tracing::error!("howardjohn: un-evict at {:?}", evict_at.map(|t| t
+					.checked_duration_since(Instant::now())
+					.unwrap_or(Duration::ZERO)));
 				tokio::select! {
 					true = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
 					item = events.recv() => handle_recv(item),
