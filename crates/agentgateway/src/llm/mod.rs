@@ -230,7 +230,7 @@ impl AIProvider {
 
 	pub async fn process_request(
 		&self,
-		client: client::Client,
+		client: &client::Client,
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
@@ -299,6 +299,7 @@ impl AIProvider {
 
 	pub async fn process_response(
 		&self,
+		client: &client::Client,
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
 		log: AsyncLog<llm::LLMResponse>,
@@ -360,13 +361,17 @@ impl AIProvider {
 					first_token: Default::default(),
 				};
 				// Apply response prompt guard
-				if let Some(dr) =
-					Policy::apply_response_prompt_guard(&mut success, &rate_limit.prompt_guard)
-						.await
-						.map_err(|e| {
-							warn!("failed to apply response prompt guard: {e}");
-							AIError::PromptWebhookError
-						})? {
+				if let Some(dr) = Policy::apply_response_prompt_guard(
+					client,
+					&mut success,
+					&parts.headers,
+					&rate_limit.prompt_guard,
+				)
+				.await
+				.map_err(|e| {
+					warn!("failed to apply response prompt guard: {e}");
+					AIError::PromptWebhookError
+				})? {
 					return Ok(dr);
 				}
 

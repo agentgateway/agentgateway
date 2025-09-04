@@ -73,9 +73,9 @@ Response rejected due to inappropriate content
 
 ### Guardrails Webhook
 
-A webhook can be used to reject or mask content before it is sent to the LLM.
+A webhook can be used to reject or mask content sent to or received from the LLM.
 
-Example policy to forward the request to a webhook for moderation:
+Example policy to forward the request and response to a webhook for moderation:
 ```yaml
 policies:
   ai:
@@ -93,4 +93,7 @@ policies:
           - name: h2
             value:
               regex: v2.*
-```
+      response:
+        webhook:
+          target: 127.0.0.1:8000
+          # set forwardHeaderMatches for to forward response headers

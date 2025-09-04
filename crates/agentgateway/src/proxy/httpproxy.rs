@@ -823,7 +823,7 @@ async fn make_backend_call(
 		if let Some((llm, use_default_policies, tokenize)) = &policies.llm_provider {
 			let r = llm
 				.process_request(
-					client,
+					&client,
 					route_policies.llm.as_deref(),
 					req,
 					*tokenize,
@@ -877,6 +877,7 @@ async fn make_backend_call(
 			if let (Some((llm, _, _)), Some(llm_request)) = (policies.llm_provider, llm_request) {
 				llm
 					.process_response(
+						&client,
 						llm_request,
 						response_policies,
 						llm_response_log.expect("must be set"),

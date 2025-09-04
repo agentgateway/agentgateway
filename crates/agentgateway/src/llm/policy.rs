@@ -86,7 +86,7 @@ impl Policy {
 	}
 	pub async fn apply_prompt_guard(
 		&self,
-		client: client::Client,
+		client: &client::Client,
 		req: &mut universal::Request,
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
@@ -127,11 +127,11 @@ impl Policy {
 		if let Some(webhook) = &g.webhook {
 			let headers =
 				Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-			let whr = webhook::send_request(client.clone(), &webhook.target, &headers, req).await?;
+			let whr = webhook::send_request(client, &webhook.target, &headers, req).await?;
 			match whr.action {
 				RequestAction::Mask(mask) => {
 					debug!(
-						"webhook masked: {}",
+						"webhook masked request: {}",
 						mask
 							.reason
 							.unwrap_or_else(|| "no reason specified".to_string())
@@ -144,7 +144,7 @@ impl Policy {
 				},
 				RequestAction::Reject(rej) => {
 					debug!(
-						"webhook rejected: {}",
+						"webhook rejected request: {}",
 						rej
 							.reason
 							.unwrap_or_else(|| "no reason specified".to_string())
@@ -157,7 +157,7 @@ impl Policy {
 				},
 				RequestAction::Pass(pass) => {
 					debug!(
-						"webhook passed: {}",
+						"webhook passed request: {}",
 						pass
 							.reason
 							.unwrap_or_else(|| "no reason specified".to_string())
@@ -311,12 +311,71 @@ impl Policy {
 	}
 
 	pub async fn apply_response_prompt_guard(
+		client: &client::Client,
 		resp: &mut CreateChatCompletionResponse,
+		http_headers: &HeaderMap,
 		g: &Option<ResponseGuard>,
 	) -> anyhow::Result<Option<Response>> {
 		let Some(guard) = g else {
 			return Ok(None);
 		};
+
+		if let Some(webhook) = &guard.webhook {
+			let headers =
+				Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
+			let whr = webhook::send_response(client, &webhook.target, &headers, resp).await?;
+			match whr.action {
+				RequestAction::Mask(mask) => {
+					debug!(
+						"webhook masked response: {}",
+						mask
+							.reason
+							.unwrap_or_else(|| "no reason specified".to_string())
+					);
+					let MaskActionBody::PromptMessages(body) = mask.body else {
+						anyhow::bail!("invalid webhook response");
+					};
+					let msgs = body.messages;
+					if resp.choices.len() != msgs.len() {
+						anyhow::bail!("webhook response message count mismatch");
+					}
+					for (i, (resp_msg, wh_msg)) in resp.choices.iter_mut().zip(msgs).enumerate() {
+						if resp_msg.message.role.to_string() != wh_msg.role {
+							anyhow::bail!(
+								"webhook response message {} role mismatch; expected {}, got {}",
+								i,
+								resp_msg.message.role,
+								wh_msg.role
+							);
+						}
+						resp_msg.message.content = Some(wh_msg.content);
+					}
+				},
+				RequestAction::Reject(rej) => {
+					debug!(
+						"webhook rejected response: {}",
+						rej
+							.reason
+							.unwrap_or_else(|| "no reason specified".to_string())
+					);
+					return Ok(Some(
+						::http::response::Builder::new()
+							.status(rej.status_code)
+							.body(http::Body::from(rej.body))?,
+					));
+				},
+				RequestAction::Pass(pass) => {
+					debug!(
+						"webhook passed response: {}",
+						pass
+							.reason
+							.unwrap_or_else(|| "no reason specified".to_string())
+					);
+					// No action needed
+				},
+			}
+		}
+
 		for msg in resp.choices.iter_mut() {
 			let Some(original_content) = msg.message.content.as_deref() else {
 				continue;
@@ -471,6 +530,7 @@ mod webhook {
 	use crate::llm::universal::Request;
 	use crate::types::agent::Target;
 	use crate::*;
+	use async_openai::types::CreateChatCompletionResponse;
 
 	#[derive(Debug, Clone, Serialize, Deserialize)]
 	#[serde(rename_all = "snake_case")]
@@ -612,6 +672,35 @@ mod webhook {
 					.collect(),
 			},
 		};
+		build_request(&body, target, http_headers)
+	}
+
+	fn build_request_for_response(
+		target: &Target,
+		http_headers: &HeaderMap,
+		resp: &CreateChatCompletionResponse,
+	) -> anyhow::Result<crate::http::Request> {
+		let body = GuardrailsPromptRequest {
+			body: PromptMessages {
+				messages: resp
+					.choices
+					.iter()
+					.filter_map(|m| {
+						let role = m.message.role.to_string();
+						let content = m.message.content.clone();
+						content.map(|content| Message { role, content })
+					})
+					.collect(),
+			},
+		};
+		build_request(&body, target, http_headers)
+	}
+
+	fn build_request(
+		body: &GuardrailsPromptRequest,
+		target: &Target,
+		http_headers: &HeaderMap,
+	) -> anyhow::Result<crate::http::Request> {
 		let body_bytes = serde_json::to_vec(&body)?;
 		let mut rb = ::http::Request::builder()
 			.uri(format!("http://{target}/request"))
@@ -631,7 +720,7 @@ mod webhook {
 	}
 
 	pub async fn send_request(
-		client: Client,
+		client: &Client,
 		target: &Target,
 		http_headers: &HeaderMap,
 		req: &Request,
@@ -644,8 +733,25 @@ mod webhook {
 				transport: Default::default(), // TODO: use policies
 			})
 			.await?;
-		let bb = axum::body::to_bytes(res.into_body(), 2_097_152).await?;
-		let parsed = serde_json::from_slice::<GuardrailsPromptResponse>(&bb)?;
+		let parsed = json::from_body(res.into_body()).await?;
+		Ok(parsed)
+	}
+
+	pub async fn send_response(
+		client: &Client,
+		target: &Target,
+		http_headers: &HeaderMap,
+		resp: &CreateChatCompletionResponse,
+	) -> anyhow::Result<GuardrailsPromptResponse> {
+		let whr = build_request_for_response(target, http_headers, resp)?;
+		let res = client
+			.call(client::Call {
+				req: whr,
+				target: target.clone(),
+				transport: Default::default(), // TODO: use policies
+			})
+			.await?;
+		let parsed = json::from_body(res.into_body()).await?;
 		Ok(parsed)
 	}
 }
