@@ -18,7 +18,7 @@ use tokio::io::DuplexStream;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::{Body, Response};
-use crate::llm::{AIBackend, AIProvider, openai};
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider, openai};
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
@@ -240,11 +240,13 @@ fn setup_llm_mock(
 	let t = setup(config).unwrap();
 	let b = Backend::AI(
 		strng::format!("{}", mock.address()),
-		AIBackend {
+		crate::types::local::LocalAIBackend::Provider(NamedAIProvider {
+			name: "default".into(),
 			provider,
 			host_override: Some(Target::Address(*mock.address())),
 			tokenize,
-		},
+		})
+		.into(),
 	);
 	t.pi.stores.binds.write().insert_backend(b);
 	let t = t.with_bind(simple_bind(basic_route(*mock.address())));

@@ -9,8 +9,7 @@ use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, Message, RequestAction};
 use crate::llm::{AIError, pii, universal};
-use crate::types::agent::Target;
-use crate::types::agent::{HeaderMatch, HeaderValueMatch};
+use crate::types::agent::{HeaderMatch, HeaderValueMatch, Target};
 use crate::{client, *};
 
 #[apply(schema!)]
@@ -652,8 +651,9 @@ mod webhook {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use ::http::{HeaderName, HeaderValue};
+
+	use super::*;
 
 	#[test]
 	fn test_get_webhook_forward_headers() {

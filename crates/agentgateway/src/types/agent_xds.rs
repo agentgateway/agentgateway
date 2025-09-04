@@ -2,6 +2,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
+use proto::agent::policy_spec::remote_rate_limit::Type as RlType;
 use rustls::ServerConfig;
 
 use super::agent::*;
@@ -10,15 +11,13 @@ use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig,
 use crate::http::{StatusCode, authorization, backendtls, ext_proc, filters, localratelimit, uri};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::rbac::McpAuthorization;
-use crate::transport::tls::provider;
 use crate::types::discovery::NamespacedHostname;
+use crate::types::proto;
 use crate::types::proto::ProtoError;
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::policy_spec::inference_routing::FailureMode;
 use crate::types::proto::agent::policy_spec::local_rate_limit::Type;
-use crate::types::{loadbalancer, proto};
 use crate::*;
-use proto::agent::policy_spec::remote_rate_limit::Type as RlType;
 
 impl TryFrom<&proto::agent::TlsConfig> for TLSConfig {
 	type Error = anyhow::Error;

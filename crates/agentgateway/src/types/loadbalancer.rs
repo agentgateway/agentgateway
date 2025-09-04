@@ -1,10 +1,11 @@
+use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use arc_swap::ArcSwap;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::Rng;
 use serde::ser::SerializeSeq;
-use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
@@ -157,15 +158,6 @@ pub enum EndpointEvent<T> {
 	Delete(EndpointKey),
 }
 
-impl<T> EndpointEvent<T> {
-	fn key(&self) -> &EndpointKey {
-		match self {
-			EndpointEvent::Add(key, _, _) => key,
-			EndpointEvent::Delete(key) => key,
-		}
-	}
-}
-
 #[derive(Debug)]
 pub enum EvictionEvent {
 	Evict(EndpointKey, Instant),
@@ -182,12 +174,14 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		let buckets = initial_set
 			.into_iter()
 			.map(|items| {
-				let mut eg = EndpointGroup::default();
-				eg.active = IndexMap::from_iter(
-					items
-						.into_iter()
-						.map(|(k, v)| (k, EndpointWithInfo::new(v))),
-				);
+				let eg = EndpointGroup {
+					active: IndexMap::from_iter(
+						items
+							.into_iter()
+							.map(|(k, v)| (k, EndpointWithInfo::new(v))),
+					),
+					rejected: Default::default(),
+				};
 				Arc::new(ArcSwap::new(Arc::new(eg)))
 			})
 			.collect_vec();
@@ -254,13 +248,13 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 	{
 		for b in self.buckets.iter() {
 			let bb = b.load_full();
-			if bb.active.iter().any(|(k, info)| f(info.endpoint.as_ref())) {
+			if bb.active.iter().any(|(_k, info)| f(info.endpoint.as_ref())) {
 				return true;
 			};
 			if bb
 				.rejected
 				.iter()
-				.any(|(k, info)| f(info.endpoint.as_ref()))
+				.any(|(_k, info)| f(info.endpoint.as_ref()))
 			{
 				return true;
 			};

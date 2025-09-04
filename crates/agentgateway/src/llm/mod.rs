@@ -52,10 +52,10 @@ impl AIBackend {
 		let b = rand::rng().random_range(0..index.len());
 		let best = [a, b]
 			.into_iter()
-			.filter_map(|idx| {
+			.map(|idx| {
 				let (_, EndpointWithInfo { endpoint, info }) =
 					index.get_index(idx).expect("index already checked");
-				Some((endpoint.clone(), info))
+				(endpoint.clone(), info)
 			})
 			.max_by(|(_, a), (_, b)| a.score().total_cmp(&b.score()));
 		let (ep, ep_info) = best?;
