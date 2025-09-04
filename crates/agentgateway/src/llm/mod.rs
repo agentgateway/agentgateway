@@ -35,7 +35,6 @@ pub mod vertex;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-// #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct AIBackend {
 	pub providers: crate::types::loadbalancer::EndpointSet<NamedAIProvider>,
 }
