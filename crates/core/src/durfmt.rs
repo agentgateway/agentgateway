@@ -75,10 +75,7 @@ mod tests {
 				854_775_807
 			))
 		);
-		assert_eq!(
-			"5124095576030431h0m15s",
-			format(Duration::new(u64::MAX, 0))
-		);
+		assert_eq!("5124095576030431h0m15s", format(Duration::new(u64::MAX, 0)));
 		assert_eq!(
 			"5124095576030431h0m15s",
 			format(Duration::new(u64::MAX, 999_999_999))
