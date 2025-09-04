@@ -70,6 +70,7 @@ impl App {
 		}
 		match backend.targets.first().map(|t| &t.spec) {
 			Some(McpTargetSpec::Mcp(s)) => Some(s.backend.clone()),
+			Some(McpTargetSpec::Sse(s)) => Some(s.backend.clone()),
 			_ => None,
 		}
 	}
