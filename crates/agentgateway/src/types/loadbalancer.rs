@@ -87,6 +87,9 @@ impl EndpointSet<Endpoint> {
 			})
 		} else {
 			let index = iter.index();
+			if index.is_empty() {
+				return None;
+			}
 			// Intentionally allow `rand::seq::index::sample` so we can pick the same element twice
 			// This avoids starvation where the worst endpoint gets 0 traffic
 			let a = rand::rng().random_range(0..index.len());
@@ -429,9 +432,14 @@ where
 pub struct ActiveEndpointsIter<T>(Arc<EndpointGroup<T>>);
 impl<T> ActiveEndpointsIter<T> {
 	pub fn iter(&self) -> impl ExactSizeIterator<Item = (&Arc<T>, &Arc<EndpointInfo>)> {
-		self.0.active.iter().map(|(_k, v)| (&v.endpoint, &v.info))
+		self.index().iter().map(|(_k, v)| (&v.endpoint, &v.info))
 	}
 	pub fn index(&self) -> &IndexMap<EndpointKey, EndpointWithInfo<T>> {
-		&self.0.active
+		if self.0.active.is_empty() {
+			// If we have no active endpoints, return the rejected ones
+			&self.0.rejected
+		} else {
+			&self.0.active
+		}
 	}
 }
