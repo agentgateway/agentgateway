@@ -1,5 +1,8 @@
-use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use std::collections::HashMap;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
+use std::sync::{Arc, Mutex};
+
 use agent_core::prelude::*;
 use futures_util::TryFutureExt;
 use rmcp::model::{
@@ -7,13 +10,12 @@ use rmcp::model::{
 	RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::{TokioChildProcess, Transport};
-use std::collections::HashMap;
-use std::fmt;
-use std::fmt::{Debug, Formatter};
-use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, warn};
+
+use crate::mcp::mergestream::Messages;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 
 pub struct Process {
 	sender: mpsc::Sender<(ClientJsonRpcMessage, IncomingRequestContext)>,
@@ -150,7 +152,6 @@ pub trait MCPTransport: Send + 'static {
 	///
 	/// Notice that the future returned by this function should be `Send` and `'static`.
 	/// It's because the sending message could be executed concurrently.
-	///
 	fn send(
 		&mut self,
 		item: ClientJsonRpcMessage,

@@ -1,13 +1,15 @@
-use crate::http::Body;
-use crate::http::buflist::BufList;
+use std::cmp;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use http_body::Frame;
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
-use std::cmp;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+
+use crate::http::Body;
+use crate::http::buflist::BufList;
 
 pin_project! {
 	struct PartiallyBufferedBody {
@@ -80,11 +82,13 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::http::Body;
+	use std::collections::HashMap;
+
 	use bytes::Bytes;
 	use http::HeaderMap;
-	use std::collections::HashMap;
+
+	use super::*;
+	use crate::http::Body;
 
 	pub async fn read(body: Body) -> Bytes {
 		axum::body::to_bytes(body, 2_097_152).await.unwrap()

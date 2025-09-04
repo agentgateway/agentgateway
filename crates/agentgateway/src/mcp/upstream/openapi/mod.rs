@@ -2,13 +2,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::json;
-use crate::mcp::mergestream;
-use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_TYPE};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
@@ -16,6 +9,14 @@ use reqwest::header::{HeaderName, HeaderValue};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+use crate::json;
+use crate::mcp::mergestream;
+use crate::mcp::mergestream::Messages;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::store::BackendPolicies;
+use crate::types::agent::SimpleBackend;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {

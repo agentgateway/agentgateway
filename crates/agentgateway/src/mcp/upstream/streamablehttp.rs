@@ -1,11 +1,3 @@
-use crate::http::Request;
-use crate::json;
-use crate::mcp::ClientError;
-use crate::mcp::upstream::IncomingRequestContext;
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
-use crate::*;
 use ::http::Uri;
 use ::http::header::CONTENT_TYPE;
 use anyhow::anyhow;
@@ -19,6 +11,14 @@ use rmcp::transport::common::http_header::{
 };
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::SseStream;
+
+use crate::http::Request;
+use crate::mcp::ClientError;
+use crate::mcp::upstream::IncomingRequestContext;
+use crate::proxy::httpproxy::PolicyClient;
+use crate::store::BackendPolicies;
+use crate::types::agent::SimpleBackend;
+use crate::{json, *};
 
 #[derive(Clone, Debug)]
 pub struct Client {

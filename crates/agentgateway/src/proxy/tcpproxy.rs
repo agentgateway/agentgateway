@@ -122,27 +122,25 @@ impl TCPProxy {
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
 
-		/*
-		let _policies = inputs
-			.stores
-			.read_binds()
-			.backend_policies(todo!(), None);
+		// let _policies = inputs
+		// .stores
+		// .read_binds()
+		// .backend_policies(todo!(), None);
 		// let transport = policies.i // TODO
-		let Target::Address(addr) = _target else {
-			panic!("TODO")
-		};
-		let upstream = stream::Socket::dial(addr)
-			.await
-			.map_err(ProxyError::Processing)?;
-		agent_core::copy::copy_bidirectional(
-			connection,
-			upstream,
-			&agent_core::copy::ConnectionResult {},
-		)
-		.await
-		.map_err(|e| ProxyError::Processing(e.into()))?;
-
-		 */
+		// let Target::Address(addr) = _target else {
+		// panic!("TODO")
+		// };
+		// let upstream = stream::Socket::dial(addr)
+		// .await
+		// .map_err(ProxyError::Processing)?;
+		// agent_core::copy::copy_bidirectional(
+		// connection,
+		// upstream,
+		// &agent_core::copy::ConnectionResult {},
+		// )
+		// .await
+		// .map_err(|e| ProxyError::Processing(e.into()))?;
+		//
 		Ok(())
 	}
 }

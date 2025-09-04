@@ -1,5 +1,6 @@
-use super::*;
 use http::Uri;
+
+use super::*;
 
 #[test]
 fn test_build_agent_path() {

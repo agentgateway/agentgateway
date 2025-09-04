@@ -1,9 +1,7 @@
-use crate::http::Response;
-use crate::mcp;
-use crate::mcp::handler::Relay;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, rbac};
-use crate::*;
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::sync::Arc;
+
 use ::http::StatusCode;
 use ::http::request::Parts;
 use agent_core::metrics::Recorder;
@@ -12,9 +10,12 @@ use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ErrorCode, JsonRpcError, 
 use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
 use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
 use sse_stream::{KeepAlive, Sse, SseBody};
-use std::collections::HashMap;
-use std::convert::Infallible;
-use std::sync::Arc;
+
+use crate::http::Response;
+use crate::mcp::handler::Relay;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::{ClientError, rbac};
+use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
 pub struct Session {

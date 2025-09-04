@@ -7,15 +7,12 @@ mod session;
 mod streamablehttp;
 mod upstream;
 
-use axum_core::BoxError;
 use std::sync::Arc;
-use thiserror::Error;
 
-pub use rbac::McpAuthorization;
-pub use rbac::McpAuthorizationSet;
-pub use rbac::ResourceId;
-pub use rbac::ResourceType;
+use axum_core::BoxError;
+pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 pub use router::App;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ClientError {

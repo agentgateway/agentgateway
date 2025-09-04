@@ -1,11 +1,3 @@
-use crate::mcp::ClientError;
-use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::stdio::Process;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
-use crate::*;
 use ::http::Uri;
 use ::http::header::CONTENT_TYPE;
 use anyhow::anyhow;
@@ -18,6 +10,15 @@ use rmcp::model::{
 use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
 use rmcp::transport::streamable_http_client::{SseError, StreamableHttpPostResponse};
 use sse_stream::{Sse, SseStream};
+
+use crate::mcp::ClientError;
+use crate::mcp::mergestream::Messages;
+use crate::mcp::upstream::stdio::Process;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::store::BackendPolicies;
+use crate::types::agent::SimpleBackend;
+use crate::*;
 
 type BoxedSseStream = BoxStream<'static, Result<Sse, SseError>>;
 

@@ -1,16 +1,6 @@
-use crate::ProxyInputs;
-use crate::cel::ContextBuilder;
-use crate::http::Response;
-use crate::http::jwt::Claims;
-use crate::mcp::mergestream::MergeFn;
-use crate::mcp::rbac::{Identity, McpAuthorizationSet};
-use crate::mcp::router::McpBackendGroup;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{MCPInfo, mergestream, metrics, rbac, upstream};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::AsyncLog;
-use crate::telemetry::trc::TraceParent;
-use crate::transport::stream::TLSConnectionInfo;
+use std::borrow::Cow;
+use std::sync::Arc;
+
 use agent_core::trcng;
 use http::StatusCode;
 use http::request::Parts;
@@ -25,8 +15,20 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, ResourcesCapability, ServerCapabilities, ServerInfo,
 	ServerResult, Tool, ToolsCapability,
 };
-use std::borrow::Cow;
-use std::sync::Arc;
+
+use crate::ProxyInputs;
+use crate::cel::ContextBuilder;
+use crate::http::Response;
+use crate::http::jwt::Claims;
+use crate::mcp::mergestream::MergeFn;
+use crate::mcp::rbac::{Identity, McpAuthorizationSet};
+use crate::mcp::router::McpBackendGroup;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::{MCPInfo, mergestream, metrics, rbac, upstream};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::AsyncLog;
+use crate::telemetry::trc::TraceParent;
+use crate::transport::stream::TLSConnectionInfo;
 
 const DELIMITER: &str = "_";
 

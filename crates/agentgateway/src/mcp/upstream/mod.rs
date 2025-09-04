@@ -3,6 +3,14 @@ mod sse;
 mod stdio;
 mod streamablehttp;
 
+use std::io;
+
+use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
+use rmcp::transport::TokioChildProcess;
+use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
+use thiserror::Error;
+use tokio::process::Command;
+
 use crate::http::jwt::Claims;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
@@ -10,12 +18,6 @@ use crate::mcp::{mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
-use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
-use rmcp::transport::TokioChildProcess;
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
-use std::io;
-use thiserror::Error;
-use tokio::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
