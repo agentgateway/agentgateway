@@ -2,7 +2,9 @@ use std::collections::BinaryHeap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use indexmap::IndexMap;
+use itertools::Itertools;
 use rand::Rng;
+use serde::ser::SerializeSeq;
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
@@ -43,7 +45,7 @@ impl<T> Default for EndpointGroup<T> {
 
 #[derive(Debug, Clone)]
 pub struct EndpointSet<T> {
-	bucket: Atomic<EndpointGroup<T>>,
+	buckets: Vec<Atomic<EndpointGroup<T>>>,
 	tx_eviction: mpsc::Sender<EvictionEvent>,
 
 	// Updates to `bucket` are atomically swapped to make read actions fast.
@@ -55,7 +57,8 @@ pub struct EndpointSet<T> {
 
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint) {
-		self.insert_key(ep.workload_uid.clone(), ep)
+		// Currently, buckets are not supported
+		self.insert_key(ep.workload_uid.clone(), ep, 0)
 	}
 	pub fn select_endpoint(
 		&self,
@@ -150,9 +153,19 @@ impl EndpointSet<Endpoint> {
 
 #[derive(Debug)]
 pub enum EndpointEvent<T> {
-	Add(EndpointKey, EndpointWithInfo<T>),
+	Add(EndpointKey, EndpointWithInfo<T>, usize),
 	Delete(EndpointKey),
 }
+
+impl<T> EndpointEvent<T> {
+	fn key(&self) -> &EndpointKey {
+		match self {
+			EndpointEvent::Add(key, _, _) => key,
+			EndpointEvent::Delete(key) => key,
+		}
+	}
+}
+
 #[derive(Debug)]
 pub enum EvictionEvent {
 	Evict(EndpointKey, Instant),
@@ -160,17 +173,17 @@ pub enum EvictionEvent {
 
 impl<T: Clone + Sync + Send + 'static> Default for EndpointSet<T> {
 	fn default() -> Self {
-		Self::new()
+		Self::new(1)
 	}
 }
 
 impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
-	pub fn new() -> Self {
+	pub fn new(priority_levels: usize) -> Self {
 		let (tx_eviction, rx_eviction) = mpsc::channel(10);
-		let bucket: Atomic<EndpointGroup<T>> = Default::default();
-		Self::worker(rx_eviction, bucket.clone());
+		let buckets = vec![Default::default(); priority_levels];
+		Self::worker(rx_eviction, buckets.clone());
 		Self {
-			bucket,
+			buckets,
 			tx_eviction,
 			action_mutex: Arc::new(Mutex::new(())),
 		}
@@ -180,38 +193,88 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		info.start_request(key, self.tx_eviction.clone())
 	}
 
-	pub fn iter(&self) -> ActiveEndpointsIter<T> {
-		ActiveEndpointsIter(self.bucket.load_full())
+	fn find_bucket(&self, key: &EndpointKey) -> Option<Arc<EndpointGroup<T>>> {
+		self.buckets.iter().find_map(|x| {
+			let b = x.load_full();
+			if b.active.contains_key(key) || b.rejected.contains_key(key) {
+				Some(b)
+			} else {
+				None
+			}
+		})
 	}
 
-	pub fn insert_key(&self, key: EndpointKey, ep: T) {
-		self.event(EndpointEvent::Add(key, EndpointWithInfo::new(ep)))
+	fn find_bucket_atomic(
+		buckets: &[Atomic<EndpointGroup<T>>],
+		key: &EndpointKey,
+	) -> Option<Atomic<EndpointGroup<T>>> {
+		buckets.iter().find_map(|x| {
+			let b = x.load_full();
+			if b.active.contains_key(key) || b.rejected.contains_key(key) {
+				Some(x.clone())
+			} else {
+				None
+			}
+		})
+	}
+
+	fn best_bucket(&self) -> Arc<EndpointGroup<T>> {
+		// find the first bucket with healthy endpoints
+		self
+			.buckets
+			.iter()
+			.find_map(|x| {
+				let b = x.load_full();
+				if !b.active.is_empty() { Some(b) } else { None }
+			})
+			// TODO: allow selecting across multiple buckets.
+			.unwrap_or_else(|| self.buckets[0].load_full())
+	}
+
+	pub fn iter(&self) -> ActiveEndpointsIter<T> {
+		ActiveEndpointsIter(self.best_bucket())
+	}
+
+	pub fn insert_key(&self, key: EndpointKey, ep: T, bucket: usize) {
+		self.event(EndpointEvent::Add(key, EndpointWithInfo::new(ep), bucket))
 	}
 	pub fn remove(&self, key: EndpointKey) {
 		self.event(EndpointEvent::Delete(key))
 	}
 	fn event(&self, item: EndpointEvent<T>) {
 		let _mu = self.action_mutex.lock();
-		let mut eps = Arc::unwrap_or_clone(self.bucket.load_full());
+
 		match item {
-			EndpointEvent::Add(key, ep) => {
+			EndpointEvent::Add(key, ep, bucket) => {
+				let mut eps = Arc::unwrap_or_clone(self.buckets[bucket].load_full());
 				eps.rejected.swap_remove(&key);
 				eps.active.insert(key, ep);
+				self.buckets[bucket].store(Arc::new(eps));
 			},
 			EndpointEvent::Delete(key) => {
+				let Some(bucket) = Self::find_bucket_atomic(self.buckets.as_slice(), &key) else {
+					return;
+				};
+				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
 				eps.active.swap_remove(&key);
 				eps.rejected.swap_remove(&key);
+				bucket.store(Arc::new(eps));
 			},
 		}
-		self.bucket.store(Arc::new(eps));
 	}
-	fn worker(mut eviction_events: mpsc::Receiver<EvictionEvent>, bucket: Atomic<EndpointGroup<T>>) {
+	fn worker(
+		mut eviction_events: mpsc::Receiver<EvictionEvent>,
+		buckets: Vec<Atomic<EndpointGroup<T>>>,
+	) {
 		tokio::task::spawn(async move {
 			let mut uneviction_heap: BinaryHeap<(Instant, EndpointKey)> = Default::default();
 			let handle_eviction = |uneviction_heap: &mut BinaryHeap<(Instant, EndpointKey)>| {
 				let (_, key) = uneviction_heap.pop().expect("heap is empty");
 
 				trace!(%key, "unevict");
+				let Some(bucket) = Self::find_bucket_atomic(buckets.as_slice(), &key) else {
+					return;
+				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
 				if let Some(ep) = eps.rejected.swap_remove(&key) {
 					ep.info.evicted_until.store(None);
@@ -225,14 +288,15 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					return;
 				};
 
+				let EvictionEvent::Evict(key, timer) = item;
+
+				let Some(bucket) = Self::find_bucket_atomic(buckets.as_slice(), &key) else {
+					return;
+				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				match item {
-					EvictionEvent::Evict(key, timer) => {
-						uneviction_heap.push((timer, key.clone()));
-						if let Some(ep) = eps.active.swap_remove(&key) {
-							eps.rejected.insert(key, ep);
-						}
-					},
+				uneviction_heap.push((timer, key.clone()));
+				if let Some(ep) = eps.active.swap_remove(&key) {
+					eps.rejected.insert(key, ep);
 				}
 				bucket.store(Arc::new(eps));
 			};
@@ -246,7 +310,10 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		});
 	}
 	pub async fn evict(&mut self, key: EndpointKey, time: Instant) {
-		if let Some(cur) = self.bucket.load_full().active.get(&key) {
+		let Some(bucket) = self.find_bucket(&key) else {
+			return;
+		};
+		if let Some(cur) = bucket.active.get(&key) {
 			// Immediately store in the endpoint the eviction time, if its not already been evicted
 			let prev = cur
 				.info
@@ -425,7 +492,11 @@ where
 	where
 		S: Serializer,
 	{
-		self.bucket.load_full().serialize(serializer)
+		let mut seq = serializer.serialize_seq(Some(self.buckets.len()))?;
+		for b in self.buckets.iter() {
+			seq.serialize_element(&b.load_full())?;
+		}
+		seq.end()
 	}
 }
 
