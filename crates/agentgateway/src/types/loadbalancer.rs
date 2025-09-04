@@ -1,10 +1,13 @@
-use crate::types::discovery::Endpoint;
-use crate::*;
-use indexmap::IndexMap;
 use std::collections::BinaryHeap;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use indexmap::IndexMap;
+use rand::Rng;
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
+
+use crate::types::discovery::{Endpoint, Service, Workload};
+use crate::*;
 
 type EndpointKey = Strng;
 
@@ -53,6 +56,92 @@ pub struct EndpointSet<T> {
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint) {
 		self.insert_key(ep.workload_uid.clone(), ep)
+	}
+	pub fn select_endpoint(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc: &Service,
+		svc_port: u16,
+		override_dest: Option<SocketAddr>,
+	) -> Option<(Arc<Endpoint>, ActiveHandle, Arc<Workload>)> {
+		let target_port = svc.ports.get(&svc_port).copied();
+
+		if target_port.is_none() {
+			// Port doesn't exist on the service at all, this is invalid
+			debug!("service {} does not have port {}", svc.hostname, svc_port);
+			return None;
+		};
+
+		let iter = svc.endpoints.iter();
+		let selected = if let Some(o) = override_dest {
+			iter.iter().find_map(|(ep, ep_info)| {
+				let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
+					debug!("failed to fetch workload for {}", ep.workload_uid);
+					return None;
+				};
+				if wl.workload_ips.contains(&o.ip()) {
+					Some((ep.clone(), ep_info, wl))
+				} else {
+					None
+				}
+			})
+		} else {
+			let index = iter.index();
+			// Intentionally allow `rand::seq::index::sample` so we can pick the same element twice
+			// This avoids starvation where the worst endpoint gets 0 traffic
+			let a = rand::rng().random_range(0..index.len());
+			let b = rand::rng().random_range(0..index.len());
+			let best = [a, b]
+				.into_iter()
+				.filter_map(|idx| {
+					let (_, EndpointWithInfo { endpoint, info }) =
+						index.get_index(idx).expect("index already checked");
+					let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
+						debug!("failed to fetch workload for {}", endpoint.workload_uid);
+						return None;
+					};
+					if target_port.unwrap_or_default() == 0 && !endpoint.port.contains_key(&svc_port) {
+						// Filter workload out, it doesn't have a matching port
+						// This is not great, since if we have a lot of partial endpoints we hit bad cases.
+						// However, this is rare enough in typical workloads that its not a big deal ATM.
+						trace!(
+							"filter endpoint {}, it does not have service port {}",
+							endpoint.workload_uid, svc_port
+						);
+						return None;
+					}
+					Some((endpoint.clone(), info, wl))
+				})
+				.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()));
+			if let Some(best) = best {
+				Some(best)
+			} else {
+				// Fallback to O(n) lookup
+				iter
+					.iter()
+					.filter_map(|(ep, ep_info)| {
+						let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
+							debug!("failed to fetch workload for {}", ep.workload_uid);
+							return None;
+						};
+						if target_port.unwrap_or_default() == 0 && !ep.port.contains_key(&svc_port) {
+							// Filter workload out, it doesn't have a matching port
+							trace!(
+								"filter endpoint {}, it does not have service port {}",
+								ep.workload_uid, svc_port
+							);
+							return None;
+						}
+						Some((ep.clone(), ep_info, wl))
+					})
+					.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()))
+			}
+		};
+		let (ep, ep_info, wl) = selected?;
+		let handle = svc
+			.endpoints
+			.start_request(ep.workload_uid.clone(), ep_info);
+		Some((ep, handle, wl))
 	}
 }
 
@@ -173,7 +262,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 
 const ALPHA: f64 = 0.3;
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct EndpointInfo {
 	/// health keeps track of the success rate for the endpoint.
 	health: Ewma,
@@ -188,9 +277,28 @@ pub struct EndpointInfo {
 	evicted_until: AtomicOption<Instant>,
 }
 
+impl Default for EndpointInfo {
+	fn default() -> Self {
+		Self {
+			health: Ewma::new(1.0),
+			// TODO: this will overload them on the first request
+			request_latency: Default::default(),
+			pending_requests: Default::default(),
+			total_requests: Default::default(),
+			evicted_until: Arc::new(Default::default()),
+		}
+	}
+}
+
 impl EndpointInfo {
 	pub fn new() -> Self {
 		Self::default()
+	}
+	// Todo: fine-tune the algorithm here
+	pub fn score(&self) -> f64 {
+		let latency_penalty =
+			self.request_latency.load() * (1.0 + self.pending_requests.countf() * 0.1);
+		self.health.load() / (1.0 + latency_penalty)
 	}
 	pub fn start_request(
 		self: &Arc<Self>,
@@ -211,6 +319,12 @@ impl EndpointInfo {
 pub struct Ewma(atomic_float::AtomicF64);
 
 impl Ewma {
+	pub fn new(f: f64) -> Self {
+		Ewma(atomic_float::AtomicF64::new(f))
+	}
+	pub fn load(&self) -> f64 {
+		self.0.load(Ordering::Relaxed)
+	}
 	pub fn record(&self, nv: f64) {
 		let _ = self
 			.0
@@ -282,6 +396,9 @@ impl ActiveCounter {
 		// We have a count, so ignore that one
 		Arc::strong_count(&self.0) - 1
 	}
+	pub fn countf(&self) -> f64 {
+		self.count() as f64
+	}
 }
 
 // tokio::select evaluates each pattern before checking the (optional) associated condition. Work
@@ -311,11 +428,10 @@ where
 
 pub struct ActiveEndpointsIter<T>(Arc<EndpointGroup<T>>);
 impl<T> ActiveEndpointsIter<T> {
-	pub fn iter(&self) -> impl Iterator<Item = (&T, &Arc<EndpointInfo>)> {
-		self
-			.0
-			.active
-			.iter()
-			.map(|(_k, v)| (v.endpoint.as_ref(), &v.info))
+	pub fn iter(&self) -> impl ExactSizeIterator<Item = (&Arc<T>, &Arc<EndpointInfo>)> {
+		self.0.active.iter().map(|(_k, v)| (&v.endpoint, &v.info))
+	}
+	pub fn index(&self) -> &IndexMap<EndpointKey, EndpointWithInfo<T>> {
+		&self.0.active
 	}
 }

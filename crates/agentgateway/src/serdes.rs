@@ -58,10 +58,11 @@ pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 }
 
 pub mod serde_instant_option {
+	use std::time::{Duration, Instant};
+
 	use agent_core::durfmt;
 	use agent_core::prelude::AtomicOption;
 	use serde::Serializer;
-	use std::time::{Duration, Instant};
 
 	pub fn serialize<S: Serializer>(
 		t: &AtomicOption<Instant>,
@@ -80,9 +81,10 @@ pub mod serde_instant_option {
 }
 
 pub mod serde_dur {
+	use std::time::Duration;
+
 	use agent_core::durfmt;
 	use serde::{Deserialize, Deserializer, Serializer};
-	use std::time::Duration;
 
 	pub fn serialize<S: Serializer>(t: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
 		serializer.serialize_str(&durfmt::format(*t))
@@ -100,9 +102,10 @@ pub mod serde_dur {
 }
 
 pub mod serde_dur_option {
+	use std::time::Duration;
+
 	use agent_core::durfmt;
 	use serde::{Deserialize, Deserializer, Serializer};
-	use std::time::Duration;
 
 	pub fn serialize<S: Serializer>(t: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error> {
 		match t {

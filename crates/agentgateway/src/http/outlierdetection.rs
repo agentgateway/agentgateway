@@ -1,8 +1,10 @@
-use crate::http::x_headers;
-use agent_core::durfmt;
-use http::{HeaderMap, HeaderName, StatusCode, header};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use agent_core::durfmt;
+use http::{HeaderMap, HeaderName, StatusCode, header};
+
+use crate::http::x_headers;
 
 fn get_header_as<T: FromStr>(h: &HeaderMap, name: &HeaderName) -> Option<T> {
 	h.get(name)

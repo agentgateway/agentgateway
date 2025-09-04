@@ -1,3 +1,16 @@
+use std::collections::HashMap;
+use std::fmt;
+use std::fmt::{Formatter, Write};
+use std::hash::Hash;
+use std::net::IpAddr;
+use std::ops::Deref;
+use std::str::FromStr;
+
+use anyhow::anyhow;
+use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
+use serde::de::Visitor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 use crate::types::loadbalancer;
 use crate::types::loadbalancer::{EndpointInfo, EndpointWithInfo};
 use crate::types::proto::workload::load_balancing::Scope as XdsScope;
@@ -7,17 +20,6 @@ use crate::types::proto::workload::{
 };
 use crate::types::proto::{ProtoError, workload};
 use crate::*;
-use anyhow::anyhow;
-use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
-use serde::de::Visitor;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
-use std::fmt;
-use std::fmt::{Formatter, Write};
-use std::hash::Hash;
-use std::net::IpAddr;
-use std::ops::Deref;
-use std::str::FromStr;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

@@ -16,10 +16,9 @@ use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::serde_dur_option;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReference;
-use crate::*;
+use crate::{serde_dur_option, *};
 
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]

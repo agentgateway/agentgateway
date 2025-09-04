@@ -1,6 +1,8 @@
-use super::*;
-use http::HeaderMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use http::HeaderMap;
+
+use super::*;
 
 #[test]
 fn test_process_rate_limit_headers() {
