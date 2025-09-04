@@ -393,23 +393,11 @@ impl TryFrom<&proto::agent::RouteMatch> for RouteMatch {
 		let method = s.method.as_ref().map(|m| MethodMatch {
 			method: strng::new(&m.exact),
 		});
-		let headers = s
-			.headers
-			.iter()
-			.map(|h| match &h.value {
-				None => Err(ProtoError::Generic(
-					"invalid header match value".to_string(),
-				)),
-				Some(proto::agent::header_match::Value::Exact(e)) => Ok(HeaderMatch {
-					name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
-					value: HeaderValueMatch::Exact(crate::http::HeaderValue::from_bytes(e.as_bytes())?),
-				}),
-				Some(proto::agent::header_match::Value::Regex(e)) => Ok(HeaderMatch {
-					name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
-					value: HeaderValueMatch::Regex(regex::Regex::new(e)?),
-				}),
-			})
-			.collect::<Result<Vec<_>, _>>()?;
+		let headers = match convert_header_match(&s.headers) {
+			Ok(h) => h,
+			Err(e) => return Err(ProtoError::Generic(format!("invalid header match: {e}"))),
+		};
+
 		let query = s
 			.query_params
 			.iter()
@@ -932,15 +920,26 @@ fn convert_prompt_enrichment(
 fn convert_webhook(
 	w: &proto::agent::policy_spec::ai::Webhook,
 ) -> Option<crate::llm::policy::Webhook> {
-	match u16::try_from(w.port) {
-		Ok(port) => Some(crate::llm::policy::Webhook {
-			target: Target::Hostname(w.host.clone().into(), port),
-		}),
+	let port = match u16::try_from(w.port) {
+		Ok(port) => port,
 		Err(_) => {
 			warn!(port = w.port, host = %w.host, "Webhook port out of range, ignoring webhook");
-			None
+			return None;
 		},
-	}
+	};
+
+	let forward_header_matches = match convert_header_match(&w.forward_header_matches) {
+		Ok(h) => h,
+		Err(e) => {
+			warn!(error = %e, "Invalid webhook header matchers, ignoring webhook");
+			return None;
+		},
+	};
+
+	Some(crate::llm::policy::Webhook {
+		target: Target::Hostname(w.host.clone().into(), port),
+		forward_header_matches,
+	})
 }
 
 fn convert_regex_rules(
@@ -1033,4 +1032,24 @@ fn resolve_reference(
 			BackendReference::Backend(name.into())
 		},
 	})
+}
+
+fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMatch>, ProtoError> {
+	let headers = h
+		.iter()
+		.map(|h| match &h.value {
+			None => Err(ProtoError::Generic(
+				"invalid header match value".to_string(),
+			)),
+			Some(proto::agent::header_match::Value::Exact(e)) => Ok(HeaderMatch {
+				name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
+				value: HeaderValueMatch::Exact(crate::http::HeaderValue::from_bytes(e.as_bytes())?),
+			}),
+			Some(proto::agent::header_match::Value::Regex(e)) => Ok(HeaderMatch {
+				name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
+				value: HeaderValueMatch::Regex(regex::Regex::new(e)?),
+			}),
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+	Ok(headers)
 }

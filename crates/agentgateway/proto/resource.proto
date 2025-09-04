@@ -4,7 +4,6 @@ package agentgateway.dev.resource;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/wrappers.proto";
-import "google/protobuf/struct.proto";
 
 option go_package = "github.com/agentgateway/agentgateway/go/api;api";
 
@@ -122,7 +121,7 @@ message Aws {
 message AwsExplicitConfig {
   // AWS Access Key ID for authentication
   string access_key_id = 1;
-  // AWS Secret Access Key for authentication  
+  // AWS Secret Access Key for authentication
   string secret_access_key = 2;
   // AWS Region (e.g., "us-west-2", "us-east-1")
   string region = 3;
@@ -318,6 +317,7 @@ message PolicySpec {
     message Webhook {
       string host = 1;
       uint32 port = 2;
+      repeated HeaderMatch forward_header_matches = 3;
     }
 
     message Moderation {
@@ -404,7 +404,7 @@ message PolicySpec {
     repeated string allow = 1;
     repeated string deny = 2;
   }
-  
+
   // JWT authentication configuration
   message JWT {
     // Validation mode for JWT authentication
@@ -416,16 +416,16 @@ message PolicySpec {
       // Requests are never rejected (useful for claims in later steps)
       PERMISSIVE = 2;
     }
-    
+
     // How the JWT validation should behave
     Mode mode = 1;
-    
+
     // JWT issuer that must match the 'iss' claim
     string issuer = 2;
-    
+
     // List of audiences - the 'aud' claim must be in this list
     repeated string audiences = 3;
-    
+
     // JWKS configuration - where to get the keys for validation
     oneof jwks_source {
       // Inline JWKS as a JSON string
@@ -452,7 +452,7 @@ message PolicySpec {
   message BodyTransformation {
     string expression = 1;
   }
-  
+
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;

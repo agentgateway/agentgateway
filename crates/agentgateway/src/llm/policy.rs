@@ -10,6 +10,7 @@ use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, Message, RequestAction};
 use crate::llm::{AIError, pii, universal};
 use crate::types::agent::Target;
+use crate::types::agent::{HeaderMatch, HeaderValueMatch};
 use crate::{client, *};
 
 #[apply(schema!)]
@@ -124,7 +125,9 @@ impl Policy {
 			}
 		}
 		if let Some(webhook) = &g.webhook {
-			let whr = webhook::send_request(client.clone(), &webhook.target, http_headers, req).await?;
+			let headers =
+				Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
+			let whr = webhook::send_request(client.clone(), &webhook.target, &headers, req).await?;
 			match whr.action {
 				RequestAction::Mask(mask) => {
 					debug!(
@@ -180,6 +183,40 @@ impl Policy {
 			}
 		}
 		Ok(None)
+	}
+
+	fn get_webhook_forward_headers(
+		http_headers: &HeaderMap,
+		header_matches: &[HeaderMatch],
+	) -> HeaderMap {
+		let mut headers = HeaderMap::new();
+		for HeaderMatch { name, value } in header_matches {
+			let Some(have) = http_headers.get(name.as_str()) else {
+				continue;
+			};
+			match value {
+				HeaderValueMatch::Exact(want) => {
+					if have != want {
+						continue;
+					}
+				},
+				HeaderValueMatch::Regex(want) => {
+					// Must be a valid string to do regex match
+					let Some(have) = have.to_str().ok() else {
+						continue;
+					};
+					let Some(m) = want.find(have) else {
+						continue;
+					};
+					// Make sure we matched the entire thing
+					if !(m.start() == 0 && m.end() == have.len()) {
+						continue;
+					}
+				},
+			}
+			headers.insert(name, have.clone());
+		}
+		headers
 	}
 
 	fn convert_message(r: Message) -> ChatCompletionRequestMessage {
@@ -365,7 +402,8 @@ pub struct NamedRegex {
 #[apply(schema!)]
 pub struct Webhook {
 	pub target: Target,
-	// TODO: headers
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub forward_header_matches: Vec<HeaderMatch>,
 }
 
 #[apply(schema!)]
@@ -609,5 +647,56 @@ mod webhook {
 		let bb = axum::body::to_bytes(res.into_body(), 2_097_152).await?;
 		let parsed = serde_json::from_slice::<GuardrailsPromptResponse>(&bb)?;
 		Ok(parsed)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use ::http::{HeaderName, HeaderValue};
+
+	#[test]
+	fn test_get_webhook_forward_headers() {
+		let mut headers = HeaderMap::new();
+		headers.insert("x-test-header", HeaderValue::from_static("test-value"));
+		headers.insert(
+			"x-another-header",
+			HeaderValue::from_static("another-value"),
+		);
+		headers.insert(
+			"x-regex-header",
+			HeaderValue::from_static("regex-match-123"),
+		);
+
+		let header_matches = vec![
+			HeaderMatch {
+				name: HeaderName::from_static("x-test-header"),
+				value: HeaderValueMatch::Exact(HeaderValue::from_static("test-value")),
+			},
+			HeaderMatch {
+				name: HeaderName::from_static("x-another-header"),
+				value: HeaderValueMatch::Exact(HeaderValue::from_static("wrong-value")),
+			},
+			HeaderMatch {
+				name: HeaderName::from_static("x-regex-header"),
+				value: HeaderValueMatch::Regex(regex::Regex::new(r"regex-match-\d+").unwrap()),
+			},
+			HeaderMatch {
+				name: HeaderName::from_static("x-missing-header"),
+				value: HeaderValueMatch::Exact(HeaderValue::from_static("some-value")),
+			},
+		];
+
+		let result = Policy::get_webhook_forward_headers(&headers, &header_matches);
+
+		assert_eq!(result.len(), 2);
+		assert_eq!(
+			result.get("x-test-header").unwrap(),
+			&HeaderValue::from_static("test-value")
+		);
+		assert_eq!(
+			result.get("x-regex-header").unwrap(),
+			&HeaderValue::from_static("regex-match-123")
+		);
 	}
 }

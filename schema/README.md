@@ -154,6 +154,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.rules[].(any)name`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.target`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches[].name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches[].value`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches[].value.(1)exact`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.openaiModeration`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.openaiModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.openaiModeration.auth`||
@@ -173,6 +178,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.rules[].(any)name`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.target`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches[].name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches[].value`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches[].value.(1)exact`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].policies.ai.defaults`||
 |`binds[].listeners[].routes[].policies.ai.overrides`||
 |`binds[].listeners[].routes[].policies.ai.prompts`||
@@ -405,6 +415,11 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.promptGuard.request.regex.rules[].(any)name`||
 |`policies[].policy.ai.promptGuard.request.webhook`||
 |`policies[].policy.ai.promptGuard.request.webhook.target`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches[].name`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches[].value`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches[].value.(1)exact`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches[].value.(1)regex`||
 |`policies[].policy.ai.promptGuard.request.openaiModeration`||
 |`policies[].policy.ai.promptGuard.request.openaiModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
 |`policies[].policy.ai.promptGuard.request.openaiModeration.auth`||
@@ -424,6 +439,11 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.promptGuard.response.regex.rules[].(any)name`||
 |`policies[].policy.ai.promptGuard.response.webhook`||
 |`policies[].policy.ai.promptGuard.response.webhook.target`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches[].name`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches[].value`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches[].value.(1)exact`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches[].value.(1)regex`||
 |`policies[].policy.ai.defaults`||
 |`policies[].policy.ai.overrides`||
 |`policies[].policy.ai.prompts`||

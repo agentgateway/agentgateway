@@ -1289,6 +1289,50 @@
                                         "properties": {
                                           "target": {
                                             "type": "string"
+                                          },
+                                          "forwardHeaderMatches": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "name": {
+                                                  "type": "string"
+                                                },
+                                                "value": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "exact": {
+                                                          "type": "string"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "exact"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "regex": {
+                                                          "type": "string"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "regex"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "name",
+                                                "value"
+                                              ]
+                                            }
                                           }
                                         },
                                         "additionalProperties": false,
@@ -1485,6 +1529,50 @@
                                         "properties": {
                                           "target": {
                                             "type": "string"
+                                          },
+                                          "forwardHeaderMatches": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "name": {
+                                                  "type": "string"
+                                                },
+                                                "value": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "exact": {
+                                                          "type": "string"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "exact"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "regex": {
+                                                          "type": "string"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "regex"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "name",
+                                                "value"
+                                              ]
+                                            }
                                           }
                                         },
                                         "additionalProperties": false,
@@ -3692,6 +3780,50 @@
                             "properties": {
                               "target": {
                                 "type": "string"
+                              },
+                              "forwardHeaderMatches": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "exact": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "exact"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "regex": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "regex"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name",
+                                    "value"
+                                  ]
+                                }
                               }
                             },
                             "additionalProperties": false,
@@ -3888,6 +4020,50 @@
                             "properties": {
                               "target": {
                                 "type": "string"
+                              },
+                              "forwardHeaderMatches": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "exact": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "exact"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "regex": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "regex"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name",
+                                    "value"
+                                  ]
+                                }
                               }
                             },
                             "additionalProperties": false,

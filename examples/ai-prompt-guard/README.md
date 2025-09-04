@@ -70,3 +70,27 @@ curl http://localhost:3000   -H "Content-Type: application/json"   -H "Authoriza
   }'
 Response rejected due to inappropriate content
 ```
+
+### Guardrails Webhook
+
+A webhook can be used to reject or mask content before it is sent to the LLM.
+
+Example policy to forward the request to a webhook for moderation:
+```yaml
+policies:
+  ai:
+    promptGuard:
+      request:
+        webhook:
+          target: 127.0.0.1:8000
+          # By default, request headers are not forwarded.
+          # forwardHeaderMatches specifies a list of header matchers to use
+          # to determine the request headers to forward to the webhook
+          forwardHeaderMatches:
+          - name: h1
+            value:
+              regex: v1
+          - name: h2
+            value:
+              regex: v2.*
+```
