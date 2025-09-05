@@ -4433,6 +4433,7 @@ dependencies = [
  "prost-types",
  "prost-wkt",
  "prost-wkt-build",
+ "protox",
  "regex",
  "serde",
  "serde_derive",
