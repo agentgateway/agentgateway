@@ -68,7 +68,8 @@ RUN --mount=type=cache,target=/app/target \
 FROM gcr.io/distroless/cc-debian12 AS runner 
 
 ARG TARGETARCH
-WORKDIR /app
+
+WORKDIR /
 
 COPY --from=builder /out/agentgateway /app/agentgateway
 
