@@ -335,7 +335,10 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				let evict_at = uneviction_heap.peek().map(|x| x.0);
 				tokio::select! {
 					true = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
-					item = eviction_events.recv() => handle_recv_evict(&mut uneviction_heap, item)
+					item = eviction_events.recv() => {
+						if item.is_none() { return };
+						handle_recv_evict(&mut uneviction_heap, item)
+					}
 				}
 			}
 		});

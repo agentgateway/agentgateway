@@ -318,26 +318,27 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailVersion`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].name`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)openAI`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)openAI.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)gemini`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)gemini.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)vertex`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)vertex.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)vertex.region`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)vertex.projectId`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)anthropic`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)anthropic.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)bedrock`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)bedrock.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)bedrock.region`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)bedrock.guardrailIdentifier`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].provider.(1)bedrock.guardrailVersion`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].hostOverride`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)providers[].tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)openAI`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)openAI.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)gemini`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)gemini.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.projectId`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)anthropic`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)anthropic.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailIdentifier`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].hostOverride`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
 |`binds[].listeners[].routes[].backends[].weight`||
 |`binds[].listeners[].tcpRoutes`||
 |`binds[].listeners[].tcpRoutes[].name`||

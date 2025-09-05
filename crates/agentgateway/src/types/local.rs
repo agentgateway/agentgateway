@@ -170,20 +170,27 @@ pub enum LocalBackend {
 #[serde(untagged)]
 pub enum LocalAIBackend {
 	Provider(NamedAIProvider),
-	Providers { providers: Vec<NamedAIProvider> },
+	Groups {
+		groups: Vec<LocalAIProviders>
+	},
+}
+
+#[apply(schema_de!)]
+pub struct LocalAIProviders {
+	providers: Vec<NamedAIProvider>,
 }
 
 impl From<LocalAIBackend> for AIBackend {
 	fn from(value: LocalAIBackend) -> Self {
 		let providers = match value {
 			LocalAIBackend::Provider(p) => {
-				vec![p]
+				vec![vec![p]]
 			},
-			LocalAIBackend::Providers { providers } => providers,
+			LocalAIBackend::Groups { groups } => groups.into_iter().map(|g| g.providers).collect_vec(),
 		};
 		let eps = providers
 			.into_iter()
-			.map(|p| vec![(p.name.clone(), p)])
+			.map(|p| p.into_iter().map(|p| (p.name.clone(), p)).collect_vec())
 			.collect_vec();
 		let es = types::loadbalancer::EndpointSet::new(eps);
 		AIBackend { providers: es }
