@@ -307,6 +307,7 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 					name: name.clone(),
 					provider,
 					tokenize: false,
+					path_override: a.path_override.as_ref().map(strng::new),
 					host_override: a
 						.r#override
 						.as_ref()

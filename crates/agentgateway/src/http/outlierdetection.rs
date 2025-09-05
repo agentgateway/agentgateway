@@ -41,6 +41,11 @@ fn process_rate_limit_headers(h: &HeaderMap, now: SystemTime) -> Option<std::tim
 			return Some(duration);
 		}
 	}
+	if let Some(retry_after) = get_header(h, &x_headers::RETRY_AFTER_MS)
+		&& let Ok(ms) = retry_after.parse::<u64>()
+	{
+		return Some(std::time::Duration::from_millis(ms));
+	}
 
 	// x-ratelimit-reset: commonly used.
 	// Typically this is a unix epoch timestamp OR number of seconds. Rarely it is number of milliseconds.

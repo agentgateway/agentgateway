@@ -2772,10 +2772,167 @@
                                             "null"
                                           ]
                                         },
+                                        "pathOverride": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
                                         "tokenize": {
                                           "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
                                           "type": "boolean",
                                           "default": false
+                                        },
+                                        "backendTLS": {
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ],
+                                          "properties": {
+                                            "cert": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "key": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "root": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "hostname": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "insecure": {
+                                              "type": "boolean",
+                                              "default": false
+                                            },
+                                            "insecureHost": {
+                                              "type": "boolean",
+                                              "default": false
+                                            }
+                                          },
+                                          "additionalProperties": false
+                                        },
+                                        "backendAuth": {
+                                          "anyOf": [
+                                            {
+                                              "oneOf": [
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "passthrough": {
+                                                      "type": "object",
+                                                      "additionalProperties": false
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "passthrough"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "key": {
+                                                      "anyOf": [
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "file": {
+                                                              "type": "string"
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "file"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "string"
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "key"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "gcp": {
+                                                      "type": "object",
+                                                      "additionalProperties": false
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "gcp"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "aws": {
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "Use explicit AWS credentials",
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "accessKeyId": {
+                                                              "type": "string"
+                                                            },
+                                                            "secretAccessKey": {
+                                                              "type": "string"
+                                                            },
+                                                            "region": {
+                                                              "type": "string"
+                                                            },
+                                                            "sessionToken": {
+                                                              "type": [
+                                                                "string",
+                                                                "null"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "additionalProperties": false,
+                                                          "required": [
+                                                            "accessKeyId",
+                                                            "secretAccessKey",
+                                                            "region"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "description": "Use implicit AWS authentication (environment variables, IAM roles, etc.)",
+                                                          "type": "object",
+                                                          "additionalProperties": false
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "aws"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
                                         }
                                       },
                                       "additionalProperties": false,
@@ -2941,10 +3098,167 @@
                                                         "null"
                                                       ]
                                                     },
+                                                    "pathOverride": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
                                                     "tokenize": {
                                                       "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
                                                       "type": "boolean",
                                                       "default": false
+                                                    },
+                                                    "backendTLS": {
+                                                      "type": [
+                                                        "object",
+                                                        "null"
+                                                      ],
+                                                      "properties": {
+                                                        "cert": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "key": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "root": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "hostname": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "insecure": {
+                                                          "type": "boolean",
+                                                          "default": false
+                                                        },
+                                                        "insecureHost": {
+                                                          "type": "boolean",
+                                                          "default": false
+                                                        }
+                                                      },
+                                                      "additionalProperties": false
+                                                    },
+                                                    "backendAuth": {
+                                                      "anyOf": [
+                                                        {
+                                                          "oneOf": [
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "passthrough": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": false
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "passthrough"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            },
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "key": {
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "file": {
+                                                                          "type": "string"
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "file"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "type": "string"
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "key"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            },
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "gcp": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": false
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "gcp"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            },
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "aws": {
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "description": "Use explicit AWS credentials",
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "accessKeyId": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "secretAccessKey": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "region": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "sessionToken": {
+                                                                          "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                          ]
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false,
+                                                                      "required": [
+                                                                        "accessKeyId",
+                                                                        "secretAccessKey",
+                                                                        "region"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "description": "Use implicit AWS authentication (environment variables, IAM roles, etc.)",
+                                                                      "type": "object",
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "aws"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "null"
+                                                        }
+                                                      ],
+                                                      "default": null
                                                     }
                                                   },
                                                   "additionalProperties": false,
@@ -3234,6 +3548,18 @@
                 },
                 "required": [
                   "backend"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "subBackend": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "subBackend"
                 ],
                 "additionalProperties": false
               }

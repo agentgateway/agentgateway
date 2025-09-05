@@ -244,6 +244,7 @@ fn setup_llm_mock(
 			name: "default".into(),
 			provider,
 			host_override: Some(Target::Address(*mock.address())),
+			path_override: None,
 			tokenize,
 		})
 		.into(),

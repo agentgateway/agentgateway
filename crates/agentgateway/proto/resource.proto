@@ -541,6 +541,7 @@ message AIBackend {
     Anthropic anthropic = 5;
     Bedrock bedrock = 6;
   }
+  google.protobuf.StringValue path_override = 7;
 }
 
 message MCPBackend {

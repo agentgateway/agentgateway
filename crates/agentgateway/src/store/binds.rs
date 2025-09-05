@@ -17,7 +17,11 @@ use crate::llm::policy::ResponseGuard;
 use crate::mcp::rbac::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
-use crate::types::agent::{A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerSet, McpAuthentication, Policy, PolicyName, PolicyTarget, Route, RouteKey, RouteName, RouteRuleName, ServiceName, SubBackendName, TCPRoute, TargetedPolicy};
+use crate::types::agent::{
+	A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerSet,
+	McpAuthentication, Policy, PolicyName, PolicyTarget, Route, RouteKey, RouteName, RouteRuleName,
+	ServiceName, SubBackendName, TCPRoute, TargetedPolicy,
+};
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
 	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Policy as XdsPolicy,
@@ -247,7 +251,7 @@ impl Store {
 		let service_rules =
 			service.and_then(|t| self.policies_by_target.get(&PolicyTarget::Service(t)));
 		let sub_backend_rules =
-		sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::SubBackend(t)));
+			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::SubBackend(t)));
 
 		// Subbackend > Backend > Service
 		let rules = sub_backend_rules
