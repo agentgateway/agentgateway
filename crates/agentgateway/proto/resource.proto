@@ -254,6 +254,8 @@ message PolicyTarget {
     string backend = 5;
     // namespace}/{hostname}
     string service = 6;
+    // For Backend: `{ns}/{name}/{sub-backend}`
+    string sub_backend = 7;
   }
 }
 message PolicySpec {
