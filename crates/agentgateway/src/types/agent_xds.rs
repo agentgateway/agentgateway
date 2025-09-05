@@ -866,13 +866,13 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 					defaults: Some(
 						ai.defaults
 							.iter()
-							.map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+							.map(|(k, v)| (k.clone(), prost_value_to_json(v)))
 							.collect(),
 					),
 					overrides: Some(
 						ai.overrides
 							.iter()
-							.map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+							.map(|(k, v)| (k.clone(), prost_value_to_json(v)))
 							.collect(),
 					),
 					prompts: ai.prompts.as_ref().map(convert_prompt_enrichment),
@@ -1098,4 +1098,39 @@ fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMat
 		})
 		.collect::<Result<Vec<_>, _>>()?;
 	Ok(headers)
+}
+
+fn prost_value_to_json(v: &prost_types::Value) -> serde_json::Value {
+	match &v.kind {
+		None => serde_json::Value::Null,
+		Some(kind) => prost_kind_to_json(kind),
+	}
+}
+
+fn prost_kind_to_json(v: &prost_types::value::Kind) -> serde_json::Value {
+	match v {
+		prost_types::value::Kind::NullValue(_) => serde_json::Value::Null,
+		prost_types::value::Kind::NumberValue(n) => serde_json::Value::Number(
+			serde_json::Number::from_f64(*n).unwrap_or(serde_json::Number::from(0)),
+		),
+		prost_types::value::Kind::StringValue(s) => serde_json::Value::String(s.clone()),
+		prost_types::value::Kind::BoolValue(b) => serde_json::Value::Bool(*b),
+		prost_types::value::Kind::StructValue(s) => prost_struct_to_json(s),
+		prost_types::value::Kind::ListValue(l) => serde_json::Value::Array(
+			l.values
+				.iter()
+				.filter_map(|v| v.kind.as_ref().map(prost_kind_to_json))
+				.collect(),
+		),
+	}
+}
+
+fn prost_struct_to_json(s: &prost_types::Struct) -> serde_json::Value {
+	let mut map = serde_json::Map::new();
+	for (k, v) in &s.fields {
+		if let Some(value) = v.kind.as_ref() {
+			map.insert(k.clone(), prost_kind_to_json(value));
+		}
+	}
+	serde_json::Value::Object(map)
 }

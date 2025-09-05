@@ -4,6 +4,7 @@ package agentgateway.dev.resource;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
 
 option go_package = "github.com/agentgateway/agentgateway/go/api;api";
 
@@ -370,8 +371,8 @@ message PolicySpec {
     }
 
     PromptGuard prompt_guard = 1;
-    map<string, string> defaults = 2;
-    map<string, string> overrides = 3;
+    map<string, google.protobuf.Value> defaults = 2;
+    map<string, google.protobuf.Value> overrides = 3;
     PromptEnrichment prompts = 4;
   }
   message ExternalAuth {
