@@ -95,7 +95,7 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
             <h3 className="font-medium">Configuration Summary</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 border">
-                <Network className="h-5 w-5 text-blue-500" />
+                <Network className="h-5 w-5 text-primary" />
                 <div>
                   <p className="font-medium text-sm">Listeners</p>
                   <p className="text-xs text-muted-foreground">
@@ -142,7 +142,7 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
                   <div key={bindIndex} className="border rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="font-medium text-sm">Port {bind.port}</h4>
-                      <Badge variant="secondary">
+                      <Badge>
                         {bind.listeners?.length || 0} listener
                         {bind.listeners?.length !== 1 ? "s" : ""}
                       </Badge>
@@ -215,11 +215,11 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
             </p>
           </div>
 
-          <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
-            <h4 className="font-medium text-sm mb-2 text-blue-600 dark:text-blue-400">
+          <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
+            <h4 className="font-medium text-sm mb-2 text-primary">
               💡 Next Steps
             </h4>
-            <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+            <ul className="text-sm text-primary space-y-1">
               <li>• Test your configuration with sample requests</li>
               <li>• Add more routes and backends as needed</li>
               <li>• Configure additional policies for security and performance</li>

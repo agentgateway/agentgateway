@@ -422,7 +422,7 @@ export function ListenerConfig({
                           <ChevronRight className="h-4 w-4" />
                         )}
                         <div className="flex items-center space-x-2">
-                          <Network className="h-5 w-5 text-blue-500" />
+                          <Network className="h-5 w-5 text-primary" />
                           <div>
                             <h3 className="text-lg font-semibold">Port {bind.port}</h3>
                             <p className="text-sm text-muted-foreground">
@@ -433,7 +433,7 @@ export function ListenerConfig({
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Badge variant="secondary">{bind.port}</Badge>
+                        <Badge>{bind.port}</Badge>
                         <Button
                           variant="ghost"
                           size="icon"

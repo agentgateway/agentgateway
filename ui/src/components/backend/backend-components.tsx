@@ -158,7 +158,7 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                         </div>
                       </div>
                     </div>
-                    <Badge variant="secondary">{backendContexts.length} backends</Badge>
+                    <Badge>{backendContexts.length} backends</Badge>
                   </div>
                 </CardHeader>
               </CollapsibleTrigger>
@@ -224,8 +224,8 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                                     )}
                                     {hasPolicies && (
                                       <div className="flex items-center space-x-1 mt-1">
-                                        <Shield className="h-3 w-3 text-blue-500" />
-                                        <span className="text-xs text-blue-600 font-medium">
+                                        <Shield className="h-3 w-3 text-primary" />
+                                        <span className="text-xs text-primary font-medium">
                                           Backend Policies: {policyTypes.join(", ")}
                                         </span>
                                       </div>
@@ -235,7 +235,7 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                               })()}
                             </TableCell>
                             <TableCell>
-                              <Badge variant="secondary">
+                              <Badge>
                                 {backendContext.backend.weight || 1}
                               </Badge>
                             </TableCell>

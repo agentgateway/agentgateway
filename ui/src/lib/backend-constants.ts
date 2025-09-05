@@ -75,7 +75,7 @@ export const BACKEND_TABLE_HEADERS = [
 ] as const;
 
 export const BACKEND_TYPE_COLORS = {
-  mcp: "bg-blue-500 hover:bg-blue-600",
+  mcp: "bg-primary hover:bg-primary/90",
   ai: "bg-green-500 hover:bg-green-600",
   service: "bg-orange-500 hover:bg-orange-600",
   host: "bg-red-500 hover:bg-red-600",

@@ -36,12 +36,12 @@ export const ROUTE_TABLE_HEADERS = [
 export const ROUTE_TYPE_CONFIGS = {
   http: {
     label: "HTTP",
-    color: "bg-green-500 hover:bg-green-600",
+    color: "bg-primary hover:bg-primary/90 text-primary-foreground",
     icon: "Globe",
   },
   tcp: {
     label: "TCP",
-    color: "bg-blue-500 hover:bg-blue-600 text-white",
+    color: "bg-primary hover:bg-primary/90 text-primary-foreground",
     icon: "Server",
   },
 } as const;

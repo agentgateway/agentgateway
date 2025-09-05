@@ -117,14 +117,14 @@ export const RouteTable: React.FC<RouteTableProps> = ({
                           )}
                           {tcpCount > 0 && (
                             <div className="flex items-center space-x-1">
-                              <Server className="h-3 w-3 text-blue-500" />
+                              <Server className="h-3 w-3 text-primary" />
                               <span>{tcpCount} TCP</span>
                             </div>
                           )}
                         </div>
                       </div>
                     </div>
-                    <Badge variant="secondary">{combinedRoutes.length} routes</Badge>
+                    <Badge>{combinedRoutes.length} routes</Badge>
                   </div>
                 </CardHeader>
               </CollapsibleTrigger>
@@ -328,7 +328,7 @@ export const AddRouteDialog: React.FC<AddRouteDialogProps> = ({
                 <div className="flex items-center space-x-2">
                   {isTcpListener(selectedListener.listener) ? (
                     <>
-                      <Server className="h-4 w-4 text-blue-500" />
+                      <Server className="h-4 w-4 text-primary" />
                       <span className="font-medium">TCP Route</span>
                     </>
                   ) : (

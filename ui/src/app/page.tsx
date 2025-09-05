@@ -259,7 +259,7 @@ export default function Home() {
           <Card className="@container/card">
             <CardHeader>
               <CardDescription className="flex items-center gap-2 text-xs uppercase tracking-wider font-medium text-muted-foreground/80">
-                <Network className="h-4 w-4 text-blue-500" />
+                <Network className="h-4 w-4 text-primary" />
                 Port Binds
               </CardDescription>
               <CardTitle className="text-3xl font-semibold mt-2">{binds?.length || 0}</CardTitle>
@@ -276,7 +276,7 @@ export default function Home() {
           <Card className="@container/card">
             <CardHeader>
               <CardDescription className="flex items-center gap-2 text-xs uppercase tracking-wider font-medium text-muted-foreground/80">
-                <Server className="h-4 w-4 text-green-500" />
+                <Server className="h-4 w-4" />
                 Listeners
               </CardDescription>
               <CardTitle className="text-3xl font-semibold mt-2">{getTotalListeners()}</CardTitle>
@@ -310,7 +310,7 @@ export default function Home() {
           <Card className="@container/card">
             <CardHeader>
               <CardDescription className="flex items-center gap-2 text-xs uppercase tracking-wider font-medium text-muted-foreground/80">
-                <Database className="h-4 w-4 text-purple-500" />
+                <Database className="h-4 w-4 text-primary" />
                 Backends
               </CardDescription>
               <CardTitle className="text-3xl font-semibold mt-2">{getTotalBackends()}</CardTitle>
@@ -329,7 +329,7 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-blue-500" />
+                <Globe className="h-5 w-5 text-primary" />
                 Protocol Distribution
               </CardTitle>
               <CardDescription>Listener protocols in use</CardDescription>
@@ -340,13 +340,13 @@ export default function Home() {
                   <div key={protocol} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {protocol === "HTTPS" || protocol === "TLS" ? (
-                        <Lock className="h-4 w-4 text-green-500" />
+                        <Lock className="h-4 w-4" />
                       ) : (
-                        <Globe className="h-4 w-4 text-blue-500" />
+                        <Globe className="h-4 w-4 text-primary" />
                       )}
                       <span className="text-sm font-medium">{protocol}</span>
                     </div>
-                    <Badge variant="secondary">{count}</Badge>
+                    <Badge>{count}</Badge>
                   </div>
                 ))}
                 {Object.keys(protocolStats).length === 0 && (
@@ -372,21 +372,21 @@ export default function Home() {
                     <Shield className="h-4 w-4 text-red-500" />
                     <span className="text-sm font-medium">Security</span>
                   </div>
-                  <Badge variant="secondary">{policyStats.securityPolicies}</Badge>
+                  <Badge>{policyStats.securityPolicies}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-yellow-500" />
                     <span className="text-sm font-medium">Traffic</span>
                   </div>
-                  <Badge variant="secondary">{policyStats.trafficPolicies}</Badge>
+                  <Badge>{policyStats.trafficPolicies}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Settings className="h-4 w-4 text-gray-500" />
                     <span className="text-sm font-medium">Total Policies</span>
                   </div>
-                  <Badge variant="secondary">{policyStats.totalPolicies}</Badge>
+                  <Badge>{policyStats.totalPolicies}</Badge>
                 </div>
                 {policyStats.totalPolicies === 0 && (
                   <p className="text-sm text-muted-foreground">No policies configured</p>
@@ -439,7 +439,7 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-500" />
+                <CheckCircle className="h-5 w-5" />
                 Configuration Status
               </CardTitle>
               <CardDescription>Overall system health and completeness</CardDescription>
@@ -447,25 +447,25 @@ export default function Home() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-500">{binds?.length || 0}</div>
+                  <div className="text-2xl font-bold">{binds?.length || 0}</div>
                   <div className="text-sm text-muted-foreground">Active Port Binds</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-500">{getTotalListeners()}</div>
+                  <div className="text-2xl font-bold text-primary">{getTotalListeners()}</div>
                   <div className="text-sm text-muted-foreground">Configured Listeners</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-500">{getTotalRoutes()}</div>
+                  <div className="text-2xl font-bold text-primary">{getTotalRoutes()}</div>
                   <div className="text-sm text-muted-foreground">Total Routes</div>
                 </div>
               </div>
               {healthCheck.issues.length === 0 && healthCheck.warnings.length === 0 && (
-                <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                <div className="mt-4 p-3 bg-primary/10 rounded-lg">
+                  <div className="flex items-center gap-2 text-primary">
                     <CheckCircle className="h-4 w-4" />
                     <span className="text-sm font-medium">Configuration looks good!</span>
                   </div>
-                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                  <p className="text-sm  mt-1">
                     All listeners have routes and all routes have backends configured.
                   </p>
                 </div>

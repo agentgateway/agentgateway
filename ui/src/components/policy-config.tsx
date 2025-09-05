@@ -367,7 +367,7 @@ export function PolicyConfig() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant="secondary">{routeContexts.length} routes</Badge>
+                      <Badge>{routeContexts.length} routes</Badge>
                     </div>
                   </CardHeader>
                 </CollapsibleTrigger>
@@ -479,7 +479,7 @@ export function PolicyConfig() {
                     <p className="text-sm text-muted-foreground mb-3">{info.description}</p>
                     <div className="flex items-center space-x-2">
                       <Button
-                        variant={hasPolicy ? "secondary" : "default"}
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           if (hasPolicy) {
