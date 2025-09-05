@@ -457,6 +457,7 @@ impl Backend {
 }
 
 pub type BackendName = Strng;
+pub type SubBackendName = Strng;
 pub type ServiceName = Strng;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -965,6 +966,9 @@ pub enum PolicyTarget {
 	// Note: Backend includes Service:port, this is used when we are *only* attaching to service
 	Service(ServiceName),
 	Backend(BackendName),
+	// Some Backend types group multiple backends.
+	// Format: <backend>/<sub-backend>
+	SubBackend(SubBackendName),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

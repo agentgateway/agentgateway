@@ -20,7 +20,7 @@ use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerSet,
 	McpAuthentication, Policy, PolicyName, PolicyTarget, Route, RouteKey, RouteName, RouteRuleName,
-	ServiceName, TCPRoute, TargetedPolicy,
+	ServiceName, SubBackendName, TCPRoute, TargetedPolicy,
 };
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -245,16 +245,20 @@ impl Store {
 		&self,
 		backend: BackendName,
 		service: Option<ServiceName>,
+		sub_backend: Option<SubBackendName>,
 	) -> BackendPolicies {
 		let backend_rules = self.policies_by_target.get(&PolicyTarget::Backend(backend));
 		let service_rules =
 			service.and_then(|t| self.policies_by_target.get(&PolicyTarget::Service(t)));
+		let sub_backend_rules =
+			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::SubBackend(t)));
 
-		// Backend > Service
-		let rules = backend_rules
+		// Subbackend > Backend > Service
+		let rules = sub_backend_rules
 			.iter()
 			.copied()
 			.flatten()
+			.chain(backend_rules.iter().copied().flatten())
 			.chain(service_rules.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_name.get(n));
 

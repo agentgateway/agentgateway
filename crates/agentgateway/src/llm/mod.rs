@@ -69,6 +69,7 @@ pub struct NamedAIProvider {
 	pub name: Strng,
 	pub provider: AIProvider,
 	pub host_override: Option<Target>,
+	pub path_override: Option<Strng>,
 	/// Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
 	/// since we know (part of) the cost of the request upfront.
 	/// This comes with the cost of an expensive operation.

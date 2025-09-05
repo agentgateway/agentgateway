@@ -307,6 +307,7 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 					name: name.clone(),
 					provider,
 					tokenize: false,
+					path_override: a.path_override.as_ref().map(strng::new),
 					host_override: a
 						.r#override
 						.as_ref()
@@ -896,6 +897,7 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 			Some(proto::agent::policy_target::Kind::RouteRule(v)) => PolicyTarget::RouteRule(v.into()),
 			Some(proto::agent::policy_target::Kind::Service(v)) => PolicyTarget::Service(v.into()),
 			Some(proto::agent::policy_target::Kind::Backend(v)) => PolicyTarget::Backend(v.into()),
+			Some(proto::agent::policy_target::Kind::SubBackend(v)) => PolicyTarget::SubBackend(v.into()),
 			_ => return Err(ProtoError::EnumParse("unknown target kind".to_string())),
 		};
 		let policy = spec.try_into()?;

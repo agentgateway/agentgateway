@@ -46,6 +46,8 @@ pub mod x_headers {
 	pub const X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
 	pub const X_AMZN_REQUESTID: HeaderName = HeaderName::from_static("x-amzn-requestid");
 
+	pub const RETRY_AFTER_MS: HeaderName = HeaderName::from_static("retry-after-ms");
+
 	pub const X_RATELIMIT_RESET_REQUESTS: HeaderName =
 		HeaderName::from_static("x-ratelimit-reset-requests");
 	pub const X_RATELIMIT_RESET_TOKENS: HeaderName =

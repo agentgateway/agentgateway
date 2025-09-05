@@ -254,6 +254,8 @@ message PolicyTarget {
     string backend = 5;
     // namespace}/{hostname}
     string service = 6;
+    // For Backend: `{ns}/{name}/{sub-backend}`
+    string sub_backend = 7;
   }
 }
 message PolicySpec {
@@ -539,6 +541,7 @@ message AIBackend {
     Anthropic anthropic = 5;
     Bedrock bedrock = 6;
   }
+  google.protobuf.StringValue path_override = 7;
 }
 
 message MCPBackend {

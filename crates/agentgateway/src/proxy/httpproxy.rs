@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
+use ::http::uri::PathAndQuery;
 use ::http::{HeaderMap, header};
 use anyhow::anyhow;
 use futures_util::FutureExt;
@@ -681,22 +683,34 @@ async fn make_backend_call(
 		inputs: inputs.clone(),
 	};
 
-	let service = match backend {
-		Backend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
-		_ => None,
+	let mut ai_provider = None;
+	let (service, sub_backend) = match backend {
+		Backend::Service(svc, _) => (
+			Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
+			None,
+		),
+		Backend::AI(n, ai) => {
+			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
+			log.add(move |l| l.request_handle = Some(handle));
+			let k = strng::format!("{}/{}", n, provider.name);
+			ai_provider = Some(provider);
+			(None, Some(k))
+		},
+		_ => (None, None),
 	};
+
 	let policies = inputs
 		.stores
 		.read_binds()
-		.backend_policies(backend.name(), service);
+		.backend_policies(backend.name(), service, sub_backend);
+
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
 	let override_dest = maybe_inference.mutate_request(&mut req).await?;
 	log.add(|l| l.inference_pool = override_dest);
 
 	let backend_call = match backend {
-		Backend::AI(_, ai) => {
-			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
-			log.add(move |l| l.request_handle = Some(handle));
+		Backend::AI(_, _ai) => {
+			let provider = ai_provider.expect("must be set above");
 			let (target, default_policies) = match &provider.host_override {
 				Some(target) => (
 					target.clone(),
@@ -715,6 +729,13 @@ async fn make_backend_call(
 					(tgt, Some(pol))
 				},
 			};
+			if let Some(po) = &provider.path_override {
+				http::modify_req_uri(&mut req, |p| {
+					p.path_and_query = Some(PathAndQuery::from_str(po)?);
+					Ok(())
+				})
+				.map_err(ProxyError::Processing)?;
+			}
 			BackendCall {
 				target,
 				default_policies,

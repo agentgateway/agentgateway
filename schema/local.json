@@ -2772,10 +2772,167 @@
                                             "null"
                                           ]
                                         },
+                                        "pathOverride": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
                                         "tokenize": {
                                           "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
                                           "type": "boolean",
                                           "default": false
+                                        },
+                                        "backendTLS": {
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ],
+                                          "properties": {
+                                            "cert": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "key": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "root": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "hostname": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "insecure": {
+                                              "type": "boolean",
+                                              "default": false
+                                            },
+                                            "insecureHost": {
+                                              "type": "boolean",
+                                              "default": false
+                                            }
+                                          },
+                                          "additionalProperties": false
+                                        },
+                                        "backendAuth": {
+                                          "anyOf": [
+                                            {
+                                              "oneOf": [
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "passthrough": {
+                                                      "type": "object",
+                                                      "additionalProperties": false
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "passthrough"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "key": {
+                                                      "anyOf": [
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "file": {
+                                                              "type": "string"
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "file"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "string"
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "key"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "gcp": {
+                                                      "type": "object",
+                                                      "additionalProperties": false
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "gcp"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "aws": {
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "Use explicit AWS credentials",
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "accessKeyId": {
+                                                              "type": "string"
+                                                            },
+                                                            "secretAccessKey": {
+                                                              "type": "string"
+                                                            },
+                                                            "region": {
+                                                              "type": "string"
+                                                            },
+                                                            "sessionToken": {
+                                                              "type": [
+                                                                "string",
+                                                                "null"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "additionalProperties": false,
+                                                          "required": [
+                                                            "accessKeyId",
+                                                            "secretAccessKey",
+                                                            "region"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "description": "Use implicit AWS authentication (environment variables, IAM roles, etc.)",
+                                                          "type": "object",
+                                                          "additionalProperties": false
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "aws"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
                                         }
                                       },
                                       "additionalProperties": false,
@@ -2787,172 +2944,341 @@
                                     {
                                       "type": "object",
                                       "properties": {
-                                        "providers": {
+                                        "groups": {
                                           "type": "array",
                                           "items": {
                                             "type": "object",
                                             "properties": {
-                                              "name": {
-                                                "type": "string"
-                                              },
-                                              "provider": {
-                                                "oneOf": [
-                                                  {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "openAI": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                          "model": {
-                                                            "type": [
-                                                              "string",
-                                                              "null"
-                                                            ]
-                                                          }
-                                                        },
-                                                        "additionalProperties": false
-                                                      }
+                                              "providers": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "name": {
+                                                      "type": "string"
                                                     },
-                                                    "required": [
-                                                      "openAI"
-                                                    ],
-                                                    "additionalProperties": false
-                                                  },
-                                                  {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "gemini": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                          "model": {
-                                                            "type": [
-                                                              "string",
-                                                              "null"
-                                                            ]
-                                                          }
+                                                    "provider": {
+                                                      "oneOf": [
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "openAI": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "additionalProperties": false
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "openAI"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "gemini": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "gemini"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "vertex": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
+                                                                "region": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
+                                                                "projectId": {
+                                                                  "type": "string"
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "projectId"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "vertex"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "anthropic": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "anthropic"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "bedrock": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
+                                                                "region": {
+                                                                  "type": "string"
+                                                                },
+                                                                "guardrailIdentifier": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
+                                                                "guardrailVersion": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "region"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "bedrock"
+                                                          ],
+                                                          "additionalProperties": false
                                                         }
-                                                      }
+                                                      ]
                                                     },
-                                                    "required": [
-                                                      "gemini"
-                                                    ],
-                                                    "additionalProperties": false
-                                                  },
-                                                  {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "vertex": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                          "model": {
-                                                            "type": [
-                                                              "string",
-                                                              "null"
-                                                            ]
-                                                          },
-                                                          "region": {
-                                                            "type": [
-                                                              "string",
-                                                              "null"
-                                                            ]
-                                                          },
-                                                          "projectId": {
-                                                            "type": "string"
-                                                          }
+                                                    "hostOverride": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "pathOverride": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "tokenize": {
+                                                      "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
+                                                      "type": "boolean",
+                                                      "default": false
+                                                    },
+                                                    "backendTLS": {
+                                                      "type": [
+                                                        "object",
+                                                        "null"
+                                                      ],
+                                                      "properties": {
+                                                        "cert": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
                                                         },
-                                                        "required": [
-                                                          "projectId"
-                                                        ]
-                                                      }
-                                                    },
-                                                    "required": [
-                                                      "vertex"
-                                                    ],
-                                                    "additionalProperties": false
-                                                  },
-                                                  {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "anthropic": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                          "model": {
-                                                            "type": [
-                                                              "string",
-                                                              "null"
-                                                            ]
-                                                          }
+                                                        "key": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "root": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "hostname": {
+                                                          "type": [
+                                                            "string",
+                                                            "null"
+                                                          ]
+                                                        },
+                                                        "insecure": {
+                                                          "type": "boolean",
+                                                          "default": false
+                                                        },
+                                                        "insecureHost": {
+                                                          "type": "boolean",
+                                                          "default": false
                                                         }
-                                                      }
+                                                      },
+                                                      "additionalProperties": false
                                                     },
-                                                    "required": [
-                                                      "anthropic"
-                                                    ],
-                                                    "additionalProperties": false
-                                                  },
-                                                  {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "bedrock": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                          "model": {
-                                                            "type": [
-                                                              "string",
-                                                              "null"
-                                                            ]
-                                                          },
-                                                          "region": {
-                                                            "type": "string"
-                                                          },
-                                                          "guardrailIdentifier": {
-                                                            "type": [
-                                                              "string",
-                                                              "null"
-                                                            ]
-                                                          },
-                                                          "guardrailVersion": {
-                                                            "type": [
-                                                              "string",
-                                                              "null"
-                                                            ]
-                                                          }
+                                                    "backendAuth": {
+                                                      "anyOf": [
+                                                        {
+                                                          "oneOf": [
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "passthrough": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": false
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "passthrough"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            },
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "key": {
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "file": {
+                                                                          "type": "string"
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "file"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "type": "string"
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "key"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            },
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "gcp": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": false
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "gcp"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            },
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "aws": {
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "description": "Use explicit AWS credentials",
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "accessKeyId": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "secretAccessKey": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "region": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "sessionToken": {
+                                                                          "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                          ]
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false,
+                                                                      "required": [
+                                                                        "accessKeyId",
+                                                                        "secretAccessKey",
+                                                                        "region"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "description": "Use implicit AWS authentication (environment variables, IAM roles, etc.)",
+                                                                      "type": "object",
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "aws"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            }
+                                                          ]
                                                         },
-                                                        "required": [
-                                                          "region"
-                                                        ]
-                                                      }
-                                                    },
-                                                    "required": [
-                                                      "bedrock"
-                                                    ],
-                                                    "additionalProperties": false
-                                                  }
-                                                ]
-                                              },
-                                              "hostOverride": {
-                                                "type": [
-                                                  "string",
-                                                  "null"
-                                                ]
-                                              },
-                                              "tokenize": {
-                                                "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
-                                                "type": "boolean",
-                                                "default": false
+                                                        {
+                                                          "type": "null"
+                                                        }
+                                                      ],
+                                                      "default": null
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "name",
+                                                    "provider"
+                                                  ]
+                                                }
                                               }
                                             },
                                             "additionalProperties": false,
                                             "required": [
-                                              "name",
-                                              "provider"
+                                              "providers"
                                             ]
                                           }
                                         }
                                       },
                                       "additionalProperties": false,
                                       "required": [
-                                        "providers"
+                                        "groups"
                                       ]
                                     }
                                   ]
@@ -3222,6 +3548,18 @@
                 },
                 "required": [
                   "backend"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "subBackend": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "subBackend"
                 ],
                 "additionalProperties": false
               }
