@@ -4,11 +4,6 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::client::Transport;
-use crate::http::HeaderValue;
-use crate::http::backendtls::{BackendTLS, SYSTEM_TRUST};
-use crate::types::agent::Target;
-use crate::*;
 use ::http::Uri;
 use ::http::uri::Authority;
 use agent_xds::ClientTrait;
@@ -17,6 +12,12 @@ use rustls::ClientConfig;
 use secrecy::{ExposeSecret, SecretString};
 use tonic::body::Body;
 use tower::Service;
+
+use crate::client::Transport;
+use crate::http::HeaderValue;
+use crate::http::backendtls::{BackendTLS, SYSTEM_TRUST};
+use crate::types::agent::Target;
+use crate::*;
 
 pub mod caclient;
 

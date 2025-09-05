@@ -1,3 +1,10 @@
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::{Debug, Display, Formatter};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::time::Duration;
+use std::{fmt, mem};
+
 use agent_core::metrics::{IncrementRecorder, Recorder};
 use agent_core::strng;
 use agent_core::strng::Strng;
@@ -6,12 +13,6 @@ use prost::{DecodeError, EncodeError};
 use prost_types::value::Kind;
 use prost_types::{Struct, Value};
 use split_iter::Splittable;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter};
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::Duration;
-use std::{fmt, mem};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tonic::body::Body;

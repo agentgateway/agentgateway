@@ -511,7 +511,6 @@ fn default_body() -> Bytes {
 mod webhook {
 	use ::http::header::CONTENT_TYPE;
 	use ::http::{HeaderMap, HeaderValue, header};
-
 	use serde::{Deserialize, Serialize};
 
 	use crate::client::Client;

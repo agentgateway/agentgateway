@@ -465,9 +465,10 @@ pub(super) fn translate_stream(
 }
 
 pub(super) mod types {
+	use std::collections::HashMap;
+
 	use bytes::Bytes;
 	use serde::{Deserialize, Serialize};
-	use std::collections::HashMap;
 
 	#[derive(Copy, Clone, Deserialize, Serialize, Debug, Default)]
 	#[serde(rename_all = "camelCase")]

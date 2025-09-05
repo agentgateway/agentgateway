@@ -1,3 +1,8 @@
+use std::net::SocketAddr;
+use std::ops::Deref;
+use std::str::FromStr;
+use std::sync::Arc;
+
 use ::http::uri::PathAndQuery;
 use ::http::{HeaderMap, header};
 use anyhow::anyhow;
@@ -8,16 +13,13 @@ use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
 use rand::Rng;
 use rand::seq::IndexedRandom;
-use std::net::SocketAddr;
-use std::ops::Deref;
-use std::str::FromStr;
-use std::sync::Arc;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
 
 use crate::client::Transport;
 use crate::http::backendtls::BackendTLS;
+use crate::http::ext_proc::ExtProcRequest;
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
 	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
@@ -25,7 +27,7 @@ use crate::http::{
 };
 use crate::llm::{LLMRequest, RequestResult, RouteType};
 use crate::proxy::{ProxyError, ProxyResponse, resolve_simple_backend};
-use crate::store::{BackendPolicies, LLMRequestPolicies, LLMResponsePolicies};
+use crate::store::{BackendPolicies, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies};
 use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
@@ -65,7 +67,6 @@ async fn apply_request_policies(
 	log.cel.ctx().with_extauthz(req);
 
 	let exec = std::cell::LazyCell::new(|| log.cel.ctx().build());
-
 	let cel_err = |_| ProxyError::ProcessingString("failed to build cel context".to_string());
 
 	if let Some(j) = &policies.authorization {
@@ -86,6 +87,13 @@ async fn apply_request_policies(
 	}
 	.apply(response_policies.headers())?;
 
+	if let Some(x) = response_policies.ext_proc.as_mut() {
+		x.mutate_request(req).await?
+	} else {
+		http::PolicyResponse::default()
+	}
+	.apply(response_policies.headers())?;
+
 	if let Some(j) = &policies.transformation {
 		j.apply_request(req, exec.deref().as_ref().map_err(cel_err)?)
 			.map_err(|_| ProxyError::TransformationFailure)?;
@@ -96,6 +104,39 @@ async fn apply_request_policies(
 			.apply(req)
 			.map_err(|_| ProxyError::CsrfValidationFailed)?
 			.apply(response_policies.headers())?;
+	}
+
+	Ok(())
+}
+
+async fn apply_gateway_policies(
+	policies: &GatewayPolicies,
+	log: &mut RequestLog,
+	req: &mut Request,
+	ext_proc: Option<&mut ExtProcRequest>,
+	response_headers: &mut HeaderMap,
+) -> Result<(), ProxyResponse> {
+	if let Some(j) = &policies.jwt {
+		j.apply(log, req)
+			.await
+			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+	}
+
+	if let Some(x) = ext_proc {
+		x.mutate_request(req).await?
+	} else {
+		http::PolicyResponse::default()
+	}
+	.apply(response_headers)?;
+
+	if let Some(j) = &policies.transformation {
+		let exec = log
+			.cel
+			.ctx()
+			.build()
+			.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))?;
+		j.apply_request(req, &exec)
+			.map_err(|_| ProxyError::TransformationFailure)?;
 	}
 
 	Ok(())
@@ -317,6 +358,11 @@ impl HTTPProxy {
 				.unwrap_or_else(|| req.uri().path().to_string()),
 		);
 		log.version = Some(req.version());
+
+		log
+			.cel
+			.ctx()
+			.with_source(&log.tcp_info, log.tls_info.as_ref());
 		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
 		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
 			log.cel.ctx().with_request_body(body);
@@ -356,6 +402,37 @@ impl HTTPProxy {
 		log.listener_name = Some(selected_listener.name.clone());
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
+		let mut gateway_policies = inputs.stores.read_binds().gateway_policies(
+			selected_listener.key.clone(),
+			selected_listener.gateway_name.clone(),
+		);
+		gateway_policies.register_cel_expressions(log.cel.ctx());
+		log
+			.cel
+			.ctx()
+			.with_source(&log.tcp_info, log.tls_info.as_ref());
+		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
+		// so we can do logging, etc when we find no routes.
+		// But we may find new expressions that now need the request.
+		// it is zero-cost at runtime to do it twice so NBD.
+		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
+		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
+			log.cel.ctx().with_request_body(body);
+		}
+
+		let mut response_headers = HeaderMap::new();
+		let mut maybe_gateway_ext_proc = gateway_policies
+			.ext_proc
+			.take()
+			.map(|c| c.build(self.policy_client()));
+		apply_gateway_policies(
+			&gateway_policies,
+			log,
+			&mut req,
+			maybe_gateway_ext_proc.as_mut(),
+			&mut response_headers,
+		)
+		.await?;
 
 		let (selected_route, path_match) = http::route::select_best_route(
 			inputs.stores.clone(),
@@ -371,7 +448,7 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
-		let route_policies = inputs.stores.read_binds().route_policies(
+		let mut route_policies = inputs.stores.read_binds().route_policies(
 			selected_route.rule_name.clone(),
 			selected_route.route_name.clone(),
 			selected_listener.key.clone(),
@@ -380,6 +457,7 @@ impl HTTPProxy {
 		);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
+
 		log
 			.cel
 			.ctx()
@@ -393,8 +471,16 @@ impl HTTPProxy {
 			log.cel.ctx().with_request_body(body);
 		}
 
-		let mut response_policies = ResponsePolicies::from(route_policies.transformation.clone());
-
+		let maybe_ext_proc = route_policies
+			.ext_proc
+			.take()
+			.map(|c| c.build(self.policy_client()));
+		let mut response_policies = ResponsePolicies::from(
+			route_policies.transformation.clone(),
+			maybe_ext_proc,
+			maybe_gateway_ext_proc,
+			response_headers,
+		);
 		apply_request_policies(
 			&route_policies,
 			self.policy_client(),
@@ -585,7 +671,7 @@ impl HTTPProxy {
 			.map_err(ProxyError::from)?;
 		apply_response_filters(selected_backend.filters.as_slice(), &mut resp)
 			.map_err(ProxyError::from)?;
-		response_policies.apply(&mut resp, log)?;
+		response_policies.apply(&mut resp, log).await?;
 
 		// for now we do not have any body timeout. Maybe we should add it
 		// let resp = body_timeout.apply(resp);
@@ -742,7 +828,8 @@ async fn make_backend_call(
 		.backend_policies(backend.name(), service, sub_backend);
 
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
-	let override_dest = maybe_inference.mutate_request(&mut req).await?;
+	let (override_dest, ext_proc_resp) = maybe_inference.mutate_request(&mut req).await?;
+	ext_proc_resp.apply(response_headers)?;
 	log.add(|l| l.inference_pool = override_dest);
 
 	let backend_call = match backend {
@@ -988,7 +1075,8 @@ async fn make_backend_call(
 		} else {
 			resp
 		};
-		maybe_inference.mutate_response(&mut resp).await?;
+		// TODO: we currently do not support ImmediateResponse from inference router
+		let _ = maybe_inference.mutate_response(&mut resp).await?;
 		Ok(resp)
 	}))
 }
@@ -1144,23 +1232,49 @@ struct BackendCall {
 struct ResponsePolicies {
 	transformation: Option<Transformation>,
 	response_headers: HeaderMap,
+	ext_proc: Option<ExtProcRequest>,
+	early_ext_proc: Option<ExtProcRequest>,
 }
 
 impl ResponsePolicies {
-	pub fn from(transformation: Option<Transformation>) -> ResponsePolicies {
+	pub fn from(
+		transformation: Option<Transformation>,
+		ext_proc: Option<ExtProcRequest>,
+		early_ext_proc: Option<ExtProcRequest>,
+		hm: HeaderMap,
+	) -> ResponsePolicies {
 		Self {
 			transformation,
-			response_headers: HeaderMap::new(),
+			ext_proc,
+			early_ext_proc,
+			response_headers: hm,
 		}
 	}
 	pub fn headers(&mut self) -> &mut HeaderMap {
 		&mut self.response_headers
 	}
-	pub fn apply(&self, resp: &mut Response, log: &mut RequestLog) -> Result<(), ProxyError> {
+
+	pub async fn apply(
+		&mut self,
+		resp: &mut Response,
+		log: &mut RequestLog,
+	) -> Result<(), ProxyResponse> {
 		if let Some(j) = &self.transformation {
 			j.apply_response(resp, log.cel.ctx())
 				.map_err(|_| ProxyError::TransformationFailure)?;
 		}
+		if let Some(x) = self.ext_proc.as_mut() {
+			x.mutate_response(resp).await?
+		} else {
+			PolicyResponse::default()
+		}
+		.apply(&mut self.response_headers)?;
+		if let Some(x) = self.early_ext_proc.as_mut() {
+			x.mutate_response(resp).await?
+		} else {
+			PolicyResponse::default()
+		}
+		.apply(&mut self.response_headers)?;
 		merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
 		Ok(())
 	}

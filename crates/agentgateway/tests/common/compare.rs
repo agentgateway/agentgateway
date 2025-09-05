@@ -147,7 +147,11 @@ binds:
 
 		let mut cmd = Command::new("envoy");
 		cmd
-			.args(["-c", &config_file.to_string_lossy()])
+			.args([
+				"-c",
+				&config_file.to_string_lossy(),
+				"--disable-hot-restart",
+			])
 			.stdout(Stdio::piped())
 			.stderr(Stdio::piped());
 

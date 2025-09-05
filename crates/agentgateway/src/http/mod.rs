@@ -34,8 +34,6 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::proxy::{ProxyError, ProxyResponse};
-use crate::transport::BufferLimit;
 pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
@@ -44,6 +42,9 @@ use bytes::Bytes;
 use http_body::{Frame, SizeHint};
 use tower_serve_static::private::mime;
 use url::Url;
+
+use crate::proxy::{ProxyError, ProxyResponse};
+use crate::transport::BufferLimit;
 
 pub mod x_headers {
 	use http::HeaderName;

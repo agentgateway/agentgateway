@@ -1,5 +1,6 @@
-use ::http::{Method, StatusCode, header};
 use std::collections::HashSet;
+
+use ::http::{Method, StatusCode, header};
 
 use crate::http::{PolicyResponse, Request, filters};
 use crate::*;

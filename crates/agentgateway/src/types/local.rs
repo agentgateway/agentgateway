@@ -14,6 +14,7 @@ use serde_with::{TryFromInto, serde_as};
 use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
+use crate::http::ext_proc::FailureMode;
 use crate::http::{filters, retry, timeout};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, RouteType};
 use crate::mcp::McpAuthorization;
@@ -21,11 +22,12 @@ use crate::store::LocalWorkload;
 use crate::types::agent::PolicyTarget::RouteRule;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendName, BackendReference, Bind, BindName, GatewayName,
-	Listener, ListenerKey, ListenerProtocol, ListenerSet, McpAuthentication, McpBackend, McpTarget,
-	McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, Policy, PolicyName, PolicyTarget, Route,
-	RouteBackendReference, RouteFilter, RouteMatch, RouteName, RouteRuleName, RouteSet,
-	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, TLSConfig, Target, TargetedPolicy, TrafficPolicy,
+	GatewayTargetedPolicy, Listener, ListenerKey, ListenerProtocol, ListenerSet, McpAuthentication,
+	McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, Policy,
+	PolicyName, PolicyTarget, Route, RouteBackendReference, RouteFilter, RouteMatch, RouteName,
+	RouteRuleName, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec,
+	TCPRoute, TCPRouteBackendReference, TCPRouteSet, TLSConfig, Target, TargetedPolicy,
+	TrafficPolicy,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::*;
@@ -45,6 +47,7 @@ impl NormalizedLocalConfig {
 pub struct NormalizedLocalConfig {
 	pub binds: Vec<Bind>,
 	pub policies: Vec<TargetedPolicy>,
+	pub gateway_policies: Vec<GatewayTargetedPolicy>,
 	pub backends: Vec<Backend>,
 	// Note: here we use LocalWorkload since it conveys useful info, we could maybe change but not a problem
 	// for now
@@ -64,6 +67,12 @@ pub struct LocalConfig {
 	/// This is an advanced feature; users should typically use the inline `policies` field under route.
 	#[serde(default)]
 	policies: Vec<LocalPolicy>,
+	/// gatewayPolicies define policies that run at the Gateway level. This includes a subset of possible
+	/// policy types.
+	/// In general, normal (route level) policies should be used, except you need the policy to influence
+	/// routing.
+	#[serde(default)]
+	gateway_policies: Vec<LocalGatewayTargetedPolicy>,
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	workloads: Vec<LocalWorkload>,
@@ -507,6 +516,50 @@ struct LocalPolicy {
 }
 
 #[apply(schema_de!)]
+struct LocalGatewayTargetedPolicy {
+	pub name: PolicyName,
+	pub target: PolicyTarget,
+	pub policy: LocalGatewayPolicy,
+}
+
+impl From<LocalGatewayPolicy> for FilterOrPolicy {
+	fn from(value: LocalGatewayPolicy) -> Self {
+		Self {
+			ext_proc: value.ext_proc,
+			transformations: value.transformations,
+			jwt_auth: value.jwt_auth,
+			..Default::default()
+		}
+	}
+}
+
+#[apply(schema_de!)]
+struct LocalGatewayPolicy {
+	/// Extend agentgateway with an external processor
+	#[serde(default)]
+	ext_proc: Option<LocalExtProc>,
+
+	/// Authenticate incoming JWT requests.
+	#[serde(default)]
+	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
+
+	/// Modify requests and responses
+	#[serde(default)]
+	#[serde_as(
+		deserialize_as = "Option<TryFromInto<http::transformation_cel::LocalTransformationConfig>>"
+	)]
+	// serde_as is supposed to generate this automatically; not sure why its failing...
+	#[cfg_attr(
+		feature = "schema",
+		schemars(
+			with = "serde_with::Schema::<Option<crate::http::transformation_cel::Transformation>, Option<TryFromInto<http::transformation_cel::LocalTransformationConfig>>>"
+		)
+	)]
+	transformations: Option<crate::http::transformation_cel::Transformation>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
 struct FilterOrPolicy {
 	// Filters. Keep in sync with RouteFilter
 	/// Headers to be modified in the request.
@@ -571,6 +624,9 @@ struct FilterOrPolicy {
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
 	ext_authz: Option<LocalExtAuthz>,
+	/// Extend agentgateway with an external processor
+	#[serde(default)]
+	ext_proc: Option<LocalExtProc>,
 	/// Modify requests and responses
 	#[serde(default)]
 	#[serde_as(
@@ -609,10 +665,12 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 		config: _,
 		binds,
 		policies,
+		gateway_policies,
 		workloads,
 		services,
 	} = i;
 	let mut all_policies = vec![];
+	let mut all_gateway_policies = vec![];
 	let mut all_backends = vec![];
 	let mut all_binds = vec![];
 	for b in binds {
@@ -662,9 +720,33 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 		all_policies.push(tgt_policy);
 	}
 
+	for p in gateway_policies {
+		let res = split_policies(client.clone(), &p.name, &mut all_backends, p.policy.into()).await?;
+		if !res.filters.is_empty() {
+			anyhow::bail!("'gateway_policies' may not contain filters")
+		}
+		if res.traffic_policy != TrafficPolicy::default() {
+			anyhow::bail!("'gateway_policies' may not contain traffic policies")
+		}
+		if !res.backend_policies.is_empty() {
+			anyhow::bail!("'gateway_policies' may not contain backend policies")
+		}
+		if res.route_policies.len() != 1 {
+			anyhow::bail!("'gateway_policies' must contain exactly 1 policy")
+		}
+		let tp = res.route_policies.first().unwrap().clone();
+		let tgt_policy = GatewayTargetedPolicy {
+			name: p.name,
+			target: p.target,
+			policy: tp.try_into()?,
+		};
+		all_gateway_policies.push(tgt_policy);
+	}
+
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
+		gateway_policies: all_gateway_policies,
 		backends: all_backends,
 		workloads,
 		services,
@@ -879,6 +961,7 @@ async fn split_policies(
 		transformations,
 		csrf,
 		ext_authz,
+		ext_proc,
 		timeout,
 		retry,
 	} = pol;
@@ -971,6 +1054,18 @@ async fn split_policies(
 			.into_iter()
 			.for_each(|backend| external_backends.push(backend));
 		route_policies.push(Policy::ExtAuthz(pol))
+	}
+	if let Some(p) = ext_proc {
+		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/extproc", key), &p.target);
+
+		let pol = http::ext_proc::ExtProc {
+			target: Arc::new(bref),
+			failure_mode: p.failure_mode,
+		};
+		backend
+			.into_iter()
+			.for_each(|backend| external_backends.push(backend));
+		route_policies.push(Policy::ExtProc(pol))
 	}
 	if !local_rate_limit.is_empty() {
 		route_policies.push(Policy::LocalRateLimit(local_rate_limit))
@@ -1122,6 +1217,14 @@ pub struct LocalExtAuthz {
 	pub fail_open: Option<bool>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub status_on_error: Option<u16>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalExtProc {
+	#[serde(flatten)]
+	pub target: SimpleLocalBackend,
+	#[serde(default)]
+	pub failure_mode: FailureMode,
 }
 
 #[apply(schema_de!)]

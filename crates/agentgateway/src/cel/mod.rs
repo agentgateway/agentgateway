@@ -1,6 +1,11 @@
 // Portions of this code are heavily inspired from https://github.com/Kuadrant/wasm-shim/
 // Under Apache 2.0 license (https://github.com/Kuadrant/wasm-shim/blob/main/LICENSE)
 
+use std::collections::HashSet;
+use std::fmt::{Debug, Display, Formatter};
+use std::net::IpAddr;
+use std::sync::Arc;
+
 use agent_core::strng::Strng;
 use bytes::Bytes;
 pub use cel::Value;
@@ -9,10 +14,6 @@ use cel::{Context, ExecutionError, ParseError, ParseErrors, Program};
 pub use functions::{FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_MAP_RECURSIVE};
 use once_cell::sync::Lazy;
 use serde::{Serialize, Serializer};
-use std::collections::HashSet;
-use std::fmt::{Debug, Display, Formatter};
-use std::net::IpAddr;
-use std::sync::Arc;
 
 use crate::http::jwt::Claims;
 use crate::llm;
@@ -132,6 +133,9 @@ impl ContextBuilder {
 		if !self.attributes.contains(REQUEST_ATTRIBUTE) {
 			return false;
 		}
+		if let Some(r) = self.context.request.as_ref() {
+			return r.body.is_none() && self.attributes.contains(REQUEST_BODY_ATTRIBUTE);
+		}
 		self.context.request = Some(RequestContext {
 			method: req.method().clone(),
 			// TODO: split headers and the rest?
@@ -179,6 +183,9 @@ impl ContextBuilder {
 
 	pub fn with_source(&mut self, tcp: &TCPConnectionInfo, tls: Option<&TLSConnectionInfo>) {
 		if !self.attributes.contains(SOURCE_ATTRIBUTE) {
+			return;
+		}
+		if self.context.source.is_some() {
 			return;
 		}
 		self.context.source = Some(SourceContext {
@@ -287,7 +294,13 @@ impl ContextBuilder {
 
 impl Executor<'_> {
 	pub fn eval(&self, expr: &Expression) -> Result<Value, Error> {
-		Ok(expr.expression.execute(&self.ctx)?)
+		match expr.expression.execute(&self.ctx) {
+			Ok(v) => Ok(v),
+			Err(e) => {
+				tracing::trace!("failed to evaluate expression: {}", e);
+				Err(e.into())
+			},
+		}
 	}
 	pub fn eval_bool(&self, expr: &Expression) -> bool {
 		match self.eval(expr) {

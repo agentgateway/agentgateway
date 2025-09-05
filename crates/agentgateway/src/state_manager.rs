@@ -186,11 +186,13 @@ impl LocalClient {
 		info!("loaded config from {:?}", self.cfg);
 
 		// Sync the state
-		let next_binds =
-			self
-				.stores
-				.binds
-				.sync_local(config.binds, config.policies, config.backends, prev.binds);
+		let next_binds = self.stores.binds.sync_local(
+			config.binds,
+			config.policies,
+			config.gateway_policies,
+			config.backends,
+			prev.binds,
+		);
 		let next_discovery =
 			self
 				.stores

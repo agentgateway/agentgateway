@@ -18,9 +18,10 @@ use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{
-	A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerSet,
-	McpAuthentication, Policy, PolicyName, PolicyTarget, Route, RouteKey, RouteName, RouteRuleName,
-	ServiceName, SubBackendName, TCPRoute, TargetedPolicy,
+	A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, GatewayPolicy,
+	GatewayTargetedPolicy, Listener, ListenerKey, ListenerSet, McpAuthentication, Policy, PolicyName,
+	PolicyTarget, Route, RouteKey, RouteName, RouteRuleName, ServiceName, SubBackendName, TCPRoute,
+	TargetedPolicy,
 };
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -36,6 +37,9 @@ pub struct Store {
 
 	policies_by_name: HashMap<PolicyName, Arc<TargetedPolicy>>,
 	policies_by_target: HashMap<PolicyTarget, HashSet<PolicyName>>,
+
+	gateway_policies_by_name: HashMap<PolicyName, Arc<GatewayTargetedPolicy>>,
+	gateway_policies_by_target: HashMap<PolicyTarget, HashSet<PolicyName>>,
 
 	backends_by_name: HashMap<BackendName, Arc<Backend>>,
 
@@ -79,16 +83,34 @@ impl BackendPolicies {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RoutePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
 	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
 	pub jwt: Option<http::jwt::Jwt>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
+	pub ext_proc: Option<ext_proc::ExtProc>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
 	pub llm: Option<Arc<llm::Policy>>,
 	pub csrf: Option<http::csrf::Csrf>,
+}
+
+#[derive(Debug, Default)]
+pub struct GatewayPolicies {
+	pub ext_proc: Option<ext_proc::ExtProc>,
+	pub jwt: Option<http::jwt::Jwt>,
+	pub transformation: Option<http::transformation_cel::Transformation>,
+}
+
+impl GatewayPolicies {
+	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		if let Some(xfm) = &self.transformation {
+			for expr in xfm.expressions() {
+				ctx.register_expression(expr)
+			}
+		};
+	}
 }
 
 impl RoutePolicies {
@@ -177,6 +199,8 @@ impl Store {
 			by_name: Default::default(),
 			policies_by_name: Default::default(),
 			policies_by_target: Default::default(),
+			gateway_policies_by_name: Default::default(),
+			gateway_policies_by_target: Default::default(),
 			backends_by_name: Default::default(),
 			staged_routes: Default::default(),
 			staged_listeners: Default::default(),
@@ -224,16 +248,7 @@ impl Store {
 		let rules = inline.iter().chain(rules);
 
 		let mut authz = Vec::new();
-		let mut pol = RoutePolicies {
-			local_rate_limit: vec![],
-			remote_rate_limit: None,
-			jwt: None,
-			ext_authz: None,
-			transformation: None,
-			authorization: None,
-			llm: None,
-			csrf: None,
-		};
+		let mut pol = RoutePolicies::default();
 		for rule in rules {
 			match &rule {
 				Policy::LocalRateLimit(p) => {
@@ -243,6 +258,9 @@ impl Store {
 				},
 				Policy::ExtAuthz(p) => {
 					pol.ext_authz.get_or_insert_with(|| p.clone());
+				},
+				Policy::ExtProc(p) => {
+					pol.ext_proc.get_or_insert_with(|| p.clone());
 				},
 				Policy::RemoteRateLimit(p) => {
 					pol.remote_rate_limit.get_or_insert_with(|| p.clone());
@@ -268,6 +286,39 @@ impl Store {
 		}
 		if !authz.is_empty() {
 			pol.authorization = Some(HTTPAuthorizationSet::new(authz.into()));
+		}
+
+		pol
+	}
+
+	pub fn gateway_policies(&self, listener: ListenerKey, gateway: GatewayName) -> GatewayPolicies {
+		let gateway = self
+			.gateway_policies_by_target
+			.get(&PolicyTarget::Gateway(gateway));
+		let listener = self
+			.gateway_policies_by_target
+			.get(&PolicyTarget::Listener(listener));
+		let rules = listener
+			.iter()
+			.copied()
+			.flatten()
+			.chain(gateway.iter().copied().flatten())
+			.filter_map(|n| self.gateway_policies_by_name.get(n))
+			.map(|p| &p.policy);
+
+		let mut pol = GatewayPolicies::default();
+		for rule in rules {
+			match &rule {
+				GatewayPolicy::ExtProc(p) => {
+					pol.ext_proc.get_or_insert_with(|| p.clone());
+				},
+				GatewayPolicy::JwtAuth(p) => {
+					pol.jwt.get_or_insert_with(|| p.clone());
+				},
+				GatewayPolicy::Transformation(p) => {
+					pol.transformation.get_or_insert_with(|| p.clone());
+				},
+			}
 		}
 
 		pol
@@ -536,6 +587,29 @@ impl Store {
 			.or_default()
 			.insert(pol.name.clone());
 	}
+	#[instrument(
+        level = Level::INFO,
+        name="insert_gateway_policy",
+        skip_all,
+        fields(pol=%pol.name),
+    )]
+	pub fn insert_gateway_policy(&mut self, pol: GatewayTargetedPolicy) {
+		let pol = Arc::new(pol);
+		if let Some(old) = self
+			.gateway_policies_by_name
+			.insert(pol.name.clone(), pol.clone())
+		{
+			// Remove the old target. We may add it back, though.
+			if let Some(o) = self.gateway_policies_by_target.get_mut(&old.target) {
+				o.remove(&pol.name);
+			}
+		}
+		self
+			.gateway_policies_by_target
+			.entry(pol.target.clone())
+			.or_default()
+			.insert(pol.name.clone());
+	}
 
 	pub fn insert_listener(&mut self, mut lis: Listener, bind_name: BindName) {
 		debug!(listener=%lis.name,bind=%bind_name, "insert listener");
@@ -721,6 +795,7 @@ pub struct StoreUpdater {
 pub struct Dump {
 	binds: Vec<Arc<Bind>>,
 	policies: Vec<Arc<TargetedPolicy>>,
+	gateway_policies: Vec<Arc<GatewayTargetedPolicy>>,
 	backends: Vec<Arc<Backend>>,
 }
 
@@ -749,6 +824,12 @@ impl StoreUpdater {
 			.sorted_by_key(|k| k.0)
 			.map(|k| k.1.clone())
 			.collect();
+		let gateway_policies: Vec<_> = store
+			.gateway_policies_by_name
+			.iter()
+			.sorted_by_key(|k| k.0)
+			.map(|k| k.1.clone())
+			.collect();
 		let backends: Vec<_> = store
 			.backends_by_name
 			.iter()
@@ -758,6 +839,7 @@ impl StoreUpdater {
 		Dump {
 			binds,
 			policies,
+			gateway_policies,
 			backends,
 		}
 	}
@@ -765,16 +847,19 @@ impl StoreUpdater {
 		&self,
 		binds: Vec<Bind>,
 		policies: Vec<TargetedPolicy>,
+		early_targeted_policy: Vec<GatewayTargetedPolicy>,
 		backends: Vec<Backend>,
 		prev: PreviousState,
 	) -> PreviousState {
 		let mut s = self.state.write().expect("mutex acquired");
 		let mut old_binds = prev.binds;
 		let mut old_pols = prev.policies;
+		let mut old_gateway_pols = prev.gateway_policies;
 		let mut old_backends = prev.backends;
 		let mut next_state = PreviousState {
 			binds: Default::default(),
 			policies: Default::default(),
+			gateway_policies: Default::default(),
 			backends: Default::default(),
 		};
 		for b in binds {
@@ -791,6 +876,11 @@ impl StoreUpdater {
 			old_pols.remove(&p.name);
 			next_state.policies.insert(p.name.clone());
 			s.insert_policy(p);
+		}
+		for p in early_targeted_policy {
+			old_gateway_pols.remove(&p.name);
+			next_state.gateway_policies.insert(p.name.clone());
+			s.insert_gateway_policy(p);
 		}
 		for remaining_bind in old_binds {
 			s.remove_bind(remaining_bind);
@@ -809,6 +899,7 @@ impl StoreUpdater {
 pub struct PreviousState {
 	pub binds: HashSet<BindName>,
 	pub policies: HashSet<PolicyName>,
+	pub gateway_policies: HashSet<PolicyName>,
 	pub backends: HashSet<BackendName>,
 }
 

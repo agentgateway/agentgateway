@@ -283,6 +283,14 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)context`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)failOpen`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)statusOnError`||
+|`binds[].listeners[].routes[].policies.extProc`|Extend agentgateway with an external processor|
+|`binds[].listeners[].routes[].policies.extProc.(any)(1)service`||
+|`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name`||
+|`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.extProc.(any)(1)service.port`||
+|`binds[].listeners[].routes[].policies.extProc.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.extProc.(any)failureMode`||
 |`binds[].listeners[].routes[].policies.transformations`|Modify requests and responses|
 |`binds[].listeners[].routes[].policies.transformations.request`||
 |`binds[].listeners[].routes[].policies.transformations.request.add`||
@@ -769,6 +777,14 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)context`||
 |`policies[].policy.extAuthz.(any)failOpen`||
 |`policies[].policy.extAuthz.(any)statusOnError`||
+|`policies[].policy.extProc`|Extend agentgateway with an external processor|
+|`policies[].policy.extProc.(any)(1)service`||
+|`policies[].policy.extProc.(any)(1)service.name`||
+|`policies[].policy.extProc.(any)(1)service.name.namespace`||
+|`policies[].policy.extProc.(any)(1)service.name.hostname`||
+|`policies[].policy.extProc.(any)(1)service.port`||
+|`policies[].policy.extProc.(any)(1)host`||
+|`policies[].policy.extProc.(any)failureMode`||
 |`policies[].policy.transformations`|Modify requests and responses|
 |`policies[].policy.transformations.request`||
 |`policies[].policy.transformations.request.add`||
@@ -789,6 +805,50 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.retry.attempts`||
 |`policies[].policy.retry.backoff`||
 |`policies[].policy.retry.codes`||
+|`gatewayPolicies`|gatewayPolicies define policies that run at the Gateway level. This includes a subset of possible<br>policy types.<br>In general, normal (route level) policies should be used, except you need the policy to influence<br>routing.|
+|`gatewayPolicies[].name`||
+|`gatewayPolicies[].target`||
+|`gatewayPolicies[].target.(1)gateway`||
+|`gatewayPolicies[].target.(1)listener`||
+|`gatewayPolicies[].target.(1)route`||
+|`gatewayPolicies[].target.(1)routeRule`||
+|`gatewayPolicies[].target.(1)service`||
+|`gatewayPolicies[].target.(1)backend`||
+|`gatewayPolicies[].target.(1)subBackend`||
+|`gatewayPolicies[].policy`||
+|`gatewayPolicies[].policy.extProc`|Extend agentgateway with an external processor|
+|`gatewayPolicies[].policy.extProc.(any)(1)service`||
+|`gatewayPolicies[].policy.extProc.(any)(1)service.name`||
+|`gatewayPolicies[].policy.extProc.(any)(1)service.name.namespace`||
+|`gatewayPolicies[].policy.extProc.(any)(1)service.name.hostname`||
+|`gatewayPolicies[].policy.extProc.(any)(1)service.port`||
+|`gatewayPolicies[].policy.extProc.(any)(1)host`||
+|`gatewayPolicies[].policy.extProc.(any)failureMode`||
+|`gatewayPolicies[].policy.jwtAuth`|Authenticate incoming JWT requests.|
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)mode`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].issuer`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].audiences`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].jwks`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)file`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)mode`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)issuer`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)audiences`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)jwks`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)jwks.(any)file`||
+|`gatewayPolicies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
+|`gatewayPolicies[].policy.transformations`|Modify requests and responses|
+|`gatewayPolicies[].policy.transformations.request`||
+|`gatewayPolicies[].policy.transformations.request.add`||
+|`gatewayPolicies[].policy.transformations.request.set`||
+|`gatewayPolicies[].policy.transformations.request.remove`||
+|`gatewayPolicies[].policy.transformations.request.body`||
+|`gatewayPolicies[].policy.transformations.response`||
+|`gatewayPolicies[].policy.transformations.response.add`||
+|`gatewayPolicies[].policy.transformations.response.set`||
+|`gatewayPolicies[].policy.transformations.response.remove`||
+|`gatewayPolicies[].policy.transformations.response.body`||
 |`workloads`||
 |`services`||
 ## CEL context

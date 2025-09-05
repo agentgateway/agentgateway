@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use agent_core::prelude::Strng;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -6,7 +8,6 @@ use http::Method;
 use itertools::Itertools;
 use prometheus_client::registry::Registry;
 use rmcp::transport::StreamableHttpServerConfig;
-use std::sync::Arc;
 use tracing::warn;
 
 use crate::cel::ContextBuilder;

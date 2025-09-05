@@ -1,6 +1,7 @@
-use super::Provider;
 use itertools::Itertools;
 use serde_json::json;
+
+use super::Provider;
 
 #[test]
 pub fn test_azure_jwks() {

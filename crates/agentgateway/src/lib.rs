@@ -44,10 +44,11 @@ pub mod types;
 mod ui;
 pub mod util;
 
-use crate::control::{AuthSource, RootCert};
-use crate::telemetry::trc::Protocol;
 use control::caclient;
 use telemetry::{metrics, trc};
+
+use crate::control::{AuthSource, RootCert};
+use crate::telemetry::trc::Protocol;
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]

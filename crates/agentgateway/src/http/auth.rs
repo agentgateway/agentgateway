@@ -344,15 +344,15 @@ mod aws {
 }
 
 mod azure {
-	use crate::{
-		client,
-		http::auth::{AzureAuth, AzureAuthCredentialSource, AzureUserAssignedIdentity},
-	};
+	use std::sync::Arc;
+
 	use azure_core::credentials::TokenCredential;
 	use azure_identity::UserAssignedId;
 	use secrecy::ExposeSecret;
-	use std::sync::Arc;
 	use tracing::trace;
+
+	use crate::client;
+	use crate::http::auth::{AzureAuth, AzureAuthCredentialSource, AzureUserAssignedIdentity};
 
 	const SCOPES: &[&str] = &["https://cognitiveservices.azure.com/.default"];
 	fn token_credential_from_auth(

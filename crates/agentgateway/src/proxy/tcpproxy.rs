@@ -1,6 +1,7 @@
-use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+use rand::prelude::IndexedRandom;
 
 use crate::proxy::ProxyError;
 use crate::telemetry::log;

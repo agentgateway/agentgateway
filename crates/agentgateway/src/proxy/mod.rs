@@ -7,7 +7,7 @@ pub mod tcpproxy;
 pub use gateway::Gateway;
 use hyper_util_fork::client::legacy::Error as HyperError;
 
-use crate::http::{HeaderValue, Response, StatusCode};
+use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
 use crate::types::agent::{Backend, BackendReference, SimpleBackend, SimpleBackendReference};
 use crate::*;
 
@@ -70,6 +70,8 @@ pub enum ProxyError {
 	RequestTimeout,
 	#[error("processing failed: {0}")]
 	Processing(anyhow::Error),
+	#[error("ext_proc failed: {0}")]
+	ExtProc(#[from] ext_proc::Error),
 	#[error("processing failed: {0}")]
 	ProcessingString(String),
 	#[error("rate limit exceeded")]
@@ -108,6 +110,7 @@ impl ProxyError {
 			ProxyError::BackendAuthenticationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::InvalidBackendType => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::TransformationFailure => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::ExtProc(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::CsrfValidationFailed => StatusCode::FORBIDDEN,
 
 			ProxyError::UpgradeFailed(_, _) => StatusCode::BAD_GATEWAY,

@@ -2516,6 +2516,86 @@
                               }
                             ]
                           },
+                          "extProc": {
+                            "description": "Extend agentgateway with an external processor",
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "failureMode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "failClosed",
+                                      "failOpen"
+                                    ],
+                                    "default": "failClosed"
+                                  }
+                                },
+                                "unevaluatedProperties": false,
+                                "oneOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "invalid"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "service": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "object",
+                                            "properties": {
+                                              "namespace": {
+                                                "type": "string"
+                                              },
+                                              "hostname": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "namespace",
+                                              "hostname"
+                                            ]
+                                          },
+                                          "port": {
+                                            "type": "integer",
+                                            "format": "uint16",
+                                            "minimum": 0,
+                                            "maximum": 65535
+                                          }
+                                        },
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "name",
+                                          "port"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "service"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "host": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "host"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "transformations": {
                             "description": "Modify requests and responses",
                             "type": [
@@ -7024,6 +7104,86 @@
                   }
                 ]
               },
+              "extProc": {
+                "description": "Extend agentgateway with an external processor",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "failureMode": {
+                        "type": "string",
+                        "enum": [
+                          "failClosed",
+                          "failOpen"
+                        ],
+                        "default": "failClosed"
+                      }
+                    },
+                    "unevaluatedProperties": false,
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "invalid"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "service": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "object",
+                                "properties": {
+                                  "namespace": {
+                                    "type": "string"
+                                  },
+                                  "hostname": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "namespace",
+                                  "hostname"
+                                ]
+                              },
+                              "port": {
+                                "type": "integer",
+                                "format": "uint16",
+                                "minimum": 0,
+                                "maximum": 65535
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "name",
+                              "port"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "service"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "host": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "host"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "transformations": {
                 "description": "Modify requests and responses",
                 "type": [
@@ -7185,6 +7345,445 @@
                 "required": [
                   "codes"
                 ],
+                "default": null
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "target",
+          "policy"
+        ]
+      }
+    },
+    "gatewayPolicies": {
+      "description": "gatewayPolicies define policies that run at the Gateway level. This includes a subset of possible\npolicy types.\nIn general, normal (route level) policies should be used, except you need the policy to influence\nrouting.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "target": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "gateway": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gateway"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "listener": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "listener"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "route"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "routeRule": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "routeRule"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "service": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "service"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "backend": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "backend"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "subBackend": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "subBackend"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "policy": {
+            "type": "object",
+            "properties": {
+              "extProc": {
+                "description": "Extend agentgateway with an external processor",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "failureMode": {
+                        "type": "string",
+                        "enum": [
+                          "failClosed",
+                          "failOpen"
+                        ],
+                        "default": "failClosed"
+                      }
+                    },
+                    "unevaluatedProperties": false,
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "invalid"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "service": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "object",
+                                "properties": {
+                                  "namespace": {
+                                    "type": "string"
+                                  },
+                                  "hostname": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "namespace",
+                                  "hostname"
+                                ]
+                              },
+                              "port": {
+                                "type": "integer",
+                                "format": "uint16",
+                                "minimum": 0,
+                                "maximum": 65535
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "name",
+                              "port"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "service"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "host": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "host"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "jwtAuth": {
+                "description": "Authenticate incoming JWT requests.",
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "oneOf": [
+                              {
+                                "description": "A valid token, issued by a configured issuer, must be present.",
+                                "type": "string",
+                                "const": "strict"
+                              },
+                              {
+                                "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                "type": "string",
+                                "const": "optional"
+                              },
+                              {
+                                "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                "type": "string",
+                                "const": "permissive"
+                              }
+                            ],
+                            "default": "optional"
+                          },
+                          "providers": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "issuer": {
+                                  "type": "string"
+                                },
+                                "audiences": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "jwks": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "file": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "file"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "url": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "url"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "issuer",
+                                "audiences",
+                                "jwks"
+                              ]
+                            }
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "providers"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "oneOf": [
+                              {
+                                "description": "A valid token, issued by a configured issuer, must be present.",
+                                "type": "string",
+                                "const": "strict"
+                              },
+                              {
+                                "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                "type": "string",
+                                "const": "optional"
+                              },
+                              {
+                                "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                "type": "string",
+                                "const": "permissive"
+                              }
+                            ],
+                            "default": "optional"
+                          },
+                          "issuer": {
+                            "type": "string"
+                          },
+                          "audiences": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "jwks": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "file": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "file"
+                                ]
+                              },
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "url": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "url"
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "issuer",
+                          "audiences",
+                          "jwks"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "transformations": {
+                "description": "Modify requests and responses",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "request": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "add": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "default": {}
+                      },
+                      "set": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "default": {}
+                      },
+                      "remove": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "default": []
+                      },
+                      "body": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "response": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "add": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "default": {}
+                      },
+                      "set": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "default": {}
+                      },
+                      "remove": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "default": []
+                      },
+                      "body": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false,
                 "default": null
               }
             },

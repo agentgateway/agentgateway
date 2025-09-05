@@ -271,8 +271,8 @@ pub enum RouteFilter {
 	CORS(http::cors::Cors),
 }
 
-#[derive(Default, Eq, PartialEq)]
 #[apply(schema!)]
+#[derive(Default, Eq, PartialEq)]
 pub struct TrafficPolicy {
 	pub timeout: timeout::Policy,
 	pub retry: Option<retry::Policy>,
@@ -960,8 +960,16 @@ pub struct TargetedPolicy {
 	pub policy: Policy,
 }
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayTargetedPolicy {
+	pub name: PolicyName,
+	pub target: PolicyTarget,
+	pub policy: GatewayPolicy,
+}
+
 #[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
 pub enum PolicyTarget {
 	Gateway(GatewayName),
 	Listener(ListenerKey),
@@ -975,6 +983,25 @@ pub enum PolicyTarget {
 	SubBackend(SubBackendName),
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GatewayPolicy {
+	JwtAuth(crate::http::jwt::Jwt),
+	Transformation(crate::http::transformation_cel::Transformation),
+	ExtProc(ext_proc::ExtProc),
+}
+
+impl TryFrom<Policy> for GatewayPolicy {
+	type Error = anyhow::Error;
+	fn try_from(value: Policy) -> Result<Self, Self::Error> {
+		match value {
+			Policy::JwtAuth(p) => Ok(GatewayPolicy::JwtAuth(p)),
+			Policy::Transformation(p) => Ok(GatewayPolicy::Transformation(p)),
+			Policy::ExtProc(p) => Ok(GatewayPolicy::ExtProc(p)),
+			_ => anyhow::bail!("invalid gateway_policy type"),
+		}
+	}
+}
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Policy {
@@ -1004,8 +1031,9 @@ pub enum Policy {
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	ExtAuthz(ext_authz::ExtAuthz),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
-	JwtAuth(crate::http::jwt::Jwt),
+	ExtProc(ext_proc::ExtProc),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
+	JwtAuth(crate::http::jwt::Jwt),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	Transformation(crate::http::transformation_cel::Transformation),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed

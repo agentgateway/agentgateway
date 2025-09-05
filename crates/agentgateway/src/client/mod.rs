@@ -6,6 +6,7 @@ use std::task;
 
 use ::http::Uri;
 use ::http::uri::{Authority, Scheme};
+use async_trait::async_trait;
 use azure_core::error::ResultExt;
 use azure_core::http::BufResponse;
 use futures::TryStreamExt;
@@ -23,7 +24,6 @@ use crate::transport::stream::{LoggingMode, Socket};
 use crate::transport::{hbone, stream};
 use crate::types::agent::Target;
 use crate::*;
-use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct Client {
