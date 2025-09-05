@@ -328,7 +328,7 @@ impl ExtAuthz {
 			for (key, value) in metadata.fields {
 				dynamic_metadata
 					.metadata
-					.insert(key, convert_prost_value_to_json(&value));
+					.insert(key, convert_prost_value_to_json(&value)?);
 			}
 
 			if !dynamic_metadata.metadata.is_empty() {
@@ -417,27 +417,8 @@ impl ExtAuthz {
 	}
 }
 
-fn convert_prost_value_to_json(value: &prost_types::Value) -> JsonValue {
-	use prost_types::value::Kind;
-
-	match &value.kind {
-		Some(Kind::NullValue(_)) => JsonValue::Null,
-		Some(Kind::NumberValue(n)) => JsonValue::from(*n),
-		Some(Kind::StringValue(s)) => JsonValue::String(s.clone()),
-		Some(Kind::BoolValue(b)) => JsonValue::Bool(*b),
-		Some(Kind::StructValue(s)) => {
-			let mut map = serde_json::Map::new();
-			for (key, val) in &s.fields {
-				map.insert(key.clone(), convert_prost_value_to_json(val));
-			}
-			JsonValue::Object(map)
-		},
-		Some(Kind::ListValue(l)) => {
-			let arr: Vec<JsonValue> = l.values.iter().map(convert_prost_value_to_json).collect();
-			JsonValue::Array(arr)
-		},
-		None => JsonValue::Null,
-	}
+fn convert_prost_value_to_json(value: &prost_wkt_types::Value) -> Result<JsonValue, ProxyError> {
+	serde_json::to_value(value).map_err(|e| ProxyError::Processing(e.into()))
 }
 
 fn process_headers(

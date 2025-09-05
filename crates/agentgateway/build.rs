@@ -26,6 +26,8 @@ fn main() -> Result<(), anyhow::Error> {
 			".agentgateway.dev.workload.Address",
 			".agentgateway.dev.workload.Address",
 		]);
+		c.extern_path(".google.protobuf.Value", "::prost_wkt_types::Value");
+		c.extern_path(".google.protobuf.Struct", "::prost_wkt_types::Struct");
 		c
 	};
 	let fds = protox::compile(&proto_files, &include_dirs)?;

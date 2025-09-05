@@ -77,6 +77,7 @@ pin-project-lite.workspace = true
 prometheus-client.workspace = true
 prost.workspace = true
 prost-types.workspace = true
+prost-wkt-types.workspace = true
 rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
@@ -142,6 +143,7 @@ prost-build.workspace = true
 tonic-prost-build.workspace = true
 tonic-build.workspace = true
 protox.workspace = true
+prost-wkt-build.workspace = true
 
 [dev-dependencies]
 assert_matches.workspace = true

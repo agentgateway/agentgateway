@@ -49,4 +49,6 @@ pub enum ProtoError {
 	Duration(#[from] prost_types::DurationError),
 	#[error("missing required field")]
 	MissingRequiredField,
+	#[error("invalid json: {0}")]
+	Json(#[from] serde_json::Error),
 }
