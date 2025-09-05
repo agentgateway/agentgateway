@@ -156,6 +156,11 @@ which.workspace = true
 agentgateway = { version = "0.7.0", path = ".", default-features = false, features = [
     "testing",
 ] }
+rmcp = { version = "0.6.3", features = [
+    "transport-streamable-http-client-reqwest",
+    "transport-sse-client-reqwest",
+] }
+
 
 [lints.clippy]
 # This rule makes code more confusing

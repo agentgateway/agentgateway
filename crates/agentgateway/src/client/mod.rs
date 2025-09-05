@@ -286,6 +286,13 @@ impl Client {
 		let host = uri.authority().to_owned();
 		// const TIMEOUT: Option<Duration> = Some(Duration::from_secs(5));
 		const TIMEOUT: Option<Duration> = None;
+		event!(
+			target: "upstream request",
+			parent: None,
+			tracing::Level::TRACE,
+
+			request =?req
+		);
 		let resp = match TIMEOUT {
 			Some(to) => match tokio::time::timeout(to, self.client.request(req)).await {
 				Ok(res) => res.map_err(ProxyError::UpstreamCallFailed),
@@ -298,6 +305,7 @@ impl Client {
 				.map_err(ProxyError::UpstreamCallFailed),
 		};
 		let dur = format!("{}ms", start.elapsed().as_millis());
+
 		event!(
 			target: "upstream request",
 			parent: None,

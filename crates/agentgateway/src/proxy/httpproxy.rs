@@ -699,6 +699,24 @@ async fn make_backend_call(
 		_ => (None, None),
 	};
 
+	// The MCP backend aggregates multiple backends into a single backend.
+	// In some cases, we want to treat this as a normal backend, so we swap it out.
+	let backend = match backend {
+		Backend::MCP(name, mcp_backend) => {
+			if let Some(be) = inputs
+				.clone()
+				.mcp_state
+				.should_passthrough(name.clone(), mcp_backend, &req)
+			{
+				let target = super::resolve_simple_backend(&be, inputs.as_ref())?;
+				&Backend::from(target)
+			} else {
+				backend
+			}
+		},
+		_ => backend,
+	};
+
 	let policies = inputs
 		.stores
 		.read_binds()
@@ -1167,13 +1185,25 @@ impl PolicyClient {
 		.map_err(ProxyResponse::downcast)?
 		.await
 	}
+
 	pub async fn call_with_default_policies(
 		&self,
 		req: Request,
 		backend: &SimpleBackend,
 		defaults: BackendPolicies,
 	) -> Result<Response, ProxyError> {
-		Box::pin(
+		self
+			.internal_call_with_default_policies(req, backend, defaults)
+			.await
+	}
+
+	pub fn internal_call_with_default_policies<'a>(
+		&'a self,
+		req: Request,
+		backend: &'a SimpleBackend,
+		defaults: BackendPolicies,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		Box::pin(async move {
 			make_backend_call(
 				self.inputs.clone(),
 				Arc::new(LLMRequestPolicies::default()),
@@ -1184,9 +1214,9 @@ impl PolicyClient {
 				&mut Default::default(),
 			)
 			.await
-			.map_err(ProxyResponse::downcast)?,
-		)
-		.await
+			.map_err(ProxyResponse::downcast)?
+			.await
+		})
 	}
 
 	pub async fn simple_call(&self, req: Request) -> Result<Response, ProxyError> {

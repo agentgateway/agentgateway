@@ -447,7 +447,7 @@ pub struct RequestLog {
 	pub error: Option<String>,
 
 	pub grpc_status: AsyncLog<u8>,
-	pub mcp_status: AsyncLog<mcp::sse::MCPInfo>,
+	pub mcp_status: AsyncLog<mcp::MCPInfo>,
 
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,

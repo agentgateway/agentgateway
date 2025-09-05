@@ -2,17 +2,18 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use http::Method;
 use http::header::{ACCEPT, CONTENT_TYPE};
-use http::{HeaderMap, Method};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use reqwest::header::{HeaderName, HeaderValue};
-use rmcp::model::{JsonObject, Tool};
+use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::instrument;
 
-use crate::http::jwt::Claims;
 use crate::json;
+use crate::mcp::mergestream;
+use crate::mcp::mergestream::Messages;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::BackendPolicies;
 use crate::types::agent::SimpleBackend;
@@ -26,10 +27,6 @@ pub struct UpstreamOpenAPICall {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
-	#[error("missing fields")]
-	MissingFields,
-	#[error("missing schema")]
-	MissingSchema,
 	#[error("missing components")]
 	MissingComponents,
 	#[error("invalid reference: {0}")]
@@ -44,24 +41,8 @@ pub enum ParseError {
 	SerdeError(#[from] serde_json::Error),
 	#[error("io error: {0}")]
 	IoError(#[from] std::io::Error),
-	#[error("HTTP request failed: {0}")]
-	HttpError(#[from] reqwest::Error),
 	#[error("Invalid URL: {0}")]
 	InvalidUrl(#[from] url::ParseError),
-	#[error("Schema source not specified in OpenAPI target")]
-	SchemaSourceMissing,
-	#[error(
-		"Unsupported schema format or content type from URL {0}. Only JSON and YAML are supported."
-	)]
-	UnsupportedSchemaFormat(String), // Added URL to message
-	#[error("Local schema file path not specified")]
-	LocalPathMissing,
-	#[error("Local schema inline content not specified or empty")]
-	LocalInlineMissing, // Added for inline content
-	#[error("Invalid header name or value")]
-	InvalidHeader,
-	#[error("Header value source not supported (e.g. env_value)")]
-	HeaderValueSourceNotSupported(String),
 }
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
@@ -399,6 +380,8 @@ pub(crate) fn parse_openapi_schema(
 								input_schema: Arc::new(final_json),
 								// TODO: support output_schema
 								output_schema: None,
+								icons: None,
+								title: None,
 							};
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
@@ -527,6 +510,85 @@ pub struct Handler {
 }
 
 impl Handler {
+	pub async fn send_message(
+		&self,
+		request: JsonRpcRequest<ClientRequest>,
+		ctx: &IncomingRequestContext,
+	) -> Result<mergestream::Messages, UpstreamError> {
+		use rmcp::model::*;
+		let method = request.request.method();
+		let id = request.id;
+		let res = match request.request {
+			ClientRequest::InitializeRequest(_) => Messages::from_result(
+				id,
+				ServerInfo {
+					capabilities: ServerCapabilities::builder().enable_tools().build(),
+					..Default::default()
+				},
+			),
+			ClientRequest::GetPromptRequest(_) => Messages::from_result(
+				id,
+				GetPromptResult {
+					description: None,
+					messages: vec![],
+				},
+			),
+			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
+				id,
+				ListPromptsResult {
+					next_cursor: None,
+					prompts: vec![],
+				},
+			),
+			ClientRequest::ListResourcesRequest(_) => Messages::from_result(
+				id,
+				ListResourcesResult {
+					next_cursor: None,
+					resources: vec![],
+				},
+			),
+			ClientRequest::ListResourceTemplatesRequest(_) => Messages::from_result(
+				id,
+				ListResourceTemplatesResult {
+					next_cursor: None,
+					resource_templates: vec![],
+				},
+			),
+			ClientRequest::ReadResourceRequest(_) => {
+				Messages::from_result(id, ReadResourceResult { contents: vec![] })
+			},
+			ClientRequest::PingRequest(_)
+			| ClientRequest::SetLevelRequest(_)
+			| ClientRequest::SubscribeRequest(_)
+			| ClientRequest::UnsubscribeRequest(_) => Messages::empty(),
+			ClientRequest::CompleteRequest(_) => {
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			},
+			ClientRequest::CallToolRequest(ctr) => {
+				let res = self
+					.call_tool(ctr.params.name.as_ref(), ctr.params.arguments, ctx)
+					.await?;
+				Messages::from_result(
+					id,
+					CallToolResult {
+						content: vec![],
+						structured_content: Some(res),
+						is_error: None,
+						meta: None,
+					},
+				)
+			},
+			ClientRequest::ListToolsRequest(_) => Messages::from_result(
+				id,
+				ListToolsResult {
+					next_cursor: None,
+					tools: self.tools(),
+				},
+			),
+		};
+		Ok(res)
+	}
+
 	/// We need to use the parse the schema to get the correct args.
 	/// They are in the json schema under the "properties" key.
 	/// Body is under the "body" key.
@@ -538,19 +600,11 @@ impl Handler {
 	/// Headers need to be added to the request headers.
 	/// Body needs to be added to the request body.
 	/// Path params need to be added to the template params in the path.
-	#[instrument(
-		level = "debug",
-		skip_all,
-		fields(
-			name=%name,
-		),
-	)]
 	pub async fn call_tool(
 		&self,
 		name: &str,
 		args: Option<JsonObject>,
-		user_headers: &HeaderMap,
-		claims: Option<Claims>,
+		ctx: &IncomingRequestContext,
 	) -> Result<serde_json::Value, anyhow::Error> {
 		let (_tool, info) = self
 			.tools
@@ -689,14 +743,8 @@ impl Handler {
 		let mut request = rb
 			.body(body.into())
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
-		for (k, v) in user_headers {
-			if !request.headers().contains_key(k) {
-				request.headers_mut().insert(k.clone(), v.clone());
-			}
-		}
-		if let Some(claims) = claims.as_ref() {
-			request.extensions_mut().insert(claims.clone());
-		}
+
+		ctx.apply(&mut request);
 
 		// Make the request
 		let response = self

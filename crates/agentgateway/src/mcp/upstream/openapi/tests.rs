@@ -40,14 +40,7 @@ async fn setup() -> (MockServer, Handler) {
 		upstream: client.clone(),
 		ca: None,
 
-		mcp_state: mcp::sse::App::new(
-			stores.clone(),
-			Arc::new(crate::mcp::relay::metrics::Metrics::new(
-				&mut Registry::default(),
-				None, // TODO custom tags
-			)),
-			drain_rx.clone(),
-		),
+		mcp_state: mcp::router::App::new(stores.clone(), &mut Registry::default(), drain_rx.clone()),
 	});
 
 	let client = PolicyClient { inputs: pi };
@@ -55,6 +48,8 @@ async fn setup() -> (MockServer, Handler) {
 	let test_tool_get = Tool {
 		name: Cow::Borrowed("get_user"),
 		description: Some(Cow::Borrowed("Get user details")), // Added description
+		icons: None,
+		title: None,
 		input_schema: Arc::new(
 			json!({ // Define a simple schema for testing
 					"type": "object",
@@ -96,6 +91,8 @@ async fn setup() -> (MockServer, Handler) {
 	let test_tool_post = Tool {
 		name: Cow::Borrowed("create_user"),
 		description: Some(Cow::Borrowed("Create a new user")),
+		icons: None,
+		title: None,
 		input_schema: Arc::new(
 			json!({
 				"type": "object",
@@ -173,8 +170,7 @@ async fn test_call_tool_get_simple_success() {
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 
@@ -203,8 +199,7 @@ async fn test_call_tool_get_with_query() {
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 
@@ -232,8 +227,7 @@ async fn test_call_tool_get_with_header() {
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 
@@ -260,8 +254,7 @@ async fn test_call_tool_post_with_body() {
 		.call_tool(
 			"create_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 
@@ -296,8 +289,7 @@ async fn test_call_tool_post_all_params() {
 		.call_tool(
 			"create_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 
@@ -314,8 +306,7 @@ async fn test_call_tool_tool_not_found() {
 		.call_tool(
 			"nonexistent_tool",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 
@@ -346,8 +337,7 @@ async fn test_call_tool_upstream_error() {
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 
@@ -381,8 +371,7 @@ async fn test_call_tool_invalid_header_value() {
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 	assert!(result.is_ok()); // Check that the call still succeeds despite the bad header
@@ -414,8 +403,7 @@ async fn test_call_tool_invalid_query_param_value() {
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 	assert!(result.is_ok());
@@ -448,8 +436,7 @@ async fn test_call_tool_invalid_path_param_value() {
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
-			&HeaderMap::new(),
-			None,
+			&IncomingRequestContext::empty(),
 		)
 		.await;
 
