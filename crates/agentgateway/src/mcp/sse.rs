@@ -36,7 +36,9 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::{BackendName, McpAuthentication, McpBackend, McpIDP};
+use crate::types::agent::{
+	BackendName, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, SimpleBackendReference,
+};
 use crate::{ProxyInputs, json};
 
 type SseTxs =
@@ -67,6 +69,30 @@ impl App {
 			_drain: drain,
 			session,
 			sse_txs: Default::default(),
+		}
+	}
+
+	pub fn should_passthrough(
+		&self,
+		name: BackendName,
+		backend: &McpBackend,
+		req: &Request,
+	) -> Option<SimpleBackendReference> {
+		if backend.targets.len() != 1 {
+			return None;
+		}
+
+		let binds = self.state.read_binds();
+		let (_, authn) = binds.mcp_policies(name.clone());
+		if authn.is_some() {
+			return None;
+		}
+		if !req.uri().path().contains("/.well-known/") {
+			return None;
+		}
+		match backend.targets.first().map(|t| &t.spec) {
+			Some(McpTargetSpec::Mcp(s)) => Some(s.backend.clone()),
+			_ => None,
 		}
 	}
 
