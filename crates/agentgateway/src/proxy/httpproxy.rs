@@ -60,7 +60,11 @@ async fn apply_request_policies(
 
 	// Extract dynamic metadata for CEL context
 	log.cel.ctx().with_extauthz(req);
-
+	log.cel.ctx().with_request(req);
+	log
+		.cel
+		.ctx()
+		.with_source(&log.tcp_info, log.tls_info.as_ref());
 	let exec = log
 		.cel
 		.ctx()
@@ -105,6 +109,11 @@ async fn apply_llm_request_policies(
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit
 		&& let Some(log) = log
 	{
+		log.cel.ctx().with_request(req);
+		log
+			.cel
+			.ctx()
+			.with_source(&log.tcp_info, log.tls_info.as_ref());
 		let exec = log
 			.cel
 			.ctx()
