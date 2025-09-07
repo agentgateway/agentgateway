@@ -1,4 +1,4 @@
-use std::path::{absolute, Path, PathBuf};
+use std::path::{Path, PathBuf, absolute};
 use std::time::Duration;
 
 use agent_core::prelude::*;
@@ -132,8 +132,8 @@ impl LocalClient {
 				if events.iter().any(|e| {
 					matches!(
 						e.kind,
-						EventKind::Modify(_) | EventKind::Create(_) if e.paths.last().is_some_and(|p| p == &abspath)) || 
-						(current_config_path.is_some() && current_config_path != real_config_path)
+						EventKind::Modify(_) | EventKind::Create(_) if e.paths.last().is_some_and(|p| p == &abspath)
+						|| (current_config_path.is_some() && current_config_path != real_config_path))
 				}) {
 					real_config_path = current_config_path.clone();
 					info!("Config file changed, reloading...");
@@ -163,7 +163,7 @@ impl LocalClient {
 					Ok(target) => Ok(target),
 					Err(_) => Ok(path.to_path_buf()), // Fallback to original path on error
 				}
-			}
+			},
 			Ok(_) => Ok(path.to_path_buf()),
 			Err(_) => Ok(path.to_path_buf()), // Fallback to original path on metadata error
 		}
