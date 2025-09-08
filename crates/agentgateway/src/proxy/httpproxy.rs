@@ -289,8 +289,8 @@ impl HTTPProxy {
 
 		let mut req = req.map(http::Body::new);
 
-		normalize_uri(&connection, &mut req).map_err(ProxyError::Processing)?;
 		sensitive_headers(&mut req);
+		normalize_uri(&connection, &mut req).map_err(ProxyError::Processing)?;
 		let mut req_upgrade = hop_by_hop_headers(&mut req);
 
 		let host = http::get_host(&req)?.to_string();
