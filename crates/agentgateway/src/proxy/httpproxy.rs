@@ -359,7 +359,10 @@ impl HTTPProxy {
 		);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-		log.cel.ctx().with_source(&log.tcp_info, log.tls_info.as_ref());
+		log
+			.cel
+			.ctx()
+			.with_source(&log.tcp_info, log.tls_info.as_ref());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
 		// so we can do logging, etc when we find no routes.
 		// But we may find new expressions that now need the request.
