@@ -149,6 +149,7 @@ fn default_weight() -> usize {
 }
 
 #[apply(schema_de!)]
+#[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalBackend {
 	// This one is a reference
 	Service {
@@ -168,6 +169,7 @@ pub enum LocalBackend {
 
 #[apply(schema_de!)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalAIBackend {
 	Provider(LocalNamedAIProvider),
 	Groups { groups: Vec<LocalAIProviders> },
@@ -197,7 +199,7 @@ pub struct LocalNamedAIProvider {
 }
 
 impl LocalAIBackend {
-	fn translate(
+	pub fn translate(
 		self,
 		backend_name: BackendName,
 	) -> anyhow::Result<(AIBackend, Vec<TargetedPolicy>)> {
