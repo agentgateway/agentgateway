@@ -563,7 +563,7 @@ impl StreamableHttpClient for ClientWrapper {
 			return Ok(StreamableHttpPostResponse::Accepted);
 		}
 
-		if resp.status().is_client_error() || resp.status().is_server_error() {
+		if !resp.status().is_success() {
 			return Err(StreamableHttpError::Client(HttpError::new(anyhow!(
 				"received status code {}",
 				resp.status()
