@@ -1,7 +1,5 @@
 use ::http::HeaderMap;
-use async_openai::types::{
-	ChatCompletionRequestMessage, CreateChatCompletionRequest, CreateChatCompletionResponse,
-};
+use async_openai::types::{ChatCompletionRequestMessage, CreateChatCompletionResponse};
 use bytes::Bytes;
 
 use crate::http::auth::{BackendAuth, SimpleBackendAuth};
@@ -48,10 +46,7 @@ pub struct PromptGuard {
 	pub response: Option<ResponseGuard>,
 }
 impl Policy {
-	pub fn apply_prompt_enrichment(
-		&self,
-		chat: &mut CreateChatCompletionRequest,
-	) -> CreateChatCompletionRequest {
+	pub fn apply_prompt_enrichment(&self, chat: &mut universal::Request) -> universal::Request {
 		if let Some(prompts) = &self.prompts {
 			let old_messages = std::mem::take(&mut chat.messages);
 			chat.messages = prompts
@@ -64,7 +59,7 @@ impl Policy {
 		}
 		chat.clone()
 	}
-	pub fn unmarshal_request(&self, bytes: &Bytes) -> Result<CreateChatCompletionRequest, AIError> {
+	pub fn unmarshal_request(&self, bytes: &Bytes) -> Result<universal::Request, AIError> {
 		if self.defaults.is_none() && self.overrides.is_none() && self.prompts.is_none() {
 			// Fast path: directly bytes to typed
 			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);

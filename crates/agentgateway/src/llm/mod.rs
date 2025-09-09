@@ -577,10 +577,10 @@ impl AIProvider {
 	) -> Result<LLMRequest, AIError> {
 		let input_tokens = if tokenize {
 			// TODO: avoid clone, we need it for spawn_blocking though
-			let msg = req.clone().messages.clone();
-			let model = req.clone().model.clone();
+			let msg = req.messages.clone();
+			let model = req.model.clone();
 			let tokens = tokio::task::spawn_blocking(move || {
-				let res = num_tokens_from_messages(&model, &msg)?;
+				let res = num_tokens_from_messages(&model.unwrap_or_default(), &msg)?;
 				Ok::<_, AIError>(res)
 			})
 			.await??;
@@ -591,7 +591,7 @@ impl AIProvider {
 		// Pass the original body through
 		let llm = LLMRequest {
 			input_tokens,
-			request_model: req.model.as_str().into(),
+			request_model: req.model.clone().unwrap_or_default().as_str().into(),
 			provider: self.provider(),
 			streaming: req.stream.unwrap_or_default(),
 			params: LLMRequestParams {

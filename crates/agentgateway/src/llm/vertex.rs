@@ -26,8 +26,10 @@ impl Provider {
 		&self,
 		mut req: universal::Request,
 	) -> Result<universal::Request, AIError> {
-		if let Some(model) = &self.model {
-			req.model = model.to_string();
+		if let Some(provider_model) = &self.model {
+			req.model = Some(provider_model.to_string());
+		} else if req.model.is_none() {
+			return Err(AIError::MissingField("model not specified".into()));
 		}
 		// Gemini compat mode is the same!
 		Ok(req)
