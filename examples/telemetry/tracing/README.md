@@ -7,7 +7,7 @@ While you can use tracing without RBAC, this example uses both together to showc
 ### Running the example
 
 ```zsh
-./target/release/agentgateway -f examples/telemetry/config.yaml
+cargo run -- -f examples/telemetry/config.yaml
 ```
 
 ### Send a request to LLM provider.
