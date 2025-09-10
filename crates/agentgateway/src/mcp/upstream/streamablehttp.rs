@@ -164,7 +164,7 @@ impl Client {
 
 		let mut req = ::http::Request::builder()
 			.uri(&self.uri)
-			.method(http::Method::DELETE)
+			.method(http::Method::GET)
 			.body(crate::http::Body::empty())
 			.map_err(ClientError::new)?;
 
