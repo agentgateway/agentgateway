@@ -12,7 +12,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@a2a-js/sdk": "^0.3.2",
+    "@a2a-js/sdk": "^0.3.4",
     "@modelcontextprotocol/sdk": "^1.9.0",
     "@radix-ui/react-accordion": "^1.2.8",
     "@radix-ui/react-checkbox": "^1.1.5",
