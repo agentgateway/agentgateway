@@ -235,9 +235,7 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                               })()}
                             </TableCell>
                             <TableCell>
-                              <Badge>
-                                {backendContext.backend.weight || 1}
-                              </Badge>
+                              <Badge>{backendContext.backend.weight || 1}</Badge>
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">

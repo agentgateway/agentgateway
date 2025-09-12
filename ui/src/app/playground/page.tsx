@@ -898,9 +898,7 @@ export default function PlaygroundPage() {
                             <div className="flex items-center gap-2">
                               <Server className="h-4 w-4 text-muted-foreground" />
                               <span className="font-medium text-sm">{listenerName}</span>
-                              <Badge className="text-xs">
-                                Port {port}
-                              </Badge>
+                              <Badge className="text-xs">Port {port}</Badge>
                             </div>
                             <div className="text-xs text-muted-foreground font-mono">
                               {endpoint}
@@ -952,19 +950,13 @@ export default function PlaygroundPage() {
                                         {routeInfo.routePath}
                                       </Badge>
                                       {routeInfo.route.matches?.[0]?.path?.regex && (
-                                        <Badge className="text-xs">
-                                          regex
-                                        </Badge>
+                                        <Badge className="text-xs">regex</Badge>
                                       )}
                                       {routeInfo.route.matches?.[0]?.path?.pathPrefix && (
-                                        <Badge className="text-xs">
-                                          prefix
-                                        </Badge>
+                                        <Badge className="text-xs">prefix</Badge>
                                       )}
                                       {routeInfo.route.matches?.[0]?.path?.exact && (
-                                        <Badge className="text-xs">
-                                          exact
-                                        </Badge>
+                                        <Badge className="text-xs">exact</Badge>
                                       )}
                                     </div>
 
@@ -1005,17 +997,16 @@ export default function PlaygroundPage() {
                                         {(hasBackends || hasA2aPolicy) && (
                                           <div className="flex gap-1">
                                             {hasA2aPolicy && (
-                                              <Badge variant="default" className="text-xs py-0 px-1 bg-primary hover:bg-primary/90">
+                                              <Badge
+                                                variant="default"
+                                                className="text-xs py-0 px-1 bg-primary hover:bg-primary/90"
+                                              >
                                                 A2A
                                               </Badge>
                                             )}
                                             {hasBackends &&
                                               backendTypes.map((type, idx) => (
-                                                <Badge
-                                                  key={idx}
-                                                
-                                                  className="text-xs py-0 px-1"
-                                                >
+                                                <Badge key={idx} className="text-xs py-0 px-1">
                                                   {type}
                                                 </Badge>
                                               ))}
@@ -1181,19 +1172,13 @@ export default function PlaygroundPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs">{selectedRoute.routePath}</span>
                         {selectedRoute.route.matches?.[0]?.path?.regex && (
-                          <Badge className="text-xs">
-                            regex
-                          </Badge>
+                          <Badge className="text-xs">regex</Badge>
                         )}
                         {selectedRoute.route.matches?.[0]?.path?.pathPrefix && (
-                          <Badge className="text-xs">
-                            prefix
-                          </Badge>
+                          <Badge className="text-xs">prefix</Badge>
                         )}
                         {selectedRoute.route.matches?.[0]?.path?.exact && (
-                          <Badge className="text-xs">
-                            exact
-                          </Badge>
+                          <Badge className="text-xs">exact</Badge>
                         )}
                       </div>
                     </div>
@@ -1212,9 +1197,7 @@ export default function PlaygroundPage() {
                           return (
                             <div key={idx} className="flex items-center gap-2">
                               <Icon className="h-3 w-3" />
-                              <Badge className="text-xs">
-                                {info.type}
-                              </Badge>
+                              <Badge className="text-xs">{info.type}</Badge>
                               <span className="text-xs">{info.name}</span>
                               {backend.weight && backend.weight !== 1 && (
                                 <span className="text-xs text-muted-foreground">

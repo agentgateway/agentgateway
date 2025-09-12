@@ -297,21 +297,9 @@ export function PolicyStep({ onNext, onPrevious, config, onConfigChange }: Polic
           <div className="p-4 bg-muted/30 rounded-lg">
             <h4 className="font-medium text-sm mb-2">Active Policies</h4>
             <div className="flex flex-wrap gap-2">
-              {enableJwt && (
-                <Badge className="text-xs">
-                  JWT Authentication
-                </Badge>
-              )}
-              {enableCors && (
-                <Badge className="text-xs">
-                  CORS Headers
-                </Badge>
-              )}
-              {enableTimeout && (
-                <Badge className="text-xs">
-                  Request Timeout
-                </Badge>
-              )}
+              {enableJwt && <Badge className="text-xs">JWT Authentication</Badge>}
+              {enableCors && <Badge className="text-xs">CORS Headers</Badge>}
+              {enableTimeout && <Badge className="text-xs">Request Timeout</Badge>}
               {!enableJwt && !enableCors && !enableTimeout && (
                 <span className="text-muted-foreground text-sm">No policies configured</span>
               )}

@@ -216,9 +216,7 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
           </div>
 
           <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
-            <h4 className="font-medium text-sm mb-2 text-primary">
-              💡 Next Steps
-            </h4>
+            <h4 className="font-medium text-sm mb-2 text-primary">💡 Next Steps</h4>
             <ul className="text-sm text-primary space-y-1">
               <li>• Test your configuration with sample requests</li>
               <li>• Add more routes and backends as needed</li>
