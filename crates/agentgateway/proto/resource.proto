@@ -4,7 +4,6 @@ package agentgateway.dev.resource;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/wrappers.proto";
-import "google/protobuf/struct.proto";
 
 option go_package = "github.com/agentgateway/agentgateway/go/api;api";
 
@@ -373,8 +372,10 @@ message PolicySpec {
     }
 
     PromptGuard prompt_guard = 1;
-    map<string, google.protobuf.Value> defaults = 2;
-    map<string, google.protobuf.Value> overrides = 3;
+    // Default JSON key-value pairs to add to the LLM request if the key is not set in the request.
+    map<string, string> defaults = 2;
+    // Override JSON key-value pairs to set in the LLM request regardless of whether they are set in the request.
+    map<string, string> overrides = 3;
     PromptEnrichment prompts = 4;
   }
   message ExternalAuth {

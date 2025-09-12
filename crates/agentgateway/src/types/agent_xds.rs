@@ -899,13 +899,13 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 					defaults: Some(
 						ai.defaults
 							.iter()
-							.map(|(k, v)| serde_json::to_value(v).map(|v| (k.clone(), v)))
+							.map(|(k, v)| serde_json::from_str(v).map(|v| (k.clone(), v)))
 							.collect::<Result<_, _>>()?,
 					),
 					overrides: Some(
 						ai.overrides
 							.iter()
-							.map(|(k, v)| serde_json::to_value(v).map(|v| (k.clone(), v)))
+							.map(|(k, v)| serde_json::from_str(v).map(|v| (k.clone(), v)))
 							.collect::<Result<_, _>>()?,
 					),
 					prompts: ai.prompts.as_ref().map(convert_prompt_enrichment),
