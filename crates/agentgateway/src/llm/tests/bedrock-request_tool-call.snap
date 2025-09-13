@@ -20,7 +20,6 @@ info:
       content: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
 ---
 {
-  "modelId": "gpt-3.5-turbo",
   "messages": [
     {
       "role": "user",
@@ -40,6 +39,7 @@ info:
     }
   ],
   "inferenceConfig": {
-    "maxTokens": 4096
+    "maxTokens": 4096,
+    "stopSequences": []
   }
 }

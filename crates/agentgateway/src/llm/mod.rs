@@ -23,6 +23,7 @@ use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::{client, *};
 
 pub mod anthropic;
+pub mod anthropic_types;
 pub mod bedrock;
 pub mod gemini;
 pub mod openai;
@@ -84,6 +85,7 @@ pub enum AIProvider {
 	Vertex(vertex::Provider),
 	Anthropic(anthropic::Provider),
 	Bedrock(bedrock::Provider),
+	BedrockDirect(bedrock::anthropic::Provider),
 }
 
 trait Provider {
@@ -152,6 +154,7 @@ impl AIProvider {
 			AIProvider::Gemini(_p) => gemini::Provider::NAME,
 			AIProvider::Vertex(_p) => vertex::Provider::NAME,
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
+			AIProvider::BedrockDirect(_p) => bedrock::anthropic::Provider::NAME,
 		}
 	}
 	pub fn default_connector(&self) -> (Target, BackendPolicies) {
@@ -186,6 +189,16 @@ impl AIProvider {
 					llm_provider: None,
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
+			},
+			AIProvider::BedrockDirect(p) => {
+				let bp = BackendPolicies {
+					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
+					backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {})),
+					a2a: None,
+					inference_routing: None,
+					llm_provider: None,
+				};
+				(Target::Hostname(strng::new(&p.get_host()), 443), bp)
 			},
 		}
 	}
@@ -256,7 +269,78 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::BedrockDirect(provider) => {
+				// Direct Anthropic-to-Bedrock provider setup
+				let path = provider.get_path_for_model(&llm_request.request_model, llm_request.streaming);
+				http::modify_req(req, |req| {
+					http::modify_uri(req, |uri| {
+						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						uri.authority = Some(Authority::from_str(&provider.get_host())?);
+						Ok(())
+					})?;
+					// Store the region in request extensions so AWS signing can use it
+					req.extensions.insert(bedrock::AwsRegion {
+						region: provider.region.as_str().to_string(),
+					});
+					Ok(())
+				})
+			},
 		}
+	}
+
+	/// Process BedrockDirect request with direct Anthropic format handling
+	#[tracing::instrument(
+		skip(self, provider, parts, bytes),
+		fields(provider = "bedrock_direct")
+	)]
+	async fn process_bedrock_direct_request(
+		&self,
+		provider: &bedrock::anthropic::Provider,
+		mut parts: ::http::request::Parts,
+		bytes: &bytes::Bytes,
+	) -> Result<RequestResult, AIError> {
+		// Parse the Anthropic request directly
+		let anthropic_request: crate::llm::anthropic_types::MessagesRequest =
+			serde_json::from_slice(bytes).map_err(AIError::RequestParsing)?;
+
+		// TODO: Inject policy data from request extensions into metadata if needed
+		// inject_policy_data_into_metadata(&mut anthropic_request, &parts.extensions, &MetadataInjectionStrategy::default());
+
+		let streaming = anthropic_request.stream.unwrap_or(false);
+
+		// Extract headers for validation and processing
+		let anthropic_headers =
+			crate::llm::bedrock::anthropic::Provider::extract_headers(&parts.headers)?;
+
+		// Validate required Anthropic headers
+		if anthropic_headers.anthropic_version.is_none() {
+			return Err(AIError::MissingField(strng::new(
+				"anthropic-version header is required",
+			)));
+		}
+
+		// CRITICAL: Resolve model ID for path construction BEFORE processing
+		let bedrock_model_id = provider.resolve_model_id(&anthropic_request.model)?;
+
+		// Process the request through the direct Anthropic provider
+		let bedrock_request = provider.process_request(anthropic_request, None).await?;
+
+		// Create the request body
+		let body = serde_json::to_vec(&bedrock_request).map_err(AIError::RequestMarshal)?;
+		let resp = Body::from(body);
+
+		// Create LLM request info for logging
+		let llm_info = LLMRequest {
+			input_tokens: None, // TODO: implement tokenization if needed
+			request_model: strng::new(&bedrock_model_id),
+			provider: bedrock::anthropic::Provider::NAME,
+			streaming,
+			params: LLMRequestParams::default(), // TODO: extract params if needed
+		};
+
+		parts.headers.remove(header::CONTENT_LENGTH);
+		let req = Request::from_parts(parts, resp);
+		Ok(RequestResult::Success(req, llm_info))
 	}
 
 	pub async fn process_request(
@@ -272,6 +356,13 @@ impl AIProvider {
 		let Ok(bytes) = axum::body::to_bytes(body, 2_097_152).await else {
 			return Err(AIError::RequestTooLarge);
 		};
+
+		// Handle BedrockDirect provider using dedicated method
+		if let AIProvider::BedrockDirect(p) = self {
+			return self.process_bedrock_direct_request(p, parts, &bytes).await;
+		}
+
+		// For all other providers, use universal format parsing
 		let mut req: universal::Request = if let Some(p) = policies {
 			p.unmarshal_request(&bytes)?
 		} else {
@@ -314,18 +405,91 @@ impl AIProvider {
 				include_usage: true,
 			});
 		}
+
 		let resp_json = match self {
 			AIProvider::OpenAI(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Gemini(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Vertex(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Anthropic(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Bedrock(p) => serde_json::to_vec(&p.process_request(req).await?),
+			AIProvider::BedrockDirect(_) => {
+				// BedrockDirect provider handled by early return above - this should never be reached
+				return Err(AIError::UnsupportedContent);
+			},
 		};
 		let body = resp_json.map_err(AIError::RequestMarshal)?;
 		let resp = Body::from(body);
 		parts.headers.remove(header::CONTENT_LENGTH);
 		let req = Request::from_parts(parts, resp);
 		Ok(RequestResult::Success(req, llm_info))
+	}
+
+	/// Process BedrockDirect response with direct Anthropic format handling
+	#[tracing::instrument(skip(self, provider, req, log, parts, bytes), fields(provider = "bedrock_direct", status = %parts.status))]
+	async fn process_bedrock_direct_response(
+		&self,
+		provider: &bedrock::anthropic::Provider,
+		req: LLMRequest,
+		log: AsyncLog<llm::LLMResponse>,
+		include_completion_in_log: bool,
+		mut parts: ::http::response::Parts,
+		bytes: &bytes::Bytes,
+	) -> Result<Response, AIError> {
+		if parts.status.is_success() {
+			// Process success response directly as native Anthropic format
+			let anthropic_response = provider
+				.process_response_direct(&req.request_model, bytes)
+				.await?;
+
+			let llm_resp = LLMResponse {
+				request: req,
+				input_tokens_from_response: Some(anthropic_response.usage.input_tokens as u64),
+				output_tokens: Some(anthropic_response.usage.output_tokens as u64),
+				total_tokens: Some(
+					(anthropic_response.usage.input_tokens + anthropic_response.usage.output_tokens) as u64,
+				),
+				provider_model: Some(strng::new(&anthropic_response.model)),
+				completion: if include_completion_in_log {
+					Some(
+						anthropic_response
+							.content
+							.iter()
+							.filter_map(|block| match block {
+								crate::llm::anthropic_types::ResponseContentBlock::Text(text_block) => {
+									Some(text_block.text.clone())
+								},
+								_ => None,
+							})
+							.collect::<Vec<_>>(),
+					)
+				} else {
+					None
+				},
+				first_token: Default::default(),
+			};
+
+			// Set the response data in the log
+			log.store(Some(llm_resp));
+
+			// Return the native Anthropic response directly (no universal conversion)
+			let response_body =
+				serde_json::to_vec(&anthropic_response).map_err(AIError::ResponseMarshal)?;
+			let body = Body::from(response_body);
+			// CRITICAL: Remove Content-Length header to prevent client hanging
+			parts.headers.remove(header::CONTENT_LENGTH);
+			let response = Response::from_parts(parts, body);
+			Ok(response)
+		} else {
+			// Handle error response for BedrockDirect
+			let anthropic_error_response = provider.process_error_direct(parts.status, bytes).await?;
+			let error_body =
+				serde_json::to_vec(&anthropic_error_response).map_err(AIError::ResponseMarshal)?;
+			let body = Body::from(error_body);
+			// CRITICAL: Remove Content-Length header to prevent client hanging
+			parts.headers.remove(header::CONTENT_LENGTH);
+			let response = Response::from_parts(parts, body);
+			Ok(response)
+		}
 	}
 
 	pub async fn process_response(
@@ -350,6 +514,14 @@ impl AIProvider {
 		else {
 			return Err(AIError::RequestTooLarge);
 		};
+
+		// Handle BedrockDirect provider using dedicated method
+		if let AIProvider::BedrockDirect(p) = self {
+			return self
+				.process_bedrock_direct_response(p, req, log, include_completion_in_log, parts, &bytes)
+				.await;
+		}
+
 		// 3 cases: success, error properly handled, and unexpected error we need to synthesize
 		let openai_response = self
 			.process_response_status(&req, parts.status, &bytes)
@@ -448,15 +620,21 @@ impl AIProvider {
 		status: StatusCode,
 		bytes: &Bytes,
 	) -> Result<Result<universal::Response, ChatCompletionErrorResponse>, AIError> {
+		// BedrockDirect uses completely separate processing pipeline - should never reach here
+		if matches!(self, AIProvider::BedrockDirect(_)) {
+			return Err(AIError::UnsupportedContent);
+		}
+
 		if status.is_success() {
 			let openai_response = match self {
 				AIProvider::OpenAI(p) => p.process_response(bytes).await?,
 				AIProvider::Gemini(p) => p.process_response(bytes).await?,
 				AIProvider::Vertex(p) => p.process_response(bytes).await?,
 				AIProvider::Anthropic(p) => p.process_response(bytes).await?,
-				AIProvider::Bedrock(p) => {
-					p.process_response(req.request_model.as_str(), bytes)
-						.await?
+				AIProvider::Bedrock(p) => p.process_response(&req.request_model, bytes).await?,
+				AIProvider::BedrockDirect(_p) => {
+					// BedrockDirect uses direct response processing and should not reach this branch
+					return Err(AIError::UnsupportedContent);
 				},
 			};
 			Ok(Ok(openai_response))
@@ -467,6 +645,10 @@ impl AIProvider {
 				AIProvider::Vertex(p) => p.process_error(bytes).await?,
 				AIProvider::Anthropic(p) => p.process_error(bytes).await?,
 				AIProvider::Bedrock(p) => p.process_error(bytes).await?,
+				AIProvider::BedrockDirect(_p) => {
+					// BedrockDirect uses direct response processing and should not reach this branch
+					return Err(AIError::UnsupportedContent);
+				},
 			};
 			Ok(Err(openai_response))
 		}
@@ -495,6 +677,7 @@ impl AIProvider {
 		let resp = match self {
 			AIProvider::Anthropic(p) => p.process_streaming(log, resp).await,
 			AIProvider::Bedrock(p) => p.process_streaming(log, resp, model.as_str()).await,
+			AIProvider::BedrockDirect(p) => p.process_streaming(log, resp, model.as_str()).await,
 			_ => {
 				self
 					.default_process_streaming(log, include_completion_in_log, rate_limit, resp)
