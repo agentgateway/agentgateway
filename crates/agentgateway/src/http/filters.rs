@@ -225,8 +225,11 @@ fn rewrite_path(
 			};
 			let mut new_path = r.to_string();
 			let (_, rest) = orig.path().split_at(match_pfx.len());
-			if !rest.is_empty() && !rest.starts_with('/') {
+			if !new_path.ends_with('/') && !rest.is_empty() && !rest.starts_with('/') {
 				new_path.push('/');
+			}
+			if new_path.ends_with('/') && rest.starts_with('/') {
+				new_path.pop();
 			}
 			new_path.push_str(rest);
 			if let Some(q) = orig.query() {
