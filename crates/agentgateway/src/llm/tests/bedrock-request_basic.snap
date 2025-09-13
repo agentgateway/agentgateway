@@ -10,7 +10,6 @@ info:
       content: What is the name of the LLM provider?
 ---
 {
-  "modelId": "replaceme",
   "messages": [
     {
       "role": "user",
@@ -27,6 +26,7 @@ info:
     }
   ],
   "inferenceConfig": {
-    "maxTokens": 4096
+    "maxTokens": 4096,
+    "stopSequences": []
   }
 }

@@ -70,7 +70,6 @@ info:
   function_call: auto
 ---
 {
-  "modelId": "gpt-4-turbo-preview",
   "messages": [
     {
       "role": "user",
@@ -104,12 +103,12 @@ info:
   ],
   "inferenceConfig": {
     "maxTokens": 1000,
-    "temperature": 0.7,
-    "top_p": 0.9,
     "stopSequences": [
       "\n\n",
       "END"
-    ]
+    ],
+    "temperature": 0.7,
+    "topP": 0.9
   },
   "toolConfig": {
     "tools": [
@@ -141,7 +140,7 @@ info:
         }
       }
     ],
-    "tool_choice": {
+    "toolChoice": {
       "tool": {
         "name": "my_function"
       }

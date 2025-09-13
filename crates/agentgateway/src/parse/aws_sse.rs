@@ -1,4 +1,3 @@
-use aws_event_stream_parser::{EventStreamCodec, Message};
 use bytes::Bytes;
 use serde::Serialize;
 use tokio_sse_codec::{Event, Frame, SseEncoder};
@@ -8,11 +7,10 @@ use crate::*;
 
 pub fn transform<O: Serialize>(
 	b: http::Body,
-	mut f: impl FnMut(Message) -> Option<O> + Send + 'static,
+	mut f: impl FnMut(aws_event_stream_parser::Message) -> Option<O> + Send + 'static,
 ) -> http::Body {
-	let decoder = EventStreamCodec;
+	let decoder = aws_event_stream_parser::EventStreamCodec;
 	let encoder = SseEncoder::new();
-
 	transform_parser(b, decoder, encoder, move |o| {
 		let transformed = f(o)?;
 		let json_bytes = serde_json::to_vec(&transformed).ok()?;
