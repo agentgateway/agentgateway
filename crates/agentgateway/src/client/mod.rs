@@ -1,6 +1,7 @@
 mod dns;
 mod hyperrustls;
 
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::task;
 
@@ -24,6 +25,9 @@ pub struct Client {
 	resolver: Arc<dns::CachedResolver>,
 	client: hyper_util_fork::client::legacy::Client<Connector, http::Body, PoolKey>,
 }
+
+#[derive(Debug, Clone)]
+pub struct EppSelectedEndpoint(pub SocketAddr);
 
 impl Debug for Client {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -241,7 +245,13 @@ impl Client {
 			target,
 			transport,
 		} = call;
-		let dest = match &target {
+
+		// If EPP has selected an endpoint for this request, honor it.
+		let epp_selected: Option<SocketAddr> =
+			req.extensions().get::<EppSelectedEndpoint>().map(|s| s.0);
+
+		// Resolve default destination from Target (used when EPP didn't choose).
+		let resolved_default = match &target {
 			Target::Address(addr) => *addr,
 			Target::Hostname(hostname, port) => {
 				let ip = self
@@ -252,6 +262,10 @@ impl Client {
 				SocketAddr::from((ip, *port))
 			},
 		};
+
+		// Final connect address: EPP selection wins if present.
+		let dest: SocketAddr = epp_selected.unwrap_or(resolved_default);
+
 		let auto_host = req.extensions().get::<filters::AutoHostname>().is_some();
 		http::modify_req_uri(&mut req, |uri| {
 			let scheme = transport.scheme();
@@ -277,6 +291,7 @@ impl Client {
 		let version = req.version();
 		let transport_name = transport.name();
 		let target_name = target.to_string();
+		// Build PoolKey only after final dest is known (post-EPP).
 		let key = PoolKey(target, dest, transport, version);
 		trace!(?req, ?key, "sending request");
 		req.extensions_mut().insert(key);

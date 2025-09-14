@@ -16,6 +16,7 @@ use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
 
+use crate::client::EppSelectedEndpoint;
 use crate::client::Transport;
 use crate::http::backendtls::BackendTLS;
 use crate::http::transformation_cel::Transformation;
@@ -707,6 +708,11 @@ async fn make_backend_call(
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
 	let override_dest = maybe_inference.mutate_request(&mut req).await?;
 	log.add(|l| l.inference_pool = override_dest);
+
+	if let Some(sel) = override_dest {
+		// Carry the EPP-selected endpoint to the client.
+		req.extensions_mut().insert(EppSelectedEndpoint(sel));
+	}
 
 	let backend_call = match backend {
 		Backend::AI(_, _ai) => {
