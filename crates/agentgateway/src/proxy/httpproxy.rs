@@ -748,7 +748,7 @@ async fn make_backend_call(
 			let workloads = &inputs.stores.read_discovery().workloads;
 			let (ep, handle, wl) = svc
 				.endpoints
-				.select_endpoint(workloads, svc.as_ref(), port, None)
+				.select_endpoint(workloads, svc.as_ref(), port, override_dest)
 				.ok_or(ProxyError::NoHealthyEndpoints)?;
 
 			let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
