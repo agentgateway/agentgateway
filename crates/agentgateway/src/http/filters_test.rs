@@ -565,7 +565,7 @@ fn rewrite_test() {
 
 	let prefix_path_empty_rewrite = UrlRewrite {
 		authority: None,
-		path: Some(PathRedirect::Prefix("/".into())),
+		path: Some(PathRedirect::Prefix("".into())),
 	};
 
 	let combined_rewrite = UrlRewrite {
