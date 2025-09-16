@@ -29,6 +29,10 @@ pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
 
+use std::fmt::Debug;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
@@ -36,9 +40,6 @@ pub use ::http::{
 use axum::body::to_bytes;
 use bytes::Bytes;
 use http_body::{Frame, SizeHint};
-use std::fmt::Debug;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use tower_serve_static::private::mime;
 
 use crate::proxy::{ProxyError, ProxyResponse};

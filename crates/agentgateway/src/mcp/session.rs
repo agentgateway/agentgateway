@@ -2,12 +2,6 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use crate::http::Response;
-use crate::mcp::handler::Relay;
-use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, rbac};
-use crate::{mcp, *};
 use ::http::StatusCode;
 use ::http::header::CONTENT_TYPE;
 use ::http::request::Parts;
@@ -25,6 +19,13 @@ use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
+
+use crate::http::Response;
+use crate::mcp::handler::Relay;
+use crate::mcp::mergestream::Messages;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::{ClientError, rbac};
+use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
 pub struct Session {
