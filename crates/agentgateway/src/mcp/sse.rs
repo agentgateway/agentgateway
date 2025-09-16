@@ -10,8 +10,9 @@ use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
 use rmcp::transport::sse_server::PostEventQuery;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::http::{Request, Response};
+use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::Relay;
+use crate::mcp::session;
 use crate::mcp::session::SessionManager;
 use crate::*;
 
@@ -92,7 +93,7 @@ impl LegacySSEService {
 		accepted_response()
 	}
 
-	pub async fn handle_get(&self, _request: Request) -> Response {
+	pub async fn handle_get(&self, request: Request) -> Response {
 		let relay = match (self.service_factory)() {
 			Ok(r) => r,
 			Err(e) => {
@@ -117,7 +118,13 @@ impl LegacySSEService {
 				Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
 			}),
 		);
-		Sse::new(stream).into_response().map(http::Body::new)
+		let (parts, _) = request.into_parts();
+		Sse::new(stream).into_response().map(|b| {
+			http::Body::new(DropBody::new(
+				b,
+				session::dropper(self.session_manager.clone(), session, parts),
+			))
+		})
 	}
 }
 

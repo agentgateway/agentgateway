@@ -192,12 +192,13 @@ impl StreamableHttpService {
 				"Unauthorized: Session ID is required",
 			);
 		};
-		let Some(session) = self.session_manager.get_session(session_id) else {
-			// Its ok if the session is not found, we just return accepted
-			return accepted_response();
-		};
+		let session_id = session_id.to_string();
 		let (parts, _) = request.into_parts();
-		session.delete_session(parts).await
+		self
+			.session_manager
+			.delete_session(&session_id, parts)
+			.await
+			.unwrap_or_else(accepted_response)
 	}
 }
 

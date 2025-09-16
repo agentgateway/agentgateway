@@ -2,6 +2,12 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use crate::http::Response;
+use crate::mcp::handler::Relay;
+use crate::mcp::mergestream::Messages;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::{ClientError, rbac};
+use crate::{mcp, *};
 use ::http::StatusCode;
 use ::http::header::CONTENT_TYPE;
 use ::http::request::Parts;
@@ -19,13 +25,6 @@ use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
-
-use crate::http::Response;
-use crate::mcp::handler::Relay;
-use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, rbac};
-use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
 pub struct Session {
@@ -381,6 +380,40 @@ impl SessionManager {
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
 		(sess, rx)
+	}
+
+	pub async fn delete_session(&self, id: &str, parts: Parts) -> Option<Response> {
+		let sess = {
+			let mut sm = self.sessions.write().expect("write lock");
+			sm.remove(id)?
+		};
+		Some(sess.delete_session(parts).await)
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionDropper {
+	sm: Arc<SessionManager>,
+	s: Option<(Session, Parts)>,
+}
+
+/// Dropper returns a handle that, when dropped, removes the session
+pub fn dropper(sm: Arc<SessionManager>, s: Session, parts: Parts) -> SessionDropper {
+	SessionDropper {
+		sm,
+		s: Some((s, parts)),
+	}
+}
+
+impl Drop for SessionDropper {
+	fn drop(&mut self) {
+		let Some((s, parts)) = self.s.take() else {
+			return;
+		};
+		let mut sm = self.sm.sessions.write().expect("write lock");
+		debug!("delete session {}", s.id);
+		sm.remove(s.id.as_ref());
+		tokio::task::spawn(async move { s.delete_session(parts).await });
 	}
 }
 
