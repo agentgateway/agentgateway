@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use ::http::uri::{Authority, PathAndQuery};
@@ -76,6 +75,10 @@ pub struct NamedAIProvider {
 	/// This comes with the cost of an expensive operation.
 	#[serde(default)]
 	pub tokenize: bool,
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
 	pub routes: IndexMap<Strng, RouteType>,
 }
 

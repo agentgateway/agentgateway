@@ -247,6 +247,7 @@ fn setup_llm_mock(
 		tokenize,
 		backend_tls: None,
 		backend_auth: None,
+		routes: Default::default(),
 	})
 	.translate(strng::format!("{}", mock.address()))
 	.unwrap();

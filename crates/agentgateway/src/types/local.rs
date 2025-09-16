@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -194,6 +194,10 @@ pub struct LocalNamedAIProvider {
 	/// Routes defines how to identify the type of traffic we should handle
 	/// The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.
 	#[serde(default)]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
 	pub routes: IndexMap<Strng, RouteType>,
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<LocalBackendTLS>,
