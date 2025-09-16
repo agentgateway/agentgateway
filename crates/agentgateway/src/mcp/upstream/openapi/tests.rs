@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use agent_core::{drain, metrics, strng};
+use agent_core::{metrics, strng};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use prometheus_client::registry::Registry;
 use rmcp::model::Tool;

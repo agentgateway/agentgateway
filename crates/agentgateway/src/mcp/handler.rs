@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::sync::Arc;
+
 use agent_core::trcng;
 use futures_core::Stream;
 use http::StatusCode;
@@ -13,8 +16,6 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
-use std::borrow::Cow;
-use std::sync::Arc;
 
 use crate::ProxyInputs;
 use crate::cel::ContextBuilder;
