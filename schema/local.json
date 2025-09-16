@@ -2783,6 +2783,35 @@
                                           "type": "boolean",
                                           "default": false
                                         },
+                                        "routes": {
+                                          "description": "Routes defines how to identify the type of traffic we should handle\nThe keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.",
+                                          "type": "object",
+                                          "additionalProperties": {
+                                            "oneOf": [
+                                              {
+                                                "description": "OpenAI /v1/chat/completions",
+                                                "type": "string",
+                                                "const": "completions"
+                                              },
+                                              {
+                                                "description": "Anthropic /v1/messages",
+                                                "type": "string",
+                                                "const": "messages"
+                                              },
+                                              {
+                                                "description": "OpenAI /v1/models",
+                                                "type": "string",
+                                                "const": "models"
+                                              },
+                                              {
+                                                "description": "Send the request to the upstream LLM provider as-is",
+                                                "type": "string",
+                                                "const": "passthrough"
+                                              }
+                                            ]
+                                          },
+                                          "default": {}
+                                        },
                                         "backendTLS": {
                                           "type": [
                                             "object",
@@ -3108,6 +3137,35 @@
                                                       "description": "Whether to tokenize on the request flow. This enables us to do more accurate rate limits,\nsince we know (part of) the cost of the request upfront.\nThis comes with the cost of an expensive operation.",
                                                       "type": "boolean",
                                                       "default": false
+                                                    },
+                                                    "routes": {
+                                                      "description": "Routes defines how to identify the type of traffic we should handle\nThe keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.",
+                                                      "type": "object",
+                                                      "additionalProperties": {
+                                                        "oneOf": [
+                                                          {
+                                                            "description": "OpenAI /v1/chat/completions",
+                                                            "type": "string",
+                                                            "const": "completions"
+                                                          },
+                                                          {
+                                                            "description": "Anthropic /v1/messages",
+                                                            "type": "string",
+                                                            "const": "messages"
+                                                          },
+                                                          {
+                                                            "description": "OpenAI /v1/models",
+                                                            "type": "string",
+                                                            "const": "models"
+                                                          },
+                                                          {
+                                                            "description": "Send the request to the upstream LLM provider as-is",
+                                                            "type": "string",
+                                                            "const": "passthrough"
+                                                          }
+                                                        ]
+                                                      },
+                                                      "default": {}
                                                     },
                                                     "backendTLS": {
                                                       "type": [

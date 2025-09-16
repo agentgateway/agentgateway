@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use ::http::uri::{Authority, PathAndQuery};
@@ -75,6 +76,39 @@ pub struct NamedAIProvider {
 	/// This comes with the cost of an expensive operation.
 	#[serde(default)]
 	pub tokenize: bool,
+	pub routes: BTreeMap<Strng, RouteType>,
+}
+
+const DEFAULT_ROUTE: &str = "*";
+impl NamedAIProvider {
+	pub fn use_default_policies(&self) -> bool {
+		self.host_override.is_none()
+	}
+	pub fn resolve_route(&self, path: &str) -> RouteType {
+		for (path_suffix, rt) in &self.routes {
+			if path_suffix == DEFAULT_ROUTE {
+				return *rt;
+			}
+			if path.ends_with(path_suffix.as_str()) {
+				return *rt;
+			}
+		}
+		// If there is no match, there is an implicit default to Completions
+		RouteType::Completions
+	}
+}
+
+#[apply(schema!)]
+#[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RouteType {
+	/// OpenAI /v1/chat/completions
+	Completions,
+	/// Anthropic /v1/messages
+	Messages,
+	/// OpenAI /v1/models
+	Models,
+	/// Send the request to the upstream LLM provider as-is
+	Passthrough,
 }
 
 #[apply(schema!)]
@@ -189,11 +223,19 @@ impl AIProvider {
 			},
 		}
 	}
-	pub fn setup_request(&self, req: &mut Request, llm_request: &LLMRequest) -> anyhow::Result<()> {
+	pub fn setup_request(
+		&self,
+		req: &mut Request,
+		route_type: RouteType,
+		llm_request: Option<&LLMRequest>,
+	) -> anyhow::Result<()> {
+		let override_path = route_type != RouteType::Passthrough;
 		match self {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					uri.path_and_query = Some(PathAndQuery::from_static(openai::DEFAULT_PATH));
+					if override_path {
+						uri.path_and_query = Some(PathAndQuery::from_static(openai::DEFAULT_PATH));
+					}
 					uri.authority = Some(Authority::from_static(openai::DEFAULT_HOST_STR));
 					Ok(())
 				})?;
@@ -202,7 +244,9 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.path_and_query = Some(PathAndQuery::from_static(anthropic::DEFAULT_PATH));
+						if override_path {
+							uri.path_and_query = Some(PathAndQuery::from_static(anthropic::DEFAULT_PATH));
+						}
 						uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
 						Ok(())
 					})?;
@@ -222,7 +266,9 @@ impl AIProvider {
 			},
 			AIProvider::Gemini(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					uri.path_and_query = Some(PathAndQuery::from_static(gemini::DEFAULT_PATH));
+					if override_path {
+						uri.path_and_query = Some(PathAndQuery::from_static(gemini::DEFAULT_PATH));
+					}
 					uri.authority = Some(Authority::from_static(gemini::DEFAULT_HOST_STR));
 					Ok(())
 				})?;
@@ -240,12 +286,12 @@ impl AIProvider {
 				})
 			},
 			AIProvider::Bedrock(provider) => {
-				// For Bedrock, use a default model path - the actual model will be specified in the request body
-				let path =
-					provider.get_path_for_model(llm_request.streaming, llm_request.request_model.as_str());
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						if override_path && let Some(l) = llm_request {
+							let path = provider.get_path_for_model(l.streaming, l.request_model.as_str());
+							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						}
 						uri.authority = Some(Authority::from_str(&provider.get_host())?);
 						Ok(())
 					})?;

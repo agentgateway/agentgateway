@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
@@ -334,6 +335,7 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 										.map_err(|e| ProtoError::Generic(e.to_string()))
 								})
 								.transpose()?,
+							routes: BTreeMap::default(),
 						};
 						local_provider_group.push((provider_name, np));
 					}

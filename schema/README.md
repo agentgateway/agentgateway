@@ -319,6 +319,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)pathOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)routes`|Routes defines how to identify the type of traffic we should handle<br>The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.key`||
@@ -358,6 +359,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].pathOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].routes`|Routes defines how to identify the type of traffic we should handle<br>The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.key`||

@@ -23,7 +23,7 @@ use crate::http::{
 	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
 	auth, filters, get_host, merge_in_headers, retry,
 };
-use crate::llm::{LLMRequest, RequestResult};
+use crate::llm::{LLMRequest, RequestResult, RouteType};
 use crate::proxy::{ProxyError, ProxyResponse, resolve_simple_backend};
 use crate::store::{BackendPolicies, LLMRequestPolicies, LLMResponsePolicies};
 use crate::telemetry::log;
@@ -720,12 +720,12 @@ async fn make_backend_call(
 						a2a: None,
 						inference_routing: None,
 						// Attach LLM provider, but don't use default setup
-						llm_provider: Some((provider.provider.clone(), false, provider.tokenize)),
+						llm_provider: Some(provider.clone()),
 					}),
 				),
 				None => {
 					let (tgt, mut pol) = provider.provider.default_connector();
-					pol.llm_provider = Some((provider.provider.clone(), true, provider.tokenize));
+					pol.llm_provider = Some(provider.clone());
 					(tgt, Some(pol))
 				},
 			};
@@ -842,41 +842,69 @@ async fn make_backend_call(
 		log.add(|l| l.a2a_method = Some(method));
 	}
 
-	let (mut req, response_policies, llm_request) =
-		if let Some((llm, use_default_policies, tokenize)) = &policies.llm_provider {
-			let r = llm
-				.process_request(
-					&client,
-					route_policies.llm.as_deref(),
-					req,
-					*tokenize,
+	let (mut req, response_policies, llm_request) = if let Some(llm) = &policies.llm_provider {
+		let route_type = llm.resolve_route(req.uri().path());
+		trace!("llm: route {} to {route_type:?}", req.uri().path());
+		// First, we process the incoming request. This entails translating to the relevant provider,
+		// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like
+		// prompt enrichment, prompt guard, etc.
+		match route_type {
+			RouteType::Completions => {
+				let r = llm
+					.provider
+					.process_request(
+						&client,
+						route_policies.llm.as_deref(),
+						req,
+						llm.tokenize,
+						&mut log,
+					)
+					.await
+					.map_err(|e| ProxyError::Processing(e.into()))?;
+				let (mut req, llm_request) = match r {
+					RequestResult::Success(r, lr) => (r, lr),
+					RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
+				};
+				// If a user doesn't configure explicit overrides for connecting to a provider, setup default
+				// paths, TLS, etc.
+				if llm.use_default_policies() {
+					llm
+						.provider
+						.setup_request(&mut req, route_type, Some(&llm_request))
+						.map_err(ProxyError::Processing)?;
+				}
+				// Apply all policies (rate limits)
+				let response_policies = apply_llm_request_policies(
+					&route_policies,
+					policy_client,
 					&mut log,
+					&mut req,
+					&llm_request,
+					response_headers,
 				)
-				.await
-				.map_err(|e| ProxyError::Processing(e.into()))?;
-			let (mut req, llm_request) = match r {
-				RequestResult::Success(r, lr) => (r, lr),
-				RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
-			};
-			if *use_default_policies {
+				.await?;
+				log.add(|l| l.llm_request = Some(llm_request.clone()));
+				(req, response_policies, Some(llm_request))
+			},
+			RouteType::Messages => {
+				todo!()
+			},
+			RouteType::Models => {
+				todo!()
+			},
+			RouteType::Passthrough => {
+				// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
+				// We do not need LLM policies nor token-based rate limits, etc.
 				llm
-					.setup_request(&mut req, &llm_request)
+					.provider
+					.setup_request(&mut req, route_type, None)
 					.map_err(ProxyError::Processing)?;
-			}
-			let response_policies = apply_llm_request_policies(
-				&route_policies,
-				policy_client,
-				&mut log,
-				&mut req,
-				&llm_request,
-				response_headers,
-			)
-			.await?;
-			log.add(|l| l.llm_request = Some(llm_request.clone()));
-			(req, response_policies, Some(llm_request))
-		} else {
-			(req, LLMResponsePolicies::default(), None)
-		};
+				(req, LLMResponsePolicies::default(), None)
+			},
+		}
+	} else {
+		(req, LLMResponsePolicies::default(), None)
+	};
 	// Some auth types (AWS) need to be applied after all request processing
 	auth::apply_late_backend_auth(policies.backend_auth.as_ref(), &mut req).await?;
 	let transport = build_transport(&inputs, &backend_call, policies.backend_tls.clone()).await?;
@@ -896,22 +924,22 @@ async fn make_backend_call(
 		a2a::apply_to_response(policies.a2a.as_ref(), a2a_type, &mut resp)
 			.await
 			.map_err(ProxyError::Processing)?;
-		let mut resp =
-			if let (Some((llm, _, _)), Some(llm_request)) = (policies.llm_provider, llm_request) {
-				llm
-					.process_response(
-						&client,
-						llm_request,
-						response_policies,
-						llm_response_log.expect("must be set"),
-						include_completion_in_log,
-						resp,
-					)
-					.await
-					.map_err(|e| ProxyError::Processing(e.into()))?
-			} else {
-				resp
-			};
+		let mut resp = if let (Some(llm), Some(llm_request)) = (policies.llm_provider, llm_request) {
+			llm
+				.provider
+				.process_response(
+					&client,
+					llm_request,
+					response_policies,
+					llm_response_log.expect("must be set"),
+					include_completion_in_log,
+					resp,
+				)
+				.await
+				.map_err(|e| ProxyError::Processing(e.into()))?
+		} else {
+			resp
+		};
 		maybe_inference.mutate_response(&mut resp).await?;
 		Ok(resp)
 	}))
