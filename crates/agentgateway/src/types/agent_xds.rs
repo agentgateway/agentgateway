@@ -1133,3 +1133,78 @@ fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMat
 		.collect::<Result<Vec<_>, _>>()?;
 	Ok(headers)
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::types::proto::agent::policy_spec::Ai;
+	use serde_json::json;
+
+	use super::*;
+
+	#[test]
+	fn test_policy_spec_to_ai_policy() -> Result<(), ProtoError> {
+		let spec = proto::agent::PolicySpec {
+			kind: Some(proto::agent::policy_spec::Kind::Ai(Ai {
+				defaults: vec![
+					("temperature".to_string(), "0.7".to_string()),
+					("max_tokens".to_string(), "2000".to_string()),
+					(
+						"object_value".to_string(),
+						"{\"key\":\"value\"}".to_string(),
+					),
+				]
+				.into_iter()
+				.collect(),
+				overrides: vec![
+					("model".to_string(), "\"gpt-4\"".to_string()),
+					("frequency_penalty".to_string(), "0.5".to_string()),
+					("array_value".to_string(), "[1,2,3]".to_string()),
+				]
+				.into_iter()
+				.collect(),
+				prompt_guard: None,
+				prompts: None,
+			})),
+		};
+
+		let policy = Policy::try_from(&spec)?;
+
+		if let Policy::AI(ai_policy) = policy {
+			let defaults = ai_policy.defaults.as_ref().expect("defaults should be set");
+			let overrides = ai_policy
+				.overrides
+				.as_ref()
+				.expect("overrides should be set");
+
+			// Verify defaults have correct types and values
+			let temp_val = defaults.get("temperature").unwrap();
+			assert!(temp_val.is_f64(), "temperature should be f64");
+			assert_eq!(temp_val.as_f64().unwrap(), 0.7);
+
+			let tokens_val = defaults.get("max_tokens").unwrap();
+			assert!(tokens_val.is_u64(), "max_tokens should be u64");
+			assert_eq!(tokens_val.as_u64().unwrap(), 2000);
+
+			let obj_val = defaults.get("object_value").unwrap();
+			assert!(obj_val.is_object(), "object_value should be an object");
+			assert_eq!(obj_val, &json!({"key": "value"}));
+
+			// Verify overrides have correct types and values
+			let model_val = overrides.get("model").unwrap();
+			assert!(model_val.is_string(), "model should be a string");
+			assert_eq!(model_val.as_str().unwrap(), "gpt-4");
+
+			let freq_val = overrides.get("frequency_penalty").unwrap();
+			assert!(freq_val.is_f64(), "frequency_penalty should be f64");
+			assert_eq!(freq_val.as_f64().unwrap(), 0.5);
+
+			let array_val = overrides.get("array_value").unwrap();
+			assert!(array_val.is_array(), "array_value should be an array");
+			assert_eq!(array_val, &json!([1, 2, 3]));
+		} else {
+			panic!("Expected AI policy variant");
+		}
+
+		Ok(())
+	}
+}
