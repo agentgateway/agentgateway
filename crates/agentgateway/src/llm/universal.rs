@@ -1,6 +1,8 @@
 #![allow(deprecated)]
 #![allow(deprecated_in_future)]
 
+use std::collections::HashMap;
+
 #[allow(deprecated)]
 #[allow(deprecated_in_future)]
 pub use async_openai::types::ChatCompletionFunctions;
@@ -30,7 +32,6 @@ pub use async_openai::types::{
 	ServiceTier, WebSearchOptions,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {

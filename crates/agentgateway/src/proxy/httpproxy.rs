@@ -886,11 +886,18 @@ async fn make_backend_call(
 				log.add(|l| l.llm_request = Some(llm_request.clone()));
 				(req, response_policies, Some(llm_request))
 			},
-			RouteType::Messages => {
-				todo!()
-			},
-			RouteType::Models => {
-				todo!()
+			RouteType::Messages | RouteType::Models => {
+				return Ok(Box::pin(async move {
+					Ok(
+						::http::Response::builder()
+							.status(::http::StatusCode::NOT_IMPLEMENTED)
+							.header(::http::header::CONTENT_TYPE, "application/json")
+							.body(http::Body::from(format!(
+								"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
+							)))
+							.expect("Failed to build response"),
+					)
+				}));
 			},
 			RouteType::Passthrough => {
 				// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.

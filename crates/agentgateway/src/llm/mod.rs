@@ -76,7 +76,7 @@ pub struct NamedAIProvider {
 	/// This comes with the cost of an expensive operation.
 	#[serde(default)]
 	pub tokenize: bool,
-	pub routes: BTreeMap<Strng, RouteType>,
+	pub routes: IndexMap<Strng, RouteType>,
 }
 
 const DEFAULT_ROUTE: &str = "*";

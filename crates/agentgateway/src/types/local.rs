@@ -194,7 +194,7 @@ pub struct LocalNamedAIProvider {
 	/// Routes defines how to identify the type of traffic we should handle
 	/// The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.
 	#[serde(default)]
-	pub routes: BTreeMap<Strng, RouteType>,
+	pub routes: IndexMap<Strng, RouteType>,
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<LocalBackendTLS>,
 	#[serde(default)]

@@ -518,13 +518,13 @@ fn default_body() -> Bytes {
 mod webhook {
 	use ::http::header::CONTENT_TYPE;
 	use ::http::{HeaderMap, HeaderValue, header};
+	use async_openai::types::CreateChatCompletionResponse;
 	use serde::{Deserialize, Serialize};
 
 	use crate::client::Client;
 	use crate::llm::universal::Request;
 	use crate::types::agent::Target;
 	use crate::*;
-	use async_openai::types::CreateChatCompletionResponse;
 
 	#[derive(Debug, Clone, Serialize, Deserialize)]
 	#[serde(rename_all = "snake_case")]
