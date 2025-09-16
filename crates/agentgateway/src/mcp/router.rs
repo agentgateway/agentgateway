@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use agent_core::drain::DrainWatcher;
 use agent_core::prelude::Strng;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -33,12 +32,12 @@ use crate::{ProxyInputs, json, mcp};
 pub struct App {
 	state: Stores,
 	metrics: Arc<mcp::metrics::Metrics>,
-	_drain: DrainWatcher,
+	// _drain: DrainWatcher,
 	session: Arc<SessionManager>,
 }
 
 impl App {
-	pub fn new(state: Stores, registry: &mut Registry, drain: DrainWatcher) -> Self {
+	pub fn new(state: Stores, registry: &mut Registry) -> Self {
 		let session: Arc<SessionManager> = Arc::new(Default::default());
 		let metrics = Arc::new(crate::mcp::metrics::Metrics::new(
 			registry, None, // TODO custom tags
@@ -46,7 +45,6 @@ impl App {
 		Self {
 			state,
 			metrics,
-			_drain: drain,
 			session,
 		}
 	}

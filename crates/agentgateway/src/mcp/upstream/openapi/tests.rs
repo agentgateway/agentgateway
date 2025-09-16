@@ -29,7 +29,6 @@ async fn setup() -> (MockServer, Handler) {
 		},
 		None,
 	);
-	let (_drain_tx, drain_rx) = drain::new();
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),
 		stores: stores.clone(),
@@ -40,7 +39,7 @@ async fn setup() -> (MockServer, Handler) {
 		upstream: client.clone(),
 		ca: None,
 
-		mcp_state: mcp::router::App::new(stores.clone(), &mut Registry::default(), drain_rx.clone()),
+		mcp_state: mcp::router::App::new(stores.clone(), &mut Registry::default()),
 	});
 
 	let client = PolicyClient { inputs: pi };

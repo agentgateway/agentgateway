@@ -156,19 +156,17 @@ impl Client {
 		path: Strng,
 		client: PolicyClient,
 		policies: BackendPolicies,
-	) -> Self {
+	) -> anyhow::Result<Self> {
 		let hp = backend.hostport();
-		Self {
+		Ok(Self {
 			client: ClientCore {
 				backend: Arc::new(backend),
-				uri: ("http://".to_string() + &hp + path.as_str())
-					.parse()
-					.expect("TODO"),
+				uri: ("http://".to_string() + &hp + path.as_str()).parse()?,
 				policies,
 				client,
 			},
 			active_stream: Default::default(),
-		}
+		})
 	}
 	pub async fn stop(&self) -> Result<(), UpstreamError> {
 		let mut stream = self.active_stream.lock().await;

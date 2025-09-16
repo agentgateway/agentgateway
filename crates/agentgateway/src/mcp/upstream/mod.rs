@@ -236,7 +236,7 @@ impl UpstreamGroup {
 					path.into(),
 					self.client.clone(),
 					target.backend_policies.clone(),
-				);
+				)?;
 
 				upstream::Upstream::McpSSE(client)
 			},
@@ -255,7 +255,7 @@ impl UpstreamGroup {
 					path.into(),
 					self.client.clone(),
 					target.backend_policies.clone(),
-				);
+				)?;
 
 				upstream::Upstream::McpStreamable(client)
 			},

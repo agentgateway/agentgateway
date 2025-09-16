@@ -1,7 +1,5 @@
-use std::borrow::Cow;
-use std::sync::Arc;
-
 use agent_core::trcng;
+use futures_core::Stream;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
@@ -12,9 +10,11 @@ use rmcp::ErrorData;
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
 	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Prompt,
-	PromptsCapability, ProtocolVersion, ResourcesCapability, ServerCapabilities, ServerInfo,
-	ServerResult, Tool, ToolsCapability,
+	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
+	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
+use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::ProxyInputs;
 use crate::cel::ContextBuilder;
@@ -24,7 +24,7 @@ use crate::mcp::mergestream::MergeFn;
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{MCPInfo, mergestream, metrics, rbac, upstream};
+use crate::mcp::{ClientError, MCPInfo, mergestream, metrics, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
@@ -143,7 +143,6 @@ impl Relay {
 		let info = self.get_info();
 		Box::new(move |_| {
 			// For now, we just send our own info. In the future, we should merge the results from each upstream.
-			// TODO: set session info
 			Ok(info.into())
 		})
 	}
@@ -265,6 +264,7 @@ impl Relay {
 		ctx: IncomingRequestContext,
 		service_name: &str,
 	) -> Result<Response, UpstreamError> {
+		let id = r.id.clone();
 		let Ok(us) = self.upstreams.get(service_name) else {
 			return Err(UpstreamError::InvalidRequest(format!(
 				"unknown service {service_name}"
@@ -272,7 +272,7 @@ impl Relay {
 		};
 		let stream = us.generic_stream(r, &ctx).await?;
 
-		messages_to_response(stream)
+		messages_to_response(id, stream)
 	}
 	// For some requests, we don't have a sane mapping of incoming requests to a specific
 	// downstream service when multiplexing. Only forward when we have only one backend.
@@ -305,7 +305,7 @@ impl Relay {
 		}
 
 		let ms = mergestream::MergeStream::new_without_merge(streams);
-		merge_to_response(ms)
+		messages_to_response(RequestId::Number(0), ms)
 	}
 	pub async fn send_fanout(
 		&self,
@@ -313,13 +313,14 @@ impl Relay {
 		ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
+		let id = r.id.clone();
 		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
 			streams.push((name, con.generic_stream(r.clone(), &ctx).await?));
 		}
 
-		let ms = mergestream::MergeStream::new(streams, r.id, merge);
-		merge_to_response(ms)
+		let ms = mergestream::MergeStream::new(streams, id.clone(), merge);
+		messages_to_response(id, ms)
 	}
 	pub async fn send_notification(
 		&self,
@@ -393,40 +394,19 @@ pub fn setup_request_log(
 	(_span, log, cel)
 }
 
-fn merge_to_response(stream: super::mergestream::MergeStream) -> Result<Response, UpstreamError> {
+fn messages_to_response(
+	id: RequestId,
+	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+) -> Result<Response, UpstreamError> {
 	use futures_util::StreamExt;
-	use rmcp::model::{RequestId, ServerJsonRpcMessage};
+	use rmcp::model::ServerJsonRpcMessage;
 	use rmcp::transport::common::server_side_http::ServerSseMessage;
-	let stream = stream.map(|rpc| {
+	let stream = stream.map(move |rpc| {
 		let r = match rpc {
 			Ok(rpc) => rpc,
-			// TODO: do not hardcode number
-			Err(e) => ServerJsonRpcMessage::error(
-				ErrorData::internal_error(e.to_string(), None),
-				RequestId::Number(2),
-			),
-		};
-		// TODO: is it ok to have no event_id here?
-		ServerSseMessage {
-			event_id: None,
-			message: Arc::new(r),
-		}
-	});
-	Ok(crate::mcp::session::sse_stream_response(stream, None))
-}
-
-fn messages_to_response(stream: super::mergestream::Messages) -> Result<Response, UpstreamError> {
-	use futures_util::StreamExt;
-	use rmcp::model::{RequestId, ServerJsonRpcMessage};
-	use rmcp::transport::common::server_side_http::ServerSseMessage;
-	let stream = stream.map(|rpc| {
-		let r = match rpc {
-			Ok(rpc) => rpc,
-			// TODO: do not hardcode number
-			Err(e) => ServerJsonRpcMessage::error(
-				ErrorData::internal_error(e.to_string(), None),
-				RequestId::Number(2),
-			),
+			Err(e) => {
+				ServerJsonRpcMessage::error(ErrorData::internal_error(e.to_string(), None), id.clone())
+			},
 		};
 		// TODO: is it ok to have no event_id here?
 		ServerSseMessage {

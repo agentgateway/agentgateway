@@ -35,17 +35,15 @@ impl Client {
 		path: Strng,
 		client: PolicyClient,
 		policies: BackendPolicies,
-	) -> Self {
+	) -> anyhow::Result<Self> {
 		let hp = backend.hostport();
-		Self {
+		Ok(Self {
 			backend: Arc::new(backend),
-			uri: ("http://".to_string() + &hp + path.as_str())
-				.parse()
-				.expect("TODO"),
+			uri: ("http://".to_string() + &hp + path.as_str()).parse()?,
 			client,
 			policies,
 			session_id: Default::default(),
-		}
+		})
 	}
 	pub fn set_session_id(&self, s: String) {
 		self.session_id.store(Some(Arc::new(s)));
