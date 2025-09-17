@@ -296,7 +296,13 @@ impl HTTPProxy {
 		let host = http::get_host(&req)?.to_string();
 		log.host = Some(host.clone());
 		log.method = Some(req.method().clone());
-		log.path = Some(req.uri().path().to_string());
+		log.path = Some(
+			req
+				.uri()
+				.path_and_query()
+				.map(|pq| pq.to_string())
+				.unwrap_or_else(|| req.uri().path().to_string()),
+		);
 		log.version = Some(req.version());
 		let needs_body = log.cel.ctx().with_request(&req);
 		if needs_body && let Ok(body) = crate::http::inspect_body(req.body_mut()).await {

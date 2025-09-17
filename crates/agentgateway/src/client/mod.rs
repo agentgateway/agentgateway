@@ -108,10 +108,7 @@ impl tower::Service<::http::Extensions> for Connector {
 
 			match transport {
 				Transport::Plaintext => {
-					let mut res = Socket::dial(ep)
-						.await
-						.context("http call failed")
-						.map_err(crate::http::Error::new)?;
+					let mut res = Socket::dial(ep).await.map_err(crate::http::Error::new)?;
 					res.with_logging(LoggingMode::Upstream);
 					Ok(TokioIo::new(res))
 				},

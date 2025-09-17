@@ -691,7 +691,7 @@ impl Drop for DropOnLog {
 					.map(Into::into),
 			),
 			("retry.attempt", log.retry_attempt.display()),
-			("error", log.error.display()),
+			("error", log.error.quoted()),
 			("duration", Some(dur.as_str().into())),
 		];
 		if enable_trace && let Some(t) = &log.tracer {

@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::io;
 use std::io::{Error, IoSlice};
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -130,7 +131,7 @@ impl Socket {
 		}
 	}
 
-	pub fn from_tcp(stream: TcpStream) -> anyhow::Result<Self> {
+	pub fn from_tcp(stream: TcpStream) -> io::Result<Self> {
 		let mut ext = Extension::new();
 		stream.set_nodelay(true)?;
 		ext.insert(TCPConnectionInfo {
@@ -213,7 +214,7 @@ impl Socket {
 		}
 	}
 
-	pub async fn dial(target: SocketAddr) -> anyhow::Result<Socket> {
+	pub async fn dial(target: SocketAddr) -> io::Result<Socket> {
 		// TODO: settings like timeout, etc from hyper
 		let res = TcpStream::connect(target).await?;
 		Socket::from_tcp(res)
