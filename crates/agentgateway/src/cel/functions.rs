@@ -24,6 +24,7 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	ctx.add_function("map_values", map_values);
 	ctx.add_function("variables", variables);
 	ctx.add_function("random", || random_range(0.0..=1.0));
+	ctx.add_function("default", default);
 
 	// Using the go name, base64.encode is blocked by https://github.com/cel-rust/cel-rust/issues/103 (namespacing)
 	ctx.add_function("base64_encode", base64_encode);
@@ -170,6 +171,23 @@ fn to_json(ftx: &FunctionContext, v: Value) -> ResolveResult {
 	Ok(Value::String(Arc::new(
 		serde_json::to_string(&pj).map_err(|e| ftx.error(e))?,
 	)))
+}
+
+fn default(ftx: &FunctionContext, exp: Expression, d: Value) -> ResolveResult {
+	fn has(ftx: &FunctionContext, exp: Expression) -> Result<Option<Value>, cel::ExecutionError> {
+		// We determine if a type has a property by attempting to resolve it.
+		// If we get a NoSuchKey error, then we know the property does not exist
+		Ok(match ftx.resolve(exp) {
+			Ok(Value::Null) => None,
+			Ok(v) => Some(v),
+			Err(err) => match err {
+				cel::ExecutionError::NoSuchKey(_) => None,
+				cel::ExecutionError::UndeclaredReference(_) => None,
+				_ => return Err(err),
+			},
+		})
+	}
+	Ok(has(ftx, exp)?.unwrap_or(d))
 }
 
 #[cfg(any(test, feature = "internal_benches"))]

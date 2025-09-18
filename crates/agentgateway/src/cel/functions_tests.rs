@@ -14,13 +14,13 @@ fn eval(expr: &str) -> Result<Value, Error> {
 #[test]
 fn with() {
 	let expr = r#"[1,2].with(a, a + a)"#;
-	assert_eq!(json!([1, 2, 1, 2]), eval(expr).unwrap().json().unwrap());
+	assert(json!([1, 2, 1, 2]), expr);
 }
 
 #[test]
 fn json() {
 	let expr = r#"json('{"hi":1}').hi"#;
-	assert_eq!(json!(1), eval(expr).unwrap().json().unwrap());
+	assert(json!(1), expr);
 }
 
 #[test]
@@ -33,13 +33,33 @@ fn random() {
 #[test]
 fn base64() {
 	let expr = r#""hello".base64_encode()"#;
-	assert_eq!(json!("aGVsbG8="), eval(expr).unwrap().json().unwrap());
+	assert(json!("aGVsbG8="), expr);
 	let expr = r#"string("hello".base64_encode().base64_decode())"#;
-	assert_eq!(json!("hello"), eval(expr).unwrap().json().unwrap());
+	assert(json!("hello"), expr);
 }
 
 #[test]
 fn map_values() {
 	let expr = r#"{"a": 1, "b": 2}.map_values(v, v * 2)"#;
-	assert_eq!(json!({"a": 2, "b": 4}), eval(expr).unwrap().json().unwrap());
+	assert(json!({"a": 2, "b": 4}), expr);
+}
+
+#[test]
+fn default() {
+	let expr = r#"default(a, "b")"#;
+	assert(json!("b"), expr);
+	let expr = r#"default({"a":1}["a"], 2)"#;
+	assert(json!(1), expr);
+	let expr = r#"default({"a":1}["b"], 2)"#;
+	assert(json!(2), expr);
+	let expr = r#"default(a.b, "b")"#;
+	assert(json!("b"), expr);
+}
+
+fn assert(want: serde_json::Value, expr: &str) {
+	assert_eq!(
+		want,
+		eval(expr).unwrap().json().unwrap(),
+		"expression: {expr}"
+	);
 }
