@@ -46,6 +46,7 @@ Additionally, custom functions are available:
 | `base64_encode`     | Encodes a string to a base64 string. Example: `base64_encode("hello")`.                                                                                                                                                                                                          |
 | `base64_decode`     | Decodes a string in base64 format. Example: `string(base64_decode("aGVsbG8K"))`. Warning: this returns `bytes`, not a `String`. Various parts of agentgateway will display bytes in base64 format, which may appear like the function does nothing if not converted to a string. |
 | `random`            | Generates a number float from 0.0-1.0                                                                                                                                                                                                                                            |
+| `default`           | Resolves to a default value if the expression cannot be resolved. For example `default(request.headers["missing-header"], "fallback")`                                                                                                                                           |
 
 Additionally, the following standard functions are available:
 * `contains`, `size`, `has`, `map`, `filter`, `all`, `max`, `startsWith`, `endsWith`, `string`, `bytes`, `double`, `exists`, `exists_one`, `int`, `uint`, `matches`.
