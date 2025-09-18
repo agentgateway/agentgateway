@@ -177,7 +177,7 @@ fn default(ftx: &FunctionContext, exp: Expression, d: Value) -> ResolveResult {
 	fn has(ftx: &FunctionContext, exp: Expression) -> Result<Option<Value>, cel::ExecutionError> {
 		// We determine if a type has a property by attempting to resolve it.
 		// If we get a NoSuchKey error, then we know the property does not exist
-		Ok(match dbg!(ftx.resolve(exp)) {
+		Ok(match ftx.resolve(exp) {
 			Ok(Value::Null) => None,
 			Ok(v) => Some(v),
 			Err(err) => match err {

@@ -57,5 +57,9 @@ fn default() {
 }
 
 fn assert(want: serde_json::Value, expr: &str) {
-	assert_eq!(want, eval(expr).unwrap().json().unwrap(), "expression: {expr}");
+	assert_eq!(
+		want,
+		eval(expr).unwrap().json().unwrap(),
+		"expression: {expr}"
+	);
 }
