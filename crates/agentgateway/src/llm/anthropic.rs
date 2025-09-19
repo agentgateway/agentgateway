@@ -126,8 +126,8 @@ impl Provider {
 						mk(
 							vec![],
 							Some(universal::Usage {
-								prompt_tokens: usage.output_tokens as u32,
-								completion_tokens: input_tokens as u32,
+								prompt_tokens: input_tokens as u32,
+								completion_tokens: usage.output_tokens as u32,
 								total_tokens: (input_tokens + usage.output_tokens) as u32,
 
 								prompt_tokens_details: None,

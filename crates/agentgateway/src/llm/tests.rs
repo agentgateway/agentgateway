@@ -83,7 +83,7 @@ fn test_bedrock() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 	};
-	let request = |i| Ok(bedrock::translate_request(i, &provider));
+	let request = |i| Ok(bedrock::translate_openai_request(i, &provider, "test-model"));
 	for r in ALL_REQUESTS {
 		test_request("bedrock", r, request);
 	}

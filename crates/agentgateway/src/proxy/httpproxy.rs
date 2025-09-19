@@ -32,6 +32,8 @@ use crate::telemetry::metrics::TCPLabels;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::{ProxyInputs, store, *};
+use crate::llm::messages;
+use crate::llm::universal;
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
 	route
@@ -296,13 +298,7 @@ impl HTTPProxy {
 		let host = http::get_host(&req)?.to_string();
 		log.host = Some(host.clone());
 		log.method = Some(req.method().clone());
-		log.path = Some(
-			req
-				.uri()
-				.path_and_query()
-				.map(|pq| pq.to_string())
-				.unwrap_or_else(|| req.uri().path().to_string()),
-		);
+		log.path = Some(req.uri().path().to_string());
 		log.version = Some(req.version());
 		let needs_body = log.cel.ctx().with_request(&req);
 		if needs_body && let Ok(body) = crate::http::inspect_body(req.body_mut()).await {
@@ -881,6 +877,7 @@ async fn make_backend_call(
 						route_policies.llm.as_deref(),
 						req,
 						llm.tokenize,
+						route_type,
 						&mut log,
 					)
 					.await
@@ -910,22 +907,73 @@ async fn make_backend_call(
 				log.add(|l| l.llm_request = Some(llm_request.clone()));
 				(req, response_policies, Some(llm_request))
 			},
-			RouteType::Messages | RouteType::Models => {
-				return Ok(Box::pin(async move {
-					Ok(
-						::http::Response::builder()
-							.status(::http::StatusCode::NOT_IMPLEMENTED)
-							.header(::http::header::CONTENT_TYPE, "application/json")
-							.body(http::Body::from(format!(
-								"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
-							)))
-							.expect("Failed to build response"),
+			RouteType::Messages => {
+				// Read and parse Messages API request body
+				let body = std::mem::replace(req.body_mut(), http::Body::empty());
+				let body_bytes = axum::body::to_bytes(body, 2_097_152).await
+					.map_err(|e| ProxyError::ProcessingString(format!("Failed to read request body: {}", e)))?;
+
+				let messages_request: messages::MessagesRequest = serde_json::from_slice(&body_bytes)
+					.map_err(|e| ProxyError::ProcessingString(format!("Invalid JSON in request body: {}", e)))?;
+
+				// Use edge decoder to convert Messages API to universal format
+				let universal_request = messages::ingress::decode_messages_to_universal(&messages_request)
+					.map_err(|e| ProxyError::ProcessingString(format!("Request validation failed: {}", e)))?;
+
+				// Put universal request back into HTTP body to reuse shared policy pipeline
+				let universal_json = serde_json::to_vec(&universal_request)
+					.map_err(|e| ProxyError::ProcessingString(format!("Failed to serialize universal request: {}", e)))?;
+				*req.body_mut() = http::Body::from(universal_json);
+
+				// Use the same policy pipeline as Completions route
+				let r = llm
+					.provider
+					.process_request(
+						&client,
+						route_policies.llm.as_deref(),
+						req,
+						llm.tokenize,
+						route_type,
+						&mut log,
 					)
-				}));
+					.await
+					.map_err(|e| ProxyError::Processing(e.into()))?;
+				let (mut req, llm_request) = match r {
+					RequestResult::Success(r, lr) => (r, lr),
+					RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
+				};
+				// If a user doesn't configure explicit overrides for connecting to a provider, setup default
+				// paths, TLS, etc.
+				if llm.use_default_policies() {
+					llm
+						.provider
+						.setup_request(&mut req, route_type, Some(&llm_request))
+						.map_err(ProxyError::Processing)?;
+				}
+				// Apply all policies (rate limits)
+				let response_policies = apply_llm_request_policies(
+					&route_policies,
+					policy_client,
+					&mut log,
+					&mut req,
+					&llm_request,
+					response_headers,
+				)
+				.await?;
+				log.add(|l| l.llm_request = Some(llm_request.clone()));
+				(req, response_policies, Some(llm_request))
 			},
 			RouteType::Passthrough => {
 				// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
 				// We do not need LLM policies nor token-based rate limits, etc.
+				llm
+					.provider
+					.setup_request(&mut req, route_type, None)
+					.map_err(ProxyError::Processing)?;
+				(req, LLMResponsePolicies::default(), None)
+			},
+			RouteType::Models => {
+				// Models endpoint - treat as passthrough for now
 				llm
 					.provider
 					.setup_request(&mut req, route_type, None)
@@ -956,7 +1004,10 @@ async fn make_backend_call(
 			.await
 			.map_err(ProxyError::Processing)?;
 		let mut resp = if let (Some(llm), Some(llm_request)) = (policies.llm_provider, llm_request) {
-			llm
+			// Extract route type before moving llm_request
+			let route_type = llm_request.route_type;
+			
+			let mut processed_resp = llm
 				.provider
 				.process_response(
 					&client,
@@ -967,7 +1018,33 @@ async fn make_backend_call(
 					resp,
 				)
 				.await
-				.map_err(|e| ProxyError::Processing(e.into()))?
+				.map_err(|e| ProxyError::Processing(e.into()))?;
+
+			// Convert response format based on route type using edge encoders
+			if route_type == RouteType::Messages {
+				let body = std::mem::replace(processed_resp.body_mut(), http::Body::empty());
+				if let Ok(body_bytes) = axum::body::to_bytes(body, 2_097_152).await {
+					if let Ok(universal_response) = serde_json::from_slice::<universal::Response>(&body_bytes) {
+						// Use edge encoder to convert Universal response to Messages API format
+						match messages::egress::encode_universal_to_messages(&universal_response) {
+							Ok(messages_response) => {
+								let messages_json = serde_json::to_vec(&messages_response)
+									.map_err(|e| ProxyError::Processing(anyhow!("Failed to serialize Messages response: {}", e)))?;
+								*processed_resp.body_mut() = http::Body::from(messages_json);
+							}
+							Err(e) => {
+								debug!("Failed to convert to Messages format, keeping Universal format: {:?}", e);
+								// Restore original body
+								*processed_resp.body_mut() = http::Body::from(body_bytes);
+							}
+						}
+					} else {
+						// Restore original body if JSON parsing failed
+						*processed_resp.body_mut() = http::Body::from(body_bytes);
+					}
+				}
+			}
+			processed_resp
 		} else {
 			resp
 		};

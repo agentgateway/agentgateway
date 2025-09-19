@@ -9,6 +9,7 @@ use headers::{ContentEncoding, HeaderMapExt};
 use itertools::Itertools;
 pub use policy::Policy;
 use rand::Rng;
+use serde::Serialize;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
@@ -25,6 +26,7 @@ use crate::{client, *};
 pub mod anthropic;
 pub mod bedrock;
 pub mod gemini;
+pub mod messages;
 pub mod openai;
 mod pii;
 pub mod policy;
@@ -96,7 +98,6 @@ impl NamedAIProvider {
 				return *rt;
 			}
 		}
-		// If there is no match, there is an implicit default to Completions
 		RouteType::Completions
 	}
 }
@@ -127,6 +128,26 @@ trait Provider {
 	const NAME: Strng;
 }
 
+/// Backend adapter trait for OpenAI ⇄ Provider-specific format conversion.
+/// This trait enables clean separation between OpenAI format processing and provider-specific APIs.
+pub trait BackendAdapter {
+	/// Provider-specific request type (e.g., bedrock::ConverseRequest)
+	type BReq: Send;
+	/// Provider-specific response type (e.g., bedrock::ConverseResponse)
+	type BResp: Send;
+	/// Provider-specific streaming event type (e.g., bedrock::ConverseStreamOutput)
+	type BStream: Send;
+
+	/// Convert OpenAI request to provider-specific request format
+	fn to_backend(&self, req: &universal::Request) -> Result<Self::BReq, AIError>;
+
+	/// Convert provider-specific response to OpenAI response format
+	fn from_backend(&self, bresp: Self::BResp, model_id: &str) -> Result<universal::Response, AIError>;
+
+	/// Convert provider-specific streaming events to OpenAI streaming format
+	fn stream_map(&mut self, ev: Self::BStream) -> Result<Vec<universal::ChatChoiceStream>, AIError>;
+}
+
 #[derive(Debug, Clone)]
 pub struct LLMRequest {
 	/// Input tokens derived by tokenizing the request. Not always enabled
@@ -134,6 +155,7 @@ pub struct LLMRequest {
 	pub request_model: Strng,
 	pub provider: Strng,
 	pub streaming: bool,
+	pub route_type: RouteType,
 	pub params: llm::LLMRequestParams,
 }
 
@@ -314,6 +336,7 @@ impl AIProvider {
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
+		route_type: RouteType,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		// Buffer the body, max 2mb
@@ -341,7 +364,7 @@ impl AIProvider {
 				return Ok(RequestResult::Rejected(dr));
 			}
 		}
-		let llm_info = self.to_llm_request(&req, tokenize).await?;
+		let llm_info = self.to_llm_request(&req, tokenize, route_type).await?;
 		if let Some(log) = log {
 			let needs_prompt = log.cel.cel_context.with_llm_request(&llm_info);
 			if needs_prompt {
@@ -368,7 +391,11 @@ impl AIProvider {
 			AIProvider::Gemini(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Vertex(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Anthropic(p) => serde_json::to_vec(&p.process_request(req).await?),
-			AIProvider::Bedrock(p) => serde_json::to_vec(&p.process_request(req).await?),
+			AIProvider::Bedrock(p) => {
+				// Use BackendAdapter with direct OpenAI → Bedrock conversion
+				let bedrock_req = p.to_backend(&req)?;
+				serde_json::to_vec(&bedrock_req)
+			},
 		};
 		let body = resp_json.map_err(AIError::RequestMarshal)?;
 		let resp = Body::from(body);
@@ -504,8 +531,10 @@ impl AIProvider {
 				AIProvider::Vertex(p) => p.process_response(bytes).await?,
 				AIProvider::Anthropic(p) => p.process_response(bytes).await?,
 				AIProvider::Bedrock(p) => {
-					p.process_response(req.request_model.as_str(), bytes)
-						.await?
+					// Use BackendAdapter with direct Bedrock → OpenAI conversion
+					let bedrock_resp: bedrock::types::ConverseResponse =
+						serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+					p.from_backend(bedrock_resp, req.request_model.as_str())?
 				},
 			};
 			Ok(Ok(openai_response))
@@ -530,6 +559,7 @@ impl AIProvider {
 		resp: Response,
 	) -> Result<Response, AIError> {
 		let model = req.request_model.clone();
+		let route_type = req.route_type;
 		// Store an empty response, as we stream in info we will parse into it
 		let llmresp = llm::LLMResponse {
 			request: req,
@@ -543,7 +573,16 @@ impl AIProvider {
 		log.store(Some(llmresp));
 		let resp = match self {
 			AIProvider::Anthropic(p) => p.process_streaming(log, resp).await,
-			AIProvider::Bedrock(p) => p.process_streaming(log, resp, model.as_str()).await,
+			AIProvider::Bedrock(p) => {
+				match route_type {
+					RouteType::Messages => {
+						p.process_streaming_messages(log, rate_limit, resp, model.as_str()).await
+					},
+					_ => {
+						p.process_streaming(log, resp, model.as_str()).await
+					},
+				}
+			},
 			_ => {
 				self
 					.default_process_streaming(log, include_completion_in_log, rate_limit, resp)
@@ -623,6 +662,7 @@ impl AIProvider {
 		&self,
 		req: &universal::Request,
 		tokenize: bool,
+		route_type: RouteType,
 	) -> Result<LLMRequest, AIError> {
 		let input_tokens = if tokenize {
 			// TODO: avoid clone, we need it for spawn_blocking though
@@ -643,6 +683,7 @@ impl AIProvider {
 			request_model: req.model.clone().unwrap_or_default().as_str().into(),
 			provider: self.provider(),
 			streaming: req.stream.unwrap_or_default(),
+			route_type,
 			params: LLMRequestParams {
 				temperature: req.temperature.map(Into::into),
 				top_p: req.top_p.map(Into::into),
@@ -748,6 +789,36 @@ pub enum AIError {
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]
 	JoinError(#[from] tokio::task::JoinError),
+	
+	// === Messages API Validation Errors (400 Bad Request) ===
+	#[error("invalid role: {0}. Messages API only supports 'user' and 'assistant' roles")]
+	InvalidRole(String),
+	#[error("max_tokens is required and must be greater than 0")]
+	MissingMaxTokens,
+	#[error("invalid max_tokens: {0}. Must be greater than 0")]
+	InvalidMaxTokens(u32),
+	#[error("unpaired tool use: tool_use with id '{0}' has no matching tool_result")]
+	UnpairedToolUse(String),
+	#[error("unpaired tool result: tool_result for id '{0}' has no matching tool_use")]
+	UnpairedToolResult(String),
+	#[error("duplicate tool result: multiple tool_result blocks for id '{0}'")]
+	DuplicateToolResult(String),
+	#[error("invalid message sequence: {0}")]
+	InvalidMessageSequence(String),
+	#[error("empty message content")]
+	EmptyMessageContent,
+	#[error("empty messages array")]
+	EmptyMessages,
+	#[error("invalid tool definition: {0}")]
+	InvalidToolDefinition(String),
+	#[error("duplicate tool name: '{0}'")]
+	DuplicateToolName(String),
+	#[error("invalid tool name: '{0}'. Tool names must be valid identifiers")]
+	InvalidToolName(String),
+	#[error("missing tool input_schema")]
+	MissingToolSchema,
+	#[error("not implemented")]
+	NotImplemented,
 }
 
 fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMResponse) {
