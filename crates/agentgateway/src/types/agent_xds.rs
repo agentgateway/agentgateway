@@ -77,6 +77,52 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 				};
 				BackendAuth::Aws(aws_auth)
 			},
+			Some(proto::agent::backend_auth_policy::Kind::Azure(a)) => {
+				let azure_auth = match a.kind {
+					Some(proto::agent::azure::Kind::ExplicitConfig(config)) => {
+						let src = match config.credential_source {
+							Some(proto::agent::azure_explicit_config::CredentialSource::ClientSecret(cs)) => {
+								crate::http::auth::AzureAuthCredentialSource::ClientSecret {
+									tenant_id: cs.tenant_id,
+									client_id: cs.client_id,
+									client_secret: cs.client_secret.into(),
+								}
+							},
+							Some(proto::agent::azure_explicit_config::CredentialSource::ManagedIdentityCredential(mic)) => {
+								crate::http::auth::AzureAuthCredentialSource::ManagedIdentity {
+									user_assigned_identity: mic.user_assigned_identity.map(|uami| {
+										uami.id.map(|id| match id {
+											proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ClientId(c) => {
+												crate::http::auth::AzureUserAssignedIdentity::ClientId(c)
+											},
+											proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ObjectId(o) => {
+												crate::http::auth::AzureUserAssignedIdentity::ObjectId(o)
+											},
+											proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ResourceId(r) => {
+												crate::http::auth::AzureUserAssignedIdentity::ResourceId(r)
+											},
+										}).expect("one of clientId, objectId, or resourceId must be set")
+									})
+								}
+							},
+							Some(proto::agent::azure_explicit_config::CredentialSource::WorkloadIdentityCredential(_)) => {
+								crate::http::auth::AzureAuthCredentialSource::WorkloadIdentity {}
+							},
+							None => {
+								return Err(ProtoError::MissingRequiredField);
+							},
+						};
+						crate::http::auth::AzureAuth::ExplicitConfig {
+							credential_source: src,
+						}
+					},
+					Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
+						crate::http::auth::AzureAuth::DeveloperImplicit {}
+					},
+					None => return Err(ProtoError::MissingRequiredField),
+				};
+				BackendAuth::Azure(azure_auth)
+			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}

@@ -860,7 +860,7 @@ async fn make_backend_call(
 	};
 
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
-	auth::apply_backend_auth(policies.backend_auth.as_ref(), &mut req).await?;
+	auth::apply_backend_auth(&client, policies.backend_auth.as_ref(), &mut req).await?;
 	let a2a_type = a2a::apply_to_request(policies.a2a.as_ref(), &mut req).await;
 	if let a2a::RequestType::Call(method) = a2a_type {
 		log.add(|l| l.a2a_method = Some(method));

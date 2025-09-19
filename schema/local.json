@@ -1789,6 +1789,150 @@
                                       "aws"
                                     ],
                                     "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "azure": {
+                                        "oneOf": [
+                                          {
+                                            "description": "Use explicit Azure credentials",
+                                            "type": "object",
+                                            "properties": {
+                                              "explicitConfig": {
+                                                "type": "object",
+                                                "unevaluatedProperties": false,
+                                                "oneOf": [
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "clientSecret": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "tenant_id": {
+                                                            "type": "string"
+                                                          },
+                                                          "client_id": {
+                                                            "type": "string"
+                                                          },
+                                                          "client_secret": {
+                                                            "type": "string"
+                                                          }
+                                                        },
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "tenant_id",
+                                                          "client_id",
+                                                          "client_secret"
+                                                        ]
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "clientSecret"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "managedIdentity": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "userAssignedIdentity": {
+                                                            "anyOf": [
+                                                              {
+                                                                "oneOf": [
+                                                                  {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                      "clientId": {
+                                                                        "type": "string"
+                                                                      }
+                                                                    },
+                                                                    "required": [
+                                                                      "clientId"
+                                                                    ],
+                                                                    "additionalProperties": false
+                                                                  },
+                                                                  {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                      "objectId": {
+                                                                        "type": "string"
+                                                                      }
+                                                                    },
+                                                                    "required": [
+                                                                      "objectId"
+                                                                    ],
+                                                                    "additionalProperties": false
+                                                                  },
+                                                                  {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                      "resourceId": {
+                                                                        "type": "string"
+                                                                      }
+                                                                    },
+                                                                    "required": [
+                                                                      "resourceId"
+                                                                    ],
+                                                                    "additionalProperties": false
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "type": "null"
+                                                              }
+                                                            ]
+                                                          }
+                                                        },
+                                                        "additionalProperties": false
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "managedIdentity"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "workloadIdentity": {
+                                                        "type": "object",
+                                                        "additionalProperties": false
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "workloadIdentity"
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "explicitConfig"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "description": "Use implicit Azure auth. Note that this is for developer use-cases only!",
+                                            "type": "object",
+                                            "properties": {
+                                              "developerImplicit": {
+                                                "type": "object",
+                                                "additionalProperties": false
+                                              }
+                                            },
+                                            "required": [
+                                              "developerImplicit"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "azure"
+                                    ],
+                                    "additionalProperties": false
                                   }
                                 ]
                               },
@@ -2933,6 +3077,150 @@
                                                     "aws"
                                                   ],
                                                   "additionalProperties": false
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "azure": {
+                                                      "oneOf": [
+                                                        {
+                                                          "description": "Use explicit Azure credentials",
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "explicitConfig": {
+                                                              "type": "object",
+                                                              "unevaluatedProperties": false,
+                                                              "oneOf": [
+                                                                {
+                                                                  "type": "object",
+                                                                  "properties": {
+                                                                    "clientSecret": {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "tenant_id": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "client_id": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "client_secret": {
+                                                                          "type": "string"
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false,
+                                                                      "required": [
+                                                                        "tenant_id",
+                                                                        "client_id",
+                                                                        "client_secret"
+                                                                      ]
+                                                                    }
+                                                                  },
+                                                                  "required": [
+                                                                    "clientSecret"
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "type": "object",
+                                                                  "properties": {
+                                                                    "managedIdentity": {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "userAssignedIdentity": {
+                                                                          "anyOf": [
+                                                                            {
+                                                                              "oneOf": [
+                                                                                {
+                                                                                  "type": "object",
+                                                                                  "properties": {
+                                                                                    "clientId": {
+                                                                                      "type": "string"
+                                                                                    }
+                                                                                  },
+                                                                                  "required": [
+                                                                                    "clientId"
+                                                                                  ],
+                                                                                  "additionalProperties": false
+                                                                                },
+                                                                                {
+                                                                                  "type": "object",
+                                                                                  "properties": {
+                                                                                    "objectId": {
+                                                                                      "type": "string"
+                                                                                    }
+                                                                                  },
+                                                                                  "required": [
+                                                                                    "objectId"
+                                                                                  ],
+                                                                                  "additionalProperties": false
+                                                                                },
+                                                                                {
+                                                                                  "type": "object",
+                                                                                  "properties": {
+                                                                                    "resourceId": {
+                                                                                      "type": "string"
+                                                                                    }
+                                                                                  },
+                                                                                  "required": [
+                                                                                    "resourceId"
+                                                                                  ],
+                                                                                  "additionalProperties": false
+                                                                                }
+                                                                              ]
+                                                                            },
+                                                                            {
+                                                                              "type": "null"
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  },
+                                                                  "required": [
+                                                                    "managedIdentity"
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "type": "object",
+                                                                  "properties": {
+                                                                    "workloadIdentity": {
+                                                                      "type": "object",
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  },
+                                                                  "required": [
+                                                                    "workloadIdentity"
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "explicitConfig"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "description": "Use implicit Azure auth. Note that this is for developer use-cases only!",
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "developerImplicit": {
+                                                              "type": "object",
+                                                              "additionalProperties": false
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "developerImplicit"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "azure"
+                                                  ],
+                                                  "additionalProperties": false
                                                 }
                                               ]
                                             },
@@ -3265,6 +3553,150 @@
                                                               },
                                                               "required": [
                                                                 "aws"
+                                                              ],
+                                                              "additionalProperties": false
+                                                            },
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "azure": {
+                                                                  "oneOf": [
+                                                                    {
+                                                                      "description": "Use explicit Azure credentials",
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "explicitConfig": {
+                                                                          "type": "object",
+                                                                          "unevaluatedProperties": false,
+                                                                          "oneOf": [
+                                                                            {
+                                                                              "type": "object",
+                                                                              "properties": {
+                                                                                "clientSecret": {
+                                                                                  "type": "object",
+                                                                                  "properties": {
+                                                                                    "tenant_id": {
+                                                                                      "type": "string"
+                                                                                    },
+                                                                                    "client_id": {
+                                                                                      "type": "string"
+                                                                                    },
+                                                                                    "client_secret": {
+                                                                                      "type": "string"
+                                                                                    }
+                                                                                  },
+                                                                                  "additionalProperties": false,
+                                                                                  "required": [
+                                                                                    "tenant_id",
+                                                                                    "client_id",
+                                                                                    "client_secret"
+                                                                                  ]
+                                                                                }
+                                                                              },
+                                                                              "required": [
+                                                                                "clientSecret"
+                                                                              ]
+                                                                            },
+                                                                            {
+                                                                              "type": "object",
+                                                                              "properties": {
+                                                                                "managedIdentity": {
+                                                                                  "type": "object",
+                                                                                  "properties": {
+                                                                                    "userAssignedIdentity": {
+                                                                                      "anyOf": [
+                                                                                        {
+                                                                                          "oneOf": [
+                                                                                            {
+                                                                                              "type": "object",
+                                                                                              "properties": {
+                                                                                                "clientId": {
+                                                                                                  "type": "string"
+                                                                                                }
+                                                                                              },
+                                                                                              "required": [
+                                                                                                "clientId"
+                                                                                              ],
+                                                                                              "additionalProperties": false
+                                                                                            },
+                                                                                            {
+                                                                                              "type": "object",
+                                                                                              "properties": {
+                                                                                                "objectId": {
+                                                                                                  "type": "string"
+                                                                                                }
+                                                                                              },
+                                                                                              "required": [
+                                                                                                "objectId"
+                                                                                              ],
+                                                                                              "additionalProperties": false
+                                                                                            },
+                                                                                            {
+                                                                                              "type": "object",
+                                                                                              "properties": {
+                                                                                                "resourceId": {
+                                                                                                  "type": "string"
+                                                                                                }
+                                                                                              },
+                                                                                              "required": [
+                                                                                                "resourceId"
+                                                                                              ],
+                                                                                              "additionalProperties": false
+                                                                                            }
+                                                                                          ]
+                                                                                        },
+                                                                                        {
+                                                                                          "type": "null"
+                                                                                        }
+                                                                                      ]
+                                                                                    }
+                                                                                  },
+                                                                                  "additionalProperties": false
+                                                                                }
+                                                                              },
+                                                                              "required": [
+                                                                                "managedIdentity"
+                                                                              ]
+                                                                            },
+                                                                            {
+                                                                              "type": "object",
+                                                                              "properties": {
+                                                                                "workloadIdentity": {
+                                                                                  "type": "object",
+                                                                                  "additionalProperties": false
+                                                                                }
+                                                                              },
+                                                                              "required": [
+                                                                                "workloadIdentity"
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "explicitConfig"
+                                                                      ],
+                                                                      "additionalProperties": false
+                                                                    },
+                                                                    {
+                                                                      "description": "Use implicit Azure auth. Note that this is for developer use-cases only!",
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "developerImplicit": {
+                                                                          "type": "object",
+                                                                          "additionalProperties": false
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "developerImplicit"
+                                                                      ],
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "azure"
                                                               ],
                                                               "additionalProperties": false
                                                             }
@@ -4812,6 +5244,150 @@
                         },
                         "required": [
                           "aws"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "azure": {
+                            "oneOf": [
+                              {
+                                "description": "Use explicit Azure credentials",
+                                "type": "object",
+                                "properties": {
+                                  "explicitConfig": {
+                                    "type": "object",
+                                    "unevaluatedProperties": false,
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "clientSecret": {
+                                            "type": "object",
+                                            "properties": {
+                                              "tenant_id": {
+                                                "type": "string"
+                                              },
+                                              "client_id": {
+                                                "type": "string"
+                                              },
+                                              "client_secret": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "tenant_id",
+                                              "client_id",
+                                              "client_secret"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "clientSecret"
+                                        ]
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "managedIdentity": {
+                                            "type": "object",
+                                            "properties": {
+                                              "userAssignedIdentity": {
+                                                "anyOf": [
+                                                  {
+                                                    "oneOf": [
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "clientId": {
+                                                            "type": "string"
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "clientId"
+                                                        ],
+                                                        "additionalProperties": false
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "objectId": {
+                                                            "type": "string"
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "objectId"
+                                                        ],
+                                                        "additionalProperties": false
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "resourceId": {
+                                                            "type": "string"
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "resourceId"
+                                                        ],
+                                                        "additionalProperties": false
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "null"
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "required": [
+                                          "managedIdentity"
+                                        ]
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "workloadIdentity": {
+                                            "type": "object",
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "required": [
+                                          "workloadIdentity"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "explicitConfig"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "description": "Use implicit Azure auth. Note that this is for developer use-cases only!",
+                                "type": "object",
+                                "properties": {
+                                  "developerImplicit": {
+                                    "type": "object",
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "developerImplicit"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "azure"
                         ],
                         "additionalProperties": false
                       }

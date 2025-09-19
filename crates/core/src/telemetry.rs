@@ -204,11 +204,12 @@ fn fmt_layer(
 }
 
 fn default_filter() -> filter::Targets {
+	const CUSTOM_TARGETS: &str = "rmcp=warn,hickory_server::server::server_future=off,typespec_client_core::http::policies::logging=warn";
 	// Read from env var, but prefix with setting DNS logs to warn as they are noisy; they can be explicitly overriden
 	let var: String = env::var("RUST_LOG")
 		.map_err(|_| ())
-		.map(|v| "rmcp=warn,hickory_server::server::server_future=off,".to_string() + v.as_str())
-		.unwrap_or("rmcp=warn,hickory_server::server::server_future=off,info".to_string());
+		.map(|v| CUSTOM_TARGETS.to_string() + "," + v.as_str())
+		.unwrap_or(CUSTOM_TARGETS.to_string() + ",info");
 	filter::Targets::from_str(&var).expect("static filter should build")
 }
 

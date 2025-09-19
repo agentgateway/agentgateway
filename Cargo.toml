@@ -51,6 +51,11 @@ aws-sigv4 = "1.3"
 axum = { version = "0.8", features = ["macros"] }
 axum-core = "0.5"
 axum-extra = { version = "0.10", features = ["json-lines", "typed-header"] }
+# Disable default features to avoid pulling in native-tls and requiring openssl
+# TODO: allow default features if we ever add an openssl feature
+azure_identity = { version = "0.28", default-features = false }
+azure_core = { version = "0.28", default-features = false }
+typespec_client_core = { default-features = false, version = "0.7.0" }
 base64 = "0.22"
 bytes = { version = "1.10", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }

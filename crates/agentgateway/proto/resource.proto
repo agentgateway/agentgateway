@@ -95,6 +95,7 @@ message BackendAuthPolicy {
     Key key = 2;
     Gcp gcp = 3;
     Aws aws = 4;
+    Azure azure = 5;
   }
 }
 
@@ -117,6 +118,14 @@ message Aws {
   }
 }
 
+// Azure-specific backend authentication.
+message Azure {
+  oneof kind {
+    AzureExplicitConfig explicit_config = 1;
+    AzureDeveloperImplicit developer_implicit = 2;
+  }
+}
+
 // Explicit AWS credentials configuration
 message AwsExplicitConfig {
   // AWS Access Key ID for authentication
@@ -132,6 +141,44 @@ message AwsExplicitConfig {
 
 // Use implicit AWS authentication (environment variables, IAM roles, etc.)
 message AwsImplicit {}
+
+// Explicit Azure credentials configuration
+message AzureExplicitConfig {
+  oneof credential_source {
+    AzureClientSecret client_secret = 1;
+    AzureManagedIdentityCredential managed_identity_credential = 2;
+    AzureWorkloadIdentityCredential workload_identity_credential = 3;
+  }
+}
+
+// Azure Client Secret authentication method
+message AzureClientSecret {
+  // Azure tenant ID
+  string tenant_id = 1;
+  // Azure client ID (application ID)
+  string client_id = 2;
+  // Azure client secret
+  string client_secret = 3;
+}
+
+// Azure Managed Identity authentication method
+message AzureManagedIdentityCredential {
+  message UserAssignedIdentity {
+    oneof id {
+      string client_id = 1;
+      string object_id = 2;
+      string resource_id = 3;
+    }
+  }
+  // The UAMI to be used to authenticate. If not set, the system-assigned identity will be used.
+  optional UserAssignedIdentity user_assigned_identity = 1;
+}
+
+// Azure Workload Identity authentication method
+message AzureWorkloadIdentityCredential {}
+
+// Use implicit Azure authentication for developer use-cases only
+message AzureDeveloperImplicit {}
 
 message RouteMatch {
   PathMatch path = 1;

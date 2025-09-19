@@ -65,7 +65,7 @@ RUN --mount=type=cache,target=/app/target \
     mkdir /out && \
     mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
 
-FROM gcr.io/distroless/cc-debian12 AS runner 
+FROM gcr.io/distroless/cc-debian12 AS runner
 
 ARG TARGETARCH
 

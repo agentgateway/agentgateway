@@ -110,7 +110,7 @@ impl Policy {
 				"input": content,
 				"model": model,
 			}))?))?;
-			auth::apply_backend_auth(Some(&auth), &mut req).await?;
+			auth::apply_backend_auth(client, Some(&auth), &mut req).await?;
 			let resp = client.simple_call(req).await;
 			let resp: async_openai::types::CreateModerationResponse =
 				json::from_body(resp?.into_body()).await?;
