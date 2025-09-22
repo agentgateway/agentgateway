@@ -434,13 +434,25 @@ impl HTTPProxy {
 		)
 		.await?;
 
-		apply_request_filters(
+		match apply_request_filters(
 			selected_route.as_ref().filters.as_slice(),
 			&path_match,
 			&mut req,
 		)
 		.map_err(ProxyError::from)?
-		.apply(response_policies.headers())?;
+		.apply(response_policies.headers())
+		{
+			Ok(()) => {},
+			// "capture" direct response but propagate errors to the caller.
+			Err(ProxyResponse::DirectResponse(mut dr)) => {
+				apply_response_filters(selected_route.filters.as_slice(), &mut *dr)
+					.map_err(ProxyError::from)?;
+				return Ok(*dr);
+			},
+			Err(ProxyResponse::Error(e)) => {
+				return Err(proxy::ProxyResponse::Error(e));
+			},
+		};
 
 		let selected_backend =
 			select_backend(selected_route.as_ref(), &req).ok_or(ProxyError::NoValidBackends)?;
