@@ -134,7 +134,6 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.(any)(1)auth0`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.(any)(1)keycloak`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`||
-|`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata.resource`||
 |`binds[].listeners[].routes[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`||
@@ -506,7 +505,6 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.mcpAuthentication.provider.(any)(1)auth0`||
 |`policies[].policy.mcpAuthentication.provider.(any)(1)keycloak`||
 |`policies[].policy.mcpAuthentication.resourceMetadata`||
-|`policies[].policy.mcpAuthentication.resourceMetadata.resource`||
 |`policies[].policy.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`||

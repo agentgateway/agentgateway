@@ -1094,14 +1094,6 @@
                               },
                               "resourceMetadata": {
                                 "type": "object",
-                                "properties": {
-                                  "resource": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "resource"
-                                ],
                                 "additionalProperties": true
                               }
                             },
@@ -4551,14 +4543,6 @@
                   },
                   "resourceMetadata": {
                     "type": "object",
-                    "properties": {
-                      "resource": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "resource"
-                    ],
                     "additionalProperties": true
                   }
                 },

@@ -1046,9 +1046,6 @@ impl ResourceMetadata {
 		// Copy user-provided extra keys, converting to snake_case
 		for (key, value) in &self.extra {
 			let snake = key.to_snake_case();
-			if snake == "resource" || snake == "authorization_servers" {
-				continue;
-			}
 			map.insert(snake, value.clone());
 		}
 
