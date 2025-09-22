@@ -5,7 +5,7 @@ use bytes::Bytes;
 use crate::http::auth::{BackendAuth, SimpleBackendAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
-use crate::llm::policy::webhook::{MaskActionBody, Message, RequestAction};
+use crate::llm::policy::webhook::{MaskActionBody, Message, RequestAction, ResponseAction};
 use crate::llm::{AIError, pii, universal};
 use crate::types::agent::{HeaderMatch, HeaderValueMatch, Target};
 use crate::{client, *};
@@ -319,46 +319,33 @@ impl Policy {
 				Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 			let whr = webhook::send_response(client, &webhook.target, &headers, resp).await?;
 			match whr.action {
-				RequestAction::Mask(mask) => {
+				ResponseAction::Mask(mask) => {
 					debug!(
 						"webhook masked response: {}",
 						mask
 							.reason
 							.unwrap_or_else(|| "no reason specified".to_string())
 					);
-					let MaskActionBody::PromptMessages(body) = mask.body else {
+					let MaskActionBody::ResponseChoices(body) = mask.body else {
 						anyhow::bail!("invalid webhook response");
 					};
-					let msgs = body.messages;
+					let msgs = body.choices;
 					if resp.choices.len() != msgs.len() {
 						anyhow::bail!("webhook response message count mismatch");
 					}
 					for (i, (resp_msg, wh_msg)) in resp.choices.iter_mut().zip(msgs).enumerate() {
-						if resp_msg.message.role.to_string() != wh_msg.role {
+						if resp_msg.message.role.to_string() != wh_msg.message.role {
 							anyhow::bail!(
 								"webhook response message {} role mismatch; expected {}, got {}",
 								i,
 								resp_msg.message.role,
-								wh_msg.role
+								wh_msg.message.role
 							);
 						}
-						resp_msg.message.content = Some(wh_msg.content);
+						resp_msg.message.content = Some(wh_msg.message.content);
 					}
 				},
-				RequestAction::Reject(rej) => {
-					debug!(
-						"webhook rejected response: {}",
-						rej
-							.reason
-							.unwrap_or_else(|| "no reason specified".to_string())
-					);
-					return Ok(Some(
-						::http::response::Builder::new()
-							.status(rej.status_code)
-							.body(http::Body::from(rej.body))?,
-					));
-				},
-				RequestAction::Pass(pass) => {
+				ResponseAction::Pass(pass) => {
 					debug!(
 						"webhook passed response: {}",
 						pass
@@ -526,6 +513,9 @@ mod webhook {
 	use crate::types::agent::Target;
 	use crate::*;
 
+	const REQUEST_PATH: &str = "request";
+	const RESPONSE_PATH: &str = "response";
+
 	#[derive(Debug, Clone, Serialize, Deserialize)]
 	#[serde(rename_all = "snake_case")]
 	pub struct GuardrailsPromptRequest {
@@ -666,7 +656,7 @@ mod webhook {
 					.collect(),
 			},
 		};
-		build_request(&body, target, http_headers)
+		build_request(&body, target, REQUEST_PATH, http_headers)
 	}
 
 	fn build_request_for_response(
@@ -674,30 +664,33 @@ mod webhook {
 		http_headers: &HeaderMap,
 		resp: &CreateChatCompletionResponse,
 	) -> anyhow::Result<crate::http::Request> {
-		let body = GuardrailsPromptRequest {
-			body: PromptMessages {
-				messages: resp
+		let body = GuardrailsResponseRequest {
+			body: ResponseChoices {
+				choices: resp
 					.choices
 					.iter()
-					.filter_map(|m| {
-						let role = m.message.role.to_string();
-						let content = m.message.content.clone();
-						content.map(|content| Message { role, content })
+					.filter_map(|c| {
+						let role = c.message.role.to_string();
+						let content = c.message.content.clone();
+						content.map(|content| ResponseChoice {
+							message: Message { role, content },
+						})
 					})
 					.collect(),
 			},
 		};
-		build_request(&body, target, http_headers)
+		build_request(&body, target, RESPONSE_PATH, http_headers)
 	}
 
-	fn build_request(
-		body: &GuardrailsPromptRequest,
+	fn build_request<T: serde::Serialize>(
+		body: &T,
 		target: &Target,
+		path: &str,
 		http_headers: &HeaderMap,
 	) -> anyhow::Result<crate::http::Request> {
-		let body_bytes = serde_json::to_vec(&body)?;
+		let body_bytes = serde_json::to_vec(body)?;
 		let mut rb = ::http::Request::builder()
-			.uri(format!("http://{target}/request"))
+			.uri(format!("http://{target}/{path}"))
 			.method(http::Method::POST);
 		for (k, v) in http_headers {
 			// TODO: this is configurable by users
@@ -736,7 +729,7 @@ mod webhook {
 		target: &Target,
 		http_headers: &HeaderMap,
 		resp: &CreateChatCompletionResponse,
-	) -> anyhow::Result<GuardrailsPromptResponse> {
+	) -> anyhow::Result<GuardrailsResponseResponse> {
 		let whr = build_request_for_response(target, http_headers, resp)?;
 		let res = client
 			.call(client::Call {
