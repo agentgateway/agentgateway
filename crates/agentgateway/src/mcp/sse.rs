@@ -10,7 +10,7 @@ use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
 use rmcp::transport::sse_server::PostEventQuery;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::http::{DropBody, Request, Response};
+use crate::http::{DropBody, Request, Response, filters};
 use crate::mcp::handler::Relay;
 use crate::mcp::session;
 use crate::mcp::session::SessionManager;
@@ -107,10 +107,27 @@ impl LegacySSEService {
 		// GET requests establish an SSE stream.
 		// We will return the sessionId, and all future responses will get sent on the rx channel to send to this channel.
 		let (session, rx) = self.session_manager.create_legacy_session(relay);
+		let mut base_url = request
+			.extensions()
+			.get::<filters::OriginalUrl>()
+			.map(|u| u.0.clone())
+			.unwrap_or_else(|| request.uri().clone());
+		if let Err(e) = http::modify_url(&mut base_url, |url| {
+			url.query_pairs_mut().append_pair("sessionId", &session.id);
+			Ok(())
+		}) {
+			return http_error(
+				StatusCode::INTERNAL_SERVER_ERROR,
+				format!("fail to create SSE url: {e}"),
+			);
+		}
 		let stream = futures::stream::once(futures::future::ok(
-			Event::default()
-				.event("endpoint")
-				.data(format!("?sessionId={}", session.id)),
+			Event::default().event("endpoint").data(
+				base_url
+					.path_and_query()
+					.map(ToString::to_string)
+					.unwrap_or_default(),
+			),
 		))
 		.chain(
 			ReceiverStream::new(rx).map(|message| match serde_json::to_string(&message) {

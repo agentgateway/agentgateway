@@ -33,6 +33,7 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use crate::proxy::{ProxyError, ProxyResponse};
 pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
@@ -41,8 +42,7 @@ use axum::body::to_bytes;
 use bytes::Bytes;
 use http_body::{Frame, SizeHint};
 use tower_serve_static::private::mime;
-
-use crate::proxy::{ProxyError, ProxyResponse};
+use url::Url;
 
 pub mod x_headers {
 	use http::HeaderName;
@@ -97,6 +97,41 @@ pub fn modify_uri(
 	let mut parts = nreq.into_parts();
 	f(&mut parts)?;
 	head.uri = Uri::from_parts(parts)?;
+	Ok(())
+}
+
+pub fn modify_url(
+	uri: &mut Uri,
+	f: impl FnOnce(&mut Url) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+	fn url_to_uri(url: &Url) -> anyhow::Result<Uri> {
+		if !url.has_authority() {
+			anyhow::bail!("no authority");
+		}
+		if !url.has_host() {
+			anyhow::bail!("no host");
+		}
+
+		let scheme = url.scheme();
+		let authority = url.authority();
+
+		let authority_end = scheme.len() + "://".len() + authority.len();
+		let path_and_query = &url.as_str()[authority_end..];
+
+		Ok(
+			Uri::builder()
+				.scheme(scheme)
+				.authority(authority)
+				.path_and_query(path_and_query)
+				.build()?,
+		)
+	}
+	fn uri_to_url(uri: &Uri) -> anyhow::Result<Url> {
+		Ok(Url::parse(&uri.to_string())?)
+	}
+	let mut url = uri_to_url(uri)?;
+	f(&mut url)?;
+	*uri = url_to_uri(&url)?;
 	Ok(())
 }
 
