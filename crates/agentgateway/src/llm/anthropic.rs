@@ -609,20 +609,6 @@ pub(super) mod types {
 		None,
 	}
 
-	/// Configuration for extended thinking
-	#[derive(Debug, Deserialize, Serialize)]
-	pub struct Thinking {
-		/// Must be at least 1024 tokens
-		pub budget_tokens: usize,
-		#[serde(rename = "type")]
-		pub type_: ThinkingType,
-	}
-
-	#[derive(Debug, Deserialize, Serialize)]
-	pub enum ThinkingType {
-		#[serde(rename = "enabled")]
-		Enabled,
-	}
 	/// Message metadata
 	#[derive(Debug, Serialize, Deserialize, Default)]
 	pub struct Metadata {

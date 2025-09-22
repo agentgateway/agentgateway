@@ -143,7 +143,7 @@ impl RemoteRateLimit {
 			request,
 		};
 
-		cr.and_then(|pr| (Self::apply(req, pr).map(|x| (x, Some(r)))))
+		cr.and_then(|pr| Self::apply(req, pr).map(|x| (x, Some(r))))
 	}
 
 	pub async fn check(

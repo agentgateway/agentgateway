@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/app/npm/cache npm install
 
 RUN --mount=type=cache,target=/app/npm/cache npm run build
 
-FROM docker.io/library/rust:1.89.0-slim-bookworm AS musl-builder
+FROM docker.io/library/rust:1.90.0-slim-bookworm AS musl-builder
 
 ARG TARGETARCH
 
@@ -32,7 +32,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.89.0-slim-bookworm AS base-builder
+FROM docker.io/library/rust:1.90.0-slim-bookworm AS base-builder
 
 ARG TARGETARCH
 

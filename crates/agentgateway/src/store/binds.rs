@@ -156,7 +156,7 @@ impl Store {
 	}
 	pub fn subscribe(
 		&self,
-	) -> (impl Stream<Item = Result<Event<Arc<Bind>>, BroadcastStreamRecvError>> + use<>) {
+	) -> impl Stream<Item = Result<Event<Arc<Bind>>, BroadcastStreamRecvError>> + use<> {
 		let sub = self.tx.subscribe();
 		tokio_stream::wrappers::BroadcastStream::new(sub)
 	}

@@ -68,7 +68,7 @@ fn get_tag_rules() -> Option<HashMap<String, String>> {
 	TAG_RULES.get().cloned()
 }
 fn set_tag_rules(rules: HashMap<String, String>) {
-	_ = TAG_RULES.get_or_init(|| (rules))
+	_ = TAG_RULES.get_or_init(|| rules)
 }
 fn get_resource() -> Resource {
 	static RESOURCE: OnceLock<Resource> = OnceLock::new();
