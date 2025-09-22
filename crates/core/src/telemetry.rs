@@ -17,8 +17,8 @@ use std::{env, fmt, io};
 use itertools::Itertools;
 use nonblocking::NonBlocking;
 use once_cell::sync::{Lazy, OnceCell};
-use serde::Serializer;
 use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
 use thiserror::Error;
 use tracing::{Event, Subscriber, error, field, info, warn};
 use tracing_core::Field;
@@ -45,6 +45,9 @@ pub trait OptionExt<T>: Sized {
 	fn debug(&self) -> Option<ValueBag>
 	where
 		T: Debug;
+	fn quoted(&self) -> Option<ValueBag>
+	where
+		T: Serialize;
 }
 
 impl<T: 'static> OptionExt<T> for Option<T> {
@@ -60,6 +63,12 @@ impl<T: 'static> OptionExt<T> for Option<T> {
 	{
 		self.as_ref().map(debug)
 	}
+	fn quoted(&self) -> Option<ValueBag>
+	where
+		T: Serialize,
+	{
+		self.as_ref().map(quoted)
+	}
 }
 
 pub fn display<T: Display + 'static>(value: &T) -> ValueBag {
@@ -68,6 +77,10 @@ pub fn display<T: Display + 'static>(value: &T) -> ValueBag {
 
 pub fn debug<T: Debug + 'static>(value: &T) -> ValueBag {
 	ValueBag::capture_debug(value)
+}
+
+pub fn quoted<T: Serialize + 'static>(value: &T) -> ValueBag {
+	ValueBag::from_serde1(value)
 }
 
 /// A safe function to determine if a target is enabled.

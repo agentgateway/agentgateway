@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use super::*;
 use crate::http::authorization::PolicySet;
 use crate::http::jwt::Claims;
-use crate::mcp::rbac::{ResourceId, ResourceType};
+use crate::mcp::{ResourceId, ResourceType};
 
 fn create_policy_set(policies: Vec<&str>) -> PolicySet {
 	let mut policy_set = PolicySet::default();

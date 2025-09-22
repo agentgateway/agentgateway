@@ -2,14 +2,15 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
+use proto::agent::policy_spec::remote_rate_limit::Type as RlType;
 use rustls::ServerConfig;
 
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, SimpleBackendAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{StatusCode, authorization, backendtls, ext_proc, filters, localratelimit, uri};
-use crate::llm::{AIBackend, AIProvider};
-use crate::mcp::rbac::McpAuthorization;
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
+use crate::mcp::McpAuthorization;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto;
 use crate::types::proto::ProtoError;
@@ -264,57 +265,94 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 				Target::try_from((s.host.as_str(), s.port as u16))
 					.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
-			Some(proto::agent::backend::Kind::Ai(a)) => Backend::AI(
-				name.clone(),
-				AIBackend {
-					tokenize: false,
-					host_override: a
-						.r#override
-						.as_ref()
-						.map(|o| {
-							Target::try_from((o.host.as_str(), o.port as u16))
-								.map_err(|e| ProtoError::Generic(e.to_string()))
-						})
-						.transpose()?,
-					provider: match &a.provider {
-						Some(proto::agent::ai_backend::Provider::Openai(openai)) => {
-							AIProvider::OpenAI(llm::openai::Provider {
-								model: openai.model.as_deref().map(strng::new),
-							})
-						},
-						Some(proto::agent::ai_backend::Provider::Gemini(gemini)) => {
-							AIProvider::Gemini(llm::gemini::Provider {
-								model: gemini.model.as_deref().map(strng::new),
-							})
-						},
-						Some(proto::agent::ai_backend::Provider::Vertex(vertex)) => {
-							AIProvider::Vertex(llm::vertex::Provider {
-								model: vertex.model.as_deref().map(strng::new),
-								region: Some(strng::new(&vertex.region)),
-								project_id: strng::new(&vertex.project_id),
-							})
-						},
-						Some(proto::agent::ai_backend::Provider::Anthropic(anthropic)) => {
-							AIProvider::Anthropic(llm::anthropic::Provider {
-								model: anthropic.model.as_deref().map(strng::new),
-							})
-						},
-						Some(proto::agent::ai_backend::Provider::Bedrock(bedrock)) => {
-							AIProvider::Bedrock(llm::bedrock::Provider {
-								model: bedrock.model.as_deref().map(strng::new),
-								region: strng::new(&bedrock.region),
-								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
-								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-							})
-						},
-						None => {
-							return Err(ProtoError::Generic(
-								"AI backend provider is required".to_string(),
-							));
-						},
-					},
-				},
-			),
+			Some(proto::agent::backend::Kind::Ai(a)) => {
+				if a.provider_groups.is_empty() {
+					return Err(ProtoError::Generic(
+						"AI backend must have at least one provider group".to_string(),
+					));
+				}
+
+				let mut provider_groups = Vec::new();
+
+				for group in &a.provider_groups {
+					let mut local_provider_group = Vec::new();
+					for (provider_idx, provider_config) in group.providers.iter().enumerate() {
+						let provider = match &provider_config.provider {
+							Some(proto::agent::ai_backend::provider::Provider::Openai(openai)) => {
+								AIProvider::OpenAI(llm::openai::Provider {
+									model: openai.model.as_deref().map(strng::new),
+								})
+							},
+							Some(proto::agent::ai_backend::provider::Provider::Gemini(gemini)) => {
+								AIProvider::Gemini(llm::gemini::Provider {
+									model: gemini.model.as_deref().map(strng::new),
+								})
+							},
+							Some(proto::agent::ai_backend::provider::Provider::Vertex(vertex)) => {
+								AIProvider::Vertex(llm::vertex::Provider {
+									model: vertex.model.as_deref().map(strng::new),
+									region: Some(strng::new(&vertex.region)),
+									project_id: strng::new(&vertex.project_id),
+								})
+							},
+							Some(proto::agent::ai_backend::provider::Provider::Anthropic(anthropic)) => {
+								AIProvider::Anthropic(llm::anthropic::Provider {
+									model: anthropic.model.as_deref().map(strng::new),
+								})
+							},
+							Some(proto::agent::ai_backend::provider::Provider::Bedrock(bedrock)) => {
+								AIProvider::Bedrock(llm::bedrock::Provider {
+									model: bedrock.model.as_deref().map(strng::new),
+									region: strng::new(&bedrock.region),
+									guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
+									guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+								})
+							},
+							None => {
+								return Err(ProtoError::Generic(format!(
+									"AI backend provider at index {provider_idx} is required"
+								)));
+							},
+						};
+
+						let provider_name = if provider_config.name.is_empty() {
+							strng::new(format!("{name}_{provider_idx}"))
+						} else {
+							strng::new(&provider_config.name)
+						};
+
+						let np = NamedAIProvider {
+							name: provider_name.clone(),
+							provider,
+							tokenize: false,
+							path_override: provider_config.path_override.as_ref().map(strng::new),
+							host_override: provider_config
+								.r#host_override
+								.as_ref()
+								.map(|o| {
+									Target::try_from((o.host.as_str(), o.port as u16))
+										.map_err(|e| ProtoError::Generic(e.to_string()))
+								})
+								.transpose()?,
+							routes: IndexMap::default(),
+						};
+						local_provider_group.push((provider_name, np));
+					}
+
+					if !local_provider_group.is_empty() {
+						provider_groups.push(local_provider_group);
+					}
+				}
+
+				if provider_groups.is_empty() {
+					return Err(ProtoError::Generic(
+						"AI backend must have at least one non-empty provider group".to_string(),
+					));
+				}
+
+				let es = crate::types::loadbalancer::EndpointSet::new(provider_groups);
+				Backend::AI(name.clone(), AIBackend { providers: es })
+			},
 			Some(proto::agent::backend::Kind::Mcp(m)) => Backend::MCP(
 				name.clone(),
 				McpBackend {
@@ -393,23 +431,11 @@ impl TryFrom<&proto::agent::RouteMatch> for RouteMatch {
 		let method = s.method.as_ref().map(|m| MethodMatch {
 			method: strng::new(&m.exact),
 		});
-		let headers = s
-			.headers
-			.iter()
-			.map(|h| match &h.value {
-				None => Err(ProtoError::Generic(
-					"invalid header match value".to_string(),
-				)),
-				Some(proto::agent::header_match::Value::Exact(e)) => Ok(HeaderMatch {
-					name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
-					value: HeaderValueMatch::Exact(crate::http::HeaderValue::from_bytes(e.as_bytes())?),
-				}),
-				Some(proto::agent::header_match::Value::Regex(e)) => Ok(HeaderMatch {
-					name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
-					value: HeaderValueMatch::Regex(regex::Regex::new(e)?),
-				}),
-			})
-			.collect::<Result<Vec<_>, _>>()?;
+		let headers = match convert_header_match(&s.headers) {
+			Ok(h) => h,
+			Err(e) => return Err(ProtoError::Generic(format!("invalid header match: {e}"))),
+		};
+
 		let query = s
 			.query_params
 			.iter()
@@ -663,6 +689,48 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 					.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))?,
 				])
 			},
+			Some(proto::agent::policy_spec::Kind::RemoteRateLimit(rrl)) => {
+				// Build descriptors
+				let descriptors = rrl
+					.descriptors
+					.iter()
+					.map(
+						|d| -> Result<http::remoteratelimit::DescriptorEntry, ProtoError> {
+							let entries: Result<Vec<_>, ProtoError> = d
+								.entries
+								.iter()
+								.map(|e| {
+									cel::Expression::new(e.value.clone())
+										.map_err(|e| ProtoError::Generic(format!("invalid descriptor value: {e}")))
+										.map(|expr| http::remoteratelimit::Descriptor(e.key.clone(), expr))
+								})
+								.collect();
+
+							Ok(http::remoteratelimit::DescriptorEntry {
+								entries: Arc::new(entries?),
+								limit_type: match RlType::try_from(d.r#type).unwrap_or(RlType::Requests) {
+									RlType::Requests => localratelimit::RateLimitType::Requests,
+									RlType::Tokens => localratelimit::RateLimitType::Tokens,
+								},
+							})
+						},
+					)
+					.collect::<Result<Vec<_>, _>>()?;
+
+				// Require target (no legacy host)
+				let target = resolve_simple_reference(rrl.target.as_ref())?;
+				if matches!(target, SimpleBackendReference::Invalid) {
+					return Err(ProtoError::Generic(
+						"remote_rate_limit: target must be set".into(),
+					));
+				}
+
+				Policy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
+					domain: rrl.domain.clone(),
+					target: Arc::new(target),
+					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
+				})
+			},
 			Some(proto::agent::policy_spec::Kind::ExtAuthz(ea)) => {
 				let target = resolve_simple_reference(ea.target.as_ref())?;
 				let failure_mode =
@@ -832,14 +900,14 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 					defaults: Some(
 						ai.defaults
 							.iter()
-							.map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
-							.collect(),
+							.map(|(k, v)| serde_json::from_str(v).map(|v| (k.clone(), v)))
+							.collect::<Result<_, _>>()?,
 					),
 					overrides: Some(
 						ai.overrides
 							.iter()
-							.map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
-							.collect(),
+							.map(|(k, v)| serde_json::from_str(v).map(|v| (k.clone(), v)))
+							.collect::<Result<_, _>>()?,
 					),
 					prompts: ai.prompts.as_ref().map(convert_prompt_enrichment),
 				}))
@@ -862,6 +930,7 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 			Some(proto::agent::policy_target::Kind::RouteRule(v)) => PolicyTarget::RouteRule(v.into()),
 			Some(proto::agent::policy_target::Kind::Service(v)) => PolicyTarget::Service(v.into()),
 			Some(proto::agent::policy_target::Kind::Backend(v)) => PolicyTarget::Backend(v.into()),
+			Some(proto::agent::policy_target::Kind::SubBackend(v)) => PolicyTarget::SubBackend(v.into()),
 			_ => return Err(ProtoError::EnumParse("unknown target kind".to_string())),
 		};
 		let policy = spec.try_into()?;
@@ -932,15 +1001,26 @@ fn convert_prompt_enrichment(
 fn convert_webhook(
 	w: &proto::agent::policy_spec::ai::Webhook,
 ) -> Option<crate::llm::policy::Webhook> {
-	match u16::try_from(w.port) {
-		Ok(port) => Some(crate::llm::policy::Webhook {
-			target: Target::Hostname(w.host.clone().into(), port),
-		}),
+	let port = match u16::try_from(w.port) {
+		Ok(port) => port,
 		Err(_) => {
 			warn!(port = w.port, host = %w.host, "Webhook port out of range, ignoring webhook");
-			None
+			return None;
 		},
-	}
+	};
+
+	let forward_header_matches = match convert_header_match(&w.forward_header_matches) {
+		Ok(h) => h,
+		Err(e) => {
+			warn!(error = %e, "Invalid webhook header matchers, ignoring webhook");
+			return None;
+		},
+	};
+
+	Some(crate::llm::policy::Webhook {
+		target: Target::Hostname(w.host.clone().into(), port),
+		forward_header_matches,
+	})
 }
 
 fn convert_regex_rules(
@@ -1033,4 +1113,99 @@ fn resolve_reference(
 			BackendReference::Backend(name.into())
 		},
 	})
+}
+
+fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMatch>, ProtoError> {
+	let headers = h
+		.iter()
+		.map(|h| match &h.value {
+			None => Err(ProtoError::Generic(
+				"invalid header match value".to_string(),
+			)),
+			Some(proto::agent::header_match::Value::Exact(e)) => Ok(HeaderMatch {
+				name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
+				value: HeaderValueMatch::Exact(crate::http::HeaderValue::from_bytes(e.as_bytes())?),
+			}),
+			Some(proto::agent::header_match::Value::Regex(e)) => Ok(HeaderMatch {
+				name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
+				value: HeaderValueMatch::Regex(regex::Regex::new(e)?),
+			}),
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+	Ok(headers)
+}
+
+#[cfg(test)]
+mod tests {
+	use serde_json::json;
+
+	use super::*;
+	use crate::types::proto::agent::policy_spec::Ai;
+
+	#[test]
+	fn test_policy_spec_to_ai_policy() -> Result<(), ProtoError> {
+		let spec = proto::agent::PolicySpec {
+			kind: Some(proto::agent::policy_spec::Kind::Ai(Ai {
+				defaults: vec![
+					("temperature".to_string(), "0.7".to_string()),
+					("max_tokens".to_string(), "2000".to_string()),
+					(
+						"object_value".to_string(),
+						"{\"key\":\"value\"}".to_string(),
+					),
+				]
+				.into_iter()
+				.collect(),
+				overrides: vec![
+					("model".to_string(), "\"gpt-4\"".to_string()),
+					("frequency_penalty".to_string(), "0.5".to_string()),
+					("array_value".to_string(), "[1,2,3]".to_string()),
+				]
+				.into_iter()
+				.collect(),
+				prompt_guard: None,
+				prompts: None,
+			})),
+		};
+
+		let policy = Policy::try_from(&spec)?;
+
+		if let Policy::AI(ai_policy) = policy {
+			let defaults = ai_policy.defaults.as_ref().expect("defaults should be set");
+			let overrides = ai_policy
+				.overrides
+				.as_ref()
+				.expect("overrides should be set");
+
+			// Verify defaults have correct types and values
+			let temp_val = defaults.get("temperature").unwrap();
+			assert!(temp_val.is_f64(), "temperature should be f64");
+			assert_eq!(temp_val.as_f64().unwrap(), 0.7);
+
+			let tokens_val = defaults.get("max_tokens").unwrap();
+			assert!(tokens_val.is_u64(), "max_tokens should be u64");
+			assert_eq!(tokens_val.as_u64().unwrap(), 2000);
+
+			let obj_val = defaults.get("object_value").unwrap();
+			assert!(obj_val.is_object(), "object_value should be an object");
+			assert_eq!(obj_val, &json!({"key": "value"}));
+
+			// Verify overrides have correct types and values
+			let model_val = overrides.get("model").unwrap();
+			assert!(model_val.is_string(), "model should be a string");
+			assert_eq!(model_val.as_str().unwrap(), "gpt-4");
+
+			let freq_val = overrides.get("frequency_penalty").unwrap();
+			assert!(freq_val.is_f64(), "frequency_penalty should be f64");
+			assert_eq!(freq_val.as_f64().unwrap(), 0.5);
+
+			let array_val = overrides.get("array_value").unwrap();
+			assert!(array_val.is_array(), "array_value should be an array");
+			assert_eq!(array_val, &json!([1, 2, 3]));
+		} else {
+			panic!("Expected AI policy variant");
+		}
+
+		Ok(())
+	}
 }

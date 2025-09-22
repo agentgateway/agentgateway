@@ -73,7 +73,6 @@ impl ResourceId {
 #[derive(Clone, Debug, Default)]
 pub struct Identity {
 	pub claims: Option<Claims>,
-	pub connection_id: Option<String>,
 }
 
 impl agent_core::trcng::Claim for Identity {
@@ -83,18 +82,8 @@ impl agent_core::trcng::Claim for Identity {
 }
 
 impl Identity {
-	pub fn empty() -> Self {
-		Self {
-			claims: None,
-			connection_id: None,
-		}
-	}
-
-	pub fn new(claims: Option<Claims>, connection_id: Option<String>) -> Self {
-		Self {
-			claims,
-			connection_id,
-		}
+	pub fn new(claims: Option<Claims>) -> Self {
+		Self { claims }
 	}
 	// Attempts to get the claim from the claims map
 	// The key should be split by the key_delimiter and then the map should be searched recursively

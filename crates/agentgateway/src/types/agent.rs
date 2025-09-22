@@ -25,7 +25,7 @@ use crate::http::authorization::RuleSet;
 use crate::http::{
 	HeaderName, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
 };
-use crate::mcp::rbac::McpAuthorization;
+use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::*;
 
@@ -457,6 +457,7 @@ impl Backend {
 }
 
 pub type BackendName = Strng;
+pub type SubBackendName = Strng;
 pub type ServiceName = Strng;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -965,6 +966,9 @@ pub enum PolicyTarget {
 	// Note: Backend includes Service:port, this is used when we are *only* attaching to service
 	Service(ServiceName),
 	Backend(BackendName),
+	// Some Backend types group multiple backends.
+	// Format: <backend>/<sub-backend>
+	SubBackend(SubBackendName),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -990,13 +994,11 @@ pub enum Policy {
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	Authorization(Authorization),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	LocalRateLimit(Vec<crate::http::localratelimit::RateLimit>),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
-	ExtAuthz(ext_authz::ExtAuthz),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	RemoteRateLimit(remoteratelimit::RemoteRateLimit),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
+	ExtAuthz(ext_authz::ExtAuthz),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	JwtAuth(crate::http::jwt::Jwt),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed

@@ -8,6 +8,7 @@ use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 use itertools::Itertools;
 pub use policy::Policy;
+use rand::Rng;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
@@ -18,6 +19,7 @@ use crate::llm::universal::{ChatCompletionError, ChatCompletionErrorResponse};
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::Target;
+use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::{client, *};
 
 pub mod anthropic;
@@ -31,22 +33,88 @@ mod tests;
 pub mod universal;
 pub mod vertex;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct AIBackend {
+	pub providers: crate::types::loadbalancer::EndpointSet<NamedAIProvider>,
+}
+
+impl AIBackend {
+	pub fn select_provider(&self) -> Option<(Arc<NamedAIProvider>, ActiveHandle)> {
+		let iter = self.providers.iter();
+		let index = iter.index();
+		if index.is_empty() {
+			return None;
+		}
+		// Intentionally allow `rand::seq::index::sample` so we can pick the same element twice
+		// This avoids starvation where the worst endpoint gets 0 traffic
+		let a = rand::rng().random_range(0..index.len());
+		let b = rand::rng().random_range(0..index.len());
+		let best = [a, b]
+			.into_iter()
+			.map(|idx| {
+				let (_, EndpointWithInfo { endpoint, info }) =
+					index.get_index(idx).expect("index already checked");
+				(endpoint.clone(), info)
+			})
+			.max_by(|(_, a), (_, b)| a.score().total_cmp(&b.score()));
+		let (ep, ep_info) = best?;
+		let handle = self.providers.start_request(ep.name.clone(), ep_info);
+		Some((ep, handle))
+	}
+}
+
+#[apply(schema!)]
+pub struct NamedAIProvider {
+	pub name: Strng,
 	pub provider: AIProvider,
 	pub host_override: Option<Target>,
+	pub path_override: Option<Strng>,
 	/// Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
 	/// since we know (part of) the cost of the request upfront.
 	/// This comes with the cost of an expensive operation.
 	#[serde(default)]
 	pub tokenize: bool,
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	pub routes: IndexMap<Strng, RouteType>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+const DEFAULT_ROUTE: &str = "*";
+impl NamedAIProvider {
+	pub fn use_default_policies(&self) -> bool {
+		self.host_override.is_none()
+	}
+	pub fn resolve_route(&self, path: &str) -> RouteType {
+		for (path_suffix, rt) in &self.routes {
+			if path_suffix == DEFAULT_ROUTE {
+				return *rt;
+			}
+			if path.ends_with(path_suffix.as_str()) {
+				return *rt;
+			}
+		}
+		// If there is no match, there is an implicit default to Completions
+		RouteType::Completions
+	}
+}
+
+#[apply(schema!)]
+#[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RouteType {
+	/// OpenAI /v1/chat/completions
+	Completions,
+	/// Anthropic /v1/messages
+	Messages,
+	/// OpenAI /v1/models
+	Models,
+	/// Send the request to the upstream LLM provider as-is
+	Passthrough,
+}
+
+#[apply(schema!)]
 pub enum AIProvider {
 	OpenAI(openai::Provider),
 	Gemini(gemini::Provider),
@@ -158,11 +226,19 @@ impl AIProvider {
 			},
 		}
 	}
-	pub fn setup_request(&self, req: &mut Request, llm_request: &LLMRequest) -> anyhow::Result<()> {
+	pub fn setup_request(
+		&self,
+		req: &mut Request,
+		route_type: RouteType,
+		llm_request: Option<&LLMRequest>,
+	) -> anyhow::Result<()> {
+		let override_path = route_type != RouteType::Passthrough;
 		match self {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					uri.path_and_query = Some(PathAndQuery::from_static(openai::DEFAULT_PATH));
+					if override_path {
+						uri.path_and_query = Some(PathAndQuery::from_static(openai::DEFAULT_PATH));
+					}
 					uri.authority = Some(Authority::from_static(openai::DEFAULT_HOST_STR));
 					Ok(())
 				})?;
@@ -171,7 +247,9 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.path_and_query = Some(PathAndQuery::from_static(anthropic::DEFAULT_PATH));
+						if override_path {
+							uri.path_and_query = Some(PathAndQuery::from_static(anthropic::DEFAULT_PATH));
+						}
 						uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
 						Ok(())
 					})?;
@@ -191,7 +269,9 @@ impl AIProvider {
 			},
 			AIProvider::Gemini(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					uri.path_and_query = Some(PathAndQuery::from_static(gemini::DEFAULT_PATH));
+					if override_path {
+						uri.path_and_query = Some(PathAndQuery::from_static(gemini::DEFAULT_PATH));
+					}
 					uri.authority = Some(Authority::from_static(gemini::DEFAULT_HOST_STR));
 					Ok(())
 				})?;
@@ -209,12 +289,12 @@ impl AIProvider {
 				})
 			},
 			AIProvider::Bedrock(provider) => {
-				// For Bedrock, use a default model path - the actual model will be specified in the request body
-				let path =
-					provider.get_path_for_model(llm_request.streaming, llm_request.request_model.as_str());
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						if override_path && let Some(l) = llm_request {
+							let path = provider.get_path_for_model(l.streaming, l.request_model.as_str());
+							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						}
 						uri.authority = Some(Authority::from_str(&provider.get_host())?);
 						Ok(())
 					})?;
@@ -230,7 +310,7 @@ impl AIProvider {
 
 	pub async fn process_request(
 		&self,
-		client: client::Client,
+		client: &client::Client,
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
@@ -299,6 +379,7 @@ impl AIProvider {
 
 	pub async fn process_response(
 		&self,
+		client: &client::Client,
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
 		log: AsyncLog<llm::LLMResponse>,
@@ -360,13 +441,17 @@ impl AIProvider {
 					first_token: Default::default(),
 				};
 				// Apply response prompt guard
-				if let Some(dr) =
-					Policy::apply_response_prompt_guard(&mut success, &rate_limit.prompt_guard)
-						.await
-						.map_err(|e| {
-							warn!("failed to apply response prompt guard: {e}");
-							AIError::PromptWebhookError
-						})? {
+				if let Some(dr) = Policy::apply_response_prompt_guard(
+					client,
+					&mut success,
+					&parts.headers,
+					&rate_limit.prompt_guard,
+				)
+				.await
+				.map_err(|e| {
+					warn!("failed to apply response prompt guard: {e}");
+					AIError::PromptWebhookError
+				})? {
 					return Ok(dr);
 				}
 
@@ -541,10 +626,10 @@ impl AIProvider {
 	) -> Result<LLMRequest, AIError> {
 		let input_tokens = if tokenize {
 			// TODO: avoid clone, we need it for spawn_blocking though
-			let msg = req.clone().messages.clone();
-			let model = req.clone().model.clone();
+			let msg = req.messages.clone();
+			let model = req.model.clone();
 			let tokens = tokio::task::spawn_blocking(move || {
-				let res = num_tokens_from_messages(&model, &msg)?;
+				let res = num_tokens_from_messages(&model.unwrap_or_default(), &msg)?;
 				Ok::<_, AIError>(res)
 			})
 			.await??;
@@ -555,7 +640,7 @@ impl AIProvider {
 		// Pass the original body through
 		let llm = LLMRequest {
 			input_tokens,
-			request_model: req.model.as_str().into(),
+			request_model: req.model.clone().unwrap_or_default().as_str().into(),
 			provider: self.provider(),
 			streaming: req.stream.unwrap_or_default(),
 			params: LLMRequestParams {

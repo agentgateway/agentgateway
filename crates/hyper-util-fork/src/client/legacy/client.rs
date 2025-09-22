@@ -1584,7 +1584,11 @@ impl fmt::Debug for Error {
 
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "client error ({:?})", self.kind)
+		if let Some(ref cause) = self.source {
+			write!(f, "{:?}: {}", self.kind, cause)
+		} else {
+			write!(f, "{:?}", self.kind)
+		}
 	}
 }
 

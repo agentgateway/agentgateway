@@ -84,7 +84,6 @@ Thanks to all contributors who are helping to make agentgateway better.
   <img src="https://contrib.rocks/image?repo=agentgateway/agentgateway" />
 </a>
 
-
 ### Star History
 
 <a href="https://www.star-history.com/#agentgateway/agentgateway&Date">
@@ -94,3 +93,10 @@ Thanks to all contributors who are helping to make agentgateway better.
    <img alt="Star history of agentgateway/agentgateway over time" src="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date" />
  </picture>
 </a>
+
+---
+
+<div align="center">
+    <img src="img/lf-stacked-color.png" width="300" alt="Linux Foundation logo"/>
+    <p>Agentgateway is a <a href="https://www.linuxfoundation.org/">Linux Foundation</a> project.</p>
+</div>

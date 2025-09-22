@@ -89,6 +89,20 @@ fn redirection_test() {
 		status: None,
 	};
 
+	let prefix_path_slash = RequestRedirect {
+		scheme: None,
+		authority: None,
+		path: Some(PathRedirect::Prefix("/".into())),
+		status: None,
+	};
+
+	let prefix_path_empty = RequestRedirect {
+		scheme: None,
+		authority: None,
+		path: Some(PathRedirect::Prefix("".into())),
+		status: None,
+	};
+
 	let status_override = RequestRedirect {
 		scheme: None,
 		authority: None,
@@ -364,7 +378,6 @@ fn redirection_test() {
 			}),
 		),
 		// Test path prefix edge case - with trailing slash
-		// TODO: unclear the desired behavior here
 		(
 			"path_prefix_trailing_slash",
 			Input {
@@ -373,7 +386,31 @@ fn redirection_test() {
 				uri: "http://test.com/api/users",
 			},
 			Some(Want {
-				location: "http://test.com/v1//users".to_string(),
+				location: "http://test.com/v1/users".to_string(),
+				code: StatusCode::FOUND,
+			}),
+		),
+		(
+			"path_prefix_without_trailing_slash_to_slash",
+			Input {
+				path: &match_api,
+				redirect: &prefix_path_slash,
+				uri: "http://test.com/api/users",
+			},
+			Some(Want {
+				location: "http://test.com/users".to_string(),
+				code: StatusCode::FOUND,
+			}),
+		),
+		(
+			"path_prefix_with_trailing_slash_to_empty",
+			Input {
+				path: &match_api_slash,
+				redirect: &prefix_path_empty,
+				uri: "http://test.com/api/users",
+			},
+			Some(Want {
+				location: "http://test.com/users".to_string(),
 				code: StatusCode::FOUND,
 			}),
 		),
@@ -519,6 +556,16 @@ fn rewrite_test() {
 	let prefix_path_v1_slash_rewrite = UrlRewrite {
 		authority: None,
 		path: Some(PathRedirect::Prefix("/v1/".into())),
+	};
+
+	let prefix_path_slash_rewrite = UrlRewrite {
+		authority: None,
+		path: Some(PathRedirect::Prefix("/".into())),
+	};
+
+	let prefix_path_empty_rewrite = UrlRewrite {
+		authority: None,
+		path: Some(PathRedirect::Prefix("".into())),
 	};
 
 	let combined_rewrite = UrlRewrite {
@@ -712,7 +759,31 @@ fn rewrite_test() {
 				uri: "http://test.com/api/users",
 			},
 			Some(Want {
-				uri: "http://test.com/v1//users".to_string(),
+				uri: "http://test.com/v1/users".to_string(),
+			}),
+		),
+		// Test path prefix edge case - replace prefix_without_trailing_slash with /
+		(
+			"path_prefix_trailing_slash",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_slash_rewrite,
+				uri: "http://test.com/api/users",
+			},
+			Some(Want {
+				uri: "http://test.com/users".to_string(),
+			}),
+		),
+		// Test path prefix edge case - replace prefix_with_trailing_slash with empty
+		(
+			"path_prefix_trailing_slash",
+			Input {
+				path: &match_api_slash,
+				rewrite: &prefix_path_empty_rewrite,
+				uri: "http://test.com/api/users",
+			},
+			Some(Want {
+				uri: "http://test.com/users".to_string(),
 			}),
 		),
 		// Test complex query parameters with special characters

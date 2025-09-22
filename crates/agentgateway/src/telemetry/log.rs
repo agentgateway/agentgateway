@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, ready};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use agent_core::metrics::CustomField;
 use agent_core::strng;
@@ -25,6 +25,7 @@ use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
 	BackendName, BindName, GatewayName, ListenerName, RouteName, RouteRuleName, Target,
 };
+use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
@@ -395,6 +396,7 @@ impl RequestLog {
 			path: None,
 			version: None,
 			status: None,
+			retry_after: None,
 			jwt_sub: None,
 			retry_attempt: None,
 			error: None,
@@ -406,6 +408,7 @@ impl RequestLog {
 			llm_response: Default::default(),
 			a2a_method: None,
 			inference_pool: None,
+			request_handle: None,
 		}
 	}
 }
@@ -436,6 +439,7 @@ pub struct RequestLog {
 	pub path: Option<String>,
 	pub version: Option<::http::Version>,
 	pub status: Option<crate::http::StatusCode>,
+	pub retry_after: Option<Duration>,
 
 	pub jwt_sub: Option<String>,
 
@@ -443,7 +447,7 @@ pub struct RequestLog {
 	pub error: Option<String>,
 
 	pub grpc_status: AsyncLog<u8>,
-	pub mcp_status: AsyncLog<mcp::sse::MCPInfo>,
+	pub mcp_status: AsyncLog<mcp::MCPInfo>,
 
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,
@@ -454,6 +458,8 @@ pub struct RequestLog {
 	pub a2a_method: Option<&'static str>,
 
 	pub inference_pool: Option<SocketAddr>,
+
+	pub request_handle: Option<ActiveHandle>,
 }
 
 impl RequestLog {
@@ -513,6 +519,13 @@ impl Drop for DropOnLog {
 
 		let end_time = Instant::now();
 		let duration = end_time - log.start;
+		if let Some(rh) = log.request_handle.take() {
+			let status = log
+				.status
+				.unwrap_or(crate::http::StatusCode::INTERNAL_SERVER_ERROR);
+			let health = !status.is_server_error() && !status.is_client_error();
+			rh.finish_request(health, duration, log.retry_after);
+		}
 
 		let llm_response = log.llm_response.take();
 		if let Some(llm_response) = &llm_response {
@@ -678,7 +691,7 @@ impl Drop for DropOnLog {
 					.map(Into::into),
 			),
 			("retry.attempt", log.retry_attempt.display()),
-			("error", log.error.display()),
+			("error", log.error.quoted()),
 			("duration", Some(dur.as_str().into())),
 		];
 		if enable_trace && let Some(t) = &log.tracer {

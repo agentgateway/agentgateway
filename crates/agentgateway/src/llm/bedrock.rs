@@ -45,7 +45,9 @@ impl Provider {
 	) -> Result<ConverseRequest, AIError> {
 		// Use provider's model if configured, otherwise keep the request model
 		if let Some(provider_model) = &self.model {
-			req.model = provider_model.to_string();
+			req.model = Some(provider_model.to_string());
+		} else if req.model.is_none() {
+			return Err(AIError::MissingField("model not specified".into()));
 		}
 		let bedrock_request = translate_request(req, self);
 
@@ -438,7 +440,7 @@ pub(super) fn translate_request(req: universal::Request, provider: &Provider) ->
 	});
 	let tool_config = tools.map(|tools| types::ToolConfiguration { tools, tool_choice });
 	ConverseRequest {
-		model_id: req.model,
+		model_id: req.model.unwrap_or_default(),
 		messages,
 		system: if system.is_empty() {
 			None

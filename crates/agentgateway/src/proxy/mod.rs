@@ -62,7 +62,7 @@ pub enum ProxyError {
 	AuthorizationFailed(Option<StatusCode>),
 	#[error("backend authentication failed: {0}")]
 	BackendAuthenticationFailed(anyhow::Error),
-	#[error("upstream call failed: {0:?}")]
+	#[error("upstream call failed: {0}")]
 	UpstreamCallFailed(HyperError),
 	#[error("request timeout")]
 	RequestTimeout,

@@ -126,7 +126,7 @@ export default function PoliciesPage() {
               </div>
               {policyStats.securityPolicies > 0 && (
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div className="w-2 h-2 bg-primary rounded-full"></div>
                   <span>{policyStats.securityPolicies} Security</span>
                 </div>
               )}

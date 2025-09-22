@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Error, anyhow, bail};
+use itertools::Itertools;
 use macro_rules_attribute::apply;
 use openapiv3::OpenAPI;
 use rustls::ServerConfig;
@@ -14,7 +15,8 @@ use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::{filters, retry, timeout};
-use crate::mcp::rbac::McpAuthorization;
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider, RouteType};
+use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::PolicyTarget::RouteRule;
 use crate::types::agent::{
@@ -147,6 +149,7 @@ fn default_weight() -> usize {
 }
 
 #[apply(schema_de!)]
+#[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalBackend {
 	// This one is a reference
 	Service {
@@ -160,8 +163,95 @@ pub enum LocalBackend {
 	#[serde(rename = "mcp")]
 	MCP(LocalMcpBackend),
 	#[serde(rename = "ai")]
-	AI(crate::llm::AIBackend),
+	AI(LocalAIBackend),
 	Invalid,
+}
+
+#[apply(schema_de!)]
+#[serde(untagged)]
+#[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
+pub enum LocalAIBackend {
+	Provider(LocalNamedAIProvider),
+	Groups { groups: Vec<LocalAIProviders> },
+}
+
+#[apply(schema_de!)]
+pub struct LocalAIProviders {
+	providers: Vec<LocalNamedAIProvider>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalNamedAIProvider {
+	pub name: Strng,
+	pub provider: AIProvider,
+	pub host_override: Option<Target>,
+	pub path_override: Option<Strng>,
+	/// Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
+	/// since we know (part of) the cost of the request upfront.
+	/// This comes with the cost of an expensive operation.
+	#[serde(default)]
+	pub tokenize: bool,
+	/// Routes defines how to identify the type of traffic we should handle
+	/// The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.
+	#[serde(default)]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	pub routes: IndexMap<Strng, RouteType>,
+	#[serde(rename = "backendTLS", default)]
+	pub backend_tls: Option<LocalBackendTLS>,
+	#[serde(default)]
+	pub backend_auth: Option<BackendAuth>,
+}
+
+impl LocalAIBackend {
+	pub fn translate(
+		self,
+		backend_name: BackendName,
+	) -> anyhow::Result<(AIBackend, Vec<TargetedPolicy>)> {
+		let providers = match self {
+			LocalAIBackend::Provider(p) => {
+				vec![vec![p]]
+			},
+			LocalAIBackend::Groups { groups } => groups.into_iter().map(|g| g.providers).collect_vec(),
+		};
+		let mut ep_groups = vec![];
+		let mut policies = vec![];
+		for g in providers {
+			let mut group = vec![];
+			for p in g {
+				if let Some(btls) = p.backend_tls {
+					policies.push(TargetedPolicy {
+						name: strng::format!("{backend_name}/{}-tls", p.name),
+						target: PolicyTarget::SubBackend(strng::format!("{}/{}", backend_name, p.name.clone())),
+						policy: Policy::BackendTLS(btls.try_into()?),
+					});
+				}
+				if let Some(bauth) = p.backend_auth {
+					policies.push(TargetedPolicy {
+						name: strng::format!("{backend_name}/{}-auth", p.name),
+						target: PolicyTarget::SubBackend(strng::format!("{}/{}", backend_name, p.name.clone())),
+						policy: Policy::BackendAuth(bauth),
+					});
+				}
+				group.push((
+					p.name.clone(),
+					NamedAIProvider {
+						name: p.name,
+						provider: p.provider,
+						host_override: p.host_override,
+						path_override: p.path_override,
+						tokenize: p.tokenize,
+						routes: p.routes,
+					},
+				));
+			}
+			ep_groups.push(group);
+		}
+		let es = types::loadbalancer::EndpointSet::new(ep_groups);
+		Ok((AIBackend { providers: es }, policies))
+	}
 }
 
 impl LocalBackend {
@@ -241,7 +331,10 @@ impl LocalBackend {
 				backends.push(Backend::MCP(name, m));
 				(backends, policies)
 			},
-			LocalBackend::AI(tgt) => (vec![Backend::AI(name, tgt.clone())], vec![]),
+			LocalBackend::AI(tgt) => {
+				let (be, pols) = tgt.clone().translate(name.clone())?;
+				(vec![Backend::AI(name, be)], pols)
+			},
 			LocalBackend::Invalid => (vec![Backend::Invalid], vec![]),
 		})
 	}

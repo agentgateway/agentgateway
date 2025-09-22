@@ -98,13 +98,8 @@ impl Store {
 			.services
 			.get_by_namespaced_host(&service.namespaced_hostname())
 		{
-			for ep in prev.endpoints.iter() {
-				if service.should_include_endpoint(ep.status) {
-					service
-						.endpoints
-						.insert(ep.workload_uid.clone(), ep.clone());
-				}
-			}
+			// TODO: if health mode changes we are in trouble
+			service.endpoints = prev.endpoints.clone();
 		}
 
 		self.services.insert(service);
@@ -277,13 +272,7 @@ impl ServiceStore {
 				);
 				return;
 			}
-			let mut svc = Arc::unwrap_or_clone(svc);
-
-			// Clone the service and add the endpoint.
-			svc.endpoints.insert(ep_uid, ep);
-
-			// Update the service.
-			self.insert_endpoint_update(svc);
+			svc.endpoints.insert(ep);
 		} else {
 			// We received workload endpoints, but don't have the Service yet.
 			// This can happen due to ordering issues.
@@ -319,11 +308,7 @@ impl ServiceStore {
 		// Now remove the endpoint from all Services.
 		for svc in &services_to_update {
 			if let Some(svc) = self.get_by_namespaced_host(svc) {
-				let mut svc = Arc::unwrap_or_clone(svc);
-				svc.endpoints.remove(workload_uid);
-
-				// Update the service.
-				self.insert_endpoint_update(svc);
+				svc.endpoints.remove(workload_uid.clone());
 			}
 		}
 	}
@@ -369,17 +354,12 @@ impl ServiceStore {
 		}
 	}
 
-	/// insert_endpoint_update is like insert, but optimized for the case where we know only endpoints change.
-	fn insert_endpoint_update(&mut self, service: Service) {
-		self.insert_internal(service, true)
-	}
-
 	/// Adds the given service.
 	fn insert(&mut self, service: Service) {
 		self.insert_internal(service, false)
 	}
 
-	fn insert_internal(&mut self, mut service: Service, endpoint_update_only: bool) {
+	fn insert_internal(&mut self, service: Service, endpoint_update_only: bool) {
 		let namespaced_hostname = service.namespaced_hostname();
 		// If we're replacing an existing service, remove the old one from all data structures.
 		if !endpoint_update_only {
@@ -390,9 +370,9 @@ impl ServiceStore {
 					"staged service found, inserting {} endpoints",
 					endpoints.len()
 				);
-				for (wip, ep) in endpoints {
+				for (_, ep) in endpoints {
 					if service.should_include_endpoint(ep.status) {
-						service.endpoints.insert(wip.clone(), ep);
+						service.endpoints.insert(ep);
 					}
 				}
 			}

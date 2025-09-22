@@ -11,7 +11,7 @@ use std::sync::RwLock;
 
 pub use binds::PreviousState as BindPreviousState;
 pub use discovery::{
-	LocalWorkload, PreviousState as DiscoveryPreviousState, Store as DiscoveryStore,
+	LocalWorkload, PreviousState as DiscoveryPreviousState, Store as DiscoveryStore, WorkloadStore,
 };
 
 use crate::store;

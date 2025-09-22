@@ -37,6 +37,7 @@ lint:
 	cargo fmt --check
 	cargo clippy --all-targets -- -D warnings
 
+.PHONY: fix-lint
 fix-lint:
 	cargo clippy --fix --allow-staged --allow-dirty --workspace
 	cargo fmt

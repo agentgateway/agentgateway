@@ -107,14 +107,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		upstream: client.clone(),
 		ca,
 
-		mcp_state: mcp::sse::App::new(
-			stores.clone(),
-			Arc::new(crate::mcp::relay::metrics::Metrics::new(
-				&mut registry,
-				None, // TODO custom tags
-			)),
-			drain_rx.clone(),
-		),
+		mcp_state: mcp::App::new(stores.clone(), &mut registry),
 	};
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());

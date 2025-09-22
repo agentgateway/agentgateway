@@ -32,8 +32,10 @@ impl Provider {
 		&self,
 		mut req: universal::Request,
 	) -> Result<MessagesRequest, AIError> {
-		if let Some(model) = &self.model {
-			req.model = model.to_string();
+		if let Some(provider_model) = &self.model {
+			req.model = Some(provider_model.to_string());
+		} else if req.model.is_none() {
+			return Err(AIError::MissingField("model not specified".into()));
 		}
 		let anthropic_message = translate_request(req);
 		Ok(anthropic_message)
@@ -309,7 +311,7 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 	types::MessagesRequest {
 		messages,
 		system,
-		model: req.model,
+		model: req.model.unwrap_or_default(),
 		max_tokens,
 		stop_sequences,
 		stream: req.stream.unwrap_or(false),

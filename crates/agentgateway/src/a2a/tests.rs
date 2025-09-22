@@ -1,5 +1,6 @@
-use super::*;
 use http::Uri;
+
+use super::*;
 
 #[test]
 fn test_build_agent_path() {
@@ -43,6 +44,6 @@ fn test_build_agent_path() {
 	for (input_url, expected_output) in test_cases {
 		let uri: Uri = input_url.parse().expect("Failed to parse URI");
 		let result = build_agent_path(uri);
-		assert_eq!(result, expected_output, "Failed for input: {}", input_url);
+		assert_eq!(result, expected_output, "Failed for input: {input_url}");
 	}
 }

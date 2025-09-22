@@ -17,7 +17,6 @@ use crate::http::Body;
 /// Serde yaml represents things different than just as "JSON in YAML format".
 /// We don't want this. Instead, we transcode YAML via the JSON module.
 pub mod yamlviajson {
-
 	use serde::{de, ser};
 
 	pub fn from_str<T>(s: &str) -> anyhow::Result<T>
@@ -58,31 +57,74 @@ pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 	*t == Default::default()
 }
 
-pub mod serde_dur {
+pub mod serde_instant_option {
+	use std::time::{Duration, Instant};
 
-	use duration_str::HumanFormat;
-	pub use duration_str::deserialize_duration as deserialize;
+	use agent_core::durfmt;
+	use agent_core::prelude::AtomicOption;
 	use serde::Serializer;
 
-	pub fn serialize<S: Serializer, T: HumanFormat>(t: &T, serializer: S) -> Result<S::Ok, S::Error> {
-		serializer.serialize_str(&t.human_format())
+	pub fn serialize<S: Serializer>(
+		t: &AtomicOption<Instant>,
+		serializer: S,
+	) -> Result<S::Ok, S::Error> {
+		match t.load().as_ref() {
+			None => serializer.serialize_none(),
+			Some(t) => {
+				let ts: Duration = t
+					.checked_duration_since(Instant::now())
+					.unwrap_or(Duration::ZERO);
+				serializer.serialize_str(durfmt::format(ts).as_str())
+			},
+		}
+	}
+}
+
+pub mod serde_dur {
+	use std::time::Duration;
+
+	use agent_core::durfmt;
+	use serde::{Deserialize, Deserializer, Serializer};
+
+	pub fn serialize<S: Serializer>(t: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
+		serializer.serialize_str(&durfmt::format(*t))
+	}
+
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let input = String::deserialize(deserializer)?;
+
+		durfmt::parse(&input)
+			.map_err(|e| serde::de::Error::custom(format!("failed to parse duration: {e:?}")))
 	}
 }
 
 pub mod serde_dur_option {
+	use std::time::Duration;
 
-	use duration_str::HumanFormat;
-	pub use duration_str::deserialize_option_duration as deserialize;
-	use serde::Serializer;
+	use agent_core::durfmt;
+	use serde::{Deserialize, Deserializer, Serializer};
 
-	pub fn serialize<S: Serializer, T: HumanFormat>(
-		t: &Option<T>,
-		serializer: S,
-	) -> Result<S::Ok, S::Error> {
+	pub fn serialize<S: Serializer>(t: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error> {
 		match t {
 			None => serializer.serialize_none(),
-			Some(t) => serializer.serialize_str(&t.human_format()),
+			Some(t) => serializer.serialize_str(&durfmt::format(*t)),
 		}
+	}
+
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let input: Option<String> = Option::deserialize(deserializer)?;
+
+		input
+			.as_deref()
+			.map(durfmt::parse)
+			.transpose()
+			.map_err(serde::de::Error::custom)
 	}
 }
 

@@ -28,16 +28,16 @@ pub struct RemoteRateLimit {
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Descriptor(String, cel::Expression);
+pub struct Descriptor(pub String, pub cel::Expression);
 
 #[apply(schema!)]
-pub struct DescriptorSet(Vec<DescriptorEntry>);
+pub struct DescriptorSet(pub Vec<DescriptorEntry>);
 
 #[apply(schema!)]
 pub struct DescriptorEntry {
 	#[serde(deserialize_with = "de_descriptors")]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<KV>"))]
-	entries: Arc<Vec<Descriptor>>,
+	pub entries: Arc<Vec<Descriptor>>,
 	#[serde(default)]
 	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Formatter, Write};
+use std::hash::Hash;
 use std::net::IpAddr;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -10,6 +11,7 @@ use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::types::loadbalancer;
 use crate::types::proto::workload::load_balancing::Scope as XdsScope;
 use crate::types::proto::workload::{
 	GatewayAddress as XdsGatewayAddress, Port, PortList, Service as XdsService,
@@ -404,7 +406,7 @@ pub enum InboundProtocol {
 	LegacyIstioMtls,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Service {
 	pub name: Strng,
@@ -416,8 +418,8 @@ pub struct Service {
 	pub app_protocols: HashMap<u16, AppProtocol>,
 
 	/// Maps endpoint UIDs to service [Endpoint]s.
-	#[serde(default)]
-	pub endpoints: EndpointSet,
+	#[serde(default, skip_deserializing)]
+	pub endpoints: loadbalancer::EndpointSet<Endpoint>,
 	#[serde(default)]
 	pub subject_alt_names: Vec<Strng>,
 
@@ -527,63 +529,6 @@ pub struct Endpoint {
 
 	/// Health status for the endpoint
 	pub status: HealthStatus,
-}
-
-/// EndpointSet is an abstraction over a set of endpoints.
-/// While this is currently not very useful, merely wrapping a HashMap, the intent is to make this future
-/// proofed to future enhancements, such as keeping track of load balancing information the ability
-/// to incrementally update.
-#[derive(Debug, Eq, PartialEq, Clone, Default)]
-pub struct EndpointSet {
-	pub inner: HashMap<Strng, Arc<Endpoint>>,
-}
-
-impl<'de> serde::Deserialize<'de> for EndpointSet {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		<HashMap<Strng, Arc<Endpoint>>>::deserialize(deserializer).map(|inner| EndpointSet { inner })
-	}
-}
-
-impl serde::Serialize for EndpointSet {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		self.inner.serialize(serializer)
-	}
-}
-
-impl EndpointSet {
-	pub fn from_list<const N: usize>(eps: [Endpoint; N]) -> EndpointSet {
-		let mut endpoints = HashMap::with_capacity(eps.len());
-		for ep in eps.into_iter() {
-			endpoints.insert(ep.workload_uid.clone(), Arc::new(ep));
-		}
-		EndpointSet { inner: endpoints }
-	}
-
-	pub fn insert(&mut self, k: Strng, v: Endpoint) {
-		self.inner.insert(k, Arc::new(v));
-	}
-
-	pub fn contains(&self, key: &Strng) -> bool {
-		self.inner.contains_key(key)
-	}
-
-	pub fn get(&self, key: &Strng) -> Option<&Endpoint> {
-		self.inner.get(key).map(Arc::as_ref)
-	}
-
-	pub fn remove(&mut self, key: &Strng) {
-		self.inner.remove(key);
-	}
-
-	pub fn iter(&self) -> impl Iterator<Item = &Endpoint> {
-		self.inner.values().map(Arc::as_ref)
-	}
 }
 
 impl From<workload::TunnelProtocol> for InboundProtocol {

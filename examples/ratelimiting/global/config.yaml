@@ -1,0 +1,44 @@
+config:
+  tracing:
+    otlpEndpoint: http://localhost:4317
+    randomSampling: true
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        remoteRateLimit:
+          domain: "agentgateway"
+          host: "127.0.0.1:8081"
+          descriptors:
+            - entries:
+                - key: "user"
+                  value: '"test-user"'
+                - key: "tool"
+                  value: '"echo"'
+              type: "requests"
+        cors:
+          allowOrigins:
+            - "*"
+          allowHeaders:
+            - "*"
+        jwtAuth:
+          issuer: agentgateway.dev
+          audiences: [test.agentgateway.dev]
+          jwks:
+            file: ./manifests/jwt/pub-key
+        mcpAuthorization:
+          rules:
+          # Allow anyone to call 'echo'
+          - 'mcp.tool.name == "echo"'
+          # Only the test-user can call 'add'
+          - 'jwt.sub == "test-user" && mcp.tool.name == "add"'
+          # Any authenticated user with the claim `nested.key == value` can access 'printEnv'
+          - 'mcp.tool.name == "printEnv" && jwt.nested.key == "value"'
+      backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use itertools::Itertools;
 use rand::prelude::IndexedRandom;
 
 use crate::proxy::ProxyError;
@@ -97,7 +96,10 @@ impl TCPProxy {
 		let (_target, _policy_key) = match &selected_backend.backend {
 			SimpleBackend::Service(svc, port) => {
 				let port = *port;
-				let (ep, wl) = tcp_load_balance(inputs.clone(), svc.as_ref(), port)
+				let workloads = &inputs.stores.read_discovery().workloads;
+				let (ep, _, wl) = svc
+					.endpoints
+					.select_endpoint(workloads, svc.as_ref(), port, None)
 					.ok_or(ProxyError::NoHealthyEndpoints)?;
 				let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
 				let target_port = if let Some(&ep_target_port) = ep.port.get(&port) {
@@ -122,27 +124,25 @@ impl TCPProxy {
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
 
-		/*
-		let _policies = inputs
-			.stores
-			.read_binds()
-			.backend_policies(todo!(), None);
+		// let _policies = inputs
+		// .stores
+		// .read_binds()
+		// .backend_policies(todo!(), None);
 		// let transport = policies.i // TODO
-		let Target::Address(addr) = _target else {
-			panic!("TODO")
-		};
-		let upstream = stream::Socket::dial(addr)
-			.await
-			.map_err(ProxyError::Processing)?;
-		agent_core::copy::copy_bidirectional(
-			connection,
-			upstream,
-			&agent_core::copy::ConnectionResult {},
-		)
-		.await
-		.map_err(|e| ProxyError::Processing(e.into()))?;
-
-		 */
+		// let Target::Address(addr) = _target else {
+		// panic!("TODO")
+		// };
+		// let upstream = stream::Socket::dial(addr)
+		// .await
+		// .map_err(ProxyError::Processing)?;
+		// agent_core::copy::copy_bidirectional(
+		// connection,
+		// upstream,
+		// &agent_core::copy::ConnectionResult {},
+		// )
+		// .await
+		// .map_err(|e| ProxyError::Processing(e.into()))?;
+		//
 		Ok(())
 	}
 }
@@ -184,47 +184,4 @@ fn resolve_backend(
 		weight: b.weight,
 		backend,
 	})
-}
-
-fn tcp_load_balance(
-	pi: Arc<ProxyInputs>,
-	svc: &crate::types::discovery::Service,
-	svc_port: u16,
-) -> Option<(
-	&crate::types::discovery::Endpoint,
-	Arc<crate::types::discovery::Workload>,
-)> {
-	let state = &pi.stores;
-	let workloads = &state.read_discovery().workloads;
-	let target_port = svc.ports.get(&svc_port).copied();
-
-	if target_port.is_none() {
-		// Port doesn't exist on the service at all, this is invalid
-		debug!("service {} does not have port {}", svc.hostname, svc_port);
-		return None;
-	};
-
-	let endpoints = svc.endpoints.iter().filter_map(|ep| {
-		let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
-			debug!("failed to fetch workload for {}", ep.workload_uid);
-			return None;
-		};
-		if target_port.unwrap_or_default() == 0 && !ep.port.contains_key(&svc_port) {
-			// Filter workload out, it doesn't have a matching port
-			trace!(
-				"filter endpoint {}, it does not have service port {}",
-				ep.workload_uid, svc_port
-			);
-			return None;
-		}
-		Some((ep, wl))
-	});
-
-	let options = endpoints.collect_vec();
-	options
-		.choose_weighted(&mut rand::rng(), |(_, wl)| wl.capacity as u64)
-		// This can fail if there are no weights, the sum is zero (not possible in our API), or if it overflows
-		// The API has u32 but we sum into an u64, so it would take ~4 billion entries of max weight to overflow
-		.ok()
-		.cloned()
 }

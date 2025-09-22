@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, env};
 
+use agent_core::durfmt;
 use agent_core::prelude::*;
 use serde::de::DeserializeOwned;
 
@@ -388,8 +389,7 @@ where
 fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
 	parse::<String>(env)?
 		.map(|ds| {
-			duration_str::parse(&ds)
-				.map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, ds, e))
+			durfmt::parse(&ds).map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, ds, e))
 		})
 		.transpose()
 }

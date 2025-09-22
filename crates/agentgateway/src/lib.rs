@@ -36,6 +36,8 @@ pub mod serdes;
 pub mod state_manager;
 pub mod store;
 mod telemetry;
+#[cfg(any(test, feature = "internal_benches"))]
+pub mod test_helpers;
 pub mod transport;
 pub mod types;
 #[cfg(feature = "ui")]
@@ -347,7 +349,7 @@ pub struct ProxyInputs {
 	metrics: Arc<metrics::Metrics>,
 	tracer: Option<trc::Tracer>,
 
-	mcp_state: mcp::sse::App,
+	mcp_state: mcp::App,
 	ca: Option<Arc<CaClient>>,
 }
 

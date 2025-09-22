@@ -154,6 +154,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.rules[].(any)name`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.target`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches[].name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches[].value`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches[].value.(1)exact`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.openaiModeration`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.openaiModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.openaiModeration.auth`||
@@ -173,6 +178,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.rules[].(any)name`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.target`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches[].name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches[].value`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches[].value.(1)exact`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].policies.ai.defaults`||
 |`binds[].listeners[].routes[].policies.ai.overrides`||
 |`binds[].listeners[].routes[].policies.ai.prompts`||
@@ -211,6 +221,12 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)service.name.hostname`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)domain`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries[].key`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries[].value`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].type`||
 |`binds[].listeners[].routes[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers`||
@@ -232,6 +248,9 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.name.hostname`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)context`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)failOpen`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)statusOnError`||
 |`binds[].listeners[].routes[].policies.transformations`|Modify requests and responses|
 |`binds[].listeners[].routes[].policies.transformations.request`||
 |`binds[].listeners[].routes[].policies.transformations.request.add`||
@@ -277,26 +296,88 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.port`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.path`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.schema`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].name`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.statefulMode`||
 |`binds[].listeners[].routes[].backends[].(1)ai`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)openAI`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)openAI.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)gemini`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)gemini.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)vertex`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)vertex.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)vertex.region`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)vertex.projectId`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)anthropic`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)anthropic.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.region`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.guardrailIdentifier`||
-|`binds[].listeners[].routes[].backends[].(1)ai.provider.(1)bedrock.guardrailVersion`||
-|`binds[].listeners[].routes[].backends[].(1)ai.hostOverride`||
-|`binds[].listeners[].routes[].backends[].(1)ai.tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)openAI`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)openAI.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)gemini`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)gemini.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex.projectId`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)anthropic`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)anthropic.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailIdentifier`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)hostOverride`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)pathOverride`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)routes`|Routes defines how to identify the type of traffic we should handle<br>The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.cert`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.key`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.root`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.insecure`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.insecureHost`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)passthrough`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)key`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)key.(any)file`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)aws`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)aws.(any)region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)aws.(any)sessionToken`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)openAI`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)openAI.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)gemini`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)gemini.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.projectId`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)anthropic`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)anthropic.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailIdentifier`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].hostOverride`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].pathOverride`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].routes`|Routes defines how to identify the type of traffic we should handle<br>The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.cert`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.key`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.root`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.insecure`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.insecureHost`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)passthrough`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)key`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)key.(any)file`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)aws`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)aws.(any)region`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)aws.(any)sessionToken`||
+|`binds[].listeners[].routes[].backends[].weight`||
 |`binds[].listeners[].tcpRoutes`||
 |`binds[].listeners[].tcpRoutes[].name`||
 |`binds[].listeners[].tcpRoutes[].ruleName`||
@@ -327,6 +408,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].target.(1)routeRule`||
 |`policies[].target.(1)service`||
 |`policies[].target.(1)backend`||
+|`policies[].target.(1)subBackend`||
 |`policies[].policy`||
 |`policies[].policy.requestHeaderModifier`|Headers to be modified in the request.|
 |`policies[].policy.requestHeaderModifier.add`||
@@ -405,6 +487,11 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.promptGuard.request.regex.rules[].(any)name`||
 |`policies[].policy.ai.promptGuard.request.webhook`||
 |`policies[].policy.ai.promptGuard.request.webhook.target`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches[].name`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches[].value`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches[].value.(1)exact`||
+|`policies[].policy.ai.promptGuard.request.webhook.forwardHeaderMatches[].value.(1)regex`||
 |`policies[].policy.ai.promptGuard.request.openaiModeration`||
 |`policies[].policy.ai.promptGuard.request.openaiModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
 |`policies[].policy.ai.promptGuard.request.openaiModeration.auth`||
@@ -424,6 +511,11 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.promptGuard.response.regex.rules[].(any)name`||
 |`policies[].policy.ai.promptGuard.response.webhook`||
 |`policies[].policy.ai.promptGuard.response.webhook.target`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches[].name`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches[].value`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches[].value.(1)exact`||
+|`policies[].policy.ai.promptGuard.response.webhook.forwardHeaderMatches[].value.(1)regex`||
 |`policies[].policy.ai.defaults`||
 |`policies[].policy.ai.overrides`||
 |`policies[].policy.ai.prompts`||
@@ -462,6 +554,12 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.remoteRateLimit.(any)(1)service.name.hostname`||
 |`policies[].policy.remoteRateLimit.(any)(1)service.port`||
 |`policies[].policy.remoteRateLimit.(any)(1)host`||
+|`policies[].policy.remoteRateLimit.(any)domain`||
+|`policies[].policy.remoteRateLimit.(any)descriptors`||
+|`policies[].policy.remoteRateLimit.(any)descriptors[].entries`||
+|`policies[].policy.remoteRateLimit.(any)descriptors[].entries[].key`||
+|`policies[].policy.remoteRateLimit.(any)descriptors[].entries[].value`||
+|`policies[].policy.remoteRateLimit.(any)descriptors[].type`||
 |`policies[].policy.jwtAuth`|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.(any)(any)mode`||
 |`policies[].policy.jwtAuth.(any)(any)providers`||
@@ -483,6 +581,9 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)(1)service.name.hostname`||
 |`policies[].policy.extAuthz.(any)(1)service.port`||
 |`policies[].policy.extAuthz.(any)(1)host`||
+|`policies[].policy.extAuthz.(any)context`||
+|`policies[].policy.extAuthz.(any)failOpen`||
+|`policies[].policy.extAuthz.(any)statusOnError`||
 |`policies[].policy.transformations`|Modify requests and responses|
 |`policies[].policy.transformations.request`||
 |`policies[].policy.transformations.request.add`||

@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../../../schema/local.json
+config:
+  tracing:
+    otlpEndpoint: http://localhost:4317
+    randomSampling: true
+    fields:
+      add:
+        span.name: '"openai.chat"'
+        openinference.span.kind: '"LLM"'
+        llm.system: 'llm.provider'
+        llm.input_messages: 'flatten_recursive(llm.prompt.map(c, {"message": c}))'
+        llm.output_messages: 'flatten_recursive(llm.completion.map(c, {"role":"assistant", "content": c}))'
+        llm.token_count.completion: 'llm.outputTokens'
+        llm.token_count.prompt: 'llm.inputTokens'
+        llm.token_count.total: 'llm.totalTokens'
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+       - ai:
+          name: gemini
+          provider:
+              gemini:
+                # Optional; overrides the model in requests
+                model: gemini-1.5-flash
+      policies:
+        backendAuth:
+          key: $GEMINI_API_KEY

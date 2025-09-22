@@ -14,13 +14,13 @@ use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
 use crate::http::{ext_authz, ext_proc, remoteratelimit};
 use crate::llm::policy::ResponseGuard;
-use crate::mcp::rbac::McpAuthorizationSet;
+use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerSet,
 	McpAuthentication, Policy, PolicyName, PolicyTarget, Route, RouteKey, RouteName, RouteRuleName,
-	ServiceName, TCPRoute, TargetedPolicy,
+	ServiceName, SubBackendName, TCPRoute, TargetedPolicy,
 };
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -52,9 +52,7 @@ pub struct BackendPolicies {
 	pub backend_tls: Option<BackendTLS>,
 	pub backend_auth: Option<BackendAuth>,
 	pub a2a: Option<A2aPolicy>,
-	// bool represents "should use default settings for provider"
-	// second bool represents "tokenize"
-	pub llm_provider: Option<(llm::AIProvider, bool, bool)>,
+	pub llm_provider: Option<Arc<llm::NamedAIProvider>>,
 	pub inference_routing: Option<InferenceRouting>,
 }
 
@@ -245,16 +243,20 @@ impl Store {
 		&self,
 		backend: BackendName,
 		service: Option<ServiceName>,
+		sub_backend: Option<SubBackendName>,
 	) -> BackendPolicies {
 		let backend_rules = self.policies_by_target.get(&PolicyTarget::Backend(backend));
 		let service_rules =
 			service.and_then(|t| self.policies_by_target.get(&PolicyTarget::Service(t)));
+		let sub_backend_rules =
+			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::SubBackend(t)));
 
-		// Backend > Service
-		let rules = backend_rules
+		// Subbackend > Backend > Service
+		let rules = sub_backend_rules
 			.iter()
 			.copied()
 			.flatten()
+			.chain(backend_rules.iter().copied().flatten())
 			.chain(service_rules.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_name.get(n));
 
@@ -468,7 +470,7 @@ impl Store {
 	pub fn insert_backend(&mut self, b: Backend) {
 		let name = b.name();
 		if let Backend::AI(_, t) = &b
-			&& t.tokenize
+			&& t.providers.any(|p| p.tokenize)
 		{
 			preload_tokenizers()
 		}

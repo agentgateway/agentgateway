@@ -19,6 +19,7 @@ pub mod backendtls;
 pub mod compression;
 pub mod ext_authz;
 pub mod ext_proc;
+pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
 pub mod transformation_cel;
@@ -27,12 +28,18 @@ pub type Error = axum_core::Error;
 pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
+
+use std::fmt::Debug;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
 };
 use axum::body::to_bytes;
 use bytes::Bytes;
+use http_body::{Frame, SizeHint};
 use tower_serve_static::private::mime;
 
 use crate::proxy::{ProxyError, ProxyResponse};
@@ -44,6 +51,17 @@ pub mod x_headers {
 	pub const X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 	pub const X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
 	pub const X_AMZN_REQUESTID: HeaderName = HeaderName::from_static("x-amzn-requestid");
+
+	pub const RETRY_AFTER_MS: HeaderName = HeaderName::from_static("retry-after-ms");
+
+	pub const X_RATELIMIT_RESET_REQUESTS: HeaderName =
+		HeaderName::from_static("x-ratelimit-reset-requests");
+	pub const X_RATELIMIT_RESET_TOKENS: HeaderName =
+		HeaderName::from_static("x-ratelimit-reset-tokens");
+	pub const X_RATELIMIT_RESET_REQUESTS_DAY: HeaderName =
+		HeaderName::from_static("x-ratelimit-reset-requests-day");
+	pub const X_RATELIMIT_RESET_TOKENS_MINUTE: HeaderName =
+		HeaderName::from_static("x-ratelimit-reset-tokens-minute");
 }
 
 pub fn modify_req(
@@ -194,5 +212,46 @@ pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut Header
 			let Some(k) = k else { continue };
 			dest.insert(k, v);
 		}
+	}
+}
+
+pin_project_lite::pin_project! {
+	/// DropBody is simply a Body wrapper that holds onto another item such that it is dropped when the body
+	/// is complete.
+	#[derive(Debug)]
+	pub struct DropBody<B, D> {
+		#[pin]
+		body: B,
+		dropper: D,
+	}
+}
+
+impl<B, D> DropBody<B, D> {
+	pub fn new(body: B, dropper: D) -> Self {
+		Self { body, dropper }
+	}
+}
+
+impl<B: http_body::Body + Debug + Unpin, D> http_body::Body for DropBody<B, D>
+where
+	B::Data: Debug,
+{
+	type Data = B::Data;
+	type Error = B::Error;
+
+	fn poll_frame(
+		self: Pin<&mut Self>,
+		cx: &mut Context<'_>,
+	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+		let this = self.project();
+		this.body.poll_frame(cx)
+	}
+
+	fn is_end_stream(&self) -> bool {
+		self.body.is_end_stream()
+	}
+
+	fn size_hint(&self) -> SizeHint {
+		self.body.size_hint()
 	}
 }

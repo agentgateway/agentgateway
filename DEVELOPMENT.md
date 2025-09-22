@@ -20,7 +20,7 @@ Build the agentgateway binary:
 
 ```bash
 cd ..
-CARGO_NET_GIT_FETCH_WITH_CLI=true
+export CARGO_NET_GIT_FETCH_WITH_CLI=true
 make build
 ```
 

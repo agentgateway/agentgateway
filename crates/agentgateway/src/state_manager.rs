@@ -1,8 +1,9 @@
-use std::path::{Path, absolute};
+use std::path::{Path, PathBuf, absolute};
 use std::time::Duration;
 
 use agent_core::prelude::*;
 use notify::{EventKind, RecursiveMode};
+use tokio::fs;
 
 use crate::client::Client;
 use crate::store::Stores;
@@ -120,14 +121,21 @@ impl LocalClient {
 		let lc: LocalClient = self.to_owned();
 		let mut next_state = lc.reload_config(PreviousState::default()).await?;
 		tokio::task::spawn(async move {
+			// Resolve initial target (symlink or not)
+			let mut real_config_path = lc.resolve_symlink(&abspath).await.ok();
+
 			// Handle file change events
 			while let Some(Ok(events)) = rx.recv().await {
+				let current_config_path = lc.resolve_symlink(&abspath).await.ok();
+
 				// Only process if we have actual content changes
 				if events.iter().any(|e| {
 					matches!(
 						e.kind,
-						EventKind::Modify(_) | EventKind::Create(_) if e.paths.last().is_some_and(|p| p == &abspath))
+						EventKind::Modify(_) | EventKind::Create(_) if e.paths.last().is_some_and(|p| p == &abspath)
+						|| (current_config_path.is_some() && current_config_path != real_config_path))
 				}) {
+					real_config_path = current_config_path.clone();
 					info!("Config file changed, reloading...");
 					match lc.reload_config(next_state.clone()).await {
 						Ok(nxt) => {
@@ -144,6 +152,21 @@ impl LocalClient {
 		});
 
 		Ok(())
+	}
+
+	/// Resolves a symlink to its final target. If the file is not a symlink, returns the original path.
+	/// If symlink resolution fails, returns the original path as fallback.
+	async fn resolve_symlink(&self, path: &Path) -> anyhow::Result<PathBuf> {
+		match fs::symlink_metadata(path).await {
+			Ok(metadata) if metadata.file_type().is_symlink() => {
+				match fs::canonicalize(path).await {
+					Ok(target) => Ok(target),
+					Err(_) => Ok(path.to_path_buf()), // Fallback to original path on error
+				}
+			},
+			Ok(_) => Ok(path.to_path_buf()),
+			Err(_) => Ok(path.to_path_buf()), // Fallback to original path on metadata error
+		}
 	}
 
 	async fn reload_config(&self, prev: PreviousState) -> anyhow::Result<PreviousState> {

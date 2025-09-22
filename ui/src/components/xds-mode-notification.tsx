@@ -8,7 +8,7 @@ export function XdsModeNotification() {
   if (!xds) return null;
 
   return (
-    <div className="bg-blue-500 text-center p-2 text-sm">
+    <div className="bg-primary text-primary-foreground text-center p-2 text-sm">
       Configuration is managed by an external source (XDS). Editing the configuration is not allowed
       via the UI.
     </div>

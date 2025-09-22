@@ -8,7 +8,11 @@ on:
     inputs:
       version:
         description: 'Version number'
-
+      skip_gh_release:
+        description: 'Skip creating a GitHub release'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY_IMAGE: ghcr.io/agentgateway/agentgateway
@@ -109,7 +113,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          tags: | 
+          tags: |
             type=semver,pattern={{version}}
             # use custom value instead of git tag
             type=semver,pattern={{version}},value=${{ github.event.inputs.version }}
@@ -224,7 +228,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          tags: | 
+          tags: |
             type=semver,pattern={{version}}
             # use custom value instead of git tag
             type=semver,pattern={{version}},value=${{ github.event.inputs.version }}
@@ -243,6 +247,7 @@ jobs:
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}-musl
 
   build:
+    if: ${{ github.event_name == 'push' || ! github.event.inputs.skip_gh_release }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -276,7 +281,7 @@ jobs:
         targets: ${{ matrix.target }}
     # TODO: build this in a separate job and just copy it over
     - name: Build UI
-      run: | 
+      run: |
         cd ui
         npm install
         npm run build
@@ -302,6 +307,7 @@ jobs:
           target/${{ matrix.target }}/release/agentgateway.exe
 
   release:
+    if: ${{ github.event_name == 'push' || ! github.event.inputs.skip_gh_release }}
     needs:
     - push-image
     - musl-push-image
@@ -314,7 +320,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         pattern: release-binary-*
-      
+
     - name: Display structure of downloaded files
       run: |
         ls -R

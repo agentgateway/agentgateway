@@ -55,7 +55,7 @@ jobs:
     - name: Build UI
       run: |
         cd ui
-        npm install
+        npm ci
         npm run build
     - name: Install musl-tools
       if: ${{ matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-latest' }}
@@ -104,6 +104,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 23
     - uses: actions/cache@v4
       with:
         path: |
@@ -121,6 +124,11 @@ jobs:
       run: git config --global core.autocrlf true; make gen check-clean-repo
     - name: Lint
       run: make lint
+    - name: Lint UI
+      run: |
+        cd ui
+        npm ci
+        npm run lint
 
   docker:
     strategy:
