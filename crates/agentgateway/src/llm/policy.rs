@@ -536,6 +536,23 @@ mod webhook {
 
 	#[derive(Debug, Clone, Serialize, Deserialize)]
 	#[serde(rename_all = "snake_case")]
+	pub struct GuardrailsResponseRequest {
+		/// body contains the object with a list of Choice that contains the response content from the LLM.
+		pub body: ResponseChoices,
+	}
+
+	#[derive(Debug, Clone, Serialize, Deserialize)]
+	#[serde(rename_all = "snake_case")]
+	pub struct GuardrailsResponseResponse {
+		/// action is the action to be taken based on the request.
+		/// The following actions are available on the response:
+		/// - PassAction: No action is required.
+		/// - MaskAction: Mask the response body.
+		pub action: ResponseAction,
+	}
+
+	#[derive(Debug, Clone, Serialize, Deserialize)]
+	#[serde(rename_all = "snake_case")]
 	pub struct Message {
 		/// The role associated to the content in this message.
 		pub role: String,
@@ -602,6 +619,14 @@ mod webhook {
 	pub enum RequestAction {
 		Mask(MaskAction),
 		Reject(RejectAction),
+		Pass(PassAction),
+	}
+
+	/// Enum for actions available in response responses
+	#[derive(Debug, Clone, Serialize, Deserialize)]
+	#[serde(untagged, rename_all = "snake_case")]
+	pub enum ResponseAction {
+		Mask(MaskAction),
 		Pass(PassAction),
 	}
 
