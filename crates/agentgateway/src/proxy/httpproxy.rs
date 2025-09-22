@@ -402,7 +402,7 @@ impl HTTPProxy {
 			Ok(()) => {},
 			// "capture" direct response but propagate errors to the caller.
 			Err(ProxyResponse::DirectResponse(mut dr)) => {
-				apply_response_filters(selected_route.filters.as_slice(), &mut *dr)
+				apply_response_filters(selected_route.filters.as_slice(), &mut dr)
 					.map_err(ProxyError::from)?;
 				return Ok(*dr);
 			},
