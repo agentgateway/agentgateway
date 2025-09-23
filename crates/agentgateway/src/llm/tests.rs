@@ -45,12 +45,12 @@ async fn test_streaming(
 	let test_dir = Path::new("src/llm/tests");
 
 	// Read input JSON
-	let input_path = test_dir.join(format!("{test_name}"));
+	let input_path = test_dir.join(test_name.to_string());
 	let provider =
 		&fs::read(&input_path).unwrap_or_else(|_| panic!("{test_name}: Failed to read input file"));
 	let body = Body::from(provider.clone());
 	let log = AsyncLog::default();
-	let mut resp = xlate(body, log).expect("failed to translate stream");
+	let resp = xlate(body, log).expect("failed to translate stream");
 	let resp_bytes = resp.collect().await.unwrap().to_bytes();
 	let resp_str = std::str::from_utf8(&resp_bytes).unwrap();
 

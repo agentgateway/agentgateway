@@ -552,6 +552,7 @@ pub mod testing {
 	use std::collections::HashMap;
 	use std::fmt::{Display, Formatter};
 	use std::io;
+	use std::io::IoSlice;
 	use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 	use once_cell::sync::Lazy;
@@ -664,6 +665,15 @@ pub mod testing {
 		fn flush(&mut self) -> io::Result<()> {
 			self.buf()?.flush()
 		}
+
+		fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> std::io::Result<usize> {
+			let mut target = self.buf()?;
+			let mut n = 0;
+			for b in bufs {
+				n += target.write(b.as_ref())?;
+			}
+			Ok(n)
+		}
 	}
 
 	impl fmt::MakeWriter<'_> for MockWriter {
@@ -687,7 +697,7 @@ pub mod testing {
 		Lazy::force(&TRACING);
 	}
 
-	pub fn setup_test_logging_internal() {
+	fn setup_test_logging_internal() {
 		Lazy::force(&APPLICATION_START_TIME);
 		let mock_writer = MockWriter::new(global_buf());
 		let (non_blocking, _guard) = nonblocking::NonBlockingBuilder::default()
