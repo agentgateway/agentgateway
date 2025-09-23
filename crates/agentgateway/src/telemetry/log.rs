@@ -458,7 +458,7 @@ pub struct RequestLog {
 	pub outgoing_span: Option<trc::TraceParent>,
 
 	pub llm_request: Option<llm::LLMRequest>,
-	pub llm_response: AsyncLog<llm::LLMResponse>,
+	pub llm_response: AsyncLog<llm::LLMInfo>,
 
 	pub a2a_method: Option<&'static str>,
 
@@ -571,7 +571,7 @@ impl Drop for DropOnLog {
 				// TODO: map this properly
 				gen_ai_system: llm_response.request.provider.clone().into(),
 				gen_ai_request_model: llm_response.request.request_model.clone().into(),
-				gen_ai_response_model: llm_response.provider_model.clone().into(),
+				gen_ai_response_model: llm_response.response.provider_model.clone().into(),
 				custom: custom_metric_fields.clone(),
 			});
 			if let Some(it) = llm_response.input_tokens() {
@@ -584,7 +584,7 @@ impl Drop for DropOnLog {
 					})
 					.observe(it as f64)
 			}
-			if let Some(ot) = llm_response.output_tokens {
+			if let Some(ot) = llm_response.response.output_tokens {
 				log
 					.metrics
 					.gen_ai_token_usage
@@ -599,7 +599,7 @@ impl Drop for DropOnLog {
 				.gen_ai_request_duration
 				.get_or_create(&gen_ai_labels)
 				.observe(duration.as_secs_f64());
-			if let Some(ft) = llm_response.first_token {
+			if let Some(ft) = llm_response.response.first_token {
 				let ttft = ft - log.start;
 				// Duration from start of request to first token
 				// This is the start of when WE got the request, but it should probably be when we SENT the upstream.
@@ -609,7 +609,7 @@ impl Drop for DropOnLog {
 					.get_or_create(&gen_ai_labels)
 					.observe(ttft.as_secs_f64());
 
-				if let Some(ot) = llm_response.output_tokens {
+				if let Some(ot) = llm_response.response.output_tokens {
 					let first_to_last = end_time - ft;
 					let throughput = first_to_last.as_secs_f64() / (ot as f64);
 					log
@@ -690,13 +690,13 @@ impl Drop for DropOnLog {
 				"llm.response.model",
 				llm_response
 					.as_ref()
-					.and_then(|l| l.provider_model.display()),
+					.and_then(|l| l.response.provider_model.display()),
 			),
 			(
 				"llm.response.tokens",
 				llm_response
 					.as_ref()
-					.and_then(|l| l.output_tokens)
+					.and_then(|l| l.response.output_tokens)
 					.map(Into::into),
 			),
 			("retry.attempt", log.retry_attempt.display()),

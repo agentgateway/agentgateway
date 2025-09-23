@@ -81,3 +81,9 @@ pub fn to_body<T: Serialize>(j: T) -> anyhow::Result<http::Body> {
 	let bytes = serde_json::to_vec(&j)?;
 	Ok(http::Body::from(bytes))
 }
+
+pub fn convert<I: Serialize, O: DeserializeOwned>(input: &I) -> Result<O, serde_json::Error> {
+	let v = serde_json::to_value(input)?;
+	let o = serde_json::from_value::<O>(v)?;
+	Ok(o)
+}

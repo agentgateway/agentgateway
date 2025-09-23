@@ -1035,21 +1035,10 @@ fn resolve_simple_reference(
 
 fn convert_message(
 	m: &proto::agent::policy_spec::ai::Message,
-) -> crate::llm::universal::RequestMessage {
-	match m.role.as_str() {
-		"system" => crate::llm::universal::RequestSystemMessage::from(m.content.clone()).into(),
-		"assistant" => crate::llm::universal::RequestAssistantMessage::from(m.content.clone()).into(),
-		"function" => crate::llm::universal::RequestFunctionMessage {
-			content: Some(m.content.clone()),
-			name: "".to_string(),
-		}
-		.into(),
-		"tool" => crate::llm::universal::RequestToolMessage {
-			content: crate::llm::universal::RequestToolMessageContent::from(m.content.clone()),
-			tool_call_id: "".to_string(),
-		}
-		.into(),
-		_ => crate::llm::universal::RequestUserMessage::from(m.content.clone()).into(),
+) -> crate::llm::SimpleChatCompletionMessage {
+	llm::SimpleChatCompletionMessage {
+		role: strng::new(&m.role),
+		content: strng::new(&m.content),
 	}
 }
 

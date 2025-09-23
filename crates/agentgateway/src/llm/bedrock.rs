@@ -12,7 +12,8 @@ use crate::llm::bedrock::types::{
 	ContentBlock, ContentBlockDelta, ConverseErrorResponse, ConverseRequest, ConverseResponse,
 	ConverseStreamOutput, StopReason,
 };
-use crate::llm::{AIError, LLMResponse, universal};
+use crate::llm::universal::ResponseType;
+use crate::llm::{AIError, InputFormat, LLMInfo, anthropic, universal};
 use crate::telemetry::log::AsyncLog;
 use crate::*;
 
@@ -54,20 +55,7 @@ impl Provider {
 		Ok(bedrock_request)
 	}
 
-	pub async fn process_response(
-		&self,
-		model: &str,
-		bytes: &Bytes,
-	) -> Result<universal::Response, AIError> {
-		let model = self.model.as_deref().unwrap_or(model);
-		let resp =
-			serde_json::from_slice::<ConverseResponse>(bytes).map_err(AIError::ResponseParsing)?;
-
-		// Bedrock response doesn't contain the model, so we pass through the model from the request into the response
-		translate_response(resp, model)
-	}
-
-	pub async fn process_error(
+	pub fn process_error(
 		&self,
 		bytes: &Bytes,
 	) -> Result<universal::ChatCompletionErrorResponse, AIError> {
@@ -78,7 +66,7 @@ impl Provider {
 
 	pub(super) async fn process_streaming(
 		&self,
-		log: AsyncLog<LLMResponse>,
+		log: AsyncLog<LLMInfo>,
 		resp: Response,
 		model: &str,
 	) -> Response {
@@ -106,6 +94,31 @@ impl Provider {
 	}
 }
 
+pub fn process_response(
+	model: &str,
+	bytes: &Bytes,
+	input_format: InputFormat,
+) -> Result<Box<dyn ResponseType>, AIError> {
+	match input_format {
+		InputFormat::Completions => {
+			let resp =
+				serde_json::from_slice::<ConverseResponse>(bytes).map_err(AIError::ResponseParsing)?;
+			let completions = translate_response_to_completions(resp, model)?;
+			let passthrough = json::convert::<_, universal::passthrough::Response>(&completions)
+				.map_err(AIError::ResponseParsing)?;
+			Ok(Box::new(passthrough))
+		},
+		InputFormat::Messages => {
+			let resp =
+				serde_json::from_slice::<ConverseResponse>(bytes).map_err(AIError::ResponseParsing)?;
+			let messages = translate_response_to_messages(resp, model)?;
+			let passthrough = json::convert::<_, anthropic::passthrough::Response>(&messages)
+				.map_err(AIError::ResponseParsing)?;
+			Ok(Box::new(passthrough))
+		},
+	}
+}
+
 pub(super) fn translate_error(
 	resp: ConverseErrorResponse,
 ) -> Result<universal::ChatCompletionErrorResponse, AIError> {
@@ -121,7 +134,16 @@ pub(super) fn translate_error(
 	})
 }
 
-pub(super) fn translate_response(
+pub(super) fn translate_response_to_messages(
+	_: ConverseResponse,
+	_: &str,
+) -> Result<anthropic::types::MessagesResponse, AIError> {
+	Err(AIError::UnsupportedConversion(strng::literal!(
+		"messages to bedrock"
+	)))
+}
+
+pub(super) fn translate_response_to_completions(
 	resp: ConverseResponse,
 	model: &str,
 ) -> Result<universal::Response, AIError> {
@@ -344,7 +366,7 @@ pub(super) fn translate_request(req: universal::Request, provider: &Provider) ->
 
 pub(super) fn translate_stream(
 	b: Body,
-	log: AsyncLog<LLMResponse>,
+	log: AsyncLog<LLMInfo>,
 	model: String,
 	message_id: String,
 ) -> Body {
@@ -371,7 +393,7 @@ pub(super) fn translate_stream(
 				if !saw_token {
 					saw_token = true;
 					log.non_atomic_mutate(|r| {
-						r.first_token = Some(Instant::now());
+						r.response.first_token = Some(Instant::now());
 					});
 				}
 				let delta = d.delta.map(|delta| {
@@ -441,9 +463,9 @@ pub(super) fn translate_stream(
 			ConverseStreamOutput::Metadata(metadata) => {
 				if let Some(usage) = metadata.usage {
 					log.non_atomic_mutate(|r| {
-						r.output_tokens = Some(usage.output_tokens as u64);
-						r.input_tokens_from_response = Some(usage.input_tokens as u64);
-						r.total_tokens = Some(usage.total_tokens as u64);
+						r.response.output_tokens = Some(usage.output_tokens as u64);
+						r.response.input_tokens = Some(usage.input_tokens as u64);
+						r.response.total_tokens = Some(usage.total_tokens as u64);
 					});
 
 					mk(

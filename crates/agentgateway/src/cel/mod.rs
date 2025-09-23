@@ -17,7 +17,7 @@ use serde::{Serialize, Serializer};
 
 use crate::http::jwt::Claims;
 use crate::llm;
-use crate::llm::{LLMRequest, LLMResponse};
+use crate::llm::{LLMInfo, LLMRequest};
 use crate::serdes::*;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::discovery::Identity;
@@ -233,20 +233,21 @@ impl ContextBuilder {
 		r.prompt = Some(msg);
 	}
 
-	pub fn with_llm_response(&mut self, info: &LLMResponse) {
+	pub fn with_llm_response(&mut self, info: &LLMInfo) {
 		if !self.attributes.contains(LLM_ATTRIBUTE) {
 			return;
 		}
+		let resp = &info.response;
 		if let Some(o) = self.context.llm.as_mut() {
-			o.output_tokens = info.output_tokens;
-			o.total_tokens = info.total_tokens;
-			if let Some(pt) = info.input_tokens_from_response {
+			o.output_tokens = resp.output_tokens;
+			o.total_tokens = resp.total_tokens;
+			if let Some(pt) = resp.input_tokens {
 				// Better info, override
 				o.input_tokens = Some(pt);
 			}
-			o.response_model = info.provider_model.clone();
+			o.response_model = resp.provider_model.clone();
 			// Not always set
-			o.completion = info.completion.clone();
+			o.completion = resp.completion.clone();
 		}
 	}
 

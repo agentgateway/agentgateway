@@ -1,14 +1,15 @@
-use ::http::HeaderMap;
-use async_openai::types::ChatCompletionRequestMessage;
-use bytes::Bytes;
-
 use crate::http::auth::{BackendAuth, SimpleBackendAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
-use crate::llm::policy::webhook::{MaskActionBody, Message, RequestAction, ResponseAction};
-use crate::llm::{AIError, pii, universal};
+use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
+use crate::llm::universal::{RequestType, ResponseType};
+use crate::llm::{AIError, pii};
 use crate::types::agent::{HeaderMatch, HeaderValueMatch, Target};
 use crate::{client, *};
+use ::http::HeaderMap;
+use bytes::Bytes;
+use itertools::Itertools;
+use serde::de::DeserializeOwned;
 
 #[apply(schema!)]
 pub struct Policy {
@@ -31,17 +32,8 @@ pub struct Policy {
 #[apply(schema!)]
 pub struct PromptEnrichment {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "crate::llm::SimpleChatCompletionMessage")
-	)]
-	pub append: Vec<ChatCompletionRequestMessage>,
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "crate::llm::SimpleChatCompletionMessage")
-	)]
-	pub prepend: Vec<ChatCompletionRequestMessage>,
+	pub append: Vec<crate::llm::SimpleChatCompletionMessage>,
+	pub prepend: Vec<crate::llm::SimpleChatCompletionMessage>,
 }
 
 #[apply(schema!)]
@@ -52,21 +44,13 @@ pub struct PromptGuard {
 	pub response: Option<ResponseGuard>,
 }
 impl Policy {
-	pub fn apply_prompt_enrichment(&self, chat: &mut universal::Request) -> universal::Request {
+	pub fn apply_prompt_enrichment(&self, chat: &mut dyn RequestType) {
 		if let Some(prompts) = &self.prompts {
-			let old_messages = std::mem::take(&mut chat.messages);
-			chat.messages = prompts
-				.prepend
-				.clone()
-				.into_iter()
-				.chain(old_messages)
-				.chain(prompts.append.clone())
-				.collect();
+			chat.prepend_prompts(prompts.prepend.clone());
 		}
-		chat.clone()
 	}
-	pub fn unmarshal_request(&self, bytes: &Bytes) -> Result<universal::Request, AIError> {
-		if self.defaults.is_none() && self.overrides.is_none() && self.prompts.is_none() {
+	pub fn unmarshal_request<T: DeserializeOwned>(&self, bytes: &Bytes) -> Result<T, AIError> {
+		if self.defaults.is_none() && self.overrides.is_none() {
 			// Fast path: directly bytes to typed
 			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);
 		}
@@ -84,10 +68,11 @@ impl Policy {
 		}
 		serde_json::from_value(serde_json::Value::Object(map)).map_err(AIError::RequestParsing)
 	}
+
 	pub async fn apply_prompt_guard(
 		&self,
 		client: &client::Client,
-		req: &mut universal::Request,
+		req: &mut dyn RequestType,
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
 	) -> anyhow::Result<Option<Response>> {
@@ -101,10 +86,10 @@ impl Policy {
 				.unwrap_or(strng::literal!("omni-moderation-latest"));
 			let auth = BackendAuth::from(moderation.auth.clone());
 			let content = req
-				.messages
-				.iter()
-				.filter_map(universal::message_text)
-				.collect::<Vec<_>>();
+				.get_messages()
+				.into_iter()
+				.map(|t| t.content)
+				.collect_vec();
 			let mut rb = ::http::Request::builder()
 				.uri("https://api.openai.com/v1/moderations")
 				.method(::http::Method::POST)
@@ -125,9 +110,10 @@ impl Policy {
 			}
 		}
 		if let Some(webhook) = &g.webhook {
+			let messsages = req.get_messages();
 			let headers =
 				Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-			let whr = webhook::send_request(client, &webhook.target, &headers, req).await?;
+			let whr = webhook::send_request(client, &webhook.target, &headers, messsages).await?;
 			match whr.action {
 				RequestAction::Mask(mask) => {
 					debug!(
@@ -140,7 +126,7 @@ impl Policy {
 						anyhow::bail!("invalid webhook response");
 					};
 					let msgs = body.messages;
-					req.messages = msgs.into_iter().map(Self::convert_message).collect();
+					req.set_messages(msgs);
 				},
 				RequestAction::Reject(rej) => {
 					debug!(
@@ -166,20 +152,21 @@ impl Policy {
 				},
 			}
 		}
-		for msg in &mut req.messages {
-			let Some(original_content) = universal::message_text(msg) else {
-				continue;
-			};
-
-			let (res, modified_content) = Self::apply_prompt_guard_regex(original_content, &g.regex);
-			if let Some(content) = modified_content {
-				*msg = Self::convert_message(Message {
-					role: universal::message_role(msg).to_string(),
-					content,
-				});
+		if let Some(rgx) = g.regex.as_ref() {
+			let mut msgs = req.get_messages();
+			let mut any_changed = false;
+			for msg in &mut msgs {
+				let (res, modified_content) = Self::apply_prompt_guard_regex(&msg.content, rgx);
+				if let Some(content) = modified_content {
+					any_changed = true;
+					msg.content = content.into();
+				}
+				if res.is_some() {
+					return Ok(res);
+				}
 			}
-			if res.is_some() {
-				return Ok(res);
+			if any_changed {
+				req.set_messages(msgs);
 			}
 		}
 		Ok(None)
@@ -219,100 +206,98 @@ impl Policy {
 		headers
 	}
 
-	fn convert_message(r: Message) -> ChatCompletionRequestMessage {
-		match r.role.as_str() {
-			"system" => universal::RequestMessage::from(universal::RequestSystemMessage::from(r.content)),
-			"assistant" => {
-				universal::RequestMessage::from(universal::RequestAssistantMessage::from(r.content))
-			},
-			// TODO: the webhook API cannot express functions or tools...
-			"function" => universal::RequestMessage::from(universal::RequestFunctionMessage {
-				content: Some(r.content),
-				name: "".to_string(),
-			}),
-			"tool" => universal::RequestMessage::from(universal::RequestToolMessage {
-				content: universal::RequestToolMessageContent::from(r.content),
-				tool_call_id: "".to_string(),
-			}),
-			_ => universal::RequestMessage::from(universal::RequestUserMessage::from(r.content)),
-		}
-	}
+	// fn convert_message(r: Message) -> ChatCompletionRequestMessage {
+	// 	match r.role.as_str() {
+	// 		"system" => universal::RequestMessage::from(universal::RequestSystemMessage::from(r.content)),
+	// 		"assistant" => {
+	// 			universal::RequestMessage::from(universal::RequestAssistantMessage::from(r.content))
+	// 		},
+	// 		// TODO: the webhook API cannot express functions or tools...
+	// 		"function" => universal::RequestMessage::from(universal::RequestFunctionMessage {
+	// 			content: Some(r.content),
+	// 			name: "".to_string(),
+	// 		}),
+	// 		"tool" => universal::RequestMessage::from(universal::RequestToolMessage {
+	// 			content: universal::RequestToolMessageContent::from(r.content),
+	// 			tool_call_id: "".to_string(),
+	// 		}),
+	// 		_ => universal::RequestMessage::from(universal::RequestUserMessage::from(r.content)),
+	// 	}
+	// }
 
 	fn apply_prompt_guard_regex(
 		original_content: &str,
-		regex: &Option<RegexRules>,
+		rgx: &RegexRules,
 	) -> (Option<Response>, Option<String>) {
-		if let Some(rgx) = regex {
-			let mut current_content = original_content.to_string();
-			let mut content_modified = false;
+		let mut current_content = original_content.to_string();
+		let mut content_modified = false;
 
-			// Process each rule sequentially, updating the content as we go
-			for r in &rgx.rules {
-				match r {
-					RegexRule::Builtin { builtin } => {
-						let rec = match builtin {
-							Builtin::Ssn => &*pii::SSN,
-							Builtin::CreditCard => &*pii::CC,
-							Builtin::PhoneNumber => &*pii::PHONE,
-							Builtin::Email => &*pii::EMAIL,
-						};
-						let results = pii::recognizer(rec, &current_content);
+		// Process each rule sequentially, updating the content as we go
+		for r in &rgx.rules {
+			match r {
+				RegexRule::Builtin { builtin } => {
+					let rec = match builtin {
+						Builtin::Ssn => &*pii::SSN,
+						Builtin::CreditCard => &*pii::CC,
+						Builtin::PhoneNumber => &*pii::PHONE,
+						Builtin::Email => &*pii::EMAIL,
+					};
+					let results = pii::recognizer(rec, &current_content);
 
-						if !results.is_empty() {
-							match &rgx.action {
-								Action::Reject { response } => {
-									return (Some(response.as_response()), None);
-								},
-								Action::Mask => {
-									// Sort in reverse to avoid index shifting during replacement
-									let mut sorted_results = results;
-									sorted_results.sort_by(|a, b| b.start.cmp(&a.start));
+					if !results.is_empty() {
+						match &rgx.action {
+							Action::Reject { response } => {
+								return (Some(response.as_response()), None);
+							},
+							Action::Mask => {
+								// Sort in reverse to avoid index shifting during replacement
+								let mut sorted_results = results;
+								sorted_results.sort_by(|a, b| b.start.cmp(&a.start));
 
-									for result in sorted_results {
-										current_content.replace_range(
-											result.start..result.end,
-											&format!("<{}>", result.entity_type.to_uppercase()),
-										);
-									}
-									content_modified = true;
-								},
-							}
+								for result in sorted_results {
+									current_content.replace_range(
+										result.start..result.end,
+										&format!("<{}>", result.entity_type.to_uppercase()),
+									);
+								}
+								content_modified = true;
+							},
 						}
-					},
-					RegexRule::Regex { pattern, name } => {
-						let ranges: Vec<std::ops::Range<usize>> = pattern
-							.find_iter(&current_content)
-							.map(|m| m.range())
-							.collect();
+					}
+				},
+				RegexRule::Regex { pattern, name } => {
+					let ranges: Vec<std::ops::Range<usize>> = pattern
+						.find_iter(&current_content)
+						.map(|m| m.range())
+						.collect();
 
-						if !ranges.is_empty() {
-							match &rgx.action {
-								Action::Reject { response } => {
-									return (Some(response.as_response()), None);
-								},
-								Action::Mask => {
-									// Process matches in reverse order to avoid index shifting
-									for range in ranges.into_iter().rev() {
-										current_content.replace_range(range, &format!("<{name}>"));
-									}
-									content_modified = true;
-								},
-							}
+					if !ranges.is_empty() {
+						match &rgx.action {
+							Action::Reject { response } => {
+								return (Some(response.as_response()), None);
+							},
+							Action::Mask => {
+								// Process matches in reverse order to avoid index shifting
+								for range in ranges.into_iter().rev() {
+									current_content.replace_range(range, &format!("<{name}>"));
+								}
+								content_modified = true;
+							},
 						}
-					},
-				}
+					}
+				},
 			}
-			// Only update the message if content was actually modified
-			if content_modified {
-				return (None, Some(current_content));
-			}
+		}
+		// Only update the message if content was actually modified
+		if content_modified {
+			return (None, Some(current_content));
 		}
 		(None, None)
 	}
 
 	pub async fn apply_response_prompt_guard(
 		client: &client::Client,
-		resp: &mut universal::Response,
+		resp: &mut dyn ResponseType,
 		http_headers: &HeaderMap,
 		g: &Option<ResponseGuard>,
 	) -> anyhow::Result<Option<Response>> {
@@ -323,7 +308,8 @@ impl Policy {
 		if let Some(webhook) = &guard.webhook {
 			let headers =
 				Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-			let whr = webhook::send_response(client, &webhook.target, &headers, resp).await?;
+			let webhook_choices = resp.to_webhook_choices();
+			let whr = webhook::send_response(client, &webhook.target, &headers, webhook_choices).await?;
 			match whr.action {
 				ResponseAction::Mask(mask) => {
 					debug!(
@@ -336,20 +322,7 @@ impl Policy {
 						anyhow::bail!("invalid webhook response");
 					};
 					let msgs = body.choices;
-					if resp.choices.len() != msgs.len() {
-						anyhow::bail!("webhook response message count mismatch");
-					}
-					for (i, (resp_msg, wh_msg)) in resp.choices.iter_mut().zip(msgs).enumerate() {
-						if resp_msg.message.role.to_string() != wh_msg.message.role {
-							anyhow::bail!(
-								"webhook response message {} role mismatch; expected {}, got {}",
-								i,
-								resp_msg.message.role,
-								wh_msg.message.role
-							);
-						}
-						resp_msg.message.content = Some(wh_msg.message.content);
-					}
+					resp.set_webhook_choices(msgs)?;
 				},
 				ResponseAction::Pass(pass) => {
 					debug!(
@@ -363,17 +336,21 @@ impl Policy {
 			}
 		}
 
-		for msg in resp.choices.iter_mut() {
-			let Some(original_content) = msg.message.content.as_deref() else {
-				continue;
-			};
-
-			let (res, modified_content) = Self::apply_prompt_guard_regex(original_content, &guard.regex);
-			if let Some(content) = modified_content {
-				msg.message.content = Some(content);
+		if let Some(rgx) = &guard.regex {
+			let mut webhook_choices = resp.to_webhook_choices();
+			let mut any_changed = false;
+			for msg in &mut webhook_choices {
+				let (res, modified_content) = Self::apply_prompt_guard_regex(&msg.message.content, rgx);
+				if let Some(content) = modified_content {
+					any_changed = true;
+					msg.message.content = content.into();
+				}
+				if res.is_some() {
+					return Ok(res);
+				}
 			}
-			if res.is_some() {
-				return Ok(res);
+			if any_changed {
+				resp.set_webhook_choices(webhook_choices)?;
 			}
 		}
 		Ok(None)
@@ -508,14 +485,13 @@ fn default_body() -> Bytes {
 	Bytes::from_static(b"The request was rejected due to inappropriate content")
 }
 
-mod webhook {
+pub mod webhook {
 	use ::http::header::CONTENT_TYPE;
 	use ::http::{HeaderMap, HeaderValue, header};
 	use serde::{Deserialize, Serialize};
 
 	use crate::client::Client;
-	use crate::llm::universal;
-	use crate::llm::universal::Request;
+
 	use crate::types::agent::Target;
 	use crate::*;
 
@@ -557,14 +533,8 @@ mod webhook {
 		pub action: ResponseAction,
 	}
 
-	#[derive(Debug, Clone, Serialize, Deserialize)]
-	#[serde(rename_all = "snake_case")]
-	pub struct Message {
-		/// The role associated to the content in this message.
-		pub role: String,
-		/// The content text for this message.
-		pub content: String,
-	}
+	// For convenience, re-use SimpleChatCompletionMessage
+	pub type Message = llm::SimpleChatCompletionMessage;
 
 	#[derive(Debug, Clone, Serialize, Deserialize)]
 	#[serde(rename_all = "snake_case")]
@@ -647,20 +617,10 @@ mod webhook {
 	fn build_request_for_request(
 		target: &Target,
 		http_headers: &HeaderMap,
-		i: &Request,
+		messages: Vec<Message>,
 	) -> anyhow::Result<crate::http::Request> {
 		let body = GuardrailsPromptRequest {
-			body: PromptMessages {
-				messages: i
-					.messages
-					.iter()
-					.filter_map(|m| {
-						let role = llm::universal::message_role(m).to_string();
-						let content = llm::universal::message_text(m).map(|s| s.to_string());
-						content.map(|content| Message { role, content })
-					})
-					.collect(),
-			},
+			body: PromptMessages { messages },
 		};
 		build_request(&body, target, REQUEST_PATH, http_headers)
 	}
@@ -668,22 +628,10 @@ mod webhook {
 	fn build_request_for_response(
 		target: &Target,
 		http_headers: &HeaderMap,
-		resp: &universal::Response,
+		choices: Vec<ResponseChoice>,
 	) -> anyhow::Result<crate::http::Request> {
 		let body = GuardrailsResponseRequest {
-			body: ResponseChoices {
-				choices: resp
-					.choices
-					.iter()
-					.filter_map(|c| {
-						let role = c.message.role.to_string();
-						let content = c.message.content.clone();
-						content.map(|content| ResponseChoice {
-							message: Message { role, content },
-						})
-					})
-					.collect(),
-			},
+			body: ResponseChoices { choices },
 		};
 		build_request(&body, target, RESPONSE_PATH, http_headers)
 	}
@@ -716,9 +664,9 @@ mod webhook {
 		client: &Client,
 		target: &Target,
 		http_headers: &HeaderMap,
-		req: &Request,
+		messages: Vec<Message>,
 	) -> anyhow::Result<GuardrailsPromptResponse> {
-		let whr = build_request_for_request(target, http_headers, req)?;
+		let whr = build_request_for_request(target, http_headers, messages)?;
 		let res = client
 			.call(client::Call {
 				req: whr,
@@ -734,9 +682,9 @@ mod webhook {
 		client: &Client,
 		target: &Target,
 		http_headers: &HeaderMap,
-		resp: &universal::Response,
+		choices: Vec<ResponseChoice>,
 	) -> anyhow::Result<GuardrailsResponseResponse> {
-		let whr = build_request_for_response(target, http_headers, resp)?;
+		let whr = build_request_for_response(target, http_headers, choices)?;
 		let res = client
 			.call(client::Call {
 				req: whr,

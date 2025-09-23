@@ -977,18 +977,32 @@ async fn make_backend_call(
 		// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like
 		// prompt enrichment, prompt guard, etc.
 		match route_type {
-			RouteType::Completions => {
-				let r = llm
-					.provider
-					.process_request(
-						&client,
-						route_policies.llm.as_deref(),
-						req,
-						llm.tokenize,
-						&mut log,
-					)
-					.await
-					.map_err(|e| ProxyError::Processing(e.into()))?;
+			RouteType::Completions | RouteType::Messages => {
+				let r = if route_type == RouteType::Completions {
+					llm
+						.provider
+						.process_completions_request(
+							&client,
+							route_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						)
+						.await
+						.map_err(|e| ProxyError::Processing(e.into()))?
+				} else {
+					llm
+						.provider
+						.process_messages_request(
+							&client,
+							route_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						)
+						.await
+						.map_err(|e| ProxyError::Processing(e.into()))?
+				};
 				let (mut req, llm_request) = match r {
 					RequestResult::Success(r, lr) => (r, lr),
 					RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
@@ -1014,7 +1028,7 @@ async fn make_backend_call(
 				log.add(|l| l.llm_request = Some(llm_request.clone()));
 				(req, response_policies, Some(llm_request))
 			},
-			RouteType::Messages | RouteType::Models => {
+			RouteType::Models => {
 				return Ok(Box::pin(async move {
 					Ok(
 						::http::Response::builder()

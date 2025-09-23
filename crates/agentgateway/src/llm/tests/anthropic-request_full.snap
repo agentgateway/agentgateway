@@ -14,8 +14,12 @@ info:
       content: This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers.
       name: assistant_1
     - role: user
-      content: Can you optimize it for better performance?
-      name: user_2
+      content:
+        - type: text
+          text: "What's in this image?"
+        - type: image_url
+          image_url:
+            url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
   max_tokens: 1000
   temperature: 0.7
   top_p: 0.9
@@ -86,15 +90,6 @@ info:
         {
           "type": "text",
           "text": "This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers."
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Can you optimize it for better performance?"
         }
       ]
     }

@@ -1,0 +1,21 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "anthropic: request_anthropic_basic"
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 1024
+  messages:
+    - role: user
+      content: "Hello, world"
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello, world"
+    }
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "max_completion_tokens": 1024,
+  "stream": false
+}
