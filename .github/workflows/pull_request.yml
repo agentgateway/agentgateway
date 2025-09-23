@@ -37,20 +37,11 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: 23
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: ${{ matrix.target }}
+    - uses: Swatinem/rust-cache@v2
 
     - name: Build UI
       run: |
@@ -74,15 +65,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Install jq on Windows
       if: runner.os == 'Windows'
       run: choco install jq -y
@@ -91,6 +73,7 @@ jobs:
       run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
     - name: Add Go bin to PATH
       shell: bash
       run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
@@ -107,17 +90,9 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: 23
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
     - name: Add Go bin to PATH
       run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
     - name: Generation
