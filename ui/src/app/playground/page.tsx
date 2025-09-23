@@ -902,7 +902,7 @@ export default function PlaygroundPage() {
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Test Console</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Playground</h1>
         <p className="text-muted-foreground mt-1">Test your configured routes and backends</p>
       </div>
 
