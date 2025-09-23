@@ -275,6 +275,14 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.transformations.response.set`||
 |`binds[].listeners[].routes[].policies.transformations.response.remove`||
 |`binds[].listeners[].routes[].policies.transformations.response.body`||
+|`binds[].listeners[].routes[].policies.csrf`|Handle CSRF protection by validating request origins against configured allowed origins.|
+|`binds[].listeners[].routes[].policies.csrf.additionalOrigins`|Additional origins that are allowed for CSRF validation|
+|`binds[].listeners[].routes[].policies.csrf.additionalOrigins[].exact`||
+|`binds[].listeners[].routes[].policies.csrf.additionalOrigins[].prefix`||
+|`binds[].listeners[].routes[].policies.csrf.additionalOrigins[].suffix`||
+|`binds[].listeners[].routes[].policies.csrf.additionalOrigins[].contains`||
+|`binds[].listeners[].routes[].policies.csrf.additionalOrigins[].safeRegex`||
+|`binds[].listeners[].routes[].policies.csrf.additionalOrigins[].ignoreCase`||
 |`binds[].listeners[].routes[].policies.timeout`|Timeout requests that exceed the configured duration.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`||
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`||
@@ -759,6 +767,14 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.transformations.response.set`||
 |`policies[].policy.transformations.response.remove`||
 |`policies[].policy.transformations.response.body`||
+|`policies[].policy.csrf`|Handle CSRF protection by validating request origins against configured allowed origins.|
+|`policies[].policy.csrf.additionalOrigins`|Additional origins that are allowed for CSRF validation|
+|`policies[].policy.csrf.additionalOrigins[].exact`||
+|`policies[].policy.csrf.additionalOrigins[].prefix`||
+|`policies[].policy.csrf.additionalOrigins[].suffix`||
+|`policies[].policy.csrf.additionalOrigins[].contains`||
+|`policies[].policy.csrf.additionalOrigins[].safeRegex`||
+|`policies[].policy.csrf.additionalOrigins[].ignoreCase`||
 |`policies[].policy.timeout`|Timeout requests that exceed the configured duration.|
 |`policies[].policy.timeout.requestTimeout`||
 |`policies[].policy.timeout.backendRequestTimeout`||

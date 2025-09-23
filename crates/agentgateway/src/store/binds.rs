@@ -88,6 +88,7 @@ pub struct RoutePolicies {
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
 	pub llm: Option<Arc<llm::Policy>>,
+	pub csrf: Option<http::csrf::Csrf>,
 }
 
 impl RoutePolicies {
@@ -231,6 +232,7 @@ impl Store {
 			transformation: None,
 			authorization: None,
 			llm: None,
+			csrf: None,
 		};
 		for rule in rules {
 			match &rule {
@@ -257,6 +259,9 @@ impl Store {
 				},
 				Policy::AI(p) => {
 					pol.llm.get_or_insert_with(|| p.clone());
+				},
+				Policy::Csrf(p) => {
+					pol.csrf.get_or_insert_with(|| p.clone());
 				},
 				_ => {}, // others are not route policies
 			}

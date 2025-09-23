@@ -2438,6 +2438,62 @@
                             "additionalProperties": false,
                             "default": null
                           },
+                          "csrf": {
+                            "description": "Handle CSRF protection by validating request origins against configured allowed origins.",
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "additionalOrigins": {
+                                "description": "Additional origins that are allowed for CSRF validation",
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "exact": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "prefix": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "suffix": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "contains": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "safeRegex": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "ignoreCase": {
+                                      "type": "boolean",
+                                      "default": false
+                                    }
+                                  },
+                                  "additionalProperties": false
+                                },
+                                "default": []
+                              }
+                            },
+                            "additionalProperties": false,
+                            "default": null
+                          },
                           "timeout": {
                             "description": "Timeout requests that exceed the configured duration.",
                             "type": [
@@ -6922,6 +6978,62 @@
                       }
                     },
                     "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false,
+                "default": null
+              },
+              "csrf": {
+                "description": "Handle CSRF protection by validating request origins against configured allowed origins.",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "additionalOrigins": {
+                    "description": "Additional origins that are allowed for CSRF validation",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "exact": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "prefix": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "suffix": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "contains": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "safeRegex": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "ignoreCase": {
+                          "type": "boolean",
+                          "default": false
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "default": []
                   }
                 },
                 "additionalProperties": false,

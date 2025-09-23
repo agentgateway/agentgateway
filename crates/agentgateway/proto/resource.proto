@@ -521,6 +521,26 @@ message PolicySpec {
     string expression = 1;
   }
 
+  // String matcher for CSRF additional origins
+  message StringMatcher {
+    bool ignore_case = 6;
+
+    oneof match_pattern {
+      string exact = 1;
+      string prefix = 2;
+      string suffix = 3;
+      string safe_regex = 4;
+      string contains = 7;
+    }
+  }
+
+  // Cross-Site Request Forgery (CSRF) policy configuration.
+  message CSRF {
+    // Additional origins that are allowed for CSRF validation beyond the same-origin policy.
+    // If a request's origin header matches any of these matchers, the request will be allowed.
+    repeated StringMatcher additional_origins = 1;
+  }
+
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;
@@ -534,6 +554,7 @@ message PolicySpec {
     JWT jwt = 10;
     TransformationPolicy transformation = 11;
     RemoteRateLimit remote_rate_limit = 12;
+    CSRF csrf = 13;
   }
 }
 
