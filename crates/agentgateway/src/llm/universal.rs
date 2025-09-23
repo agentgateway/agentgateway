@@ -379,45 +379,6 @@ pub struct Request {
 	pub functions: Option<Vec<ChatCompletionFunctions>>,
 }
 
-impl From<Request> for CreateChatCompletionRequest {
-	fn from(req: Request) -> Self {
-		#[allow(deprecated)]
-		CreateChatCompletionRequest {
-			messages: req.messages,
-			model: req.model.unwrap_or_default(),
-			store: req.store,
-			reasoning_effort: req.reasoning_effort,
-			metadata: req.metadata,
-			frequency_penalty: req.frequency_penalty,
-			logit_bias: req.logit_bias,
-			logprobs: req.logprobs,
-			top_logprobs: req.top_logprobs,
-			max_tokens: req.max_tokens,
-			max_completion_tokens: req.max_completion_tokens,
-			n: req.n,
-			modalities: req.modalities,
-			prediction: req.prediction,
-			audio: req.audio,
-			presence_penalty: req.presence_penalty,
-			response_format: req.response_format,
-			seed: req.seed,
-			service_tier: req.service_tier,
-			stop: req.stop,
-			stream: req.stream,
-			stream_options: req.stream_options,
-			temperature: req.temperature,
-			top_p: req.top_p,
-			tools: req.tools,
-			tool_choice: req.tool_choice,
-			parallel_tool_calls: req.parallel_tool_calls,
-			user: req.user,
-			web_search_options: req.web_search_options,
-			function_call: req.function_call,
-			functions: req.functions,
-		}
-	}
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ChatCompletionErrorResponse {
 	pub event_id: Option<String>,
