@@ -575,6 +575,10 @@ struct FilterOrPolicy {
 	)]
 	transformations: Option<crate::http::transformation_cel::Transformation>,
 
+	/// Handle CSRF protection by validating request origins against configured allowed origins.
+	#[serde(default)]
+	csrf: Option<http::csrf::Csrf>,
+
 	// TrafficPolicy
 	/// Timeout requests that exceed the configured duration.
 	#[serde(default)]
@@ -863,6 +867,7 @@ async fn split_policies(
 		remote_rate_limit,
 		jwt_auth,
 		transformations,
+		csrf,
 		ext_authz,
 		timeout,
 		retry,
@@ -927,6 +932,9 @@ async fn split_policies(
 	}
 	if let Some(p) = transformations {
 		route_policies.push(Policy::Transformation(p));
+	}
+	if let Some(p) = csrf {
+		route_policies.push(Policy::Csrf(p))
 	}
 	if let Some(p) = authorization {
 		route_policies.push(Policy::Authorization(p))
