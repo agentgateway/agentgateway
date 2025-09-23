@@ -1,0 +1,51 @@
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_018XasA6jgabsibaUtstx4bg","type":"message","role":"assistant","model":"claude-opus-4-1-20250805","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":47,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":4,"service_tier":"standard"}}      }
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}       }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"The user is"}              }
+
+event: ping
+data: {"type": "ping"}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" asking me about the weather in"}       }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" San Francisco. However, I don"}        }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"d suggest how they can get current weather information."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"EsgDCkYIBxgCKkDIY0kwFva57N6iFPjhIgYy221Ub+EFYZWV+OTmoLv3y/bbXg5rjd6MgPsrwJKf75dB+6WUHs2F/epN1HbNrR68EgznKMtCqednHsUIeZcaDDK1y0Z+c/3JokR/uCIw16faEoFv4stNb8SgXMiRRJECbRtkS86bv2cn9Fv75SOv8/DFTFt1+QRtPLsTRwTIKq8CFUnvffH/J0Ei3Pc2oaWuLuPA9eSAm4I89gEge/Et3d9f9wdXDy5Y/OztcD9S04lC7H/3iOgUJOMGQGqEV+k87Sv2fa+cEaNjjCouz4odDIB/e/+pR5vYPltOj/bdlf1RNHT7KMnCEc/rGDJ9aY2JZXrbMmA2i+SJN4WoAQ+86D2KDO3NWwFT3V7d2YOkqN/nX6ehZnts6pl6/ABi2EH0qH6B8tWBccP2FcaUZXFoYpQbhDpN++eYQp8m9+ehqEf/G66s30Y5bjwW2qwW56GzGx7nt04n8cxNLL/5SpeTJoUu4jgYSx4ae7AA9xpbnRDNO6xjKou4TnUnLcOBvszoi+RmjJMQ/fWquBOTFjdsrg6CGTz8ewgZSwcnnrU73G2XCXOgnOl7OF4t50bL87hOGAE="}          }
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0        }
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}        }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"I don't have access to real"}     }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\" in your browser\n\nIs there something"}       }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" specific about San Francisco's climate patterns"}             }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" you'd like to know more about?"}        }
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1            }
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":47,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":264}           }
+
+event: message_stop
+data: {"type":"message_stop"          }
+

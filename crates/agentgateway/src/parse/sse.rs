@@ -38,7 +38,7 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 		// Pass through [DONE] events unchanged
 		if data.as_ref() == b"[DONE]" {
 			return Some(Frame::Event(Event::<Bytes> {
-				data: Bytes::copy_from_slice(b"[DONE]"),
+				data: Bytes::from_static(b"[DONE]"),
 				name: std::borrow::Cow::Borrowed(""),
 				id: None,
 			}));

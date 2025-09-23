@@ -3,7 +3,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-
+use http_body_util::BodyExt;
 use super::*;
 
 fn test_response<T: DeserializeOwned>(
@@ -51,7 +51,7 @@ async fn test_streaming(
 	let body = Body::from(provider.clone());
 	let log = AsyncLog::default();
 	let mut resp = xlate(body, log).expect("failed to translate stream");
-	let resp_bytes = http::inspect_body(&mut resp).await.unwrap();
+	let resp_bytes = resp.collect().await.unwrap().to_bytes();
 	let resp_str = std::str::from_utf8(&resp_bytes).unwrap();
 
 	insta::with_settings!({
@@ -60,6 +60,9 @@ async fn test_streaming(
 			omit_expression => true,
 			prepend_module_to_snapshot => false,
 			snapshot_path => "tests",
+			filters => vec![
+				("\"created\":[0-9]*","\"created\":123")
+			]
 	}, {
 			 insta::assert_snapshot!(test_name, resp_str);
 	});
@@ -147,6 +150,7 @@ async fn test_anthropic() {
 
 	let stream_response = |i, log| Ok(anthropic::translate_stream(i, log));
 	test_streaming("response_stream-anthropic_basic.json", stream_response).await;
+	test_streaming("response_stream-anthropic_thinking.json", stream_response).await;
 
 	let request = |i| Ok(anthropic::translate_request(i));
 	for r in ALL_REQUESTS {

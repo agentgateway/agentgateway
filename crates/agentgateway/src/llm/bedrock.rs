@@ -374,24 +374,32 @@ pub(super) fn translate_stream(
 						r.first_token = Some(Instant::now());
 					});
 				}
-				match d.delta {
-					Some(ContentBlockDelta::Text(s)) => {
-						let choice = universal::ChatChoiceStream {
-							index: 0,
-							logprobs: None,
-							delta: universal::StreamResponseDelta {
-								role: None,
-								content: Some(s),
-								refusal: None,
-								#[allow(deprecated)]
-								function_call: None,
-								tool_calls: None,
-							},
-							finish_reason: None,
-						};
-						mk(vec![choice], None)
-					},
-					_ => None,
+				let delta = d.delta.map(|delta| {
+					let mut dr = universal::StreamResponseDelta::default();
+					match delta {
+						ContentBlockDelta::ReasoningContent(types::ReasoningContentBlockDelta::Text(t)) => {
+							dr.reasoning_content = Some(t);
+						},
+						// TODO
+						ContentBlockDelta::ReasoningContent(_) => {},
+						ContentBlockDelta::Text(t) => {
+							dr.content = Some(t);
+						},
+						// TODO
+						ContentBlockDelta::ToolUse(_) => {},
+					};
+					dr
+				});
+				if let Some(delta) = delta {
+					let choice = universal::ChatChoiceStream {
+						index: 0,
+						logprobs: None,
+						delta,
+						finish_reason: None,
+					};
+					mk(vec![choice], None)
+				} else {
+					None
 				}
 			},
 			ConverseStreamOutput::ContentBlockStart(_) => {
@@ -417,6 +425,7 @@ pub(super) fn translate_stream(
 						#[allow(deprecated)]
 						function_call: None,
 						tool_calls: None,
+						reasoning_content: None,
 					},
 					finish_reason: None,
 				};
@@ -429,14 +438,7 @@ pub(super) fn translate_stream(
 				let choice = universal::ChatChoiceStream {
 					index: 0,
 					logprobs: None,
-					delta: universal::StreamResponseDelta {
-						role: None,
-						content: None,
-						refusal: None,
-						#[allow(deprecated)]
-						function_call: None,
-						tool_calls: None,
-					},
+					delta: universal::StreamResponseDelta::default(),
 					finish_reason,
 				};
 				mk(vec![choice], None)
@@ -468,9 +470,9 @@ pub(super) fn translate_stream(
 }
 
 pub(super) mod types {
-	use std::collections::HashMap;
-
+	use bytes::Bytes;
 	use serde::{Deserialize, Serialize};
+	use std::collections::HashMap;
 
 	#[derive(Copy, Clone, Deserialize, Serialize, Debug, Default)]
 	#[serde(rename_all = "camelCase")]
@@ -902,9 +904,25 @@ pub(super) mod types {
 	#[derive(Clone, Debug, Deserialize)]
 	#[serde(rename_all = "camelCase")]
 	pub enum ContentBlockDelta {
-		/// The content text.
+		ReasoningContent(ReasoningContentBlockDelta),
 		Text(String),
-		// TODO: tool use, reasoning
+		ToolUse(ToolUseBlockDelta),
+	}
+
+	#[derive(Clone, Debug, Deserialize)]
+	#[serde(rename_all = "camelCase")]
+	pub struct ToolUseBlockDelta {
+		pub input: String,
+	}
+
+	#[derive(Clone, Debug, Deserialize)]
+	#[serde(rename_all = "camelCase")]
+	pub enum ReasoningContentBlockDelta {
+		RedactedContent(Bytes),
+		Signature(String),
+		Text(String),
+		#[non_exhaustive]
+		Unknown,
 	}
 
 	#[derive(Clone, Debug, Deserialize)]

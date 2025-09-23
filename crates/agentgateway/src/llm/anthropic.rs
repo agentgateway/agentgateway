@@ -305,18 +305,20 @@ pub(super) fn translate_stream(b: Body, log: AsyncLog<LLMResponse>) -> Body {
 						r.first_token = Some(Instant::now());
 					});
 				}
-				let ContentBlockDelta::TextDelta { text } = delta;
+				let mut dr = universal::StreamResponseDelta::default();
+				match delta {
+					ContentBlockDelta::TextDelta { text } => {
+						dr.content = Some(text);
+					},
+					ContentBlockDelta::ThinkingDelta { thinking } => dr.reasoning_content = Some(thinking),
+					// TODO
+					ContentBlockDelta::InputJsonDelta { .. } => {},
+					ContentBlockDelta::SignatureDelta { .. } => {},
+				};
 				let choice = universal::ChatChoiceStream {
 					index: 0,
 					logprobs: None,
-					delta: universal::StreamResponseDelta {
-						role: None,
-						content: Some(text),
-						refusal: None,
-						#[allow(deprecated)]
-						function_call: None,
-						tool_calls: None,
-					},
+					delta: dr,
 					finish_reason: None,
 				};
 				mk(vec![choice], None)
@@ -560,6 +562,9 @@ pub(super) mod types {
 	#[serde(rename_all = "snake_case", tag = "type")]
 	pub enum ContentBlockDelta {
 		TextDelta { text: String },
+		InputJsonDelta { partial_json: String },
+		ThinkingDelta { thinking: String },
+		SignatureDelta { signature: String },
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]

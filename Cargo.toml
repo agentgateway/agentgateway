@@ -86,7 +86,7 @@ hyper-util = { version = "0.1", features = ["full"] }
 hyper-util-fork = { path = "crates/hyper-util-fork", features = ["full"] }
 include_dir = "0.7"
 indexmap = { version = "2.9", features = ["serde"] }
-insta = { version = "1.38", features = ["json", "redactions"] }
+insta = { version = "1.38", features = ["json", "redactions", "filters"] }
 ipnet = { version = "2.11", features = ["serde"] }
 itertools = "0.14"
 jsonwebtoken = "9.3"

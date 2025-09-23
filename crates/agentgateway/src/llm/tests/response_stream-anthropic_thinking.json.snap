@@ -1,0 +1,33 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response_stream-anthropic_thinking.json
+---
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"The user is"}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":null,"reasoning_content":" asking me about the weather in"}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":null,"reasoning_content":" San Francisco. However, I don"}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"d suggest how they can get current weather information."}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":null}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":"I don't have access to real"}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":"\" in your browser\n\nIs there something"}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":" specific about San Francisco's climate patterns"}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":" you'd like to know more about?"}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":47,"completion_tokens":264,"total_tokens":311}}
