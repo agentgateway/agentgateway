@@ -45,7 +45,7 @@ async fn test_streaming(
 	let test_dir = Path::new("src/llm/tests");
 
 	// Read input JSON
-	let input_path = test_dir.join(test_name.to_string());
+	let input_path = test_dir.join(test_name);
 	let provider =
 		&fs::read(&input_path).unwrap_or_else(|_| panic!("{test_name}: Failed to read input file"));
 	let body = Body::from(provider.clone());
