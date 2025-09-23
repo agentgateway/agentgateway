@@ -560,6 +560,7 @@ pub(super) mod types {
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 	#[serde(rename_all = "snake_case", tag = "type")]
+	#[allow(clippy::enum_variant_names)]
 	pub enum ContentBlockDelta {
 		TextDelta { text: String },
 		InputJsonDelta { partial_json: String },

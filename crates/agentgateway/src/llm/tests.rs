@@ -1,10 +1,10 @@
+use super::*;
 use agent_core::strng;
+use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use http_body_util::BodyExt;
-use super::*;
 
 fn test_response<T: DeserializeOwned>(
 	test_name: &str,

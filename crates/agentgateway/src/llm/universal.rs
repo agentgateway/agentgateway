@@ -8,8 +8,8 @@ use std::collections::HashMap;
 pub use async_openai::types::ChatCompletionFunctions;
 use async_openai::types::{
 	ChatChoiceLogprobs, ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
-	ChatCompletionResponseMessageAudio, CompletionUsage,
-	FunctionCallStream, ServiceTierResponse, Stop,
+	ChatCompletionResponseMessageAudio, CompletionUsage, FunctionCallStream, ServiceTierResponse,
+	Stop,
 };
 pub use async_openai::types::{
 	ChatCompletionAudio, ChatCompletionFunctionCall,
@@ -27,8 +27,7 @@ pub use async_openai::types::{
 	ChatCompletionRequestToolMessageContent as RequestToolMessageContent,
 	ChatCompletionRequestUserMessage as RequestUserMessage,
 	ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
-	ChatCompletionStreamOptions as StreamOptions,
-	 ChatCompletionTool,
+	ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool,
 	ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 	ChatCompletionToolType as ToolType, CompletionUsage as Usage, CreateChatCompletionRequest,
 	FinishReason, FunctionCall, PredictionContent, ReasoningEffort, ResponseFormat, Role,
@@ -129,7 +128,11 @@ pub struct StreamResponseDelta {
 
 	/// Agentgateway: added reasoning_content
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub reasoning_content: Option<String>
+	pub reasoning_content: Option<String>,
+
+	/// Agentgateway: add opaque passthrough for fields like reasoning, etc that we do not support
+	#[serde(flatten)]
+	pub extra: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]

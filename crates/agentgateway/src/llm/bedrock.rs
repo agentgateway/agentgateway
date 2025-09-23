@@ -420,12 +420,7 @@ pub(super) fn translate_stream(
 							types::Role::Assistant => universal::Role::Assistant,
 							types::Role::User => universal::Role::User,
 						}),
-						content: None,
-						refusal: None,
-						#[allow(deprecated)]
-						function_call: None,
-						tool_calls: None,
-						reasoning_content: None,
+						..Default::default()
 					},
 					finish_reason: None,
 				};
@@ -906,20 +901,21 @@ pub(super) mod types {
 	pub enum ContentBlockDelta {
 		ReasoningContent(ReasoningContentBlockDelta),
 		Text(String),
-		ToolUse(ToolUseBlockDelta),
+		ToolUse(#[allow(unused)] ToolUseBlockDelta),
 	}
 
 	#[derive(Clone, Debug, Deserialize)]
 	#[serde(rename_all = "camelCase")]
 	pub struct ToolUseBlockDelta {
+		#[allow(unused)]
 		pub input: String,
 	}
 
 	#[derive(Clone, Debug, Deserialize)]
 	#[serde(rename_all = "camelCase")]
 	pub enum ReasoningContentBlockDelta {
-		RedactedContent(Bytes),
-		Signature(String),
+		RedactedContent(#[allow(unused)] Bytes),
+		Signature(#[allow(unused)] String),
 		Text(String),
 		#[non_exhaustive]
 		Unknown,
