@@ -104,29 +104,3 @@ jobs:
         cd ui
         npm ci
         npm run lint
-
-  docker:
-    strategy:
-      matrix:
-        os:
-        - ubuntu-latest
-        - ubuntu-22.04-arm
-    runs-on: ${{ matrix.os }}
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: Build
-      env:
-        DOCKER_BUILDER: "docker buildx"
-        DOCKER_BUILD_ARGS: "--cache-from type=registry,ref=ghcr.io/agentgateway/agentgateway:buildcache --build-arg PROFILE=quick-release"
-      run: make docker
-  # docker-windows: # TODO: Move windows builds to release.yaml since it takes 40min
-  #   runs-on: windows-2025 # So we get docker automatically
-  #   steps:
-  #   - uses: actions/checkout@v4
-  #   - name: Build
-  #     env:
-  #       DOCKER_BUILDER: "docker"
-  #     run: make docker
