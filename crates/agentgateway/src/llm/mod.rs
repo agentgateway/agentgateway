@@ -531,7 +531,7 @@ impl AIProvider {
 	) -> Result<Response, AIError> {
 		let model = req.request_model.clone();
 		// Store an empty response, as we stream in info we will parse into it
-		let llmresp = llm::LLMResponse {
+		let llmresp = LLMResponse {
 			request: req,
 			input_tokens_from_response: Default::default(),
 			output_tokens: Default::default(),
