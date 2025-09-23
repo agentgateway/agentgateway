@@ -294,6 +294,8 @@ pub(super) fn translate_response(
 		function_call: None,
 		refusal: None,
 		audio: None,
+		extra: None,
+		reasoning_content: None,
 	};
 	let finish_reason = Some(translate_stop_reason(&resp.stop_reason));
 	// Only one choice for Bedrock

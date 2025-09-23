@@ -1,0 +1,26 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "bedrock: request_reasoning"
+info:
+  model: gpt-3.5-turbo
+  messages:
+    - role: user
+      content: How is the current weather in Columbus?
+  reasoning_effort: medium
+---
+{
+  "modelId": "gpt-3.5-turbo",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "How is the current weather in Columbus?"
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 4096
+  }
+}

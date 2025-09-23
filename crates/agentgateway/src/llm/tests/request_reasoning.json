@@ -1,0 +1,10 @@
+{
+  "model": "gpt-3.5-turbo",
+  "messages": [
+    {
+      "role": "user",
+      "content": "How is the current weather in Columbus?"
+    }
+  ],
+  "reasoning_effort": "medium"
+}

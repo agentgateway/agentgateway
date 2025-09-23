@@ -70,7 +70,19 @@ fn test_request<T: Serialize>(
 	});
 }
 
-const ALL_REQUESTS: &[&str] = &["request_basic", "request_full", "request_tool-call"];
+const ALL_REQUESTS: &[&str] = &[
+	"request_basic",
+	"request_full",
+	"request_tool-call",
+	"request_reasoning",
+];
+
+#[test]
+fn test_openai() {
+	let response = |i| Ok(i);
+	test_response::<universal::Response>("response_basic", response);
+	test_response::<universal::Response>("response_reasoning_openrouter", response);
+}
 
 #[test]
 fn test_bedrock() {
@@ -94,6 +106,7 @@ fn test_anthropic() {
 	let response = |i| Ok(anthropic::translate_response(i));
 	test_response::<anthropic::types::MessagesResponse>("response_anthropic_basic", response);
 	test_response::<anthropic::types::MessagesResponse>("response_anthropic_tool", response);
+	test_response::<anthropic::types::MessagesResponse>("response_anthropic_thinking", response);
 
 	let request = |i| Ok(anthropic::translate_request(i));
 	for r in ALL_REQUESTS {

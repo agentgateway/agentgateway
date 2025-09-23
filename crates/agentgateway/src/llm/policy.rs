@@ -1,5 +1,5 @@
 use ::http::HeaderMap;
-use async_openai::types::{ChatCompletionRequestMessage, CreateChatCompletionResponse};
+use async_openai::types::ChatCompletionRequestMessage;
 use bytes::Bytes;
 
 use crate::http::auth::{BackendAuth, SimpleBackendAuth};
@@ -306,7 +306,7 @@ impl Policy {
 
 	pub async fn apply_response_prompt_guard(
 		client: &client::Client,
-		resp: &mut CreateChatCompletionResponse,
+		resp: &mut universal::Response,
 		http_headers: &HeaderMap,
 		g: &Option<ResponseGuard>,
 	) -> anyhow::Result<Option<Response>> {
@@ -505,10 +505,11 @@ fn default_body() -> Bytes {
 mod webhook {
 	use ::http::header::CONTENT_TYPE;
 	use ::http::{HeaderMap, HeaderValue, header};
-	use async_openai::types::CreateChatCompletionResponse;
+
 	use serde::{Deserialize, Serialize};
 
 	use crate::client::Client;
+	use crate::llm::universal;
 	use crate::llm::universal::Request;
 	use crate::types::agent::Target;
 	use crate::*;
@@ -662,7 +663,7 @@ mod webhook {
 	fn build_request_for_response(
 		target: &Target,
 		http_headers: &HeaderMap,
-		resp: &CreateChatCompletionResponse,
+		resp: &universal::Response,
 	) -> anyhow::Result<crate::http::Request> {
 		let body = GuardrailsResponseRequest {
 			body: ResponseChoices {
@@ -728,7 +729,7 @@ mod webhook {
 		client: &Client,
 		target: &Target,
 		http_headers: &HeaderMap,
-		resp: &CreateChatCompletionResponse,
+		resp: &universal::Response,
 	) -> anyhow::Result<GuardrailsResponseResponse> {
 		let whr = build_request_for_response(target, http_headers, resp)?;
 		let res = client

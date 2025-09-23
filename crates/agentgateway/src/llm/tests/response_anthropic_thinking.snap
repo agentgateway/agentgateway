@@ -1,0 +1,48 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response_anthropic_thinking.json
+info:
+  id: msg_01BE9GBzjs95TqdG8FeUanUn
+  type: message
+  role: assistant
+  model: claude-opus-4-1-20250805
+  content:
+    - type: thinking
+      thinking: The user is asking me about the current weather in San Francisco
+      signature: Es8DCkYI
+    - type: text
+      text: "I don't have access to real-time weather data"
+  stop_reason: end_turn
+  stop_sequence: ~
+  usage:
+    input_tokens: 47
+    cache_creation_input_tokens: 0
+    cache_read_input_tokens: 0
+    cache_creation:
+      ephemeral_5m_input_tokens: 0
+      ephemeral_1h_input_tokens: 0
+    output_tokens: 251
+    service_tier: standard
+---
+{
+  "id": "[id]",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "content": "I don't have access to real-time weather data",
+        "role": "assistant",
+        "reasoning_content": "The user is asking me about the current weather in San Francisco"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "created": "[date]",
+  "model": "claude-opus-4-1-20250805",
+  "object": "chat.completion",
+  "usage": {
+    "prompt_tokens": 47,
+    "completion_tokens": 251,
+    "total_tokens": 298
+  }
+}

@@ -1,6 +1,6 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use async_openai::types::FinishReason;
+use async_openai::types::{FinishReason, ReasoningEffort};
 use bytes::Bytes;
 use chrono;
 
@@ -126,8 +126,8 @@ impl Provider {
 						mk(
 							vec![],
 							Some(universal::Usage {
-								prompt_tokens: usage.output_tokens as u32,
-								completion_tokens: input_tokens as u32,
+								prompt_tokens: input_tokens as u32,
+								completion_tokens: usage.output_tokens as u32,
 								total_tokens: (input_tokens + usage.output_tokens) as u32,
 
 								prompt_tokens_details: None,
@@ -172,6 +172,7 @@ pub(super) fn translate_response(resp: MessagesResponse) -> universal::Response 
 	// Convert Anthropic content blocks to OpenAI message content
 	let mut tool_calls: Vec<universal::MessageToolCall> = Vec::new();
 	let mut content = None;
+	let mut reasoning_content = None;
 	for block in resp.content {
 		match block {
 			types::ContentBlock::Text { text } => content = Some(text.clone()),
@@ -193,6 +194,11 @@ pub(super) fn translate_response(resp: MessagesResponse) -> universal::Response 
 				// Should be on the request path, not the response path
 				continue;
 			},
+			// For now we ignore Redacted and signature think through a better approach as this may be needed
+			ContentBlock::Thinking { thinking, .. } => {
+				reasoning_content = Some(thinking);
+			},
+			ContentBlock::RedactedThinking { .. } => {},
 		}
 	}
 	let message = universal::ResponseMessage {
@@ -207,6 +213,8 @@ pub(super) fn translate_response(resp: MessagesResponse) -> universal::Response 
 		function_call: None,
 		refusal: None,
 		audio: None,
+		reasoning_content,
+		extra: None,
 	};
 	let finish_reason = resp.stop_reason.as_ref().map(translate_stop_reason);
 	// Only one choice for anthropic
@@ -308,6 +316,20 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 		Some(universal::ToolChoiceOption::None) => Some(types::ToolChoice::None),
 		None => None,
 	};
+	let thinking = match &req.reasoning_effort {
+		// Arbitrary constants come from LiteLLM defaults.
+		// OpenRouter uses percentages which may be more appropriate though (https://openrouter.ai/docs/use-cases/reasoning-tokens#reasoning-effort-level)
+		Some(ReasoningEffort::Low) => Some(types::ThinkingInput::Enabled {
+			budget_tokens: 1024,
+		}),
+		Some(ReasoningEffort::Medium) => Some(types::ThinkingInput::Enabled {
+			budget_tokens: 2048,
+		}),
+		Some(ReasoningEffort::High) => Some(types::ThinkingInput::Enabled {
+			budget_tokens: 4096,
+		}),
+		None => None,
+	};
 	types::MessagesRequest {
 		messages,
 		system,
@@ -321,6 +343,7 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 		tools,
 		tool_choice,
 		metadata,
+		thinking,
 	}
 }
 
@@ -369,6 +392,14 @@ pub(super) mod types {
 		ToolResult {
 			tool_use_id: String,
 			content: String,
+		},
+		Thinking {
+			thinking: String,
+			signature: String,
+		},
+		#[serde(rename = "redacted_thinking")]
+		RedactedThinking {
+			data: String,
 		},
 	}
 
@@ -425,6 +456,16 @@ pub(super) mod types {
 		/// Request metadata
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub metadata: Option<Metadata>,
+
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub thinking: Option<ThinkingInput>,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	#[serde(rename_all = "snake_case", tag = "type")]
+	pub enum ThinkingInput {
+		Enabled { budget_tokens: u64 },
+		Disabled {},
 	}
 
 	/// Response body for the Messages API.

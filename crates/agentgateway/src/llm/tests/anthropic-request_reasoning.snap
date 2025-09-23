@@ -1,0 +1,29 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "anthropic: request_reasoning"
+info:
+  model: gpt-3.5-turbo
+  messages:
+    - role: user
+      content: How is the current weather in Columbus?
+  reasoning_effort: medium
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "How is the current weather in Columbus?"
+        }
+      ]
+    }
+  ],
+  "model": "gpt-3.5-turbo",
+  "max_tokens": 4096,
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 2048
+  }
+}
