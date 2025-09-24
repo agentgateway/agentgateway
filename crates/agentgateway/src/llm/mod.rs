@@ -131,10 +131,17 @@ trait Provider {
 pub struct LLMRequest {
 	/// Input tokens derived by tokenizing the request. Not always enabled
 	pub input_tokens: Option<u64>,
+	pub input_format: InputFormat,
 	pub request_model: Strng,
 	pub provider: Strng,
 	pub streaming: bool,
-	pub params: llm::LLMRequestParams,
+	pub params: LLMRequestParams,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum InputFormat {
+	Completions,
+	Messages,
 }
 
 #[derive(Default, Clone, Debug, Serialize)]
@@ -308,7 +315,7 @@ impl AIProvider {
 		}
 	}
 
-	pub async fn process_request(
+	pub async fn process_completions_request(
 		&self,
 		client: &client::Client,
 		policies: Option<&Policy>,
@@ -317,16 +324,72 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		// Buffer the body, max 2mb
-		let (mut parts, body) = req.into_parts();
+		let (parts, body) = req.into_parts();
 		let Ok(bytes) = axum::body::to_bytes(body, 2_097_152).await else {
 			return Err(AIError::RequestTooLarge);
 		};
-		let mut req: universal::Request = if let Some(p) = policies {
+		let req: universal::Request = if let Some(p) = policies {
+			p.unmarshal_request(&bytes)?
+		} else {
+			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
+		};
+		self
+			.process_request(
+				client,
+				policies,
+				InputFormat::Completions,
+				req,
+				parts,
+				tokenize,
+				log,
+			)
+			.await
+	}
+
+	pub async fn process_messages_request(
+		&self,
+		client: &client::Client,
+		policies: Option<&Policy>,
+		req: Request,
+		tokenize: bool,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		// Buffer the body, max 2mb
+		let (parts, body) = req.into_parts();
+		let Ok(bytes) = axum::body::to_bytes(body, 2_097_152).await else {
+			return Err(AIError::RequestTooLarge);
+		};
+		let req: anthropic::types::MessagesRequest = if let Some(p) = policies {
 			p.unmarshal_request(&bytes)?
 		} else {
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
 		};
 
+		let universal_req = anthropic::translate_anthropic_request(req);
+		self
+			.process_request(
+				client,
+				policies,
+				InputFormat::Messages,
+				universal_req,
+				parts,
+				tokenize,
+				log,
+			)
+			.await
+	}
+
+	#[allow(clippy::too_many_arguments)]
+	async fn process_request(
+		&self,
+		client: &client::Client,
+		policies: Option<&Policy>,
+		original_format: InputFormat,
+		mut req: universal::Request,
+		mut parts: ::http::request::Parts,
+		tokenize: bool,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
 		if let Some(p) = policies {
 			p.apply_prompt_enrichment(&mut req);
 			let http_headers = &parts.headers;
@@ -341,7 +404,7 @@ impl AIProvider {
 				return Ok(RequestResult::Rejected(dr));
 			}
 		}
-		let llm_info = self.to_llm_request(&req, tokenize).await?;
+		let llm_info = self.to_llm_request(&req, original_format, tokenize).await?;
 		if let Some(log) = log {
 			let needs_prompt = log.cel.cel_context.with_llm_request(&llm_info);
 			if needs_prompt {
@@ -363,14 +426,14 @@ impl AIProvider {
 				include_usage: true,
 			});
 		}
-		let resp_json = match self {
+		let new_request = match self {
 			AIProvider::OpenAI(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Gemini(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Vertex(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Anthropic(p) => serde_json::to_vec(&p.process_request(req).await?),
 			AIProvider::Bedrock(p) => serde_json::to_vec(&p.process_request(req).await?),
 		};
-		let body = resp_json.map_err(AIError::RequestMarshal)?;
+		let body = new_request.map_err(AIError::RequestMarshal)?;
 		let resp = Body::from(body);
 		parts.headers.remove(header::CONTENT_LENGTH);
 		let req = Request::from_parts(parts, resp);
@@ -399,6 +462,7 @@ impl AIProvider {
 		else {
 			return Err(AIError::RequestTooLarge);
 		};
+
 		// 3 cases: success, error properly handled, and unexpected error we need to synthesize
 		let openai_response = self
 			.process_response_status(&req, parts.status, &bytes)
@@ -419,6 +483,9 @@ impl AIProvider {
 					},
 				})
 			});
+
+		let input_format = req.input_format;
+
 		let (llm_resp, body) = match openai_response {
 			Ok(mut success) => {
 				let llm_resp = LLMResponse {
@@ -455,7 +522,15 @@ impl AIProvider {
 					return Ok(dr);
 				}
 
-				let body = serde_json::to_vec(&success).map_err(AIError::ResponseMarshal)?;
+				let body = match input_format {
+					InputFormat::Completions => {
+						serde_json::to_vec(&success).map_err(AIError::ResponseMarshal)?
+					},
+					InputFormat::Messages => {
+						let final_response = anthropic::translate_anthropic_response(success);
+						serde_json::to_vec(&final_response).map_err(AIError::ResponseMarshal)?
+					},
+				};
 				(llm_resp, body)
 			},
 			Err(err) => {
@@ -622,6 +697,7 @@ impl AIProvider {
 	pub async fn to_llm_request(
 		&self,
 		req: &universal::Request,
+		input_format: InputFormat,
 		tokenize: bool,
 	) -> Result<LLMRequest, AIError> {
 		let input_tokens = if tokenize {
@@ -640,6 +716,7 @@ impl AIProvider {
 		// Pass the original body through
 		let llm = LLMRequest {
 			input_tokens,
+			input_format,
 			request_model: req.model.clone().unwrap_or_default().as_str().into(),
 			provider: self.provider(),
 			streaming: req.stream.unwrap_or_default(),

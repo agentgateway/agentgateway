@@ -9,7 +9,6 @@ pub use async_openai::types::ChatCompletionFunctions;
 use async_openai::types::{
 	ChatChoiceLogprobs, ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
 	ChatCompletionResponseMessageAudio, CompletionUsage, FunctionCallStream, ServiceTierResponse,
-	Stop,
 };
 pub use async_openai::types::{
 	ChatCompletionAudio, ChatCompletionFunctionCall,
@@ -27,11 +26,11 @@ pub use async_openai::types::{
 	ChatCompletionRequestToolMessageContent as RequestToolMessageContent,
 	ChatCompletionRequestUserMessage as RequestUserMessage,
 	ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
-	ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool,
+	ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool, ChatCompletionTool as Tool,
 	ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 	ChatCompletionToolType as ToolType, CompletionUsage as Usage, CreateChatCompletionRequest,
-	FinishReason, FunctionCall, PredictionContent, ReasoningEffort, ResponseFormat, Role,
-	ServiceTier, WebSearchOptions,
+	FinishReason, FunctionCall, FunctionName, FunctionObject, PredictionContent, ReasoningEffort,
+	ResponseFormat, Role, ServiceTier, Stop, WebSearchOptions,
 };
 use serde::{Deserialize, Serialize};
 
@@ -377,6 +376,20 @@ pub struct Request {
 	#[allow(deprecated_in_future)]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub functions: Option<Vec<ChatCompletionFunctions>>,
+
+	/// Agentgateway: vendor specific fields we allow only for internal creation
+	#[serde(flatten, skip_deserializing)]
+	pub vendor_extensions: RequestVendorExtensions,
+}
+
+#[derive(Clone, Debug, Serialize, Default)]
+pub struct RequestVendorExtensions {
+	/// Anthropic
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub top_k: Option<usize>,
+	/// Anthropic
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub thinking_budget_tokens: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

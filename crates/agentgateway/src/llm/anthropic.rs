@@ -1,20 +1,24 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use async_openai::types::{FinishReason, ReasoningEffort};
+use async_openai::types::{
+	ChatCompletionRequestToolMessageContent, ChatCompletionRequestToolMessageContentPart,
+	FinishReason, ReasoningEffort,
+};
 use bytes::Bytes;
 use chrono;
 
 use crate::http::{Body, Response};
 use crate::llm::anthropic::types::{
 	ContentBlock, ContentBlockDelta, MessagesErrorResponse, MessagesRequest, MessagesResponse,
-	MessagesStreamEvent, StopReason,
+	MessagesStreamEvent, StopReason, ThinkingInput, ToolResultContent, ToolResultContentPart,
 };
+use crate::llm::universal::{RequestSystemMessage, RequestVendorExtensions};
 use crate::llm::{AIError, LLMResponse, universal};
 use crate::telemetry::log::AsyncLog;
 use crate::{parse, *};
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+use itertools::Itertools;
+
+#[apply(schema!)]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
@@ -83,9 +87,15 @@ pub(super) fn translate_response(resp: MessagesResponse) -> universal::Response 
 	let mut reasoning_content = None;
 	for block in resp.content {
 		match block {
-			types::ContentBlock::Text { text } => content = Some(text.clone()),
-			types::ContentBlock::Image { .. } => continue, // Skip images in response for now
-			ContentBlock::ToolUse { id, name, input } => {
+			types::ContentBlock::Text(types::ContentTextBlock { text, .. }) => {
+				content = Some(text.clone())
+			},
+			ContentBlock::ToolUse {
+				id, name, input, ..
+			}
+			| ContentBlock::ServerToolUse {
+				id, name, input, ..
+			} => {
 				let Some(args) = serde_json::to_string(&input).ok() else {
 					continue;
 				};
@@ -107,6 +117,12 @@ pub(super) fn translate_response(resp: MessagesResponse) -> universal::Response 
 				reasoning_content = Some(thinking);
 			},
 			ContentBlock::RedactedThinking { .. } => {},
+
+			// not currently supported
+			types::ContentBlock::Image { .. } => continue,
+			ContentBlock::Document(_) => continue,
+			ContentBlock::SearchResult(_) => continue,
+			ContentBlock::Unknown => continue,
 		}
 	}
 	let message = universal::ResponseMessage {
@@ -187,9 +203,11 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 
 			universal::message_text(msg)
 				.map(|s| {
-					vec![types::ContentBlock::Text {
+					vec![types::ContentBlock::Text(types::ContentTextBlock {
 						text: s.to_string(),
-					}]
+						citations: None,
+						cache_control: None,
+					})]
 				})
 				.map(|content| types::Message { role, content })
 		})
@@ -224,23 +242,33 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 		Some(universal::ToolChoiceOption::None) => Some(types::ToolChoice::None),
 		None => None,
 	};
-	let thinking = match &req.reasoning_effort {
-		// Arbitrary constants come from LiteLLM defaults.
-		// OpenRouter uses percentages which may be more appropriate though (https://openrouter.ai/docs/use-cases/reasoning-tokens#reasoning-effort-level)
-		Some(ReasoningEffort::Low) => Some(types::ThinkingInput::Enabled {
-			budget_tokens: 1024,
-		}),
-		Some(ReasoningEffort::Medium) => Some(types::ThinkingInput::Enabled {
-			budget_tokens: 2048,
-		}),
-		Some(ReasoningEffort::High) => Some(types::ThinkingInput::Enabled {
-			budget_tokens: 4096,
-		}),
-		None => None,
+	let thinking = if let Some(budget) = req.vendor_extensions.thinking_budget_tokens {
+		Some(types::ThinkingInput::Enabled {
+			budget_tokens: budget,
+		})
+	} else {
+		match &req.reasoning_effort {
+			// Arbitrary constants come from LiteLLM defaults.
+			// OpenRouter uses percentages which may be more appropriate though (https://openrouter.ai/docs/use-cases/reasoning-tokens#reasoning-effort-level)
+			Some(ReasoningEffort::Low) => Some(types::ThinkingInput::Enabled {
+				budget_tokens: 1024,
+			}),
+			Some(ReasoningEffort::Medium) => Some(types::ThinkingInput::Enabled {
+				budget_tokens: 2048,
+			}),
+			Some(ReasoningEffort::High) => Some(types::ThinkingInput::Enabled {
+				budget_tokens: 4096,
+			}),
+			None => None,
+		}
 	};
 	types::MessagesRequest {
 		messages,
-		system,
+		system: if system.is_empty() {
+			None
+		} else {
+			Some(system)
+		},
 		model: req.model.unwrap_or_default(),
 		max_tokens,
 		stop_sequences,
@@ -352,6 +380,238 @@ pub(super) fn translate_stream(b: Body, log: AsyncLog<LLMResponse>) -> Body {
 	})
 }
 
+pub(super) fn translate_anthropic_response(_req: universal::Response) -> types::MessagesResponse {
+	// TODO: implement this
+	types::MessagesResponse {
+		id: "".to_string(),
+		r#type: "".to_string(),
+		role: Default::default(),
+		content: vec![],
+		model: "".to_string(),
+		stop_reason: None,
+		stop_sequence: None,
+		usage: types::Usage {
+			input_tokens: 0,
+			output_tokens: 0,
+		},
+	}
+}
+pub(super) fn translate_anthropic_request(req: types::MessagesRequest) -> universal::Request {
+	let types::MessagesRequest {
+		messages,
+		system,
+		model,
+		max_tokens,
+		stop_sequences,
+		stream,
+		temperature,
+		top_p,
+		top_k,
+		tools,
+		tool_choice,
+		metadata,
+		thinking,
+	} = req;
+	let mut msgs: Vec<universal::RequestMessage> = Vec::new();
+
+	// Handle the system prompt
+	if let Some(system) = system {
+		msgs.push(universal::RequestMessage::System(
+			RequestSystemMessage::from(system),
+		));
+	}
+
+	// Convert messages from Anthropic to universal format
+	for msg in messages {
+		match msg.role {
+			types::Role::User => {
+				let mut user_text = String::new();
+				for block in msg.content {
+					match block {
+						types::ContentBlock::Text(types::ContentTextBlock { text, .. }) => {
+							if !user_text.is_empty() {
+								user_text.push('\n');
+							}
+							user_text.push_str(&text);
+						},
+						types::ContentBlock::ToolResult {
+							tool_use_id,
+							content,
+							..
+						} => {
+							msgs.push(
+								universal::RequestToolMessage {
+									tool_call_id: tool_use_id,
+									content: match content {
+										ToolResultContent::Text(t) => t.into(),
+										ToolResultContent::Array(parts) => {
+											ChatCompletionRequestToolMessageContent::Array(
+												parts
+													.into_iter()
+													.filter_map(|p| match p {
+														ToolResultContentPart::Text(types::ContentTextBlock {
+															text, ..
+														}) => Some(ChatCompletionRequestToolMessageContentPart::Text(
+															text.into(),
+														)),
+														// Other types are not supported
+														_ => None,
+													})
+													.collect_vec(),
+											)
+										},
+									},
+								}
+								.into(),
+							);
+						},
+						// Image content is not directly supported in universal::Message::User in this form.
+						// This would require a different content format not represented here.
+						types::ContentBlock::Image { .. } => {}, // Image content is not directly supported in universal::Message::User in this form.
+						// This would require a different content format not represented here.
+						// ToolUse blocks are expected from assistants, not users.
+						types::ContentBlock::ServerToolUse { .. } | types::ContentBlock::ToolUse { .. } => {}, // ToolUse blocks are expected from assistants, not users.
+
+						// Other content block types are not expected from the user in a request.
+						_ => {},
+					}
+				}
+				if !user_text.is_empty() {
+					msgs.push(
+						universal::RequestUserMessage {
+							content: user_text.into(),
+							name: None,
+						}
+						.into(),
+					);
+				}
+			},
+			types::Role::Assistant => {
+				let mut assistant_text = None;
+				let mut tool_calls = Vec::new();
+				for block in msg.content {
+					match block {
+						types::ContentBlock::Text(types::ContentTextBlock { text, .. }) => {
+							assistant_text = Some(text);
+						},
+						types::ContentBlock::ToolUse {
+							id, name, input, ..
+						} => {
+							tool_calls.push(universal::MessageToolCall {
+								id,
+								r#type: universal::ToolType::Function,
+								function: universal::FunctionCall {
+									name,
+									// It's assumed that the input is a JSON object that can be stringified.
+									arguments: serde_json::to_string(&input).unwrap_or_default(),
+								},
+							});
+						},
+						ContentBlock::Thinking { .. } => {
+							// TODO
+						},
+						ContentBlock::RedactedThinking { .. } => {
+							// TODO
+						},
+						// Other content block types are not expected from the assistant in a request.
+						_ => {},
+					}
+				}
+				if assistant_text.is_some() || !tool_calls.is_empty() {
+					msgs.push(
+						universal::RequestAssistantMessage {
+							content: assistant_text.map(Into::into),
+							tool_calls: if tool_calls.is_empty() {
+								None
+							} else {
+								Some(tool_calls)
+							},
+							..Default::default()
+						}
+						.into(),
+					);
+				}
+			},
+		}
+	}
+
+	let tools = tools
+		.into_iter()
+		.flat_map(|tools| tools.into_iter())
+		.map(|tool| universal::Tool {
+			r#type: universal::ToolType::Function,
+			function: universal::FunctionObject {
+				name: tool.name,
+				description: tool.description,
+				parameters: Some(tool.input_schema),
+				strict: None,
+			},
+		})
+		.collect_vec();
+	let tool_choice = tool_choice.map(|choice| match choice {
+		types::ToolChoice::Auto => universal::ToolChoiceOption::Auto,
+		types::ToolChoice::Any => universal::ToolChoiceOption::Required,
+		types::ToolChoice::Tool { name } => {
+			universal::ToolChoiceOption::Named(universal::NamedToolChoice {
+				r#type: universal::ToolType::Function,
+				function: universal::FunctionName { name },
+			})
+		},
+		types::ToolChoice::None => universal::ToolChoiceOption::None,
+	});
+
+	universal::Request {
+		model: Some(model),
+		messages: msgs,
+		stream: Some(stream),
+		temperature,
+		top_p,
+		max_completion_tokens: Some(max_tokens as u32),
+		stop: if stop_sequences.is_empty() {
+			None
+		} else {
+			Some(universal::Stop::StringArray(stop_sequences))
+		},
+		tools: if tools.is_empty() { None } else { Some(tools) },
+		tool_choice,
+		parallel_tool_calls: None,
+		user: metadata.and_then(|m| m.fields.get("user_id").cloned()),
+
+		vendor_extensions: RequestVendorExtensions {
+			top_k,
+			thinking_budget_tokens: thinking.and_then(|t| match t {
+				ThinkingInput::Enabled { budget_tokens } => Some(budget_tokens),
+				ThinkingInput::Disabled { .. } => None,
+			}),
+		},
+
+		// The following OpenAI fields are not supported by Anthropic and are set to None:
+		frequency_penalty: None,
+		logit_bias: None,
+		logprobs: None,
+		top_logprobs: None,
+		n: None,
+		modalities: None,
+		prediction: None,
+		audio: None,
+		presence_penalty: None,
+		response_format: None,
+		seed: None,
+		#[allow(deprecated)]
+		function_call: None,
+		#[allow(deprecated)]
+		functions: None,
+		metadata: None,
+		#[allow(deprecated)]
+		max_tokens: None,
+		service_tier: None,
+		web_search_options: None,
+		stream_options: None,
+		store: None,
+		reasoning_effort: None,
+	}
+}
+
 fn translate_stop_reason(resp: &types::StopReason) -> FinishReason {
 	match resp {
 		StopReason::EndTurn => universal::FinishReason::Stop,
@@ -362,9 +622,9 @@ fn translate_stop_reason(resp: &types::StopReason) -> FinishReason {
 	}
 }
 pub(super) mod types {
-	use serde::{Deserialize, Serialize};
-
 	use crate::serdes::is_default;
+	use serde::{Deserialize, Deserializer, Serialize};
+	use serde_json::Value;
 
 	#[derive(Copy, Clone, Deserialize, Serialize, Debug, PartialEq, Eq, Default)]
 	#[serde(rename_all = "snake_case")]
@@ -373,61 +633,168 @@ pub(super) mod types {
 		User,
 		Assistant,
 	}
+	#[derive(Clone, Deserialize, Serialize, Debug)]
+	#[serde(rename_all = "snake_case")]
+	pub struct ContentTextBlock {
+		pub text: String,
 
-	#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub citations: Option<Value>,
+
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
+	}
+
+	#[derive(Clone, Deserialize, Serialize, Debug)]
+	#[serde(rename_all = "snake_case")]
+	pub struct ContentImageBlock {
+		pub source: Value,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
+	}
+
+	#[derive(Clone, Deserialize, Serialize, Debug)]
+	#[serde(rename_all = "snake_case")]
+	pub struct ContentSearchResultBlock {
+		pub content: Vec<Value>,
+		pub source: String,
+		pub title: String,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
+	}
+
+	#[derive(Clone, Deserialize, Serialize, Debug)]
+	#[serde(rename_all = "snake_case")]
+	pub struct ContentDocumentBlock {
+		pub source: Value,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub citations: Option<Value>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub context: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub title: Option<String>,
+	}
+
+	#[derive(Clone, Deserialize, Serialize, Debug)]
 	#[serde(rename_all = "snake_case", tag = "type")]
 	pub enum ContentBlock {
-		Text {
-			text: String,
-		},
-		Image {
-			source: String,
-			media_type: String,
-			data: String,
-		},
-		/// Tool use content
-		#[serde(rename = "tool_use")]
-		ToolUse {
-			id: String,
-			name: String,
-			input: serde_json::Value,
-		},
-		/// Tool result content
-		#[serde(rename = "tool_result")]
-		ToolResult {
-			tool_use_id: String,
-			content: String,
-		},
+		Text(ContentTextBlock),
+		Image(ContentImageBlock),
+		Document(ContentDocumentBlock),
+		SearchResult(ContentSearchResultBlock),
 		Thinking {
 			thinking: String,
 			signature: String,
 		},
-		#[serde(rename = "redacted_thinking")]
 		RedactedThinking {
 			data: String,
 		},
+		/// Tool use content
+		ToolUse {
+			id: String,
+			name: String,
+			input: serde_json::Value,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
+		/// Tool result content
+		ToolResult {
+			tool_use_id: String,
+			content: ToolResultContent,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			is_error: Option<bool>,
+		},
+		ServerToolUse {
+			id: String,
+			name: String,
+			input: serde_json::Value,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
+		// There are LOTs of possible values; since we don't support them all, just allow them without failing
+		#[serde(other)]
+		Unknown,
 	}
 
-	#[derive(Clone, Serialize, Debug, PartialEq, Eq)]
+	#[derive(Debug, Serialize, Deserialize, Clone)]
+	#[serde(untagged)]
+	pub enum ToolResultContent {
+		/// The text contents of the tool message.
+		Text(String),
+		/// An array of content parts with a defined type. For tool messages, only type `text` is supported.
+		Array(Vec<ToolResultContentPart>),
+	}
+
+	#[derive(Debug, Serialize, Deserialize, Clone)]
+	#[serde(tag = "type")]
+	pub enum ToolResultContentPart {
+		Text(ContentTextBlock),
+		Image(ContentImageBlock),
+		Document(ContentDocumentBlock),
+		SearchResult(ContentSearchResultBlock),
+	}
+
+	#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
+	#[serde(rename_all = "snake_case", tag = "type")]
+	pub enum CacheControlEphemeral {
+		Ephemeral {
+			#[serde(default)]
+			#[serde(skip_serializing_if = "Option::is_none")]
+			ttl: Option<String>,
+		},
+	}
+
+	#[derive(Clone, Deserialize, Serialize, Debug)]
 	#[serde(rename_all = "snake_case")]
 	pub struct Message {
 		pub role: Role,
+		#[serde(deserialize_with = "deserialize_content")]
 		pub content: Vec<ContentBlock>,
 	}
 
-	#[derive(Serialize, Default, Debug)]
+	// Custom deserializer that handles both string and array formats
+	fn deserialize_content<'de, D>(deserializer: D) -> Result<Vec<ContentBlock>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		use serde::de::Error;
+		use serde_json::Value;
+
+		let value = Value::deserialize(deserializer)?;
+
+		match value {
+			// If it's a string, wrap it in a Text content block
+			Value::String(text) => Ok(vec![ContentBlock::Text(ContentTextBlock {
+				text,
+				citations: None,
+				cache_control: None,
+			})]),
+			// If it's an array, deserialize normally
+			Value::Array(_) => Vec::<ContentBlock>::deserialize(value).map_err(D::Error::custom),
+			// Reject other types
+			_ => Err(D::Error::custom(
+				"content must be either a string or an array",
+			)),
+		}
+	}
+
+	#[derive(Deserialize, Serialize, Default, Debug)]
 	pub struct MessagesRequest {
 		/// The User/Assistent prompts.
 		pub messages: Vec<Message>,
 		/// The System prompt.
-		#[serde(skip_serializing_if = "String::is_empty")]
-		pub system: String,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub system: Option<String>,
 		/// The model to use.
 		pub model: String,
 		/// The maximum number of tokens to generate before stopping.
 		pub max_tokens: usize,
 		/// The stop sequences to use.
-		#[serde(skip_serializing_if = "Vec::is_empty")]
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
 		pub stop_sequences: Vec<String>,
 		/// Whether to incrementally stream the response.
 		#[serde(default, skip_serializing_if = "is_default")]
@@ -474,7 +841,7 @@ pub(super) mod types {
 	}
 
 	/// Response body for the Messages API.
-	#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+	#[derive(Debug, Serialize, Deserialize, Clone)]
 	pub struct MessagesResponse {
 		/// Unique object identifier.
 		/// The format and length of IDs may change over time.
@@ -533,7 +900,7 @@ pub(super) mod types {
 		pub usage: Usage,
 	}
 
-	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	#[derive(Clone, Serialize, Deserialize, Debug)]
 	#[serde(rename_all = "snake_case", tag = "type")]
 	pub enum MessagesStreamEvent {
 		MessageStart {

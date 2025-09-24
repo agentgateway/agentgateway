@@ -68,22 +68,21 @@ async fn test_streaming(
 	});
 }
 
-fn test_request<T: Serialize>(
-	provider_name: &str,
-	test_name: &str,
-	xlate: impl Fn(universal::Request) -> Result<T, AIError>,
-) {
+fn test_request<I, O>(provider_name: &str, test_name: &str, xlate: impl Fn(I) -> Result<O, AIError>)
+where
+	I: DeserializeOwned,
+	O: Serialize,
+{
 	let test_dir = Path::new("src/llm/tests");
 
 	// Read input JSON
 	let input_path = test_dir.join(format!("{test_name}.json"));
 	let openai_str = &fs::read_to_string(&input_path).expect("Failed to read input file");
-	let openai_raw: Value = serde_json::from_str(openai_str).expect("Failed to parse openai json");
-	let openai: universal::Request =
-		serde_json::from_str(openai_str).expect("Failed to parse openai JSON");
+	let openai_raw: Value = serde_json::from_str(openai_str).expect("Failed to parse input json");
+	let openai: I = serde_json::from_str(openai_str).expect("Failed to parse input JSON");
 
 	let provider_response =
-		xlate(openai).expect("Failed to translate OpenAI format to provider request ");
+		xlate(openai).expect("Failed to translate input format to provider request ");
 
 	insta::with_settings!({
 			info => &openai_raw,
@@ -139,6 +138,21 @@ async fn test_bedrock() {
 	for r in ALL_REQUESTS {
 		test_request("bedrock", r, request);
 	}
+}
+
+#[tokio::test]
+async fn test_anthropic_to_anthropic() {
+	let request = |i| Ok(anthropic::translate_anthropic_request(i));
+	test_request::<anthropic::types::MessagesRequest, universal::Request>(
+		"anthropic",
+		"request_anthropic_basic",
+		request,
+	);
+	test_request::<anthropic::types::MessagesRequest, universal::Request>(
+		"anthropic",
+		"request_anthropic_tools",
+		request,
+	);
 }
 
 #[tokio::test]
