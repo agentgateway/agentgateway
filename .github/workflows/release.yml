@@ -263,6 +263,9 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             features: default
+          - os: macos-15-intel
+            target: amd64-apple-darwin
+            features: default
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             features: default
@@ -327,6 +330,8 @@ jobs:
         mkdir outputs
         mv release-binary-macos-latest/agentgateway outputs/agentgateway-darwin-arm64
         sha256sum outputs/agentgateway-darwin-arm64 > outputs/agentgateway-darwin-arm64.sha256
+        mv release-binary-macos-latest/agentgateway outputs/agentgateway-darwin-amd64
+        sha256sum outputs/agentgateway-darwin-amd64 > outputs/agentgateway-darwin-amd64.sha256
         mv release-binary-ubuntu-latest/agentgateway outputs/agentgateway-linux-amd64
         sha256sum outputs/agentgateway-linux-amd64 > outputs/agentgateway-linux-amd64.sha256
         mv release-binary-ubuntu-22.04-arm/agentgateway outputs/agentgateway-linux-arm64
