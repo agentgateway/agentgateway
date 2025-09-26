@@ -1,7 +1,3 @@
-use std::net::SocketAddr;
-use std::str::FromStr;
-use std::sync::Arc;
-
 use ::http::uri::PathAndQuery;
 use ::http::{HeaderMap, header};
 use anyhow::anyhow;
@@ -12,6 +8,9 @@ use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
 use rand::Rng;
 use rand::seq::IndexedRandom;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::sync::Arc;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -207,6 +206,7 @@ impl HTTPProxy {
 		mut req: ::http::Request<Incoming>,
 	) -> Response {
 		let start = Instant::now();
+		let start_time = agent_core::telemetry::render_current_time();
 
 		// Copy connection level attributes into request level attributes
 		connection.copy::<TCPConnectionInfo>(req.extensions_mut());
@@ -222,6 +222,7 @@ impl HTTPProxy {
 			),
 			self.inputs.metrics.clone(),
 			start,
+			start_time,
 			tcp.clone(),
 		)
 		.into();
@@ -304,7 +305,7 @@ impl HTTPProxy {
 				.unwrap_or_else(|| req.uri().path().to_string()),
 		);
 		log.version = Some(req.version());
-		let needs_body = log.cel.ctx().with_request(&req);
+		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
 		if needs_body && let Ok(body) = crate::http::inspect_body(req.body_mut()).await {
 			log.cel.ctx().with_request_body(body);
 		}
@@ -375,7 +376,7 @@ impl HTTPProxy {
 		// so we can do logging, etc when we find no routes.
 		// But we may find new expressions that now need the request.
 		// it is zero-cost at runtime to do it twice so NBD.
-		let needs_body = log.cel.ctx().with_request(&req);
+		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
 		if needs_body && let Ok(body) = crate::http::inspect_body(req.body_mut()).await {
 			log.cel.ctx().with_request_body(body);
 		}
@@ -829,12 +830,13 @@ async fn make_backend_call(
 			let inputs = inputs.clone();
 			let backend = backend.clone();
 			let name = name.clone();
+			let time = log.as_ref().unwrap().start_time.clone();
 			let mcp_response_log = log.map(|l| l.mcp_status.clone()).expect("must be set");
 			return Ok(Box::pin(async move {
 				inputs
 					.clone()
 					.mcp_state
-					.serve(inputs, name, backend, req, mcp_response_log)
+					.serve(inputs, name, backend, req, mcp_response_log, time)
 					.map(Ok)
 					.await
 			}));

@@ -2,6 +2,7 @@
 
 // We build our own Date cacher, as formatting the date string is ~50% of the cost of the log
 mod date;
+pub use date::build as render_current_time;
 
 // We have a force of tracing_appender to support batching writes, which leads to massive throughput benefits
 mod msg;

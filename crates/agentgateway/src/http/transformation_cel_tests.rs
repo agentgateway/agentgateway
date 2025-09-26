@@ -30,7 +30,7 @@ fn test_transformation() {
 	for e in xfm.expressions() {
 		ctx.register_expression(e)
 	}
-	ctx.with_request(&req);
+	ctx.with_request(&req, "".to_string());
 	xfm.apply_request(&mut req, &ctx.build().unwrap()).unwrap();
 	assert_eq!(req.headers().get("x-insert").unwrap(), "hello Bar");
 }

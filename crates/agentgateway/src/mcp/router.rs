@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use agent_core::prelude::Strng;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -8,6 +6,7 @@ use http::Method;
 use itertools::Itertools;
 use prometheus_client::registry::Registry;
 use rmcp::transport::StreamableHttpServerConfig;
+use std::sync::Arc;
 use tracing::warn;
 
 use crate::cel::ContextBuilder;
@@ -80,6 +79,7 @@ impl App {
 		backend: McpBackend,
 		mut req: Request,
 		log: AsyncLog<MCPInfo>,
+		start_time: String,
 	) -> Response {
 		let (backends, authorization_policies, authn) = {
 			let binds = self.state.read_binds();
@@ -115,7 +115,7 @@ impl App {
 		// so we don't know to register the MCP policies
 		let mut ctx = ContextBuilder::new();
 		authorization_policies.register(&mut ctx);
-		let needs_body = ctx.with_request(&req);
+		let needs_body = ctx.with_request(&req, start_time);
 		if needs_body && let Ok(body) = crate::http::inspect_body(req.body_mut()).await {
 			ctx.with_request_body(body);
 		}

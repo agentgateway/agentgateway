@@ -1,11 +1,6 @@
 // Portions of this code are heavily inspired from https://github.com/Kuadrant/wasm-shim/
 // Under Apache 2.0 license (https://github.com/Kuadrant/wasm-shim/blob/main/LICENSE)
 
-use std::collections::HashSet;
-use std::fmt::{Debug, Display, Formatter};
-use std::net::IpAddr;
-use std::sync::Arc;
-
 use agent_core::strng::Strng;
 use bytes::Bytes;
 pub use cel::Value;
@@ -14,6 +9,10 @@ use cel::{Context, ExecutionError, ParseError, ParseErrors, Program};
 pub use functions::{FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_MAP_RECURSIVE};
 use once_cell::sync::Lazy;
 use serde::{Serialize, Serializer};
+use std::collections::HashSet;
+use std::fmt::{Debug, Display, Formatter};
+use std::net::IpAddr;
+use std::sync::Arc;
 
 use crate::http::jwt::Claims;
 use crate::llm;
@@ -129,7 +128,7 @@ impl ContextBuilder {
 		};
 		r.body = Some(body);
 	}
-	pub fn with_request(&mut self, req: &crate::http::Request) -> bool {
+	pub fn with_request(&mut self, req: &crate::http::Request, start_time: String) -> bool {
 		if !self.attributes.contains(REQUEST_ATTRIBUTE) {
 			return false;
 		}
@@ -140,6 +139,8 @@ impl ContextBuilder {
 			uri: req.uri().clone(),
 			path: req.uri().path().to_string(),
 			body: None,
+			end_time: None,
+			start_time,
 		});
 		self.attributes.contains(REQUEST_BODY_ATTRIBUTE)
 	}
@@ -239,6 +240,12 @@ impl ContextBuilder {
 			o.response_model = info.provider_model.clone();
 			// Not always set
 			o.completion = info.completion.clone();
+		}
+	}
+
+	pub fn with_request_completion(&mut self, end_time: String) {
+		if let Some(r) = self.context.request.as_mut() {
+			r.end_time = Some(end_time);
 		}
 	}
 
@@ -383,6 +390,12 @@ pub struct RequestContext {
 
 	/// The body of the request. Warning: accessing the body will cause the body to be buffered.
 	pub body: Option<Bytes>,
+
+	/// The (pre-rendered) time the request started
+	pub start_time: String,
+
+	/// The (pre-rendered) time the request completed
+	pub end_time: Option<String>,
 }
 
 #[apply(schema_ser!)]

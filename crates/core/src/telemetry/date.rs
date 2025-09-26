@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 // "2025-07-16T18:32:01.".len()
 pub(crate) const DATE_VALUE_LENGTH: usize = 20;
 
-pub(crate) fn build() -> String {
+pub fn build() -> String {
 	let mut w = String::with_capacity(27);
 	write(&mut w);
 	w

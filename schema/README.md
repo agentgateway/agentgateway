@@ -664,6 +664,8 @@ This folder contains JSON schemas for various parts of the project
 |`request.path`|The path of the request URI.|
 |`request.headers`|The headers of the request.|
 |`request.body`|The body of the request. Warning: accessing the body will cause the body to be buffered.|
+|`request.startTime`|The (pre-rendered) time the request started|
+|`request.endTime`|The (pre-rendered) time the request completed|
 |`response`|`response` contains attributes about the HTTP response|
 |`response.code`|The HTTP status code of the response.|
 |`jwt`|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|

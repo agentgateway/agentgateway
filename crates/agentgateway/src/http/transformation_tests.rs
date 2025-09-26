@@ -20,7 +20,7 @@ fn test_transformation() {
 		.unwrap();
 	let xfm = build([("x-insert", r#"hello {{ request_header("x-custom-foo") }}"#)]);
 	let mut ctx = xfm.ctx();
-	ctx.with_request(&req);
+	ctx.with_request(&req, "".to_string());
 	xfm.apply(&mut req, ctx);
 	assert_eq!(req.headers().get("x-insert").unwrap(), "hello Bar");
 }

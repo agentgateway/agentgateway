@@ -375,12 +375,14 @@ impl RequestLog {
 		cel: CelLogging,
 		metrics: Arc<Metrics>,
 		start: Instant,
+		start_time: String,
 		tcp_info: TCPConnectionInfo,
 	) -> Self {
 		RequestLog {
 			cel,
 			metrics,
 			start,
+			start_time,
 			tcp_info,
 			tls_info: None,
 			tracer: None,
@@ -417,6 +419,7 @@ pub struct RequestLog {
 	pub cel: CelLogging,
 	pub metrics: Arc<Metrics>,
 	pub start: Instant,
+	pub start_time: String,
 	pub tcp_info: TCPConnectionInfo,
 
 	// Set only for TLS traffic
@@ -518,6 +521,10 @@ impl Drop for DropOnLog {
 		}
 
 		let end_time = Instant::now();
+		log
+			.cel
+			.cel_context
+			.with_request_completion(agent_core::telemetry::render_current_time());
 		let duration = end_time - log.start;
 		if let Some(rh) = log.request_handle.take() {
 			let status = log

@@ -1,7 +1,6 @@
+use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-use rand::prelude::IndexedRandom;
 
 use crate::proxy::ProxyError;
 use crate::telemetry::log;
@@ -27,6 +26,7 @@ pub struct TCPProxy {
 impl TCPProxy {
 	pub async fn proxy(&self, connection: Socket) {
 		let start = Instant::now();
+		let start_time = agent_core::telemetry::render_current_time();
 
 		let tcp = connection
 			.ext::<TCPConnectionInfo>()
@@ -38,6 +38,7 @@ impl TCPProxy {
 			),
 			self.inputs.metrics.clone(),
 			start,
+			start_time,
 			tcp.clone(),
 		)
 		.into();

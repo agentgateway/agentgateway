@@ -42,6 +42,17 @@
             "minimum": 0,
             "maximum": 255
           }
+        },
+        "startTime": {
+          "description": "The (pre-rendered) time the request started",
+          "type": "string"
+        },
+        "endTime": {
+          "description": "The (pre-rendered) time the request completed",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -49,7 +60,8 @@
         "method",
         "uri",
         "path",
-        "headers"
+        "headers",
+        "startTime"
       ]
     },
     "response": {

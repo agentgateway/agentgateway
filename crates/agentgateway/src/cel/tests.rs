@@ -12,7 +12,7 @@ fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 	let mut cb = ContextBuilder::new();
 	let exp = Expression::new(expr)?;
 	cb.register_expression(&exp);
-	cb.with_request(&req);
+	cb.with_request(&req, "".to_string());
 	let exec = cb.build()?;
 	exec.eval(&exp)
 }
@@ -27,7 +27,7 @@ fn test_eval() {
 		.unwrap();
 	let mut cb = ContextBuilder::new();
 	cb.register_expression(&expr);
-	cb.with_request(&req);
+	cb.with_request(&req, "".to_string());
 	let exec = cb.build().unwrap();
 
 	exec.eval(&expr).unwrap();
@@ -117,7 +117,7 @@ fn bench_lookup(b: Bencher) {
 		.unwrap();
 	let mut cb = ContextBuilder::new();
 	cb.register_expression(&expr);
-	cb.with_request(&req);
+	cb.with_request(&req, "".to_string());
 	let exec = cb.build().unwrap();
 
 	with_profiling("lookup", || {
