@@ -49,9 +49,7 @@ binds:
       - mcp:
           targets:
           - mcp:
-              host: mcpbin.is.solo.io
-              path: /remote/mcp
-              port: 443
+              host: https://mcpbin.is.solo.io/remote/mcp
             name: mcpbin
       matches:
       - path:
@@ -59,7 +57,6 @@ binds:
       - path:
           exact: /.well-known/oauth-protected-resource/remote/mcp
       policies:
-        backendTLS: {}
         cors:
           allowHeaders:
           - mcp-protocol-version

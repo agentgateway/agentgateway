@@ -83,9 +83,7 @@ Also in `examples/mcp-authentication/config.yaml`:
       targets:
       - name: mcpbin
         mcp:
-          host: mcpbin.is.solo.io
-          port: 443
-          path: /remote/mcp
+          host: https://mcpbin.is.solo.io/remote/mcp
   matches:
   - path:
       exact: /remote/mcp
