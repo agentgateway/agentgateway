@@ -1,7 +1,3 @@
-use ::http::HeaderMap;
-use async_openai::types::ChatCompletionRequestMessage;
-use bytes::Bytes;
-
 use crate::http::auth::{BackendAuth, SimpleBackendAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
@@ -9,6 +5,10 @@ use crate::llm::policy::webhook::{MaskActionBody, Message, RequestAction, Respon
 use crate::llm::{AIError, pii, universal};
 use crate::types::agent::{HeaderMatch, HeaderValueMatch, Target};
 use crate::{client, *};
+use ::http::HeaderMap;
+use async_openai::types::ChatCompletionRequestMessage;
+use bytes::Bytes;
+use serde::de::DeserializeOwned;
 
 #[apply(schema!)]
 pub struct Policy {
@@ -59,8 +59,8 @@ impl Policy {
 		}
 		chat.clone()
 	}
-	pub fn unmarshal_request(&self, bytes: &Bytes) -> Result<universal::Request, AIError> {
-		if self.defaults.is_none() && self.overrides.is_none() && self.prompts.is_none() {
+	pub fn unmarshal_request<T: DeserializeOwned>(&self, bytes: &Bytes) -> Result<T, AIError> {
+		if self.defaults.is_none() && self.overrides.is_none() {
 			// Fast path: directly bytes to typed
 			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);
 		}
@@ -78,6 +78,7 @@ impl Policy {
 		}
 		serde_json::from_value(serde_json::Value::Object(map)).map_err(AIError::RequestParsing)
 	}
+
 	pub async fn apply_prompt_guard(
 		&self,
 		client: &client::Client,

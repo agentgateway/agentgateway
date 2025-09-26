@@ -12,7 +12,7 @@ use crate::llm::bedrock::types::{
 	ContentBlock, ContentBlockDelta, ConverseErrorResponse, ConverseRequest, ConverseResponse,
 	ConverseStreamOutput, StopReason,
 };
-use crate::llm::{AIError, LLMResponse, universal};
+use crate::llm::{AIError, LLMInfo, LLMResponse, universal};
 use crate::telemetry::log::AsyncLog;
 use crate::*;
 
@@ -54,20 +54,33 @@ impl Provider {
 		Ok(bedrock_request)
 	}
 
-	pub async fn process_response(
+	pub fn process_response(
 		&self,
 		model: &str,
 		bytes: &Bytes,
-	) -> Result<universal::Response, AIError> {
+		input_format: crate::llm::InputFormat,
+	) -> Result<Box<dyn crate::llm::ResponseType>, AIError> {
 		let model = self.model.as_deref().unwrap_or(model);
 		let resp =
 			serde_json::from_slice::<ConverseResponse>(bytes).map_err(AIError::ResponseParsing)?;
 
-		// Bedrock response doesn't contain the model, so we pass through the model from the request into the response
-		translate_response(resp, model)
+		match input_format {
+			crate::llm::InputFormat::Completions => {
+				// EXISTING PATH: Bedrock → Universal OpenAI format
+				let openai_resp = translate_response(resp, model)?;
+				let passthrough = crate::json::convert::<_, universal::passthrough::Response>(&openai_resp)
+					.map_err(AIError::ResponseParsing)?;
+				Ok(Box::new(passthrough))
+			}
+			crate::llm::InputFormat::Messages => {
+				// NEW PATH: Bedrock → Anthropic Messages format
+				let anthropic_resp = translate_response_anthropic(resp, model)?;
+				Ok(Box::new(anthropic_resp))
+			}
+		}
 	}
 
-	pub async fn process_error(
+	pub fn process_error(
 		&self,
 		bytes: &Bytes,
 	) -> Result<universal::ChatCompletionErrorResponse, AIError> {
@@ -76,11 +89,13 @@ impl Provider {
 		translate_error(resp)
 	}
 
+
 	pub(super) async fn process_streaming(
 		&self,
-		log: AsyncLog<LLMResponse>,
+		log: AsyncLog<LLMInfo>,
 		resp: Response,
 		model: &str,
+		input_format: crate::llm::InputFormat,
 	) -> Response {
 		let model = self.model.as_deref().unwrap_or(model).to_string();
 		// Bedrock doesn't return an ID, so get one from the request... if we can
@@ -89,7 +104,32 @@ impl Provider {
 			.get(http::x_headers::X_AMZN_REQUESTID)
 			.and_then(|s| s.to_str().ok().map(|s| s.to_owned()))
 			.unwrap_or_else(|| format!("{:016x}", rand::rng().random::<u64>()));
-		resp.map(|b| translate_stream(b, log, model, message_id))
+
+		match input_format {
+			crate::llm::InputFormat::Completions => {
+				// EXISTING PATH: AWS EventStream → Universal SSE
+				resp.map(|b| translate_stream(b, log, model, message_id))
+			}
+			crate::llm::InputFormat::Messages => {
+				// NEW PATH: AWS EventStream → Anthropic SSE
+				resp.map(|body| {
+					use std::cell::RefCell;
+					// Track which block indices we've seen to synthesize content_block_start
+					let seen_blocks = RefCell::new(std::collections::HashSet::new());
+
+					parse::aws_sse::transform_multi(body, move |aws_event| {
+						match types::ConverseStreamOutput::deserialize(aws_event) {
+							Ok(event) => {
+								let mut blocks = seen_blocks.borrow_mut();
+								let model_cloned = model.clone();
+								translate_stream_event(event, &log, &mut blocks, &model_cloned)
+							},
+							Err(_) => Vec::new()
+						}
+					})
+				})
+			}
+		}
 	}
 
 	pub fn get_path_for_model(&self, streaming: bool, model: &str) -> Strng {
@@ -138,10 +178,14 @@ pub(super) fn translate_response(
 	// Convert Bedrock content blocks to OpenAI message content
 	let mut tool_calls: Vec<universal::MessageToolCall> = Vec::new();
 	let mut content = None;
+	let mut reasoning_content = None;
 	for block in &message.content {
 		match block {
 			ContentBlock::Text(text) => {
 				content = Some(text.clone());
+			},
+			ContentBlock::ReasoningContent(reasoning) => {
+				reasoning_content = Some(reasoning.text.clone());
 			},
 			ContentBlock::Image { .. } => continue, // Skip images in response for now
 			ContentBlock::ToolResult(_) => {
@@ -160,7 +204,11 @@ pub(super) fn translate_response(
 						arguments: args,
 					},
 				});
-			}, // TODO: guard content, reasoning
+			},
+			ContentBlock::CachePoint(_) => {
+				// Cache points are metadata and don't contain user content - skip them
+				continue;
+			},
 		};
 	}
 
@@ -177,7 +225,7 @@ pub(super) fn translate_response(
 		refusal: None,
 		audio: None,
 		extra: None,
-		reasoning_content: None,
+		reasoning_content,
 	};
 	let finish_reason = Some(translate_stop_reason(&resp.stop_reason));
 	// Only one choice for Bedrock
@@ -323,6 +371,39 @@ pub(super) fn translate_request(req: universal::Request, provider: &Provider) ->
 			.collect_vec()
 	});
 	let tool_config = tools.map(|tools| types::ToolConfiguration { tools, tool_choice });
+
+	// Handle thinking configuration similar to Anthropic
+	let thinking = if let Some(budget) = req.vendor_extensions.thinking_budget_tokens {
+		Some(serde_json::json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": budget
+			}
+		}))
+	} else {
+		match &req.reasoning_effort {
+			Some(universal::ReasoningEffort::Low) => Some(serde_json::json!({
+				"thinking": {
+					"type": "enabled",
+					"budget_tokens": 1024
+				}
+			})),
+			Some(universal::ReasoningEffort::Medium) => Some(serde_json::json!({
+				"thinking": {
+					"type": "enabled",
+					"budget_tokens": 2048
+				}
+			})),
+			Some(universal::ReasoningEffort::High) => Some(serde_json::json!({
+				"thinking": {
+					"type": "enabled",
+					"budget_tokens": 4096
+				}
+			})),
+			None => None,
+		}
+	};
+
 	ConverseRequest {
 		model_id: req.model.unwrap_or_default(),
 		messages,
@@ -334,7 +415,7 @@ pub(super) fn translate_request(req: universal::Request, provider: &Provider) ->
 		inference_config: Some(inference_config),
 		tool_config,
 		guardrail_config,
-		additional_model_request_fields: None,
+		additional_model_request_fields: thinking,
 		prompt_variables: None,
 		additional_model_response_field_paths: None,
 		request_metadata: metadata,
@@ -342,9 +423,813 @@ pub(super) fn translate_request(req: universal::Request, provider: &Provider) ->
 	}
 }
 
+// ================================================================================================
+// CONTENT BLOCK CONVERSION FUNCTIONS FOR ANTHROPIC PASSTHROUGH
+// ================================================================================================
+
+/// Convert Anthropic content block to Bedrock content block (for requests)
+fn translate_content_block_to_bedrock(
+	content: &serde_json::Value,
+) -> Result<ContentBlock, AIError> {
+	let content_type = content
+		.get("type")
+		.and_then(|t| t.as_str())
+		.ok_or_else(|| AIError::MissingField("content block type".into()))?;
+
+	match content_type {
+		"text" => {
+			let text = content
+				.get("text")
+				.and_then(|t| t.as_str())
+				.ok_or_else(|| AIError::MissingField("text content".into()))?;
+			Ok(ContentBlock::Text(text.to_string()))
+		},
+		"image" => {
+			let source = content
+				.get("source")
+				.ok_or_else(|| AIError::MissingField("image source".into()))?;
+
+			let source_type = source
+				.get("type")
+				.and_then(|t| t.as_str())
+				.unwrap_or("base64");
+
+			let media_type = source
+				.get("media_type")
+				.and_then(|t| t.as_str())
+				.ok_or_else(|| AIError::MissingField("image media_type".into()))?;
+
+			let data = source
+				.get("data")
+				.and_then(|d| d.as_str())
+				.ok_or_else(|| AIError::MissingField("image data".into()))?;
+
+			Ok(ContentBlock::Image {
+				source: source_type.to_string(),
+				media_type: media_type.to_string(),
+				data: data.to_string(),
+			})
+		},
+		"tool_use" => {
+			let id = content
+				.get("id")
+				.and_then(|i| i.as_str())
+				.ok_or_else(|| AIError::MissingField("tool_use id".into()))?;
+
+			let name = content
+				.get("name")
+				.and_then(|n| n.as_str())
+				.ok_or_else(|| AIError::MissingField("tool_use name".into()))?;
+
+			let input = content
+				.get("input")
+				.cloned()
+				.unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+
+			Ok(ContentBlock::ToolUse(types::ToolUseBlock {
+				tool_use_id: id.to_string(),
+				name: name.to_string(),
+				input,
+			}))
+		},
+		"tool_result" => {
+			let tool_use_id = content
+				.get("tool_use_id")
+				.and_then(|i| i.as_str())
+				.ok_or_else(|| AIError::MissingField("tool_result tool_use_id".into()))?;
+
+			let content_value = content
+				.get("content")
+				.and_then(|c| c.as_str())
+				.unwrap_or("");
+
+			let is_error = content
+				.get("is_error")
+				.and_then(|e| e.as_bool())
+				.unwrap_or(false);
+
+			Ok(ContentBlock::ToolResult(types::ToolResultBlock {
+				tool_use_id: tool_use_id.to_string(),
+				content: vec![types::ToolResultContentBlock::Text(content_value.to_string())],
+				status: if is_error {
+					Some(types::ToolResultStatus::Error)
+				} else {
+					Some(types::ToolResultStatus::Success)
+				},
+			}))
+		},
+		"thinking" => {
+			let thinking = content
+				.get("thinking")
+				.and_then(|t| t.as_str())
+				.ok_or_else(|| AIError::MissingField("thinking content".into()))?;
+
+			Ok(ContentBlock::ReasoningContent(types::ReasoningContentBlock {
+				text: thinking.to_string(),
+			}))
+		},
+		_ => Err(AIError::UnsupportedContent),
+	}
+}
+
+/// Convert Bedrock content block to Anthropic content block (for responses)
+fn translate_content_block_to_anthropic(block: &ContentBlock) -> Option<serde_json::Value> {
+	match block {
+		ContentBlock::Text(text) => Some(serde_json::json!({
+			"type": "text",
+			"text": text
+		})),
+		ContentBlock::ReasoningContent(reasoning) => Some(serde_json::json!({
+			"type": "thinking",
+			"thinking": reasoning.text
+		})),
+		ContentBlock::ToolUse(tool_use) => Some(serde_json::json!({
+			"type": "tool_use",
+			"id": tool_use.tool_use_id,
+			"name": tool_use.name,
+			"input": tool_use.input
+		})),
+		ContentBlock::Image { source, media_type, data } => Some(serde_json::json!({
+			"type": "image",
+			"source": {
+				"type": if source == "base64" || data.starts_with("data:") { "base64" } else { "url" },
+				"media_type": media_type,
+				"data": data
+			}
+		})),
+		ContentBlock::ToolResult(_) => None, // Skip tool results in responses
+		ContentBlock::CachePoint(_) => None, // Skip cache points - they're metadata only
+	}
+}
+
+/// Generate Anthropic-style message ID
+fn generate_anthropic_message_id() -> String {
+	let timestamp = chrono::Utc::now().timestamp_millis();
+	let random: u32 = rand::random();
+	format!("msg_{:x}{:08x}", timestamp, random)
+}
+
+/// Generate Anthropic-style tool use ID
+fn generate_anthropic_tool_id() -> String {
+	let timestamp = chrono::Utc::now().timestamp_millis();
+	let random: u32 = rand::random();
+	format!("toolu_{:x}{:08x}", timestamp, random)
+}
+
+/// Translate Bedrock stop reason to Anthropic format
+fn translate_stop_reason_anthropic(stop_reason: StopReason) -> &'static str {
+	match stop_reason {
+		StopReason::EndTurn => "end_turn",
+		StopReason::MaxTokens => "max_tokens",
+		StopReason::StopSequence => "stop_sequence",
+		StopReason::ToolUse => "tool_use",
+		StopReason::ContentFiltered | StopReason::GuardrailIntervened => "refusal",
+	}
+}
+
+/// Helper function to create a cache point block
+fn create_cache_point() -> types::CachePointBlock {
+	types::CachePointBlock {
+		r#type: types::CachePointType::Default,
+	}
+}
+
+/// Transform content blocks with cache_control into content + cache points
+/// Returns (transformed_content, cache_points_added)
+fn insert_cache_points_in_content(
+	content_blocks: &[crate::llm::anthropic::passthrough::ContentPart],
+	cache_points_used: &mut usize,
+) -> Result<Vec<types::ContentBlock>, AIError> {
+	let mut result = Vec::new();
+
+	for block in content_blocks {
+		let json_block = serde_json::to_value(block)
+			.map_err(|e| AIError::RequestParsing(e))?;
+
+		// Convert the content block
+		let bedrock_block = translate_content_block_to_bedrock(&json_block)?;
+		result.push(bedrock_block);
+
+		// Check if this block has cache_control
+		if let Some(cache_control) = json_block.get("cache_control") {
+			if let Some(cache_type) = cache_control.get("type") {
+				if cache_type.as_str() == Some("ephemeral") && *cache_points_used < 4 {
+					// Insert cache point after this content block
+					result.push(types::ContentBlock::CachePoint(create_cache_point()));
+					*cache_points_used += 1;
+				}
+			}
+		}
+	}
+
+	Ok(result)
+}
+
+/// Transform system messages with cache_control into system content + cache points
+fn insert_cache_points_in_system(
+	messages: &[crate::llm::anthropic::passthrough::RequestMessage],
+	cache_points_used: &mut usize,
+) -> Vec<types::SystemContentBlock> {
+	let mut result = Vec::new();
+
+	for msg in messages {
+		if msg.role == "system" {
+			match &msg.content {
+				Some(crate::llm::anthropic::passthrough::RequestContent::Text(text)) => {
+					result.push(types::SystemContentBlock::Text { text: text.clone() });
+
+					// Check if this message has cache_control in rest fields
+					if let Some(cache_control) = msg.rest.get("cache_control") {
+						if let Some(cache_type) = cache_control.get("type") {
+							if cache_type.as_str() == Some("ephemeral") && *cache_points_used < 4 {
+								result.push(types::SystemContentBlock::CachePoint(create_cache_point()));
+								*cache_points_used += 1;
+							}
+						}
+					}
+				},
+				Some(crate::llm::anthropic::passthrough::RequestContent::Array(blocks)) => {
+					// Process array content blocks for cache control
+					for block in blocks {
+						if block.r#type == "text" {
+							if let Some(text) = &block.text {
+								result.push(types::SystemContentBlock::Text { text: text.clone() });
+
+								// Check for cache_control on this block
+								if let Some(cache_control) = block.rest.get("cache_control") {
+									if let Some(cache_type) = cache_control.get("type") {
+										if cache_type.as_str() == Some("ephemeral") && *cache_points_used < 4 {
+											result.push(types::SystemContentBlock::CachePoint(create_cache_point()));
+											*cache_points_used += 1;
+										}
+									}
+								}
+							}
+						}
+					}
+				},
+				None => {}
+			}
+		}
+	}
+
+	result
+}
+
+/// Transform tools with cache_control into tools + cache points
+fn insert_cache_points_in_tools(
+	tools_array: &serde_json::Value,
+	cache_points_used: &mut usize,
+) -> Vec<types::Tool> {
+	let mut result = Vec::new();
+
+	if let Some(tools) = tools_array.as_array() {
+		for tool in tools {
+			// Add the tool specification
+			if let (Some(name), input_schema) = (
+				tool.get("name").and_then(|n| n.as_str()),
+				tool.get("input_schema")
+			) {
+				let description = tool.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
+
+				result.push(types::Tool::ToolSpec(types::ToolSpecification {
+					name: name.to_string(),
+					description,
+					input_schema: input_schema.cloned().map(types::ToolInputSchema::Json),
+				}));
+
+				// Check for cache_control on this tool
+				if let Some(cache_control) = tool.get("cache_control") {
+					if let Some(cache_type) = cache_control.get("type") {
+						if cache_type.as_str() == Some("ephemeral") && *cache_points_used < 4 {
+							result.push(types::Tool::CachePoint(create_cache_point()));
+							*cache_points_used += 1;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	result
+}
+
+/// Extract beta headers from HTTP request headers and return them as an array
+/// Handles comma-separated and multiple header values for anthropic-beta
+fn extract_beta_headers(headers: &http::HeaderMap) -> Result<Option<Vec<serde_json::Value>>, AIError> {
+	let mut beta_features = Vec::new();
+
+	// Collect all anthropic-beta header values
+	for value in headers.get_all("anthropic-beta") {
+		let header_str = value.to_str().map_err(|_| AIError::MissingField("Invalid anthropic-beta header value".into()))?;
+
+		// Handle comma-separated values within a single header
+		for feature in header_str.split(',') {
+			let trimmed = feature.trim();
+			if !trimmed.is_empty() {
+				// Add each beta feature as a string value in the array
+				beta_features.push(serde_json::Value::String(trimmed.to_string()));
+			}
+		}
+	}
+
+	if beta_features.is_empty() {
+		Ok(None)
+	} else {
+		Ok(Some(beta_features))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use http::HeaderMap;
+
+	#[test]
+	fn test_extract_beta_headers_empty() {
+		let headers = HeaderMap::new();
+		let result = extract_beta_headers(&headers).unwrap();
+		assert!(result.is_none());
+	}
+
+	#[test]
+	fn test_extract_beta_headers_single() {
+		let mut headers = HeaderMap::new();
+		headers.insert("anthropic-beta", "prompt-caching-2024-07-31".parse().unwrap());
+		let result = extract_beta_headers(&headers).unwrap();
+		assert!(result.is_some());
+		let beta_array = result.unwrap();
+		assert_eq!(beta_array.len(), 1);
+		assert_eq!(beta_array[0], serde_json::Value::String("prompt-caching-2024-07-31".to_string()));
+	}
+
+	#[test]
+	fn test_extract_beta_headers_multiple_comma_separated() {
+		let mut headers = HeaderMap::new();
+		headers.insert("anthropic-beta", "cache-control-2024-08-15,computer-use-2024-10-22".parse().unwrap());
+		let result = extract_beta_headers(&headers).unwrap();
+		assert!(result.is_some());
+		let beta_array = result.unwrap();
+		assert_eq!(beta_array.len(), 2);
+		assert!(beta_array.contains(&serde_json::Value::String("cache-control-2024-08-15".to_string())));
+		assert!(beta_array.contains(&serde_json::Value::String("computer-use-2024-10-22".to_string())));
+	}
+
+	#[test]
+	fn test_extract_beta_headers_multiple_headers() {
+		let mut headers = HeaderMap::new();
+		headers.append("anthropic-beta", "cache-control-2024-08-15".parse().unwrap());
+		headers.append("anthropic-beta", "computer-use-2024-10-22".parse().unwrap());
+		let result = extract_beta_headers(&headers).unwrap();
+		assert!(result.is_some());
+		let beta_array = result.unwrap();
+		assert_eq!(beta_array.len(), 2);
+		assert!(beta_array.contains(&serde_json::Value::String("cache-control-2024-08-15".to_string())));
+		assert!(beta_array.contains(&serde_json::Value::String("computer-use-2024-10-22".to_string())));
+	}
+
+	#[test]
+	fn test_extract_beta_headers_with_spaces() {
+		let mut headers = HeaderMap::new();
+		headers.insert("anthropic-beta", " cache-control-2024-08-15 , computer-use-2024-10-22 ".parse().unwrap());
+		let result = extract_beta_headers(&headers).unwrap();
+		assert!(result.is_some());
+		let beta_array = result.unwrap();
+		assert_eq!(beta_array.len(), 2);
+		assert!(beta_array.contains(&serde_json::Value::String("cache-control-2024-08-15".to_string())));
+		assert!(beta_array.contains(&serde_json::Value::String("computer-use-2024-10-22".to_string())));
+	}
+}
+
+/// Translate Anthropic request to Bedrock ConverseRequest
+pub(super) fn translate_request_anthropic(
+	req: &crate::llm::anthropic::passthrough::Request,
+	provider: &Provider,
+	headers: Option<&http::HeaderMap>,
+) -> Result<ConverseRequest, AIError> {
+	// Track cache points used (max 4 for Bedrock)
+	let mut cache_points_used = 0;
+
+	// Extract system messages with cache control awareness
+	let system_content = insert_cache_points_in_system(&req.messages, &mut cache_points_used);
+
+	// Convert non-system messages to Bedrock format
+	let messages: Result<Vec<types::Message>, AIError> = req
+		.messages
+		.iter()
+		.filter(|msg| msg.role != "system") // Skip system messages
+		.map(|msg| {
+			let role = match msg.role.as_str() {
+				"assistant" => types::Role::Assistant,
+				"user" | _ => types::Role::User, // Default to user
+			};
+
+			let content_blocks: Result<Vec<ContentBlock>, AIError> = match &msg.content {
+				Some(crate::llm::anthropic::passthrough::RequestContent::Text(text)) => {
+					Ok(vec![ContentBlock::Text(text.clone())])
+				},
+				Some(crate::llm::anthropic::passthrough::RequestContent::Array(blocks)) => {
+					insert_cache_points_in_content(blocks, &mut cache_points_used)
+				},
+				None => Ok(vec![]),
+			};
+
+			Ok(types::Message {
+				role,
+				content: content_blocks?,
+			})
+		})
+		.collect();
+
+	let messages = messages?;
+
+	// Build inference configuration from Anthropic request parameters
+	let inference_config = types::InferenceConfiguration {
+		max_tokens: req.max_tokens.unwrap_or(1000) as usize,
+		temperature: req.temperature,
+		top_p: req.top_p,
+		stop_sequences: req.rest.get("stop_sequences")
+			.and_then(|v| v.as_array())
+			.map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+			.unwrap_or_default(),
+		anthropic_version: None, // Not used for Bedrock
+	};
+
+	// Handle tool configuration with cache control awareness
+	let tool_config = if let Some(tools_value) = req.rest.get("tools") {
+		let bedrock_tools = insert_cache_points_in_tools(tools_value, &mut cache_points_used);
+
+		let tool_choice = if let Some(choice_value) = req.rest.get("tool_choice") {
+			match choice_value.get("type").and_then(|t| t.as_str()) {
+				Some("auto") => Some(types::ToolChoice::Auto),
+				Some("any") => Some(types::ToolChoice::Any),
+				Some("tool") => {
+					if let Some(name) = choice_value.get("name").and_then(|n| n.as_str()) {
+						Some(types::ToolChoice::Tool { name: name.to_string() })
+					} else {
+						Some(types::ToolChoice::Auto)
+					}
+				},
+				_ => Some(types::ToolChoice::Auto),
+			}
+		} else {
+			None
+		};
+
+		Some(types::ToolConfiguration {
+			tools: bedrock_tools,
+			tool_choice,
+		})
+	} else {
+		None
+	};
+
+	// Handle thinking/reasoning configuration
+	let mut additional_fields = if let Some(budget) = req.rest.get("thinking_budget_tokens").and_then(|v| v.as_u64()) {
+		Some(serde_json::json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": budget
+			}
+		}))
+	} else {
+		None
+	};
+
+	// Extract and handle beta headers
+	if let Some(headers) = headers {
+		if let Some(beta_array) = extract_beta_headers(headers)? {
+			// Add beta headers under the "anthropic_beta" key
+			match additional_fields {
+				Some(ref mut fields) => {
+					// Add anthropic_beta array to existing fields
+					if let Some(existing_obj) = fields.as_object_mut() {
+						existing_obj.insert("anthropic_beta".to_string(), serde_json::Value::Array(beta_array));
+					}
+				},
+				None => {
+					// Create new additionalModelRequestFields with anthropic_beta
+					let mut fields = serde_json::Map::new();
+					fields.insert("anthropic_beta".to_string(), serde_json::Value::Array(beta_array));
+					additional_fields = Some(serde_json::Value::Object(fields));
+				}
+			}
+		}
+	};
+
+	// Build guardrail configuration if provider has it configured
+	let guardrail_config = if let (Some(identifier), Some(version)) =
+		(&provider.guardrail_identifier, &provider.guardrail_version)
+	{
+		Some(types::GuardrailConfiguration {
+			guardrail_identifier: identifier.to_string(),
+			guardrail_version: version.to_string(),
+			trace: Some("enabled".to_string()),
+		})
+	} else {
+		None
+	};
+
+	// Convert metadata if present
+	let metadata = req.rest.get("metadata")
+		.and_then(|m| m.get("user_id"))
+		.and_then(|user_id| user_id.as_str())
+		.map(|user_id| {
+			std::collections::HashMap::from([("user_id".to_string(), user_id.to_string())])
+		});
+
+	Ok(ConverseRequest {
+		model_id: req.model.clone().unwrap_or_default(),
+		messages,
+		system: if system_content.is_empty() {
+			None
+		} else {
+			Some(system_content)
+		},
+		inference_config: Some(inference_config),
+		tool_config,
+		guardrail_config,
+		additional_model_request_fields: additional_fields,
+		prompt_variables: None,
+		additional_model_response_field_paths: None,
+		request_metadata: metadata,
+		performance_config: None,
+	})
+}
+
+/// Translate Bedrock ConverseResponse to Anthropic Messages response format
+pub(super) fn translate_response_anthropic(
+	bedrock_resp: ConverseResponse,
+	model: &str,
+) -> Result<crate::llm::anthropic::passthrough::Response, AIError> {
+	// Extract the message from the response
+	let output_msg = match bedrock_resp.output {
+		Some(types::ConverseOutput::Message(m)) => m,
+		Some(types::ConverseOutput::Unknown) => return Err(AIError::IncompleteResponse),
+		None => return Err(AIError::IncompleteResponse),
+	};
+
+	// Convert content blocks to Anthropic format
+	let content_blocks: Vec<serde_json::Value> = output_msg
+		.content
+		.iter()
+		.filter_map(|block| translate_content_block_to_anthropic(block))
+		.collect();
+
+	// Map stop reason to Anthropic format
+	let stop_reason = translate_stop_reason_anthropic(bedrock_resp.stop_reason);
+
+	// Generate Anthropic-style message ID
+	let id = generate_anthropic_message_id();
+
+	// Convert usage information inline to match existing patterns
+	let usage = match bedrock_resp.usage {
+		Some(usage) => serde_json::json!({
+			"input_tokens": usage.input_tokens,
+			"output_tokens": usage.output_tokens,
+			"cache_creation_input_tokens": usage.cache_write_input_tokens,
+			"cache_read_input_tokens": usage.cache_read_input_tokens,
+			"cache_creation": null,
+			"server_tool_use": null,
+			"service_tier": null
+		}),
+		None => serde_json::json!({
+			"input_tokens": 0,
+			"output_tokens": 0,
+			"cache_creation_input_tokens": null,
+			"cache_read_input_tokens": null,
+			"cache_creation": null,
+			"server_tool_use": null,
+			"service_tier": null
+		})
+	};
+
+	// Build the complete Anthropic response
+	let anthropic_response = serde_json::json!({
+		"id": id,
+		"type": "message",
+		"role": "assistant",
+		"content": content_blocks,
+		"model": model,
+		"stop_reason": stop_reason,
+		"stop_sequence": null, // Bedrock doesn't provide the matched sequence
+		"usage": usage,
+		"container": null
+	});
+
+	// Convert to anthropic::passthrough::Response
+	serde_json::from_value::<crate::llm::anthropic::passthrough::Response>(anthropic_response)
+		.map_err(AIError::ResponseParsing)
+}
+
+
+/// Convert Bedrock streaming event to Anthropic SSE event
+fn translate_stream_event(
+	event: types::ConverseStreamOutput,
+	log: &AsyncLog<LLMInfo>,
+	seen_blocks: &mut std::collections::HashSet<i32>,
+	model: &str,
+) -> Vec<serde_json::Value> {
+	let mut results = Vec::new();
+
+	// Handle synthesis for ContentBlockDelta without prior ContentBlockStart
+	if let types::ConverseStreamOutput::ContentBlockDelta(ref delta) = event {
+		if !seen_blocks.contains(&delta.content_block_index) {
+			seen_blocks.insert(delta.content_block_index);
+
+			// Synthesize content_block_start based on the delta type
+			let block_type = if let Some(ref content_delta) = delta.delta {
+				match content_delta {
+					types::ContentBlockDelta::Text(_) => serde_json::json!({
+						"type": "text",
+						"text": ""
+					}),
+					types::ContentBlockDelta::ReasoningContent(_) => serde_json::json!({
+						"type": "thinking",
+						"thinking": ""
+					}),
+					types::ContentBlockDelta::ToolUse(_) => serde_json::json!({
+						"type": "tool_use",
+						"id": generate_anthropic_tool_id(),
+						"name": "unknown",
+						"input": {}
+					}),
+				}
+			} else {
+				serde_json::json!({
+					"type": "text",
+					"text": ""
+				})
+			};
+
+			results.push(serde_json::json!({
+				"type": "content_block_start",
+				"index": delta.content_block_index,
+				"content_block": block_type
+			}));
+		}
+	}
+
+	// Convert the actual event
+	match event {
+		types::ConverseStreamOutput::MessageStart(_start) => {
+			results.push(serde_json::json!({
+				"type": "message_start",
+				"message": {
+					"id": generate_anthropic_message_id(),
+					"type": "message",
+					"role": "assistant",
+					"content": [],
+					"model": model,
+					"stop_reason": null,
+					"stop_sequence": null,
+					"usage": {
+						"input_tokens": 0,
+						"output_tokens": 0,
+						"cache_creation_input_tokens": null,
+						"cache_read_input_tokens": null
+					}
+				}
+			}));
+		}
+		types::ConverseStreamOutput::ContentBlockStart(start) => {
+			// Mark this block as seen to prevent duplicate synthesis
+			seen_blocks.insert(start.content_block_index);
+
+			results.push(serde_json::json!({
+				"type": "content_block_start",
+				"index": start.content_block_index,
+				"content_block": determine_content_block_type(&start)
+			}));
+		}
+		types::ConverseStreamOutput::ContentBlockDelta(delta) => {
+			if let Some(content_delta) = delta.delta {
+				match content_delta {
+					types::ContentBlockDelta::Text(text) => {
+						results.push(serde_json::json!({
+							"type": "content_block_delta",
+							"index": delta.content_block_index,
+							"delta": {
+								"type": "text_delta",
+								"text": text
+							}
+						}));
+					},
+					types::ContentBlockDelta::ReasoningContent(reasoning_delta) => {
+						match reasoning_delta {
+							types::ReasoningContentBlockDelta::Text(thinking) => {
+								results.push(serde_json::json!({
+									"type": "content_block_delta",
+									"index": delta.content_block_index,
+									"delta": {
+										"type": "thinking_delta",
+										"thinking": thinking
+									}
+								}));
+							},
+							types::ReasoningContentBlockDelta::RedactedContent(_) => {
+								results.push(serde_json::json!({
+									"type": "content_block_delta",
+									"index": delta.content_block_index,
+									"delta": {
+										"type": "thinking_delta",
+										"thinking": "[REDACTED]"
+									}
+								}));
+							},
+							types::ReasoningContentBlockDelta::Signature(signature) => {
+								results.push(serde_json::json!({
+									"type": "content_block_delta",
+									"index": delta.content_block_index,
+									"delta": {
+										"type": "signature_delta",
+										"signature": signature
+									}
+								}));
+							},
+							types::ReasoningContentBlockDelta::Unknown => {},
+						}
+					},
+					types::ContentBlockDelta::ToolUse(tool_delta) => {
+						results.push(serde_json::json!({
+							"type": "content_block_delta",
+							"index": delta.content_block_index,
+							"delta": {
+								"type": "input_json_delta",
+								"partial_json": tool_delta.input
+							}
+						}));
+					}
+				}
+			}
+		}
+		types::ConverseStreamOutput::ContentBlockStop(stop) => {
+			results.push(serde_json::json!({
+				"type": "content_block_stop",
+				"index": stop.content_block_index
+			}));
+		}
+		types::ConverseStreamOutput::MessageStop(stop) => {
+			results.push(serde_json::json!({
+				"type": "message_delta",
+				"delta": {
+					"stop_reason": translate_stop_reason_anthropic(stop.stop_reason),
+					"stop_sequence": null
+				}
+			}));
+		}
+		types::ConverseStreamOutput::Metadata(metadata) => {
+			// Update usage stats in logging
+			if let Some(usage) = metadata.usage {
+				log.non_atomic_mutate(|r| {
+					r.response.input_tokens = Some(usage.input_tokens as u64);
+					r.response.output_tokens = Some(usage.output_tokens as u64);
+					r.response.total_tokens = Some(usage.total_tokens as u64);
+					r.response.cache_read_input_tokens = usage.cache_read_input_tokens.map(|v| v as u64);
+					r.response.cache_write_input_tokens = usage.cache_write_input_tokens.map(|v| v as u64);
+				});
+			}
+
+			results.push(serde_json::json!({
+				"type": "message_stop"
+			}));
+		}
+	}
+
+	results
+}
+
+/// Determine content block type from ContentBlockStartEvent
+fn determine_content_block_type(start: &types::ContentBlockStartEvent) -> serde_json::Value {
+	if let Some(block_start) = &start.start {
+		match block_start {
+			types::ContentBlockStart::ToolUse(tool_start) => serde_json::json!({
+				"type": "tool_use",
+				"id": tool_start.tool_use_id,
+				"name": tool_start.name,
+				"input": {}
+			}),
+			types::ContentBlockStart::ReasoningContent => serde_json::json!({
+				"type": "thinking",
+				"thinking": ""
+			}),
+			types::ContentBlockStart::Text => serde_json::json!({
+				"type": "text",
+				"text": ""
+			}),
+		}
+	} else {
+		// Default to text content block
+		serde_json::json!({
+			"type": "text",
+			"text": ""
+		})
+	}
+}
+
 pub(super) fn translate_stream(
 	b: Body,
-	log: AsyncLog<LLMResponse>,
+	log: AsyncLog<LLMInfo>,
 	model: String,
 	message_id: String,
 ) -> Body {
@@ -371,22 +1256,35 @@ pub(super) fn translate_stream(
 				if !saw_token {
 					saw_token = true;
 					log.non_atomic_mutate(|r| {
-						r.first_token = Some(Instant::now());
+						r.response.first_token = Some(Instant::now());
 					});
 				}
 				let delta = d.delta.map(|delta| {
 					let mut dr = universal::StreamResponseDelta::default();
 					match delta {
-						ContentBlockDelta::ReasoningContent(types::ReasoningContentBlockDelta::Text(t)) => {
-							dr.reasoning_content = Some(t);
+						ContentBlockDelta::ReasoningContent(reasoning_delta) => {
+							match reasoning_delta {
+								types::ReasoningContentBlockDelta::Text(t) => {
+									dr.reasoning_content = Some(t);
+								},
+								types::ReasoningContentBlockDelta::RedactedContent(_) => {
+									// Redacted content - include a placeholder
+									dr.reasoning_content = Some("[REDACTED]".to_string());
+								},
+								types::ReasoningContentBlockDelta::Signature(_) => {
+									// Signature content - skip as it's cryptographic verification
+								},
+								types::ReasoningContentBlockDelta::Unknown => {
+									// Unknown reasoning content type - skip
+								},
+							}
 						},
-						// TODO
-						ContentBlockDelta::ReasoningContent(_) => {},
 						ContentBlockDelta::Text(t) => {
 							dr.content = Some(t);
 						},
-						// TODO
-						ContentBlockDelta::ToolUse(_) => {},
+						ContentBlockDelta::ToolUse(_tool_delta) => {
+							// TODO: Implement tool use delta for universal format when needed
+						},
 					};
 					dr
 				});
@@ -403,7 +1301,7 @@ pub(super) fn translate_stream(
 				}
 			},
 			ConverseStreamOutput::ContentBlockStart(_) => {
-				// TODO support tool calls
+				// TODO: Implement tool call support for universal format when needed
 				None
 			},
 			ConverseStreamOutput::ContentBlockStop(_) => {
@@ -441,9 +1339,11 @@ pub(super) fn translate_stream(
 			ConverseStreamOutput::Metadata(metadata) => {
 				if let Some(usage) = metadata.usage {
 					log.non_atomic_mutate(|r| {
-						r.output_tokens = Some(usage.output_tokens as u64);
-						r.input_tokens_from_response = Some(usage.input_tokens as u64);
-						r.total_tokens = Some(usage.total_tokens as u64);
+						r.response.output_tokens = Some(usage.output_tokens as u64);
+						r.response.input_tokens = Some(usage.input_tokens as u64);
+						r.response.total_tokens = Some(usage.total_tokens as u64);
+						r.response.cache_read_input_tokens = usage.cache_read_input_tokens.map(|v| v as u64);
+						r.response.cache_write_input_tokens = usage.cache_write_input_tokens.map(|v| v as u64);
 					});
 
 					mk(
@@ -488,6 +1388,14 @@ pub(super) mod types {
 		},
 		ToolResult(ToolResultBlock),
 		ToolUse(ToolUseBlock),
+		ReasoningContent(ReasoningContentBlock),
+		CachePoint(CachePointBlock),
+	}
+
+	#[derive(Clone, Deserialize, Serialize, Debug)]
+	#[serde(rename_all = "camelCase")]
+	pub struct ReasoningContentBlock {
+		pub text: String,
 	}
 	#[derive(Clone, Deserialize, Serialize, Debug)]
 	#[serde(rename_all = "camelCase")]
@@ -530,6 +1438,7 @@ pub(super) mod types {
 	#[serde(untagged)]
 	pub enum SystemContentBlock {
 		Text { text: String },
+		CachePoint(CachePointBlock),
 	}
 
 	#[derive(Clone, Deserialize, Serialize, Debug)]
@@ -714,6 +1623,12 @@ pub(super) mod types {
 		/// The total number of tokens used
 		#[serde(rename = "totalTokens")]
 		pub total_tokens: usize,
+		/// The number of input tokens read from cache (optional)
+		#[serde(rename = "cacheReadInputTokens", skip_serializing_if = "Option::is_none")]
+		pub cache_read_input_tokens: Option<usize>,
+		/// The number of input tokens written to cache (optional)
+		#[serde(rename = "cacheWriteInputTokens", skip_serializing_if = "Option::is_none")]
+		pub cache_write_input_tokens: Option<usize>,
 	}
 
 	/// Metrics for the Converse call
@@ -927,6 +1842,12 @@ pub(super) mod types {
 		/// Information about a tool that the model is requesting to use.
 		#[allow(dead_code)]
 		ToolUse(ToolUseBlockStart),
+		/// Reasoning/thinking content block start
+		#[allow(dead_code)]
+		ReasoningContent,
+		/// Text content block start
+		#[allow(dead_code)]
+		Text,
 	}
 
 	#[derive(Clone, Debug, Deserialize)]
