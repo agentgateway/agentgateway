@@ -1,4 +1,5 @@
 use super::*;
+use crate::llm::universal::RequestMessage;
 use agent_core::strng;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
@@ -68,22 +69,21 @@ async fn test_streaming(
 	});
 }
 
-fn test_request<T: Serialize>(
-	provider_name: &str,
-	test_name: &str,
-	xlate: impl Fn(universal::Request) -> Result<T, AIError>,
-) {
+fn test_request<I, O>(provider_name: &str, test_name: &str, xlate: impl Fn(I) -> Result<O, AIError>)
+where
+	I: DeserializeOwned,
+	O: Serialize,
+{
 	let test_dir = Path::new("src/llm/tests");
 
 	// Read input JSON
 	let input_path = test_dir.join(format!("{test_name}.json"));
 	let openai_str = &fs::read_to_string(&input_path).expect("Failed to read input file");
-	let openai_raw: Value = serde_json::from_str(openai_str).expect("Failed to parse openai json");
-	let openai: universal::Request =
-		serde_json::from_str(openai_str).expect("Failed to parse openai JSON");
+	let openai_raw: Value = serde_json::from_str(openai_str).expect("Failed to parse input json");
+	let openai: I = serde_json::from_str(openai_str).expect("Failed to parse input JSON");
 
 	let provider_response =
-		xlate(openai).expect("Failed to translate OpenAI format to provider request ");
+		xlate(openai).expect("Failed to translate input format to provider request ");
 
 	insta::with_settings!({
 			info => &openai_raw,
@@ -139,6 +139,41 @@ async fn test_bedrock() {
 	for r in ALL_REQUESTS {
 		test_request("bedrock", r, request);
 	}
+}
+
+#[tokio::test]
+async fn test_passthrough() {
+	let test_dir = Path::new("src/llm/tests");
+
+	let test_name = "request_full";
+	// Read input JSON
+	let input_path = test_dir.join(format!("{test_name}.json"));
+	let openai_str = &fs::read_to_string(&input_path).expect("Failed to read input file");
+	let openai_raw: Value = serde_json::from_str(openai_str).expect("Failed to parse input json");
+	let openai: universal::passthrough::Request =
+		serde_json::from_str(openai_str).expect("Failed to parse input JSON");
+	let t = serde_json::to_string_pretty(&openai).unwrap();
+	let t2 = serde_json::to_string_pretty(&openai_raw).unwrap();
+	assert_eq!(
+		serde_json::from_str::<Value>(&t).unwrap(),
+		serde_json::from_str::<Value>(&t2).unwrap(),
+		"{t}\n{t2}"
+	);
+}
+
+#[tokio::test]
+async fn test_anthropic_to_anthropic() {
+	let request = |i| Ok(anthropic::translate_anthropic_request(i));
+	test_request::<anthropic::types::MessagesRequest, universal::Request>(
+		"anthropic",
+		"request_anthropic_basic",
+		request,
+	);
+	test_request::<anthropic::types::MessagesRequest, universal::Request>(
+		"anthropic",
+		"request_anthropic_tools",
+		request,
+	);
 }
 
 #[tokio::test]
