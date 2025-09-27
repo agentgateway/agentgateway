@@ -2432,6 +2432,24 @@
                             "additionalProperties": false,
                             "default": null
                           },
+                          "csrf": {
+                            "description": "Handle CSRF protection by validating request origins against configured allowed origins.",
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "additionalOrigins": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "default": []
+                              }
+                            },
+                            "additionalProperties": false,
+                            "default": null
+                          },
                           "timeout": {
                             "description": "Timeout requests that exceed the configured duration.",
                             "type": [
@@ -5876,6 +5894,24 @@
                       }
                     },
                     "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false,
+                "default": null
+              },
+              "csrf": {
+                "description": "Handle CSRF protection by validating request origins against configured allowed origins.",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "additionalOrigins": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": []
                   }
                 },
                 "additionalProperties": false,

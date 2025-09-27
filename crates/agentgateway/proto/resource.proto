@@ -519,6 +519,14 @@ message PolicySpec {
     string expression = 1;
   }
 
+  // Cross-Site Request Forgery (CSRF) policy configuration.
+  message CSRF {
+    // Additional origins that are allowed for CSRF validation beyond the same-origin policy.
+    // If a request's origin header matches any of these exact origins, the request will be allowed.
+    // Each origin should be in the format "scheme://host[:port]" (e.g., "https://www.example.com")
+    repeated string additional_origins = 1;
+  }
+
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;
@@ -532,6 +540,7 @@ message PolicySpec {
     JWT jwt = 10;
     TransformationPolicy transformation = 11;
     RemoteRateLimit remote_rate_limit = 12;
+    CSRF csrf = 13;
   }
 }
 

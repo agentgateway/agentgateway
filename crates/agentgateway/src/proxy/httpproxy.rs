@@ -89,6 +89,16 @@ async fn apply_request_policies(
 			.map_err(|_| ProxyError::TransformationFailure)?;
 	}
 
+	if let Some(csrf) = &policies.csrf {
+		let res = csrf
+			.apply(req)
+			.map_err(|_| ProxyError::CsrfValidationFailed)?;
+		if let Some(response) = res.direct_response {
+			return Err(ProxyResponse::DirectResponse(Box::new(response)));
+		}
+		res.apply(response_policies.headers())?;
+	}
+
 	Ok(())
 }
 

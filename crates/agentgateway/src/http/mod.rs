@@ -17,6 +17,7 @@ mod transformation;
 pub mod authorization;
 pub mod backendtls;
 pub mod compression;
+pub mod csrf;
 pub mod ext_authz;
 pub mod ext_proc;
 pub mod outlierdetection;
