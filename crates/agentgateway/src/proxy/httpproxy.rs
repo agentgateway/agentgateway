@@ -90,13 +90,10 @@ async fn apply_request_policies(
 	}
 
 	if let Some(csrf) = &policies.csrf {
-		let res = csrf
+		csrf
 			.apply(req)
-			.map_err(|_| ProxyError::CsrfValidationFailed)?;
-		if let Some(response) = res.direct_response {
-			return Err(ProxyResponse::DirectResponse(Box::new(response)));
-		}
-		res.apply(response_policies.headers())?;
+			.map_err(|_| ProxyError::CsrfValidationFailed)?
+			.apply(response_policies.headers())?;
 	}
 
 	Ok(())

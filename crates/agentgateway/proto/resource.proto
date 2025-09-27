@@ -521,24 +521,12 @@ message PolicySpec {
     string expression = 1;
   }
 
-  // String matcher for CSRF additional origins
-  message StringMatcher {
-    bool ignore_case = 6;
-
-    oneof match_pattern {
-      string exact = 1;
-      string prefix = 2;
-      string suffix = 3;
-      string safe_regex = 4;
-      string contains = 7;
-    }
-  }
-
   // Cross-Site Request Forgery (CSRF) policy configuration.
   message CSRF {
     // Additional origins that are allowed for CSRF validation beyond the same-origin policy.
-    // If a request's origin header matches any of these matchers, the request will be allowed.
-    repeated StringMatcher additional_origins = 1;
+    // If a request's origin header matches any of these exact origins, the request will be allowed.
+    // Each origin should be in the format "scheme://host[:port]" (e.g., "https://www.example.com")
+    repeated string additional_origins = 1;
   }
 
   oneof kind {

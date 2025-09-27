@@ -2446,47 +2446,10 @@
                             ],
                             "properties": {
                               "additionalOrigins": {
-                                "description": "Additional origins that are allowed for CSRF validation",
                                 "type": "array",
+                                "uniqueItems": true,
                                 "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "exact": {
-                                      "type": [
-                                        "string",
-                                        "null"
-                                      ]
-                                    },
-                                    "prefix": {
-                                      "type": [
-                                        "string",
-                                        "null"
-                                      ]
-                                    },
-                                    "suffix": {
-                                      "type": [
-                                        "string",
-                                        "null"
-                                      ]
-                                    },
-                                    "contains": {
-                                      "type": [
-                                        "string",
-                                        "null"
-                                      ]
-                                    },
-                                    "safeRegex": {
-                                      "type": [
-                                        "string",
-                                        "null"
-                                      ]
-                                    },
-                                    "ignoreCase": {
-                                      "type": "boolean",
-                                      "default": false
-                                    }
-                                  },
-                                  "additionalProperties": false
+                                  "type": "string"
                                 },
                                 "default": []
                               }
@@ -6991,47 +6954,10 @@
                 ],
                 "properties": {
                   "additionalOrigins": {
-                    "description": "Additional origins that are allowed for CSRF validation",
                     "type": "array",
+                    "uniqueItems": true,
                     "items": {
-                      "type": "object",
-                      "properties": {
-                        "exact": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "prefix": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "suffix": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "contains": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "safeRegex": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "ignoreCase": {
-                          "type": "boolean",
-                          "default": false
-                        }
-                      },
-                      "additionalProperties": false
+                      "type": "string"
                     },
                     "default": []
                   }
