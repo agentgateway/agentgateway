@@ -5,6 +5,7 @@ use bytes::Bytes;
 use chrono;
 use itertools::Itertools;
 use rand::Rng;
+use std::collections::HashMap;
 use tracing::trace;
 
 use crate::http::{Body, Response};
@@ -32,6 +33,8 @@ pub struct Provider {
 	pub guardrail_identifier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub guardrail_version: Option<Strng>,
+	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
+	pub model_aliases: HashMap<Strng, Strng>,
 }
 
 impl super::Provider for Provider {
@@ -43,10 +46,18 @@ impl Provider {
 		&self,
 		mut req: universal::Request,
 	) -> Result<ConverseRequest, AIError> {
-		// Use provider's model if configured, otherwise keep the request model
-		if let Some(provider_model) = &self.model {
-			req.model = Some(provider_model.to_string());
-		} else if req.model.is_none() {
+		// Apply model alias resolution (request model takes precedence over provider default)
+		if let Some(model) = req.model.as_deref().or(self.model.as_deref()) {
+			trace!("Bedrock: checking model alias for '{}'", model);
+			trace!("Bedrock: available aliases: {:?}", self.model_aliases);
+			if let Some(resolved) = crate::llm::resolve_model_alias(&self.model_aliases, model) {
+				trace!("Bedrock: resolved '{}' to '{}'", model, resolved);
+				req.model = Some(resolved.to_string());
+			} else {
+				trace!("Bedrock: no alias found for '{}'", model);
+				req.model = Some(model.to_string());
+			}
+		} else {
 			return Err(AIError::MissingField("model not specified".into()));
 		}
 		let bedrock_request = translate_request(req, self);
@@ -93,7 +104,12 @@ impl Provider {
 	}
 
 	pub fn get_path_for_model(&self, streaming: bool, model: &str) -> Strng {
+		// Apply model alias resolution (provider default takes precedence over request model)
 		let model = self.model.as_deref().unwrap_or(model);
+		let model = crate::llm::resolve_model_alias(&self.model_aliases, model)
+			.map(|s| s.to_string())
+			.unwrap_or_else(|| model.to_string());
+
 		if streaming {
 			strng::format!("/model/{model}/converse-stream")
 		} else {

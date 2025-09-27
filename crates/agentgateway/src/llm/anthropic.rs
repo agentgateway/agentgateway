@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use async_openai::types::{FinishReason, ReasoningEffort};
@@ -18,6 +20,8 @@ use crate::{parse, *};
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
+	pub model_aliases: HashMap<Strng, Strng>,
 }
 
 impl super::Provider for Provider {
@@ -32,9 +36,14 @@ impl Provider {
 		&self,
 		mut req: universal::Request,
 	) -> Result<MessagesRequest, AIError> {
-		if let Some(provider_model) = &self.model {
-			req.model = Some(provider_model.to_string());
-		} else if req.model.is_none() {
+		// Apply model alias resolution (request model takes precedence over provider default)
+		if let Some(model) = req.model.as_deref().or(self.model.as_deref()) {
+			if let Some(resolved) = crate::llm::resolve_model_alias(&self.model_aliases, model) {
+				req.model = Some(resolved.to_string());
+			} else {
+				req.model = Some(model.to_string());
+			}
+		} else {
 			return Err(AIError::MissingField("model not specified".into()));
 		}
 		let anthropic_message = translate_request(req);

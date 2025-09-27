@@ -2780,6 +2780,12 @@
                                                         "string",
                                                         "null"
                                                       ]
+                                                    },
+                                                    "modelAliases": {
+                                                      "type": "object",
+                                                      "additionalProperties": {
+                                                        "type": "string"
+                                                      }
                                                     }
                                                   },
                                                   "additionalProperties": false
@@ -2801,6 +2807,12 @@
                                                         "string",
                                                         "null"
                                                       ]
+                                                    },
+                                                    "modelAliases": {
+                                                      "type": "object",
+                                                      "additionalProperties": {
+                                                        "type": "string"
+                                                      }
                                                     }
                                                   }
                                                 }
@@ -2830,6 +2842,12 @@
                                                     },
                                                     "projectId": {
                                                       "type": "string"
+                                                    },
+                                                    "modelAliases": {
+                                                      "type": "object",
+                                                      "additionalProperties": {
+                                                        "type": "string"
+                                                      }
                                                     }
                                                   },
                                                   "required": [
@@ -2853,6 +2871,12 @@
                                                         "string",
                                                         "null"
                                                       ]
+                                                    },
+                                                    "modelAliases": {
+                                                      "type": "object",
+                                                      "additionalProperties": {
+                                                        "type": "string"
+                                                      }
                                                     }
                                                   }
                                                 }
@@ -2888,6 +2912,12 @@
                                                         "string",
                                                         "null"
                                                       ]
+                                                    },
+                                                    "modelAliases": {
+                                                      "type": "object",
+                                                      "additionalProperties": {
+                                                        "type": "string"
+                                                      }
                                                     }
                                                   },
                                                   "required": [
@@ -3769,6 +3799,12 @@
                                                                     "string",
                                                                     "null"
                                                                   ]
+                                                                },
+                                                                "modelAliases": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": {
+                                                                    "type": "string"
+                                                                  }
                                                                 }
                                                               },
                                                               "additionalProperties": false
@@ -3790,6 +3826,12 @@
                                                                     "string",
                                                                     "null"
                                                                   ]
+                                                                },
+                                                                "modelAliases": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": {
+                                                                    "type": "string"
+                                                                  }
                                                                 }
                                                               }
                                                             }
@@ -3819,6 +3861,12 @@
                                                                 },
                                                                 "projectId": {
                                                                   "type": "string"
+                                                                },
+                                                                "modelAliases": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": {
+                                                                    "type": "string"
+                                                                  }
                                                                 }
                                                               },
                                                               "required": [
@@ -3842,6 +3890,12 @@
                                                                     "string",
                                                                     "null"
                                                                   ]
+                                                                },
+                                                                "modelAliases": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": {
+                                                                    "type": "string"
+                                                                  }
                                                                 }
                                                               }
                                                             }
@@ -3877,6 +3931,12 @@
                                                                     "string",
                                                                     "null"
                                                                   ]
+                                                                },
+                                                                "modelAliases": {
+                                                                  "type": "object",
+                                                                  "additionalProperties": {
+                                                                    "type": "string"
+                                                                  }
                                                                 }
                                                               },
                                                               "required": [
@@ -6979,6 +7039,14 @@
     },
     "services": {
       "default": []
+    },
+    "modelAliases": {
+      "description": "Global model aliases that apply to all providers",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {}
     }
   },
   "additionalProperties": false

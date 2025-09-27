@@ -4,6 +4,7 @@ use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::Rng;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 
 use crate::http::Body;
 use crate::llm::{AIProvider, openai};
@@ -75,7 +76,10 @@ async fn llm_openai() {
 	let mock = body_mock(include_bytes!("../llm/tests/response_basic.json")).await;
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			model_aliases: HashMap::new(),
+		}),
 		false,
 		"{}",
 	);
@@ -95,7 +99,10 @@ async fn llm_openai_tokenize() {
 	let mock = body_mock(include_bytes!("../llm/tests/response_basic.json")).await;
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			model_aliases: HashMap::new(),
+		}),
 		true,
 		"{}",
 	);
@@ -128,7 +135,10 @@ async fn llm_log_body() {
 	.unwrap();
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			model_aliases: HashMap::new(),
+		}),
 		true,
 		x.as_str(),
 	);

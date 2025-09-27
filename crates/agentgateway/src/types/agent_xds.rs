@@ -327,11 +327,21 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 							Some(proto::agent::ai_backend::provider::Provider::Openai(openai)) => {
 								AIProvider::OpenAI(llm::openai::Provider {
 									model: openai.model.as_deref().map(strng::new),
+									model_aliases: openai
+										.model_aliases
+										.iter()
+										.map(|(k, v)| (strng::new(k), strng::new(v)))
+										.collect(),
 								})
 							},
 							Some(proto::agent::ai_backend::provider::Provider::Gemini(gemini)) => {
 								AIProvider::Gemini(llm::gemini::Provider {
 									model: gemini.model.as_deref().map(strng::new),
+									model_aliases: gemini
+										.model_aliases
+										.iter()
+										.map(|(k, v)| (strng::new(k), strng::new(v)))
+										.collect(),
 								})
 							},
 							Some(proto::agent::ai_backend::provider::Provider::Vertex(vertex)) => {
@@ -339,11 +349,21 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 									model: vertex.model.as_deref().map(strng::new),
 									region: Some(strng::new(&vertex.region)),
 									project_id: strng::new(&vertex.project_id),
+									model_aliases: vertex
+										.model_aliases
+										.iter()
+										.map(|(k, v)| (strng::new(k), strng::new(v)))
+										.collect(),
 								})
 							},
 							Some(proto::agent::ai_backend::provider::Provider::Anthropic(anthropic)) => {
 								AIProvider::Anthropic(llm::anthropic::Provider {
 									model: anthropic.model.as_deref().map(strng::new),
+									model_aliases: anthropic
+										.model_aliases
+										.iter()
+										.map(|(k, v)| (strng::new(k), strng::new(v)))
+										.collect(),
 								})
 							},
 							Some(proto::agent::ai_backend::provider::Provider::Bedrock(bedrock)) => {
@@ -352,6 +372,11 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 									region: strng::new(&bedrock.region),
 									guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 									guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+									model_aliases: bedrock
+										.model_aliases
+										.iter()
+										.map(|(k, v)| (strng::new(k), strng::new(v)))
+										.collect(),
 								})
 							},
 							None => {

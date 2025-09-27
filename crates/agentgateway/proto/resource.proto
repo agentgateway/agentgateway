@@ -563,23 +563,28 @@ message AIBackend {
   }
   message OpenAI {
     google.protobuf.StringValue model = 1;
+    map<string, string> model_aliases = 2;
   }
   message Gemini {
     google.protobuf.StringValue model = 1;
+    map<string, string> model_aliases = 2;
   }
   message Vertex {
     google.protobuf.StringValue model = 1;
     string region = 2;
     string project_id = 3;
+    map<string, string> model_aliases = 4;
   }
   message Anthropic {
     google.protobuf.StringValue model = 1;
+    map<string, string> model_aliases = 2;
   }
   message Bedrock {
     google.protobuf.StringValue model = 1;
     string region = 2;
     google.protobuf.StringValue guardrail_identifier = 3;
     google.protobuf.StringValue guardrail_version = 4;
+    map<string, string> model_aliases = 5;
   }
   message Provider {
     string name = 1;
