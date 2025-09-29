@@ -205,7 +205,7 @@ pub struct LocalNamedAIProvider {
 	pub backend_auth: Option<BackendAuth>,
 
 	#[serde(flatten, default)]
-	pub policies: Option<Arc<llm::Policy>>
+	pub policies: Option<Arc<llm::Policy>>,
 }
 
 impl LocalAIBackend {

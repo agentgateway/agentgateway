@@ -100,6 +100,7 @@ pub fn setup_llm_mock(
 		tokenize,
 		backend_tls: None,
 		backend_auth: None,
+		policies: None,
 		routes: Default::default(),
 	})
 	.translate(strng::format!("{}", mock.address()))
