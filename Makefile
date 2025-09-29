@@ -77,7 +77,7 @@ generate-apis:
 ifeq ($(OS),Windows_NT)
 	@powershell -ExecutionPolicy Bypass -Command common/tools/buf.ps1 generate --path crates/agentgateway/proto/resource.proto --path crates/agentgateway/proto/workload.proto
 else
-	@PATH=./common/tools:$(PATH) buf generate --path crates/agentgateway/proto/resource.proto --path crates/agentgateway/proto/workload.proto
+	@PATH="./common/tools:$(PATH)" buf generate --path crates/agentgateway/proto/resource.proto --path crates/agentgateway/proto/workload.proto
 endif
 
 .PHONY: run-validation-deps
