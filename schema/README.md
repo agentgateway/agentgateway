@@ -418,6 +418,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.prepend`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.prepend.role`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.prepend.content`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].name`||
@@ -526,6 +527,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.prepend`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.prepend.role`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.prepend.content`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].modelAliases`||
 |`binds[].listeners[].routes[].backends[].weight`||
 |`binds[].listeners[].tcpRoutes`||
 |`binds[].listeners[].tcpRoutes[].name`||
