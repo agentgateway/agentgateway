@@ -15,7 +15,10 @@ use crate::{parse, *};
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct Provider {}
+pub struct Provider {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub model: Option<Strng>,
+}
 
 impl super::Provider for Provider {
 	const NAME: Strng = strng::literal!("anthropic");
@@ -27,9 +30,11 @@ pub const DEFAULT_PATH: &str = "/v1/messages";
 impl Provider {
 	pub async fn process_request(
 		&self,
-		req: universal::Request,
+		mut req: universal::Request,
 	) -> Result<MessagesRequest, AIError> {
-		if req.model.is_none() {
+		if let Some(provider_model) = &self.model {
+			req.model = Some(provider_model.to_string());
+		} else if req.model.is_none() {
 			return Err(AIError::MissingField("model not specified".into()));
 		}
 		let anthropic_message = translate_request(req);

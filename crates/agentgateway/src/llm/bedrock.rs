@@ -25,6 +25,8 @@ pub struct AwsRegion {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Provider {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub model: Option<Strng>, // Optional: model override for Bedrock API path
 	pub region: Strng, // Required: AWS region
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub guardrail_identifier: Option<Strng>,
@@ -39,9 +41,12 @@ impl super::Provider for Provider {
 impl Provider {
 	pub async fn process_request(
 		&self,
-		req: universal::Request,
+		mut req: universal::Request,
 	) -> Result<ConverseRequest, AIError> {
-		if req.model.is_none() {
+		// Use provider's model if configured, otherwise keep the request model
+		if let Some(provider_model) = &self.model {
+			req.model = Some(provider_model.to_string());
+		} else if req.model.is_none() {
 			return Err(AIError::MissingField("model not specified".into()));
 		}
 		let bedrock_request = translate_request(req, self);
@@ -54,6 +59,7 @@ impl Provider {
 		model: &str,
 		bytes: &Bytes,
 	) -> Result<universal::Response, AIError> {
+		let model = self.model.as_deref().unwrap_or(model);
 		let resp =
 			serde_json::from_slice::<ConverseResponse>(bytes).map_err(AIError::ResponseParsing)?;
 
@@ -76,7 +82,7 @@ impl Provider {
 		resp: Response,
 		model: &str,
 	) -> Response {
-		let model = model.to_string();
+		let model = self.model.as_deref().unwrap_or(model).to_string();
 		// Bedrock doesn't return an ID, so get one from the request... if we can
 		let message_id = resp
 			.headers()
@@ -87,7 +93,7 @@ impl Provider {
 	}
 
 	pub fn get_path_for_model(&self, streaming: bool, model: &str) -> Strng {
-
+		let model = self.model.as_deref().unwrap_or(model);
 		if streaming {
 			strng::format!("/model/{model}/converse-stream")
 		} else {

@@ -7,7 +7,10 @@ use crate::llm::AIError;
 use crate::*;
 
 #[apply(schema!)]
-pub struct Provider {}
+pub struct Provider {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub model: Option<Strng>,
+}
 
 impl super::Provider for Provider {
 	const NAME: Strng = strng::literal!("openai");
@@ -19,11 +22,14 @@ pub const DEFAULT_PATH: &str = "/v1/chat/completions";
 impl Provider {
 	pub async fn process_request(
 		&self,
-		req: universal::Request,
+		mut req: universal::Request,
 	) -> Result<universal::Request, AIError> {
-		if req.model.is_none() {
+		if let Some(provider_model) = &self.model {
+			req.model = Some(provider_model.to_string());
+		} else if req.model.is_none() {
 			return Err(AIError::MissingField("model not specified".into()));
 		}
+		// This is openai already...
 		Ok(req)
 	}
 	pub async fn process_response(&self, bytes: &Bytes) -> Result<universal::Response, AIError> {

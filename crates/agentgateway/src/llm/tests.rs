@@ -3,7 +3,6 @@ use agent_core::strng;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -131,6 +130,7 @@ async fn test_bedrock() {
 	test_streaming("response_stream-bedrock_basic.bin", stream_response).await;
 
 	let provider = bedrock::Provider {
+		model: Some(strng::new("test-model")),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
