@@ -76,10 +76,7 @@ async fn llm_openai() {
 	let mock = body_mock(include_bytes!("../llm/tests/response_basic.json")).await;
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider {
-			model: None,
-			model_aliases: HashMap::new(),
-		}),
+		AIProvider::OpenAI(openai::Provider {}),
 		false,
 		"{}",
 	);
@@ -99,10 +96,7 @@ async fn llm_openai_tokenize() {
 	let mock = body_mock(include_bytes!("../llm/tests/response_basic.json")).await;
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider {
-			model: None,
-			model_aliases: HashMap::new(),
-		}),
+		AIProvider::OpenAI(openai::Provider {}),
 		true,
 		"{}",
 	);
@@ -135,10 +129,7 @@ async fn llm_log_body() {
 	.unwrap();
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider {
-			model: None,
-			model_aliases: HashMap::new(),
-		}),
+		AIProvider::OpenAI(openai::Provider {}),
 		true,
 		x.as_str(),
 	);

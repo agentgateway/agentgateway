@@ -324,59 +324,26 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 					let mut local_provider_group = Vec::new();
 					for (provider_idx, provider_config) in group.providers.iter().enumerate() {
 						let provider = match &provider_config.provider {
-							Some(proto::agent::ai_backend::provider::Provider::Openai(openai)) => {
-								AIProvider::OpenAI(llm::openai::Provider {
-									model: openai.model.as_deref().map(strng::new),
-									model_aliases: openai
-										.model_aliases
-										.iter()
-										.map(|(k, v)| (strng::new(k), strng::new(v)))
-										.collect(),
-								})
+							Some(proto::agent::ai_backend::provider::Provider::Openai(_)) => {
+								AIProvider::OpenAI(llm::openai::Provider {})
 							},
-							Some(proto::agent::ai_backend::provider::Provider::Gemini(gemini)) => {
-								AIProvider::Gemini(llm::gemini::Provider {
-									model: gemini.model.as_deref().map(strng::new),
-									model_aliases: gemini
-										.model_aliases
-										.iter()
-										.map(|(k, v)| (strng::new(k), strng::new(v)))
-										.collect(),
-								})
+							Some(proto::agent::ai_backend::provider::Provider::Gemini(_)) => {
+								AIProvider::Gemini(llm::gemini::Provider {})
 							},
 							Some(proto::agent::ai_backend::provider::Provider::Vertex(vertex)) => {
 								AIProvider::Vertex(llm::vertex::Provider {
-									model: vertex.model.as_deref().map(strng::new),
 									region: Some(strng::new(&vertex.region)),
 									project_id: strng::new(&vertex.project_id),
-									model_aliases: vertex
-										.model_aliases
-										.iter()
-										.map(|(k, v)| (strng::new(k), strng::new(v)))
-										.collect(),
 								})
 							},
-							Some(proto::agent::ai_backend::provider::Provider::Anthropic(anthropic)) => {
-								AIProvider::Anthropic(llm::anthropic::Provider {
-									model: anthropic.model.as_deref().map(strng::new),
-									model_aliases: anthropic
-										.model_aliases
-										.iter()
-										.map(|(k, v)| (strng::new(k), strng::new(v)))
-										.collect(),
-								})
+							Some(proto::agent::ai_backend::provider::Provider::Anthropic(_)) => {
+								AIProvider::Anthropic(llm::anthropic::Provider {})
 							},
 							Some(proto::agent::ai_backend::provider::Provider::Bedrock(bedrock)) => {
 								AIProvider::Bedrock(llm::bedrock::Provider {
-									model: bedrock.model.as_deref().map(strng::new),
 									region: strng::new(&bedrock.region),
 									guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 									guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-									model_aliases: bedrock
-										.model_aliases
-										.iter()
-										.map(|(k, v)| (strng::new(k), strng::new(v)))
-										.collect(),
 								})
 							},
 							None => {
@@ -986,6 +953,11 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 							.collect::<Result<_, _>>()?,
 					),
 					prompts: ai.prompts.as_ref().map(convert_prompt_enrichment),
+					model_aliases: ai
+						.model_aliases
+						.iter()
+						.map(|(k, v)| (strng::new(k), strng::new(v)))
+						.collect(),
 				}))
 			},
 			_ => return Err(ProtoError::EnumParse("unknown spec kind".to_string())),
@@ -1241,6 +1213,7 @@ mod tests {
 				.collect(),
 				prompt_guard: None,
 				prompts: None,
+				model_aliases: Default::default(),
 			})),
 		};
 

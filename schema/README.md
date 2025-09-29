@@ -191,6 +191,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.prompts.prepend`||
 |`binds[].listeners[].routes[].policies.ai.prompts.prepend.role`||
 |`binds[].listeners[].routes[].policies.ai.prompts.prepend.content`||
+|`binds[].listeners[].routes[].policies.ai.modelAliases`||
 |`binds[].listeners[].routes[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.backendTLS.key`||
@@ -314,25 +315,15 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)name`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)openAI`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)openAI.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)openAI.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)gemini`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)gemini.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)gemini.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex.model`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex.region`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex.projectId`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)vertex.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)anthropic`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)anthropic.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)anthropic.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.model`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.region`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailIdentifier`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailVersion`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)pathOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
@@ -427,25 +418,15 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].name`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)openAI`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)openAI.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)openAI.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)gemini`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)gemini.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)gemini.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.model`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.region`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.projectId`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)vertex.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)anthropic`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)anthropic.model`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)anthropic.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.model`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.region`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailIdentifier`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailVersion`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].pathOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
@@ -682,6 +663,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.prompts.prepend`||
 |`policies[].policy.ai.prompts.prepend.role`||
 |`policies[].policy.ai.prompts.prepend.content`||
+|`policies[].policy.ai.modelAliases`||
 |`policies[].policy.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.backendTLS.cert`||
 |`policies[].policy.backendTLS.key`||
@@ -774,7 +756,6 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.retry.codes`||
 |`workloads`||
 |`services`||
-|`modelAliases`|Global model aliases that apply to all providers|
 ## CEL context
 
 |Field|Description|

@@ -20,6 +20,8 @@ pub struct Policy {
 	pub overrides: Option<HashMap<String, serde_json::Value>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompts: Option<PromptEnrichment>,
+	#[serde(rename = "modelAliases", default, skip_serializing_if = "HashMap::is_empty")]
+	pub model_aliases: HashMap<Strng, Strng>,
 }
 
 #[apply(schema!)]

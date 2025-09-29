@@ -35,11 +35,7 @@ impl NormalizedLocalConfig {
 		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
 		let s = s.replace("# yaml-language-server: $schema", "#");
 		let s = shellexpand::full(&s)?;
-		let mut config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
-		// Hot-reload global model aliases from LocalConfig.
-		// ArcSwap ensures readers are lock-free; this runs on initial load and reload.
-		let aliases = std::mem::take(&mut config.model_aliases);
-		crate::llm::update_global_aliases(aliases);
+		let config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
 		let t = convert(client, config).await?;
 		Ok(t)
 	}
@@ -74,9 +70,6 @@ pub struct LocalConfig {
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	services: Vec<Service>,
-	/// Global model aliases that apply to all providers
-	#[serde(rename = "modelAliases", default)]
-	pub model_aliases: HashMap<String, String>,
 }
 
 #[apply(schema_de!)]
@@ -614,7 +607,6 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 		policies,
 		workloads,
 		services,
-		model_aliases: _, // Already processed in NormalizedLocalConfig::from
 	} = i;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];

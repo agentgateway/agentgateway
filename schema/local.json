@@ -1632,6 +1632,12 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              },
+                              "modelAliases": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
                               }
                             },
                             "additionalProperties": false,
@@ -2774,20 +2780,6 @@
                                               "properties": {
                                                 "openAI": {
                                                   "type": "object",
-                                                  "properties": {
-                                                    "model": {
-                                                      "type": [
-                                                        "string",
-                                                        "null"
-                                                      ]
-                                                    },
-                                                    "modelAliases": {
-                                                      "type": "object",
-                                                      "additionalProperties": {
-                                                        "type": "string"
-                                                      }
-                                                    }
-                                                  },
                                                   "additionalProperties": false
                                                 }
                                               },
@@ -2800,21 +2792,7 @@
                                               "type": "object",
                                               "properties": {
                                                 "gemini": {
-                                                  "type": "object",
-                                                  "properties": {
-                                                    "model": {
-                                                      "type": [
-                                                        "string",
-                                                        "null"
-                                                      ]
-                                                    },
-                                                    "modelAliases": {
-                                                      "type": "object",
-                                                      "additionalProperties": {
-                                                        "type": "string"
-                                                      }
-                                                    }
-                                                  }
+                                                  "type": "object"
                                                 }
                                               },
                                               "required": [
@@ -2828,12 +2806,6 @@
                                                 "vertex": {
                                                   "type": "object",
                                                   "properties": {
-                                                    "model": {
-                                                      "type": [
-                                                        "string",
-                                                        "null"
-                                                      ]
-                                                    },
                                                     "region": {
                                                       "type": [
                                                         "string",
@@ -2842,12 +2814,6 @@
                                                     },
                                                     "projectId": {
                                                       "type": "string"
-                                                    },
-                                                    "modelAliases": {
-                                                      "type": "object",
-                                                      "additionalProperties": {
-                                                        "type": "string"
-                                                      }
                                                     }
                                                   },
                                                   "required": [
@@ -2864,21 +2830,7 @@
                                               "type": "object",
                                               "properties": {
                                                 "anthropic": {
-                                                  "type": "object",
-                                                  "properties": {
-                                                    "model": {
-                                                      "type": [
-                                                        "string",
-                                                        "null"
-                                                      ]
-                                                    },
-                                                    "modelAliases": {
-                                                      "type": "object",
-                                                      "additionalProperties": {
-                                                        "type": "string"
-                                                      }
-                                                    }
-                                                  }
+                                                  "type": "object"
                                                 }
                                               },
                                               "required": [
@@ -2892,12 +2844,6 @@
                                                 "bedrock": {
                                                   "type": "object",
                                                   "properties": {
-                                                    "model": {
-                                                      "type": [
-                                                        "string",
-                                                        "null"
-                                                      ]
-                                                    },
                                                     "region": {
                                                       "type": "string"
                                                     },
@@ -2912,12 +2858,6 @@
                                                         "string",
                                                         "null"
                                                       ]
-                                                    },
-                                                    "modelAliases": {
-                                                      "type": "object",
-                                                      "additionalProperties": {
-                                                        "type": "string"
-                                                      }
                                                     }
                                                   },
                                                   "required": [
@@ -3793,20 +3733,6 @@
                                                           "properties": {
                                                             "openAI": {
                                                               "type": "object",
-                                                              "properties": {
-                                                                "model": {
-                                                                  "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                  ]
-                                                                },
-                                                                "modelAliases": {
-                                                                  "type": "object",
-                                                                  "additionalProperties": {
-                                                                    "type": "string"
-                                                                  }
-                                                                }
-                                                              },
                                                               "additionalProperties": false
                                                             }
                                                           },
@@ -3819,21 +3745,7 @@
                                                           "type": "object",
                                                           "properties": {
                                                             "gemini": {
-                                                              "type": "object",
-                                                              "properties": {
-                                                                "model": {
-                                                                  "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                  ]
-                                                                },
-                                                                "modelAliases": {
-                                                                  "type": "object",
-                                                                  "additionalProperties": {
-                                                                    "type": "string"
-                                                                  }
-                                                                }
-                                                              }
+                                                              "type": "object"
                                                             }
                                                           },
                                                           "required": [
@@ -3847,12 +3759,6 @@
                                                             "vertex": {
                                                               "type": "object",
                                                               "properties": {
-                                                                "model": {
-                                                                  "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                  ]
-                                                                },
                                                                 "region": {
                                                                   "type": [
                                                                     "string",
@@ -3861,12 +3767,6 @@
                                                                 },
                                                                 "projectId": {
                                                                   "type": "string"
-                                                                },
-                                                                "modelAliases": {
-                                                                  "type": "object",
-                                                                  "additionalProperties": {
-                                                                    "type": "string"
-                                                                  }
                                                                 }
                                                               },
                                                               "required": [
@@ -3883,21 +3783,7 @@
                                                           "type": "object",
                                                           "properties": {
                                                             "anthropic": {
-                                                              "type": "object",
-                                                              "properties": {
-                                                                "model": {
-                                                                  "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                  ]
-                                                                },
-                                                                "modelAliases": {
-                                                                  "type": "object",
-                                                                  "additionalProperties": {
-                                                                    "type": "string"
-                                                                  }
-                                                                }
-                                                              }
+                                                              "type": "object"
                                                             }
                                                           },
                                                           "required": [
@@ -3911,12 +3797,6 @@
                                                             "bedrock": {
                                                               "type": "object",
                                                               "properties": {
-                                                                "model": {
-                                                                  "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                  ]
-                                                                },
                                                                 "region": {
                                                                   "type": "string"
                                                                 },
@@ -3931,12 +3811,6 @@
                                                                     "string",
                                                                     "null"
                                                                   ]
-                                                                },
-                                                                "modelAliases": {
-                                                                  "type": "object",
-                                                                  "additionalProperties": {
-                                                                    "type": "string"
-                                                                  }
                                                                 }
                                                               },
                                                               "required": [
@@ -6163,6 +6037,12 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "modelAliases": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   }
                 },
                 "additionalProperties": false,
@@ -7039,14 +6919,6 @@
     },
     "services": {
       "default": []
-    },
-    "modelAliases": {
-      "description": "Global model aliases that apply to all providers",
-      "type": "object",
-      "additionalProperties": {
-        "type": "string"
-      },
-      "default": {}
     }
   },
   "additionalProperties": false

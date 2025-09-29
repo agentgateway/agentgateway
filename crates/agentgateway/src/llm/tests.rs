@@ -131,11 +131,9 @@ async fn test_bedrock() {
 	test_streaming("response_stream-bedrock_basic.bin", stream_response).await;
 
 	let provider = bedrock::Provider {
-		model: Some(strng::new("test-model")),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		model_aliases: HashMap::new(),
 	};
 	let request = |i| Ok(bedrock::translate_request(i, &provider));
 	for r in ALL_REQUESTS {

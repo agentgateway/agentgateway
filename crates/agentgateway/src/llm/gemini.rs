@@ -1,7 +1,6 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
 use bytes::Bytes;
-use std::collections::HashMap;
 
 use super::universal;
 use crate::llm::AIError;
@@ -10,12 +9,7 @@ use crate::*;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct Provider {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>,
-	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
-	pub model_aliases: HashMap<Strng, Strng>,
-}
+pub struct Provider {}
 
 impl super::Provider for Provider {
 	const NAME: Strng = strng::literal!("gemini");
@@ -27,19 +21,11 @@ pub const DEFAULT_PATH: &str = "/v1beta/openai/chat/completions";
 impl Provider {
 	pub async fn process_request(
 		&self,
-		mut req: universal::Request,
+		req: universal::Request,
 	) -> Result<universal::Request, AIError> {
-		// Apply model alias resolution (request model takes precedence over provider default)
-		if let Some(model) = req.model.as_deref().or(self.model.as_deref()) {
-			if let Some(resolved) = crate::llm::resolve_model_alias(&self.model_aliases, model) {
-				req.model = Some(resolved.to_string());
-			} else {
-				req.model = Some(model.to_string());
-			}
-		} else {
+		if req.model.is_none() {
 			return Err(AIError::MissingField("model not specified".into()));
 		}
-		// Gemini compat mode is the same!
 		Ok(req)
 	}
 	pub async fn process_response(&self, bytes: &Bytes) -> Result<universal::Response, AIError> {

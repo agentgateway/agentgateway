@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -6,11 +5,9 @@ use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderValue, StatusCode, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use arc_swap::ArcSwap;
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 pub use policy::Policy;
 use rand::Rng;
 use tiktoken_rs::CoreBPE;
@@ -37,29 +34,6 @@ mod tests;
 pub mod universal;
 pub mod vertex;
 
-// Model alias resolution
-static GLOBAL_MODEL_ALIASES: Lazy<ArcSwap<HashMap<Strng, Strng>>> =
-	Lazy::new(|| ArcSwap::from_pointee(HashMap::new()));
-
-pub fn update_global_aliases(aliases: HashMap<String, String>) {
-	let alias_map = aliases
-		.into_iter()
-		.map(|(alias, target)| (strng::new(alias), strng::new(target)))
-		.collect();
-	GLOBAL_MODEL_ALIASES.store(Arc::new(alias_map));
-}
-
-pub fn resolve_model_alias(provider_aliases: &HashMap<Strng, Strng>, model: &str) -> Option<Strng> {
-	let model_key = strng::new(model);
-
-	// Check provider-level aliases first
-	if let Some(actual) = provider_aliases.get(&model_key) {
-		return Some(actual.clone());
-	}
-
-	// Check global map - load() returns an Arc that we need to keep alive
-	GLOBAL_MODEL_ALIASES.load().get(&model_key).cloned()
-}
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -359,6 +333,12 @@ impl AIProvider {
 		};
 
 		if let Some(p) = policies {
+			// Apply model alias resolution
+			if let Some(model) = req.model.as_ref() {
+				if let Some(aliased) = p.model_aliases.get(model.as_str()) {
+					req.model = Some(aliased.to_string());
+				}
+			}
 			p.apply_prompt_enrichment(&mut req);
 			let http_headers = &parts.headers;
 			let claims = parts.extensions.get::<Claims>().cloned();

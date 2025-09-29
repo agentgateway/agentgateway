@@ -5,7 +5,6 @@ use bytes::Bytes;
 use chrono;
 use itertools::Itertools;
 use rand::Rng;
-use std::collections::HashMap;
 use tracing::trace;
 
 use crate::http::{Body, Response};
@@ -26,15 +25,11 @@ pub struct AwsRegion {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Provider {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>, // Optional: model override for Bedrock API path
 	pub region: Strng, // Required: AWS region
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub guardrail_identifier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub guardrail_version: Option<Strng>,
-	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
-	pub model_aliases: HashMap<Strng, Strng>,
 }
 
 impl super::Provider for Provider {
@@ -44,20 +39,9 @@ impl super::Provider for Provider {
 impl Provider {
 	pub async fn process_request(
 		&self,
-		mut req: universal::Request,
+		req: universal::Request,
 	) -> Result<ConverseRequest, AIError> {
-		// Apply model alias resolution (request model takes precedence over provider default)
-		if let Some(model) = req.model.as_deref().or(self.model.as_deref()) {
-			trace!("Bedrock: checking model alias for '{}'", model);
-			trace!("Bedrock: available aliases: {:?}", self.model_aliases);
-			if let Some(resolved) = crate::llm::resolve_model_alias(&self.model_aliases, model) {
-				trace!("Bedrock: resolved '{}' to '{}'", model, resolved);
-				req.model = Some(resolved.to_string());
-			} else {
-				trace!("Bedrock: no alias found for '{}'", model);
-				req.model = Some(model.to_string());
-			}
-		} else {
+		if req.model.is_none() {
 			return Err(AIError::MissingField("model not specified".into()));
 		}
 		let bedrock_request = translate_request(req, self);
@@ -70,7 +54,6 @@ impl Provider {
 		model: &str,
 		bytes: &Bytes,
 	) -> Result<universal::Response, AIError> {
-		let model = self.model.as_deref().unwrap_or(model);
 		let resp =
 			serde_json::from_slice::<ConverseResponse>(bytes).map_err(AIError::ResponseParsing)?;
 
@@ -93,7 +76,7 @@ impl Provider {
 		resp: Response,
 		model: &str,
 	) -> Response {
-		let model = self.model.as_deref().unwrap_or(model).to_string();
+		let model = model.to_string();
 		// Bedrock doesn't return an ID, so get one from the request... if we can
 		let message_id = resp
 			.headers()
@@ -104,11 +87,6 @@ impl Provider {
 	}
 
 	pub fn get_path_for_model(&self, streaming: bool, model: &str) -> Strng {
-		// Apply model alias resolution (provider default takes precedence over request model)
-		let model = self.model.as_deref().unwrap_or(model);
-		let model = crate::llm::resolve_model_alias(&self.model_aliases, model)
-			.map(|s| s.to_string())
-			.unwrap_or_else(|| model.to_string());
 
 		if streaming {
 			strng::format!("/model/{model}/converse-stream")
