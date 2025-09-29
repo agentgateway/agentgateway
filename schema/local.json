@@ -3221,6 +3221,517 @@
                                             }
                                           ],
                                           "default": null
+                                        },
+                                        "promptGuard": {
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ],
+                                          "properties": {
+                                            "request": {
+                                              "type": [
+                                                "object",
+                                                "null"
+                                              ],
+                                              "properties": {
+                                                "rejection": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "body": {
+                                                      "type": [
+                                                        "array",
+                                                        "string"
+                                                      ],
+                                                      "items": {
+                                                        "type": "integer",
+                                                        "format": "uint8",
+                                                        "minimum": 0,
+                                                        "maximum": 255
+                                                      },
+                                                      "default": "The request was rejected due to inappropriate content"
+                                                    },
+                                                    "status": {
+                                                      "type": "integer",
+                                                      "format": "uint16",
+                                                      "minimum": 1,
+                                                      "maximum": 65535,
+                                                      "default": 403
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "default": {
+                                                    "body": "The request was rejected due to inappropriate content",
+                                                    "status": 403
+                                                  }
+                                                },
+                                                "regex": {
+                                                  "type": [
+                                                    "object",
+                                                    "null"
+                                                  ],
+                                                  "properties": {
+                                                    "action": {
+                                                      "oneOf": [
+                                                        {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "mask"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "reject": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "response": {
+                                                                  "type": "object",
+                                                                  "properties": {
+                                                                    "body": {
+                                                                      "type": [
+                                                                        "array",
+                                                                        "string"
+                                                                      ],
+                                                                      "items": {
+                                                                        "type": "integer",
+                                                                        "format": "uint8",
+                                                                        "minimum": 0,
+                                                                        "maximum": 255
+                                                                      },
+                                                                      "default": "The request was rejected due to inappropriate content"
+                                                                    },
+                                                                    "status": {
+                                                                      "type": "integer",
+                                                                      "format": "uint16",
+                                                                      "minimum": 1,
+                                                                      "maximum": 65535,
+                                                                      "default": 403
+                                                                    }
+                                                                  },
+                                                                  "additionalProperties": false,
+                                                                  "default": {
+                                                                    "body": "The request was rejected due to inappropriate content",
+                                                                    "status": 403
+                                                                  }
+                                                                }
+                                                              },
+                                                              "additionalProperties": false
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "reject"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        }
+                                                      ],
+                                                      "default": "mask"
+                                                    },
+                                                    "rules": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "anyOf": [
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "builtin": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                  "ssn",
+                                                                  "creditCard",
+                                                                  "phoneNumber",
+                                                                  "email"
+                                                                ]
+                                                              }
+                                                            },
+                                                            "additionalProperties": false,
+                                                            "required": [
+                                                              "builtin"
+                                                            ]
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "pattern": {
+                                                                "type": "string"
+                                                              },
+                                                              "name": {
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "additionalProperties": false,
+                                                            "required": [
+                                                              "pattern",
+                                                              "name"
+                                                            ]
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "rules"
+                                                  ]
+                                                },
+                                                "webhook": {
+                                                  "type": [
+                                                    "object",
+                                                    "null"
+                                                  ],
+                                                  "properties": {
+                                                    "target": {
+                                                      "type": "string"
+                                                    },
+                                                    "forwardHeaderMatches": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "name": {
+                                                            "type": "string"
+                                                          },
+                                                          "value": {
+                                                            "oneOf": [
+                                                              {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                  "exact": {
+                                                                    "type": "string"
+                                                                  }
+                                                                },
+                                                                "required": [
+                                                                  "exact"
+                                                                ],
+                                                                "additionalProperties": false
+                                                              },
+                                                              {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                  "regex": {
+                                                                    "type": "string"
+                                                                  }
+                                                                },
+                                                                "required": [
+                                                                  "regex"
+                                                                ],
+                                                                "additionalProperties": false
+                                                              }
+                                                            ]
+                                                          }
+                                                        },
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "name",
+                                                          "value"
+                                                        ]
+                                                      }
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "target"
+                                                  ]
+                                                },
+                                                "openaiModeration": {
+                                                  "type": [
+                                                    "object",
+                                                    "null"
+                                                  ],
+                                                  "properties": {
+                                                    "model": {
+                                                      "description": "Model to use. Defaults to `omni-moderation-latest`",
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "auth": {
+                                                      "oneOf": [
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "passthrough": {
+                                                              "type": "object",
+                                                              "additionalProperties": false
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "passthrough"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "key": {
+                                                              "anyOf": [
+                                                                {
+                                                                  "type": "object",
+                                                                  "properties": {
+                                                                    "file": {
+                                                                      "type": "string"
+                                                                    }
+                                                                  },
+                                                                  "required": [
+                                                                    "file"
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "type": "string"
+                                                                }
+                                                              ]
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "key"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "auth"
+                                                  ]
+                                                }
+                                              },
+                                              "additionalProperties": false
+                                            },
+                                            "response": {
+                                              "type": [
+                                                "object",
+                                                "null"
+                                              ],
+                                              "properties": {
+                                                "regex": {
+                                                  "type": [
+                                                    "object",
+                                                    "null"
+                                                  ],
+                                                  "properties": {
+                                                    "action": {
+                                                      "oneOf": [
+                                                        {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "mask"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "reject": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "response": {
+                                                                  "type": "object",
+                                                                  "properties": {
+                                                                    "body": {
+                                                                      "type": [
+                                                                        "array",
+                                                                        "string"
+                                                                      ],
+                                                                      "items": {
+                                                                        "type": "integer",
+                                                                        "format": "uint8",
+                                                                        "minimum": 0,
+                                                                        "maximum": 255
+                                                                      },
+                                                                      "default": "The request was rejected due to inappropriate content"
+                                                                    },
+                                                                    "status": {
+                                                                      "type": "integer",
+                                                                      "format": "uint16",
+                                                                      "minimum": 1,
+                                                                      "maximum": 65535,
+                                                                      "default": 403
+                                                                    }
+                                                                  },
+                                                                  "additionalProperties": false,
+                                                                  "default": {
+                                                                    "body": "The request was rejected due to inappropriate content",
+                                                                    "status": 403
+                                                                  }
+                                                                }
+                                                              },
+                                                              "additionalProperties": false
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "reject"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        }
+                                                      ],
+                                                      "default": "mask"
+                                                    },
+                                                    "rules": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "anyOf": [
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "builtin": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                  "ssn",
+                                                                  "creditCard",
+                                                                  "phoneNumber",
+                                                                  "email"
+                                                                ]
+                                                              }
+                                                            },
+                                                            "additionalProperties": false,
+                                                            "required": [
+                                                              "builtin"
+                                                            ]
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "pattern": {
+                                                                "type": "string"
+                                                              },
+                                                              "name": {
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "additionalProperties": false,
+                                                            "required": [
+                                                              "pattern",
+                                                              "name"
+                                                            ]
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "rules"
+                                                  ]
+                                                },
+                                                "webhook": {
+                                                  "type": [
+                                                    "object",
+                                                    "null"
+                                                  ],
+                                                  "properties": {
+                                                    "target": {
+                                                      "type": "string"
+                                                    },
+                                                    "forwardHeaderMatches": {
+                                                      "type": "array",
+                                                      "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "name": {
+                                                            "type": "string"
+                                                          },
+                                                          "value": {
+                                                            "oneOf": [
+                                                              {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                  "exact": {
+                                                                    "type": "string"
+                                                                  }
+                                                                },
+                                                                "required": [
+                                                                  "exact"
+                                                                ],
+                                                                "additionalProperties": false
+                                                              },
+                                                              {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                  "regex": {
+                                                                    "type": "string"
+                                                                  }
+                                                                },
+                                                                "required": [
+                                                                  "regex"
+                                                                ],
+                                                                "additionalProperties": false
+                                                              }
+                                                            ]
+                                                          }
+                                                        },
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "name",
+                                                          "value"
+                                                        ]
+                                                      }
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "target"
+                                                  ]
+                                                }
+                                              },
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "additionalProperties": false
+                                        },
+                                        "defaults": {
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ],
+                                          "additionalProperties": true
+                                        },
+                                        "overrides": {
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ],
+                                          "additionalProperties": true
+                                        },
+                                        "prompts": {
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ],
+                                          "properties": {
+                                            "append": {
+                                              "type": "object",
+                                              "properties": {
+                                                "role": {
+                                                  "type": "string"
+                                                },
+                                                "content": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "role",
+                                                "content"
+                                              ]
+                                            },
+                                            "prepend": {
+                                              "type": "object",
+                                              "properties": {
+                                                "role": {
+                                                  "type": "string"
+                                                },
+                                                "content": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "role",
+                                                "content"
+                                              ]
+                                            }
+                                          },
+                                          "additionalProperties": false
                                         }
                                       },
                                       "additionalProperties": false,
@@ -3699,6 +4210,517 @@
                                                         }
                                                       ],
                                                       "default": null
+                                                    },
+                                                    "promptGuard": {
+                                                      "type": [
+                                                        "object",
+                                                        "null"
+                                                      ],
+                                                      "properties": {
+                                                        "request": {
+                                                          "type": [
+                                                            "object",
+                                                            "null"
+                                                          ],
+                                                          "properties": {
+                                                            "rejection": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "body": {
+                                                                  "type": [
+                                                                    "array",
+                                                                    "string"
+                                                                  ],
+                                                                  "items": {
+                                                                    "type": "integer",
+                                                                    "format": "uint8",
+                                                                    "minimum": 0,
+                                                                    "maximum": 255
+                                                                  },
+                                                                  "default": "The request was rejected due to inappropriate content"
+                                                                },
+                                                                "status": {
+                                                                  "type": "integer",
+                                                                  "format": "uint16",
+                                                                  "minimum": 1,
+                                                                  "maximum": 65535,
+                                                                  "default": 403
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "default": {
+                                                                "body": "The request was rejected due to inappropriate content",
+                                                                "status": 403
+                                                              }
+                                                            },
+                                                            "regex": {
+                                                              "type": [
+                                                                "object",
+                                                                "null"
+                                                              ],
+                                                              "properties": {
+                                                                "action": {
+                                                                  "oneOf": [
+                                                                    {
+                                                                      "type": "string",
+                                                                      "enum": [
+                                                                        "mask"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "reject": {
+                                                                          "type": "object",
+                                                                          "properties": {
+                                                                            "response": {
+                                                                              "type": "object",
+                                                                              "properties": {
+                                                                                "body": {
+                                                                                  "type": [
+                                                                                    "array",
+                                                                                    "string"
+                                                                                  ],
+                                                                                  "items": {
+                                                                                    "type": "integer",
+                                                                                    "format": "uint8",
+                                                                                    "minimum": 0,
+                                                                                    "maximum": 255
+                                                                                  },
+                                                                                  "default": "The request was rejected due to inappropriate content"
+                                                                                },
+                                                                                "status": {
+                                                                                  "type": "integer",
+                                                                                  "format": "uint16",
+                                                                                  "minimum": 1,
+                                                                                  "maximum": 65535,
+                                                                                  "default": 403
+                                                                                }
+                                                                              },
+                                                                              "additionalProperties": false,
+                                                                              "default": {
+                                                                                "body": "The request was rejected due to inappropriate content",
+                                                                                "status": 403
+                                                                              }
+                                                                            }
+                                                                          },
+                                                                          "additionalProperties": false
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "reject"
+                                                                      ],
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  ],
+                                                                  "default": "mask"
+                                                                },
+                                                                "rules": {
+                                                                  "type": "array",
+                                                                  "items": {
+                                                                    "anyOf": [
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "builtin": {
+                                                                            "type": "string",
+                                                                            "enum": [
+                                                                              "ssn",
+                                                                              "creditCard",
+                                                                              "phoneNumber",
+                                                                              "email"
+                                                                            ]
+                                                                          }
+                                                                        },
+                                                                        "additionalProperties": false,
+                                                                        "required": [
+                                                                          "builtin"
+                                                                        ]
+                                                                      },
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "pattern": {
+                                                                            "type": "string"
+                                                                          },
+                                                                          "name": {
+                                                                            "type": "string"
+                                                                          }
+                                                                        },
+                                                                        "additionalProperties": false,
+                                                                        "required": [
+                                                                          "pattern",
+                                                                          "name"
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "rules"
+                                                              ]
+                                                            },
+                                                            "webhook": {
+                                                              "type": [
+                                                                "object",
+                                                                "null"
+                                                              ],
+                                                              "properties": {
+                                                                "target": {
+                                                                  "type": "string"
+                                                                },
+                                                                "forwardHeaderMatches": {
+                                                                  "type": "array",
+                                                                  "items": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                      "name": {
+                                                                        "type": "string"
+                                                                      },
+                                                                      "value": {
+                                                                        "oneOf": [
+                                                                          {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                              "exact": {
+                                                                                "type": "string"
+                                                                              }
+                                                                            },
+                                                                            "required": [
+                                                                              "exact"
+                                                                            ],
+                                                                            "additionalProperties": false
+                                                                          },
+                                                                          {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                              "regex": {
+                                                                                "type": "string"
+                                                                              }
+                                                                            },
+                                                                            "required": [
+                                                                              "regex"
+                                                                            ],
+                                                                            "additionalProperties": false
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    },
+                                                                    "additionalProperties": false,
+                                                                    "required": [
+                                                                      "name",
+                                                                      "value"
+                                                                    ]
+                                                                  }
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "target"
+                                                              ]
+                                                            },
+                                                            "openaiModeration": {
+                                                              "type": [
+                                                                "object",
+                                                                "null"
+                                                              ],
+                                                              "properties": {
+                                                                "model": {
+                                                                  "description": "Model to use. Defaults to `omni-moderation-latest`",
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
+                                                                "auth": {
+                                                                  "oneOf": [
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "passthrough": {
+                                                                          "type": "object",
+                                                                          "additionalProperties": false
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "passthrough"
+                                                                      ],
+                                                                      "additionalProperties": false
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "key": {
+                                                                          "anyOf": [
+                                                                            {
+                                                                              "type": "object",
+                                                                              "properties": {
+                                                                                "file": {
+                                                                                  "type": "string"
+                                                                                }
+                                                                              },
+                                                                              "required": [
+                                                                                "file"
+                                                                              ]
+                                                                            },
+                                                                            {
+                                                                              "type": "string"
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "key"
+                                                                      ],
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "auth"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "additionalProperties": false
+                                                        },
+                                                        "response": {
+                                                          "type": [
+                                                            "object",
+                                                            "null"
+                                                          ],
+                                                          "properties": {
+                                                            "regex": {
+                                                              "type": [
+                                                                "object",
+                                                                "null"
+                                                              ],
+                                                              "properties": {
+                                                                "action": {
+                                                                  "oneOf": [
+                                                                    {
+                                                                      "type": "string",
+                                                                      "enum": [
+                                                                        "mask"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "reject": {
+                                                                          "type": "object",
+                                                                          "properties": {
+                                                                            "response": {
+                                                                              "type": "object",
+                                                                              "properties": {
+                                                                                "body": {
+                                                                                  "type": [
+                                                                                    "array",
+                                                                                    "string"
+                                                                                  ],
+                                                                                  "items": {
+                                                                                    "type": "integer",
+                                                                                    "format": "uint8",
+                                                                                    "minimum": 0,
+                                                                                    "maximum": 255
+                                                                                  },
+                                                                                  "default": "The request was rejected due to inappropriate content"
+                                                                                },
+                                                                                "status": {
+                                                                                  "type": "integer",
+                                                                                  "format": "uint16",
+                                                                                  "minimum": 1,
+                                                                                  "maximum": 65535,
+                                                                                  "default": 403
+                                                                                }
+                                                                              },
+                                                                              "additionalProperties": false,
+                                                                              "default": {
+                                                                                "body": "The request was rejected due to inappropriate content",
+                                                                                "status": 403
+                                                                              }
+                                                                            }
+                                                                          },
+                                                                          "additionalProperties": false
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "reject"
+                                                                      ],
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  ],
+                                                                  "default": "mask"
+                                                                },
+                                                                "rules": {
+                                                                  "type": "array",
+                                                                  "items": {
+                                                                    "anyOf": [
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "builtin": {
+                                                                            "type": "string",
+                                                                            "enum": [
+                                                                              "ssn",
+                                                                              "creditCard",
+                                                                              "phoneNumber",
+                                                                              "email"
+                                                                            ]
+                                                                          }
+                                                                        },
+                                                                        "additionalProperties": false,
+                                                                        "required": [
+                                                                          "builtin"
+                                                                        ]
+                                                                      },
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "pattern": {
+                                                                            "type": "string"
+                                                                          },
+                                                                          "name": {
+                                                                            "type": "string"
+                                                                          }
+                                                                        },
+                                                                        "additionalProperties": false,
+                                                                        "required": [
+                                                                          "pattern",
+                                                                          "name"
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "rules"
+                                                              ]
+                                                            },
+                                                            "webhook": {
+                                                              "type": [
+                                                                "object",
+                                                                "null"
+                                                              ],
+                                                              "properties": {
+                                                                "target": {
+                                                                  "type": "string"
+                                                                },
+                                                                "forwardHeaderMatches": {
+                                                                  "type": "array",
+                                                                  "items": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                      "name": {
+                                                                        "type": "string"
+                                                                      },
+                                                                      "value": {
+                                                                        "oneOf": [
+                                                                          {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                              "exact": {
+                                                                                "type": "string"
+                                                                              }
+                                                                            },
+                                                                            "required": [
+                                                                              "exact"
+                                                                            ],
+                                                                            "additionalProperties": false
+                                                                          },
+                                                                          {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                              "regex": {
+                                                                                "type": "string"
+                                                                              }
+                                                                            },
+                                                                            "required": [
+                                                                              "regex"
+                                                                            ],
+                                                                            "additionalProperties": false
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    },
+                                                                    "additionalProperties": false,
+                                                                    "required": [
+                                                                      "name",
+                                                                      "value"
+                                                                    ]
+                                                                  }
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "target"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "additionalProperties": false
+                                                        }
+                                                      },
+                                                      "additionalProperties": false
+                                                    },
+                                                    "defaults": {
+                                                      "type": [
+                                                        "object",
+                                                        "null"
+                                                      ],
+                                                      "additionalProperties": true
+                                                    },
+                                                    "overrides": {
+                                                      "type": [
+                                                        "object",
+                                                        "null"
+                                                      ],
+                                                      "additionalProperties": true
+                                                    },
+                                                    "prompts": {
+                                                      "type": [
+                                                        "object",
+                                                        "null"
+                                                      ],
+                                                      "properties": {
+                                                        "append": {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "role": {
+                                                              "type": "string"
+                                                            },
+                                                            "content": {
+                                                              "type": "string"
+                                                            }
+                                                          },
+                                                          "additionalProperties": false,
+                                                          "required": [
+                                                            "role",
+                                                            "content"
+                                                          ]
+                                                        },
+                                                        "prepend": {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "role": {
+                                                              "type": "string"
+                                                            },
+                                                            "content": {
+                                                              "type": "string"
+                                                            }
+                                                          },
+                                                          "additionalProperties": false,
+                                                          "required": [
+                                                            "role",
+                                                            "content"
+                                                          ]
+                                                        }
+                                                      },
+                                                      "additionalProperties": false
                                                     }
                                                   },
                                                   "additionalProperties": false,

@@ -203,6 +203,9 @@ pub struct LocalNamedAIProvider {
 	pub backend_tls: Option<LocalBackendTLS>,
 	#[serde(default)]
 	pub backend_auth: Option<BackendAuth>,
+
+	#[serde(flatten, default)]
+	pub policies: Option<Arc<llm::Policy>>
 }
 
 impl LocalAIBackend {
@@ -233,6 +236,13 @@ impl LocalAIBackend {
 						name: strng::format!("{backend_name}/{}-auth", p.name),
 						target: PolicyTarget::SubBackend(strng::format!("{}/{}", backend_name, p.name.clone())),
 						policy: Policy::BackendAuth(bauth),
+					});
+				}
+				if let Some(llm) = p.policies {
+					policies.push(TargetedPolicy {
+						name: strng::format!("{backend_name}/{}-ai", p.name),
+						target: PolicyTarget::SubBackend(strng::format!("{}/{}", backend_name, p.name.clone())),
+						policy: Policy::AI(llm),
 					});
 				}
 				group.push((

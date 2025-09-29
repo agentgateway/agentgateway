@@ -744,6 +744,7 @@ async fn make_backend_call(
 						backend_auth: None,
 						a2a: None,
 						inference_routing: None,
+						llm: None,
 						// Attach LLM provider, but don't use default setup
 						llm_provider: Some(provider.clone()),
 					}),
@@ -860,6 +861,8 @@ async fn make_backend_call(
 		Some(def) => def.merge(policies),
 		None => policies,
 	};
+
+	let route_policies = route_policies.merge_backend_policies(policies.llm.clone());
 
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	auth::apply_backend_auth(&client, policies.backend_auth.as_ref(), &mut req).await?;

@@ -199,6 +199,7 @@ impl AIProvider {
 			a2a: None,
 			inference_routing: None,
 			llm_provider: None,
+			llm: None,
 		};
 		match self {
 			AIProvider::OpenAI(_) => (Target::Hostname(openai::DEFAULT_HOST, 443), btls),
@@ -210,6 +211,7 @@ impl AIProvider {
 					a2a: None,
 					inference_routing: None,
 					llm_provider: None,
+					llm: None,
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
@@ -221,6 +223,7 @@ impl AIProvider {
 					a2a: None,
 					inference_routing: None,
 					llm_provider: None,
+					llm: None,
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
