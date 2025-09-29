@@ -2780,6 +2780,14 @@
                                               "properties": {
                                                 "openAI": {
                                                   "type": "object",
+                                                  "properties": {
+                                                    "model": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    }
+                                                  },
                                                   "additionalProperties": false
                                                 }
                                               },
@@ -2792,7 +2800,15 @@
                                               "type": "object",
                                               "properties": {
                                                 "gemini": {
-                                                  "type": "object"
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "model": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    }
+                                                  }
                                                 }
                                               },
                                               "required": [
@@ -2806,6 +2822,12 @@
                                                 "vertex": {
                                                   "type": "object",
                                                   "properties": {
+                                                    "model": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
                                                     "region": {
                                                       "type": [
                                                         "string",
@@ -2830,7 +2852,15 @@
                                               "type": "object",
                                               "properties": {
                                                 "anthropic": {
-                                                  "type": "object"
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "model": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    }
+                                                  }
                                                 }
                                               },
                                               "required": [
@@ -2844,6 +2874,12 @@
                                                 "bedrock": {
                                                   "type": "object",
                                                   "properties": {
+                                                    "model": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
                                                     "region": {
                                                       "type": "string"
                                                     },
@@ -3733,6 +3769,14 @@
                                                           "properties": {
                                                             "openAI": {
                                                               "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              },
                                                               "additionalProperties": false
                                                             }
                                                           },
@@ -3745,7 +3789,15 @@
                                                           "type": "object",
                                                           "properties": {
                                                             "gemini": {
-                                                              "type": "object"
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              }
                                                             }
                                                           },
                                                           "required": [
@@ -3759,6 +3811,12 @@
                                                             "vertex": {
                                                               "type": "object",
                                                               "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
                                                                 "region": {
                                                                   "type": [
                                                                     "string",
@@ -3783,7 +3841,15 @@
                                                           "type": "object",
                                                           "properties": {
                                                             "anthropic": {
-                                                              "type": "object"
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              }
                                                             }
                                                           },
                                                           "required": [
@@ -3797,6 +3863,12 @@
                                                             "bedrock": {
                                                               "type": "object",
                                                               "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
                                                                 "region": {
                                                                   "type": "string"
                                                                 },

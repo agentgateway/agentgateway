@@ -147,6 +147,11 @@ impl LLMRequestPolicies {
 			defaults: be.defaults.clone().or_else(|| re.defaults.clone()),
 			overrides: be.overrides.clone().or_else(|| re.overrides.clone()),
 			prompts: be.prompts.clone().or_else(|| re.prompts.clone()),
+			model_aliases: if be.model_aliases.is_empty() {
+				re.model_aliases.clone()
+			} else {
+				be.model_aliases.clone()
+			},
 		}));
 		Arc::new(route_policies)
 	}
