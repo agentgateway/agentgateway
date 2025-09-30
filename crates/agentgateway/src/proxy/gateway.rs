@@ -179,7 +179,10 @@ impl Gateway {
 			let (inner_trigger, inner_drain) = drain::new();
 			drop(inner_drain);
 			let handle_stream = |stream: TcpStream, upgrader: &DrainUpgrader| {
-				let mut stream = Socket::from_tcp(stream).expect("todo");
+				let Ok(mut stream) = Socket::from_tcp(stream) else {
+					// Can fail if they immediately disconnected; not much we can do.
+					return;
+				};
 				stream.with_logging(LoggingMode::Downstream);
 				let pi = pi.clone();
 				// We got the connection; make a strong drain blocker.
