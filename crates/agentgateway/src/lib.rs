@@ -117,7 +117,7 @@ pub struct ListenerConfig {
 	#[serde(default = "defaults::tls_handshake_timeout")]
 	tls_handshake_timeout: Duration,
 
-	/// The maximum number of numbers allowed in a request. Changing this value results in a performance
+	/// The maximum number of headers allowed in a request. Changing this value results in a performance
 	/// degradation, even if set to a lower value than the default (100)
 	#[serde(default)]
 	http1_max_headers: Option<usize>,
