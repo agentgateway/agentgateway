@@ -34,11 +34,11 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::proxy::{ProxyError, ProxyResponse};
+use crate::transport::BufferLimit;
 pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
 };
-use axum::body::to_bytes;
 use bytes::Bytes;
 use http_body::{Frame, SizeHint};
 use tower_serve_static::private::mime;
@@ -166,8 +166,34 @@ pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 	Ok(host)
 }
 
-pub async fn inspect_body(body: &mut Body) -> anyhow::Result<Bytes> {
-	inspect_body_with_limit(body, 2_097_152).await
+pub fn buffer_limit(req: &Request) -> usize {
+	req
+		.extensions()
+		.get::<BufferLimit>()
+		.map(|b| b.0)
+		.unwrap_or(2_097_152)
+}
+
+pub fn response_buffer_limit(resp: &Response) -> usize {
+	resp
+		.extensions()
+		.get::<BufferLimit>()
+		.map(|b| b.0)
+		.unwrap_or(2_097_152)
+}
+
+pub async fn read_body(req: Request) -> Result<Bytes, axum_core::Error> {
+	let lim = buffer_limit(&req);
+	read_body_with_limit(req.into_body(), lim).await
+}
+
+pub async fn read_body_with_limit(body: Body, limit: usize) -> Result<Bytes, axum_core::Error> {
+	axum::body::to_bytes(body, limit).await
+}
+
+pub async fn inspect_body(req: &mut Request) -> anyhow::Result<Bytes> {
+	let lim = buffer_limit(req);
+	inspect_body_with_limit(req.body_mut(), lim).await
 }
 
 pub async fn inspect_body_with_limit(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {

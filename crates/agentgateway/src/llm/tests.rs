@@ -148,7 +148,7 @@ async fn test_anthropic() {
 	test_response::<anthropic::types::MessagesResponse>("response_anthropic_tool", response);
 	test_response::<anthropic::types::MessagesResponse>("response_anthropic_thinking", response);
 
-	let stream_response = |i, log| Ok(anthropic::translate_stream(i, log));
+	let stream_response = |i, log| Ok(anthropic::translate_stream(i, 1024, log));
 	test_streaming("response_stream-anthropic_basic.json", stream_response).await;
 	test_streaming("response_stream-anthropic_thinking.json", stream_response).await;
 

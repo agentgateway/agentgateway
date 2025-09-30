@@ -117,9 +117,9 @@ impl Policy {
 				"model": model,
 			}))?))?;
 			auth::apply_backend_auth(client, Some(&auth), &mut req).await?;
-			let resp = client.simple_call(req).await;
+			let resp = client.simple_call(req).await?;
 			let resp: async_openai::types::CreateModerationResponse =
-				json::from_body(resp?.into_body()).await?;
+				json::from_response_body(resp).await?;
 			if resp.results.iter().any(|r| r.flagged) {
 				return Ok(Some(g.rejection.as_response()));
 			}
@@ -727,7 +727,7 @@ mod webhook {
 				transport: Default::default(), // TODO: use policies
 			})
 			.await?;
-		let parsed = json::from_body(res.into_body()).await?;
+		let parsed = json::from_response_body(res).await?;
 		Ok(parsed)
 	}
 
@@ -745,7 +745,7 @@ mod webhook {
 				transport: Default::default(), // TODO: use policies
 			})
 			.await?;
-		let parsed = json::from_body(res.into_body()).await?;
+		let parsed = json::from_response_body(res).await?;
 		Ok(parsed)
 	}
 }

@@ -121,7 +121,7 @@ async fn test_sse_json_transform() {
 		status: String,
 	}
 
-	let transformed_body = sse::json_transform::<Input, Output>(body, |input| match input {
+	let transformed_body = sse::json_transform::<Input, Output>(body, 1024, |input| match input {
 		Ok(input) => Some(Output {
 			message: input.msg,
 			error: "".to_string(),

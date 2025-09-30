@@ -101,8 +101,59 @@ pub struct RawConfig {
 
 	#[serde(default)]
 	backend: BackendConfig,
+	#[serde(default)]
+	listener: ListenerConfig,
 
-	http2: Option<RawHTTP2>,
+	hbone: Option<RawHBONE>,
+}
+
+#[apply(schema!)]
+pub struct ListenerConfig {
+	#[serde(default = "defaults::max_buffer_size")]
+	max_buffer_size: usize,
+
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(default = "defaults::tls_handshake_timeout")]
+	tls_handshake_timeout: Duration,
+
+	/// The maximum number of numbers allowed in a request. Changing this value results in a performance
+	/// degradation, even if set to a lower value than the default (100)
+	#[serde(default)]
+	http1_max_headers: Option<usize>,
+
+	#[serde(default)]
+	http2_window_size: Option<u32>,
+	#[serde(default)]
+	http2_connection_window_size: Option<u32>,
+	#[serde(default)]
+	http2_frame_size: Option<u32>,
+	#[serde(with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[serde(default)]
+	http2_keepalive_interval: Option<Duration>,
+	#[serde(with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[serde(default)]
+	http2_keepalive_timeout: Option<Duration>,
+}
+
+impl Default for ListenerConfig {
+	fn default() -> Self {
+		Self {
+			max_buffer_size: defaults::max_buffer_size(),
+			tls_handshake_timeout: defaults::tls_handshake_timeout(),
+
+			http1_max_headers: None,
+
+			http2_window_size: None,
+			http2_connection_window_size: None,
+			http2_frame_size: None,
+
+			http2_keepalive_interval: None,
+			http2_keepalive_timeout: None,
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -169,10 +220,18 @@ mod defaults {
 	pub fn connect_timeout() -> Duration {
 		Duration::from_secs(10)
 	}
+
+	pub fn max_buffer_size() -> usize {
+		2_097_152
+	}
+
+	pub fn tls_handshake_timeout() -> Duration {
+		Duration::from_secs(15)
+	}
 }
 
 #[apply(schema_de!)]
-pub struct RawHTTP2 {
+pub struct RawHBONE {
 	window_size: Option<u32>,
 	connection_window_size: Option<u32>,
 	frame_size: Option<u32>,
@@ -366,6 +425,7 @@ pub struct Config {
 	pub threading_mode: ThreadingMode,
 
 	pub backend: BackendConfig,
+	pub listener: ListenerConfig,
 }
 
 #[derive(serde::Serialize, Copy, PartialOrd, PartialEq, Eq, Clone, Debug, Default)]

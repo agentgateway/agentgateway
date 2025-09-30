@@ -333,10 +333,11 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				ns = std::env::var("POD_NAMESPACE").unwrap_or_else(|_| "".to_string())
 			),
 		},
+		listener: raw.listener,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?
-				.or(raw.http2.as_ref().and_then(|h| h.window_size))
+				.or(raw.hbone.as_ref().and_then(|h| h.window_size))
 				.unwrap_or(4u32 * 1024 * 1024),
 			// connection window size: per connection.
 			// Setting this to the same value as window_size can introduce deadlocks in some applications
@@ -344,20 +345,20 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			// If streamA consumes the entire connection window, we enter a deadlock.
 			// A 4x limit should be appropriate without introducing too much potential buffering.
 			connection_window_size: parse("HTTP2_CONNECTION_WINDOW_SIZE")?
-				.or(raw.http2.as_ref().and_then(|h| h.connection_window_size))
+				.or(raw.hbone.as_ref().and_then(|h| h.connection_window_size))
 				.unwrap_or(16u32 * 1024 * 1024),
 			frame_size: parse("HTTP2_FRAME_SIZE")?
-				.or(raw.http2.as_ref().and_then(|h| h.frame_size))
+				.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
 				.unwrap_or(1024u32 * 1024),
 
 			pool_max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
-				.or(raw.http2.as_ref().and_then(|h| h.pool_max_streams_per_conn))
+				.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
 				.unwrap_or(100u16),
 
 			pool_unused_release_timeout: parse_duration("POOL_UNUSED_RELEASE_TIMEOUT")?
 				.or(
 					raw
-						.http2
+						.hbone
 						.as_ref()
 						.and_then(|h| h.pool_unused_release_timeout),
 				)

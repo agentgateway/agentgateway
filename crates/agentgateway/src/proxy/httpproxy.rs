@@ -29,6 +29,7 @@ use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::telemetry::trc::TraceParent;
+use crate::transport::BufferLimit;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::{ProxyInputs, store, *};
 
@@ -211,6 +212,9 @@ impl HTTPProxy {
 		// Copy connection level attributes into request level attributes
 		connection.copy::<TCPConnectionInfo>(req.extensions_mut());
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		req
+			.extensions_mut()
+			.insert(BufferLimit::new(self.inputs.cfg.listener.max_buffer_size));
 
 		let tcp = connection
 			.get::<TCPConnectionInfo>()
@@ -306,7 +310,7 @@ impl HTTPProxy {
 		);
 		log.version = Some(req.version());
 		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
-		if needs_body && let Ok(body) = crate::http::inspect_body(req.body_mut()).await {
+		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
 			log.cel.ctx().with_request_body(body);
 		}
 
@@ -377,7 +381,7 @@ impl HTTPProxy {
 		// But we may find new expressions that now need the request.
 		// it is zero-cost at runtime to do it twice so NBD.
 		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
-		if needs_body && let Ok(body) = crate::http::inspect_body(req.body_mut()).await {
+		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
 			log.cel.ctx().with_request_body(body);
 		}
 

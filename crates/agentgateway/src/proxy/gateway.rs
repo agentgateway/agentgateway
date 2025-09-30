@@ -21,7 +21,7 @@ use tracing::{Instrument, debug, event, info, info_span, warn};
 use crate::store::Event;
 use crate::transport::stream::{Extension, LoggingMode, Socket};
 use crate::types::agent::{Bind, BindName, BindProtocol, Listener, ListenerProtocol};
-use crate::{ProxyInputs, client};
+use crate::{ListenerConfig, ProxyInputs, client};
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
@@ -302,23 +302,22 @@ impl Gateway {
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
 		let target_address = stream.target_address();
+		let server = auto_server(&inputs.cfg.listener);
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
 			inputs,
 			selected_listener,
 			target_address,
 		};
-		let server = auto_server();
 		let connection = Arc::new(stream.get_ext());
-		let serve = server // TODO: tune all optinos
-			.serve_connection_with_upgrades(
-				TokioIo::new(stream),
-				hyper::service::service_fn(move |req| {
-					let proxy = proxy.clone();
-					let connection = connection.clone();
-					async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
-				}),
-			);
+		let serve = server.serve_connection_with_upgrades(
+			TokioIo::new(stream),
+			hyper::service::service_fn(move |req| {
+				let proxy = proxy.clone();
+				let connection = connection.clone();
+				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
+			}),
+		);
 		// Wrap it in the graceful watcher, will ensure GOAWAY/Connect:clone when we shutdown
 		let serve = drain.wrap_connection(serve);
 		let res = serve.await;
@@ -366,18 +365,22 @@ impl Gateway {
 		raw_stream: Socket,
 		bind: BindName,
 	) -> anyhow::Result<(Arc<Listener>, Socket)> {
-		let listeners = inp.stores.read_binds().listeners(bind.clone()).unwrap();
-		let (ext, counter, inner) = raw_stream.into_parts();
-		let acceptor =
+		let to = inp.cfg.listener.tls_handshake_timeout;
+		let handshake = async move {
+			let listeners = inp.stores.read_binds().listeners(bind.clone()).unwrap();
+			let (ext, counter, inner) = raw_stream.into_parts();
+			let acceptor =
 			tokio_rustls::LazyConfigAcceptor::new(rustls::server::Acceptor::default(), Box::new(inner));
-		let start = acceptor.await?;
-		let ch = start.client_hello();
-		let best = listeners
+			let start = acceptor.await?;
+			let ch = start.client_hello();
+			let best = listeners
 			.best_match(ch.server_name().unwrap_or_default())
 			.ok_or(anyhow!("no TLS listener match"))?;
-		let cfg = best.protocol.tls().unwrap();
-		let tls = start.into_stream(cfg).await?;
-		Ok((best, Socket::from_tls(ext, counter, tls.into())?))
+			let cfg = best.protocol.tls().unwrap();
+			let tls = start.into_stream(cfg).await?;
+			Ok((best, Socket::from_tls(ext, counter, tls.into())?))
+		};
+		tokio::time::timeout(to, handshake).await?
 	}
 
 	async fn terminate_hbone(
@@ -480,9 +483,44 @@ fn bind_protocol(inp: Arc<ProxyInputs>, bind: BindName) -> BindProtocol {
 	BindProtocol::http
 }
 
-pub fn auto_server() -> auto::Builder<::hyper_util::rt::TokioExecutor> {
+pub fn auto_server(c: &ListenerConfig) -> auto::Builder<::hyper_util::rt::TokioExecutor> {
 	let mut b = auto::Builder::new(::hyper_util::rt::TokioExecutor::new());
 	b.http2().timer(hyper_util::rt::tokio::TokioTimer::new());
+	b.http1().timer(hyper_util::rt::tokio::TokioTimer::new());
+
+	let ListenerConfig {
+		max_buffer_size: _, // Not handled here
+		tls_handshake_timeout: _, // Not handled here
+		http1_max_headers,
+		http2_window_size,
+		http2_connection_window_size,
+		http2_frame_size,
+		http2_keepalive_interval,
+		http2_keepalive_timeout,
+	} = c;
+
+	if let Some(m) = http1_max_headers {
+		b.http1().max_headers(*m);
+	}
+
+	if http2_window_size.is_some() || http2_connection_window_size.is_some() {
+		if let Some(w) = http2_connection_window_size {
+			b.http2().initial_connection_window_size(Some(*w));
+		}
+		if let Some(w) = http2_window_size {
+			b.http2().initial_stream_window_size(Some(*w));
+		}
+	} else {
+		b.http2().adaptive_window(true);
+	}
+	b.http2().keep_alive_interval(*http2_keepalive_interval);
+	if let Some(to) = http2_keepalive_timeout {
+		b.http2().keep_alive_timeout(*to);
+	}
+	if let Some(m) = http2_frame_size {
+		b.http2().max_frame_size(*m);
+	}
+
 	b
 }
 

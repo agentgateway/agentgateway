@@ -91,7 +91,9 @@ mod tests {
 	use crate::http::Body;
 
 	pub async fn read(body: Body) -> Bytes {
-		axum::body::to_bytes(body, 2_097_152).await.unwrap()
+		crate::http::read_body_with_limit(body, 1_097_152)
+			.await
+			.unwrap()
 	}
 
 	// -----------------------------------------------------------------

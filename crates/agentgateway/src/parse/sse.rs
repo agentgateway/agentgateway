@@ -9,9 +9,10 @@ use crate::*;
 
 pub fn json_passthrough<F: DeserializeOwned>(
 	b: http::Body,
+	buffer_limit: usize,
 	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
 ) -> http::Body {
-	let decoder = SseDecoder::<Bytes>::with_max_size(2_097_152);
+	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 
 	passthrough_parser(b, decoder, move |o| {
 		let Some(data) = unwrap_sse_data(o) else {
@@ -28,9 +29,10 @@ pub fn json_passthrough<F: DeserializeOwned>(
 
 pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	b: http::Body,
+	buffer_limit: usize,
 	mut f: impl FnMut(anyhow::Result<I>) -> Option<O> + Send + 'static,
 ) -> http::Body {
-	let decoder = SseDecoder::<Bytes>::with_max_size(2_097_152);
+	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 	let encoder = SseEncoder::new();
 
 	transform_parser(b, decoder, encoder, move |o| {

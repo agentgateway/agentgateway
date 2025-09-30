@@ -427,6 +427,7 @@ impl Client {
 
 			request =?req
 		);
+		let buffer_limit = http::buffer_limit(&req);
 		let resp = match TIMEOUT {
 			Some(to) => match tokio::time::timeout(to, self.client.request(req)).await {
 				Ok(res) => res.map_err(ProxyError::UpstreamCallFailed),
@@ -457,6 +458,11 @@ impl Client {
 
 			duration = dur,
 		);
-		Ok(resp?.map(http::Body::new))
+
+		let mut resp = resp?.map(http::Body::new);
+		resp
+			.extensions_mut()
+			.insert(transport::BufferLimit::new(buffer_limit));
+		Ok(resp)
 	}
 }

@@ -1,7 +1,6 @@
 use std::convert::Infallible;
 
 use anyhow::anyhow;
-use axum::body::to_bytes;
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::BodyStream;
@@ -158,12 +157,13 @@ impl ExtProc {
 
 	pub async fn mutate_request(&mut self, req: http::Request) -> anyhow::Result<http::Request> {
 		let headers = to_header_map(req.headers());
+		let buffer = http::buffer_limit(&req);
 		let (parts, body) = req.into_parts();
 
 		// For fail open we need a copy of the body. There is definitely a better way to do this, but for
 		// now its good enough?
 		let (body_copy, body) = if self.failure_mode == FailureMode::FailOpen {
-			let buffered = to_bytes(body, 2_097_152).await?;
+			let buffered = http::read_body_with_limit(body, buffer).await?;
 			(Some(buffered.clone()), http::Body::from(buffered))
 		} else {
 			(None, body)

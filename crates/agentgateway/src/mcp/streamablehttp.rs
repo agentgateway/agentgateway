@@ -83,8 +83,9 @@ impl StreamableHttpService {
 			);
 		}
 
+		let limit = http::buffer_limit(&request);
 		let (part, body) = request.into_parts();
-		let message = match json::from_body::<ClientJsonRpcMessage>(body).await {
+		let message = match json::from_body_with_limit::<ClientJsonRpcMessage>(body, limit).await {
 			Ok(b) => b,
 			Err(e) => {
 				return http_error(
@@ -140,6 +141,7 @@ impl StreamableHttpService {
 			(session, true)
 		};
 		let mut resp = session.send(part, message).await;
+
 		if set_session_id {
 			let Ok(sid) = session.id.parse() else {
 				return internal_error_response("create session id header");

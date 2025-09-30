@@ -1,7 +1,7 @@
-use axum::body::to_bytes;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+use crate::http::{Request, Response};
 use crate::*;
 
 pub fn must_traverse<'a, T>(
@@ -45,17 +45,31 @@ fn parse_index(s: &str) -> Option<usize> {
 	s.parse().ok()
 }
 
-pub async fn from_body<T: DeserializeOwned>(body: http::Body) -> anyhow::Result<T> {
-	// TODO: configurable limit
-	let bytes = to_bytes(body, 2_097_152).await?;
+pub async fn from_request_body<T: DeserializeOwned>(req: Request) -> anyhow::Result<T> {
+	let lim = http::buffer_limit(&req);
+	from_body_with_limit(req.into_body(), lim).await
+}
+
+pub async fn from_response_body<T: DeserializeOwned>(resp: Response) -> anyhow::Result<T> {
+	let lim = http::response_buffer_limit(&resp);
+	from_body_with_limit(resp.into_body(), lim).await
+}
+
+pub async fn from_body_with_limit<T: DeserializeOwned>(
+	body: http::Body,
+	limit: usize,
+) -> anyhow::Result<T> {
+	let bytes = http::read_body_with_limit(body, limit).await?;
 	// Try to parse the response body as JSON
 	let t = serde_json::from_slice::<T>(bytes.as_ref())?;
 	Ok(t)
 }
 
-pub async fn inspect_body<T: DeserializeOwned>(body: &mut http::Body) -> anyhow::Result<T> {
+pub async fn inspect_body<T: DeserializeOwned>(req: &mut http::Request) -> anyhow::Result<T> {
+	let buffer = http::buffer_limit(req);
+	let body = req.body_mut();
 	let orig = std::mem::replace(body, http::Body::empty());
-	let bytes = to_bytes(orig, 2_097_152).await?;
+	let bytes = http::read_body_with_limit(orig, buffer).await?;
 	// Try to parse the response body as JSON
 	let t = serde_json::from_slice::<T>(bytes.as_ref());
 	// Regardless of an error or not, we should reset the body back

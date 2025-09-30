@@ -321,8 +321,9 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		// Buffer the body, max 2mb
+		let buffer_limit = http::buffer_limit(&req);
 		let (mut parts, body) = req.into_parts();
-		let Ok(bytes) = axum::body::to_bytes(body, 2_097_152).await else {
+		let Ok(bytes) = http::read_body_with_limit(body, buffer_limit).await else {
 			return Err(AIError::RequestTooLarge);
 		};
 		let mut req: universal::Request = if let Some(p) = policies {
@@ -401,13 +402,14 @@ impl AIProvider {
 				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
 				.await;
 		}
-		// Buffer the body, max 2mb
+		// Buffer the body
+		let buffer_limit = http::response_buffer_limit(&resp);
 		let (mut parts, body) = resp.into_parts();
 		let ce = parts.headers.typed_get::<ContentEncoding>();
 		let Ok((encoding, bytes)) =
-			http::compression::to_bytes_with_decompression(body, ce, 2_097_152).await
+			http::compression::to_bytes_with_decompression(body, ce, buffer_limit).await
 		else {
-			return Err(AIError::RequestTooLarge);
+			return Err(AIError::ResponseTooLarge);
 		};
 		// 3 cases: success, error properly handled, and unexpected error we need to synthesize
 		let openai_response = self
@@ -575,11 +577,12 @@ impl AIProvider {
 		} else {
 			None
 		};
+		let buffer_limit = http::response_buffer_limit(&resp);
 		resp.map(|b| {
 			let mut seen_provider = false;
 			let mut saw_token = false;
 			let mut rate_limit = Some(rate_limit);
-			parse::sse::json_passthrough::<universal::StreamResponse>(b, move |f| {
+			parse::sse::json_passthrough::<universal::StreamResponse>(b, buffer_limit, move |f| {
 				match f {
 					Some(Ok(f)) => {
 						if let Some(c) = completion.as_mut()
@@ -744,6 +747,8 @@ pub enum AIError {
 	UnsupportedContent,
 	#[error("request was too large")]
 	RequestTooLarge,
+	#[error("response was too large")]
+	ResponseTooLarge,
 	#[error("prompt guard failed")]
 	PromptWebhookError,
 	#[error("failed to parse request: {0}")]

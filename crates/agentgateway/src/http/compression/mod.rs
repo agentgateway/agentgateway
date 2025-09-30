@@ -26,7 +26,7 @@ pub async fn to_bytes_with_decompression(
 		Some(c) if c.contains(BR) => Ok((Some(BR), decode_body(body, BR, limit).await?)),
 		Some(c) if c.contains(ZSTD) => Ok((Some(ZSTD), decode_body(body, ZSTD, limit).await?)),
 		// TODO: explicitly error on Some() that we don't know about?
-		_ => Ok((None, crate::http::to_bytes(body, limit).await?)),
+		_ => Ok((None, crate::http::read_body_with_limit(body, limit).await?)),
 	}
 }
 

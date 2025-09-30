@@ -756,11 +756,12 @@ impl Handler {
 		let status = response.status();
 		// Check if the request was successful
 		if status.is_success() {
-			let body = json::from_body::<serde_json::Value>(response.into_body()).await?;
+			let body = json::from_response_body::<serde_json::Value>(response).await?;
 			Ok(body)
 		} else {
+			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(
-				axum::body::to_bytes(response.into_body(), 2_097_152)
+				crate::http::read_body_with_limit(response.into_body(), lim)
 					.await?
 					.to_vec(),
 			)?;

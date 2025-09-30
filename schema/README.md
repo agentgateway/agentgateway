@@ -49,12 +49,21 @@ This folder contains JSON schemas for various parts of the project
 |`config.backend.keepalives.interval`||
 |`config.backend.keepalives.retries`||
 |`config.backend.connectTimeout`||
-|`config.http2`||
-|`config.http2.windowSize`||
-|`config.http2.connectionWindowSize`||
-|`config.http2.frameSize`||
-|`config.http2.poolMaxStreamsPerConn`||
-|`config.http2.poolUnusedReleaseTimeout`||
+|`config.listener`||
+|`config.listener.maxBufferSize`||
+|`config.listener.tlsHandshakeTimeout`||
+|`config.listener.http1MaxHeaders`|The maximum number of numbers allowed in a request. Changing this value results in a performance<br>degradation, even if set to a lower value than the default (100)|
+|`config.listener.http2WindowSize`||
+|`config.listener.http2ConnectionWindowSize`||
+|`config.listener.http2FrameSize`||
+|`config.listener.http2KeepaliveInterval`||
+|`config.listener.http2KeepaliveTimeout`||
+|`config.hbone`||
+|`config.hbone.windowSize`||
+|`config.hbone.connectionWindowSize`||
+|`config.hbone.frameSize`||
+|`config.hbone.poolMaxStreamsPerConn`||
+|`config.hbone.poolUnusedReleaseTimeout`||
 |`binds`||
 |`binds[].port`||
 |`binds[].listeners`||

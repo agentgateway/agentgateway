@@ -115,7 +115,7 @@ impl Client {
 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
-				let message = json::from_body::<ServerJsonRpcMessage>(resp.into_body())
+				let message = json::from_response_body::<ServerJsonRpcMessage>(resp)
 					.await
 					.map_err(ClientError::new)?;
 				Ok(StreamableHttpPostResponse::Json(message, session_id))

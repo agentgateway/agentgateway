@@ -120,7 +120,7 @@ impl Session {
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
 				trace!("forward SSE got single JSON response");
-				let message = json::from_body::<ServerJsonRpcMessage>(resp.into_body())
+				let message = json::from_response_body::<ServerJsonRpcMessage>(resp)
 					.await
 					.map_err(ClientError::new)?;
 				Ok(StreamableHttpPostResponse::Json(message, None))

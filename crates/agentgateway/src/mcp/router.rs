@@ -12,7 +12,7 @@ use tracing::warn;
 use crate::cel::ContextBuilder;
 use crate::http::jwt::Claims;
 use crate::http::*;
-use crate::json::from_body;
+use crate::json::from_body_with_limit;
 use crate::mcp::MCPInfo;
 use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
@@ -116,7 +116,7 @@ impl App {
 		let mut ctx = ContextBuilder::new();
 		authorization_policies.register(&mut ctx);
 		let needs_body = ctx.with_request(&req, start_time);
-		if needs_body && let Ok(body) = crate::http::inspect_body(req.body_mut()).await {
+		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
 			ctx.with_request_body(body);
 		}
 		if let Some(jwt) = req.extensions().get::<Claims>() {
@@ -320,7 +320,8 @@ impl App {
 			))
 			.body(Body::empty())?;
 		let upstream = client.simple_call(ureq).await?;
-		let mut resp: serde_json::Value = from_body(upstream.into_body()).await?;
+		let limit = crate::http::response_buffer_limit(&upstream);
+		let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit).await?;
 		match &auth.provider {
 			Some(McpIDP::Auth0 {}) => {
 				// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
