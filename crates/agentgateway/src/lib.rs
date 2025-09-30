@@ -44,10 +44,10 @@ pub mod types;
 mod ui;
 pub mod util;
 
+use crate::control::{AuthSource, RootCert};
+use crate::telemetry::trc::Protocol;
 use control::caclient;
 use telemetry::{metrics, trc};
-
-use crate::telemetry::trc::Protocol;
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -68,7 +68,9 @@ pub struct RawConfig {
 	local_xds_path: Option<PathBuf>,
 
 	ca_address: Option<String>,
+	ca_auth_token: Option<String>,
 	xds_address: Option<String>,
+	xds_auth_token: Option<String>,
 	namespace: Option<String>,
 	gateway: Option<String>,
 	trust_domain: Option<String>,
@@ -82,8 +84,6 @@ pub struct RawConfig {
 	stats_addr: Option<String>,
 	/// Readiness probe server address in the format "ip:port"
 	readiness_addr: Option<String>,
-
-	auth_token: Option<String>,
 
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
@@ -382,6 +382,8 @@ pub enum ThreadingMode {
 pub struct XDSConfig {
 	/// XDS address to use. If unset, XDS will not be used.
 	pub address: Option<String>,
+	pub auth: AuthSource,
+	pub ca_cert: RootCert,
 	pub namespace: String,
 	pub gateway: String,
 

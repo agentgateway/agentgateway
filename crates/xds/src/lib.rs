@@ -17,8 +17,8 @@ mod types;
 pub enum Error {
 	#[error("gRPC error {}", DisplayStatus(.0))]
 	GrpcStatus(#[from] tonic::Status),
-	#[error("gRPC connection error connecting to {}: {}", .0, DisplayStatus(.1))]
-	Connection(String, #[source] tonic::Status),
+	#[error("gRPC connection error: {}", DisplayStatus(.0))]
+	Connection(#[source] tonic::Status),
 	#[error("connection failed {0}")]
 	Transport(#[from] tonic::transport::Error),
 	/// Attempted to send on a MPSC channel which has been canceled

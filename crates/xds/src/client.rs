@@ -1,17 +1,20 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter};
-use std::time::Duration;
-use std::{fmt, mem};
-
 use agent_core::metrics::{IncrementRecorder, Recorder};
 use agent_core::strng;
 use agent_core::strng::Strng;
+use http::Request;
 use prost::{DecodeError, EncodeError};
 use prost_types::value::Kind;
 use prost_types::{Struct, Value};
 use split_iter::Splittable;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::{Debug, Display, Formatter};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::time::Duration;
+use std::{fmt, mem};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
+use tonic::body::Body;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::Error;
@@ -185,10 +188,51 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 	}
 }
 
+pub struct GrpcClient {
+	client: Box<dyn ClientTrait>,
+}
+
+impl GrpcClient {
+	pub fn new<T: ClientTrait>(t: T) -> GrpcClient {
+		Self {
+			client: Box::new(t),
+		}
+	}
+}
+
+impl Clone for GrpcClient {
+	fn clone(&self) -> Self {
+		GrpcClient {
+			client: self.client.box_clone(),
+		}
+	}
+}
+
+pub trait ClientTrait: Send + Sync + Debug + 'static {
+	fn make_call(
+		&mut self,
+		req: Request<Body>,
+	) -> Pin<
+		Box<dyn Future<Output = Result<http::Response<axum_core::body::Body>, anyhow::Error>> + Send>,
+	>;
+	fn box_clone(&self) -> Box<dyn ClientTrait>;
+}
+//
+impl tower::Service<Request<Body>> for GrpcClient {
+	type Response = http::Response<axum_core::body::Body>;
+	type Error = anyhow::Error;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+	fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		Ok(()).into()
+	}
+
+	fn call(&mut self, req: Request<Body>) -> Self::Future {
+		self.client.box_clone().make_call(req)
+	}
+}
 pub struct Config {
-	address: String,
-	// tls_builder: Box<dyn tls::ControlPlaneClientCertProvider>,
-	// auth: identity::AuthSource,
+	client: GrpcClient,
 	proxy_metadata: HashMap<String, String>,
 	handlers: HashMap<Strng, Box<dyn RawHandler>>,
 	initial_requests: Vec<DeltaDiscoveryRequest>,
@@ -198,15 +242,12 @@ pub struct Config {
 	pod_name: String,
 	pod_namespace: String,
 	node_name: String,
-	// alt_hostname provides an alternative accepted SAN for the control plane TLS verification
-	// alt_hostname: Option<String>,
-	// xds_headers: Vec<(AsciiMetadataKey, AsciiMetadataValue)>,
 }
 
 impl Config {
-	pub fn new(address: String, gateway_name: String, namespace: String) -> Self {
+	pub fn new(client: GrpcClient, gateway_name: String, namespace: String) -> Self {
 		Self {
-			address,
+			client,
 			handlers: HashMap::new(),
 			initial_requests: Vec::new(),
 			on_demand: false,
@@ -468,7 +509,7 @@ impl AdsClient {
 
 	async fn run_loop(&mut self, backoff: Duration) -> Duration {
 		match self.run_internal().await {
-			Err(e @ Error::Connection(_, _)) => {
+			Err(e @ Error::Connection(_)) => {
 				// For connection errors, we add backoff
 				let backoff = std::cmp::min(MAX_BACKOFF, backoff * 2);
 				warn!(
@@ -598,26 +639,13 @@ impl AdsClient {
 			warn!("outbound stream complete");
 		};
 
-		let addr = self.config.address.clone();
-		// let tls_grpc_channel = tls::grpc_connector(
-		// 	self.config.address.clone(),
-		// 	self.config.auth.clone(),
-		// 	self.config
-		// 		.tls_builder
-		// 		.fetch_cert(self.config.alt_hostname.clone())
-		// 		.await?,
-		// )?;
-
 		let req = tonic::Request::new(outbound);
-		let ads_connection = AggregatedDiscoveryServiceClient::connect(self.config.address.clone())
-			.await?
+		let ads_connection = AggregatedDiscoveryServiceClient::new(self.config.client.clone())
 			.max_decoding_message_size(200 * 1024 * 1024)
 			.delta_aggregated_resources(req)
 			.await;
 
-		let mut response_stream = ads_connection
-			.map_err(|src| Error::Connection(addr, src))?
-			.into_inner();
+		let mut response_stream = ads_connection.map_err(Error::Connection)?.into_inner();
 		debug!("connected established");
 
 		info!("Stream established");

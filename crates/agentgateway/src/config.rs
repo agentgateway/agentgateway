@@ -62,8 +62,46 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		} else {
 			("".to_string(), "".to_string())
 		};
+		let cluster: String = parse("CLUSTER_ID")?
+			.or(raw.cluster_id.clone())
+			.unwrap_or("Kubernetes".to_string());
+		let tok = parse("XDS_AUTH_TOKEN")?.or(raw.xds_auth_token);
+		let auth = match tok {
+			None => {
+				// If nothing is set, conditionally use the default if it exists
+				if Path::new(&"./var/run/secrets/xds-tokens/xds-token").exists() {
+					crate::control::AuthSource::Token(
+						PathBuf::from("./var/run/secrets/xds-tokens/xds-token"),
+						cluster.clone(),
+					)
+				} else {
+					crate::control::AuthSource::None
+				}
+			},
+			Some(p) if Path::new(&p).exists() => {
+				// This is a file
+				crate::control::AuthSource::Token(PathBuf::from(p), cluster.clone())
+			},
+			Some(p) => {
+				anyhow::bail!("auth token {p} not found")
+			},
+		};
+		let xds_cert = parse_default(
+			"XDS_ROOT_CA",
+			"./var/run/secrets/xds/root-cert.pem".to_string(),
+		)?;
+		let xds_root_cert = if Path::new(&xds_cert).exists() {
+			crate::control::RootCert::File(xds_cert.into())
+		} else if xds_cert.eq("SYSTEM") {
+			// handle SYSTEM special case for ca
+			crate::control::RootCert::Default
+		} else {
+			crate::control::RootCert::Default
+		};
 		XDSConfig {
 			address,
+			auth,
+			ca_cert: xds_root_cert,
 			namespace,
 			gateway,
 			local_config,
@@ -94,7 +132,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		let cluster: String = parse("CLUSTER_ID")?
 			.or(raw.cluster_id)
 			.unwrap_or("Kubernetes".to_string());
-		let tok = parse("AUTH_TOKEN")?.or(raw.auth_token);
+		let tok = parse("CA_AUTH_TOKEN")?.or(raw.ca_auth_token);
 		let auth = match tok {
 			None => {
 				// If nothing is set, conditionally use the default if it exists

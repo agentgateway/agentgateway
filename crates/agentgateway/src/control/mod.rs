@@ -4,16 +4,19 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use ::http::Uri;
-use ::http::uri::Authority;
-use rustls::ClientConfig;
-use secrecy::{ExposeSecret, SecretString};
-
 use crate::client::Transport;
 use crate::http::HeaderValue;
 use crate::http::backendtls::{BackendTLS, SYSTEM_TRUST};
 use crate::types::agent::Target;
 use crate::*;
+use ::http::Uri;
+use ::http::uri::Authority;
+use agent_xds::ClientTrait;
+use anyhow::Error;
+use rustls::ClientConfig;
+use secrecy::{ExposeSecret, SecretString};
+use tonic::body::Body;
+use tower::Service;
 
 pub mod caclient;
 
@@ -76,6 +79,7 @@ impl AuthSource {
 				let token = load_token(path).await.map(|mut t| {
 					let mut bearer: Vec<u8> = b"Bearer ".to_vec();
 					bearer.append(&mut t);
+					tracing::error!("howardjohn: `{}`", String::from_utf8_lossy(&bearer));
 					bearer
 				})?;
 				let mut hv: HeaderValue = token.try_into()?;
@@ -167,6 +171,20 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcChannel {
 					.await?,
 			)
 		})
+	}
+}
+
+impl agent_xds::ClientTrait for GrpcChannel {
+	fn make_call(
+		&mut self,
+		req: ::http::Request<Body>,
+	) -> Pin<Box<dyn Future<Output = Result<::http::Response<axum_core::body::Body>, Error>> + Send>>
+	{
+		self.call(req)
+	}
+
+	fn box_clone(&self) -> Box<dyn ClientTrait> {
+		Box::new(self.clone())
 	}
 }
 

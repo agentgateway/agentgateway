@@ -8,12 +8,15 @@ rust-version = "1.85"
 path = "src/lib.rs"
 
 [dependencies]
+axum-core.workspace = true
 agent-core.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
 prometheus-client.workspace = true
 prost.workspace = true
 prost-types.workspace = true
+tower.workspace = true
+http.workspace = true
 split-iter.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
