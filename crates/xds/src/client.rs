@@ -702,6 +702,11 @@ impl AdsClient {
 			),
 		};
 
+		if let Some(block_ready) = self.block_ready.as_mut() {
+			info!("unblocking gateway");
+			_ = block_ready.send(());
+		}
+
 		send
 			.send(DeltaDiscoveryRequest {
 				type_url,              // this is owned, OK to move
