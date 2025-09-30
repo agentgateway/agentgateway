@@ -370,12 +370,12 @@ impl Gateway {
 			let listeners = inp.stores.read_binds().listeners(bind.clone()).unwrap();
 			let (ext, counter, inner) = raw_stream.into_parts();
 			let acceptor =
-			tokio_rustls::LazyConfigAcceptor::new(rustls::server::Acceptor::default(), Box::new(inner));
+				tokio_rustls::LazyConfigAcceptor::new(rustls::server::Acceptor::default(), Box::new(inner));
 			let start = acceptor.await?;
 			let ch = start.client_hello();
 			let best = listeners
-			.best_match(ch.server_name().unwrap_or_default())
-			.ok_or(anyhow!("no TLS listener match"))?;
+				.best_match(ch.server_name().unwrap_or_default())
+				.ok_or(anyhow!("no TLS listener match"))?;
 			let cfg = best.protocol.tls().unwrap();
 			let tls = start.into_stream(cfg).await?;
 			Ok((best, Socket::from_tls(ext, counter, tls.into())?))
@@ -489,7 +489,7 @@ pub fn auto_server(c: &ListenerConfig) -> auto::Builder<::hyper_util::rt::TokioE
 	b.http1().timer(hyper_util::rt::tokio::TokioTimer::new());
 
 	let ListenerConfig {
-		max_buffer_size: _, // Not handled here
+		max_buffer_size: _,       // Not handled here
 		tls_handshake_timeout: _, // Not handled here
 		http1_max_headers,
 		http2_window_size,
