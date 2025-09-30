@@ -42,6 +42,13 @@ This folder contains JSON schemas for various parts of the project
 |`config.metrics`||
 |`config.metrics.fields`||
 |`config.metrics.fields.add`||
+|`config.backend`||
+|`config.backend.keepalives`||
+|`config.backend.keepalives.enabled`||
+|`config.backend.keepalives.time`||
+|`config.backend.keepalives.interval`||
+|`config.backend.keepalives.retries`||
+|`config.backend.connectTimeout`||
 |`config.http2`||
 |`config.http2.windowSize`||
 |`config.http2.connectionWindowSize`||

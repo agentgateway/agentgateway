@@ -279,6 +279,55 @@
           },
           "additionalProperties": false
         },
+        "backend": {
+          "type": "object",
+          "properties": {
+            "keepalives": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "time": {
+                  "type": "string",
+                  "default": "3m0s"
+                },
+                "interval": {
+                  "type": "string",
+                  "default": "3m0s"
+                },
+                "retries": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0,
+                  "default": 9
+                }
+              },
+              "additionalProperties": false,
+              "default": {
+                "enabled": true,
+                "time": "3m0s",
+                "interval": "3m0s",
+                "retries": 9
+              }
+            },
+            "connectTimeout": {
+              "type": "string",
+              "default": "10s"
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "keepalives": {
+              "enabled": true,
+              "time": "3m0s",
+              "interval": "3m0s",
+              "retries": 9
+            },
+            "connectTimeout": "10s"
+          }
+        },
         "http2": {
           "type": [
             "object",
