@@ -222,10 +222,7 @@ impl UpstreamGroup {
 		trace!("connecting to target: {}", target.name);
 		let target = match &target.spec {
 			McpTargetSpec::Sse(sse) => {
-				debug!(
-					"starting sse transport for target: {}",
-					target.name
-				);
+				debug!("starting sse transport for target: {}", target.name);
 				let path = match sse.path.as_str() {
 					"" => "/sse",
 					_ => sse.path.as_str(),
