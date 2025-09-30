@@ -1762,39 +1762,48 @@
                                 ],
                                 "properties": {
                                   "append": {
-                                    "type": "object",
-                                    "properties": {
-                                      "role": {
-                                        "type": "string"
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "role": {
+                                          "type": "string"
+                                        },
+                                        "content": {
+                                          "type": "string"
+                                        }
                                       },
-                                      "content": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "additionalProperties": false,
-                                    "required": [
-                                      "role",
-                                      "content"
-                                    ]
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "role",
+                                        "content"
+                                      ]
+                                    }
                                   },
                                   "prepend": {
-                                    "type": "object",
-                                    "properties": {
-                                      "role": {
-                                        "type": "string"
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "role": {
+                                          "type": "string"
+                                        },
+                                        "content": {
+                                          "type": "string"
+                                        }
                                       },
-                                      "content": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "additionalProperties": false,
-                                    "required": [
-                                      "role",
-                                      "content"
-                                    ]
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "role",
+                                        "content"
+                                      ]
+                                    }
                                   }
                                 },
-                                "additionalProperties": false
+                                "additionalProperties": false,
+                                "required": [
+                                  "prepend"
+                                ]
                               },
                               "modelAliases": {
                                 "type": "object",
@@ -3122,7 +3131,8 @@
                                                         "null"
                                                       ]
                                                     }
-                                                  }
+                                                  },
+                                                  "additionalProperties": false
                                                 }
                                               },
                                               "required": [
@@ -3967,39 +3977,48 @@
                                           ],
                                           "properties": {
                                             "append": {
-                                              "type": "object",
-                                              "properties": {
-                                                "role": {
-                                                  "type": "string"
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "role": {
+                                                    "type": "string"
+                                                  },
+                                                  "content": {
+                                                    "type": "string"
+                                                  }
                                                 },
-                                                "content": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "additionalProperties": false,
-                                              "required": [
-                                                "role",
-                                                "content"
-                                              ]
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "role",
+                                                  "content"
+                                                ]
+                                              }
                                             },
                                             "prepend": {
-                                              "type": "object",
-                                              "properties": {
-                                                "role": {
-                                                  "type": "string"
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "role": {
+                                                    "type": "string"
+                                                  },
+                                                  "content": {
+                                                    "type": "string"
+                                                  }
                                                 },
-                                                "content": {
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "additionalProperties": false,
-                                              "required": [
-                                                "role",
-                                                "content"
-                                              ]
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "role",
+                                                  "content"
+                                                ]
+                                              }
                                             }
                                           },
-                                          "additionalProperties": false
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "prepend"
+                                          ]
                                         },
                                         "modelAliases": {
                                           "type": "object",
@@ -4117,7 +4136,8 @@
                                                                     "null"
                                                                   ]
                                                                 }
-                                                              }
+                                                              },
+                                                              "additionalProperties": false
                                                             }
                                                           },
                                                           "required": [
@@ -4962,39 +4982,48 @@
                                                       ],
                                                       "properties": {
                                                         "append": {
-                                                          "type": "object",
-                                                          "properties": {
-                                                            "role": {
-                                                              "type": "string"
+                                                          "type": "array",
+                                                          "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "role": {
+                                                                "type": "string"
+                                                              },
+                                                              "content": {
+                                                                "type": "string"
+                                                              }
                                                             },
-                                                            "content": {
-                                                              "type": "string"
-                                                            }
-                                                          },
-                                                          "additionalProperties": false,
-                                                          "required": [
-                                                            "role",
-                                                            "content"
-                                                          ]
+                                                            "additionalProperties": false,
+                                                            "required": [
+                                                              "role",
+                                                              "content"
+                                                            ]
+                                                          }
                                                         },
                                                         "prepend": {
-                                                          "type": "object",
-                                                          "properties": {
-                                                            "role": {
-                                                              "type": "string"
+                                                          "type": "array",
+                                                          "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "role": {
+                                                                "type": "string"
+                                                              },
+                                                              "content": {
+                                                                "type": "string"
+                                                              }
                                                             },
-                                                            "content": {
-                                                              "type": "string"
-                                                            }
-                                                          },
-                                                          "additionalProperties": false,
-                                                          "required": [
-                                                            "role",
-                                                            "content"
-                                                          ]
+                                                            "additionalProperties": false,
+                                                            "required": [
+                                                              "role",
+                                                              "content"
+                                                            ]
+                                                          }
                                                         }
                                                       },
-                                                      "additionalProperties": false
+                                                      "additionalProperties": false,
+                                                      "required": [
+                                                        "prepend"
+                                                      ]
                                                     },
                                                     "modelAliases": {
                                                       "type": "object",
@@ -6350,39 +6379,48 @@
                     ],
                     "properties": {
                       "append": {
-                        "type": "object",
-                        "properties": {
-                          "role": {
-                            "type": "string"
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "role": {
+                              "type": "string"
+                            },
+                            "content": {
+                              "type": "string"
+                            }
                           },
-                          "content": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": false,
-                        "required": [
-                          "role",
-                          "content"
-                        ]
+                          "additionalProperties": false,
+                          "required": [
+                            "role",
+                            "content"
+                          ]
+                        }
                       },
                       "prepend": {
-                        "type": "object",
-                        "properties": {
-                          "role": {
-                            "type": "string"
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "role": {
+                              "type": "string"
+                            },
+                            "content": {
+                              "type": "string"
+                            }
                           },
-                          "content": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": false,
-                        "required": [
-                          "role",
-                          "content"
-                        ]
+                          "additionalProperties": false,
+                          "required": [
+                            "role",
+                            "content"
+                          ]
+                        }
                       }
                     },
-                    "additionalProperties": false
+                    "additionalProperties": false,
+                    "required": [
+                      "prepend"
+                    ]
                   },
                   "modelAliases": {
                     "type": "object",

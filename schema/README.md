@@ -205,11 +205,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.overrides`||
 |`binds[].listeners[].routes[].policies.ai.prompts`||
 |`binds[].listeners[].routes[].policies.ai.prompts.append`||
-|`binds[].listeners[].routes[].policies.ai.prompts.append.role`||
-|`binds[].listeners[].routes[].policies.ai.prompts.append.content`||
+|`binds[].listeners[].routes[].policies.ai.prompts.append[].role`||
+|`binds[].listeners[].routes[].policies.ai.prompts.append[].content`||
 |`binds[].listeners[].routes[].policies.ai.prompts.prepend`||
-|`binds[].listeners[].routes[].policies.ai.prompts.prepend.role`||
-|`binds[].listeners[].routes[].policies.ai.prompts.prepend.content`||
+|`binds[].listeners[].routes[].policies.ai.prompts.prepend[].role`||
+|`binds[].listeners[].routes[].policies.ai.prompts.prepend[].content`||
 |`binds[].listeners[].routes[].policies.ai.modelAliases`||
 |`binds[].listeners[].routes[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`||
@@ -442,11 +442,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)overrides`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.append`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.append.role`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.append.content`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.append[].role`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.append[].content`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.prepend`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.prepend.role`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.prepend.content`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.prepend[].role`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)prompts.prepend[].content`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)modelAliases`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers`||
@@ -551,11 +551,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].overrides`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.append`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.append.role`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.append.content`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.append[].role`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.append[].content`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.prepend`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.prepend.role`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.prepend.content`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.prepend[].role`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].prompts.prepend[].content`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].modelAliases`||
 |`binds[].listeners[].routes[].backends[].weight`||
 |`binds[].listeners[].tcpRoutes`||
@@ -699,11 +699,11 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.overrides`||
 |`policies[].policy.ai.prompts`||
 |`policies[].policy.ai.prompts.append`||
-|`policies[].policy.ai.prompts.append.role`||
-|`policies[].policy.ai.prompts.append.content`||
+|`policies[].policy.ai.prompts.append[].role`||
+|`policies[].policy.ai.prompts.append[].content`||
 |`policies[].policy.ai.prompts.prepend`||
-|`policies[].policy.ai.prompts.prepend.role`||
-|`policies[].policy.ai.prompts.prepend.content`||
+|`policies[].policy.ai.prompts.prepend[].role`||
+|`policies[].policy.ai.prompts.prepend[].content`||
 |`policies[].policy.ai.modelAliases`||
 |`policies[].policy.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.backendTLS.cert`||

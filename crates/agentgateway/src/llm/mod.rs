@@ -456,7 +456,7 @@ impl AIProvider {
 		if let Some(p) = policies {
 			// Apply model alias resolution
 			if let Some(model) = req.model()
-			&& let Some(aliased) = p.model_aliases.get(model.as_str())
+				&& let Some(aliased) = p.model_aliases.get(model.as_str())
 			{
 				*model = aliased.to_string();
 			}
