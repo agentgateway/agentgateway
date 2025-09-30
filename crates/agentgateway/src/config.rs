@@ -13,8 +13,8 @@ use crate::telemetry::log::{LoggingFields, MetricFields};
 use crate::telemetry::trc;
 use crate::types::discovery::Identity;
 use crate::{
-	Address, Config, ConfigSource, NestedRawConfig, StringOrInt, ThreadingMode, XDSConfig, cel,
-	client, serdes, telemetry,
+	Address, Config, ConfigSource, NestedRawConfig, RawLoggingLevel, StringOrInt, ThreadingMode,
+	XDSConfig, cel, client, serdes, telemetry,
 };
 
 pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Result<Config> {
@@ -266,6 +266,16 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.map(cel::Expression::new)
 				.transpose()?
 				.map(Arc::new),
+			level: match raw.logging.as_ref().and_then(|l| l.level.as_ref()) {
+				None => "".to_string(),
+				Some(RawLoggingLevel::Single(level)) => level.to_string(),
+				Some(RawLoggingLevel::List(levels)) => levels.join(","),
+			},
+			format: raw
+				.logging
+				.as_ref()
+				.and_then(|l| l.format.clone())
+				.unwrap_or_default(),
 			fields: Arc::new(
 				raw
 					.logging

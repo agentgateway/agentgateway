@@ -137,6 +137,23 @@ pub struct RawTracing {
 pub struct RawLogging {
 	filter: Option<String>,
 	fields: Option<RawLoggingFields>,
+	level: Option<RawLoggingLevel>,
+	format: Option<LoggingFormat>,
+}
+
+#[apply(schema_de!)]
+#[serde(untagged)]
+pub enum RawLoggingLevel {
+	Single(String),
+	List(Vec<String>),
+}
+
+#[apply(schema!)]
+#[derive(Default, Eq, PartialEq)]
+pub enum LoggingFormat {
+	#[default]
+	Text,
+	Json,
 }
 
 #[apply(schema_de!)]

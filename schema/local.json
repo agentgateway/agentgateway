@@ -219,6 +219,37 @@
                 }
               },
               "additionalProperties": false
+            },
+            "level": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "format": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "text",
+                "json",
+                null
+              ]
             }
           },
           "additionalProperties": false

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_core::{telemetry, version};
-use agentgateway::{Config, client, serdes};
+use agentgateway::{Config, LoggingFormat, client, serdes};
 use clap::Parser;
 use tracing::info;
 
@@ -49,8 +49,6 @@ struct Args {
 }
 
 fn main() -> anyhow::Result<()> {
-	let _log_flush = telemetry::setup_logging();
-
 	let args = Args::parse();
 	let Args {
 		config,
@@ -92,6 +90,10 @@ fn main() -> anyhow::Result<()> {
 				return validate(contents, filename).await;
 			}
 			let config = agentgateway::config::parse_config(contents, filename)?;
+			let _log_flush = telemetry::setup_logging(
+				&config.logging.level,
+				config.logging.format == LoggingFormat::Json,
+			);
 			proxy(Arc::new(config)).await
 		})
 }

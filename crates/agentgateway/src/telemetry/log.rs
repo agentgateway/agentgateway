@@ -80,6 +80,8 @@ pub struct Config {
 	pub filter: Option<Arc<cel::Expression>>,
 	pub fields: Arc<LoggingFields>,
 	pub metric_fields: Arc<MetricFields>,
+	pub level: String,
+	pub format: crate::LoggingFormat,
 }
 
 #[derive(serde::Serialize, Default, Clone, Debug)]
