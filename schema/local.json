@@ -25,7 +25,19 @@
             "null"
           ]
         },
+        "caAuthToken": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "xdsAddress": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "xdsAuthToken": {
           "type": [
             "string",
             "null"
@@ -83,12 +95,6 @@
         },
         "readinessAddr": {
           "description": "Readiness probe server address in the format \"ip:port\"",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "authToken": {
           "type": [
             "string",
             "null"

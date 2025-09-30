@@ -79,7 +79,6 @@ impl AuthSource {
 				let token = load_token(path).await.map(|mut t| {
 					let mut bearer: Vec<u8> = b"Bearer ".to_vec();
 					bearer.append(&mut t);
-					tracing::error!("howardjohn: `{}`", String::from_utf8_lossy(&bearer));
 					bearer
 				})?;
 				let mut hv: HeaderValue = token.try_into()?;

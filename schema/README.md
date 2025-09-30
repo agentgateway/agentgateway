@@ -9,7 +9,9 @@ This folder contains JSON schemas for various parts of the project
 |`config.enableIpv6`||
 |`config.localXdsPath`|Local XDS path. If not specified, the current configuration file will be used.|
 |`config.caAddress`||
+|`config.caAuthToken`||
 |`config.xdsAddress`||
+|`config.xdsAuthToken`||
 |`config.namespace`||
 |`config.gateway`||
 |`config.trustDomain`||
@@ -19,7 +21,6 @@ This folder contains JSON schemas for various parts of the project
 |`config.adminAddr`|Admin UI address in the format "ip:port"|
 |`config.statsAddr`|Stats/metrics server address in the format "ip:port"|
 |`config.readinessAddr`|Readiness probe server address in the format "ip:port"|
-|`config.authToken`||
 |`config.connectionTerminationDeadline`||
 |`config.connectionMinTerminationDeadline`||
 |`config.workerThreads`||
