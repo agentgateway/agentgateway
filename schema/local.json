@@ -342,7 +342,7 @@
               "default": "15s"
             },
             "http1MaxHeaders": {
-              "description": "The maximum number of numbers allowed in a request. Changing this value results in a performance\ndegradation, even if set to a lower value than the default (100)",
+              "description": "The maximum number of headers allowed in a request. Changing this value results in a performance\ndegradation, even if set to a lower value than the default (100)",
               "type": [
                 "integer",
                 "null"
