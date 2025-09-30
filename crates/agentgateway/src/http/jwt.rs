@@ -7,7 +7,7 @@ use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet, KeyAlgorithm};
-use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use secrecy::SecretString;
 use serde_json::{Map, Value};
 
@@ -15,6 +15,9 @@ use crate::client::Client;
 use crate::http::Request;
 use crate::telemetry::log::RequestLog;
 use crate::*;
+
+#[path = "jwt_tests.rs"]
+mod tests;
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum TokenError {
@@ -198,10 +201,10 @@ impl Provider {
 		};
 
 		for jwk in jwks.keys {
-			if let Some(key_alg) = to_supported_alg(jwk.common.key_algorithm) {
-				let kid = jwk.common.key_id.ok_or(JwkError::MissingKeyId)?;
+			let kid = jwk.common.key_id.ok_or(JwkError::MissingKeyId)?;
 
-				let decoding_key = match &jwk.algorithm {
+			let decoding_key =
+				match &jwk.algorithm {
 					AlgorithmParameters::RSA(rsa) => DecodingKey::from_rsa_components(&rsa.n, &rsa.e)
 						.map_err(|err| JwkError::DecodingError {
 							key_id: kid.clone(),
@@ -220,23 +223,38 @@ impl Provider {
 					},
 				};
 
-				let mut validation = Validation::new(key_alg);
-				validation.set_audience(&audiences);
-				validation.set_issuer(std::slice::from_ref(&issuer));
+			let supported_algorithms = match to_supported_alg(jwk.common.key_algorithm) {
+				None => {
+					// If they did not explicitly set the key algorithm, which is optional, then we can infer it
+					// based on the algorithm properties.
+					// Add each key algorithm in the correct family.
+					match &jwk.algorithm {
+						AlgorithmParameters::EllipticCurve(_) => {
+							vec![Algorithm::ES256, Algorithm::ES384]
+						},
+						AlgorithmParameters::RSA(_) => {
+							vec![Algorithm::RS256, Algorithm::RS384, Algorithm::RS512]
+						},
+						_ => unreachable!(),
+					}
+				},
+				Some(explicit_alg) => {
+					vec![explicit_alg]
+				},
+			};
+			// The new() requires 1 algorithm, so just pass the first before we override it
+			let mut validation = Validation::new(supported_algorithms.first().unwrap().clone());
+			validation.algorithms = supported_algorithms;
+			validation.set_audience(&audiences);
+			validation.set_issuer(std::slice::from_ref(&issuer));
 
-				keys.insert(
-					kid,
-					Jwk {
-						decoding: decoding_key,
-						validation,
-					},
-				);
-			} else {
-				warn!(
-					"JWK key algorithm {:?} is not supported. Tokens signed by that key will not be accepted.",
-					jwk.common.key_algorithm
-				)
-			}
+			keys.insert(
+				kid,
+				Jwk {
+					decoding: decoding_key,
+					validation,
+				},
+			);
 		}
 
 		Ok(Provider { issuer, keys })
