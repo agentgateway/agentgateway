@@ -54,7 +54,7 @@ impl UiHandler {
 			.layer(add_cors_layer())
 			.with_state(App {
 				state: cfg.clone(),
-				client: client::Client::new(&cfg.dns, None),
+				client: client::Client::new(&cfg.dns, None, Default::default()),
 			});
 		Self { router }
 	}

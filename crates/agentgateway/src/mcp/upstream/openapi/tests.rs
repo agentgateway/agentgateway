@@ -13,7 +13,7 @@ use super::*;
 use crate::client::Client;
 use crate::store::Stores;
 use crate::types::agent::Target;
-use crate::{ProxyInputs, client, mcp};
+use crate::{BackendConfig, ProxyInputs, client, mcp};
 
 // Helper to create a handler and mock server for tests
 async fn setup() -> (MockServer, Handler) {
@@ -28,6 +28,7 @@ async fn setup() -> (MockServer, Handler) {
 			resolver_opts: ResolverOpts::default(),
 		},
 		None,
+		BackendConfig::default(),
 	);
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),

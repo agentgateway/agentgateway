@@ -56,7 +56,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	// TODO: metric for version
 
 	// TODO: use for XDS
-	let control_client = client::Client::new(&config.dns, None);
+	let control_client = client::Client::new(&config.dns, None, config.backend.clone());
 	let ca = if let Some(cfg) = &config.ca {
 		Some(Arc::new(caclient::CaClient::new(
 			control_client.clone(),
@@ -68,7 +68,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let pool = ca
 		.clone()
 		.map(|ca| agent_hbone::pool::WorkloadHBONEPool::new(config.hbone.clone(), ca));
-	let client = client::Client::new(&config.dns, pool);
+	let client = client::Client::new(&config.dns, pool, config.backend.clone());
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
 	let state_mgr =

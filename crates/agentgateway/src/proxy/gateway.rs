@@ -134,7 +134,7 @@ impl Gateway {
 		let name = b.key.clone();
 		let (pi, listener) = if pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
 			let mut pi = Arc::unwrap_or_clone(pi);
-			let client = client::Client::new(&pi.cfg.dns, None);
+			let client = client::Client::new(&pi.cfg.dns, None, pi.cfg.backend.clone());
 			pi.upstream = client;
 			let pi = Arc::new(pi);
 			let builder = if b.address.is_ipv4() {

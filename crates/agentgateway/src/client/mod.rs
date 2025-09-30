@@ -217,6 +217,7 @@ impl Transport {
 #[derive(Debug, Clone)]
 struct Connector {
 	hbone_pool: Option<agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>>,
+	backend_config: Arc<crate::BackendConfig>,
 }
 
 impl tower::Service<::http::Extensions> for Connector {
@@ -237,7 +238,9 @@ impl tower::Service<::http::Extensions> for Connector {
 
 			match transport {
 				Transport::Plaintext => {
-					let mut res = Socket::dial(ep).await.map_err(crate::http::Error::new)?;
+					let mut res = Socket::dial(ep, it.backend_config.clone())
+						.await
+						.map_err(crate::http::Error::new)?;
 					res.with_logging(LoggingMode::Upstream);
 					Ok(TokioIo::new(res))
 				},
@@ -256,6 +259,7 @@ impl tower::Service<::http::Extensions> for Connector {
 					let mut https = self::hyperrustls::HttpsConnector {
 						tls_config: tls.config.clone(),
 						server_name,
+						backend_config: it.backend_config.clone(),
 					};
 
 					let mut res = https.call(ep).await.map_err(crate::http::Error::new)?;
@@ -318,12 +322,16 @@ impl Client {
 	pub fn new(
 		cfg: &Config,
 		hbone_pool: Option<agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>>,
+		backend_config: BackendConfig,
 	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
 		let client =
 			::hyper_util_fork::client::legacy::Client::builder(::hyper_util::rt::TokioExecutor::new())
 				.timer(hyper_util::rt::tokio::TokioTimer::new())
-				.build_with_pool_key(Connector { hbone_pool });
+				.build_with_pool_key(Connector {
+					hbone_pool,
+					backend_config: Arc::new(backend_config),
+				});
 		Client {
 			resolver: Arc::new(resolver),
 			client,

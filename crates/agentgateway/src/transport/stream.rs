@@ -214,9 +214,20 @@ impl Socket {
 		}
 	}
 
-	pub async fn dial(target: SocketAddr) -> io::Result<Socket> {
-		// TODO: settings like timeout, etc from hyper
-		let res = TcpStream::connect(target).await?;
+	pub async fn dial(target: SocketAddr, cfg: Arc<crate::BackendConfig>) -> io::Result<Socket> {
+		let res = tokio::time::timeout(cfg.connect_timeout, TcpStream::connect(target))
+			.await
+			.map_err(|to| io::Error::new(io::ErrorKind::TimedOut, to))??;
+		if cfg.keepalives.enabled {
+			let ka = socket2::TcpKeepalive::new()
+				.with_time(cfg.keepalives.time)
+				.with_retries(cfg.keepalives.retries)
+				.with_interval(cfg.keepalives.interval);
+			tracing::trace!(
+				"set keepalive: {:?}",
+				socket2::SockRef::from(&res).set_tcp_keepalive(&ka)
+			);
+		}
 		Socket::from_tcp(res)
 	}
 

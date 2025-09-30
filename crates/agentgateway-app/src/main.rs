@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_core::{telemetry, version};
-use agentgateway::{Config, LoggingFormat, client, serdes};
+use agentgateway::control::RootCert::Default;
+use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use clap::Parser;
 use tracing::info;
 
@@ -119,7 +120,7 @@ fn copy_binary(copy_self: PathBuf) -> anyhow::Result<()> {
 
 async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result<()> {
 	let config = agentgateway::config::parse_config(contents, filename)?;
-	let client = client::Client::new(&config.dns, None);
+	let client = client::Client::new(&config.dns, None, BackendConfig::default());
 	if let Some(cfg) = config.xds.local_config {
 		let cs = cfg.read_to_string().await?;
 		agentgateway::types::local::NormalizedLocalConfig::from(client, cs.as_str()).await?;

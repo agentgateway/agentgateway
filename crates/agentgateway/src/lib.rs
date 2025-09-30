@@ -99,7 +99,76 @@ pub struct RawConfig {
 	logging: Option<RawLogging>,
 	metrics: Option<RawMetrics>,
 
+	#[serde(default)]
+	backend: BackendConfig,
+
 	http2: Option<RawHTTP2>,
+}
+
+#[apply(schema!)]
+pub struct BackendConfig {
+	#[serde(default)]
+	keepalives: KeepaliveConfig,
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(default = "defaults::connect_timeout")]
+	connect_timeout: Duration,
+}
+
+impl Default for BackendConfig {
+	fn default() -> Self {
+		crate::BackendConfig {
+			keepalives: Default::default(),
+			connect_timeout: defaults::connect_timeout(),
+		}
+	}
+}
+
+#[apply(schema!)]
+pub struct KeepaliveConfig {
+	#[serde(default = "defaults::always_true")]
+	pub enabled: bool,
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(default = "defaults::keepalive_time")]
+	pub time: Duration,
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(default = "defaults::keepalive_interval")]
+	pub interval: Duration,
+	#[serde(default = "defaults::keepalive_retries")]
+	pub retries: u32,
+}
+
+impl Default for KeepaliveConfig {
+	fn default() -> Self {
+		KeepaliveConfig {
+			enabled: true,
+			time: defaults::keepalive_time(),
+			interval: defaults::keepalive_interval(),
+			retries: defaults::keepalive_retries(),
+		}
+	}
+}
+
+mod defaults {
+	use std::time::Duration;
+
+	pub fn always_true() -> bool {
+		true
+	}
+	pub fn keepalive_retries() -> u32 {
+		9
+	}
+	pub fn keepalive_interval() -> Duration {
+		Duration::from_secs(180)
+	}
+	pub fn keepalive_time() -> Duration {
+		Duration::from_secs(180)
+	}
+	pub fn connect_timeout() -> Duration {
+		Duration::from_secs(10)
+	}
 }
 
 #[apply(schema_de!)]
@@ -108,7 +177,7 @@ pub struct RawHTTP2 {
 	connection_window_size: Option<u32>,
 	frame_size: Option<u32>,
 	pool_max_streams_per_conn: Option<u16>,
-	#[serde(deserialize_with = "serde_dur_option::deserialize")]
+	#[serde(with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pool_unused_release_timeout: Option<Duration>,
 }
@@ -295,6 +364,8 @@ pub struct Config {
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
+
+	pub backend: BackendConfig,
 }
 
 #[derive(serde::Serialize, Copy, PartialOrd, PartialEq, Eq, Clone, Debug, Default)]

@@ -200,6 +200,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		num_worker_threads: parse_worker_threads(raw.worker_threads)?,
 		termination_min_deadline,
 		threading_mode,
+		backend: raw.backend,
 		termination_max_deadline: match termination_max_deadline {
 			Some(period) => period,
 			None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
