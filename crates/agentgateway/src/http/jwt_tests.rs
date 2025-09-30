@@ -1,3 +1,7 @@
+use super::Provider;
+use itertools::Itertools;
+use serde_json::json;
+
 #[test]
 pub fn test_azure_jwks() {
 	// Regression test for https://github.com/agentgateway/agentgateway/issues/477

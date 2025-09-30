@@ -16,6 +16,7 @@ use crate::http::Request;
 use crate::telemetry::log::RequestLog;
 use crate::*;
 
+#[cfg(test)]
 #[path = "jwt_tests.rs"]
 mod tests;
 
