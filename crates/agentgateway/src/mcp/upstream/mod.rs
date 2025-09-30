@@ -223,7 +223,7 @@ impl UpstreamGroup {
 		let target = match &target.spec {
 			McpTargetSpec::Sse(sse) => {
 				debug!(
-					"starting streamable http transport for target: {}",
+					"starting sse transport for target: {}",
 					target.name
 				);
 				let path = match sse.path.as_str() {
