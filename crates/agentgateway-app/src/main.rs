@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_core::{telemetry, version};
-use agentgateway::control::RootCert::Default;
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use clap::Parser;
 use tracing::info;
