@@ -311,6 +311,22 @@ impl Executor<'_> {
 	}
 }
 
+pub fn value_as_bytes(v: &Value) -> Option<&[u8]> {
+	match v {
+		Value::String(b) => Some(b.as_bytes()),
+		Value::Bytes(b) => Some(b.as_slice()),
+		_ => None,
+	}
+}
+
+pub fn value_as_int(v: &Value) -> Option<i64> {
+	match v {
+		Value::Int(b) => Some(*b),
+		Value::UInt(b) => Some(i64::try_from(*b).ok()?),
+		_ => None,
+	}
+}
+
 pub struct Executor<'a> {
 	ctx: Context<'a>,
 }
