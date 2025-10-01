@@ -63,7 +63,11 @@ pub trait RequestType: Send + Sync {
 		Err(AIError::UnsupportedConversion(strng::literal!("anthropic")))
 	}
 
-	fn to_bedrock(&self, _provider: &Provider) -> Result<Vec<u8>, AIError> {
+	fn to_bedrock(
+		&self,
+		_provider: &Provider,
+		_headers: Option<&::http::HeaderMap>,
+	) -> Result<Vec<u8>, AIError> {
 		Err(AIError::UnsupportedConversion(strng::literal!("bedrock")))
 	}
 }
@@ -248,9 +252,13 @@ pub mod passthrough {
 			serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 		}
 
-		fn to_bedrock(&self, provider: &Provider) -> Result<Vec<u8>, AIError> {
+		fn to_bedrock(
+			&self,
+			provider: &Provider,
+			_headers: Option<&::http::HeaderMap>,
+		) -> Result<Vec<u8>, AIError> {
 			let typed = json::convert::<_, universal::Request>(self).map_err(AIError::RequestMarshal)?;
-			let xlated = llm::bedrock::translate_request(typed, provider);
+			let xlated = llm::bedrock::translate_request_completions(typed, provider);
 			serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 		}
 

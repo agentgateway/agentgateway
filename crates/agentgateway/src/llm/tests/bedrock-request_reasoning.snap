@@ -22,5 +22,11 @@ info:
   ],
   "inferenceConfig": {
     "maxTokens": 4096
+  },
+  "additionalModelRequestFields": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 2048
+    }
   }
 }

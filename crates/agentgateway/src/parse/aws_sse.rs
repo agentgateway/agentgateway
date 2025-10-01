@@ -23,3 +23,26 @@ pub fn transform<O: Serialize>(
 		}))
 	})
 }
+
+pub fn transform_multi<O: Serialize>(
+	b: http::Body,
+	mut f: impl FnMut(Message) -> Vec<(&'static str, O)> + Send + 'static,
+) -> http::Body {
+	let decoder = EventStreamCodec;
+	let encoder = SseEncoder::new();
+
+	transform_parser(b, decoder, encoder, move |msg| {
+		f(msg)
+			.into_iter()
+			.filter_map(|(event_name, event)| {
+				serde_json::to_vec(&event).ok().map(|json_bytes| {
+					Frame::Event(Event::<Bytes> {
+						data: Bytes::from(json_bytes),
+						name: std::borrow::Cow::Borrowed(event_name),
+						id: None,
+					})
+				})
+			})
+			.collect::<Vec<_>>()
+	})
+}

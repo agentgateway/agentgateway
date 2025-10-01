@@ -121,7 +121,7 @@ async fn test_bedrock() {
 	test_response::<bedrock::types::ConverseResponse>("response_bedrock_tool", response);
 
 	let stream_response = |i, log| {
-		Ok(bedrock::translate_stream(
+		Ok(bedrock::translate_stream_to_completions(
 			i,
 			log,
 			"model".to_string(),
@@ -136,7 +136,7 @@ async fn test_bedrock() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 	};
-	let request = |i| Ok(bedrock::translate_request(i, &provider));
+	let request = |i| Ok(bedrock::translate_request_completions(i, &provider));
 	for r in ALL_REQUESTS {
 		test_request("bedrock", r, request);
 	}

@@ -134,6 +134,7 @@ pub(super) fn translate_response(resp: MessagesResponse) -> universal::Response 
 			types::ContentBlock::Image { .. } => continue,
 			ContentBlock::Document(_) => continue,
 			ContentBlock::SearchResult(_) => continue,
+			ContentBlock::WebSearchToolResult { .. } => continue,
 			ContentBlock::Unknown => continue,
 		}
 	}
@@ -232,6 +233,7 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 				name: tool.function.name.clone(),
 				description: tool.function.description.clone(),
 				input_schema: tool.function.parameters.clone().unwrap_or_default(),
+				cache_control: None,
 			})
 			.collect();
 		Some(mapped_tools)
@@ -279,7 +281,7 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 		system: if system.is_empty() {
 			None
 		} else {
-			Some(system)
+			Some(types::SystemPrompt::Text(system))
 		},
 		model: req.model.unwrap_or_default(),
 		max_tokens,
@@ -357,6 +359,7 @@ pub(super) fn translate_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMIn
 						// TODO
 						ContentBlockDelta::InputJsonDelta { .. } => {},
 						ContentBlockDelta::SignatureDelta { .. } => {},
+						ContentBlockDelta::CitationsDelta { .. } => {},
 					};
 					let choice = universal::ChatChoiceStream {
 						index: 0,
@@ -449,6 +452,8 @@ pub(super) fn translate_anthropic_response(_req: universal::Response) -> types::
 		usage: types::Usage {
 			input_tokens: 0,
 			output_tokens: 0,
+			cache_creation_input_tokens: None,
+			cache_read_input_tokens: None,
 		},
 	}
 }
@@ -470,10 +475,23 @@ pub(super) fn translate_anthropic_request(req: types::MessagesRequest) -> univer
 	} = req;
 	let mut msgs: Vec<universal::RequestMessage> = Vec::new();
 
-	// Handle the system prompt
+	// Handle the system prompt (convert both string and block formats to string)
 	if let Some(system) = system {
+		let system_text = match system {
+			types::SystemPrompt::Text(text) => text,
+			types::SystemPrompt::Blocks(blocks) => {
+				// Join all text blocks into a single string
+				blocks
+					.into_iter()
+					.map(|block| match block {
+						types::SystemContentBlock::Text { text, .. } => text,
+					})
+					.collect::<Vec<_>>()
+					.join("\n")
+			},
+		};
 		msgs.push(universal::RequestMessage::System(
-			RequestSystemMessage::from(system),
+			RequestSystemMessage::from(system_text),
 		));
 	}
 
@@ -505,11 +523,9 @@ pub(super) fn translate_anthropic_request(req: types::MessagesRequest) -> univer
 												parts
 													.into_iter()
 													.filter_map(|p| match p {
-														ToolResultContentPart::Text(types::ContentTextBlock {
-															text, ..
-														}) => Some(ChatCompletionRequestToolMessageContentPart::Text(
-															text.into(),
-														)),
+														ToolResultContentPart::Text { text, .. } => Some(
+															ChatCompletionRequestToolMessageContentPart::Text(text.into()),
+														),
 														// Other types are not supported
 														_ => None,
 													})
@@ -675,6 +691,8 @@ fn translate_stop_reason(resp: &types::StopReason) -> FinishReason {
 		StopReason::StopSequence => universal::FinishReason::Stop,
 		StopReason::ToolUse => universal::FinishReason::ToolCalls,
 		StopReason::Refusal => universal::FinishReason::ContentFilter,
+		StopReason::PauseTurn => universal::FinishReason::Stop,
+		StopReason::ModelContextWindowExceeded => universal::FinishReason::Length,
 	}
 }
 pub(super) mod types {
@@ -771,6 +789,14 @@ pub(super) mod types {
 			#[serde(skip_serializing_if = "Option::is_none")]
 			cache_control: Option<CacheControlEphemeral>,
 		},
+		/// Web search tool result content
+		WebSearchToolResult {
+			tool_use_id: String,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			content: Option<serde_json::Value>,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
 		// There are LOTs of possible values; since we don't support them all, just allow them without failing
 		#[serde(other)]
 		Unknown,
@@ -786,12 +812,38 @@ pub(super) mod types {
 	}
 
 	#[derive(Debug, Serialize, Deserialize, Clone)]
-	#[serde(tag = "type")]
+	#[serde(tag = "type", rename_all = "snake_case")]
 	pub enum ToolResultContentPart {
-		Text(ContentTextBlock),
-		Image(ContentImageBlock),
-		Document(ContentDocumentBlock),
-		SearchResult(ContentSearchResultBlock),
+		Text {
+			text: String,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			citations: Option<Value>,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
+		Image {
+			source: Value,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
+		Document {
+			source: Value,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			citations: Option<Value>,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			context: Option<String>,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			title: Option<String>,
+		},
+		SearchResult {
+			content: Vec<Value>,
+			source: String,
+			title: String,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
 	}
 
 	#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
@@ -838,13 +890,32 @@ pub(super) mod types {
 		}
 	}
 
+	/// System prompt format - can be either a simple string or an array of content blocks
+	#[derive(Clone, Debug, Serialize, Deserialize)]
+	#[serde(untagged)]
+	pub enum SystemPrompt {
+		Text(String),
+		Blocks(Vec<SystemContentBlock>),
+	}
+
+	/// System content block for structured system prompts
+	#[derive(Clone, Debug, Serialize, Deserialize)]
+	#[serde(tag = "type", rename_all = "snake_case")]
+	pub enum SystemContentBlock {
+		Text {
+			text: String,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
+	}
+
 	#[derive(Deserialize, Serialize, Default, Debug)]
 	pub struct MessagesRequest {
 		/// The User/Assistent prompts.
 		pub messages: Vec<Message>,
-		/// The System prompt.
+		/// The System prompt - can be a string or array of content blocks
 		#[serde(skip_serializing_if = "Option::is_none")]
-		pub system: Option<String>,
+		pub system: Option<SystemPrompt>,
 		/// The model to use.
 		pub model: String,
 		/// The maximum number of tokens to generate before stopping.
@@ -985,10 +1056,22 @@ pub(super) mod types {
 	#[serde(rename_all = "snake_case", tag = "type")]
 	#[allow(clippy::enum_variant_names)]
 	pub enum ContentBlockDelta {
-		TextDelta { text: String },
-		InputJsonDelta { partial_json: String },
-		ThinkingDelta { thinking: String },
-		SignatureDelta { signature: String },
+		TextDelta {
+			text: String,
+		},
+		InputJsonDelta {
+			partial_json: String,
+		},
+		ThinkingDelta {
+			thinking: String,
+		},
+		SignatureDelta {
+			signature: String,
+		},
+		CitationsDelta {
+			#[serde(default)]
+			citations: Vec<serde_json::Value>,
+		},
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -1038,8 +1121,14 @@ pub(super) mod types {
 		MaxTokens,
 		/// One of the provided custom stop_sequences was generated.
 		StopSequence,
+		/// The model invoked one or more tools.
 		ToolUse,
+		/// The model's response was refused.
 		Refusal,
+		/// The model paused generation (for long-running responses).
+		PauseTurn,
+		/// The model exceeded the context window.
+		ModelContextWindowExceeded,
 	}
 
 	/// Billing and rate-limit usage.
@@ -1050,6 +1139,14 @@ pub(super) mod types {
 
 		/// The number of output tokens which were used.
 		pub output_tokens: usize,
+
+		/// The number of input tokens used to create the cache entry.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_creation_input_tokens: Option<usize>,
+
+		/// The number of input tokens read from the cache.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_read_input_tokens: Option<usize>,
 	}
 
 	/// Tool definition
@@ -1062,6 +1159,9 @@ pub(super) mod types {
 		pub description: Option<String>,
 		/// JSON schema for tool input
 		pub input_schema: serde_json::Value,
+		/// Create a cache control breakpoint at this content block
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
 	}
 
 	/// Tool choice configuration
@@ -1254,6 +1354,18 @@ pub mod passthrough {
 
 		fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
 			serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
+		}
+
+		fn to_bedrock(
+			&self,
+			provider: &crate::llm::bedrock::Provider,
+			headers: Option<&::http::HeaderMap>,
+		) -> Result<Vec<u8>, AIError> {
+			let typed = json::convert::<_, anthropic::types::MessagesRequest>(self)
+				.map_err(AIError::RequestMarshal)?;
+			let bedrock_request =
+				crate::llm::bedrock::translate_request_messages(typed, provider, headers)?;
+			serde_json::to_vec(&bedrock_request).map_err(AIError::RequestMarshal)
 		}
 	}
 

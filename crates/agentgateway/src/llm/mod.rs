@@ -439,14 +439,16 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		match (original_format, self) {
 			(InputFormat::Completions, _) => {
-				// All provider support completions input
+				// All providers support completions input
 			},
 			(InputFormat::Messages, AIProvider::Anthropic(_)) => {
 				// Anthropic supports messages input
 			},
+			(InputFormat::Messages, AIProvider::Bedrock(_)) => {
+				// Bedrock supports messages input (Anthropic passthrough)
+			},
 			(m, p) => {
 				// Messages with OpenAI compatible: currently only supports translating the request
-				// Messages with Bedrock: unsupported
 				return Err(AIError::UnsupportedConversion(strng::format!(
 					"{m:?} from provider {}",
 					p.provider()
@@ -484,7 +486,7 @@ impl AIProvider {
 		let new_request = match self {
 			AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Vertex(_) => req.to_openai()?,
 			AIProvider::Anthropic(_) => req.to_anthropic()?,
-			AIProvider::Bedrock(p) => req.to_bedrock(p)?,
+			AIProvider::Bedrock(p) => req.to_bedrock(p, Some(&parts.headers))?,
 		};
 		let resp = Body::from(new_request);
 		parts.headers.remove(header::CONTENT_LENGTH);
@@ -646,7 +648,10 @@ impl AIProvider {
 		log.store(Some(llmresp));
 		let resp = match self {
 			AIProvider::Anthropic(p) => p.process_streaming(log, resp, input_format).await,
-			AIProvider::Bedrock(p) => p.process_streaming(log, resp, model.as_str()).await,
+			AIProvider::Bedrock(p) => {
+				p.process_streaming(log, resp, model.as_str(), input_format)
+					.await
+			},
 			_ => {
 				self
 					.default_process_streaming(log, include_completion_in_log, rate_limit, resp)
