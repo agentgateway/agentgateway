@@ -65,7 +65,6 @@ ipnet.workspace = true
 itertools.workspace = true
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
-minijinja.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
 num_cpus.workspace = true

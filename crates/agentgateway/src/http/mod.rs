@@ -9,11 +9,6 @@ pub mod retry;
 pub mod route;
 
 pub mod auth;
-#[cfg(any(test, feature = "internal_benches"))]
-mod tests_common;
-#[allow(dead_code)]
-mod transformation;
-// Do not warn is it is WIP
 pub mod authorization;
 pub mod backendtls;
 pub mod compression;
@@ -23,6 +18,8 @@ pub mod ext_proc;
 pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
+#[cfg(any(test, feature = "internal_benches"))]
+mod tests_common;
 pub mod transformation_cel;
 
 pub type Error = axum_core::Error;

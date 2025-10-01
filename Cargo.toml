@@ -92,7 +92,6 @@ itertools = "0.14"
 jsonwebtoken = "9.3"
 lazy_static = "1.4"
 libc = "0.2"
-minijinja = { version = "2.10", features = ["loader"] }
 notify = "8.0"
 notify-debouncer-full = "0.5"
 num_cpus = "1.17"
