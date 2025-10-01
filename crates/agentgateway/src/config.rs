@@ -424,7 +424,7 @@ fn parse_serde<T: DeserializeOwned>(env: &str) -> anyhow::Result<Option<T>> {
 	match env::var(env) {
 		Ok(val) => serde_json::from_str(&val)
 			.map(|v| Some(v))
-			.map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, val, e.to_string())),
+			.map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, val, e)),
 		Err(_) => Ok(None),
 	}
 }

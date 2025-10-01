@@ -18,118 +18,118 @@ internal_benches = ["divan"]
 testing = []
 
 [dependencies]
-go-parse-duration.workspace = true
 a2a-sdk.workspace = true
 agent-core.workspace = true
 agent-hbone.workspace = true
 agent-xds.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
+async-compression.workspace = true
 async-openai.workspace = true
 async-trait.workspace = true
-aws_event_stream_parser.workspace = true
+atomic_float.workspace = true
 aws-config.workspace = true
 aws-credential-types.workspace = true
 aws-sigv4.workspace = true
-axum.workspace = true
+aws_event_stream_parser.workspace = true
 axum-core.workspace = true
 axum-extra.workspace = true
+axum.workspace = true
 azure_core.workspace = true
 azure_identity.workspace = true
-typespec_client_core.workspace = true
 base64.workspace = true
 bytes.workspace = true
+cel.workspace = true
 chrono.workspace = true
 clocksource.workspace = true
+core_affinity.workspace = true
 crossbeam.workspace = true
 divan = { workspace = true, optional = true }
+frozen-collections.workspace = true
 fs-err = { workspace = true }
-futures.workspace = true
 futures-core.workspace = true
 futures-util.workspace = true
+futures.workspace = true
+go-parse-duration.workspace = true
 google-cloud-auth.workspace = true
 headers.workspace = true
+heck.workspace = true
 hex.workspace = true
 hickory-resolver.workspace = true
-http.workspace = true
-http-body.workspace = true
 http-body-util.workspace = true
+http-body.workspace = true
+http-serde.workspace = true
+http.workspace = true
 httpdate.workspace = true
-hyper.workspace = true
 hyper-rustls.workspace = true
-hyper-util.workspace = true
 hyper-util-fork.workspace = true
+hyper-util.workspace = true
+hyper.workspace = true
 include_dir.workspace = true
 indexmap = { workspace = true }
 ipnet.workspace = true
 itertools.workspace = true
+jemalloc_pprof = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
-notify.workspace = true
+macro_rules_attribute.workspace = true
 notify-debouncer-full.workspace = true
+notify.workspace = true
 num_cpus.workspace = true
 once_cell.workspace = true
 openapiv3.workspace = true
-opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
+opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 parking_lot.workspace = true
+percent-encoding.workspace = true
 phonenumber.workspace = true
 pin-project-lite.workspace = true
 prometheus-client.workspace = true
-prost.workspace = true
 prost-types.workspace = true
 prost-wkt-types.workspace = true
+prost.workspace = true
 rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 reqwest.workspace = true
 rmcp.workspace = true
-rustls.workspace = true
 rustls-native-certs.workspace = true
 rustls-pemfile.workspace = true
 rustls-pki-types.workspace = true
+rustls.workspace = true
 schemars = { workspace = true, optional = true }
 secrecy.workspace = true
-serde.workspace = true
 serde-transcode.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 serde_json_path_to_error.workspace = true
 serde_regex.workspace = true
+serde_urlencoded.workspace = true
 serde_with.workspace = true
 serde_yaml.workspace = true
 shellexpand.workspace = true
-sse-stream.workspace = true
 socket2.workspace = true
+sse-stream.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
+tikv-jemallocator = { workspace = true, optional = true }
 tokio = { workspace = true }
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio_sse_codec.workspace = true
-tonic.workspace = true
 tonic-prost.workspace = true
-tower.workspace = true
+tonic.workspace = true
 tower-http.workspace = true
 tower-serve-static.workspace = true
-tracing.workspace = true
+tower.workspace = true
 tracing-subscriber.workspace = true
+tracing.workspace = true
+typespec_client_core.workspace = true
 url.workspace = true
-x509-parser.workspace = true
-serde_urlencoded.workspace = true
-percent-encoding.workspace = true
-http-serde.workspace = true
-cel.workspace = true
-tikv-jemallocator = { workspace = true, optional = true }
-jemalloc_pprof = { workspace = true, optional = true }
-frozen-collections.workspace = true
 value-bag.workspace = true
-core_affinity.workspace = true
-macro_rules_attribute.workspace = true
-heck.workspace = true
-async-compression.workspace = true
-atomic_float = { version = "1.1.0", features = ["serde"] }
+x509-parser.workspace = true
 
 # Linux only dependencies
 [target.'cfg(target_family = "unix")'.dependencies]
@@ -158,7 +158,7 @@ which.workspace = true
 agentgateway = { version = "0.7.0", path = ".", default-features = false, features = [
     "testing",
 ] }
-rmcp = { version = "0.6.3", features = [
+rmcp = { workspace = true, features = [
     "transport-streamable-http-client-reqwest",
     "transport-sse-client-reqwest",
 ] }
