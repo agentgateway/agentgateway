@@ -690,7 +690,7 @@ pub struct RouteSet {
 	// Hostname -> []routes, sorted so that route matching can do a linear traversal
 	inner: HashMap<HostnameMatch, Vec<SingleRouteMatch>>,
 	// All routes
-	all: HashMap<RouteKey, Route>,
+	all: HashMap<RouteKey, Arc<Route>>,
 }
 
 impl serde::Serialize for RouteSet {
@@ -711,16 +711,20 @@ impl RouteSet {
 		rs
 	}
 
-	pub fn get_hostname(&self, hnm: &HostnameMatch) -> impl Iterator<Item = (&Route, &RouteMatch)> {
+	pub fn get_hostname(
+		&self,
+		hnm: &HostnameMatch,
+	) -> impl Iterator<Item = (Arc<Route>, &RouteMatch)> {
 		self.inner.get(hnm).into_iter().flatten().flat_map(|rl| {
 			self
 				.all
 				.get(&rl.key)
-				.map(|r| (r, r.matches.get(rl.index).expect("corrupted state")))
+				.map(|r| (r.clone(), r.matches.get(rl.index).expect("corrupted state")))
 		})
 	}
 
 	pub fn insert(&mut self, r: Route) {
+		let r = Arc::new(r);
 		// Insert the route into all HashMap first so it's available during binary search
 		self.all.insert(r.key.clone(), r.clone());
 

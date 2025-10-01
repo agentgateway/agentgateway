@@ -207,8 +207,7 @@ pub fn select_best_route(
 			true
 		});
 		if let Some((route, matcher)) = best_match {
-			// TODO
-			return Some((Arc::new(route.clone()), matcher.path.clone()));
+			return Some((route, matcher.path.clone()));
 		}
 	}
 	default_response
