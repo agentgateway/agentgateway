@@ -9,6 +9,7 @@ use hyper_util::rt::TokioIo;
 use rand::Rng;
 use rand::seq::IndexedRandom;
 use std::net::SocketAddr;
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{debug, trace};
@@ -63,14 +64,12 @@ async fn apply_request_policies(
 	// Extract dynamic metadata for CEL context
 	log.cel.ctx().with_extauthz(req);
 
-	let exec = log
-		.cel
-		.ctx()
-		.build()
-		.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))?;
+	let exec = std::cell::LazyCell::new(|| log.cel.ctx().build());
+
+	let cel_err = |_| ProxyError::ProcessingString("failed to build cel context".to_string());
 
 	if let Some(j) = &policies.authorization {
-		j.apply(&exec)
+		j.apply(exec.deref().as_ref().map_err(cel_err)?)
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed(None)))?;
 	}
 
@@ -79,14 +78,16 @@ async fn apply_request_policies(
 	}
 
 	if let Some(rrl) = &policies.remote_rate_limit {
-		rrl.check(client, req, &exec).await?
+		rrl
+			.check(client, req, exec.deref().as_ref().map_err(cel_err)?)
+			.await?
 	} else {
 		http::PolicyResponse::default()
 	}
 	.apply(response_policies.headers())?;
 
 	if let Some(j) = &policies.transformation {
-		j.apply_request(req, &exec)
+		j.apply_request(req, exec.deref().as_ref().map_err(cel_err)?)
 			.map_err(|_| ProxyError::TransformationFailure)?;
 	}
 
