@@ -81,11 +81,12 @@ async fn llm_openai() {
 	);
 
 	let want = json!({
-		"llm.provider": "openai",
-		"llm.request.model": "replaceme",
-		"llm.response.model": "gpt-3.5-turbo-0125",
-		"llm.request.tokens": 17,
-		"llm.response.tokens": 23
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
 	});
 	assert_llm(io, include_bytes!("../llm/tests/request_basic.json"), want).await;
 }
@@ -101,11 +102,12 @@ async fn llm_openai_tokenize() {
 	);
 
 	let want = json!({
-		"llm.provider": "openai",
-		"llm.request.model": "replaceme",
-		"llm.response.model": "gpt-3.5-turbo-0125",
-		"llm.request.tokens": 17,
-		"llm.response.tokens": 23
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
 	});
 	assert_llm(io, include_bytes!("../llm/tests/request_basic.json"), want).await;
 }
@@ -134,11 +136,12 @@ async fn llm_log_body() {
 	);
 
 	let want = json!({
-		"llm.provider": "openai",
-		"llm.request.model": "replaceme",
-		"llm.response.model": "gpt-3.5-turbo-0125",
-		"llm.request.tokens": 17,
-		"llm.response.tokens": 23,
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23,
 		"completion": ["Sorry, I couldn't find the name of the LLM provider. Could you please provide more information or context?"],
 		"prompt": [
 			{"role":"system","content":"You are a helpful assistant."},

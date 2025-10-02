@@ -677,28 +677,6 @@ impl Drop for DropOnLog {
 				"inferencepool.selected_endpoint",
 				log.inference_pool.display(),
 			),
-			(
-				"llm.provider",
-				log.llm_request.as_ref().map(|l| display(&l.provider)),
-			),
-			(
-				"llm.request.model",
-				log.llm_request.as_ref().map(|l| display(&l.request_model)),
-			),
-			("llm.request.tokens", input_tokens.map(Into::into)),
-			(
-				"llm.response.model",
-				llm_response
-					.as_ref()
-					.and_then(|l| l.response.provider_model.display()),
-			),
-			(
-				"llm.response.tokens",
-				llm_response
-					.as_ref()
-					.and_then(|l| l.response.output_tokens)
-					.map(Into::into),
-			),
 			// OpenTelemetry Gen AI Semantic Conventions v1.37.0
 			(
 				"gen_ai.operation.name",
@@ -706,10 +684,6 @@ impl Drop for DropOnLog {
 			),
 			(
 				"gen_ai.provider.name",
-				log.llm_request.as_ref().map(|l| display(&l.provider)),
-			),
-			(
-				"gen_ai.system",
 				log.llm_request.as_ref().map(|l| display(&l.provider)),
 			),
 			(
