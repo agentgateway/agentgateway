@@ -1853,6 +1853,16 @@
                               "insecureHost": {
                                 "type": "boolean",
                                 "default": false
+                              },
+                              "alpn": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {
+                                  "type": "string"
+                                },
+                                "default": null
                               }
                             },
                             "additionalProperties": false
@@ -3242,6 +3252,16 @@
                                             "insecureHost": {
                                               "type": "boolean",
                                               "default": false
+                                            },
+                                            "alpn": {
+                                              "type": [
+                                                "array",
+                                                "null"
+                                              ],
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "default": null
                                             }
                                           },
                                           "additionalProperties": false
@@ -4247,6 +4267,16 @@
                                                         "insecureHost": {
                                                           "type": "boolean",
                                                           "default": false
+                                                        },
+                                                        "alpn": {
+                                                          "type": [
+                                                            "array",
+                                                            "null"
+                                                          ],
+                                                          "items": {
+                                                            "type": "string"
+                                                          },
+                                                          "default": null
                                                         }
                                                       },
                                                       "additionalProperties": false
@@ -5099,7 +5129,7 @@
                           "null"
                         ],
                         "properties": {
-                          "backendTls": {
+                          "backendTLS": {
                             "type": [
                               "object",
                               "null"
@@ -5136,6 +5166,16 @@
                               "insecureHost": {
                                 "type": "boolean",
                                 "default": false
+                              },
+                              "alpn": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {
+                                  "type": "string"
+                                },
+                                "default": null
                               }
                             },
                             "additionalProperties": false
@@ -5153,73 +5193,66 @@
                               "format": "uint",
                               "minimum": 0,
                               "default": 1
-                            },
-                            "backend": {
-                              "oneOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "invalid"
-                                  ]
-                                },
-                                {
-                                  "type": "object",
-                                  "properties": {
-                                    "service": {
-                                      "type": "object",
-                                      "properties": {
-                                        "name": {
-                                          "type": "object",
-                                          "properties": {
-                                            "namespace": {
-                                              "type": "string"
-                                            },
-                                            "hostname": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "namespace",
-                                            "hostname"
-                                          ]
-                                        },
-                                        "port": {
-                                          "type": "integer",
-                                          "format": "uint16",
-                                          "minimum": 0,
-                                          "maximum": 65535
-                                        }
-                                      },
-                                      "additionalProperties": false,
-                                      "required": [
-                                        "name",
-                                        "port"
-                                      ]
-                                    }
-                                  },
-                                  "required": [
-                                    "service"
-                                  ],
-                                  "additionalProperties": false
-                                },
-                                {
-                                  "type": "object",
-                                  "properties": {
-                                    "host": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "host"
-                                  ],
-                                  "additionalProperties": false
-                                }
-                              ]
                             }
                           },
-                          "additionalProperties": false,
-                          "required": [
-                            "backend"
+                          "unevaluatedProperties": false,
+                          "oneOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "invalid"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "service": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "object",
+                                      "properties": {
+                                        "namespace": {
+                                          "type": "string"
+                                        },
+                                        "hostname": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "namespace",
+                                        "hostname"
+                                      ]
+                                    },
+                                    "port": {
+                                      "type": "integer",
+                                      "format": "uint16",
+                                      "minimum": 0,
+                                      "maximum": 65535
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name",
+                                    "port"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "service"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "host": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "host"
+                              ]
+                            }
                           ]
                         }
                       }
@@ -6470,6 +6503,16 @@
                   "insecureHost": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "alpn": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": null
                   }
                 },
                 "additionalProperties": false

@@ -218,6 +218,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.backendTLS.hostname`||
 |`binds[].listeners[].routes[].policies.backendTLS.insecure`||
 |`binds[].listeners[].routes[].policies.backendTLS.insecureHost`||
+|`binds[].listeners[].routes[].policies.backendTLS.alpn`||
 |`binds[].listeners[].routes[].policies.backendAuth`|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)passthrough`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)key`||
@@ -369,6 +370,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.hostname`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.insecure`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.insecureHost`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)backendTLS.alpn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)passthrough`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)backendAuth.(any)(1)key`||
@@ -478,6 +480,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.hostname`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.insecure`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.insecureHost`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendTLS.alpn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)passthrough`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].backendAuth.(any)(1)key`||
@@ -563,22 +566,22 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].tcpRoutes[].ruleName`||
 |`binds[].listeners[].tcpRoutes[].hostnames`|Can be a wildcard|
 |`binds[].listeners[].tcpRoutes[].policies`||
-|`binds[].listeners[].tcpRoutes[].policies.backendTls`||
-|`binds[].listeners[].tcpRoutes[].policies.backendTls.cert`||
-|`binds[].listeners[].tcpRoutes[].policies.backendTls.key`||
-|`binds[].listeners[].tcpRoutes[].policies.backendTls.root`||
-|`binds[].listeners[].tcpRoutes[].policies.backendTls.hostname`||
-|`binds[].listeners[].tcpRoutes[].policies.backendTls.insecure`||
-|`binds[].listeners[].tcpRoutes[].policies.backendTls.insecureHost`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.cert`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.key`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.root`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.hostname`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.insecure`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.insecureHost`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.alpn`||
 |`binds[].listeners[].tcpRoutes[].backends`||
+|`binds[].listeners[].tcpRoutes[].backends[].(1)service`||
+|`binds[].listeners[].tcpRoutes[].backends[].(1)service.name`||
+|`binds[].listeners[].tcpRoutes[].backends[].(1)service.name.namespace`||
+|`binds[].listeners[].tcpRoutes[].backends[].(1)service.name.hostname`||
+|`binds[].listeners[].tcpRoutes[].backends[].(1)service.port`||
+|`binds[].listeners[].tcpRoutes[].backends[].(1)host`||
 |`binds[].listeners[].tcpRoutes[].backends[].weight`||
-|`binds[].listeners[].tcpRoutes[].backends[].backend`||
-|`binds[].listeners[].tcpRoutes[].backends[].backend.(1)service`||
-|`binds[].listeners[].tcpRoutes[].backends[].backend.(1)service.name`||
-|`binds[].listeners[].tcpRoutes[].backends[].backend.(1)service.name.namespace`||
-|`binds[].listeners[].tcpRoutes[].backends[].backend.(1)service.name.hostname`||
-|`binds[].listeners[].tcpRoutes[].backends[].backend.(1)service.port`||
-|`binds[].listeners[].tcpRoutes[].backends[].backend.(1)host`||
 |`policies`|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route.|
 |`policies[].name`||
 |`policies[].target`||
@@ -712,6 +715,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.backendTLS.hostname`||
 |`policies[].policy.backendTLS.insecure`||
 |`policies[].policy.backendTLS.insecureHost`||
+|`policies[].policy.backendTLS.alpn`||
 |`policies[].policy.backendAuth`|Authenticate to the backend.|
 |`policies[].policy.backendAuth.(any)(1)passthrough`||
 |`policies[].policy.backendAuth.(any)(1)key`||
