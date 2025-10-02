@@ -36,7 +36,7 @@ pub struct Provider {
 }
 
 impl super::Provider for Provider {
-	const NAME: Strng = strng::literal!("bedrock");
+	const NAME: Strng = strng::literal!("aws.bedrock");
 }
 
 impl Provider {

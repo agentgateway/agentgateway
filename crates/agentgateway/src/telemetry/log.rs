@@ -699,6 +699,85 @@ impl Drop for DropOnLog {
 					.and_then(|l| l.response.output_tokens)
 					.map(Into::into),
 			),
+			// OpenTelemetry Gen AI Semantic Conventions v1.37.0
+			(
+				"gen_ai.operation.name",
+				log.llm_request.as_ref().map(|_| "chat".into()),
+			),
+			(
+				"gen_ai.provider.name",
+				log.llm_request.as_ref().map(|l| display(&l.provider)),
+			),
+			(
+				"gen_ai.system",
+				log.llm_request.as_ref().map(|l| display(&l.provider)),
+			),
+			(
+				"gen_ai.request.model",
+				log.llm_request.as_ref().map(|l| display(&l.request_model)),
+			),
+			(
+				"gen_ai.response.model",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.response.provider_model.display()),
+			),
+			("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
+			(
+				"gen_ai.usage.output_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.response.output_tokens)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.request.temperature",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.temperature)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.request.top_p",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.top_p)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.request.max_tokens",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.max_tokens)
+					.map(|v| (v as i64).into()),
+			),
+			(
+				"gen_ai.request.frequency_penalty",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.frequency_penalty)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.request.presence_penalty",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.presence_penalty)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.request.seed",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.seed)
+					.map(Into::into),
+			),
 			("retry.attempt", log.retry_attempt.display()),
 			("error", log.error.quoted()),
 			("duration", Some(dur.as_str().into())),

@@ -18,7 +18,7 @@ pub struct Provider {
 }
 
 impl super::Provider for Provider {
-	const NAME: Strng = strng::literal!("vertex");
+	const NAME: Strng = strng::literal!("gcp.vertex_ai");
 }
 
 impl Provider {

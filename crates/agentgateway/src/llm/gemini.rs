@@ -15,7 +15,7 @@ pub struct Provider {
 }
 
 impl super::Provider for Provider {
-	const NAME: Strng = strng::literal!("gemini");
+	const NAME: Strng = strng::literal!("gcp.gemini");
 }
 pub const DEFAULT_HOST_STR: &str = "generativelanguage.googleapis.com";
 pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
