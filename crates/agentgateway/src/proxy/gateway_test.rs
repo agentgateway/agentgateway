@@ -151,6 +151,16 @@ async fn llm_log_body() {
 	assert_llm(io, include_bytes!("../llm/tests/request_basic.json"), want).await;
 }
 
+#[tokio::test]
+async fn basic_tcp() {
+	let mock = simple_mock().await;
+	let (_mock, _bind, io) = setup_tcp_mock(mock);
+	let res = send_request(io, Method::POST, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::POST);
+}
+
 async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value) {
 	let r = rand::rng().random::<u128>();
 	let res = send_request_body(io.clone(), Method::POST, &format!("http://lo/{r}"), body).await;

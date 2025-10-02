@@ -19,7 +19,6 @@ use crate::http::{filters, retry, timeout};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, RouteType};
 use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
-use crate::types::agent::PolicyTarget::RouteRule;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendName, BackendReference, Bind, BindName, GatewayName,
 	GatewayTargetedPolicy, Listener, ListenerKey, ListenerProtocol, ListenerSet, McpAuthentication,
@@ -484,6 +483,7 @@ struct LocalTCPRoute {
 pub struct LocalTCPRouteBackend {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
+	#[serde(flatten)]
 	pub backend: SimpleLocalBackend,
 }
 
@@ -657,6 +657,7 @@ struct FilterOrPolicy {
 #[apply(schema_de!)]
 struct TCPFilterOrPolicy {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "backendTLS")]
 	backend_tls: Option<LocalBackendTLS>,
 }
 
@@ -820,8 +821,9 @@ async fn convert_listener(
 
 	let mut trs = TCPRouteSet::default();
 	for (idx, l) in tcp_routes.into_iter().flatten().enumerate() {
-		let (route, policies) = convert_tcp_route(l, idx, key.clone()).await?;
+		let (route, policies, backends) = convert_tcp_route(l, idx, key.clone()).await?;
 		all_policies.extend_from_slice(&policies);
+		all_backends.extend_from_slice(&backends);
 		trs.insert(route)
 	}
 
@@ -1097,7 +1099,7 @@ async fn convert_tcp_route(
 	lr: LocalTCPRoute,
 	idx: usize,
 	listener_key: ListenerKey,
-) -> anyhow::Result<(TCPRoute, Vec<TargetedPolicy>)> {
+) -> anyhow::Result<(TCPRoute, Vec<TargetedPolicy>, Vec<Backend>)> {
 	let LocalTCPRoute {
 		route_name,
 		rule_name,
@@ -1114,15 +1116,22 @@ async fn convert_tcp_route(
 		rule_name.clone().unwrap_or_else(|| strng::new("default"))
 	);
 	let mut external_policies = vec![];
-	let mut pol = 0;
-	let _tgt = |p: Policy| {
-		pol += 1;
-		TargetedPolicy {
-			name: format!("{key}/{pol}").into(),
-			target: RouteRule(key.clone()),
-			policy: p,
+
+	let mut backend_refs = Vec::new();
+	let mut external_backends = Vec::new();
+	for b in &backends {
+		let (backend_ref, backend) = to_simple_backend_and_ref(key.clone(), &b.backend);
+		if let Some(backend) = backend {
+			external_backends.push(backend);
 		}
-	};
+		let bref = TCPRouteBackendReference {
+			weight: b.weight,
+			backend: backend_ref,
+			// filters: b.filters,
+		};
+		backend_refs.push(bref);
+	}
+
 	let mut be_pol = 0;
 	let backend_tgt = |p: Policy| {
 		if backends.len() != 1 {
@@ -1155,15 +1164,14 @@ async fn convert_tcp_route(
 			external_policies.push(backend_tgt(Policy::BackendTLS(p.try_into()?))?)
 		}
 	}
-	#[allow(unreachable_code)]
-	let _route = TCPRoute {
+	let route = TCPRoute {
 		key,
 		route_name,
 		rule_name,
 		hostnames,
-		backends: todo!(),
+		backends: backend_refs,
 	};
-	Ok((_route, external_policies))
+	Ok((route, external_policies, external_backends))
 }
 
 fn to_simple_backend_and_ref(

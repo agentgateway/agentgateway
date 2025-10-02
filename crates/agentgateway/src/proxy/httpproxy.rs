@@ -30,7 +30,6 @@ use crate::proxy::{ProxyError, ProxyResponse, resolve_simple_backend};
 use crate::store::{BackendPolicies, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies};
 use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
-use crate::telemetry::metrics::TCPLabels;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
@@ -318,22 +317,6 @@ impl HTTPProxy {
 		let inputs = self.inputs.clone();
 		let bind_name = self.bind_name.clone();
 		debug!(bind=%bind_name, "route for bind");
-		self
-			.inputs
-			.metrics
-			.downstream_connection
-			.get_or_create(&TCPLabels {
-				bind: Some(&self.bind_name).into(),
-				// For HTTP, this will be empty
-				gateway: selected_listener.as_ref().map(|l| &l.gateway_name).into(),
-				listener: selected_listener.as_ref().map(|l| &l.name).into(),
-				protocol: if log.tls_info.is_some() {
-					BindProtocol::https
-				} else {
-					BindProtocol::http
-				},
-			})
-			.inc();
 		let Some(listeners) = ({
 			let state = inputs.stores.read_binds();
 			state.listeners(bind_name.clone())
@@ -740,7 +723,7 @@ async fn handle_upgrade(
 	Ok(resp)
 }
 
-async fn build_transport(
+pub async fn build_transport(
 	inputs: &ProxyInputs,
 	backend_call: &BackendCall,
 	backend_tls: Option<BackendTLS>,
@@ -868,43 +851,14 @@ async fn make_backend_call(
 				transport_override: None,
 			}
 		},
-		Backend::Service(svc, port) => {
-			let port = *port;
-			let workloads = &inputs.stores.read_discovery().workloads;
-			let (ep, handle, wl) = svc
-				.endpoints
-				.select_endpoint(workloads, svc.as_ref(), port, override_dest)
-				.ok_or(ProxyError::NoHealthyEndpoints)?;
-
-			let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
-			let target_port = if let Some(&ep_target_port) = ep.port.get(&port) {
-				// prefer endpoint port mapping
-				ep_target_port
-			} else if svc_target_port > 0 {
-				// otherwise, see if the service has this port
-				svc_target_port
-			} else {
-				return Err(ProxyResponse::from(ProxyError::NoHealthyEndpoints));
-			};
-			let http_version_override = if svc.port_is_http2(port) {
-				Some(::http::Version::HTTP_2)
-			} else if svc.port_is_http1(port) {
-				Some(::http::Version::HTTP_11)
-			} else {
-				None
-			};
-			let Some(ip) = wl.workload_ips.first() else {
-				return Err(ProxyResponse::from(ProxyError::NoHealthyEndpoints));
-			};
-			let dest = SocketAddr::from((*ip, target_port));
-			log.add(move |l| l.request_handle = Some(handle));
-			BackendCall {
-				target: Target::Address(dest),
-				http_version_override,
-				transport_override: Some((wl.protocol, wl.identity())),
-				default_policies,
-			}
-		},
+		Backend::Service(svc, port) => build_service_call(
+			&inputs,
+			default_policies,
+			&mut log,
+			override_dest,
+			svc,
+			port,
+		)?,
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
 			http_version_override: None,
@@ -1095,6 +1049,51 @@ async fn make_backend_call(
 	}))
 }
 
+pub fn build_service_call(
+	inputs: &ProxyInputs,
+	default_policies: Option<BackendPolicies>,
+	log: &mut Option<&mut RequestLog>,
+	override_dest: Option<SocketAddr>,
+	svc: &Arc<Service>,
+	port: &u16,
+) -> Result<BackendCall, ProxyError> {
+	let port = *port;
+	let workloads = &inputs.stores.read_discovery().workloads;
+	let (ep, handle, wl) = svc
+		.endpoints
+		.select_endpoint(workloads, svc.as_ref(), port, override_dest)
+		.ok_or(ProxyError::NoHealthyEndpoints)?;
+
+	let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
+	let target_port = if let Some(&ep_target_port) = ep.port.get(&port) {
+		// prefer endpoint port mapping
+		ep_target_port
+	} else if svc_target_port > 0 {
+		// otherwise, see if the service has this port
+		svc_target_port
+	} else {
+		return Err(ProxyError::NoHealthyEndpoints);
+	};
+	let http_version_override = if svc.port_is_http2(port) {
+		Some(::http::Version::HTTP_2)
+	} else if svc.port_is_http1(port) {
+		Some(::http::Version::HTTP_11)
+	} else {
+		None
+	};
+	let Some(ip) = wl.workload_ips.first() else {
+		return Err(ProxyError::NoHealthyEndpoints);
+	};
+	let dest = SocketAddr::from((*ip, target_port));
+	log.add(move |l| l.request_handle = Some(handle));
+	Ok(BackendCall {
+		target: Target::Address(dest),
+		http_version_override,
+		transport_override: Some((wl.protocol, wl.identity())),
+		default_policies,
+	})
+}
+
 fn should_retry(res: &Result<Response, ProxyResponse>, pol: &retry::Policy) -> bool {
 	match res {
 		Ok(resp) => pol.codes.contains(&resp.status()),
@@ -1235,11 +1234,11 @@ fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()
 	Ok(())
 }
 
-struct BackendCall {
-	target: Target,
-	http_version_override: Option<::http::Version>,
-	transport_override: Option<(InboundProtocol, Identity)>,
-	default_policies: Option<BackendPolicies>,
+pub struct BackendCall {
+	pub target: Target,
+	pub http_version_override: Option<::http::Version>,
+	pub transport_override: Option<(InboundProtocol, Identity)>,
+	pub default_policies: Option<BackendPolicies>,
 }
 
 #[derive(Debug, Default)]

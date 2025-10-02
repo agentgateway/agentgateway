@@ -19,7 +19,8 @@ use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, event, info, info_span, warn};
 
 use crate::store::Event;
-use crate::transport::stream::{Extension, LoggingMode, Socket};
+use crate::telemetry::metrics::TCPLabels;
+use crate::transport::stream::{Extension, LoggingMode, Socket, TLSConnectionInfo};
 use crate::types::agent::{Bind, BindName, BindProtocol, Listener, ListenerProtocol};
 use crate::{ListenerConfig, ProxyInputs, client};
 
@@ -303,6 +304,21 @@ impl Gateway {
 	) -> anyhow::Result<()> {
 		let target_address = stream.target_address();
 		let server = auto_server(&inputs.cfg.listener);
+		inputs
+			.metrics
+			.downstream_connection
+			.get_or_create(&TCPLabels {
+				bind: Some(&bind_name).into(),
+				// For HTTP, this will be empty
+				gateway: selected_listener.as_ref().map(|l| &l.gateway_name).into(),
+				listener: selected_listener.as_ref().map(|l| &l.name).into(),
+				protocol: if stream.ext::<TLSConnectionInfo>().is_some() {
+					BindProtocol::https
+				} else {
+					BindProtocol::http
+				},
+			})
+			.inc();
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
 			inputs,
@@ -310,6 +326,7 @@ impl Gateway {
 			target_address,
 		};
 		let connection = Arc::new(stream.get_ext());
+
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(stream),
 			hyper::service::service_fn(move |req| {

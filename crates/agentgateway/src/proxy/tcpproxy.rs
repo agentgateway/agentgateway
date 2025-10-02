@@ -3,15 +3,16 @@ use std::sync::Arc;
 
 use rand::prelude::IndexedRandom;
 
-use crate::proxy::ProxyError;
+use crate::proxy::httpproxy::BackendCall;
+use crate::proxy::{ProxyError, httpproxy};
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent;
 use crate::types::agent::{
-	BindName, BindProtocol, Listener, ListenerProtocol, PolicyTarget, SimpleBackend, TCPRoute,
-	TCPRouteBackend, TCPRouteBackendReference, Target,
+	BindName, BindProtocol, Listener, ListenerProtocol, SimpleBackend, TCPRoute, TCPRouteBackend,
+	TCPRouteBackendReference,
 };
 use crate::{ProxyInputs, *};
 
@@ -95,56 +96,43 @@ impl TCPProxy {
 			select_tcp_backend(selected_route.as_ref()).ok_or(ProxyError::NoValidBackends)?;
 		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
 
-		let (_target, _policy_key) = match &selected_backend.backend {
+		let service = match &selected_backend.backend {
+			SimpleBackend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
+			_ => None,
+		};
+		let backend_call = match &selected_backend.backend {
 			SimpleBackend::Service(svc, port) => {
-				let port = *port;
-				let workloads = &inputs.stores.read_discovery().workloads;
-				let (ep, _, wl) = svc
-					.endpoints
-					.select_endpoint(workloads, svc.as_ref(), port, None)
-					.ok_or(ProxyError::NoHealthyEndpoints)?;
-				let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
-				let target_port = if let Some(&ep_target_port) = ep.port.get(&port) {
-					// use endpoint port mapping
-					ep_target_port
-				} else if svc_target_port > 0 {
-					// otherwise, check if the service has the port
-					svc_target_port
-				} else {
-					return Err(ProxyError::NoHealthyEndpoints);
-				};
-				let Some(ip) = wl.workload_ips.first() else {
-					return Err(ProxyError::NoHealthyEndpoints);
-				};
-				let dest = std::net::SocketAddr::from((*ip, target_port));
-				(
-					Target::Address(dest),
-					PolicyTarget::Backend(selected_backend.backend.name()),
-				)
+				httpproxy::build_service_call(inputs.as_ref(), None, &mut Some(log), None, svc, port)?
 			},
-			SimpleBackend::Opaque(name, target) => (target.clone(), PolicyTarget::Backend(name.clone())),
+			SimpleBackend::Opaque(_, target) => BackendCall {
+				target: target.clone(),
+				http_version_override: None,
+				transport_override: None,
+				default_policies: None,
+			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
+		log.endpoint = Some(backend_call.target.clone());
+		let policies =
+			inputs
+				.stores
+				.read_binds()
+				.backend_policies(selected_backend.backend.name(), service, None);
+		let transport = crate::proxy::httpproxy::build_transport(
+			&inputs,
+			&backend_call,
+			policies.backend_tls.clone(),
+		)
+		.await?;
 
-		// let _policies = inputs
-		// .stores
-		// .read_binds()
-		// .backend_policies(todo!(), None);
-		// let transport = policies.i // TODO
-		// let Target::Address(addr) = _target else {
-		// panic!("TODO")
-		// };
-		// let upstream = stream::Socket::dial(addr)
-		// .await
-		// .map_err(ProxyError::Processing)?;
-		// agent_core::copy::copy_bidirectional(
-		// connection,
-		// upstream,
-		// &agent_core::copy::ConnectionResult {},
-		// )
-		// .await
-		// .map_err(|e| ProxyError::Processing(e.into()))?;
-		//
+		inputs
+			.upstream
+			.call_tcp(client::TCPCall {
+				source: connection,
+				target: backend_call.target,
+				transport,
+			})
+			.await?;
 		Ok(())
 	}
 }

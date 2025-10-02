@@ -21,6 +21,7 @@ pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
 		hostname: None,
 		insecure: true,
 		insecure_host: false,
+		alpn: None,
 	}
 	.try_into()
 	.unwrap()
@@ -72,7 +73,10 @@ pub struct LocalBackendTLS {
 	insecure: bool,
 	#[serde(default)]
 	insecure_host: bool,
+	#[serde(default)]
+	alpn: Option<Vec<String>>,
 }
+
 pub struct ResolvedBackendTLS {
 	pub cert: Option<Vec<u8>>,
 	pub key: Option<Vec<u8>>,
@@ -81,6 +85,7 @@ pub struct ResolvedBackendTLS {
 	pub hostname: Option<String>,
 	pub insecure: bool,
 	pub insecure_host: bool,
+	pub alpn: Option<Vec<String>>,
 }
 
 impl ResolvedBackendTLS {
@@ -123,9 +128,11 @@ impl ResolvedBackendTLS {
 			cc.dangerous()
 				.set_certificate_verifier(Arc::new(tls::insecure::NoVerifier));
 		}
-		// TODO: support configuring
-		cc.alpn_protocols = vec![b"h2".into(), b"http/1.1".into()];
-		// cc.alpn_protocols = vec![b"http/1.1".into()];
+		if let Some(a) = self.alpn {
+			cc.alpn_protocols = a.into_iter().map(|b| b.as_bytes().to_vec()).collect();
+		} else {
+			cc.alpn_protocols = vec![b"h2".into(), b"http/1.1".into()];
+		}
 		Ok(BackendTLS {
 			hostname_override: self.hostname.map(|s| s.try_into()).transpose()?,
 			config: Arc::new(cc),
@@ -142,6 +149,7 @@ impl LocalBackendTLS {
 			hostname: self.hostname,
 			insecure: self.insecure,
 			insecure_host: self.insecure_host,
+			alpn: self.alpn,
 		}
 		.try_into()
 	}

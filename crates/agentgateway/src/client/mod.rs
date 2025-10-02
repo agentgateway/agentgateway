@@ -13,6 +13,7 @@ use futures::TryStreamExt;
 use http_body_util::BodyExt;
 use hyper_util_fork::rt::TokioIo;
 use rustls_pki_types::{DnsName, ServerName};
+use tonic::codegen::Service;
 use tracing::event;
 use typespec_client_core::http::Sanitizer;
 
@@ -29,6 +30,7 @@ use crate::*;
 pub struct Client {
 	resolver: Arc<dns::CachedResolver>,
 	client: hyper_util_fork::client::legacy::Client<Connector, http::Body, PoolKey>,
+	connector: Connector,
 }
 
 impl Debug for Client {
@@ -166,6 +168,12 @@ pub struct Call {
 	pub transport: Transport,
 }
 
+pub struct TCPCall {
+	pub source: Socket,
+	pub target: Target,
+	pub transport: Transport,
+}
+
 #[derive(Default, Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Transport {
 	#[default]
@@ -220,8 +228,89 @@ struct Connector {
 	backend_config: Arc<crate::BackendConfig>,
 }
 
+impl Connector {
+	async fn connect(
+		&mut self,
+		target: Target,
+		ep: SocketAddr,
+		transport: Transport,
+	) -> Result<Socket, http::Error> {
+		match transport {
+			Transport::Plaintext => {
+				let mut res = Socket::dial(ep, self.backend_config.clone())
+					.await
+					.map_err(crate::http::Error::new)?;
+				res.with_logging(LoggingMode::Upstream);
+				Ok(res)
+			},
+			Transport::Tls(tls) => {
+				let server_name = if let Some(h) = tls.hostname_override {
+					h
+				} else {
+					match target {
+						Target::Address(_) => ServerName::IpAddress(ep.ip().into()),
+						Target::Hostname(host, _) => ServerName::DnsName(
+							DnsName::try_from(host.to_string()).expect("TODO: hostname conversion failed"),
+						),
+					}
+				};
+
+				let mut tls = self::hyperrustls::TLSConnector {
+					tls_config: tls.config.clone(),
+					server_name,
+					backend_config: self.backend_config.clone(),
+				};
+
+				let mut res = tls.call(ep).await.map_err(crate::http::Error::new)?;
+				res.with_logging(LoggingMode::Upstream);
+				Ok(res)
+			},
+			Transport::Hbone(inner, identity) => {
+				if inner.is_some() {
+					return Err(crate::http::Error::new(anyhow::anyhow!(
+						"todo: inner TLS is not currently supported"
+					)));
+				}
+				let uri = Uri::builder()
+					.scheme(Scheme::HTTPS)
+					.authority(ep.to_string())
+					.path_and_query("/")
+					.build()
+					.expect("todo");
+				tracing::debug!("will use HBONE");
+				let req = ::http::Request::builder()
+					.uri(uri)
+					.method(hyper::Method::CONNECT)
+					.version(hyper::Version::HTTP_2)
+					.body(())
+					.expect("builder with known status code should not fail");
+
+				let pool_key = Box::new(WorkloadKey {
+					dst_id: vec![identity],
+					dst: SocketAddr::from((ep.ip(), 15008)),
+				});
+				let mut pool = self
+					.hbone_pool
+					.clone()
+					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
+
+				let upgraded = Box::pin(pool.send_request_pooled(&pool_key, req))
+					.await
+					.map_err(crate::http::Error::new)?;
+				let rw = agent_hbone::RWStream {
+					stream: upgraded,
+					buf: Default::default(),
+				};
+				let mut socket = Socket::from_hbone(Arc::new(stream::Extension::new()), pool_key.dst, rw);
+				socket.with_logging(LoggingMode::Upstream);
+				Ok(socket)
+			},
+		}
+	}
+}
+
 impl tower::Service<::http::Extensions> for Connector {
-	type Response = TokioIo<crate::transport::stream::Socket>;
+	type Response = TokioIo<Socket>;
 	type Error = crate::http::Error;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -230,83 +319,13 @@ impl tower::Service<::http::Extensions> for Connector {
 	}
 
 	fn call(&mut self, mut dst: ::http::Extensions) -> Self::Future {
-		let it = self.clone();
+		let mut it = self.clone();
 
 		Box::pin(async move {
 			let PoolKey(target, ep, transport, _) =
 				dst.remove::<PoolKey>().expect("pool key must be set");
 
-			match transport {
-				Transport::Plaintext => {
-					let mut res = Socket::dial(ep, it.backend_config.clone())
-						.await
-						.map_err(crate::http::Error::new)?;
-					res.with_logging(LoggingMode::Upstream);
-					Ok(TokioIo::new(res))
-				},
-				Transport::Tls(tls) => {
-					let server_name = if let Some(h) = tls.hostname_override {
-						h
-					} else {
-						match target {
-							Target::Address(_) => ServerName::IpAddress(ep.ip().into()),
-							Target::Hostname(host, _) => ServerName::DnsName(
-								DnsName::try_from(host.to_string()).expect("TODO: hostname conversion failed"),
-							),
-						}
-					};
-
-					let mut https = self::hyperrustls::HttpsConnector {
-						tls_config: tls.config.clone(),
-						server_name,
-						backend_config: it.backend_config.clone(),
-					};
-
-					let mut res = https.call(ep).await.map_err(crate::http::Error::new)?;
-					res.with_logging(LoggingMode::Upstream);
-					Ok(TokioIo::new(res))
-				},
-				Transport::Hbone(inner, identity) => {
-					if inner.is_some() {
-						return Err(crate::http::Error::new(anyhow::anyhow!(
-							"todo: inner TLS is not currently supported"
-						)));
-					}
-					let uri = Uri::builder()
-						.scheme(Scheme::HTTPS)
-						.authority(ep.to_string())
-						.path_and_query("/")
-						.build()
-						.expect("todo");
-					tracing::debug!("will use HBONE");
-					let req = ::http::Request::builder()
-						.uri(uri)
-						.method(hyper::Method::CONNECT)
-						.version(hyper::Version::HTTP_2)
-						.body(())
-						.expect("builder with known status code should not fail");
-
-					let pool_key = Box::new(WorkloadKey {
-						dst_id: vec![identity],
-						dst: SocketAddr::from((ep.ip(), 15008)),
-					});
-					let mut pool = it
-						.hbone_pool
-						.clone()
-						.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
-
-					let upgraded = Box::pin(pool.send_request_pooled(&pool_key, req))
-						.await
-						.map_err(crate::http::Error::new)?;
-					let rw = agent_hbone::RWStream {
-						stream: upgraded,
-						buf: Default::default(),
-					};
-					let mut socket = Socket::from_hbone(Arc::new(stream::Extension::new()), pool_key.dst, rw);
-					socket.with_logging(LoggingMode::Upstream);
-					Ok(TokioIo::new(socket))
-				},
-			}
+			it.connect(target, ep, transport).await.map(TokioIo::new)
 		})
 	}
 }
@@ -325,16 +344,18 @@ impl Client {
 		backend_config: BackendConfig,
 	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
+		let connector = Connector {
+			hbone_pool,
+			backend_config: Arc::new(backend_config),
+		};
 		let client =
 			::hyper_util_fork::client::legacy::Client::builder(::hyper_util::rt::TokioExecutor::new())
 				.timer(hyper_util::rt::tokio::TokioTimer::new())
-				.build_with_pool_key(Connector {
-					hbone_pool,
-					backend_config: Arc::new(backend_config),
-				});
+				.build_with_pool_key(connector.clone());
 		Client {
 			resolver: Arc::new(resolver),
 			client,
+			connector,
 		}
 	}
 
@@ -366,6 +387,67 @@ impl Client {
 				transport,
 			})
 			.await
+	}
+
+	pub async fn call_tcp(&self, call: TCPCall) -> Result<(), ProxyError> {
+		let start = std::time::Instant::now();
+		let TCPCall {
+			source,
+			target,
+			transport,
+		} = call;
+		let dest = match &target {
+			Target::Address(addr) => *addr,
+			Target::Hostname(hostname, port) => {
+				let ip = self
+					.resolver
+					.resolve(hostname.clone())
+					.await
+					.map_err(|_| ProxyError::DnsResolution)?;
+				SocketAddr::from((ip, *port))
+			},
+		};
+
+		let transport_name = transport.name();
+		let target_name = target.to_string();
+
+		event!(
+			target: "upstream tcp",
+			parent: None,
+			tracing::Level::DEBUG,
+
+			target = %target_name,
+			endpoint = %dest,
+			transport = %transport_name,
+
+			"started"
+		);
+		let upstream = self
+			.connector
+			.clone()
+			.connect(target, dest, transport)
+			.await
+			.map_err(ProxyError::UpstreamTCPCallFailed)?;
+
+		agent_core::copy::copy_bidirectional(source, upstream, &agent_core::copy::ConnectionResult {})
+			.await
+			.map_err(ProxyError::UpstreamTCPProxy)?;
+
+		let dur = format!("{}ms", start.elapsed().as_millis());
+		event!(
+			target: "upstream tcp",
+			parent: None,
+			tracing::Level::DEBUG,
+
+			target = %target_name,
+			endpoint = %dest,
+			transport = %transport_name,
+
+			duration = dur,
+
+			"completed"
+		);
+		Ok(())
 	}
 
 	pub async fn call(&self, call: Call) -> Result<http::Response, ProxyError> {
@@ -418,8 +500,6 @@ impl Client {
 		let uri = req.uri().clone();
 		let path = uri.path();
 		let host = uri.authority().to_owned();
-		// const TIMEOUT: Option<Duration> = Some(Duration::from_secs(5));
-		const TIMEOUT: Option<Duration> = None;
 		event!(
 			target: "upstream request",
 			parent: None,
@@ -428,17 +508,11 @@ impl Client {
 			request =?req
 		);
 		let buffer_limit = http::buffer_limit(&req);
-		let resp = match TIMEOUT {
-			Some(to) => match tokio::time::timeout(to, self.client.request(req)).await {
-				Ok(res) => res.map_err(ProxyError::UpstreamCallFailed),
-				Err(_) => Err(ProxyError::RequestTimeout),
-			},
-			None => self
-				.client
-				.request(req)
-				.await
-				.map_err(ProxyError::UpstreamCallFailed),
-		};
+		let resp = self
+			.client
+			.request(req)
+			.await
+			.map_err(ProxyError::UpstreamCallFailed);
 		let dur = format!("{}ms", start.elapsed().as_millis());
 
 		event!(

@@ -66,6 +66,10 @@ pub enum ProxyError {
 	BackendAuthenticationFailed(anyhow::Error),
 	#[error("upstream call failed: {0}")]
 	UpstreamCallFailed(HyperError),
+	#[error("upstream tcp call failed: {0}")]
+	UpstreamTCPCallFailed(http::Error),
+	#[error("upstream tcp proxy failed: {0}")]
+	UpstreamTCPProxy(agent_core::copy::CopyError),
 	#[error("request timeout")]
 	RequestTimeout,
 	#[error("processing failed: {0}")]
@@ -131,6 +135,10 @@ impl ProxyError {
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			ProxyError::RateLimitFailed => StatusCode::TOO_MANY_REQUESTS,
+
+			// Shouldn't happen on this path
+			ProxyError::UpstreamTCPCallFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::UpstreamTCPProxy(_) => StatusCode::INTERNAL_SERVER_ERROR,
 		};
 		let msg = self.to_string();
 		let mut rb = ::http::Response::builder()

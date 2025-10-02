@@ -31,7 +31,8 @@ use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::types::agent::{
 	Backend, BackendReference, Bind, BindName, Listener, ListenerProtocol, ListenerSet, McpBackend,
 	McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference, RouteMatch, RouteSet,
-	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, Target, TargetedPolicy,
+	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
 };
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
@@ -81,6 +82,17 @@ pub fn setup_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryConne
 		.unwrap()
 		.with_backend(*mock.address())
 		.with_bind(simple_bind(basic_route(*mock.address())));
+	let io = t.serve_http(strng::new("bind"));
+	(mock, t, io)
+}
+
+pub fn setup_tcp_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_tcp_bind(basic_named_tcp_route(strng::new(
+			mock.address().to_string(),
+		))));
 	let io = t.serve_http(strng::new("bind"));
 	(mock, t, io)
 }
@@ -139,6 +151,18 @@ pub fn basic_named_route(target: Strng) -> Route {
 	}
 }
 
+pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
+	TCPRoute {
+		key: "route".into(),
+		route_name: "route".into(),
+		hostnames: Default::default(),
+		rule_name: None,
+		backends: vec![TCPRouteBackendReference {
+			weight: 1,
+			backend: SimpleBackendReference::Backend(target),
+		}],
+	}
+}
 pub fn simple_bind(route: Route) -> Bind {
 	Bind {
 		key: strng::new("bind"),
@@ -152,6 +176,23 @@ pub fn simple_bind(route: Route) -> Bind {
 			protocol: ListenerProtocol::HTTP,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
+		}]),
+	}
+}
+
+pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
+	Bind {
+		key: strng::new("bind"),
+		// not really used
+		address: "127.0.0.1:0".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: Default::default(),
+			name: Default::default(),
+			gateway_name: Default::default(),
+			hostname: Default::default(),
+			protocol: ListenerProtocol::TCP,
+			tcp_routes: TCPRouteSet::from_list(vec![route]),
+			routes: Default::default(),
 		}]),
 	}
 }
