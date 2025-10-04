@@ -486,7 +486,7 @@ impl AIProvider {
 		let new_request = match self {
 			AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Vertex(_) => req.to_openai()?,
 			AIProvider::Anthropic(_) => req.to_anthropic()?,
-			AIProvider::Bedrock(p) => req.to_bedrock(p, Some(&parts.headers))?,
+			AIProvider::Bedrock(p) => req.to_bedrock(p, Some(&parts.headers), Some(&parts.extensions))?,
 		};
 		let resp = Body::from(new_request);
 		parts.headers.remove(header::CONTENT_LENGTH);

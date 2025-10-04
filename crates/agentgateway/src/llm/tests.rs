@@ -136,7 +136,7 @@ async fn test_bedrock() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 	};
-	let request = |i| Ok(bedrock::translate_request_completions(i, &provider));
+	let request = |i| Ok(bedrock::translate_request_completions(i, &provider, None));
 	for r in ALL_REQUESTS {
 		test_request("bedrock", r, request);
 	}
