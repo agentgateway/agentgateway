@@ -1360,11 +1360,12 @@ pub mod passthrough {
 			&self,
 			provider: &crate::llm::bedrock::Provider,
 			headers: Option<&::http::HeaderMap>,
+			extensions: Option<&::http::Extensions>,
 		) -> Result<Vec<u8>, AIError> {
 			let typed = json::convert::<_, anthropic::types::MessagesRequest>(self)
 				.map_err(AIError::RequestMarshal)?;
 			let bedrock_request =
-				crate::llm::bedrock::translate_request_messages(typed, provider, headers)?;
+				crate::llm::bedrock::translate_request_messages(typed, provider, headers, extensions)?;
 			serde_json::to_vec(&bedrock_request).map_err(AIError::RequestMarshal)
 		}
 	}

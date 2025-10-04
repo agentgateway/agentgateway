@@ -6,6 +6,7 @@ use chrono;
 use itertools::Itertools;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::Instant;
 use tracing::trace;
 
@@ -120,6 +121,32 @@ pub fn process_response(
 	}
 }
 
+/// Flatten nested JSON into simple key-value pairs for Bedrock requestMetadata.
+/// Extracts leaf values only - e.g., `{"ns": {"id": "123"}}` becomes `{"id": "123"}`.
+fn flatten_json_for_bedrock(value: &serde_json::Value, output: &mut HashMap<String, String>) {
+	let serde_json::Value::Object(obj) = value else {
+		return;
+	};
+
+	for (key, val) in obj {
+		match val {
+			serde_json::Value::String(s) => {
+				output.insert(key.clone(), s.clone());
+			},
+			serde_json::Value::Number(n) => {
+				output.insert(key.clone(), n.to_string());
+			},
+			serde_json::Value::Bool(b) => {
+				output.insert(key.clone(), b.to_string());
+			},
+			serde_json::Value::Object(_) => {
+				flatten_json_for_bedrock(val, output);
+			},
+			_ => {},
+		}
+	}
+}
+
 pub(super) fn translate_error(
 	resp: ConverseErrorResponse,
 ) -> Result<universal::ChatCompletionErrorResponse, AIError> {
@@ -157,6 +184,7 @@ fn translate_stop_reason(resp: &StopReason) -> universal::FinishReason {
 pub(super) fn translate_request_completions(
 	req: universal::Request,
 	provider: &Provider,
+	extensions: Option<&::http::Extensions>,
 ) -> ConverseRequest {
 	// Extract and join system prompts from universal format
 	let system_text = req
@@ -211,9 +239,27 @@ pub(super) fn translate_request_completions(
 		None
 	};
 
-	let metadata = req
+	let mut metadata = req
 		.user
-		.map(|user| HashMap::from([("user_id".to_string(), user)]));
+		.map(|user| HashMap::from([("user_id".to_string(), user)]))
+		.unwrap_or_default();
+
+	// Merge extauthz metadata if present - extract leaf key-value pairs from nested structures
+	if let Some(ext) = extensions
+		&& let Some(extauthz) = ext.get::<Arc<http::ext_authz::ExtAuthzDynamicMetadata>>()
+	{
+		for value in extauthz.metadata.values() {
+			// Recursively flatten nested JSON objects into simple key-value pairs
+			// e.g., {"extauthz.jwt": {"sub": "user123"}} becomes {"sub": "user123"}
+			flatten_json_for_bedrock(value, &mut metadata);
+		}
+	}
+
+	let request_metadata = if metadata.is_empty() {
+		None
+	} else {
+		Some(metadata)
+	};
 
 	let tool_choice = match req.tool_choice {
 		Some(universal::ToolChoiceOption::Named(universal::NamedToolChoice {
@@ -289,7 +335,7 @@ pub(super) fn translate_request_completions(
 		additional_model_request_fields: thinking,
 		prompt_variables: None,
 		additional_model_response_field_paths: None,
-		request_metadata: metadata,
+		request_metadata,
 		performance_config: None,
 	}
 }
@@ -473,6 +519,7 @@ pub(super) fn translate_request_messages(
 	req: anthropic::MessagesRequest,
 	provider: &Provider,
 	headers: Option<&http::HeaderMap>,
+	extensions: Option<&::http::Extensions>,
 ) -> Result<ConverseRequest, AIError> {
 	let mut cache_points_used = 0;
 
@@ -799,7 +846,24 @@ pub(super) fn translate_request_messages(
 	};
 
 	// Extract metadata from typed field
-	let metadata = req.metadata.map(|m| m.fields);
+	let mut metadata = req.metadata.map(|m| m.fields).unwrap_or_default();
+
+	// Merge extauthz metadata if present - extract leaf key-value pairs from nested structures
+	if let Some(ext) = extensions
+		&& let Some(extauthz) = ext.get::<Arc<http::ext_authz::ExtAuthzDynamicMetadata>>()
+	{
+		for value in extauthz.metadata.values() {
+			// Recursively flatten nested JSON objects into simple key-value pairs
+			// e.g., {"extauthz.jwt": {"sub": "user123"}} becomes {"sub": "user123"}
+			flatten_json_for_bedrock(value, &mut metadata);
+		}
+	}
+
+	let request_metadata = if metadata.is_empty() {
+		None
+	} else {
+		Some(metadata)
+	};
 
 	let bedrock_request = ConverseRequest {
 		model_id: req.model,
@@ -811,7 +875,7 @@ pub(super) fn translate_request_messages(
 		additional_model_request_fields: additional_fields,
 		prompt_variables: None,
 		additional_model_response_field_paths: None,
-		request_metadata: metadata,
+		request_metadata,
 		performance_config: None,
 	};
 
@@ -1313,6 +1377,54 @@ mod tests {
 	use serde_json::json;
 
 	#[test]
+	fn test_extauthz_metadata_passthrough() {
+		let provider = Provider {
+			model: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
+
+		let mut extauthz_metadata = HashMap::new();
+		extauthz_metadata.insert("extauthz.jwt".to_string(), json!({"sub": "user123"}));
+
+		let extauthz = Arc::new(crate::http::ext_authz::ExtAuthzDynamicMetadata {
+			metadata: extauthz_metadata,
+		});
+
+		let mut extensions = ::http::Extensions::new();
+		extensions.insert(extauthz);
+
+		let req = anthropic::MessagesRequest {
+			model: "anthropic.claude-3-sonnet".to_string(),
+			messages: vec![anthropic::Message {
+				role: anthropic::Role::User,
+				content: vec![anthropic::ContentBlock::Text(anthropic::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			}],
+			max_tokens: 100,
+			metadata: None,
+			system: None,
+			stop_sequences: vec![],
+			stream: false,
+			temperature: None,
+			top_k: None,
+			top_p: None,
+			tools: None,
+			tool_choice: None,
+			thinking: None,
+		};
+
+		let out = translate_request_messages(req, &provider, None, Some(&extensions)).unwrap();
+		let metadata = out.request_metadata.unwrap();
+
+		assert_eq!(metadata.get("sub"), Some(&"user123".to_string()));
+	}
+
+	#[test]
 	fn test_translate_request_messages_maps_top_k_from_typed() {
 		let provider = Provider {
 			model: Some(strng::new("anthropic.claude-3")),
@@ -1344,7 +1456,7 @@ mod tests {
 			thinking: None,
 		};
 
-		let out = translate_request_messages(req, &provider, None).unwrap();
+		let out = translate_request_messages(req, &provider, None, None).unwrap();
 		let inf = out.inference_config.unwrap();
 		assert_eq!(inf.top_k, Some(7));
 	}
