@@ -24,7 +24,7 @@ use crate::http::Response;
 use crate::mcp::handler::Relay;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, rbac};
+use crate::mcp::{ClientError, rbac, MCPOperation};
 use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
@@ -204,6 +204,9 @@ impl Session {
 							.await
 					},
 					ClientRequest::ListToolsRequest(_) => {
+						log.non_atomic_mutate(|l| {
+							l.list = Some(MCPOperation::Tool);
+						});
 						self
 							.relay
 							.send_fanout(r, ctx, self.relay.merge_tools(cel.clone()))
@@ -216,6 +219,9 @@ impl Session {
 							.await
 					},
 					ClientRequest::ListPromptsRequest(_) => {
+						log.non_atomic_mutate(|l| {
+							l.list = Some(MCPOperation::Prompt);
+						});
 						self
 							.relay
 							.send_fanout(r, ctx, self.relay.merge_prompts(cel.clone()))
@@ -223,6 +229,9 @@ impl Session {
 					},
 					ClientRequest::ListResourcesRequest(_) => {
 						if !self.relay.is_multiplexing() {
+							log.non_atomic_mutate(|l| {
+								l.list = Some(MCPOperation::Resource);
+							});
 							self
 								.relay
 								.send_fanout(r, ctx, self.relay.merge_resources(cel.clone()))
@@ -237,6 +246,9 @@ impl Session {
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
 						if !self.relay.is_multiplexing() {
+							log.non_atomic_mutate(|l| {
+								l.list = Some(MCPOperation::ResourceTemplates);
+							});
 							self
 								.relay
 								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel.clone()))
@@ -266,14 +278,6 @@ impl Session {
 							return Err(UpstreamError::Authorization);
 						}
 
-						self.relay.metrics.record(
-							crate::mcp::metrics::ToolCall {
-								server: service_name.to_string(),
-								name: tool.to_string(),
-								params: vec![],
-							},
-							(),
-						);
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
 						self.relay.send_single(r, ctx, service_name).await

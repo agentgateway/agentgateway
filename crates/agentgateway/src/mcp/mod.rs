@@ -11,6 +11,7 @@ mod upstream;
 use std::sync::Arc;
 
 use axum_core::BoxError;
+use prometheus_client::encoding::EncodeLabelValue;
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 pub use router::App;
 use thiserror::Error;
@@ -33,8 +34,17 @@ impl ClientError {
 	}
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
+pub enum MCPOperation {
+	Tool,
+	Prompt,
+	Resource,
+	ResourceTemplates,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct MCPInfo {
 	pub tool_call_name: Option<String>,
 	pub target_name: Option<String>,
+	pub list: Option<MCPOperation>
 }

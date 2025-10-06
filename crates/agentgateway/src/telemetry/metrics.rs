@@ -5,24 +5,33 @@ use crate::types::agent::BindProtocol;
 use agent_core::metrics::{CustomField, DefaultedUnknown, EncodeArc, EncodeDisplay};
 use agent_core::strng::RichStrng;
 use agent_core::version;
-use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::encoding::{EncodeLabelSet, text, EncodeLabelValue};
+use prometheus_client::metrics::counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram::Histogram as PromHistogram;
 use prometheus_client::metrics::info::Info;
 use prometheus_client::registry::Registry;
+use crate::mcp::MCPOperation;
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
-pub struct HTTPLabels {
+pub struct RouteIdentifier {
 	pub bind: DefaultedUnknown<RichStrng>,
 	pub gateway: DefaultedUnknown<RichStrng>,
 	pub listener: DefaultedUnknown<RichStrng>,
 	pub route: DefaultedUnknown<RichStrng>,
 	pub route_rule: DefaultedUnknown<RichStrng>,
+}
+
+#[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct HTTPLabels {
 	pub backend: DefaultedUnknown<RichStrng>,
 
 	pub method: DefaultedUnknown<EncodeDisplay<http::Method>>,
 	pub status: DefaultedUnknown<EncodeDisplay<u16>>,
 	pub reason: DefaultedUnknown<EncodeDisplay<ProxyResponseReason>>,
+
+	#[prometheus(flatten)]
+	pub route: RouteIdentifier,
 
 	#[prometheus(flatten)]
 	pub custom: CustomField,
@@ -36,14 +45,33 @@ pub struct GenAILabels {
 	pub gen_ai_response_model: DefaultedUnknown<RichStrng>,
 
 	#[prometheus(flatten)]
+	pub route: RouteIdentifier,
+
+	#[prometheus(flatten)]
 	pub custom: CustomField,
 }
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct GenAILabelsTokenUsage {
 	pub gen_ai_token_type: DefaultedUnknown<RichStrng>,
+
 	#[prometheus(flatten)]
 	pub common: EncodeArc<GenAILabels>,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct MCPToolCall {
+	pub server: DefaultedUnknown<RichStrng>,
+	pub tool_name: DefaultedUnknown<RichStrng>,
+	#[prometheus(flatten)]
+	pub custom: CustomField,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct MCPList {
+	pub resource_type: MCPOperation,
+	#[prometheus(flatten)]
+	pub custom: CustomField,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
@@ -54,9 +82,9 @@ pub struct TCPLabels {
 	pub protocol: BindProtocol,
 }
 
-type Counter = Family<HTTPLabels, prometheus_client::metrics::counter::Counter>;
+type Counter = Family<HTTPLabels, counter::Counter>;
 type Histogram<T> = Family<T, prometheus_client::metrics::histogram::Histogram>;
-type TCPCounter = Family<TCPLabels, prometheus_client::metrics::counter::Counter>;
+type TCPCounter = Family<TCPLabels, counter::Counter>;
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct BuildLabel {
@@ -67,6 +95,9 @@ pub struct BuildLabel {
 pub struct Metrics {
 	pub requests: Counter,
 	pub downstream_connection: TCPCounter,
+
+	pub mcp_tool_call: Family<MCPToolCall, counter::Counter>,
+	pub mcp_list: Family<MCPList, counter::Counter>,
 
 	pub gen_ai_token_usage: Histogram<GenAILabelsTokenUsage>,
 	pub gen_ai_request_duration: Histogram<GenAILabels>,
@@ -132,6 +163,10 @@ impl Metrics {
 				"downstream_connections",
 				"The total number of downstream connections established",
 			),
+
+			mcp_tool_call: build(registry, "mcp_tool_calls", "Total number of MCP tool calls"),
+			mcp_list: build(registry, "mcp_list_calls", "Total number of MCP list calls calls"),
+
 			gen_ai_token_usage,
 			gen_ai_request_duration,
 			gen_ai_time_per_output_token,
@@ -144,7 +179,7 @@ fn build<T: Clone + std::hash::Hash + Eq + Send + Sync + Debug + EncodeLabelSet 
 	registry: &mut Registry,
 	name: &str,
 	help: &str,
-) -> Family<T, prometheus_client::metrics::counter::Counter> {
+) -> Family<T, counter::Counter> {
 	let m = Family::<T, _>::default();
 	registry.register(name, help, m.clone());
 	m
@@ -160,8 +195,10 @@ const REQUEST_DURATION_BUCKET: [f64; 14] = [
 	0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 20.48, 40.96, 81.92,
 ];
 // https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/#metric-gen_aiservertime_per_output_token
-const OUTPUT_TOKEN_BUCKET: [f64; 13] = [
-	0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.5,
+// NOTE: the spec has SHOULD, but is not smart enough to handle the faster LLMs.
+// We have added 0.001 (1000 TPS)
+const OUTPUT_TOKEN_BUCKET: [f64; 14] = [
+	0.001, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.5,
 ];
 // https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/#metric-gen_aiservertime_to_first_token
 const FIRST_TOKEN_BUCKET: [f64; 16] = [
