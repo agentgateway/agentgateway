@@ -78,12 +78,16 @@ pub async fn basic_setup() -> (MockServer, TestBind, Client<MemoryConnector, Bod
 }
 
 pub fn setup_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
-	let t = setup_proxy_test("{}")
+	let t = base_gateway(&mock);
+	let io = t.serve_http(BIND_KEY);
+	(mock, t, io)
+}
+
+pub fn base_gateway(mock: &MockServer) -> TestBind {
+	setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(simple_bind(basic_route(*mock.address())));
-	let io = t.serve_http(strng::new("bind"));
-	(mock, t, io)
+		.with_bind(simple_bind(basic_route(*mock.address())))
 }
 
 pub fn setup_tcp_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
@@ -93,7 +97,7 @@ pub fn setup_tcp_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryC
 		.with_bind(simple_tcp_bind(basic_named_tcp_route(strng::new(
 			mock.address().to_string(),
 		))));
-	let io = t.serve_http(strng::new("bind"));
+	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
 
@@ -120,7 +124,7 @@ pub fn setup_llm_mock(
 	let b = Backend::AI(strng::format!("{}", mock.address()), be);
 	t.pi.stores.binds.write().insert_backend(b);
 	let t = t.with_bind(simple_bind(basic_route(*mock.address())));
-	let io = t.serve_http(strng::new("bind"));
+	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
 
@@ -163,13 +167,17 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 		}],
 	}
 }
+
+pub const BIND_KEY: Strng = strng::literal!("bind");
+pub const LISTENER_KEY: Strng = strng::literal!("listener");
+
 pub fn simple_bind(route: Route) -> Bind {
 	Bind {
-		key: strng::new("bind"),
+		key: BIND_KEY,
 		// not really used
 		address: "127.0.0.1:0".parse().unwrap(),
 		listeners: ListenerSet::from_list([Listener {
-			key: Default::default(),
+			key: LISTENER_KEY,
 			name: Default::default(),
 			gateway_name: Default::default(),
 			hostname: Default::default(),
@@ -182,7 +190,7 @@ pub fn simple_bind(route: Route) -> Bind {
 
 pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
 	Bind {
-		key: strng::new("bind"),
+		key: BIND_KEY,
 		// not really used
 		address: "127.0.0.1:0".parse().unwrap(),
 		listeners: ListenerSet::from_list([Listener {
@@ -265,6 +273,10 @@ impl tower::Service<Uri> for MemoryConnector {
 impl TestBind {
 	pub fn with_bind(self, bind: Bind) -> Self {
 		self.pi.stores.binds.write().insert_bind(bind);
+		self
+	}
+	pub fn with_route(self, r: Route) -> Self {
+		self.pi.stores.binds.write().insert_route(r, LISTENER_KEY);
 		self
 	}
 

@@ -19,7 +19,7 @@ pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
 #[cfg(any(test, feature = "internal_benches"))]
-mod tests_common;
+pub mod tests_common;
 pub mod transformation_cel;
 
 pub type Error = axum_core::Error;

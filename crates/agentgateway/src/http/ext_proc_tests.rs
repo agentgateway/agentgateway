@@ -145,7 +145,7 @@ async fn failure_fail_closed() {
 	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
 	assert_eq!(res.status(), 500);
 	let body = read_body_raw(res.into_body()).await;
-	assert_eq!(body.as_ref(), b"ext_proc failed: no more responses");
+	assert!(body.as_ref().starts_with(b"ext_proc failed:"));
 }
 
 #[tokio::test]

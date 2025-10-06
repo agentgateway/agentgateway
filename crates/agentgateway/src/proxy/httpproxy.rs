@@ -284,8 +284,16 @@ impl HTTPProxy {
 			tcp.clone(),
 		)
 		.into();
+		// Setup ResponsePolicies outside of proxy_internal, so we have can unconditionally run them even on errors
+		// or direct responses
+		let mut response_policies = ResponsePolicies::default();
 		let ret = self
-			.proxy_internal(connection, req, log.as_mut().unwrap())
+			.proxy_internal(
+				connection,
+				req,
+				log.as_mut().unwrap(),
+				&mut response_policies,
+			)
 			.await;
 
 		log.with(|l| {
@@ -301,10 +309,25 @@ impl HTTPProxy {
 			Ok(_) => ProxyResponseReason::Upstream,
 			Err(e) => e.as_reason(),
 		};
-		let resp = ret.unwrap_or_else(|err| match err {
+		let mut resp = ret.unwrap_or_else(|err| match err {
 			ProxyResponse::Error(e) => e.into_response(),
 			ProxyResponse::DirectResponse(dr) => *dr,
 		});
+
+		let resp = match response_policies
+			.apply(
+				&mut resp,
+				log.as_mut().unwrap(),
+				reason == ProxyResponseReason::Upstream,
+			)
+			.await
+		{
+			Ok(_) => resp,
+			Err(e) => match e {
+				ProxyResponse::Error(e) => e.into_response(),
+				ProxyResponse::DirectResponse(dr) => *dr,
+			},
+		};
 
 		// Pass the log into the body so it finishes once the stream is entirely complete.
 		// We will also record trailer info there.
@@ -322,6 +345,7 @@ impl HTTPProxy {
 		connection: Arc<Extension>,
 		req: ::http::Request<Incoming>,
 		log: &mut RequestLog,
+		response_policies: &mut ResponsePolicies,
 	) -> Result<Response, ProxyResponse> {
 		log.tls_info = connection.get::<TLSConnectionInfo>().cloned();
 		let selected_listener = self.selected_listener.clone();
@@ -471,19 +495,22 @@ impl HTTPProxy {
 			.ext_proc
 			.take()
 			.map(|c| c.build(self.policy_client()));
-		let mut response_policies = ResponsePolicies::from(
-			route_policies.transformation.clone(),
-			gateway_policies.transformation.clone(),
-			maybe_ext_proc,
-			maybe_gateway_ext_proc,
-			response_headers,
-		);
+		response_policies.route_filters = selected_route
+			.filters
+			.iter()
+			.filter(|f| matches!(f, RouteFilter::ResponseHeaderModifier(_)))
+			.cloned()
+			.collect();
+		response_policies.transformation = route_policies.transformation.clone();
+		response_policies.gateway_transformation = gateway_policies.transformation.clone();
+		response_policies.ext_proc = maybe_ext_proc;
+		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
 		apply_request_policies(
 			&route_policies,
 			self.policy_client(),
 			log,
 			&mut req,
-			&mut response_policies,
+			response_policies,
 		)
 		.await?;
 
@@ -498,6 +525,12 @@ impl HTTPProxy {
 		let selected_backend =
 			select_backend(selected_route.as_ref(), &req).ok_or(ProxyError::NoValidBackends)?;
 		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
+		response_policies.backend_filters = selected_backend
+			.filters
+			.iter()
+			.filter(|f| matches!(f, RouteFilter::ResponseHeaderModifier(_)))
+			.cloned()
+			.collect();
 
 		apply_request_filters(selected_backend.filters.as_slice(), &path_match, &mut req)
 			.map_err(ProxyError::from)?
@@ -556,7 +589,7 @@ impl HTTPProxy {
 						late_route_policies,
 						&selected_backend,
 						&selected_route,
-						&mut response_policies,
+						response_policies,
 						req,
 					)
 					.await;
@@ -593,7 +626,7 @@ impl HTTPProxy {
 					late_route_policies.clone(),
 					&selected_backend,
 					&selected_route,
-					&mut response_policies,
+					response_policies,
 					req,
 				)
 				.await;
@@ -650,7 +683,7 @@ impl HTTPProxy {
 		};
 
 		// Run the actual call
-		let mut resp = match call_result {
+		let resp = match call_result {
 			Ok(Ok(resp)) => resp,
 			Ok(Err(e)) => {
 				return Err(e.into());
@@ -662,16 +695,6 @@ impl HTTPProxy {
 		if resp.status() == StatusCode::SWITCHING_PROTOCOLS {
 			return handle_upgrade(req_upgrade, resp).await.map_err(Into::into);
 		}
-
-		// Handle response filters
-		apply_response_filters(selected_route.filters.as_slice(), &mut resp)
-			.map_err(ProxyError::from)?;
-		apply_response_filters(selected_backend.filters.as_slice(), &mut resp)
-			.map_err(ProxyError::from)?;
-		response_policies.apply(&mut resp, log).await?;
-
-		// for now we do not have any body timeout. Maybe we should add it
-		// let resp = body_timeout.apply(resp);
 
 		// gRPC status can be in the initial headers or a trailer, add if they are here
 		maybe_set_grpc_status(&log.grpc_status, resp.headers());
@@ -1268,6 +1291,8 @@ pub struct BackendCall {
 
 #[derive(Debug, Default)]
 struct ResponsePolicies {
+	route_filters: Vec<RouteFilter>,
+	backend_filters: Vec<RouteFilter>,
 	transformation: Option<Transformation>,
 	gateway_transformation: Option<Transformation>,
 	response_headers: HeaderMap,
@@ -1276,21 +1301,6 @@ struct ResponsePolicies {
 }
 
 impl ResponsePolicies {
-	pub fn from(
-		transformation: Option<Transformation>,
-		gateway_transformation: Option<Transformation>,
-		ext_proc: Option<ExtProcRequest>,
-		gateway_ext_proc: Option<ExtProcRequest>,
-		hm: HeaderMap,
-	) -> ResponsePolicies {
-		Self {
-			transformation,
-			gateway_transformation,
-			ext_proc,
-			gateway_ext_proc,
-			response_headers: hm,
-		}
-	}
 	pub fn headers(&mut self) -> &mut HeaderMap {
 		&mut self.response_headers
 	}
@@ -1299,27 +1309,37 @@ impl ResponsePolicies {
 		&mut self,
 		resp: &mut Response,
 		log: &mut RequestLog,
+		is_upstream_response: bool,
 	) -> Result<(), ProxyResponse> {
 		let exec = std::cell::LazyCell::new(|| log.cel.ctx().build());
 		let cel_err = |_| ProxyError::ProcessingString("failed to build cel context".to_string());
+
+		apply_response_filters(self.route_filters.as_slice(), resp).map_err(ProxyError::from)?;
+		apply_response_filters(self.backend_filters.as_slice(), resp).map_err(ProxyError::from)?;
+
 		if let Some(j) = &self.transformation {
 			j.apply_response(resp, exec.deref().as_ref().map_err(cel_err)?);
 		}
 		if let Some(j) = &self.gateway_transformation {
 			j.apply_response(resp, exec.deref().as_ref().map_err(cel_err)?);
 		}
-		if let Some(x) = self.ext_proc.as_mut() {
-			x.mutate_response(resp).await?
-		} else {
-			PolicyResponse::default()
+
+		// ext_proc is only intended to run on responses from upstream
+		if is_upstream_response {
+			if let Some(x) = self.ext_proc.as_mut() {
+				x.mutate_response(resp).await?
+			} else {
+				PolicyResponse::default()
+			}
+			.apply(&mut self.response_headers)?;
+			if let Some(x) = self.gateway_ext_proc.as_mut() {
+				x.mutate_response(resp).await?
+			} else {
+				PolicyResponse::default()
+			}
+			.apply(&mut self.response_headers)?;
 		}
-		.apply(&mut self.response_headers)?;
-		if let Some(x) = self.gateway_ext_proc.as_mut() {
-			x.mutate_response(resp).await?
-		} else {
-			PolicyResponse::default()
-		}
-		.apply(&mut self.response_headers)?;
+
 		merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
 		Ok(())
 	}

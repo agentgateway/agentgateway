@@ -20,16 +20,18 @@ pub fn request(uri: &str, method: http::Method, headers: &[(&str, &str)]) -> Req
 }
 
 pub trait ResponseExt {
-	fn hdr(&self, h: HeaderName) -> String;
+	fn hdr(&self, h: impl TryInto<HeaderName>) -> &str;
 }
 
 impl ResponseExt for Response {
-	fn hdr(&self, h: HeaderName) -> String {
+	fn hdr(&self, h: impl TryInto<HeaderName>) -> &str {
+		let Ok(h) = h.try_into() else {
+			panic!("invalid header key")
+		};
 		self
 			.headers()
 			.get(h)
 			.and_then(|s| s.to_str().ok())
 			.unwrap_or_default()
-			.to_string()
 	}
 }

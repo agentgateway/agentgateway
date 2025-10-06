@@ -1,16 +1,21 @@
+use crate::http::tests_common::*;
+use crate::http::transformation_cel::Transformation;
+use crate::http::{Body, transformation_cel};
+use crate::llm::{AIProvider, openai};
+use crate::proxy::request_builder::RequestBuilder;
+use crate::test_helpers::proxymock::*;
+use crate::types::agent::{
+	PathMatch, Policy, PolicyTarget, Route, RouteFilter, RouteMatch, TargetedPolicy,
+};
+use crate::*;
+use ::http::StatusCode;
 use ::http::{Method, Version};
 use agent_core::strng;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::Rng;
 use serde_json::{Value, json};
-
-use crate::http::Body;
-use crate::llm::{AIProvider, openai};
-use crate::proxy::request_builder::RequestBuilder;
-use crate::test_helpers::proxymock::*;
-use crate::types::agent::{Policy, PolicyTarget, TargetedPolicy};
-use crate::*;
+use x509_parser::nom::AsBytes;
 
 #[tokio::test]
 async fn basic_handling() {
@@ -159,6 +164,59 @@ async fn basic_tcp() {
 	assert_eq!(res.status(), 200);
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.method, Method::POST);
+}
+
+#[tokio::test]
+async fn direct_response() {
+	let mock = simple_mock().await;
+	let xfm = transformation_cel::LocalTransformationConfig {
+		response: Some(transformation_cel::LocalTransform {
+			add: vec![("x-xfm".into(), "\"x-xfm-val\"".into())],
+			..Default::default()
+		}),
+		request: None,
+	};
+	let xfm = Transformation::try_from(xfm).unwrap();
+	let bind = base_gateway(&mock).with_route(Route {
+		key: "route2".into(),
+		route_name: "route2".into(),
+		rule_name: None,
+		hostnames: Default::default(),
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/p".into()),
+			method: None,
+			query: vec![],
+		}],
+		filters: vec![
+			RouteFilter::ResponseHeaderModifier(http::filters::HeaderModifier {
+				add: vec![("x-filter".into(), "x-filter-val".into())],
+				set: vec![],
+				remove: vec![],
+			}),
+			RouteFilter::DirectResponse(crate::http::filters::DirectResponse {
+				body: Bytes::from_static(b"hello"),
+				status: StatusCode::UNPROCESSABLE_ENTITY,
+			}),
+		],
+		inline_policies: vec![Policy::Transformation(xfm)],
+		backends: vec![],
+		policies: None,
+	});
+	let io = bind.serve_http(BIND_KEY);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), 422);
+	// Each type of response modifier should still run even though its a direct response
+	assert_eq!(res.hdr("x-filter"), "x-filter-val");
+	assert_eq!(res.hdr("x-xfm"), "x-xfm-val");
+	assert_eq!(
+		http::read_body_with_limit(res.into_body(), 100)
+			.await
+			.unwrap()
+			.as_bytes(),
+		b"hello"
+	);
 }
 
 async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value) {

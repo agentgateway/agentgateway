@@ -8,7 +8,7 @@ use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpServerConfig;
 
 use crate::test_helpers::proxymock::{
-	TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
+	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
 use crate::*;
 
@@ -163,7 +163,7 @@ async fn setup_proxy(
 		.unwrap()
 		.with_mcp_backend(mock.addr, stateful, legacy_sse)
 		.with_bind(simple_bind(basic_route(mock.addr)));
-	let io = t.serve_real_listener(strng::new("bind")).await;
+	let io = t.serve_real_listener(BIND_KEY).await;
 	(t, io)
 }
 

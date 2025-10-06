@@ -265,7 +265,6 @@ pub enum RouteFilter {
 	RequestRedirect(filters::RequestRedirect),
 	UrlRewrite(filters::UrlRewrite),
 	RequestMirror(filters::RequestMirror),
-	// TODO: xds support
 	DirectResponse(filters::DirectResponse),
 	#[serde(rename = "cors")]
 	CORS(http::cors::Cors),

@@ -498,7 +498,7 @@ fn redirection_test() {
 			.redirect
 			.apply(&mut req, inp.path)
 			.map(|resp| Want {
-				location: resp.hdr(http::header::LOCATION),
+				location: resp.hdr(http::header::LOCATION).to_string(),
 				code: resp.status(),
 			})
 			.ok();
