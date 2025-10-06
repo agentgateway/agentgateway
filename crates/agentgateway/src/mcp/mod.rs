@@ -1,6 +1,5 @@
 mod handler;
 mod mergestream;
-mod metrics;
 mod rbac;
 mod router;
 mod session;
@@ -46,5 +45,5 @@ pub enum MCPOperation {
 pub struct MCPInfo {
 	pub tool_call_name: Option<String>,
 	pub target_name: Option<String>,
-	pub list: Option<MCPOperation>
+	pub list: Option<MCPOperation>,
 }

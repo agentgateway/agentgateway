@@ -6,7 +6,6 @@ use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use http::Method;
 use itertools::Itertools;
-use prometheus_client::registry::Registry;
 use rmcp::transport::StreamableHttpServerConfig;
 use tracing::warn;
 
@@ -26,27 +25,18 @@ use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
 	BackendName, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, SimpleBackendReference,
 };
-use crate::{ProxyInputs, json, mcp};
+use crate::{ProxyInputs, json};
 
 #[derive(Debug, Clone)]
 pub struct App {
 	state: Stores,
-	metrics: Arc<mcp::metrics::Metrics>,
-	// _drain: DrainWatcher,
 	session: Arc<SessionManager>,
 }
 
 impl App {
-	pub fn new(state: Stores, registry: &mut Registry) -> Self {
+	pub fn new(state: Stores) -> Self {
 		let session: Arc<SessionManager> = Arc::new(Default::default());
-		let metrics = Arc::new(crate::mcp::metrics::Metrics::new(
-			registry, None, // TODO custom tags
-		));
-		Self {
-			state,
-			metrics,
-			session,
-		}
+		Self { state, session }
 	}
 
 	pub fn should_passthrough(
@@ -103,7 +93,6 @@ impl App {
 				authn,
 			)
 		};
-		let metrics = self.metrics.clone();
 		let sm = self.session.clone();
 		let client = PolicyClient { inputs: pi.clone() };
 
@@ -148,7 +137,6 @@ impl App {
 						Relay::new(
 							pi.clone(),
 							backends.clone(),
-							metrics.clone(),
 							authorization_policies.clone(),
 							client.clone(),
 						)
@@ -185,7 +173,6 @@ impl App {
 						Relay::new(
 							pi.clone(),
 							backends.clone(),
-							metrics.clone(),
 							authorization_policies.clone(),
 							client.clone(),
 						)

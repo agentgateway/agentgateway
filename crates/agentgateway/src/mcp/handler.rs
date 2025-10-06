@@ -25,7 +25,7 @@ use crate::mcp::mergestream::MergeFn;
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, MCPInfo, mergestream, metrics, rbac, upstream};
+use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
@@ -43,7 +43,6 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 #[derive(Debug, Clone)]
 pub struct Relay {
 	upstreams: Arc<upstream::UpstreamGroup>,
-	pub metrics: Arc<metrics::Metrics>,
 	pub policies: McpAuthorizationSet,
 	// If we have 1 target only, we don't prefix everything with 'target_'.
 	// Else this is empty
@@ -54,7 +53,6 @@ impl Relay {
 	pub fn new(
 		pi: Arc<ProxyInputs>,
 		backend: McpBackendGroup,
-		metrics: Arc<metrics::Metrics>,
 		policies: McpAuthorizationSet,
 		client: PolicyClient,
 	) -> anyhow::Result<Self> {
@@ -65,7 +63,6 @@ impl Relay {
 		};
 		Ok(Self {
 			upstreams: Arc::new(upstream::UpstreamGroup::new(pi, client, backend)?),
-			metrics,
 			policies,
 			default_target_name,
 		})

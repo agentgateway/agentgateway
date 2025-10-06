@@ -1,17 +1,17 @@
 use std::fmt::Debug;
 
+use crate::mcp::MCPOperation;
 use crate::proxy::ProxyResponseReason;
 use crate::types::agent::BindProtocol;
 use agent_core::metrics::{CustomField, DefaultedUnknown, EncodeArc, EncodeDisplay};
 use agent_core::strng::RichStrng;
 use agent_core::version;
-use prometheus_client::encoding::{EncodeLabelSet, text, EncodeLabelValue};
+use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram::Histogram as PromHistogram;
 use prometheus_client::metrics::info::Info;
 use prometheus_client::registry::Registry;
-use crate::mcp::MCPOperation;
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct RouteIdentifier {
@@ -62,7 +62,11 @@ pub struct GenAILabelsTokenUsage {
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct MCPToolCall {
 	pub server: DefaultedUnknown<RichStrng>,
-	pub tool_name: DefaultedUnknown<RichStrng>,
+	pub tool: DefaultedUnknown<RichStrng>,
+
+	#[prometheus(flatten)]
+	pub route: RouteIdentifier,
+
 	#[prometheus(flatten)]
 	pub custom: CustomField,
 }
@@ -70,6 +74,10 @@ pub struct MCPToolCall {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct MCPList {
 	pub resource_type: MCPOperation,
+
+	#[prometheus(flatten)]
+	pub route: RouteIdentifier,
+
 	#[prometheus(flatten)]
 	pub custom: CustomField,
 }
@@ -165,7 +173,11 @@ impl Metrics {
 			),
 
 			mcp_tool_call: build(registry, "mcp_tool_calls", "Total number of MCP tool calls"),
-			mcp_list: build(registry, "mcp_list_calls", "Total number of MCP list calls calls"),
+			mcp_list: build(
+				registry,
+				"mcp_list_calls",
+				"Total number of MCP list calls calls",
+			),
 
 			gen_ai_token_usage,
 			gen_ai_request_duration,

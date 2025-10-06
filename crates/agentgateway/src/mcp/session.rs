@@ -5,7 +5,6 @@ use std::sync::Arc;
 use ::http::StatusCode;
 use ::http::header::CONTENT_TYPE;
 use ::http::request::Parts;
-use agent_core::metrics::Recorder;
 use agent_core::version::BuildInfo;
 use anyhow::anyhow;
 use futures_util::StreamExt;
@@ -24,7 +23,7 @@ use crate::http::Response;
 use crate::mcp::handler::Relay;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, rbac, MCPOperation};
+use crate::mcp::{ClientError, MCPOperation, rbac};
 use crate::{mcp, *};
 
 #[derive(Debug, Clone)]

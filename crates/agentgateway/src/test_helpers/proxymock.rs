@@ -437,7 +437,7 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 		upstream: client.clone(),
 		ca: None,
 
-		mcp_state: mcp::App::new(stores.clone(), &mut Registry::default()),
+		mcp_state: mcp::App::new(stores.clone()),
 	});
 	Ok(TestBind {
 		pi,

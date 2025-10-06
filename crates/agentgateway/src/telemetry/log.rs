@@ -6,21 +6,12 @@ use std::sync::Arc;
 use std::task::{Context, Poll, ready};
 use std::time::{Duration, Instant};
 
-use agent_core::metrics::CustomField;
-use agent_core::strng;
-use agent_core::telemetry::{OptionExt, ValueBag, debug, display};
-use crossbeam::atomic::AtomicCell;
-use frozen_collections::{FzHashSet, FzStringMap};
-use http_body::{Body, Frame, SizeHint};
-use itertools::Itertools;
-use serde::{Serialize, Serializer};
-use serde_json::Value;
-use tracing::{Level, trace};
-use agent_core::strng::RichStrng;
 use crate::cel::{ContextBuilder, Expression};
 use crate::llm::LLMInfo;
 use crate::proxy::ProxyResponseReason;
-use crate::telemetry::metrics::{GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPList, MCPToolCall, Metrics, RouteIdentifier};
+use crate::telemetry::metrics::{
+	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPList, MCPToolCall, Metrics, RouteIdentifier,
+};
 use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
@@ -29,6 +20,17 @@ use crate::types::agent::{
 };
 use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
+use agent_core::metrics::CustomField;
+use agent_core::strng;
+use agent_core::strng::RichStrng;
+use agent_core::telemetry::{OptionExt, ValueBag, debug, display};
+use crossbeam::atomic::AtomicCell;
+use frozen_collections::{FzHashSet, FzStringMap};
+use http_body::{Body, Frame, SizeHint};
+use itertools::Itertools;
+use serde::{Serialize, Serializer};
+use serde_json::Value;
+use tracing::{Level, trace};
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -369,7 +371,7 @@ impl DropOnLog {
 
 	fn add_llm_metrics(
 		log: &RequestLog,
-		route_identifier: RouteIdentifier,
+		route_identifier: &RouteIdentifier,
 		end_time: Instant,
 		duration: Duration,
 		llm_response: &Option<LLMInfo>,
@@ -641,7 +643,7 @@ impl Drop for DropOnLog {
 
 		Self::add_llm_metrics(
 			&log,
-			route_identifier,
+			&route_identifier,
 			end_time,
 			duration,
 			&llm_response,
@@ -655,20 +657,22 @@ impl Drop for DropOnLog {
 					.mcp_tool_call
 					.get_or_create(&MCPToolCall {
 						server: mcp.target_name.as_ref().map(RichStrng::from).into(),
-						tool_name: mcp.tool_call_name.as_ref().map(RichStrng::from).into(),
+						tool: mcp.tool_call_name.as_ref().map(RichStrng::from).into(),
+						route: route_identifier.clone(),
 						custom: custom_metric_fields.clone(),
 					})
 					.inc();
 			}
 			if let Some(l) = &mcp.list {
 				log
-				.metrics
-				.mcp_list
-				.get_or_create(&MCPList {
-					resource_type: l.clone(),
-					custom: custom_metric_fields.clone(),
-				})
-				.inc();
+					.metrics
+					.mcp_list
+					.get_or_create(&MCPList {
+						resource_type: l.clone(),
+						route: route_identifier.clone(),
+						custom: custom_metric_fields.clone(),
+					})
+					.inc();
 			}
 		}
 
