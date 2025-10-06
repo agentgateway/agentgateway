@@ -20,6 +20,42 @@ pub enum ProxyResponse {
 }
 
 impl ProxyResponse {
+	pub fn as_reason(&self) -> ProxyResponseReason {
+		let ProxyResponse::Error(e) = self else {
+			return ProxyResponseReason::DirectResponse;
+		};
+		match e {
+			ProxyError::BindNotFound
+			| ProxyError::ListenerNotFound
+			| ProxyError::RouteNotFound
+			| ProxyError::ServiceNotFound => ProxyResponseReason::NotFound,
+			ProxyError::NoHealthyEndpoints
+			| ProxyError::InvalidBackendType
+			| ProxyError::DnsResolution
+			| ProxyError::NoValidBackends
+			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
+			ProxyError::UpgradeFailed(_, _)
+			| ProxyError::InvalidRequest
+			| ProxyError::ProcessingString(_)
+			| ProxyError::Processing(_)
+			| ProxyError::BackendUnsupportedMirror
+			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
+			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
+			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
+			ProxyError::AuthorizationFailed | ProxyError::CsrfValidationFailed => {
+				ProxyResponseReason::Authorization
+			},
+			ProxyError::UpstreamCallFailed(_)
+			| ProxyError::UpstreamTCPCallFailed(_)
+			| ProxyError::BackendAuthenticationFailed(_)
+			| ProxyError::UpstreamTCPProxy(_) => ProxyResponseReason::UpstreamFailure,
+			ProxyError::RequestTimeout => ProxyResponseReason::Timeout,
+			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
+			ProxyError::RateLimitFailed | ProxyError::RateLimitExceeded { .. } => {
+				ProxyResponseReason::RateLimit
+			},
+		}
+	}
 	pub fn downcast(self) -> ProxyError {
 		match self {
 			ProxyResponse::Error(e) => e,
@@ -27,6 +63,40 @@ impl ProxyResponse {
 				"attempted to return a direct response in an invalid context".to_string(),
 			),
 		}
+	}
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum ProxyResponseReason {
+	/// A response from the upstream
+	Upstream,
+	/// A response was directly recorded
+	DirectResponse,
+	/// The requested resource couldn't be found
+	NotFound,
+	/// There was not an endpoint eligible to send traffic to
+	NoHealthyBackend,
+	/// Some internal error in processing occurred
+	Internal,
+	/// JWT authentication failed
+	JwtAuth,
+	/// External Authorization failed
+	ExtAuth,
+	/// Authorization failed
+	Authorization,
+	/// Request timed out
+	Timeout,
+	/// External processing failed
+	ExtProc,
+	/// Rate limit exceeded
+	RateLimit,
+	/// The upstream request failed
+	UpstreamFailure,
+}
+
+impl Display for ProxyResponseReason {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}", self)
 	}
 }
 
@@ -50,8 +120,6 @@ pub enum ProxyError {
 	BackendUnsupportedMirror,
 	#[error("authentication failure: {0}")]
 	JwtAuthenticationFailure(http::jwt::TokenError),
-	#[error("transformation failed")]
-	TransformationFailure,
 	#[error("CSRF validation failed")]
 	CsrfValidationFailed,
 	#[error("service not found")]
@@ -60,8 +128,10 @@ pub enum ProxyError {
 	InvalidBackendType,
 	#[error("no healthy backends")]
 	NoHealthyEndpoints,
+	#[error("external authorization failed")]
+	ExternalAuthorizationFailed(Option<StatusCode>),
 	#[error("authorization failed")]
-	AuthorizationFailed(Option<StatusCode>),
+	AuthorizationFailed,
 	#[error("backend authentication failed: {0}")]
 	BackendAuthenticationFailed(anyhow::Error),
 	#[error("upstream call failed: {0}")]
@@ -113,7 +183,6 @@ impl ProxyError {
 			ProxyError::ServiceNotFound => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendAuthenticationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::InvalidBackendType => StatusCode::INTERNAL_SERVER_ERROR,
-			ProxyError::TransformationFailure => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::ExtProc(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::CsrfValidationFailed => StatusCode::FORBIDDEN,
 
@@ -124,7 +193,8 @@ impl ProxyError {
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::FORBIDDEN,
-			ProxyError::AuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
+			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
+			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoHealthyEndpoints => StatusCode::SERVICE_UNAVAILABLE,

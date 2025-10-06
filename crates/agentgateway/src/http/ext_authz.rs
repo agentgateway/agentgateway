@@ -98,7 +98,7 @@ impl ExtAuthz {
 				debug!("Allowing request due to FailureMode::Allow configuration");
 				Ok(PolicyResponse::default())
 			},
-			FailureMode::Deny => Err(ProxyError::AuthorizationFailed(None)),
+			FailureMode::Deny => Err(ProxyError::ExternalAuthorizationFailed(None)),
 			FailureMode::DenyWithStatus(status_code) => {
 				let status = StatusCode::from_u16(*status_code).unwrap_or(StatusCode::FORBIDDEN);
 				let resp = ::http::Response::builder()
@@ -359,7 +359,7 @@ impl ExtAuthz {
 					response_headers: None,
 				});
 			}
-			return Err(ProxyError::AuthorizationFailed(None));
+			return Err(ProxyError::ExternalAuthorizationFailed(None));
 		}
 
 		let mut res = PolicyResponse::default();

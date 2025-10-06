@@ -26,7 +26,7 @@ use crate::http::{
 	auth, filters, get_host, merge_in_headers, retry,
 };
 use crate::llm::{LLMRequest, RequestResult, RouteType};
-use crate::proxy::{ProxyError, ProxyResponse, resolve_simple_backend};
+use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
 use crate::store::{BackendPolicies, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies};
 use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
@@ -69,7 +69,7 @@ async fn apply_request_policies(
 
 	if let Some(j) = &policies.authorization {
 		j.apply(exec.deref().as_ref().map_err(cel_err)?)
-			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed(None)))?;
+			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
 	}
 
 	for lrl in &policies.local_rate_limit {
@@ -93,8 +93,7 @@ async fn apply_request_policies(
 	.apply(response_policies.headers())?;
 
 	if let Some(j) = &policies.transformation {
-		j.apply_request(req, exec.deref().as_ref().map_err(cel_err)?)
-			.map_err(|_| ProxyError::TransformationFailure)?;
+		j.apply_request(req, exec.deref().as_ref().map_err(cel_err)?);
 	}
 
 	if let Some(csrf) = &policies.csrf {
@@ -142,8 +141,7 @@ async fn apply_gateway_policies(
 			.ctx()
 			.build()
 			.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))?;
-		j.apply_request(req, &exec)
-			.map_err(|_| ProxyError::TransformationFailure)?;
+		j.apply_request(req, &exec);
 	}
 
 	Ok(())
@@ -299,6 +297,10 @@ impl HTTPProxy {
 				}
 			})
 		});
+		let reason = match &ret {
+			Ok(_) => ProxyResponseReason::Upstream,
+			Err(e) => e.as_reason(),
+		};
 		let resp = ret.unwrap_or_else(|err| match err {
 			ProxyResponse::Error(e) => e.into_response(),
 			ProxyResponse::DirectResponse(dr) => *dr,
@@ -308,6 +310,7 @@ impl HTTPProxy {
 		// We will also record trailer info there.
 		log.with(|l| {
 			l.status = Some(resp.status());
+			l.reason = Some(reason);
 			l.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
 			l.cel.ctx().with_response(&resp)
 		});
@@ -1285,13 +1288,13 @@ impl ResponsePolicies {
 		resp: &mut Response,
 		log: &mut RequestLog,
 	) -> Result<(), ProxyResponse> {
+		let exec = std::cell::LazyCell::new(|| log.cel.ctx().build());
+		let cel_err = |_| ProxyError::ProcessingString("failed to build cel context".to_string());
 		if let Some(j) = &self.transformation {
-			j.apply_response(resp, log.cel.ctx())
-				.map_err(|_| ProxyError::TransformationFailure)?;
+			j.apply_response(resp, exec.deref().as_ref().map_err(cel_err)?);
 		}
 		if let Some(j) = &self.gateway_transformation {
-			j.apply_response(resp, log.cel.ctx())
-				.map_err(|_| ProxyError::TransformationFailure)?;
+			j.apply_response(resp, exec.deref().as_ref().map_err(cel_err)?);
 		}
 		if let Some(x) = self.ext_proc.as_mut() {
 			x.mutate_response(resp).await?

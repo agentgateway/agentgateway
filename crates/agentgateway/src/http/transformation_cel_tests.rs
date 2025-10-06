@@ -1,3 +1,4 @@
+use crate::cel::ContextBuilder;
 use agent_core::strng;
 use itertools::Itertools;
 
@@ -31,7 +32,7 @@ fn test_transformation() {
 		ctx.register_expression(e)
 	}
 	ctx.with_request(&req, "".to_string());
-	xfm.apply_request(&mut req, &ctx.build().unwrap()).unwrap();
+	xfm.apply_request(&mut req, &ctx.build().unwrap());
 	assert_eq!(req.headers().get("x-insert").unwrap(), "hello Bar");
 }
 
@@ -56,7 +57,7 @@ fn test_transformation_pseudoheader() {
 		ctx.register_expression(e)
 	}
 	ctx.with_request(&req, "".to_string());
-	xfm.apply_request(&mut req, &ctx.build().unwrap()).unwrap();
+	xfm.apply_request(&mut req, &ctx.build().unwrap());
 	assert_eq!(req.method().as_str(), "POST");
 	assert_eq!(req.uri().to_string().as_str(), "https://example.com/https");
 }

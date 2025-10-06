@@ -1,4 +1,4 @@
-use crate::cel::{ContextBuilder, Executor, Expression};
+use crate::cel::{Executor, Expression};
 use crate::{cel, *};
 use ::http::StatusCode;
 use ::http::header::InvalidHeaderName;
@@ -290,27 +290,15 @@ impl<'a> RequestOrResponse<'a> {
 }
 
 impl Transformation {
-	pub fn apply_request(
-		&self,
-		req: &mut crate::http::Request,
-		exec: &cel::Executor<'_>,
-	) -> anyhow::Result<()> {
+	pub fn apply_request(&self, req: &mut crate::http::Request, exec: &cel::Executor<'_>) {
 		Self::apply(req.into(), self.request.as_ref(), exec)
 	}
 
-	pub fn apply_response(
-		&self,
-		resp: &mut crate::http::Response,
-		ctx: &ContextBuilder,
-	) -> anyhow::Result<()> {
-		Self::apply(resp.into(), self.response.as_ref(), &ctx.build()?)
+	pub fn apply_response(&self, resp: &mut crate::http::Response, exec: &cel::Executor<'_>) {
+		Self::apply(resp.into(), self.response.as_ref(), exec)
 	}
 
-	fn apply<'a>(
-		mut r: RequestOrResponse<'a>,
-		cfg: &TransformerConfig,
-		exec: &cel::Executor<'_>,
-	) -> anyhow::Result<()> {
+	fn apply<'a>(mut r: RequestOrResponse<'a>, cfg: &TransformerConfig, exec: &cel::Executor<'_>) {
 		for (k, v) in &cfg.add {
 			r.add_header(k, exec.eval(v).ok(), true);
 		}
@@ -326,7 +314,6 @@ impl Transformation {
 			*r.body() = http::Body::from(b);
 			r.headers().remove(&header::CONTENT_LENGTH);
 		}
-		Ok(())
 	}
 }
 

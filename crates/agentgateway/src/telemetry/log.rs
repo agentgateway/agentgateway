@@ -18,6 +18,7 @@ use serde_json::Value;
 use tracing::{Level, trace};
 
 use crate::cel::{ContextBuilder, Expression};
+use crate::proxy::ProxyResponseReason;
 use crate::telemetry::metrics::{GenAILabels, GenAILabelsTokenUsage, HTTPLabels, Metrics};
 use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
@@ -400,6 +401,7 @@ impl RequestLog {
 			path: None,
 			version: None,
 			status: None,
+			reason: None,
 			retry_after: None,
 			jwt_sub: None,
 			retry_attempt: None,
@@ -444,6 +446,7 @@ pub struct RequestLog {
 	pub path: Option<String>,
 	pub version: Option<::http::Version>,
 	pub status: Option<crate::http::StatusCode>,
+	pub reason: Option<ProxyResponseReason>,
 	pub retry_after: Option<Duration>,
 
 	pub jwt_sub: Option<String>,
@@ -508,6 +511,7 @@ impl Drop for DropOnLog {
 			backend: (&log.backend_name).into(),
 			method: log.method.clone().into(),
 			status: log.status.as_ref().map(|s| s.as_u16()).into(),
+			reason: log.reason.into(),
 			custom: CustomField::default(),
 		};
 

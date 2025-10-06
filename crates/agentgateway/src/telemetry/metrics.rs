@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use crate::proxy::ProxyResponseReason;
+use crate::types::agent::BindProtocol;
 use agent_core::metrics::{CustomField, DefaultedUnknown, EncodeArc, EncodeDisplay};
 use agent_core::strng::RichStrng;
 use agent_core::version;
@@ -8,8 +10,6 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram::Histogram as PromHistogram;
 use prometheus_client::metrics::info::Info;
 use prometheus_client::registry::Registry;
-
-use crate::types::agent::BindProtocol;
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct HTTPLabels {
@@ -22,6 +22,7 @@ pub struct HTTPLabels {
 
 	pub method: DefaultedUnknown<EncodeDisplay<http::Method>>,
 	pub status: DefaultedUnknown<EncodeDisplay<u16>>,
+	pub reason: DefaultedUnknown<EncodeDisplay<ProxyResponseReason>>,
 
 	#[prometheus(flatten)]
 	pub custom: CustomField,
