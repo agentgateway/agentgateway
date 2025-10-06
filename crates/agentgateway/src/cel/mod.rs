@@ -176,7 +176,13 @@ impl ContextBuilder {
 		{
 			// Direct access to extauthz.field - metadata is already stored flat
 			if !ext_authz_metadata.metadata.is_empty() {
-				self.context.extauthz = Some(ext_authz_metadata.metadata.clone());
+				if let Some(existing) = &mut self.context.extauthz {
+					for (k, v) in ext_authz_metadata.metadata.iter() {
+						existing.insert(k.clone(), v.clone());
+					}
+				} else {
+					self.context.extauthz = Some(ext_authz_metadata.metadata.clone());
+				}
 			}
 		}
 	}

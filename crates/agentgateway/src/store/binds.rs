@@ -100,6 +100,7 @@ pub struct RoutePolicies {
 pub struct GatewayPolicies {
 	pub ext_proc: Option<ext_proc::ExtProc>,
 	pub jwt: Option<http::jwt::Jwt>,
+	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
 }
 
@@ -314,6 +315,9 @@ impl Store {
 				},
 				GatewayPolicy::JwtAuth(p) => {
 					pol.jwt.get_or_insert_with(|| p.clone());
+				},
+				GatewayPolicy::ExtAuthz(p) => {
+					pol.ext_authz.get_or_insert_with(|| p.clone());
 				},
 				GatewayPolicy::Transformation(p) => {
 					pol.transformation.get_or_insert_with(|| p.clone());

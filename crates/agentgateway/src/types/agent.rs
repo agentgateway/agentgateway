@@ -987,6 +987,7 @@ pub enum PolicyTarget {
 #[serde(rename_all = "camelCase")]
 pub enum GatewayPolicy {
 	JwtAuth(crate::http::jwt::Jwt),
+	ExtAuthz(ext_authz::ExtAuthz),
 	Transformation(crate::http::transformation_cel::Transformation),
 	ExtProc(ext_proc::ExtProc),
 }

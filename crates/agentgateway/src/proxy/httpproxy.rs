@@ -61,7 +61,6 @@ async fn apply_request_policies(
 		http::PolicyResponse::default()
 	}
 	.apply(response_policies.headers())?;
-
 	// Extract dynamic metadata for CEL context
 	log.cel.ctx().with_extauthz(req);
 
@@ -110,6 +109,7 @@ async fn apply_request_policies(
 
 async fn apply_gateway_policies(
 	policies: &GatewayPolicies,
+	client: PolicyClient,
 	log: &mut RequestLog,
 	req: &mut Request,
 	ext_proc: Option<&mut ExtProcRequest>,
@@ -120,6 +120,14 @@ async fn apply_gateway_policies(
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
+	if let Some(x) = &policies.ext_authz {
+		x.check(client.clone(), req).await?
+	} else {
+		http::PolicyResponse::default()
+	}
+	.apply(response_headers)?;
+	// Extract dynamic metadata for CEL context
+	log.cel.ctx().with_extauthz(req);
 
 	if let Some(x) = ext_proc {
 		x.mutate_request(req).await?
@@ -410,6 +418,7 @@ impl HTTPProxy {
 			.map(|c| c.build(self.policy_client()));
 		apply_gateway_policies(
 			&gateway_policies,
+			self.policy_client(),
 			log,
 			&mut req,
 			maybe_gateway_ext_proc.as_mut(),
@@ -460,6 +469,7 @@ impl HTTPProxy {
 			.map(|c| c.build(self.policy_client()));
 		let mut response_policies = ResponsePolicies::from(
 			route_policies.transformation.clone(),
+			gateway_policies.transformation.clone(),
 			maybe_ext_proc,
 			maybe_gateway_ext_proc,
 			response_headers,
@@ -1244,22 +1254,25 @@ pub struct BackendCall {
 #[derive(Debug, Default)]
 struct ResponsePolicies {
 	transformation: Option<Transformation>,
+	gateway_transformation: Option<Transformation>,
 	response_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
-	early_ext_proc: Option<ExtProcRequest>,
+	gateway_ext_proc: Option<ExtProcRequest>,
 }
 
 impl ResponsePolicies {
 	pub fn from(
 		transformation: Option<Transformation>,
+		gateway_transformation: Option<Transformation>,
 		ext_proc: Option<ExtProcRequest>,
-		early_ext_proc: Option<ExtProcRequest>,
+		gateway_ext_proc: Option<ExtProcRequest>,
 		hm: HeaderMap,
 	) -> ResponsePolicies {
 		Self {
 			transformation,
+			gateway_transformation,
 			ext_proc,
-			early_ext_proc,
+			gateway_ext_proc,
 			response_headers: hm,
 		}
 	}
@@ -1276,13 +1289,17 @@ impl ResponsePolicies {
 			j.apply_response(resp, log.cel.ctx())
 				.map_err(|_| ProxyError::TransformationFailure)?;
 		}
+		if let Some(j) = &self.gateway_transformation {
+			j.apply_response(resp, log.cel.ctx())
+				.map_err(|_| ProxyError::TransformationFailure)?;
+		}
 		if let Some(x) = self.ext_proc.as_mut() {
 			x.mutate_response(resp).await?
 		} else {
 			PolicyResponse::default()
 		}
 		.apply(&mut self.response_headers)?;
-		if let Some(x) = self.early_ext_proc.as_mut() {
+		if let Some(x) = self.gateway_ext_proc.as_mut() {
 			x.mutate_response(resp).await?
 		} else {
 			PolicyResponse::default()
