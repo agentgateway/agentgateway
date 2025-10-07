@@ -60,20 +60,12 @@ pub struct GenAILabelsTokenUsage {
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
-pub struct MCPToolCall {
+pub struct MCPCall {
+	pub method: DefaultedUnknown<RichStrng>,
+
+	pub resource_type: DefaultedUnknown<MCPOperation>,
 	pub server: DefaultedUnknown<RichStrng>,
-	pub tool: DefaultedUnknown<RichStrng>,
-
-	#[prometheus(flatten)]
-	pub route: RouteIdentifier,
-
-	#[prometheus(flatten)]
-	pub custom: CustomField,
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub struct MCPList {
-	pub resource_type: MCPOperation,
+	pub resource: DefaultedUnknown<RichStrng>,
 
 	#[prometheus(flatten)]
 	pub route: RouteIdentifier,
@@ -104,8 +96,7 @@ pub struct Metrics {
 	pub requests: Counter,
 	pub downstream_connection: TCPCounter,
 
-	pub mcp_tool_call: Family<MCPToolCall, counter::Counter>,
-	pub mcp_list: Family<MCPList, counter::Counter>,
+	pub mcp_requests: Family<MCPCall, counter::Counter>,
 
 	pub gen_ai_token_usage: Histogram<GenAILabelsTokenUsage>,
 	pub gen_ai_request_duration: Histogram<GenAILabels>,
@@ -172,12 +163,7 @@ impl Metrics {
 				"The total number of downstream connections established",
 			),
 
-			mcp_tool_call: build(registry, "mcp_tool_calls", "Total number of MCP tool calls"),
-			mcp_list: build(
-				registry,
-				"mcp_list_calls",
-				"Total number of MCP list calls calls",
-			),
+			mcp_requests: build(registry, "mcp_requests", "Total number of MCP tool calls"),
 
 			gen_ai_token_usage,
 			gen_ai_request_duration,

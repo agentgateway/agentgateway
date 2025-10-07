@@ -7,10 +7,11 @@ mod sse;
 mod streamablehttp;
 mod upstream;
 
+use std::fmt::{Display, Error, Write};
 use std::sync::Arc;
 
 use axum_core::BoxError;
-use prometheus_client::encoding::EncodeLabelValue;
+use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 pub use router::App;
 use thiserror::Error;
@@ -33,7 +34,7 @@ impl ClientError {
 	}
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum MCPOperation {
 	Tool,
 	Prompt,
@@ -41,9 +42,28 @@ pub enum MCPOperation {
 	ResourceTemplates,
 }
 
+impl EncodeLabelValue for MCPOperation {
+	fn encode(&self, encoder: &mut LabelValueEncoder) -> Result<(), Error> {
+		encoder.write_str(&self.to_string())
+	}
+}
+
+impl Display for MCPOperation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			MCPOperation::Tool => write!(f, "tool"),
+			MCPOperation::Prompt => write!(f, "prompt"),
+			MCPOperation::Resource => write!(f, "resource"),
+			MCPOperation::ResourceTemplates => write!(f, "templates"),
+		}
+	}
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct MCPInfo {
-	pub tool_call_name: Option<String>,
+	pub method_name: Option<String>,
+	/// Tool name, etc
+	pub resource_name: Option<String>,
 	pub target_name: Option<String>,
-	pub list: Option<MCPOperation>,
+	pub resource: Option<MCPOperation>,
 }

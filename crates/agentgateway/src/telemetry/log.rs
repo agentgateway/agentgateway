@@ -10,7 +10,7 @@ use crate::cel::{ContextBuilder, Expression};
 use crate::llm::LLMInfo;
 use crate::proxy::ProxyResponseReason;
 use crate::telemetry::metrics::{
-	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPList, MCPToolCall, Metrics, RouteIdentifier,
+	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
 };
 use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
@@ -650,30 +650,21 @@ impl Drop for DropOnLog {
 			&custom_metric_fields,
 		);
 		let mcp = log.mcp_status.take();
-		if let Some(mcp) = &mcp {
-			if mcp.tool_call_name.is_some() {
-				log
-					.metrics
-					.mcp_tool_call
-					.get_or_create(&MCPToolCall {
-						server: mcp.target_name.as_ref().map(RichStrng::from).into(),
-						tool: mcp.tool_call_name.as_ref().map(RichStrng::from).into(),
-						route: route_identifier.clone(),
-						custom: custom_metric_fields.clone(),
-					})
-					.inc();
-			}
-			if let Some(l) = &mcp.list {
-				log
-					.metrics
-					.mcp_list
-					.get_or_create(&MCPList {
-						resource_type: l.clone(),
-						route: route_identifier.clone(),
-						custom: custom_metric_fields.clone(),
-					})
-					.inc();
-			}
+		if let Some(mcp) = &mcp && mcp.method_name.is_some() {
+			// Check mcp.method_name is set, so we don't count things like GET and DELETE
+			log
+				.metrics
+				.mcp_requests
+				.get_or_create(&MCPCall {
+					method: mcp.method_name.as_ref().map(RichStrng::from).into(),
+					resource_type: mcp.resource.into(),
+					server: mcp.target_name.as_ref().map(RichStrng::from).into(),
+					resource: mcp.resource_name.as_ref().map(RichStrng::from).into(),
+
+					route: route_identifier.clone(),
+					custom: custom_metric_fields.clone(),
+				})
+				.inc();
 		}
 
 		let enable_logs = maybe_enable_log && cel_exec.eval_filter();
@@ -713,6 +704,13 @@ impl Drop for DropOnLog {
 			("jwt.sub", log.jwt_sub.display()),
 			("a2a.method", log.a2a_method.display()),
 			(
+				"mcp.method",
+				mcp
+					.as_ref()
+					.and_then(|m| m.method_name.as_ref())
+					.map(display),
+			),
+			(
 				"mcp.target",
 				mcp
 					.as_ref()
@@ -720,10 +718,14 @@ impl Drop for DropOnLog {
 					.map(display),
 			),
 			(
-				"mcp.tool",
+				"mcp.resource",
+				mcp.as_ref().and_then(|m| m.resource.as_ref()).map(display),
+			),
+			(
+				"mcp.resource.name",
 				mcp
 					.as_ref()
-					.and_then(|m| m.tool_call_name.as_ref())
+					.and_then(|m| m.resource_name.as_ref())
 					.map(display),
 			),
 			(

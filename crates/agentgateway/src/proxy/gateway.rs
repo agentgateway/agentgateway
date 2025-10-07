@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use agent_core::drain;
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
@@ -250,12 +250,13 @@ impl Gateway {
 		drain: DrainWatcher,
 	) {
 		let bind_protocol = bind_protocol(inputs.clone(), bind_name.clone());
+		let peer_addr = raw_stream.tcp().peer_addr;
 		event!(
 			target: "downstream connection",
 			parent: None,
 			tracing::Level::DEBUG,
 
-			src.addr = %raw_stream.tcp().peer_addr,
+			src.addr = %peer_addr,
 			protocol = ?bind_protocol,
 
 			"opened",
@@ -264,7 +265,7 @@ impl Gateway {
 			BindProtocol::http => {
 				let err = Self::proxy(bind_name, inputs, None, raw_stream, drain).await;
 				if let Err(e) = err {
-					warn!("proxy error: {e}");
+					warn!(src.addr = %peer_addr, "proxy error: {e}");
 				}
 			},
 			BindProtocol::tcp => Self::proxy_tcp(bind_name, inputs, None, raw_stream, drain).await,
@@ -519,6 +520,7 @@ pub fn auto_server(c: &ListenerConfig) -> auto::Builder<::hyper_util::rt::TokioE
 	if let Some(m) = http1_max_headers {
 		b.http1().max_headers(*m);
 	}
+	b.http1().header_read_timeout(Some(Duration::from_secs(2)));
 
 	if http2_window_size.is_some() || http2_connection_window_size.is_some() {
 		if let Some(w) = http2_connection_window_size {

@@ -392,6 +392,7 @@ impl HTTPProxy {
 		let selected_listener = selected_listener
 			.or_else(|| listeners.best_match(&host))
 			.ok_or(ProxyError::ListenerNotFound)?;
+		log.bind_name = Some(bind_name.clone());
 		log.gateway_name = Some(selected_listener.gateway_name.clone());
 		log.listener_name = Some(selected_listener.name.clone());
 

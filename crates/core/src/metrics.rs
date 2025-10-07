@@ -231,6 +231,27 @@ impl<T: EncodeLabelSet> From<Arc<T>> for EncodeArc<T> {
 	}
 }
 
+/// OptionallyEncode is a wrapper that will optionally encode the entire label set.
+/// This differs from something like DefaultedUnknown which handles only the value - this makes the
+/// entire label not show up.
+#[derive(Clone, Hash, Default, Debug, PartialEq, Eq)]
+pub struct OptionallyEncode<T>(Option<T>);
+
+impl<T> From<Option<T>> for OptionallyEncode<T> {
+	fn from(t: Option<T>) -> Self {
+		OptionallyEncode(t)
+	}
+}
+
+impl<T: EncodeLabelSet> EncodeLabelSet for OptionallyEncode<T> {
+	fn encode(&self, encoder: &mut LabelSetEncoder) -> Result<(), std::fmt::Error> {
+		match &self.0 {
+			None => Ok(()),
+			Some(ll) => ll.encode(encoder),
+		}
+	}
+}
+
 #[derive(Hash, PartialEq, Eq, Clone, Debug, Default)]
 pub struct CustomField(Arc<[(RichStrng, DefaultedUnknown<RichStrng>)]>);
 
