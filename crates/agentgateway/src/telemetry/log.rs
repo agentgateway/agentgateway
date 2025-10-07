@@ -650,7 +650,9 @@ impl Drop for DropOnLog {
 			&custom_metric_fields,
 		);
 		let mcp = log.mcp_status.take();
-		if let Some(mcp) = &mcp && mcp.method_name.is_some() {
+		if let Some(mcp) = &mcp
+			&& mcp.method_name.is_some()
+		{
 			// Check mcp.method_name is set, so we don't count things like GET and DELETE
 			log
 				.metrics
