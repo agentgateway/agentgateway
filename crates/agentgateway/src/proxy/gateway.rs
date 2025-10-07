@@ -210,10 +210,12 @@ impl Gateway {
 				tokio::select! {
 					Ok((stream, _peer)) = listener.accept() => handle_stream(stream, &upgrader),
 					res = &mut wait => {
+						tracing::error!("howardjohn: drain trigger!");
 						break res;
 					}
 				}
 			};
+			tracing::error!("howardjohn: disable upgrade");
 			upgrader.disable();
 			// Now we are draining. We need to immediately start draining the inner requests
 			// Wait for Min_duration complete AND inner join complete
@@ -221,7 +223,11 @@ impl Gateway {
 			drop(drain_mode);
 			let drained_for_minimum = async move {
 				tokio::join!(
-					inner_trigger.start_drain_and_wait(mode),
+					async {
+						tracing::error!("howardjohn: start inner drain {mode:?}");
+						inner_trigger.start_drain_and_wait(mode).await;
+						tracing::error!("howardjohn: done inner drain");
+					},
 					tokio::time::sleep(min_deadline)
 				);
 			};
@@ -231,6 +237,7 @@ impl Gateway {
 				tokio::select! {
 					Ok((stream, _peer)) = listener.accept() => handle_stream(stream, &upgrader),
 					_ = &mut drained_for_minimum => {
+						tracing::error!("howardjohn: drained for min, stop!");
 						// We are done! exit.
 						// This will stop accepting new connections
 						return;
@@ -239,7 +246,7 @@ impl Gateway {
 			}
 		};
 
-		drain::run_with_drain(component, drain, max_deadline, accept).await;
+		drain::run_with_drain(component, drain, max_deadline, min_deadline, accept).await;
 		Ok(())
 	}
 
@@ -341,7 +348,7 @@ impl Gateway {
 		match res {
 			Ok(_) => Ok(()),
 			Err(e) => {
-				anyhow::bail!("{e}");
+				anyhow::bail!("{e:?}");
 			},
 		}
 	}

@@ -27,6 +27,7 @@ pub async fn run_with_drain<F, O>(
 	component: String,
 	drain: DrainWatcher,
 	deadline: Duration,
+	min_delay: Duration,
 	make_future: F,
 ) where
 	F: AsyncFnOnce(DrainWatcher, watch::Receiver<()>) -> O,
@@ -44,15 +45,16 @@ pub async fn run_with_drain<F, O>(
 		if res.mode() == DrainMode::Graceful {
 			info!(
 				component,
-				"drain started, waiting {:?} for any connections to complete", deadline
+				"drain started, waiting {:?}-{:?} for any connections to complete", min_delay, deadline
 			);
-			if tokio::time::timeout(
-				deadline,
-				sub_drain_signal.start_drain_and_wait(DrainMode::Graceful),
-			)
-			.await
-			.is_err()
-			{
+			let res = tokio::join!(
+				tokio::time::timeout(
+					deadline,
+					sub_drain_signal.start_drain_and_wait(DrainMode::Graceful)
+				),
+				tokio::time::sleep(min_delay)
+			);
+			if res.0.is_err() {
 				// Not all connections completed within time, we will force shut them down
 				warn!(
 					component,
@@ -314,6 +316,7 @@ mod hyperfork {
 				&& let Poll::Ready(guard) = this.cancel.poll(cx)
 			{
 				this.cancelled_guard.set(Some(guard));
+				tracing::error!("howardjohn: graceful shutdown...");
 				this.conn.as_mut().graceful_shutdown();
 			}
 			this.conn.poll(cx)
