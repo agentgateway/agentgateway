@@ -122,6 +122,10 @@ pub struct ListenerConfig {
 	/// degradation, even if set to a lower value than the default (100)
 	#[serde(default)]
 	http1_max_headers: Option<usize>,
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(default = "defaults::http1_idle_timeout")]
+	http1_idle_timeout: Duration,
 
 	#[serde(default)]
 	http2_window_size: Option<u32>,
@@ -146,6 +150,7 @@ impl Default for ListenerConfig {
 			tls_handshake_timeout: defaults::tls_handshake_timeout(),
 
 			http1_max_headers: None,
+			http1_idle_timeout: defaults::http1_idle_timeout(),
 
 			http2_window_size: None,
 			http2_connection_window_size: None,
@@ -228,6 +233,10 @@ mod defaults {
 
 	pub fn tls_handshake_timeout() -> Duration {
 		Duration::from_secs(15)
+	}
+	pub fn http1_idle_timeout() -> Duration {
+		// Default to 10 minutes
+		Duration::from_secs(60 * 10)
 	}
 }
 

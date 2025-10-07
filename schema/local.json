@@ -357,6 +357,10 @@
               "minimum": 0,
               "default": null
             },
+            "http1IdleTimeout": {
+              "type": "string",
+              "default": "10m0s"
+            },
             "http2WindowSize": {
               "type": [
                 "integer",
@@ -404,6 +408,7 @@
             "maxBufferSize": 2097152,
             "tlsHandshakeTimeout": "15s",
             "http1MaxHeaders": null,
+            "http1IdleTimeout": "10m0s",
             "http2WindowSize": null,
             "http2ConnectionWindowSize": null,
             "http2FrameSize": null,

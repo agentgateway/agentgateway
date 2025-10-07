@@ -54,6 +54,7 @@ This folder contains JSON schemas for various parts of the project
 |`config.listener.maxBufferSize`||
 |`config.listener.tlsHandshakeTimeout`||
 |`config.listener.http1MaxHeaders`|The maximum number of headers allowed in a request. Changing this value results in a performance<br>degradation, even if set to a lower value than the default (100)|
+|`config.listener.http1IdleTimeout`||
 |`config.listener.http2WindowSize`||
 |`config.listener.http2ConnectionWindowSize`||
 |`config.listener.http2FrameSize`||

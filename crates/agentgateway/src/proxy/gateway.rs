@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use agent_core::drain;
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
@@ -342,7 +342,13 @@ impl Gateway {
 		match res {
 			Ok(_) => Ok(()),
 			Err(e) => {
-				anyhow::bail!("{e:?}");
+				if let Some(te) = e.downcast_ref::<hyper::Error>()
+					&& te.is_timeout()
+				{
+					// This is just closing an idle connection; no need to log which is misleading
+					return Ok(());
+				}
+				anyhow::bail!("{e}");
 			},
 		}
 	}
@@ -510,6 +516,7 @@ pub fn auto_server(c: &ListenerConfig) -> auto::Builder<::hyper_util::rt::TokioE
 		max_buffer_size: _,       // Not handled here
 		tls_handshake_timeout: _, // Not handled here
 		http1_max_headers,
+		http1_idle_timeout,
 		http2_window_size,
 		http2_connection_window_size,
 		http2_frame_size,
@@ -520,7 +527,8 @@ pub fn auto_server(c: &ListenerConfig) -> auto::Builder<::hyper_util::rt::TokioE
 	if let Some(m) = http1_max_headers {
 		b.http1().max_headers(*m);
 	}
-	b.http1().header_read_timeout(Some(Duration::from_secs(2)));
+	// See https://github.com/agentgateway/agentgateway/issues/504 for why "idle timeout" is used as "read header timeout"
+	b.http1().header_read_timeout(Some(*http1_idle_timeout));
 
 	if http2_window_size.is_some() || http2_connection_window_size.is_some() {
 		if let Some(w) = http2_connection_window_size {
