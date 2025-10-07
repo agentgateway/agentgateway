@@ -323,7 +323,6 @@ mod hyperfork {
 				&& let Poll::Ready(guard) = this.cancel.poll(cx)
 			{
 				this.cancelled_guard.set(Some(guard));
-				tracing::error!("howardjohn: graceful shutdown...");
 				this.conn.as_mut().graceful_shutdown();
 			}
 			this.conn.poll(cx)
