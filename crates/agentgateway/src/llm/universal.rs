@@ -255,10 +255,10 @@ pub mod passthrough {
 		fn to_bedrock(
 			&self,
 			provider: &Provider,
-			_headers: Option<&::http::HeaderMap>,
+			headers: Option<&::http::HeaderMap>,
 		) -> Result<Vec<u8>, AIError> {
 			let typed = json::convert::<_, universal::Request>(self).map_err(AIError::RequestMarshal)?;
-			let xlated = llm::bedrock::translate_request_completions(typed, provider);
+			let xlated = llm::bedrock::translate_request_completions(typed, provider, headers);
 			serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 		}
 

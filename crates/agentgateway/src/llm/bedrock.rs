@@ -120,6 +120,44 @@ pub fn process_response(
 	}
 }
 
+/// Extract flat key-value pairs from JSON for Bedrock requestMetadata.
+/// Only extracts top-level primitive values (strings, numbers, booleans).
+fn extract_flat_metadata(value: &serde_json::Value) -> HashMap<String, String> {
+	let mut metadata = HashMap::new();
+
+	if let serde_json::Value::Object(obj) = value {
+		for (key, val) in obj {
+			match val {
+				serde_json::Value::String(s) => {
+					metadata.insert(key.clone(), s.clone());
+				},
+				serde_json::Value::Number(n) => {
+					metadata.insert(key.clone(), n.to_string());
+				},
+				serde_json::Value::Bool(b) => {
+					metadata.insert(key.clone(), b.to_string());
+				},
+				_ => {}, // Skip nested objects, arrays, null
+			}
+		}
+	}
+
+	metadata
+}
+
+/// Extract metadata from x-bedrock-metadata header.
+/// Gateway operators can use CEL transformation to populate this header with extauthz data.
+fn extract_metadata_from_headers(
+	headers: Option<&http::HeaderMap>,
+) -> Option<HashMap<String, String>> {
+	const BEDROCK_METADATA_HEADER: &str = "x-bedrock-metadata";
+
+	let header_value = headers?.get(BEDROCK_METADATA_HEADER)?;
+	let json_str = header_value.to_str().ok()?;
+	let json = serde_json::from_str::<serde_json::Value>(json_str).ok()?;
+	Some(extract_flat_metadata(&json))
+}
+
 pub(super) fn translate_error(
 	resp: ConverseErrorResponse,
 ) -> Result<universal::ChatCompletionErrorResponse, AIError> {
@@ -157,6 +195,7 @@ fn translate_stop_reason(resp: &StopReason) -> universal::FinishReason {
 pub(super) fn translate_request_completions(
 	req: universal::Request,
 	provider: &Provider,
+	headers: Option<&http::HeaderMap>,
 ) -> ConverseRequest {
 	// Extract and join system prompts from universal format
 	let system_text = req
@@ -211,9 +250,22 @@ pub(super) fn translate_request_completions(
 		None
 	};
 
-	let metadata = req
+	// Build metadata from user field and x-bedrock-metadata header
+	let mut metadata = req
 		.user
-		.map(|user| HashMap::from([("user_id".to_string(), user)]));
+		.map(|user| HashMap::from([("user_id".to_string(), user)]))
+		.unwrap_or_default();
+
+	// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
+	if let Some(header_metadata) = extract_metadata_from_headers(headers) {
+		metadata.extend(header_metadata);
+	}
+
+	let metadata = if metadata.is_empty() {
+		None
+	} else {
+		Some(metadata)
+	};
 
 	let tool_choice = match req.tool_choice {
 		Some(universal::ToolChoiceOption::Named(universal::NamedToolChoice {
@@ -798,8 +850,19 @@ pub(super) fn translate_request_messages(
 		None
 	};
 
-	// Extract metadata from typed field
-	let metadata = req.metadata.map(|m| m.fields);
+	// Build metadata from request field and x-bedrock-metadata header
+	let mut metadata = req.metadata.map(|m| m.fields).unwrap_or_default();
+
+	// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
+	if let Some(header_metadata) = extract_metadata_from_headers(headers) {
+		metadata.extend(header_metadata);
+	}
+
+	let metadata = if metadata.is_empty() {
+		None
+	} else {
+		Some(metadata)
+	};
 
 	let bedrock_request = ConverseRequest {
 		model_id: req.model,
@@ -1311,6 +1374,54 @@ mod tests {
 	use super::*;
 	use ::http::HeaderMap;
 	use serde_json::json;
+
+	#[test]
+	fn test_metadata_from_header() {
+		let provider = Provider {
+			model: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
+
+		// Simulate transformation CEL setting x-bedrock-metadata header
+		let mut headers = HeaderMap::new();
+		headers.insert(
+			"x-bedrock-metadata",
+			r#"{"user_id": "user123", "department": "engineering"}"#
+				.parse()
+				.unwrap(),
+		);
+
+		let req = anthropic::MessagesRequest {
+			model: "anthropic.claude-3-sonnet".to_string(),
+			messages: vec![anthropic::Message {
+				role: anthropic::Role::User,
+				content: vec![anthropic::ContentBlock::Text(anthropic::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			}],
+			max_tokens: 100,
+			metadata: None,
+			system: None,
+			stop_sequences: vec![],
+			stream: false,
+			temperature: None,
+			top_k: None,
+			top_p: None,
+			tools: None,
+			tool_choice: None,
+			thinking: None,
+		};
+
+		let out = translate_request_messages(req, &provider, Some(&headers)).unwrap();
+		let metadata = out.request_metadata.unwrap();
+
+		assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
+		assert_eq!(metadata.get("department"), Some(&"engineering".to_string()));
+	}
 
 	#[test]
 	fn test_translate_request_messages_maps_top_k_from_typed() {
