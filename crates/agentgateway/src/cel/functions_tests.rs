@@ -32,15 +32,15 @@ fn random() {
 
 #[test]
 fn base64() {
-	let expr = r#""hello".base64_encode()"#;
+	let expr = r#""hello".base64Encode()"#;
 	assert(json!("aGVsbG8="), expr);
-	let expr = r#"string("hello".base64_encode().base64_decode())"#;
+	let expr = r#"string("hello".base64Encode().base64Decode())"#;
 	assert(json!("hello"), expr);
 }
 
 #[test]
 fn map_values() {
-	let expr = r#"{"a": 1, "b": 2}.map_values(v, v * 2)"#;
+	let expr = r#"{"a": 1, "b": 2}.mapValues(v, v * 2)"#;
 	assert(json!({"a": 2, "b": 4}), expr);
 }
 
@@ -54,6 +54,16 @@ fn default() {
 	assert(json!(2), expr);
 	let expr = r#"default(a.b, "b")"#;
 	assert(json!("b"), expr);
+}
+
+#[test]
+fn regex_replace() {
+	let expr = r#""/path/1/id/499c81c2/bar".regexReplace("/path/([0-9]+?)/id/([0-9a-z]{8})/bar", "/path/{n}/id/{id}/bar")"#;
+	assert(json!("/path/{n}/id/{id}/bar"), expr);
+	let expr = r#""blah id=1234 bar".regexReplace("id=(.+?) ", "[$1] ")"#;
+	assert(json!("blah [1234] bar"), expr);
+	let expr = r#""/id/1234/data".regexReplace("/id/[0-9]*/", "/id/{id}/")"#;
+	assert(json!("/id/{id}/data"), expr);
 }
 
 fn assert(want: serde_json::Value, expr: &str) {

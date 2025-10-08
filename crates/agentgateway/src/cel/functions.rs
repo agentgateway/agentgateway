@@ -18,17 +18,22 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	// Custom to agentgateway
 	ctx.add_function("json", json_parse);
 	ctx.add_function("to_json", to_json);
+	// Keep old and new name for compatibility
+	ctx.add_function("toJson", to_json);
 	ctx.add_function("with", with);
 	ctx.add_function("flatten", flatten);
 	ctx.add_function("flatten_recursive", flatten_recursive);
-	ctx.add_function("map_values", map_values);
+	// Keep old and new name for compatibility
+	ctx.add_function("flattenRecursive", flatten_recursive);
+	ctx.add_function("mapValues", map_values);
 	ctx.add_function("variables", variables);
 	ctx.add_function("random", || random_range(0.0..=1.0));
 	ctx.add_function("default", default);
+	ctx.add_function("regexReplace", regex_replace);
 
 	// Using the go name, base64.encode is blocked by https://github.com/cel-rust/cel-rust/issues/103 (namespacing)
-	ctx.add_function("base64_encode", base64_encode);
-	ctx.add_function("base64_decode", base64_decode);
+	ctx.add_function("base64Encode", base64_encode);
+	ctx.add_function("base64Decode", base64_decode);
 
 	// "Strings" extension
 	// https://pkg.go.dev/github.com/google/cel-go/ext#Strings
@@ -171,6 +176,20 @@ fn to_json(ftx: &FunctionContext, v: Value) -> ResolveResult {
 	Ok(Value::String(Arc::new(
 		serde_json::to_string(&pj).map_err(|e| ftx.error(e))?,
 	)))
+}
+
+pub fn regex_replace(
+	ftx: &FunctionContext,
+	This(this): This<Arc<String>>,
+	regex: Arc<String>,
+	replacement: Arc<String>,
+) -> Result<Arc<String>, cel::ExecutionError> {
+	match regex::Regex::new(&regex) {
+		Ok(re) => Ok(Arc::new(
+			re.replace(&this, replacement.as_str()).to_string(),
+		)),
+		Err(err) => Err(ftx.error(format!("'{regex}' not a valid regex:\n{err}"))),
+	}
 }
 
 fn default(ftx: &FunctionContext, exp: Expression, d: Value) -> ResolveResult {
