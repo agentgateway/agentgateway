@@ -1,32 +1,48 @@
 # yaml-language-server: $schema=../../../schema/local.json
 config:
   tracing:
+    # Example connecting to a local OpenLLMetry backend
     otlpEndpoint: http://localhost:4317
+
+    # Example connecting to a SaaS vendor
+    # otlpEndpoint: https://api.traceloop.com
+    # headers:
+    #   Authorization: "Bearer tl_123abc"
+    # otlpProtocol: http
+
     randomSampling: true
     fields:
+      # OpenLLMetry is very similar to OpenTelemetry, but uses a few different span names.
+      # Agentgateway natively sends the OpenTelemetry attributes, but a few need to be tweaked.
       add:
         span.name: '"openai.chat"'
-        gen_ai.operation.name: '"chat"'
+        # OpenTelemetry uses gen_ai.provider.name but openllemtry is using a different attribute
+        # https://github.com/traceloop/openllmetry/blob/e66894fd7f8324bd7b2972d7f727da39e7d93181/packages/opentelemetry-semantic-conventions-ai/opentelemetry/semconv_ai/__init__.py#L70
         gen_ai.system: 'llm.provider'
+        # By default, prompt and completions are not sent; enable them.
         gen_ai.prompt: 'flatten_recursive(llm.prompt)'
         gen_ai.completion: 'flatten_recursive(llm.completion.map(c, {"role":"assistant", "content": c}))'
-        gen_ai.usage.completion_tokens: 'llm.output_tokens'
-        gen_ai.usage.prompt_tokens: 'llm.input_tokens'
-        gen_ai.request.model: 'llm.request_model'
-        gen_ai.response.model: 'llm.response_model'
-        gen_ai.request: 'flatten(llm.params)'
+        # OpenTelemetry uses gen_ai.usage.output_tokens
+        # https://github.com/traceloop/openllmetry/blob/e66894fd7f8324bd7b2972d7f727da39e7d93181/packages/opentelemetry-semantic-conventions-ai/opentelemetry/semconv_ai/__init__.py#L78C36-L80
+        gen_ai.usage.completion_tokens: 'llm.outputTokens'
+        # OpenTelemetry uses gen_ai.usage.input_tokens
+        # https://github.com/traceloop/openllmetry/blob/e66894fd7f8324bd7b2972d7f727da39e7d93181/packages/opentelemetry-semantic-conventions-ai/opentelemetry/semconv_ai/__init__.py#L78C36-L80
+        gen_ai.usage.prompt_tokens: 'llm.inputTokens'
+        # Other non-OpenTelemetry fields
         llm.is_streaming: 'llm.streaming'
+        llm.usage.total_tokens: 'llm.totalTokens'
+
 binds:
 - port: 3000
   listeners:
   - routes:
     - backends:
-       - ai:
+      - ai:
           name: gemini
           provider:
-              gemini:
-                # Optional; overrides the model in requests
-                model: gemini-1.5-flash
+            gemini:
+              # Optional; overrides the model in requests
+              model: gemini-1.5-flash
       policies:
         backendAuth:
           key: $GEMINI_API_KEY

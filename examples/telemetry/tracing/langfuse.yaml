@@ -1,20 +1,29 @@
 # yaml-language-server: $schema=../../../schema/local.json
 config:
   tracing:
-    otlpEndpoint: http://localhost:4317
+    # Replace with your langufse endpoint, as appropriate.
+    otlpEndpoint: https://us.cloud.langfuse.com/api/public/otel
+    otlpProtocol: http
+    headers:
+      # Replace with your API key
+      Authorization: "Basic xx"
     randomSampling: true
     fields:
       add:
-        gen_ai.operation.name: '"chat"'
-        gen_ai.system: "llm.provider"
-        gen_ai.prompt: "llm.prompt"
-        gen_ai.completion: 'llm.completion.map(c, {"role":"assistant", "content": c})'
-        gen_ai.usage.completion_tokens: "llm.output_tokens"
-        gen_ai.usage.prompt_tokens: "llm.input_tokens"
-        # Langfuse uses the wrong one here! Intentionally swap
-        gen_ai.request.model: "llm.request_model"
-        gen_ai.response.model: "llm.response_model"
-        gen_ai.request: "flatten(llm.params)"
+        span.name: '"openai.chat"'
+        # OpenTelemetry uses gen_ai.provider.name but langfuse is using a different attribute
+        # https://github.com/traceloop/openllmetry/blob/e66894fd7f8324bd7b2972d7f727da39e7d93181/packages/opentelemetry-semantic-conventions-ai/opentelemetry/semconv_ai/__init__.py#L70
+        gen_ai.system: 'llm.provider'
+        # By default, prompt and completions are not sent; enable them.
+        gen_ai.prompt: 'flatten_recursive(llm.prompt)'
+        gen_ai.completion: 'flatten_recursive(llm.completion.map(c, {"role":"assistant", "content": c}))'
+        # OpenTelemetry uses gen_ai.usage.output_tokens
+        # https://github.com/traceloop/openllmetry/blob/e66894fd7f8324bd7b2972d7f727da39e7d93181/packages/opentelemetry-semantic-conventions-ai/opentelemetry/semconv_ai/__init__.py#L78C36-L80
+        gen_ai.usage.completion_tokens: 'llm.outputTokens'
+        # OpenTelemetry uses gen_ai.usage.input_tokens
+        # https://github.com/traceloop/openllmetry/blob/e66894fd7f8324bd7b2972d7f727da39e7d93181/packages/opentelemetry-semantic-conventions-ai/opentelemetry/semconv_ai/__init__.py#L78C36-L80
+        gen_ai.usage.prompt_tokens: 'llm.inputTokens'
+
 binds:
   - port: 3000
     listeners:

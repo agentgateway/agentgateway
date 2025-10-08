@@ -4,13 +4,9 @@ config:
     otlpEndpoint: http://localhost:4317
     randomSampling: true
     fields:
-      add:
-        gen_ai.operation.name: "chat"
-        gen_ai.system: "llm.provider"
-        gen_ai.request.model: "llm.request_model"
-        gen_ai.output.type: "llm.response_model"
-        gen_ai.usage.completion_tokens: "llm.output_tokens"
-        gen_ai.usage.prompt_tokens: "llm.input_tokens"
+      # Agentgateway implements the OpenTelemetry v1.37.0 specification for span attributes by default
+      # See https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/#inference.
+      add: {}
 binds:
 - port: 3000
   listeners:
