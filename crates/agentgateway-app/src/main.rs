@@ -12,6 +12,8 @@ use tracing::info;
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+// Enable profiling, unless on musl due to https://github.com/tikv/jemallocator/issues/146
+#[cfg(not(target_env = "musl"))]
 #[cfg(feature = "jemalloc")]
 #[allow(non_upper_case_globals)]
 #[unsafe(export_name = "malloc_conf")]
