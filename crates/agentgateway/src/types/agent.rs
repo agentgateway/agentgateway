@@ -1065,11 +1065,29 @@ impl ResourceMetadata {
 	pub fn to_rfc_json(&self, resource_uri: String, issuer: String) -> Value {
 		let mut map = serde_json::Map::new();
 
+		// Ensure authorization_servers uses the same scheme as resource_uri
+		let authorization_server = if let (Ok(resource_url), Ok(issuer_url)) = (
+			resource_uri.parse::<http::Uri>(),
+			issuer.parse::<http::Uri>(),
+		) {
+			// Use the scheme from resource_uri for the authorization server
+			if let (Some(resource_scheme), Some(issuer_authority)) = (
+				resource_url.scheme_str(),
+				issuer_url.authority(),
+			) {
+				format!("{}://{}{}", resource_scheme, issuer_authority, issuer_url.path())
+			} else {
+				issuer
+			}
+		} else {
+			issuer
+		};
+
 		// Computed fields. User can override them if they explicitly configure them.
 		map.insert("resource".into(), Value::String(resource_uri));
 		map.insert(
 			"authorization_servers".into(),
-			Value::Array(vec![Value::String(issuer)]),
+			Value::Array(vec![Value::String(authorization_server)]),
 		);
 		// MCP-specific additions
 		map.insert(
