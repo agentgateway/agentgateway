@@ -50,6 +50,7 @@ pub const LLM_ATTRIBUTE: &str = "llm";
 pub const LLM_PROMPT_ATTRIBUTE: &str = "llm.prompt";
 pub const LLM_COMPLETION_ATTRIBUTE: &str = "llm.completion";
 pub const RESPONSE_ATTRIBUTE: &str = "response";
+pub const RESPONSE_BODY_ATTRIBUTE: &str = "response.body";
 pub const JWT_ATTRIBUTE: &str = "jwt";
 pub const MCP_ATTRIBUTE: &str = "mcp";
 pub const EXTAUTHZ_ATTRIBUTE: &str = "extauthz";
@@ -61,6 +62,7 @@ pub const ALL_ATTRIBUTES: &[&str] = &[
 	LLM_PROMPT_ATTRIBUTE,
 	LLM_COMPLETION_ATTRIBUTE,
 	RESPONSE_ATTRIBUTE,
+	RESPONSE_BODY_ATTRIBUTE,
 	JWT_ATTRIBUTE,
 	MCP_ATTRIBUTE,
 	EXTAUTHZ_ATTRIBUTE,
@@ -129,6 +131,12 @@ impl ContextBuilder {
 		};
 		r.body = Some(body);
 	}
+	pub fn with_response_body(&mut self, body: Bytes) {
+		let Some(r) = &mut self.context.response else {
+			return;
+		};
+		r.body = Some(body);
+	}
 	pub fn with_request(&mut self, req: &crate::http::Request, start_time: String) -> bool {
 		if !self.attributes.contains(REQUEST_ATTRIBUTE) {
 			return false;
@@ -148,13 +156,16 @@ impl ContextBuilder {
 		});
 		self.attributes.contains(REQUEST_BODY_ATTRIBUTE)
 	}
-	pub fn with_response(&mut self, resp: &crate::http::Response) {
+
+	pub fn with_response(&mut self, resp: &crate::http::Response) -> bool {
 		if !self.attributes.contains(RESPONSE_ATTRIBUTE) {
-			return;
+			return false;
 		}
 		self.context.response = Some(ResponseContext {
 			code: resp.status(),
-		})
+			body: None,
+		});
+		self.attributes.contains(RESPONSE_BODY_ATTRIBUTE)
 	}
 
 	pub fn with_jwt(&mut self, info: &Claims) {
@@ -371,6 +382,10 @@ impl Expression {
 					REQUEST_ATTRIBUTE.to_string(),
 					REQUEST_BODY_ATTRIBUTE.to_string(),
 				],
+				["response", "body", ..] => vec![
+					RESPONSE_ATTRIBUTE.to_string(),
+					RESPONSE_BODY_ATTRIBUTE.to_string(),
+				],
 				["llm", "prompt", ..] => vec![LLM_ATTRIBUTE.to_string(), LLM_PROMPT_ATTRIBUTE.to_string()],
 				["llm", "completion", ..] => vec![
 					LLM_ATTRIBUTE.to_string(),
@@ -454,6 +469,9 @@ pub struct ResponseContext {
 	#[cfg_attr(feature = "schema", schemars(with = "u16"))]
 	/// The HTTP status code of the response.
 	pub code: ::http::StatusCode,
+
+	/// The body of the request. Warning: accessing the body will cause the body to be buffered.
+	pub body: Option<Bytes>,
 }
 
 #[apply(schema_ser!)]

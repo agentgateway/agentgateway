@@ -314,6 +314,13 @@ impl HTTPProxy {
 			ProxyResponse::DirectResponse(dr) => *dr,
 		});
 
+		if let Some(l) = log.as_mut() {
+			let needs_body = l.cel.ctx().with_response(&resp);
+			if needs_body && let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
+				l.cel.ctx().with_response_body(body);
+			}
+		}
+
 		let resp = match response_policies
 			.apply(
 				&mut resp,
@@ -335,7 +342,6 @@ impl HTTPProxy {
 			l.status = Some(resp.status());
 			l.reason = Some(reason);
 			l.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
-			l.cel.ctx().with_response(&resp)
 		});
 
 		resp.map(move |b| http::Body::new(LogBody::new(b, log)))

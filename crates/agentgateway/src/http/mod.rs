@@ -361,6 +361,11 @@ pub async fn inspect_body(req: &mut Request) -> anyhow::Result<Bytes> {
 	inspect_body_with_limit(req.body_mut(), lim).await
 }
 
+pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<Bytes> {
+	let lim = response_buffer_limit(resp);
+	inspect_body_with_limit(resp.body_mut(), lim).await
+}
+
 pub async fn inspect_body_with_limit(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {
 	peekbody::inspect_body(body, limit).await
 }
