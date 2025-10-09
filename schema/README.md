@@ -861,9 +861,11 @@ This folder contains JSON schemas for various parts of the project
 |Field|Description|
 |-|-|
 |`request`|`request` contains attributes about the incoming HTTP request|
-|`request.method`|The HTTP method of the request.|
-|`request.uri`|The URI of the request.|
-|`request.path`|The path of the request URI.|
+|`request.method`|The HTTP method of the request. For example, `GET`|
+|`request.uri`|The complete URI of the request. For example, `http://example.com/path`.|
+|`request.host`||
+|`request.scheme`||
+|`request.path`|The path of the request URI. For example, `/path`.|
 |`request.headers`|The headers of the request.|
 |`request.body`|The body of the request. Warning: accessing the body will cause the body to be buffered.|
 |`request.startTime`|The (pre-rendered) time the request started|
