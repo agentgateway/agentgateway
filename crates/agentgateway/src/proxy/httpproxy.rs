@@ -803,7 +803,7 @@ async fn make_backend_call(
 
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
-	let backend = match backend {
+	let (backend, default_policies) = match backend {
 		Backend::MCP(name, mcp_backend) => {
 			if let Some(be) = inputs
 				.clone()
@@ -811,18 +811,29 @@ async fn make_backend_call(
 				.should_passthrough(name.clone(), mcp_backend, &req)
 			{
 				let target = super::resolve_simple_backend(&be, inputs.as_ref())?;
-				&Backend::from(target)
+				// The typically MCP flow will apply the top level Backend policies as default_policies
+				// When we passthrough, we should preserve this behavior.
+				let policies = inputs
+					.stores
+					.read_binds()
+					.backend_policies(backend.name(), None, None);
+				let np = match default_policies {
+					Some(dp) => Some(dp.merge(policies)),
+					None => Some(policies),
+				};
+				(&Backend::from(target), np)
 			} else {
-				backend
+				(backend, default_policies)
 			}
 		},
-		_ => backend,
+		_ => (backend, default_policies),
 	};
 
-	let policies = inputs
-		.stores
-		.read_binds()
-		.backend_policies(backend.name(), service, sub_backend);
+	let policies =
+		inputs
+			.stores
+			.read_binds()
+			.backend_policies(backend.name(), service, sub_backend.clone());
 
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
 	let (override_dest, ext_proc_resp) = maybe_inference.mutate_request(&mut req).await?;
