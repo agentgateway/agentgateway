@@ -97,8 +97,6 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
     - uses: Swatinem/rust-cache@v2
-      # Github cache is too tiny to handle the full matrix :-(
-      if: ${{ matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-latest' }}
     - name: Add Go bin to PATH
       run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
     - name: Generation
