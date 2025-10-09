@@ -51,6 +51,9 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 			Some(Ok(frame)) => {
 				if let Some(data) = frame.data_ref() {
 					let want_this_read = cmp::min(data.len(), want);
+					if want_this_read == 0 {
+						break;
+					}
 					buffer.push(data.clone());
 					want -= cmp::max(want_this_read, 0);
 					if want == 0 {

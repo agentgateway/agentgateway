@@ -77,6 +77,20 @@
           "format": "uint16",
           "minimum": 0,
           "maximum": 65535
+        },
+        "body": {
+          "description": "The body of the request. Warning: accessing the body will cause the body to be buffered.",
+          "type": [
+            "array",
+            "string",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "maximum": 255
+          }
         }
       },
       "additionalProperties": false,
