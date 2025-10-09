@@ -180,6 +180,11 @@ where
 
 fn eval_body(exec: &Executor, expr: &Expression) -> anyhow::Result<Bytes> {
 	let v = exec.eval(expr)?;
+	match &v {
+		Value::String(s) => return Ok(Bytes::copy_from_slice(s.as_bytes())),
+		Value::Bytes(b) => return Ok(Bytes::copy_from_slice(b)),
+		_ => {},
+	}
 	let j = match v.json() {
 		Ok(val) => val,
 		Err(e) => return Err(anyhow::anyhow!("JSON conversion failed: {}", e)),

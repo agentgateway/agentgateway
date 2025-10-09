@@ -36,6 +36,37 @@ fn test_transformation() {
 	assert_eq!(req.headers().get("x-insert").unwrap(), "hello Bar");
 }
 
+#[tokio::test]
+async fn test_transformation_body() {
+	let req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: None,
+		response: Some(super::LocalTransform {
+			body: Some("\"hello\" + request.method".into()),
+			..Default::default()
+		}),
+	};
+	let xfm = Transformation::try_from(c).unwrap();
+	let mut ctx = ContextBuilder::new();
+	for e in xfm.expressions() {
+		ctx.register_expression(e)
+	}
+	ctx.with_request(&req, "".to_string());
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.body(crate::http::Body::empty())
+		.unwrap();
+	xfm.apply_response(&mut resp, &ctx.build().unwrap());
+	let b = http::read_body_with_limit(resp.into_body(), 1000)
+		.await
+		.unwrap();
+	assert_eq!(b.as_ref(), b"helloGET");
+}
+
 #[test]
 fn test_transformation_pseudoheader() {
 	let mut req = ::http::Request::builder()
