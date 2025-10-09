@@ -2,6 +2,7 @@
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "4364354fa41897a0c2001d891c0a9a38eafedb82" }
 # Remove after v0.29.2
 async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "c95098beac2c65132c8a7b7c7bf39a9ad6479acb" }
+http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "163f20f551c2cf6032254b6dbbe246b91ce727ad" }
 
 [workspace]
 resolver = "2"
