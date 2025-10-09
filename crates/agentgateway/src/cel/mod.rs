@@ -149,6 +149,8 @@ impl ContextBuilder {
 			// TODO: split headers and the rest?
 			headers: req.headers().clone(),
 			uri: req.uri().clone(),
+			host: req.uri().authority().cloned(),
+			scheme: req.uri().scheme().cloned(),
 			path: req.uri().path().to_string(),
 			body: None,
 			end_time: None,
@@ -434,15 +436,23 @@ pub struct ExpressionContext {
 pub struct RequestContext {
 	#[serde(with = "http_serde::method")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	/// The HTTP method of the request.
+	/// The HTTP method of the request. For example, `GET`
 	pub method: ::http::Method,
 
 	#[serde(with = "http_serde::uri")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	/// The URI of the request.
+	/// The complete URI of the request. For example, `http://example.com/path`.
 	pub uri: ::http::Uri,
 
-	/// The path of the request URI.
+	#[serde(with = "http_serde::option::authority")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub host: Option<::http::uri::Authority>,
+
+	#[serde(with = "http_serde::option::scheme")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub scheme: Option<::http::uri::Scheme>,
+
+	/// The path of the request URI. For example, `/path`.
 	pub path: String,
 
 	#[serde(with = "http_serde::header_map")]

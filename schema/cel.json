@@ -11,15 +11,27 @@
       ],
       "properties": {
         "method": {
-          "description": "The HTTP method of the request.",
+          "description": "The HTTP method of the request. For example, `GET`",
           "type": "string"
         },
         "uri": {
-          "description": "The URI of the request.",
+          "description": "The complete URI of the request. For example, `http://example.com/path`.",
           "type": "string"
         },
+        "host": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scheme": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "path": {
-          "description": "The path of the request URI.",
+          "description": "The path of the request URI. For example, `/path`.",
           "type": "string"
         },
         "headers": {
