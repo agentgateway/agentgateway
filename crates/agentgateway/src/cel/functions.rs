@@ -26,6 +26,7 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	// Keep old and new name for compatibility
 	ctx.add_function("flattenRecursive", flatten_recursive);
 	ctx.add_function("mapValues", map_values);
+	ctx.add_function("merge", map_merge);
 	ctx.add_function("variables", variables);
 	ctx.add_function("random", || random_range(0.0..=1.0));
 	ctx.add_function("default", default);
@@ -139,6 +140,7 @@ fn variables(ftx: &FunctionContext) -> ResolveResult {
 	})
 	.into()
 }
+
 pub fn map_values(
 	ftx: &FunctionContext,
 	This(this): This<Value>,
@@ -159,6 +161,21 @@ pub fn map_values(
 		_ => return Err(this.error_expected_type(ValueType::Map)),
 	}
 	.into()
+}
+
+pub fn map_merge(This(this): This<Value>, other: Value) -> ResolveResult {
+	let this = must_map(this)?;
+	let other = must_map(other)?;
+	let mut nv = Arc::unwrap_or_clone(this.map);
+	nv.extend(Arc::unwrap_or_clone(other.map));
+	Value::Map(Map { map: Arc::new(nv) }).into()
+}
+
+fn must_map(v: Value) -> Result<Map, cel::ExecutionError> {
+	match v {
+		Value::Map(map) => Ok(map),
+		_ => Err(v.error_expected_type(ValueType::Map)),
+	}
 }
 
 fn json_parse(ftx: &FunctionContext, v: Value) -> ResolveResult {

@@ -64,6 +64,16 @@ fn regex_replace() {
 	assert(json!("blah [1234] bar"), expr);
 	let expr = r#""/id/1234/data".regexReplace("/id/[0-9]*/", "/id/{id}/")"#;
 	assert(json!("/id/{id}/data"), expr);
+	let expr = r#""ab".regexReplace("a" + "b", "12")"#;
+	assert(json!("12"), expr);
+}
+
+#[test]
+fn merge_maps() {
+	let expr = r#"{"a":2}.merge({"b":3})"#;
+	assert(json!({"a":2, "b":3}), expr);
+	let expr = r#"{"a":2}.merge({"a":3})"#;
+	assert(json!({"a":3}), expr);
 }
 
 fn assert(want: serde_json::Value, expr: &str) {
