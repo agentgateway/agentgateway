@@ -285,6 +285,7 @@ pub enum HostRedirect {
 	Host(Strng),
 	Port(NonZeroU16),
 	Auto,
+	None,
 }
 
 #[apply(schema!)]
