@@ -1059,12 +1059,16 @@ async fn make_backend_call(
 				};
 				// If a user doesn't configure explicit overrides for connecting to a provider, setup default
 				// paths, TLS, etc.
-				if llm.use_default_policies() {
-					llm
-						.provider
-						.setup_request(&mut req, route_type, Some(&llm_request))
-						.map_err(ProxyError::Processing)?;
-				}
+				llm
+					.provider
+					.setup_request(
+						&mut req,
+						route_type,
+						Some(&llm_request),
+						llm.use_default_policies(),
+					)
+					.map_err(ProxyError::Processing)?;
+
 				// Apply all policies (rate limits)
 				let response_policies = apply_llm_request_policies(
 					&route_policies,
@@ -1096,7 +1100,7 @@ async fn make_backend_call(
 				// We do not need LLM policies nor token-based rate limits, etc.
 				llm
 					.provider
-					.setup_request(&mut req, route_type, None)
+					.setup_request(&mut req, route_type, None, true)
 					.map_err(ProxyError::Processing)?;
 				(req, LLMResponsePolicies::default(), None)
 			},

@@ -246,7 +246,22 @@ impl AIProvider {
 			},
 		}
 	}
+
 	pub fn setup_request(
+		&self,
+		req: &mut Request,
+		route_type: RouteType,
+		llm_request: Option<&LLMRequest>,
+		apply_host_path_defaults: bool,
+	) -> anyhow::Result<()> {
+		if apply_host_path_defaults {
+			self.set_host_path_defaults(req, route_type, llm_request)?;
+		}
+		self.set_required_fields(req)?;
+		Ok(())
+	}
+
+	pub fn set_host_path_defaults(
 		&self,
 		req: &mut Request,
 		route_type: RouteType,
@@ -264,29 +279,16 @@ impl AIProvider {
 				})?;
 				Ok(())
 			}),
-			AIProvider::Anthropic(_) => {
-				http::modify_req(req, |req| {
-					http::modify_uri(req, |uri| {
-						if override_path {
-							uri.path_and_query = Some(PathAndQuery::from_static(anthropic::DEFAULT_PATH));
-						}
-						uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
-						Ok(())
-					})?;
-					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
-						// Move bearer token in anthropic header
-						req.headers.remove(http::header::AUTHORIZATION);
-						let mut api_key = HeaderValue::from_str(authz.token())?;
-						api_key.set_sensitive(true);
-						req.headers.insert("x-api-key", api_key);
-						// https://docs.anthropic.com/en/api/versioning
-						req
-							.headers
-							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
-					};
+			AIProvider::Anthropic(_) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					if override_path {
+						uri.path_and_query = Some(PathAndQuery::from_static(anthropic::DEFAULT_PATH));
+					}
+					uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
 					Ok(())
-				})
-			},
+				})?;
+				Ok(())
+			}),
 			AIProvider::Gemini(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path {
@@ -325,6 +327,28 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+		}
+	}
+
+	pub fn set_required_fields(&self, req: &mut Request) -> anyhow::Result<()> {
+		match self {
+			AIProvider::Anthropic(_) => {
+				http::modify_req(req, |req| {
+					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
+						// Move bearer token in anthropic header
+						req.headers.remove(http::header::AUTHORIZATION);
+						let mut api_key = HeaderValue::from_str(authz.token())?;
+						api_key.set_sensitive(true);
+						req.headers.insert("x-api-key", api_key);
+						// https://docs.anthropic.com/en/api/versioning
+						req
+							.headers
+							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+					};
+					Ok(())
+				})
+			},
+			_ => Ok(()),
 		}
 	}
 
