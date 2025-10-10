@@ -471,8 +471,9 @@ impl Drop for Metrics {
 			return;
 		}
 		// Export counters if a metrics context is present
+		let counts = self.counter.take().map(|c| c.load());
 		if let Some(ctx) = &self.ctx
-			&& let Some((tx, rx)) = self.counter.take().map(|c| c.load())
+			&& let Some((tx, rx)) = counts
 		{
 			ctx
 				.metrics
@@ -485,7 +486,7 @@ impl Drop for Metrics {
 				.get_or_create(&ctx.labels)
 				.inc_by(rx);
 		}
-		let (sent, recv) = if let Some((a, b)) = self.counter.take().map(|counter| counter.load()) {
+		let (sent, recv) = if let Some((a, b)) = counts {
 			(Some(a), Some(b))
 		} else {
 			(None, None)
