@@ -465,6 +465,12 @@ impl HTTPProxy {
 		.ok_or(ProxyError::RouteNotFound)?;
 		log.route_rule_name = selected_route.rule_name.clone();
 		log.route_name = Some(selected_route.route_name.clone());
+		// Record the matched path for tracing/logging span names
+		log.path_match = Some(match &path_match {
+			crate::types::agent::PathMatch::Exact(p) => p.to_string(),
+			crate::types::agent::PathMatch::PathPrefix(p) => format!("{}*", p),
+			crate::types::agent::PathMatch::Regex(r, _) => r.as_str().to_string(),
+		});
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 

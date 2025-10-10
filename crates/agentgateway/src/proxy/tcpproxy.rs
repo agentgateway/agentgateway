@@ -125,6 +125,20 @@ impl TCPProxy {
 		)
 		.await?;
 
+		// export rx/tx bytes on drop
+		let mut connection = connection;
+		let labels = TCPLabels {
+			bind: Some(&self.bind_name).into(),
+			gateway: Some(&self.selected_listener.gateway_name).into(),
+			listener: Some(&self.selected_listener.name).into(),
+			protocol: if log.tls_info.is_some() {
+				BindProtocol::tls
+			} else {
+				BindProtocol::tcp
+			},
+		};
+		connection.set_transport_metrics(self.inputs.metrics.clone(), labels);
+
 		inputs
 			.upstream
 			.call_tcp(client::TCPCall {
