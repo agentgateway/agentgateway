@@ -320,6 +320,23 @@ impl Gateway {
 				},
 			})
 			.inc();
+
+		// Precompute transport labels and metrics before moving `selected_listener` and `inputs`
+		let transport_protocol = if stream.ext::<TLSConnectionInfo>().is_some() {
+			BindProtocol::https
+		} else {
+			BindProtocol::http
+		};
+		let transport_labels = TCPLabels {
+			bind: Some(&bind_name).into(),
+			gateway: selected_listener
+				.as_ref()
+				.map(|l| &l.gateway_name)
+				.into(),
+			listener: selected_listener.as_ref().map(|l| &l.name).into(),
+			protocol: transport_protocol,
+		};
+		let transport_metrics = inputs.metrics.clone();
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
 			inputs,
@@ -327,6 +344,9 @@ impl Gateway {
 			target_address,
 		};
 		let connection = Arc::new(stream.get_ext());
+		// export rx/tx bytes on drop
+		let mut stream = stream;
+		stream.set_transport_metrics(transport_metrics, transport_labels);
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(stream),

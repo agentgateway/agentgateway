@@ -104,6 +104,9 @@ pub struct Metrics {
 	pub gen_ai_time_to_first_token: Histogram<GenAILabels>,
 
 	pub response_bytes: Family<HTTPLabels, counter::Counter>,
+
+	pub tcp_rx_bytes: Family<TCPLabels, counter::Counter>,
+	pub tcp_tx_bytes: Family<TCPLabels, counter::Counter>,
 }
 
 impl Metrics {
@@ -177,6 +180,26 @@ impl Metrics {
 				registry.register_with_unit(
 					"response_bytes",
 					"Total HTTP response bytes sent",
+					Unit::Bytes,
+					m.clone(),
+				);
+				m
+			},
+			tcp_rx_bytes: {
+				let m = Family::<TCPLabels, _>::default();
+				registry.register_with_unit(
+					"tcp_rx_bytes",
+					"Total TCP bytes received per connection labels",
+					Unit::Bytes,
+					m.clone(),
+				);
+				m
+			},
+			tcp_tx_bytes: {
+				let m = Family::<TCPLabels, _>::default();
+				registry.register_with_unit(
+					"tcp_tx_bytes",
+					"Total TCP bytes transmitted per connection labels",
 					Unit::Bytes,
 					m.clone(),
 				);

@@ -16,6 +16,7 @@ use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tracing::event;
 
+use crate::telemetry::metrics::{Metrics as TelemetryMetrics, TCPLabels};
 use crate::types::discovery::Identity;
 
 #[derive(Debug, Clone)]
@@ -60,6 +61,7 @@ pub struct HBONEConnectionInfo {
 pub struct Metrics {
 	counter: Option<BytesCounter>,
 	logging: LoggingMode,
+	ctx: Option<TransportMetricsCtx>,
 }
 
 impl Metrics {
@@ -67,8 +69,15 @@ impl Metrics {
 		Self {
 			counter: Some(Default::default()),
 			logging: LoggingMode::default(),
+			ctx: None,
 		}
 	}
+}
+
+#[derive(Debug, Clone)]
+pub struct TransportMetricsCtx {
+	pub metrics: std::sync::Arc<TelemetryMetrics>,
+	pub labels: TCPLabels,
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
@@ -119,6 +128,14 @@ impl hyper_util_fork::client::legacy::connect::Connection for Socket {
 impl Socket {
 	pub fn into_parts(self) -> (Extension, Metrics, SocketType) {
 		(self.ext, self.metrics, self.inner)
+	}
+
+	pub fn set_transport_metrics(
+		&mut self,
+		metrics: std::sync::Arc<TelemetryMetrics>,
+		labels: TCPLabels,
+	) {
+		self.metrics.ctx = Some(TransportMetricsCtx { metrics, labels });
 	}
 
 	pub fn from_memory(stream: DuplexStream, info: TCPConnectionInfo) -> Self {
@@ -181,8 +198,7 @@ impl Socket {
 		Socket {
 			ext,
 			inner: SocketType::Hbone(hbone),
-			// TODO: we probably want a counter here...
-			metrics: Default::default(),
+			metrics: Metrics::with_counter(),
 		}
 	}
 
@@ -454,7 +470,21 @@ impl Drop for Metrics {
 		if self.logging == LoggingMode::None {
 			return;
 		}
-		// let src = self.tcp().peer_addr;
+		// Export counters if a metrics context is present
+		if let Some(ctx) = &self.ctx {
+			if let Some((tx, rx)) = self.counter.take().map(|c| c.load()) {
+				ctx
+					.metrics
+					.tcp_tx_bytes
+					.get_or_create(&ctx.labels)
+					.inc_by(tx);
+				ctx
+					.metrics
+					.tcp_rx_bytes
+					.get_or_create(&ctx.labels)
+					.inc_by(rx);
+			}
+		}
 		let (sent, recv) = if let Some((a, b)) = self.counter.take().map(|counter| counter.load()) {
 			(Some(a), Some(b))
 		} else {
