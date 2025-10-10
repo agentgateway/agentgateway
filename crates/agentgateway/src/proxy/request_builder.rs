@@ -21,6 +21,7 @@ pub struct Request {
 	body: Option<Body>,
 	version: Version,
 	extensions: Extensions,
+	path_match: Option<String>,
 }
 
 /// A builder to construct the properties of a `Request`.
@@ -42,6 +43,7 @@ impl Request {
 			body: None,
 			version: Version::default(),
 			extensions: Extensions::new(),
+			path_match: None,
 		}
 	}
 
@@ -318,6 +320,13 @@ impl RequestBuilder {
 		self
 	}
 
+	pub fn path_match(mut self, path_match: String) -> Self {
+		if let Ok(ref mut req) = self.request {
+			req.path_match = Some(path_match);
+		}
+		self
+	}
+
 	pub fn build(self) -> Result<crate::http::Request, crate::http::Error> {
 		let req = crate::http::Request::try_from(self.request?)?;
 		Ok(req)
@@ -387,6 +396,7 @@ impl TryFrom<crate::http::Request> for Request {
 			body: Some(body),
 			version,
 			extensions,
+			path_match: None,
 		})
 	}
 }

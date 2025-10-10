@@ -138,22 +138,26 @@ impl Tracer {
 		// To avoid lifetime issues need to store the expression before we give it to ValueBag reference.
 		// TODO: we could allow log() to take a list of borrows and then a list of OwnedValueBag
 		let raws = cel_exec.eval(&self.fields.add);
-		let mut span_name = None;
+		// Evaluate span.name directly from CEL to avoid JSON round-tripping
+		let span_name = cel_exec
+			.fields
+			.add
+			.iter()
+			.find(|(kk, _)| kk.as_ref() == "span.name")
+			.and_then(|(_, expr)| cel_exec.executor.eval(expr.as_ref()).ok())
+			.and_then(|v| crate::cel::value_as_string(&v));
 		for (k, v) in &raws {
-			// TODO: convert directly instead of via json()
-			if k == "span.name"
-				&& let Some(serde_json::Value::String(s)) = v
-			{
-				span_name = Some(s.clone());
+			if k == "span.name" {
+				// Already evaluated directly above; skip JSON handling
+				continue;
 			} else if let Some(eval) = v.as_ref().map(ValueBag::capture_serde1) {
 				attributes.push(KeyValue::new(Key::new(k.to_string()), to_otel(&eval)));
 			}
 		}
 
-		let span_name = span_name.unwrap_or_else(|| match (&request.method, &request.path) {
-			(Some(method), Some(path)) => {
-				// TODO: should be path match, not the path!
-				format!("{method} {path}")
+		let span_name = span_name.unwrap_or_else(|| match (&request.method, &request.path_match) {
+			(Some(method), Some(path_match)) => {
+				format!("{method} {path_match}")
 			},
 			_ => "unknown".to_string(),
 		});

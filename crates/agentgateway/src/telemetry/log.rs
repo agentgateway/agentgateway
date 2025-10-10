@@ -24,6 +24,7 @@ use agent_core::metrics::CustomField;
 use agent_core::strng;
 use agent_core::strng::RichStrng;
 use agent_core::telemetry::{OptionExt, ValueBag, debug, display};
+use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::{FzHashSet, FzStringMap};
 use http_body::{Body, Frame, SizeHint};
@@ -467,6 +468,7 @@ impl RequestLog {
 			host: None,
 			method: None,
 			path: None,
+			path_match: None,
 			version: None,
 			status: None,
 			reason: None,
@@ -483,6 +485,7 @@ impl RequestLog {
 			a2a_method: None,
 			inference_pool: None,
 			request_handle: None,
+			response_bytes: 0,
 		}
 	}
 }
@@ -512,6 +515,7 @@ pub struct RequestLog {
 	pub host: Option<String>,
 	pub method: Option<::http::Method>,
 	pub path: Option<String>,
+	pub path_match: Option<String>,
 	pub version: Option<::http::Version>,
 	pub status: Option<crate::http::StatusCode>,
 	pub reason: Option<ProxyResponseReason>,
@@ -536,6 +540,8 @@ pub struct RequestLog {
 	pub inference_pool: Option<SocketAddr>,
 
 	pub request_handle: Option<ActiveHandle>,
+
+	pub response_bytes: u64,
 }
 
 impl RequestLog {
@@ -640,6 +646,13 @@ impl Drop for DropOnLog {
 		);
 		http_labels.custom = custom_metric_fields.clone();
 		log.metrics.requests.get_or_create(&http_labels).inc();
+		if log.response_bytes > 0 {
+			log
+				.metrics
+				.response_bytes
+				.get_or_create(&http_labels)
+				.inc_by(log.response_bytes);
+		}
 
 		Self::add_llm_metrics(
 			&log,
@@ -874,6 +887,12 @@ where
 					&& let Some(grpc) = this.log.as_mut().map(|log| log.grpc_status.clone())
 				{
 					crate::proxy::httpproxy::maybe_set_grpc_status(&grpc, trailer);
+				}
+				if let Some(log) = this.log.as_mut()
+					&& let Some(data) = frame.data_ref()
+				{
+					// Count the bytes in this data frame
+					log.response_bytes = log.response_bytes.saturating_add(data.remaining() as u64);
 				}
 				Poll::Ready(Some(Ok(frame)))
 			},
