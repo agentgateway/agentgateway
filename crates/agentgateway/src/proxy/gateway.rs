@@ -329,10 +329,7 @@ impl Gateway {
 		};
 		let transport_labels = TCPLabels {
 			bind: Some(&bind_name).into(),
-			gateway: selected_listener
-				.as_ref()
-				.map(|l| &l.gateway_name)
-				.into(),
+			gateway: selected_listener.as_ref().map(|l| &l.gateway_name).into(),
 			listener: selected_listener.as_ref().map(|l| &l.name).into(),
 			protocol: transport_protocol,
 		};

@@ -471,19 +471,19 @@ impl Drop for Metrics {
 			return;
 		}
 		// Export counters if a metrics context is present
-		if let Some(ctx) = &self.ctx {
-			if let Some((tx, rx)) = self.counter.take().map(|c| c.load()) {
-				ctx
-					.metrics
-					.tcp_tx_bytes
-					.get_or_create(&ctx.labels)
-					.inc_by(tx);
-				ctx
-					.metrics
-					.tcp_rx_bytes
-					.get_or_create(&ctx.labels)
-					.inc_by(rx);
-			}
+		if let Some(ctx) = &self.ctx
+			&& let Some((tx, rx)) = self.counter.take().map(|c| c.load())
+		{
+			ctx
+				.metrics
+				.tcp_tx_bytes
+				.get_or_create(&ctx.labels)
+				.inc_by(tx);
+			ctx
+				.metrics
+				.tcp_rx_bytes
+				.get_or_create(&ctx.labels)
+				.inc_by(rx);
 		}
 		let (sent, recv) = if let Some((a, b)) = self.counter.take().map(|counter| counter.load()) {
 			(Some(a), Some(b))
