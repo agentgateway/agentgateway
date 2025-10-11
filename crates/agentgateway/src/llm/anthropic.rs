@@ -42,6 +42,10 @@ impl Provider {
 		match input_format {
 			InputFormat::Completions => resp.map(|b| translate_stream(b, buffer, log)),
 			InputFormat::Messages => resp.map(|b| passthrough_stream(b, buffer, log)),
+			InputFormat::Responses => {
+				// Anthropic doesn't support Responses format
+				unreachable!("Responses format should not be routed to Anthropic provider")
+			}
 		}
 	}
 
@@ -74,6 +78,10 @@ pub fn process_response(
 
 			Ok(Box::new(resp))
 		},
+		InputFormat::Responses => {
+			// Anthropic doesn't support Responses format
+			unreachable!("Responses format should not be routed to Anthropic provider")
+		}
 	}
 }
 

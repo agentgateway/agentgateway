@@ -77,6 +77,10 @@ impl Provider {
 				// NEW PATH: AWS EventStream → Anthropic SSE
 				resp.map(|body| translate_stream_to_messages(body, log, model, message_id))
 			},
+			crate::llm::InputFormat::Responses => {
+				// Bedrock doesn't support Responses format
+				unreachable!("Responses format should not be routed to Bedrock provider")
+			}
 		}
 	}
 
@@ -117,6 +121,10 @@ pub fn process_response(
 					.map_err(AIError::ResponseParsing)?;
 			Ok(Box::new(passthrough))
 		},
+		crate::llm::InputFormat::Responses => {
+			// Bedrock doesn't support Responses format
+			unreachable!("Responses format should not be routed to Bedrock provider")
+		}
 	}
 }
 
