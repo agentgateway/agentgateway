@@ -110,6 +110,8 @@ pub enum RouteType {
 	Completions,
 	/// Anthropic /v1/messages
 	Messages,
+	/// OpenAI /responses
+	Responses,
 	/// OpenAI /v1/models
 	Models,
 	/// Send the request to the upstream LLM provider as-is
@@ -144,6 +146,7 @@ pub struct LLMRequest {
 pub enum InputFormat {
 	Completions,
 	Messages,
+	Responses,
 }
 
 #[derive(Default, Clone, Debug, Serialize)]
@@ -267,7 +270,15 @@ impl AIProvider {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path {
-						uri.path_and_query = Some(PathAndQuery::from_static(openai::DEFAULT_PATH));
+						if let Some(l) = llm_request {
+							let path = match l.input_format {
+								InputFormat::Responses => "/responses",
+								_ => openai::DEFAULT_PATH,
+							};
+							uri.path_and_query = Some(PathAndQuery::from_static(path));
+						} else {
+							uri.path_and_query = Some(PathAndQuery::from_static(openai::DEFAULT_PATH));
+						}
 					}
 					uri.authority = Some(Authority::from_static(openai::DEFAULT_HOST_STR));
 					Ok(())
@@ -426,6 +437,46 @@ impl AIProvider {
 			.await
 	}
 
+	pub async fn process_responses_request(
+		&self,
+		client: &client::Client,
+		policies: Option<&Policy>,
+		req: Request,
+		tokenize: bool,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		// Buffer the body, max 2mb
+		let buffer_limit = http::buffer_limit(&req);
+		let (parts, body) = req.into_parts();
+		let Ok(bytes) = http::read_body_with_limit(body, buffer_limit).await else {
+			return Err(AIError::RequestTooLarge);
+		};
+
+		let mut req: openai::responses::passthrough::Request = if let Some(p) = policies {
+			p.unmarshal_request(&bytes)?
+		} else {
+			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
+		};
+
+		if let Some(provider_model) = &self.override_model() {
+			req.model = Some(provider_model.to_string());
+		} else if req.model.is_none() {
+			return Err(AIError::MissingField("model not specified".into()));
+		}
+
+		self
+			.process_request(
+				client,
+				policies,
+				InputFormat::Responses,
+				req,
+				parts,
+				tokenize,
+				log,
+			)
+			.await
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	async fn process_request(
 		&self,
@@ -446,6 +497,9 @@ impl AIProvider {
 			},
 			(InputFormat::Messages, AIProvider::Bedrock(_)) => {
 				// Bedrock supports messages input (Anthropic passthrough)
+			},
+			(InputFormat::Responses, AIProvider::OpenAI(_)) => {
+				// OpenAI supports responses input
 			},
 			(m, p) => {
 				// Messages with OpenAI compatible: currently only supports translating the request
@@ -608,12 +662,15 @@ impl AIProvider {
 		bytes: &Bytes,
 	) -> Result<Result<Box<dyn ResponseType>, ChatCompletionErrorResponse>, AIError> {
 		if status.is_success() {
-			let resp = match self {
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Vertex(_) => {
+			let resp = match (self, req.input_format) {
+				(AIProvider::OpenAI(_), InputFormat::Responses) => {
+					openai::responses::process_response(bytes)?
+				},
+				(AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Vertex(_), _) => {
 					universal::passthrough::process_response(bytes, req.input_format)?
 				},
-				AIProvider::Anthropic(_) => anthropic::process_response(bytes, req.input_format)?,
-				AIProvider::Bedrock(_) => {
+				(AIProvider::Anthropic(_), _) => anthropic::process_response(bytes, req.input_format)?,
+				(AIProvider::Bedrock(_), _) => {
 					bedrock::process_response(req.request_model.as_str(), bytes, req.input_format)?
 				},
 			};
@@ -646,9 +703,12 @@ impl AIProvider {
 			response: LLMResponse::default(),
 		};
 		log.store(Some(llmresp));
-		let resp = match self {
-			AIProvider::Anthropic(p) => p.process_streaming(log, resp, input_format).await,
-			AIProvider::Bedrock(p) => {
+		let resp = match (self, input_format) {
+			(AIProvider::OpenAI(_), InputFormat::Responses) => {
+				openai::responses::process_streaming(log, resp).await
+			},
+			(AIProvider::Anthropic(p), _) => p.process_streaming(log, resp, input_format).await,
+			(AIProvider::Bedrock(p), _) => {
 				p.process_streaming(log, resp, model.as_str(), input_format)
 					.await
 			},

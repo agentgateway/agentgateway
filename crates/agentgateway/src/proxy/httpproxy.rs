@@ -979,31 +979,48 @@ async fn make_backend_call(
 		// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like
 		// prompt enrichment, prompt guard, etc.
 		match route_type {
-			RouteType::Completions | RouteType::Messages => {
-				let r = if route_type == RouteType::Completions {
-					llm
-						.provider
-						.process_completions_request(
-							&client,
-							route_policies.llm.as_deref(),
-							req,
-							llm.tokenize,
-							&mut log,
-						)
-						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?
-				} else {
-					llm
-						.provider
-						.process_messages_request(
-							&client,
-							route_policies.llm.as_deref(),
-							req,
-							llm.tokenize,
-							&mut log,
-						)
-						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?
+			RouteType::Completions | RouteType::Messages | RouteType::Responses => {
+				let r = match route_type {
+					RouteType::Completions => {
+						llm
+							.provider
+							.process_completions_request(
+								&client,
+								route_policies.llm.as_deref(),
+								req,
+								llm.tokenize,
+								&mut log,
+							)
+							.await
+							.map_err(|e| ProxyError::Processing(e.into()))?
+					},
+					RouteType::Messages => {
+						llm
+							.provider
+							.process_messages_request(
+								&client,
+								route_policies.llm.as_deref(),
+								req,
+								llm.tokenize,
+								&mut log,
+							)
+							.await
+							.map_err(|e| ProxyError::Processing(e.into()))?
+					},
+					RouteType::Responses => {
+						llm
+							.provider
+							.process_responses_request(
+								&client,
+								route_policies.llm.as_deref(),
+								req,
+								llm.tokenize,
+								&mut log,
+							)
+							.await
+							.map_err(|e| ProxyError::Processing(e.into()))?
+					},
+					_ => unreachable!(),
 				};
 				let (mut req, llm_request) = match r {
 					RequestResult::Success(r, lr) => (r, lr),
