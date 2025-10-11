@@ -592,6 +592,20 @@ message AIBackend {
     google.protobuf.StringValue guardrail_identifier = 3;
     google.protobuf.StringValue guardrail_version = 4;
   }
+  // RouteType specifies how incoming requests should be processed
+  // based on the URL path.
+  enum RouteType {
+    // Unspecified defaults to COMPLETIONS
+    ROUTE_TYPE_UNSPECIFIED = 0;
+    // Processes OpenAI /v1/chat/completions format requests
+    ROUTE_TYPE_COMPLETIONS = 1;
+    // Processes Anthropic /v1/messages format requests
+    ROUTE_TYPE_MESSAGES = 2;
+    // Handles /v1/models endpoint (returns available models)
+    ROUTE_TYPE_MODELS = 3;
+    // Sends requests to upstream as-is without LLM processing
+    ROUTE_TYPE_PASSTHROUGH = 4;
+  }
   message Provider {
     string name = 1;
     HostOverride host_override = 2;
@@ -603,6 +617,11 @@ message AIBackend {
       Anthropic anthropic = 7;
       Bedrock bedrock = 8;
     }
+    // Routes defines how to identify the type of traffic to handle.
+    // The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").
+    // The special "*" wildcard matches any path.
+    // If not specified, all traffic is treated as ROUTE_TYPE_COMPLETIONS.
+    map<string, RouteType> routes = 9;
   }
   message ProviderGroup {
     repeated Provider providers = 1;

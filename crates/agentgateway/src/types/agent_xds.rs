@@ -383,7 +383,29 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 										.map_err(|e| ProtoError::Generic(e.to_string()))
 								})
 								.transpose()?,
-							routes: IndexMap::default(),
+							routes: provider_config
+								.routes
+								.iter()
+								.map(|(path, proto_route_type)| {
+									use proto::agent::ai_backend::RouteType as ProtoRT;
+									let route_type = match ProtoRT::try_from(*proto_route_type) {
+										Ok(ProtoRT::Completions) | Ok(ProtoRT::Unspecified) => {
+											llm::RouteType::Completions
+										},
+										Ok(ProtoRT::Messages) => llm::RouteType::Messages,
+										Ok(ProtoRT::Models) => llm::RouteType::Models,
+										Ok(ProtoRT::Passthrough) => llm::RouteType::Passthrough,
+										Err(_) => {
+											warn!(
+												value = proto_route_type,
+												"Unknown proto RouteType value, defaulting to Completions"
+											);
+											llm::RouteType::Completions
+										},
+									};
+									(strng::new(path), route_type)
+								})
+								.collect(),
 						};
 						local_provider_group.push((provider_name, np));
 					}
@@ -1237,6 +1259,63 @@ mod tests {
 			Ok(())
 		} else {
 			panic!("Expected CSRF policy variant, got: {:?}", policy);
+		}
+	}
+
+	#[tokio::test]
+	async fn test_ai_backend_routes_conversion() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend;
+
+		// Test proto routes field converts to Rust RouteType
+		let mut routes_map = std::collections::HashMap::new();
+		routes_map.insert(
+			"/v1/chat/completions".to_string(),
+			ai_backend::RouteType::Completions as i32,
+		);
+		routes_map.insert(
+			"/v1/messages".to_string(),
+			ai_backend::RouteType::Messages as i32,
+		);
+
+		let proto_backend = proto::agent::Backend {
+			name: "test/backend".to_string(),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![ai_backend::ProviderGroup {
+					providers: vec![ai_backend::Provider {
+						name: "test-provider".to_string(),
+						host_override: None,
+						path_override: None,
+						routes: routes_map,
+						provider: Some(ai_backend::provider::Provider::Openai(ai_backend::OpenAi {
+							model: None,
+						})),
+					}],
+				}],
+			})),
+		};
+
+		let backend = Backend::try_from(&proto_backend)?;
+		if let Backend::AI(name, ai_backend) = backend {
+			assert_eq!(name.as_str(), "test/backend");
+			let (provider, _handle) = ai_backend.select_provider().expect("should have provider");
+			assert_eq!(provider.routes.len(), 2);
+			// Suffix matching: paths ending with these suffixes should match
+			assert_eq!(
+				provider.resolve_route("/v1/chat/completions"),
+				llm::RouteType::Completions
+			);
+			assert_eq!(
+				provider.resolve_route("/v1/messages"),
+				llm::RouteType::Messages
+			);
+			// No match -> default to Completions
+			assert_eq!(
+				provider.resolve_route("/unknown"),
+				llm::RouteType::Completions
+			);
+			Ok(())
+		} else {
+			panic!("Expected AI backend")
 		}
 	}
 
