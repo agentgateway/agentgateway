@@ -434,32 +434,32 @@ type AIBackend_RouteType int32
 
 const (
 	// Unspecified defaults to COMPLETIONS
-	AIBackend_ROUTE_TYPE_UNSPECIFIED AIBackend_RouteType = 0
+	AIBackend_UNSPECIFIED AIBackend_RouteType = 0
 	// Processes OpenAI /v1/chat/completions format requests
-	AIBackend_ROUTE_TYPE_COMPLETIONS AIBackend_RouteType = 1
+	AIBackend_COMPLETIONS AIBackend_RouteType = 1
 	// Processes Anthropic /v1/messages format requests
-	AIBackend_ROUTE_TYPE_MESSAGES AIBackend_RouteType = 2
+	AIBackend_MESSAGES AIBackend_RouteType = 2
 	// Handles /v1/models endpoint (returns available models)
-	AIBackend_ROUTE_TYPE_MODELS AIBackend_RouteType = 3
+	AIBackend_MODELS AIBackend_RouteType = 3
 	// Sends requests to upstream as-is without LLM processing
-	AIBackend_ROUTE_TYPE_PASSTHROUGH AIBackend_RouteType = 4
+	AIBackend_PASSTHROUGH AIBackend_RouteType = 4
 )
 
 // Enum value maps for AIBackend_RouteType.
 var (
 	AIBackend_RouteType_name = map[int32]string{
-		0: "ROUTE_TYPE_UNSPECIFIED",
-		1: "ROUTE_TYPE_COMPLETIONS",
-		2: "ROUTE_TYPE_MESSAGES",
-		3: "ROUTE_TYPE_MODELS",
-		4: "ROUTE_TYPE_PASSTHROUGH",
+		0: "UNSPECIFIED",
+		1: "COMPLETIONS",
+		2: "MESSAGES",
+		3: "MODELS",
+		4: "PASSTHROUGH",
 	}
 	AIBackend_RouteType_value = map[string]int32{
-		"ROUTE_TYPE_UNSPECIFIED": 0,
-		"ROUTE_TYPE_COMPLETIONS": 1,
-		"ROUTE_TYPE_MESSAGES":    2,
-		"ROUTE_TYPE_MODELS":      3,
-		"ROUTE_TYPE_PASSTHROUGH": 4,
+		"UNSPECIFIED": 0,
+		"COMPLETIONS": 1,
+		"MESSAGES":    2,
+		"MODELS":      3,
+		"PASSTHROUGH": 4,
 	}
 )
 
@@ -6827,7 +6827,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04kind\"7\n" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\x05R\x04port\"\xab\r\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\"\xf3\f\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -6865,13 +6865,14 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"\bprovider\x1a\\\n" +
 	"\rProviderGroup\x12K\n" +
-	"\tproviders\x18\x01 \x03(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\tproviders\"\x8f\x01\n" +
-	"\tRouteType\x12\x1a\n" +
-	"\x16ROUTE_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n" +
-	"\x16ROUTE_TYPE_COMPLETIONS\x10\x01\x12\x17\n" +
-	"\x13ROUTE_TYPE_MESSAGES\x10\x02\x12\x15\n" +
-	"\x11ROUTE_TYPE_MODELS\x10\x03\x12\x1a\n" +
-	"\x16ROUTE_TYPE_PASSTHROUGH\x10\x04\"\xd2\x01\n" +
+	"\tproviders\x18\x01 \x03(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\tproviders\"X\n" +
+	"\tRouteType\x12\x0f\n" +
+	"\vUNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vCOMPLETIONS\x10\x01\x12\f\n" +
+	"\bMESSAGES\x10\x02\x12\n" +
+	"\n" +
+	"\x06MODELS\x10\x03\x12\x0f\n" +
+	"\vPASSTHROUGH\x10\x04\"\xd2\x01\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +

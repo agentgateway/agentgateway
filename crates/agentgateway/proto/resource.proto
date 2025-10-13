@@ -596,15 +596,15 @@ message AIBackend {
   // based on the URL path.
   enum RouteType {
     // Unspecified defaults to COMPLETIONS
-    ROUTE_TYPE_UNSPECIFIED = 0;
+    UNSPECIFIED = 0;
     // Processes OpenAI /v1/chat/completions format requests
-    ROUTE_TYPE_COMPLETIONS = 1;
+    COMPLETIONS = 1;
     // Processes Anthropic /v1/messages format requests
-    ROUTE_TYPE_MESSAGES = 2;
+    MESSAGES = 2;
     // Handles /v1/models endpoint (returns available models)
-    ROUTE_TYPE_MODELS = 3;
+    MODELS = 3;
     // Sends requests to upstream as-is without LLM processing
-    ROUTE_TYPE_PASSTHROUGH = 4;
+    PASSTHROUGH = 4;
   }
   message Provider {
     string name = 1;
