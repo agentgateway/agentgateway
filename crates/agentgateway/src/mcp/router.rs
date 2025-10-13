@@ -116,6 +116,7 @@ impl App {
 			req.extensions().get::<TCPConnectionInfo>().unwrap(),
 			req.extensions().get::<TLSConnectionInfo>(),
 		);
+		ctx.with_extauthz(&req);
 
 		// `response` is not valid here, since we run authz first
 		// MCP context is added later
