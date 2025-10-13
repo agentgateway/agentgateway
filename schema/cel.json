@@ -79,7 +79,7 @@
           "maximum": 65535
         },
         "body": {
-          "description": "The body of the request. Warning: accessing the body will cause the body to be buffered.",
+          "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
           "type": [
             "array",
             "string",

@@ -470,7 +470,7 @@ pub struct ResponseContext {
 	/// The HTTP status code of the response.
 	pub code: ::http::StatusCode,
 
-	/// The body of the request. Warning: accessing the body will cause the body to be buffered.
+	/// The body of the response. Warning: accessing the body will cause the body to be buffered.
 	pub body: Option<Bytes>,
 }
 

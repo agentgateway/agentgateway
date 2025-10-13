@@ -870,7 +870,7 @@ This folder contains JSON schemas for various parts of the project
 |`request.endTime`|The (pre-rendered) time the request completed|
 |`response`|`response` contains attributes about the HTTP response|
 |`response.code`|The HTTP status code of the response.|
-|`response.body`|The body of the request. Warning: accessing the body will cause the body to be buffered.|
+|`response.body`|The body of the response. Warning: accessing the body will cause the body to be buffered.|
 |`jwt`|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
 |`llm`|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
 |`llm.streaming`|Whether the LLM response is streamed.|
