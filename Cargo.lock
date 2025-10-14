@@ -232,6 +232,7 @@ dependencies = [
  "tracing-subscriber",
  "typespec_client_core",
  "url",
+ "urlencoding",
  "value-bag",
  "which 8.0.0",
  "wiremock",
