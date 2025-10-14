@@ -453,6 +453,27 @@ impl Backend {
 			Backend::Invalid => strng::format!("invalid"),
 		}
 	}
+
+	pub fn backend_type(&self) -> &'static str {
+		match self {
+			Backend::AI(_, _) => "ai",
+			Backend::MCP(_, _) => "mcp",
+			_ => "other",
+		}
+	}
+
+	pub fn backend_info(&self) -> BackendInfo {
+		BackendInfo {
+			backend_type: self.backend_type(),
+			backend_name: self.name(),
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct BackendInfo {
+	pub backend_type: &'static str,
+	pub backend_name: BackendName,
 }
 
 pub type BackendName = Strng;
@@ -1189,6 +1210,24 @@ impl Display for Target {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn test_backend_type_categorization() {
+		let opaque_backend = Backend::Opaque(
+			strng::new("test-opaque"),
+			crate::types::agent::Target::Hostname(strng::new("example.com"), 443),
+		);
+		assert_eq!(opaque_backend.backend_type(), "other");
+		assert_eq!(opaque_backend.backend_info().backend_type, "other");
+
+		let invalid_backend = Backend::Invalid;
+		assert_eq!(invalid_backend.backend_type(), "other");
+		assert_eq!(invalid_backend.backend_info().backend_type, "other");
+
+		let info = opaque_backend.backend_info();
+		assert_eq!(info.backend_type, "other");
+		assert_eq!(info.backend_name, strng::new("test-opaque"));
+	}
 
 	#[test]
 	fn test_parse_key_ec_p256() {

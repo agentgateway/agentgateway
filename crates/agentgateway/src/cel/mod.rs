@@ -20,6 +20,7 @@ use crate::llm;
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::serdes::*;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::agent::BackendInfo;
 use crate::types::discovery::Identity;
 
 mod functions;
@@ -49,6 +50,7 @@ pub const REQUEST_BODY_ATTRIBUTE: &str = "request.body";
 pub const LLM_ATTRIBUTE: &str = "llm";
 pub const LLM_PROMPT_ATTRIBUTE: &str = "llm.prompt";
 pub const LLM_COMPLETION_ATTRIBUTE: &str = "llm.completion";
+pub const BACKEND_ATTRIBUTE: &str = "backend";
 pub const RESPONSE_ATTRIBUTE: &str = "response";
 pub const RESPONSE_BODY_ATTRIBUTE: &str = "response.body";
 pub const JWT_ATTRIBUTE: &str = "jwt";
@@ -252,6 +254,16 @@ impl ContextBuilder {
 		r.prompt = Some(msg);
 	}
 
+	pub fn with_backend(&mut self, backend_info: &BackendInfo) {
+		if !self.attributes.contains(BACKEND_ATTRIBUTE) {
+			return;
+		}
+		self.context.backend = Some(BackendContext {
+			name: backend_info.backend_name.as_str().to_string(),
+			backend_type: backend_info.backend_type.to_string(),
+		});
+	}
+
 	pub fn with_llm_response(&mut self, info: &LLMInfo) {
 		if !self.attributes.contains(LLM_ATTRIBUTE) {
 			return;
@@ -293,6 +305,7 @@ impl ContextBuilder {
 			llm,
 			source,
 			mcp: _,
+			backend,
 			extauthz,
 		} = &self.context;
 
@@ -300,6 +313,7 @@ impl ContextBuilder {
 		ctx.add_variable_from_value(RESPONSE_ATTRIBUTE, opt_to_value(response)?);
 		ctx.add_variable_from_value(JWT_ATTRIBUTE, opt_to_value(jwt)?);
 		ctx.add_variable_from_value(MCP_ATTRIBUTE, opt_to_value(&mcp)?);
+		ctx.add_variable_from_value(BACKEND_ATTRIBUTE, opt_to_value(backend)?);
 		ctx.add_variable_from_value(LLM_ATTRIBUTE, opt_to_value(llm)?);
 		ctx.add_variable_from_value(SOURCE_ATTRIBUTE, opt_to_value(source)?);
 		ctx.add_variable_from_value(EXTAUTHZ_ATTRIBUTE, opt_to_value(extauthz)?);
@@ -428,6 +442,8 @@ pub struct ExpressionContext {
 	/// `mcp` contains attributes about the MCP request.
 	// This is only included for schema generation; see build_with_mcp.
 	pub mcp: Option<crate::mcp::ResourceType>,
+	/// `backend` contains information about the backend being used.
+	pub backend: Option<BackendContext>,
 	/// `extauthz` contains dynamic metadata from ext_authz filters
 	pub extauthz: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
@@ -502,6 +518,14 @@ pub struct IdentityContext {
 	namespace: Strng,
 	/// The service account of the identity.
 	service_account: Strng,
+}
+
+#[apply(schema_ser!)]
+pub struct BackendContext {
+	/// The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.
+	pub name: String,
+	/// The type of backend. For example, `ai`, `mcp`, or `other`.
+	pub backend_type: String,
 }
 
 #[apply(schema_ser!)]

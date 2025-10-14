@@ -16,7 +16,7 @@ use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
-	BackendName, BindName, GatewayName, ListenerName, RouteName, RouteRuleName, Target,
+	BackendInfo, BindName, GatewayName, ListenerName, RouteName, RouteRuleName, Target,
 };
 use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
@@ -383,6 +383,13 @@ impl DropOnLog {
 				gen_ai_system: llm_response.request.provider.clone().into(),
 				gen_ai_request_model: llm_response.request.request_model.clone().into(),
 				gen_ai_response_model: llm_response.response.provider_model.clone().into(),
+				backend_type: log
+					.backend_info
+					.as_ref()
+					.map(|info| info.backend_type)
+					.unwrap_or("")
+					.to_string()
+					.into(),
 				custom: custom_metric_fields.clone(),
 				route: route_identifier.clone(),
 			});
@@ -463,7 +470,7 @@ impl RequestLog {
 			listener_name: None,
 			route_rule_name: None,
 			route_name: None,
-			backend_name: None,
+			backend_info: None,
 			host: None,
 			method: None,
 			path: None,
@@ -507,7 +514,7 @@ pub struct RequestLog {
 	pub listener_name: Option<ListenerName>,
 	pub route_rule_name: Option<RouteRuleName>,
 	pub route_name: Option<RouteName>,
-	pub backend_name: Option<BackendName>,
+	pub backend_info: Option<BackendInfo>,
 
 	pub host: Option<String>,
 	pub method: Option<::http::Method>,
@@ -579,7 +586,20 @@ impl Drop for DropOnLog {
 		};
 
 		let mut http_labels = HTTPLabels {
-			backend: (&log.backend_name).into(),
+			backend: log
+				.backend_info
+				.as_ref()
+				.map(|info| info.backend_name.as_str())
+				.unwrap_or("")
+				.to_string()
+				.into(),
+			backend_type: log
+				.backend_info
+				.as_ref()
+				.map(|info| info.backend_type)
+				.unwrap_or("")
+				.to_string()
+				.into(),
 			route: route_identifier.clone(),
 			method: log.method.clone().into(),
 			status: log.status.as_ref().map(|s| s.as_u16()).into(),
@@ -662,6 +682,13 @@ impl Drop for DropOnLog {
 					resource_type: mcp.resource.into(),
 					server: mcp.target_name.as_ref().map(RichStrng::from).into(),
 					resource: mcp.resource_name.as_ref().map(RichStrng::from).into(),
+					backend_type: log
+						.backend_info
+						.as_ref()
+						.map(|info| info.backend_type)
+						.unwrap_or("")
+						.to_string()
+						.into(),
 
 					route: route_identifier.clone(),
 					custom: custom_metric_fields.clone(),
@@ -705,6 +732,22 @@ impl Drop for DropOnLog {
 			("span.id", span_id.display()),
 			("jwt.sub", log.jwt_sub.display()),
 			("a2a.method", log.a2a_method.display()),
+			(
+				"backend",
+				log
+					.backend_info
+					.as_ref()
+					.map(|info| info.backend_name.as_str())
+					.map(|s| s.into()),
+			),
+			(
+				"backend_type",
+				log
+					.backend_info
+					.as_ref()
+					.map(|info| info.backend_type)
+					.map(|s| s.into()),
+			),
 			(
 				"mcp.method",
 				mcp

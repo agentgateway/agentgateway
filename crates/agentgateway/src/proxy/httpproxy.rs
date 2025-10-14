@@ -392,6 +392,10 @@ impl HTTPProxy {
 			log.cel.ctx().with_request_body(body);
 		}
 
+		if let Some(backend_info) = &log.backend_info {
+			log.cel.ctx().with_backend(backend_info);
+		}
+
 		let trace_parent = trc::TraceParent::from_request(&req);
 		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
 		if trace_sampled {
@@ -962,7 +966,10 @@ async fn make_backend_call(
 		},
 		_ => {},
 	};
-	log.add(|l| l.endpoint = Some(backend_call.target.clone()));
+	log.add(|l| {
+		l.endpoint = Some(backend_call.target.clone());
+		l.backend_info = Some(backend.backend_info());
+	});
 
 	let policies = match backend_call.default_policies.clone() {
 		Some(def) => def.merge(policies),
