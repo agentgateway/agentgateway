@@ -1,7 +1,6 @@
+use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-use rand::prelude::IndexedRandom;
 
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, httpproxy};
@@ -78,7 +77,6 @@ impl TCPProxy {
 			.and_then(|tls| tls.server_name.as_deref());
 
 		let selected_listener = self.selected_listener.clone();
-		let _upstream = self.inputs.upstream.clone();
 		let inputs = self.inputs.clone();
 		let bind_name = self.bind_name.clone();
 		debug!(bind=%bind_name, "route for bind");

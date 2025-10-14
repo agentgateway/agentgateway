@@ -117,9 +117,9 @@ enum LocalListenerProtocol {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-struct LocalTLSServerConfig {
-	cert: PathBuf,
-	key: PathBuf,
+pub struct LocalTLSServerConfig {
+	pub cert: PathBuf,
+	pub key: PathBuf,
 }
 
 #[apply(schema_de!)]
@@ -781,17 +781,17 @@ async fn convert_listener(
 			if routes.is_none() {
 				bail!("protocol HTTPS requires 'routes'")
 			}
-			ListenerProtocol::HTTPS(convert_tls_server(
-				tls.ok_or(anyhow!("HTTPS listener requires 'tls'"))?,
-			)?)
+			ListenerProtocol::HTTPS(
+				tls
+					.ok_or(anyhow!("HTTPS listener requires 'tls'"))?
+					.try_into()?,
+			)
 		},
 		LocalListenerProtocol::TLS => {
 			if tcp_routes.is_none() {
 				bail!("protocol TLS requires 'tcpRoutes'")
 			}
-			ListenerProtocol::TLS(convert_tls_server(
-				tls.ok_or(anyhow!("TLS listener requires 'tls'"))?,
-			)?)
+			ListenerProtocol::TLS(tls.map(TryInto::try_into).transpose()?)
 		},
 		LocalListenerProtocol::TCP => {
 			if tcp_routes.is_none() {
@@ -1190,21 +1190,25 @@ fn to_simple_backend_and_ref(
 	(bref, backend)
 }
 
-fn convert_tls_server(tls: LocalTLSServerConfig) -> anyhow::Result<TLSConfig> {
-	let cert = fs_err::read(tls.cert)?;
-	let cert_chain = crate::types::agent::parse_cert(&cert)?;
-	let key = fs_err::read(tls.key)?;
-	let private_key = crate::types::agent::parse_key(&key)?;
+impl TryInto<TLSConfig> for LocalTLSServerConfig {
+	type Error = anyhow::Error;
 
-	let mut ccb = ServerConfig::builder_with_provider(transport::tls::provider())
-		.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-		.expect("server config must be valid")
-		.with_no_client_auth()
-		.with_single_cert(cert_chain, private_key)?;
-	ccb.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-	Ok(TLSConfig {
-		config: Arc::new(ccb),
-	})
+	fn try_into(self) -> Result<TLSConfig, Self::Error> {
+		let cert = fs_err::read(self.cert)?;
+		let cert_chain = crate::types::agent::parse_cert(&cert)?;
+		let key = fs_err::read(self.key)?;
+		let private_key = crate::types::agent::parse_key(&key)?;
+
+		let mut ccb = ServerConfig::builder_with_provider(transport::tls::provider())
+			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
+			.expect("server config must be valid")
+			.with_no_client_auth()
+			.with_single_cert(cert_chain, private_key)?;
+		ccb.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+		Ok(TLSConfig {
+			config: Arc::new(ccb),
+		})
+	}
 }
 
 #[apply(schema_de!)]

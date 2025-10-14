@@ -727,6 +727,14 @@ impl Drop for DropOnLog {
 				log.status.as_ref().map(|s| s.as_u16().into()),
 			),
 			("grpc.status", grpc.map(Into::into)),
+			(
+				"tls.sni",
+				if log.host.is_none() {
+					log.tls_info.as_ref().and_then(|s| s.server_name.display())
+				} else {
+					None
+				},
+			),
 			("trace.id", trace_id.display()),
 			("span.id", span_id.display()),
 			("jwt.sub", log.jwt_sub.display()),

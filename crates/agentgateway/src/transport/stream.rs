@@ -8,6 +8,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 use std::time::Instant;
 
+use crate::telemetry::metrics::{Metrics as TelemetryMetrics, TCPLabels};
+use crate::transport::rewind;
+use crate::transport::rewind::RewindSocket;
+use crate::types::discovery::Identity;
 use agent_hbone::RWStream;
 use hyper_util::client::legacy::connect::{Connected, Connection};
 use prometheus_client::metrics::counter::Atomic;
@@ -15,9 +19,6 @@ use tokio::io::{AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tracing::event;
-
-use crate::telemetry::metrics::{Metrics as TelemetryMetrics, TCPLabels};
-use crate::types::discovery::Identity;
 
 #[derive(Debug, Clone)]
 pub struct TCPConnectionInfo {
@@ -45,7 +46,7 @@ impl From<&[u8]> for Alpn {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct TLSConnectionInfo {
 	pub src_identity: Option<Identity>,
 	pub server_name: Option<String>,
@@ -126,8 +127,27 @@ impl hyper_util_fork::client::legacy::connect::Connection for Socket {
 }
 
 impl Socket {
+	pub fn new_rewind(st: SocketType) -> RewindSocket {
+		RewindSocket::new(st)
+	}
 	pub fn into_parts(self) -> (Extension, Metrics, SocketType) {
 		(self.ext, self.metrics, self.inner)
+	}
+
+	pub fn from_rewind(ext: Extension, metrics: Metrics, socket: RewindSocket) -> Socket {
+		Self {
+			ext,
+			inner: SocketType::Rewind(Box::new(socket)),
+			metrics,
+		}
+	}
+
+	pub fn from_parts(ext: Extension, metrics: Metrics, socket: SocketType) -> Socket {
+		Self {
+			ext,
+			inner: socket,
+			metrics,
+		}
 	}
 
 	pub fn set_transport_metrics(
@@ -254,6 +274,7 @@ impl Socket {
 
 pub enum SocketType {
 	Tcp(TcpStream),
+	Rewind(Box<rewind::RewindSocket>),
 	Tls(Box<TlsStream<Box<SocketType>>>),
 	Hbone(RWStream),
 	Memory(DuplexStream),
@@ -268,6 +289,7 @@ impl AsyncRead for SocketType {
 	) -> Poll<std::io::Result<()>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_read(cx, buf),
+			SocketType::Rewind(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Tls(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Memory(inner) => Pin::new(inner).poll_read(cx, buf),
@@ -283,6 +305,7 @@ impl AsyncWrite for SocketType {
 	) -> Poll<Result<usize, std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_write(cx, buf),
+			SocketType::Rewind(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Tls(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Memory(inner) => Pin::new(inner).poll_write(cx, buf),
@@ -293,6 +316,7 @@ impl AsyncWrite for SocketType {
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_flush(cx),
+			SocketType::Rewind(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Tls(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Memory(inner) => Pin::new(inner).poll_flush(cx),
@@ -303,6 +327,7 @@ impl AsyncWrite for SocketType {
 	fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_shutdown(cx),
+			SocketType::Rewind(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Tls(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Memory(inner) => Pin::new(inner).poll_shutdown(cx),
@@ -317,6 +342,7 @@ impl AsyncWrite for SocketType {
 	) -> Poll<Result<usize, std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
+			SocketType::Rewind(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Tls(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Memory(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
@@ -327,6 +353,7 @@ impl AsyncWrite for SocketType {
 	fn is_write_vectored(&self) -> bool {
 		match &self {
 			SocketType::Tcp(inner) => inner.is_write_vectored(),
+			SocketType::Rewind(inner) => inner.is_write_vectored(),
 			SocketType::Tls(inner) => inner.is_write_vectored(),
 			SocketType::Hbone(inner) => inner.is_write_vectored(),
 			SocketType::Memory(inner) => inner.is_write_vectored(),

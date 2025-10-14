@@ -187,11 +187,14 @@ impl TryFrom<(proto::agent::Protocol, Option<&proto::agent::TlsConfig>)> for Lis
 					.try_into()
 					.map_err(|e| ProtoError::Generic(format!("{e}")))?,
 			)),
-			(Protocol::Tls, Some(tls)) => Ok(ListenerProtocol::TLS(
+			// TLS termination
+			(Protocol::Tls, Some(tls)) => Ok(ListenerProtocol::TLS(Some(
 				tls
 					.try_into()
 					.map_err(|e| ProtoError::Generic(format!("{e}")))?,
-			)),
+			))),
+			// TLS passthrough
+			(Protocol::Tls, None) => Ok(ListenerProtocol::TLS(None)),
 			(Protocol::Tcp, None) => Ok(ListenerProtocol::TCP),
 			(Protocol::Hbone, None) => Ok(ListenerProtocol::HBONE),
 			(proto, tls) => Err(ProtoError::Generic(format!(
@@ -272,7 +275,6 @@ impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
 			route_name: strng::new(&s.route_name),
 			rule_name: default_as_none(s.rule_name.as_str()).map(strng::new),
 			hostnames: s.hostnames.iter().map(strng::new).collect(),
-			// TODO
 			matches: s
 				.matches
 				.iter()

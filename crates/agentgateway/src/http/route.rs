@@ -1,9 +1,8 @@
+use agent_core::strng;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-use agent_core::strng;
 
 use crate::http::Request;
 use crate::types::agent;

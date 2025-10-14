@@ -99,9 +99,13 @@ pub fn parse_key(mut key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error
 }
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum ListenerProtocol {
+	/// HTTP
 	HTTP,
+	/// HTTPS, terminating TLS then treating as HTTP
 	HTTPS(TLSConfig),
-	TLS(TLSConfig),
+	/// TLS (passthrough or termination)
+	TLS(Option<TLSConfig>),
+	/// Opaque TCP
 	TCP,
 	HBONE,
 }
@@ -109,7 +113,8 @@ pub enum ListenerProtocol {
 impl ListenerProtocol {
 	pub fn tls(&self) -> Option<Arc<rustls::ServerConfig>> {
 		match self {
-			ListenerProtocol::HTTPS(t) | ListenerProtocol::TLS(t) => Some(t.config.clone()),
+			ListenerProtocol::HTTPS(t) => Some(t.config.clone()),
+			ListenerProtocol::TLS(t) => t.as_ref().map(|t| t.config.clone()),
 			_ => None,
 		}
 	}

@@ -1,7 +1,6 @@
-use std::convert::Infallible;
 use std::fmt::Debug;
-use std::future::Ready;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant, SystemTime};
@@ -16,12 +15,15 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use itertools::Itertools;
 use prometheus_client::registry::Registry;
+use rustls_pki_types::ServerName;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::DuplexStream;
+use tokio_rustls::TlsConnector;
 use tracing::{info, trace};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
 use crate::llm::AIProvider;
 use crate::proxy::Gateway;
@@ -242,13 +244,14 @@ pub struct TestBind {
 
 #[derive(Debug, Clone)]
 pub struct MemoryConnector {
+	tls_config: Option<BackendTLS>,
 	io: Arc<Mutex<Option<DuplexStream>>>,
 }
 
 impl tower::Service<Uri> for MemoryConnector {
 	type Response = TokioIo<Socket>;
-	type Error = Infallible;
-	type Future = Ready<Result<Self::Response, Self::Error>>;
+	type Error = crate::http::Error;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
 	fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		Poll::Ready(Ok(()))
@@ -266,7 +269,25 @@ impl tower::Service<Uri> for MemoryConnector {
 				start: Instant::now(),
 			},
 		);
-		std::future::ready(Ok(TokioIo::new(io)))
+		if let Some(tls_config) = self.tls_config.clone() {
+			Box::pin(async move {
+				let (ext, counter, inner) = io.into_parts();
+				let tls = TlsConnector::from(tls_config.config)
+					.connect(
+						tls_config
+							.hostname_override
+							// This is basically "send no SNI", since IP is not a valid SNI
+							.unwrap_or(ServerName::try_from("127.0.0.1").map_err(crate::http::Error::new)?),
+						Box::new(inner),
+					)
+					.await
+					.map_err(crate::http::Error::new)?;
+				let socket = Socket::from_tls(ext, counter, tls.into()).map_err(crate::http::Error::new)?;
+				Ok(TokioIo::new(socket))
+			})
+		} else {
+			Box::pin(async move { Ok(TokioIo::new(io)) })
+		}
 	}
 }
 
@@ -371,6 +392,31 @@ impl TestBind {
 		::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
 			.build(MemoryConnector {
+				tls_config: None,
+				io: Arc::new(Mutex::new(Some(io))),
+			})
+	}
+	pub fn serve_https(
+		&self,
+		bind_name: BindName,
+		sni: Option<&str>,
+	) -> Client<MemoryConnector, Body> {
+		let io = self.serve(bind_name);
+		let tls: BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
+			cert: None,
+			key: None,
+			root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
+			hostname: sni.map(|s| s.to_string()),
+			insecure: false,
+			insecure_host: true,
+			alpn: None,
+		}
+		.try_into()
+		.unwrap();
+		::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
+			.timer(TokioTimer::new())
+			.build(MemoryConnector {
+				tls_config: Some(tls),
 				io: Arc::new(Mutex::new(Some(io))),
 			})
 	}
@@ -381,6 +427,7 @@ impl TestBind {
 			.timer(TokioTimer::new())
 			.http2_only(true)
 			.build(MemoryConnector {
+				tls_config: None,
 				io: Arc::new(Mutex::new(Some(io))),
 			})
 	}

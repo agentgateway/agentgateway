@@ -275,25 +275,24 @@ impl Gateway {
 			},
 			BindProtocol::tcp => Self::proxy_tcp(bind_name, inputs, None, raw_stream, drain).await,
 			BindProtocol::tls => {
-				let Ok((selected_listener, stream)) =
-					Self::terminate_tls(inputs.clone(), raw_stream, bind_name.clone()).await
-				else {
-					warn!("failed to terminate TLS");
-					// TODO: log
-					return;
-				};
-				Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
+				match Self::maybe_terminate_tls(inputs.clone(), raw_stream, bind_name.clone()).await {
+					Ok((selected_listener, stream)) => {
+						Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
+					},
+					Err(e) => {
+						warn!("failed to terminate TLS: {e}");
+					},
+				}
 			},
 			BindProtocol::https => {
-				let (selected_listener, stream) =
-					match Self::terminate_tls(inputs.clone(), raw_stream, bind_name.clone()).await {
-						Ok(res) => res,
-						Err(e) => {
-							warn!("failed to terminate HTTPS: {e}");
-							return;
-						},
-					};
-				let _ = Self::proxy(bind_name, inputs, Some(selected_listener), stream, drain).await;
+				match Self::maybe_terminate_tls(inputs.clone(), raw_stream, bind_name.clone()).await {
+					Ok((selected_listener, stream)) => {
+						let _ = Self::proxy(bind_name, inputs, Some(selected_listener), stream, drain).await;
+					},
+					Err(e) => {
+						warn!("failed to terminate TLS: {e}");
+					},
+				}
 			},
 			BindProtocol::hbone => {
 				let _ = Self::terminate_hbone(bind_name, inputs, raw_stream, drain).await;
@@ -406,7 +405,10 @@ impl Gateway {
 		proxy.proxy(stream).await
 	}
 
-	async fn terminate_tls(
+	// maybe_terminate_tls will observe the TLS handshake, and once the client hello has been received, select
+	// a listener (based on SNI).
+	// Based on the listener, it will passthrough the TLS or terminate it with the appropriate configuration.
+	async fn maybe_terminate_tls(
 		inp: Arc<ProxyInputs>,
 		raw_stream: Socket,
 		bind: BindName,
@@ -414,37 +416,54 @@ impl Gateway {
 		let to = inp.cfg.listener.tls_handshake_timeout;
 		let handshake = async move {
 			let listeners = inp.stores.read_binds().listeners(bind.clone()).unwrap();
-			let (ext, counter, inner) = raw_stream.into_parts();
+			let (mut ext, counter, inner) = raw_stream.into_parts();
+			let inner = Socket::new_rewind(inner);
 			let acceptor =
-				tokio_rustls::LazyConfigAcceptor::new(rustls::server::Acceptor::default(), Box::new(inner));
+				tokio_rustls::LazyConfigAcceptor::new(rustls::server::Acceptor::default(), inner);
 			let tls_start = std::time::Instant::now();
-			let start = acceptor.await?;
+			let mut start = acceptor.await?;
 			let ch = start.client_hello();
+			let sni = ch.server_name().unwrap_or_default();
 			let best = listeners
-				.best_match(ch.server_name().unwrap_or_default())
-				.ok_or(anyhow!("no TLS listener match"))?;
-			let cfg = best.protocol.tls().unwrap();
-			let tls = start.into_stream(cfg).await?;
-			let tls_dur = tls_start.elapsed();
-			// TLS handshake duration
-			let protocol = if matches!(best.protocol, ListenerProtocol::HTTPS(_)) {
-				BindProtocol::https
-			} else {
-				BindProtocol::tls
-			};
-			if inp.metrics.enable_connect_duration_metrics {
-				inp
-					.metrics
-					.tls_handshake_duration
-					.get_or_create(&TCPLabels {
-						bind: Some(&bind).into(),
-						gateway: Some(&best.gateway_name).into(),
-						listener: Some(&best.name).into(),
-						protocol,
-					})
-					.observe(tls_dur.as_secs_f64());
+				.best_match(sni)
+				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
+			match best.protocol.tls() {
+				Some(cfg) => {
+					let tokio_rustls::StartHandshake { accepted, io, .. } = start;
+					let start = tokio_rustls::StartHandshake::from_parts(accepted, Box::new(io.discard()));
+					let tls = start.into_stream(cfg).await?;
+					let tls_dur = tls_start.elapsed();
+					// TLS handshake duration
+					let protocol = if matches!(best.protocol, ListenerProtocol::HTTPS(_)) {
+						BindProtocol::https
+					} else {
+						BindProtocol::tls
+					};
+					if inp.metrics.enable_connect_duration_metrics {
+						inp
+							.metrics
+							.tls_handshake_duration
+							.get_or_create(&TCPLabels {
+								bind: Some(&bind).into(),
+								gateway: Some(&best.gateway_name).into(),
+								listener: Some(&best.name).into(),
+								protocol,
+							})
+							.observe(tls_dur.as_secs_f64());
+					}
+					Ok((best, Socket::from_tls(ext, counter, tls.into())?))
+				},
+				None => {
+					let sni = sni.to_string();
+					// Passthrough
+					start.io.rewind();
+					ext.insert(TLSConnectionInfo {
+						server_name: Some(sni),
+						..Default::default()
+					});
+					Ok((best, Socket::from_rewind(ext, counter, start.io)))
+				},
 			}
-			Ok((best, Socket::from_tls(ext, counter, tls.into())?))
 		};
 		tokio::time::timeout(to, handshake).await?
 	}

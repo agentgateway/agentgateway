@@ -5,12 +5,14 @@ use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
-	PathMatch, Policy, PolicyTarget, Route, RouteFilter, RouteMatch, TargetedPolicy,
+	Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, Policy, PolicyTarget, Route,
+	RouteFilter, RouteMatch, RouteSet, TargetedPolicy,
 };
 use crate::*;
 use ::http::StatusCode;
 use ::http::{Method, Version};
 use agent_core::strng;
+use assert_matches::assert_matches;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::Rng;
@@ -217,6 +219,50 @@ async fn direct_response() {
 			.as_bytes(),
 		b"hello"
 	);
+}
+
+#[tokio::test]
+async fn tls_termination() {
+	let mock = simple_mock().await;
+	let route = basic_route(*mock.address());
+	let bind = Bind {
+		key: BIND_KEY,
+		// not really used
+		address: "127.0.0.1:0".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			gateway_name: Default::default(),
+			hostname: strng::new("*.example.com"),
+			protocol: ListenerProtocol::HTTPS(
+				types::local::LocalTLSServerConfig {
+					cert: "../../examples/tls/certs/cert.pem".into(),
+					key: "../../examples/tls/certs/key.pem".into(),
+				}
+				.try_into()
+				.unwrap(),
+			),
+			tcp_routes: Default::default(),
+			routes: RouteSet::from_list(vec![route]),
+		}]),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(bind);
+
+	let io = t.serve_https(strng::new("bind"), Some("a.example.com"));
+	let res = RequestBuilder::new(Method::GET, "http://lo")
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+
+	// This one should fail since it doesn't match the SNI.
+	let io = t.serve_https(strng::new("bind"), Some("not-the-domain"));
+	let res = RequestBuilder::new(Method::GET, "http://lo").send(io).await;
+	assert_matches!(res, Err(_));
 }
 
 async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value) {
