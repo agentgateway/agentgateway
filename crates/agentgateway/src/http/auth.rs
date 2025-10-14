@@ -137,9 +137,17 @@ pub async fn apply_backend_auth(
 			}
 		},
 		BackendAuth::Gcp {} => {
-			let token = gcp::get_token()
-				.await
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
+			// Generate ID token with audience = URL base of the backend
+			let audience = {
+				let host = crate::http::get_host(&req).unwrap_or_default();
+				format!("https://{}", host)
+			};
+			let token = match gcp::get_id_token_for_audience(&audience).await {
+				Ok(hv) => hv,
+				Err(_) => gcp::get_token()
+					.await
+					.map_err(ProxyError::BackendAuthenticationFailed)?,
+			};
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
 		BackendAuth::Aws(_) => {
@@ -201,6 +209,29 @@ mod gcp {
 			.ok_or(anyhow!("no authorization header"))?;
 		hv.set_sensitive(true);
 		trace!("attached GCP token");
+		Ok(hv)
+	}
+
+	// Id token for gcp audience is required. Use metadata server.
+	pub async fn get_id_token_for_audience(audience: &str) -> anyhow::Result<HeaderValue> {
+		use reqwest::Client;
+		let url = format!(
+			"http://metadata/computeMetadata/v1/instance/service-accounts/default/identity?audience={}",
+			urlencoding::encode(audience)
+		);
+		let client = Client::new();
+		let resp = client
+			.get(url)
+			.header("Metadata-Flavor", "Google")
+			.send()
+			.await?;
+		if !resp.status().is_success() {
+			anyhow::bail!("failed to fetch id token from metadata server: {}", resp.status());
+		}
+		let token = resp.text().await?;
+		let mut hv = HeaderValue::from_str(&format!("Bearer {}", token))?;
+		hv.set_sensitive(true);
+		trace!("attached GCP id_token audience={}", audience);
 		Ok(hv)
 	}
 	// What a terrible API... the older versions of this crate were usable but pulled in legacy dependency

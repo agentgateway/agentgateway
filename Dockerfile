@@ -6,7 +6,7 @@ WORKDIR /app
 
 COPY ui .
 
-RUN --mount=type=cache,target=/app/npm/cache npm install
+RUN --mount=type=cache,target=/app/npm/cache npm ci
 
 RUN --mount=type=cache,target=/app/npm/cache npm run build
 
