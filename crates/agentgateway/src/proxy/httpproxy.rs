@@ -20,6 +20,7 @@ use types::discovery::*;
 use crate::client::Transport;
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::ExtProcRequest;
+use crate::http::filters::AutoHostname;
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
 	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
@@ -521,6 +522,8 @@ impl HTTPProxy {
 		)
 		.await?;
 
+		// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite
+		req.extensions_mut().insert(AutoHostname());
 		apply_request_filters(
 			selected_route.as_ref().filters.as_slice(),
 			&path_match,
