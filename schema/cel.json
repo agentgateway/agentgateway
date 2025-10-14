@@ -402,6 +402,48 @@
         }
       ]
     },
+    "backend": {
+      "description": "`backend` contains information about the backend being used.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "name": {
+          "description": "The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.",
+          "type": "string"
+        },
+        "type": {
+          "description": "The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.",
+          "type": "string",
+          "enum": [
+            "ai",
+            "mcp",
+            "static",
+            "dynamic",
+            "service",
+            "unknown"
+          ]
+        },
+        "protocol": {
+          "description": "The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.",
+          "type": "string",
+          "enum": [
+            "http",
+            "tcp",
+            "a2a",
+            "mcp",
+            "llm"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type",
+        "protocol"
+      ]
+    },
     "extauthz": {
       "description": "`extauthz` contains dynamic metadata from ext_authz filters",
       "type": [

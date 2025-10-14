@@ -13,6 +13,7 @@ use cel::objects::Key;
 use cel::{Context, ExecutionError, ParseError, ParseErrors, Program};
 pub use functions::{FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_MAP_RECURSIVE};
 use once_cell::sync::Lazy;
+use prometheus_client::encoding::EncodeLabelValue;
 use serde::{Serialize, Serializer};
 
 use crate::http::jwt::Claims;
@@ -63,6 +64,7 @@ pub const ALL_ATTRIBUTES: &[&str] = &[
 	LLM_ATTRIBUTE,
 	LLM_PROMPT_ATTRIBUTE,
 	LLM_COMPLETION_ATTRIBUTE,
+	BACKEND_ATTRIBUTE,
 	RESPONSE_ATTRIBUTE,
 	RESPONSE_BODY_ATTRIBUTE,
 	JWT_ATTRIBUTE,
@@ -254,13 +256,14 @@ impl ContextBuilder {
 		r.prompt = Some(msg);
 	}
 
-	pub fn with_backend(&mut self, backend_info: &BackendInfo) {
+	pub fn with_backend(&mut self, backend_info: &BackendInfo, backend_protocol: BackendProtocol) {
 		if !self.attributes.contains(BACKEND_ATTRIBUTE) {
 			return;
 		}
 		self.context.backend = Some(BackendContext {
-			name: backend_info.backend_name.as_str().to_string(),
-			backend_type: backend_info.backend_type.to_string(),
+			name: backend_info.backend_name.clone(),
+			backend_type: backend_info.backend_type,
+			protocol: backend_protocol,
 		});
 	}
 
@@ -523,9 +526,35 @@ pub struct IdentityContext {
 #[apply(schema_ser!)]
 pub struct BackendContext {
 	/// The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.
-	pub name: String,
-	/// The type of backend. For example, `ai`, `mcp`, or `other`.
-	pub backend_type: String,
+	pub name: Strng,
+	/// The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.
+	#[serde(rename = "type")]
+	pub backend_type: BackendType,
+	/// The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.
+	pub protocol: BackendProtocol,
+}
+
+#[derive(Copy, PartialEq, Eq, Hash, Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum BackendType {
+	AI,
+	MCP,
+	Static,
+	Dynamic,
+	Service,
+	Unknown,
+}
+
+#[derive(Copy, PartialEq, Eq, Hash, EncodeLabelValue, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[allow(non_camel_case_types)]
+pub enum BackendProtocol {
+	http,
+	tcp,
+	a2a,
+	mcp,
+	llm,
 }
 
 #[apply(schema_ser!)]

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::mcp::MCPOperation;
 use crate::proxy::ProxyResponseReason;
 use crate::types::agent::BindProtocol;
-use agent_core::metrics::{CustomField, DefaultedUnknown, EncodeArc, EncodeDisplay};
+use agent_core::metrics::{CustomField, DefaultedUnknown, EncodeArc, EncodeDebug, EncodeDisplay};
 use agent_core::strng::RichStrng;
 use agent_core::version;
 use prometheus_client::encoding::EncodeLabelSet;
@@ -25,7 +25,7 @@ pub struct RouteIdentifier {
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct HTTPLabels {
 	pub backend: DefaultedUnknown<RichStrng>,
-	pub backend_type: DefaultedUnknown<RichStrng>,
+	pub protocol: DefaultedUnknown<EncodeDebug<crate::cel::BackendProtocol>>,
 
 	pub method: DefaultedUnknown<EncodeDisplay<http::Method>>,
 	pub status: DefaultedUnknown<EncodeDisplay<u16>>,
@@ -44,7 +44,6 @@ pub struct GenAILabels {
 	pub gen_ai_system: DefaultedUnknown<RichStrng>,
 	pub gen_ai_request_model: DefaultedUnknown<RichStrng>,
 	pub gen_ai_response_model: DefaultedUnknown<RichStrng>,
-	pub backend_type: DefaultedUnknown<RichStrng>,
 
 	#[prometheus(flatten)]
 	pub route: RouteIdentifier,
@@ -68,7 +67,6 @@ pub struct MCPCall {
 	pub resource_type: DefaultedUnknown<MCPOperation>,
 	pub server: DefaultedUnknown<RichStrng>,
 	pub resource: DefaultedUnknown<RichStrng>,
-	pub backend_type: DefaultedUnknown<RichStrng>,
 
 	#[prometheus(flatten)]
 	pub route: RouteIdentifier,

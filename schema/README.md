@@ -910,4 +910,8 @@ This folder contains JSON schemas for various parts of the project
 |`mcp.(any)(1)resource`||
 |`mcp.(any)(1)resource.target`|The target of the resource|
 |`mcp.(any)(1)resource.name`|The name of the resource|
+|`backend`|`backend` contains information about the backend being used.|
+|`backend.name`|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
+|`backend.type`|The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.|
+|`backend.protocol`|The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.|
 |`extauthz`|`extauthz` contains dynamic metadata from ext_authz filters|

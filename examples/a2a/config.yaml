@@ -1,4 +1,11 @@
 # yaml-language-server: $schema=../../schema/local.json
+config:
+  logging:
+    format: json
+    #    filter: 'response.code != 500'
+    fields:
+      add:
+        backend: backend
 binds:
 - port: 3000
   listeners:

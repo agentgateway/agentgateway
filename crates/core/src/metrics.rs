@@ -1,4 +1,4 @@
-use std::fmt::{Display, Error, Write};
+use std::fmt::{Debug, Display, Error, Write};
 use std::mem;
 use std::sync::Arc;
 
@@ -212,6 +212,28 @@ impl<T: Display> From<T> for EncodeDisplay<T> {
 impl<T: Display> From<Option<T>> for DefaultedUnknown<EncodeDisplay<T>> {
 	fn from(t: Option<T>) -> Self {
 		DefaultedUnknown(t.map(EncodeDisplay::from))
+	}
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+// EncodeDebug is a wrapper around a type that will be encoded with display
+pub struct EncodeDebug<T>(T);
+
+impl<T: Debug> EncodeLabelValue for EncodeDebug<T> {
+	fn encode(&self, writer: &mut LabelValueEncoder) -> Result<(), std::fmt::Error> {
+		write!(writer, "{:?}", self.0)
+	}
+}
+
+impl<T: Debug> From<T> for EncodeDebug<T> {
+	fn from(value: T) -> Self {
+		EncodeDebug(value)
+	}
+}
+
+impl<T: Debug> From<Option<T>> for DefaultedUnknown<EncodeDebug<T>> {
+	fn from(t: Option<T>) -> Self {
+		DefaultedUnknown(t.map(EncodeDebug::from))
 	}
 }
 

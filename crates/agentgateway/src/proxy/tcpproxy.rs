@@ -56,6 +56,7 @@ impl TCPProxy {
 		log: &mut RequestLog,
 	) -> Result<(), ProxyError> {
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
+		log.backend_protocol = Some(cel::BackendProtocol::tcp);
 		self
 			.inputs
 			.metrics
@@ -112,7 +113,14 @@ impl TCPProxy {
 			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
+
+		let bi = selected_backend.backend.backend_info();
+		if let Some(bp) = log.backend_protocol {
+			log.cel.ctx().with_backend(&bi, bp)
+		}
 		log.endpoint = Some(backend_call.target.clone());
+		log.backend_info = Some(bi);
+
 		let policies =
 			inputs
 				.stores

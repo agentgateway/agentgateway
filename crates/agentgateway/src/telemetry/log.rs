@@ -383,13 +383,6 @@ impl DropOnLog {
 				gen_ai_system: llm_response.request.provider.clone().into(),
 				gen_ai_request_model: llm_response.request.request_model.clone().into(),
 				gen_ai_response_model: llm_response.response.provider_model.clone().into(),
-				backend_type: log
-					.backend_info
-					.as_ref()
-					.map(|info| info.backend_type)
-					.unwrap_or("")
-					.to_string()
-					.into(),
 				custom: custom_metric_fields.clone(),
 				route: route_identifier.clone(),
 			});
@@ -471,6 +464,7 @@ impl RequestLog {
 			route_rule_name: None,
 			route_name: None,
 			backend_info: None,
+			backend_protocol: None,
 			host: None,
 			method: None,
 			path: None,
@@ -515,6 +509,7 @@ pub struct RequestLog {
 	pub route_rule_name: Option<RouteRuleName>,
 	pub route_name: Option<RouteName>,
 	pub backend_info: Option<BackendInfo>,
+	pub backend_protocol: Option<cel::BackendProtocol>,
 
 	pub host: Option<String>,
 	pub method: Option<::http::Method>,
@@ -585,21 +580,15 @@ impl Drop for DropOnLog {
 			route_rule: (&log.route_rule_name).into(),
 		};
 
+		let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
+
 		let mut http_labels = HTTPLabels {
 			backend: log
 				.backend_info
 				.as_ref()
-				.map(|info| info.backend_name.as_str())
-				.unwrap_or("")
-				.to_string()
+				.map(|info| info.backend_name.clone())
 				.into(),
-			backend_type: log
-				.backend_info
-				.as_ref()
-				.map(|info| info.backend_type)
-				.unwrap_or("")
-				.to_string()
-				.into(),
+			protocol: log.backend_protocol.into(),
 			route: route_identifier.clone(),
 			method: log.method.clone().into(),
 			status: log.status.as_ref().map(|s| s.as_u16()).into(),
@@ -614,7 +603,9 @@ impl Drop for DropOnLog {
 		let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
 		if !maybe_enable_log && !enable_trace && !enable_custom_metrics {
 			// Report our non-customized metrics
-			log.metrics.requests.get_or_create(&http_labels).inc();
+			if !is_tcp {
+				log.metrics.requests.get_or_create(&http_labels).inc();
+			}
 			return;
 		}
 
@@ -659,7 +650,9 @@ impl Drop for DropOnLog {
 				}),
 		);
 		http_labels.custom = custom_metric_fields.clone();
-		log.metrics.requests.get_or_create(&http_labels).inc();
+		if !is_tcp {
+			log.metrics.requests.get_or_create(&http_labels).inc();
+		}
 
 		Self::add_llm_metrics(
 			&log,
@@ -682,13 +675,6 @@ impl Drop for DropOnLog {
 					resource_type: mcp.resource.into(),
 					server: mcp.target_name.as_ref().map(RichStrng::from).into(),
 					resource: mcp.resource_name.as_ref().map(RichStrng::from).into(),
-					backend_type: log
-						.backend_info
-						.as_ref()
-						.map(|info| info.backend_type)
-						.unwrap_or("")
-						.to_string()
-						.into(),
 
 					route: route_identifier.clone(),
 					custom: custom_metric_fields.clone(),
@@ -731,23 +717,8 @@ impl Drop for DropOnLog {
 			("trace.id", trace_id.display()),
 			("span.id", span_id.display()),
 			("jwt.sub", log.jwt_sub.display()),
+			("protocol", log.backend_protocol.as_ref().map(debug)),
 			("a2a.method", log.a2a_method.display()),
-			(
-				"backend",
-				log
-					.backend_info
-					.as_ref()
-					.map(|info| info.backend_name.as_str())
-					.map(|s| s.into()),
-			),
-			(
-				"backend_type",
-				log
-					.backend_info
-					.as_ref()
-					.map(|info| info.backend_type)
-					.map(|s| s.into()),
-			),
 			(
 				"mcp.method",
 				mcp
