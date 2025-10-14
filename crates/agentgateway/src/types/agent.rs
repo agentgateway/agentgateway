@@ -1244,11 +1244,17 @@ mod tests {
 			crate::types::agent::Target::Hostname(strng::new("example.com"), 443),
 		);
 		assert_eq!(opaque_backend.backend_type(), cel::BackendType::Static);
-		assert_eq!(opaque_backend.backend_info().backend_type, cel::BackendType::Static);
+		assert_eq!(
+			opaque_backend.backend_info().backend_type,
+			cel::BackendType::Static
+		);
 
 		let invalid_backend = Backend::Invalid;
 		assert_eq!(invalid_backend.backend_type(), cel::BackendType::Unknown);
-		assert_eq!(invalid_backend.backend_info().backend_type, cel::BackendType::Unknown);
+		assert_eq!(
+			invalid_backend.backend_info().backend_type,
+			cel::BackendType::Unknown
+		);
 
 		let info = opaque_backend.backend_info();
 		assert_eq!(info.backend_name, strng::new("test-opaque"));
