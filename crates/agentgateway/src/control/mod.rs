@@ -88,9 +88,19 @@ impl fmt::Debug for AuthSourceLoaderInner {
 	}
 }
 
-#[derive(serde::Serialize, Clone, Debug)]
+#[derive(serde::Serialize, Debug)]
 pub struct AuthSourceLoader {
 	inner: Option<AuthSourceLoaderInner>,
+	#[serde(skip)]
+	drop_notifier: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+impl Drop for AuthSourceLoader {
+	fn drop(&mut self) {
+		if let Some(tx) = self.drop_notifier.take() {
+			let _ = tx.send(());
+		}
+	}
 }
 
 impl AuthSourceLoader {
@@ -112,10 +122,17 @@ impl AuthSourceLoader {
 						current_token.as_slice(),
 					)))),
 				};
+				let (tx, mut rx) = tokio::sync::oneshot::channel();
 				let token_pointer = ret.current_token.clone();
 				tokio::spawn(async move {
 					loop {
-						interval.tick().await;
+						tokio::select! {
+							_ = &mut rx => {
+								// Received shutdown signal
+								return;
+							}
+							_ = interval.tick() => {}
+						}
 						let new_token = match Self::load_token(&path).await {
 							Ok(t) => t,
 							Err(e) => {
@@ -131,7 +148,7 @@ impl AuthSourceLoader {
 						}
 					}
 				});
-				AuthSourceLoader { inner: Some(ret) }
+				AuthSourceLoader { inner: Some(ret), drop_notifier: Some(tx) }
 			},
 			AuthSource::StaticToken(token, cluster_id) => AuthSourceLoader {
 				inner: Some(AuthSourceLoaderInner {
@@ -140,8 +157,9 @@ impl AuthSourceLoader {
 						token.expose_secret().as_bytes(),
 					)))),
 				}),
+				drop_notifier: None,
 			},
-			AuthSource::None => AuthSourceLoader { inner: None },
+			AuthSource::None => AuthSourceLoader { inner: None , drop_notifier: None},
 		})
 	}
 
