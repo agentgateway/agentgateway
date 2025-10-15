@@ -388,6 +388,7 @@ impl TryFrom<Backend> for SimpleBackend {
 	}
 }
 
+#[derive(Eq, PartialEq)]
 #[apply(schema_ser!)]
 pub enum SimpleBackendReference {
 	Service { name: NamespacedHostname, port: u16 },

@@ -110,8 +110,13 @@ pub enum BackendAuth {
 	Azure(AzureAuth),
 }
 
+pub struct BackendInfo<'a> {
+	pub name: &'a str,
+	pub inputs: Arc<ProxyInputs>,
+}
+
 pub async fn apply_backend_auth(
-	client: &client::Client,
+	backend_info: &BackendInfo<'_>,
 	auth: Option<&BackendAuth>,
 	req: &mut Request,
 ) -> Result<(), ProxyError> {
@@ -146,7 +151,7 @@ pub async fn apply_backend_auth(
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
 		},
 		BackendAuth::Azure(azure_auth) => {
-			let token = azure::get_token(client, azure_auth)
+			let token = azure::get_token(&backend_info.inputs.upstream, azure_auth)
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);

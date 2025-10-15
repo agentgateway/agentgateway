@@ -149,7 +149,7 @@ impl<'de> Deserialize<'de> for NetworkAddress {
 	}
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Hash, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Workload {
 	pub workload_ips: Vec<IpAddr>,
@@ -406,7 +406,7 @@ pub enum InboundProtocol {
 	LegacyIstioMtls,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Service {
 	pub name: Strng,

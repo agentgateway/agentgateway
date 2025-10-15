@@ -128,6 +128,26 @@ pub mod serde_dur_option {
 	}
 }
 
+pub mod serde_uri {
+	use http::Uri;
+
+	use serde::{Deserialize, Deserializer, Serializer};
+
+	pub fn serialize<S: Serializer>(t: &Uri, serializer: S) -> Result<S::Ok, S::Error> {
+		serializer.serialize_str(&t.to_string())
+	}
+
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Uri, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let input = String::deserialize(deserializer)?;
+		input
+			.try_into()
+			.map_err(|e| serde::de::Error::custom(format!("failed to parse URI: {e:?}")))
+	}
+}
+
 pub fn ser_display_option<S: Serializer, T: Display>(
 	t: &Option<T>,
 	serializer: S,

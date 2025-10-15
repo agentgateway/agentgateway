@@ -71,7 +71,7 @@ impl Policy {
 
 	pub async fn apply_prompt_guard(
 		&self,
-		client: &client::Client,
+		backend_info: &auth::BackendInfo<'_>,
 		req: &mut dyn RequestType,
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
@@ -79,6 +79,7 @@ impl Policy {
 		let Some(g) = self.prompt_guard.as_ref().and_then(|g| g.request.as_ref()) else {
 			return Ok(None);
 		};
+		let client = &backend_info.inputs.upstream;
 		if let Some(moderation) = &g.openai_moderation {
 			let model = moderation
 				.model
@@ -101,7 +102,7 @@ impl Policy {
 				"input": content,
 				"model": model,
 			}))?))?;
-			auth::apply_backend_auth(client, Some(&auth), &mut req).await?;
+			auth::apply_backend_auth(backend_info, Some(&auth), &mut req).await?;
 			let resp = client.simple_call(req).await?;
 			let resp: async_openai::types::CreateModerationResponse =
 				json::from_response_body(resp).await?;

@@ -126,6 +126,9 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 				};
 				BackendAuth::Azure(azure_auth)
 			},
+			Some(proto::agent::backend_auth_policy::Kind::Extension(_)) => {
+				return Err(ProtoError::MissingRequiredField);
+			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}

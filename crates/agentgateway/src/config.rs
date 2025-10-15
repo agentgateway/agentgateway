@@ -44,7 +44,9 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		.map(ConfigSource::File);
 
 	let (resolver_cfg, resolver_opts) = hickory_resolver::system_conf::read_system_conf()?;
-
+	let cluster: String = parse("CLUSTER_ID")?
+		.or(raw.cluster_id.clone())
+		.unwrap_or("Kubernetes".to_string());
 	let xds = {
 		let address = validate_uri(empty_to_none(parse("XDS_ADDRESS")?).or(raw.xds_address))?;
 		// if local_config.is_none() && address.is_none() {
@@ -62,9 +64,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		} else {
 			("".to_string(), "".to_string())
 		};
-		let cluster: String = parse("CLUSTER_ID")?
-			.or(raw.cluster_id.clone())
-			.unwrap_or("Kubernetes".to_string());
+
 		let tok = parse("XDS_AUTH_TOKEN")?.or(raw.xds_auth_token);
 		let auth = match tok {
 			None => {
@@ -129,9 +129,6 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		let sa = parse("SERVICE_ACCOUNT")?
 			.or(raw.service_account)
 			.context("SERVICE_ACCOUNT is required")?;
-		let cluster: String = parse("CLUSTER_ID")?
-			.or(raw.cluster_id)
-			.unwrap_or("Kubernetes".to_string());
 		let tok = parse("CA_AUTH_TOKEN")?.or(raw.ca_auth_token);
 		let auth = match tok {
 			None => {

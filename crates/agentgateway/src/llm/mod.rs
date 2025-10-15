@@ -222,11 +222,7 @@ impl AIProvider {
 		let btls = BackendPolicies {
 			backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 			// We will use original request for now
-			backend_auth: None,
-			a2a: None,
-			inference_routing: None,
-			llm_provider: None,
-			llm: None,
+			..Default::default()
 		};
 		match self {
 			AIProvider::OpenAI(_) => (Target::Hostname(openai::DEFAULT_HOST, 443), btls),
@@ -235,10 +231,7 @@ impl AIProvider {
 				let bp = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(BackendAuth::Gcp {}),
-					a2a: None,
-					inference_routing: None,
-					llm_provider: None,
-					llm: None,
+					..Default::default()
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
@@ -247,10 +240,7 @@ impl AIProvider {
 				let bp = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {})),
-					a2a: None,
-					inference_routing: None,
-					llm_provider: None,
-					llm: None,
+					..Default::default()
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
@@ -340,7 +330,7 @@ impl AIProvider {
 
 	pub async fn process_completions_request(
 		&self,
-		client: &client::Client,
+		backend_info: &crate::http::auth::BackendInfo<'_>,
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
@@ -377,7 +367,7 @@ impl AIProvider {
 
 		self
 			.process_request(
-				client,
+				backend_info,
 				policies,
 				InputFormat::Completions,
 				req,
@@ -390,7 +380,7 @@ impl AIProvider {
 
 	pub async fn process_messages_request(
 		&self,
-		client: &client::Client,
+		backend_info: &crate::http::auth::BackendInfo<'_>,
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
@@ -415,7 +405,7 @@ impl AIProvider {
 
 		self
 			.process_request(
-				client,
+				backend_info,
 				policies,
 				InputFormat::Messages,
 				req,
@@ -429,7 +419,7 @@ impl AIProvider {
 	#[allow(clippy::too_many_arguments)]
 	async fn process_request(
 		&self,
-		client: &client::Client,
+		backend_info: &crate::http::auth::BackendInfo<'_>,
 		policies: Option<&Policy>,
 		original_format: InputFormat,
 		mut req: impl RequestType,
@@ -466,7 +456,7 @@ impl AIProvider {
 			let http_headers = &parts.headers;
 			let claims = parts.extensions.get::<Claims>().cloned();
 			if let Some(dr) = p
-				.apply_prompt_guard(client, &mut req, http_headers, claims)
+				.apply_prompt_guard(backend_info, &mut req, http_headers, claims)
 				.await
 				.map_err(|e| {
 					warn!("failed to call prompt guard webhook: {e}");
