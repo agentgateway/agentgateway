@@ -8,6 +8,7 @@ use http::Method;
 use itertools::Itertools;
 use rmcp::transport::StreamableHttpServerConfig;
 use tracing::warn;
+use url::Url;
 
 use crate::cel::ContextBuilder;
 use crate::http::jwt::Claims;
@@ -123,11 +124,11 @@ impl App {
 		req.extensions_mut().insert(Arc::new(ctx));
 
 		// Check if authentication is required and JWT token is missing
-		if let Some(_) = &authn
+		if let Some(auth) = &authn
 			&& req.extensions().get::<Claims>().is_none()
 			&& !Self::is_well_known_endpoint(req.uri().path())
 		{
-			return Self::create_auth_required_response(&req).into_response();
+			return Self::create_auth_required_response(&req, auth).into_response();
 		}
 
 		match (req.uri().path(), req.method(), authn) {
@@ -209,9 +210,31 @@ pub struct McpTarget {
 }
 
 impl App {
-	fn create_auth_required_response(req: &Request) -> Response {
+	fn create_auth_required_response(req: &Request, auth: &McpAuthentication) -> Response {
 		let request_path = req.uri().path();
-		let proxy_url = Self::get_redirect_url(req, request_path);
+        let proxy_url = if let Some(serde_json::Value::String(resource_url)) =
+            auth.resource_metadata.extra.get("resource")
+        {
+            // Extract the base URL from the resource URL
+            if let Ok(parsed_url) = Url::parse(resource_url) {
+                let scheme = parsed_url.scheme();
+                let host = parsed_url.host_str().unwrap_or("");
+
+                // Include port if it's explicitly set (not a default port)
+                match parsed_url.port() {
+                    Some(port) => format!("{}://{}:{}", scheme, host, port),
+                    None => format!("{}://{}", scheme, host),
+                }
+            } else {
+                // Fallback to the original method if parsing fails
+                Self::get_redirect_url(req, request_path)
+            }
+
+        } else {
+            // Fallback to the original method if resource is not configured
+            Self::get_redirect_url(req, request_path)
+        };
+        
 		let www_authenticate_value = format!(
 			"Bearer resource_metadata=\"{proxy_url}/.well-known/oauth-protected-resource{request_path}\""
 		);
