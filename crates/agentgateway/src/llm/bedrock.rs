@@ -6,6 +6,7 @@ use chrono;
 use itertools::Itertools;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::time::Instant;
 use tracing::trace;
 
@@ -87,6 +88,15 @@ impl Provider {
 		} else {
 			strng::format!("/model/{model}/converse")
 		}
+	}
+
+	pub fn get_count_tokens_path(&self, model: &str) -> Strng {
+		let model = if model.is_empty() {
+			self.model.as_deref().unwrap_or(model)
+		} else {
+			model
+		};
+		strng::format!("/model/{model}/count-tokens")
 	}
 
 	pub fn get_host(&self) -> Strng {
@@ -879,6 +889,110 @@ pub(super) fn translate_request_messages(
 	};
 
 	Ok(bedrock_request)
+}
+
+pub(super) fn translate_count_tokens_request(
+	req: anthropic::CountTokensRequest,
+	anthropic_version: &str,
+) -> Result<types::CountTokensRequest, AIError> {
+	use base64::Engine;
+
+	let mut body = req.rest;
+
+	body
+		.entry("max_tokens")
+		.or_insert(serde_json::Value::Number(1.into()));
+	body
+		.entry("anthropic_version")
+		.or_insert(serde_json::Value::String(anthropic_version.into()));
+
+	let body_json = serde_json::to_vec(&body).map_err(AIError::RequestMarshal)?;
+	let body_b64 = base64::engine::general_purpose::STANDARD.encode(&body_json);
+
+	Ok(types::CountTokensRequest {
+		input: types::CountTokensInputInvokeModel {
+			invoke_model: types::InvokeModelBody { body: body_b64 },
+		},
+	})
+}
+
+pub async fn process_count_tokens_request(
+	provider: &Provider,
+	req: crate::http::Request,
+	policies: Option<&crate::llm::policy::Policy>,
+) -> Result<crate::http::Request, AIError> {
+	use crate::http;
+
+	let buffer_limit = http::buffer_limit(&req);
+	let (parts, body) = req.into_parts();
+	let Ok(bytes) = http::read_body_with_limit(body, buffer_limit).await else {
+		return Err(AIError::RequestTooLarge);
+	};
+
+	let anthropic_version = parts
+		.headers
+		.get("anthropic-version")
+		.and_then(|v| v.to_str().ok())
+		.unwrap_or("2023-06-01");
+
+	let mut count_req: anthropic::CountTokensRequest =
+		serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+
+	if let Some(p) = policies
+		&& let Some(aliased) = p.model_aliases.get(count_req.model.as_str())
+	{
+		count_req.model = aliased.to_string();
+	}
+
+	let model = count_req.model.clone();
+
+	let bedrock_req = translate_count_tokens_request(count_req, anthropic_version)?;
+	let new_body = serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)?;
+
+	let mut req = crate::http::Request::from_parts(parts, new_body.into());
+
+	http::modify_req(&mut req, |req| {
+		http::modify_uri(req, |uri| {
+			let path = provider.get_count_tokens_path(&model);
+			uri.path_and_query = Some(http::uri::PathAndQuery::from_str(&path)?);
+			Ok(())
+		})
+	})
+	.map_err(|e: anyhow::Error| {
+		AIError::UnsupportedConversion(strng::format!("failed to set path: {}", e))
+	})?;
+
+	Ok(req)
+}
+
+pub fn translate_count_tokens_response(bedrock_bytes: &[u8]) -> Result<Vec<u8>, AIError> {
+	let resp: types::CountTokensResponse =
+		serde_json::from_slice(bedrock_bytes).map_err(AIError::ResponseParsing)?;
+	serde_json::to_vec(&resp).map_err(AIError::ResponseMarshal)
+}
+
+pub async fn process_count_tokens_response(
+	resp: crate::http::Response,
+) -> Result<crate::http::Response, anyhow::Error> {
+	use crate::http;
+
+	let (parts, body) = resp.into_parts();
+	let bytes = http::read_body_with_limit(body, 2_097_152).await?;
+
+	if parts.status.is_success() {
+		let response_bytes = translate_count_tokens_response(&bytes)
+			.map_err(|e| anyhow::anyhow!("Failed to translate count_tokens response: {}", e))?;
+
+		let mut parts = parts;
+		parts.headers.remove(http::header::CONTENT_LENGTH);
+
+		Ok(crate::http::Response::from_parts(
+			parts,
+			response_bytes.into(),
+		))
+	} else {
+		Ok(crate::http::Response::from_parts(parts, bytes.into()))
+	}
 }
 
 pub(super) fn translate_response_to_messages(
@@ -1707,6 +1821,28 @@ pub(super) mod types {
 		/// Performance configuration.
 		#[serde(rename = "performanceConfig", skip_serializing_if = "Option::is_none")]
 		pub performance_config: Option<PerformanceConfiguration>,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	pub struct CountTokensRequest {
+		pub input: CountTokensInputInvokeModel,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	#[serde(rename_all = "camelCase")]
+	pub struct CountTokensInputInvokeModel {
+		pub invoke_model: InvokeModelBody,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	pub struct InvokeModelBody {
+		pub body: String,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	pub struct CountTokensResponse {
+		#[serde(alias = "inputTokens")]
+		pub input_tokens: i32,
 	}
 
 	#[derive(Clone, Serialize, Debug)]

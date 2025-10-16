@@ -967,6 +967,13 @@ pub(super) mod types {
 		Disabled {},
 	}
 
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	pub struct CountTokensRequest {
+		pub model: String,
+		#[serde(flatten)]
+		pub rest: serde_json::Map<String, serde_json::Value>,
+	}
+
 	/// Response body for the Messages API.
 	#[derive(Debug, Serialize, Deserialize, Clone)]
 	pub struct MessagesResponse {
