@@ -481,13 +481,15 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
-		let mut route_policies = inputs.stores.read_binds().route_policies(
-			selected_route.rule_name.clone(),
-			selected_route.route_name.clone(),
-			selected_listener.key.clone(),
-			selected_listener.gateway_name.clone(),
-			&selected_route.inline_policies,
-		);
+		let mut route_policies = {
+			inputs.stores.read_binds().route_policies(
+				selected_route.rule_name.clone(),
+				selected_route.route_name.clone(),
+				selected_listener.key.clone(),
+				selected_listener.gateway_name.clone(),
+				&selected_route.inline_policies,
+			)
+		};
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 
@@ -876,11 +878,12 @@ async fn make_backend_call(
 		}
 	});
 
-	let policies =
+	let policies = {
 		inputs
 			.stores
 			.read_binds()
-			.backend_policies(backend.name(), service, sub_backend.clone());
+			.backend_policies(backend.name(), service, sub_backend.clone())
+	};
 
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
 	let (override_dest, ext_proc_resp) = maybe_inference.mutate_request(&mut req).await?;
@@ -971,6 +974,15 @@ async fn make_backend_call(
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
 
+	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
+	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
+	let backend_name = backend.name();
+	let backend_info = auth::BackendInfo {
+		name: backend_name.as_str(),
+		inputs: inputs.clone(),
+	};
+	auth::apply_backend_auth(&backend_info, policies.backend_auth.as_ref(), &mut req).await?;
+
 	match backend_call.http_version_override {
 		Some(::http::Version::HTTP_2) => {
 			req.headers_mut().remove(http::header::TRANSFER_ENCODING);
@@ -992,8 +1004,6 @@ async fn make_backend_call(
 
 	let route_policies = route_policies.merge_backend_policies(policies.llm.clone());
 
-	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
-	auth::apply_backend_auth(&client, policies.backend_auth.as_ref(), &mut req).await?;
 	let a2a_type = a2a::apply_to_request(policies.a2a.as_ref(), &mut req).await;
 	if let a2a::RequestType::Call(method) = a2a_type {
 		log.add(|l| {
@@ -1022,7 +1032,7 @@ async fn make_backend_call(
 					llm
 						.provider
 						.process_completions_request(
-							&client,
+							&backend_info,
 							route_policies.llm.as_deref(),
 							req,
 							llm.tokenize,
@@ -1034,7 +1044,7 @@ async fn make_backend_call(
 					llm
 						.provider
 						.process_messages_request(
-							&client,
+							&backend_info,
 							route_policies.llm.as_deref(),
 							req,
 							llm.tokenize,
