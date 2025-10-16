@@ -1,20 +1,18 @@
-use std::env;
-use std::fmt::Debug;
-
 use crate::mcp::MCPOperation;
 use crate::proxy::ProxyResponseReason;
 use crate::types::agent::BindProtocol;
 use agent_core::metrics::{CustomField, DefaultedUnknown, EncodeArc, EncodeDebug, EncodeDisplay};
 use agent_core::strng::RichStrng;
 use agent_core::version;
+use frozen_collections::FzHashSet;
 use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram::Histogram as PromHistogram;
 use prometheus_client::metrics::info::Info;
-use prometheus_client::registry::{Registry, Unit};
-
-const ENV_ENABLE_CONNECT_DURATION_METRICS: &str = "ENABLE_CONNECT_DURATION_METRICS";
+use prometheus_client::registry::{Metric, Registry, Unit};
+use std::fmt::Debug;
+use tracing::{debug, trace};
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct RouteIdentifier {
@@ -119,13 +117,78 @@ pub struct Metrics {
 
 	pub upstream_connect_duration: Histogram<ConnectLabels>,
 	pub tls_handshake_duration: Histogram<TCPLabels>,
+}
 
-	// Feature flag controlling emission of connect/tls duration histograms
-	pub enable_connect_duration_metrics: bool,
+// FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
+// Note: this currently only excludes them from the registry, but the underlying metrics are still
+// stored. This can result in memory cost, etc to store the labels.
+// A more robust future solution would be to have a sort of `Disabled` metric that does not store;
+// note that even still, we would be computing the labels (and then dropping them), but in many cases
+// the same labels are shared by many metrics, and are cheap to construct, so likely not a major concern.
+struct FilteredRegistry<'a> {
+	registry: &'a mut Registry,
+	removes: FzHashSet<String>,
+}
+
+impl<'a> FilteredRegistry<'a> {
+	fn should_skip(&self, name: &str, unit: Option<&Unit>) -> bool {
+		let mut names = vec![
+			name.to_string(),
+			format!("{}_total", name),
+			format!("{}_{}_total", agent_core::metrics::PREFIX, name),
+			format!("{}_{}", agent_core::metrics::PREFIX, name),
+		];
+		if let Some(unit) = unit {
+			names.extend_from_slice(&[
+				format!("{}_{}", name, unit.as_str()),
+				format!("{}_{}_total", name, unit.as_str()),
+				format!(
+					"{}_{}_{}_total",
+					agent_core::metrics::PREFIX,
+					name,
+					unit.as_str()
+				),
+				format!("{}_{}_{}", agent_core::metrics::PREFIX, name, unit.as_str()),
+			])
+		}
+
+		for n in names.into_iter() {
+			let exclude = self.removes.contains(&n);
+			trace!(name = n, exclude, "check metric for exclusion");
+			if exclude {
+				return true;
+			}
+		}
+		false
+	}
+	fn register(&mut self, name: impl Into<String>, help: impl Into<String>, metric: impl Metric) {
+		let name = name.into();
+		if self.should_skip(&name, None) {
+			debug!("skip register metric: {}", name);
+			return;
+		}
+		self.registry.register(name, help, metric);
+	}
+
+	fn register_with_unit(
+		&mut self,
+		name: impl Into<String>,
+		help: impl Into<String>,
+		unit: Unit,
+		metric: impl Metric,
+	) {
+		let name = name.into();
+		if self.should_skip(&name, Some(&unit)) {
+			debug!("skip register metric: {}_{}", name, unit.as_str());
+			return;
+		}
+		self.registry.register_with_unit(name, help, unit, metric);
+	}
 }
 
 impl Metrics {
-	pub fn new(registry: &mut Registry) -> Self {
+	pub fn new(registry: &mut Registry, removes: FzHashSet<String>) -> Self {
+		let mut registry = FilteredRegistry { registry, removes };
 		registry.register(
 			"build",
 			"Agentgateway build information",
@@ -173,17 +236,21 @@ impl Metrics {
 
 		Metrics {
 			requests: build(
-				registry,
+				&mut registry,
 				"requests",
 				"The total number of HTTP requests sent",
 			),
 			downstream_connection: build(
-				registry,
+				&mut registry,
 				"downstream_connections",
 				"The total number of downstream connections established",
 			),
 
-			mcp_requests: build(registry, "mcp_requests", "Total number of MCP tool calls"),
+			mcp_requests: build(
+				&mut registry,
+				"mcp_requests",
+				"Total number of MCP tool calls",
+			),
 
 			gen_ai_token_usage,
 			gen_ai_request_duration,
@@ -244,16 +311,12 @@ impl Metrics {
 				);
 				m
 			},
-			enable_connect_duration_metrics: match env::var(ENV_ENABLE_CONNECT_DURATION_METRICS) {
-				Ok(v) => matches!(v.as_str(), "1" | "true" | "TRUE" | "True"),
-				Err(_) => false,
-			},
 		}
 	}
 }
 
-fn build<T: Clone + std::hash::Hash + Eq + Send + Sync + Debug + EncodeLabelSet + 'static>(
-	registry: &mut Registry,
+fn build<'a, T: Clone + std::hash::Hash + Eq + Send + Sync + Debug + EncodeLabelSet + 'static>(
+	registry: &mut FilteredRegistry<'a>,
 	name: &str,
 	help: &str,
 ) -> Family<T, counter::Counter> {

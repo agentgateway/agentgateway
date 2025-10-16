@@ -266,6 +266,13 @@
             "null"
           ],
           "properties": {
+            "remove": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
             "fields": {
               "type": [
                 "object",

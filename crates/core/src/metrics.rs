@@ -12,9 +12,11 @@ use tracing_core::field::Value;
 
 use crate::strng::{RichStrng, Strng};
 
+pub const PREFIX: &str = "agentgateway";
+
 /// Creates a metrics sub registry for agentgateway.
 pub fn sub_registry(registry: &mut Registry) -> &mut Registry {
-	registry.sub_registry_with_prefix("agentgateway")
+	registry.sub_registry_with_prefix(PREFIX)
 }
 
 pub struct Deferred<'a, F, T>

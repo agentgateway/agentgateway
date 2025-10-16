@@ -296,6 +296,8 @@ pub enum LoggingFormat {
 
 #[apply(schema_de!)]
 pub struct RawMetrics {
+	#[serde(default)]
+	remove: Vec<String>,
 	fields: Option<RawMetricFields>,
 }
 

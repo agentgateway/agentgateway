@@ -439,18 +439,16 @@ impl Gateway {
 					} else {
 						BindProtocol::tls
 					};
-					if inp.metrics.enable_connect_duration_metrics {
-						inp
-							.metrics
-							.tls_handshake_duration
-							.get_or_create(&TCPLabels {
-								bind: Some(&bind).into(),
-								gateway: Some(&best.gateway_name).into(),
-								listener: Some(&best.name).into(),
-								protocol,
-							})
-							.observe(tls_dur.as_secs_f64());
-					}
+					inp
+						.metrics
+						.tls_handshake_duration
+						.get_or_create(&TCPLabels {
+							bind: Some(&bind).into(),
+							gateway: Some(&best.gateway_name).into(),
+							listener: Some(&best.name).into(),
+							protocol,
+						})
+						.observe(tls_dur.as_secs_f64());
 					Ok((best, Socket::from_tls(ext, counter, tls.into())?))
 				},
 				None => {

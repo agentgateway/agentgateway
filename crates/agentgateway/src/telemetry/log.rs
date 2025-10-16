@@ -85,6 +85,7 @@ pub struct Config {
 	pub filter: Option<Arc<cel::Expression>>,
 	pub fields: Arc<LoggingFields>,
 	pub metric_fields: Arc<MetricFields>,
+	pub excluded_metrics: FzHashSet<String>,
 	pub level: String,
 	pub format: crate::LoggingFormat,
 }
@@ -94,6 +95,7 @@ pub struct LoggingFields {
 	pub remove: FzHashSet<String>,
 	pub add: OrderedStringMap<Arc<cel::Expression>>,
 }
+
 #[derive(serde::Serialize, Default, Clone, Debug)]
 pub struct MetricFields {
 	pub add: OrderedStringMap<Arc<cel::Expression>>,

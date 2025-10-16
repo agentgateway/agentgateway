@@ -41,6 +41,7 @@ This folder contains JSON schemas for various parts of the project
 |`config.logging.level`||
 |`config.logging.format`||
 |`config.metrics`||
+|`config.metrics.remove`||
 |`config.metrics.fields`||
 |`config.metrics.fields.add`||
 |`config.backend`||

@@ -71,7 +71,10 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	// Build metrics and then the upstream client with metrics wired in
 	let sub_registry = metrics::sub_registry(&mut registry);
 	let tracer = trc::Tracer::new(&config.tracing)?;
-	let metrics_handle = Arc::new(crate::metrics::Metrics::new(sub_registry));
+	let metrics_handle = Arc::new(crate::metrics::Metrics::new(
+		sub_registry,
+		config.logging.excluded_metrics.clone(),
+	));
 	let client = client::Client::new(
 		&config.dns,
 		pool,

@@ -332,6 +332,16 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 					.transpose()?
 					.unwrap_or_default(),
 			),
+			excluded_metrics: raw
+				.metrics
+				.as_ref()
+				.map(|f| {
+					f.remove
+						.clone()
+						.into_iter()
+						.collect::<frozen_collections::FzHashSet<String>>()
+				})
+				.unwrap_or_default(),
 			metric_fields: Arc::new(
 				raw
 					.metrics

@@ -303,9 +303,7 @@ impl Connector {
 		};
 
 		let connect_ms = connect_start.elapsed().as_millis();
-		if let Some(m) = &self.metrics
-			&& m.enable_connect_duration_metrics
-		{
+		if let Some(m) = &self.metrics {
 			let labels = crate::telemetry::metrics::ConnectLabels {
 				transport: agent_core::strng::RichStrng::from(transport_name).into(),
 			};
