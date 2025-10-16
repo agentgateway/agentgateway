@@ -148,7 +148,10 @@ impl AuthSourceLoader {
 						}
 					}
 				});
-				AuthSourceLoader { inner: Some(ret), drop_notifier: Some(tx) }
+				AuthSourceLoader {
+					inner: Some(ret),
+					drop_notifier: Some(tx),
+				}
 			},
 			AuthSource::StaticToken(token, cluster_id) => AuthSourceLoader {
 				inner: Some(AuthSourceLoaderInner {
@@ -159,7 +162,10 @@ impl AuthSourceLoader {
 				}),
 				drop_notifier: None,
 			},
-			AuthSource::None => AuthSourceLoader { inner: None , drop_notifier: None},
+			AuthSource::None => AuthSourceLoader {
+				inner: None,
+				drop_notifier: None,
+			},
 		})
 	}
 
