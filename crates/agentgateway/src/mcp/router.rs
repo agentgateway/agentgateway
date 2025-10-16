@@ -5,10 +5,10 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use http::Method;
+use http::uri::PathAndQuery;
 use itertools::Itertools;
 use rmcp::transport::StreamableHttpServerConfig;
 use tracing::warn;
-use url::Url;
 
 use crate::cel::ContextBuilder;
 use crate::http::jwt::Claims;
@@ -212,29 +212,21 @@ pub struct McpTarget {
 impl App {
 	fn create_auth_required_response(req: &Request, auth: &McpAuthentication) -> Response {
 		let request_path = req.uri().path();
-        let proxy_url = if let Some(serde_json::Value::String(resource_url)) =
-            auth.resource_metadata.extra.get("resource")
-        {
-            // Extract the base URL from the resource URL
-            if let Ok(parsed_url) = Url::parse(resource_url) {
-                let scheme = parsed_url.scheme();
-                let host = parsed_url.host_str().unwrap_or("");
-
-                // Include port if it's explicitly set (not a default port)
-                match parsed_url.port() {
-                    Some(port) => format!("{}://{}:{}", scheme, host, port),
-                    None => format!("{}://{}", scheme, host),
-                }
-            } else {
-                // Fallback to the original method if parsing fails
-                Self::get_redirect_url(req, request_path)
-            }
-
-        } else {
-            // Fallback to the original method if resource is not configured
-            Self::get_redirect_url(req, request_path)
-        };
-        
+		// If the `resource` is explicitly configured, use that as the base. otherwise, derive it from the
+		// the request URL
+		let proxy_url = auth
+			.resource_metadata
+			.extra
+			.get("resource")
+			.and_then(|v| v.as_str())
+			.and_then(|u| http::uri::Uri::try_from(u).ok())
+			.and_then(|uri| {
+				let mut parts = uri.into_parts();
+				parts.path_and_query = Some(PathAndQuery::from_static(""));
+				Uri::from_parts(parts).ok()
+			})
+			.and_then(|uri| uri.to_string().strip_suffix("/").map(ToString::to_string))
+			.unwrap_or_else(|| Self::get_redirect_url(req, request_path));
 		let www_authenticate_value = format!(
 			"Bearer resource_metadata=\"{proxy_url}/.well-known/oauth-protected-resource{request_path}\""
 		);
