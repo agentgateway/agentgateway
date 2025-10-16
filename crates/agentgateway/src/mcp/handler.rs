@@ -137,8 +137,8 @@ impl Relay {
 		})
 	}
 
-	pub fn merge_initialize(&self) -> Box<MergeFn> {
-		let info = self.get_info();
+	pub fn merge_initialize(&self, pv: ProtocolVersion) -> Box<MergeFn> {
+		let info = self.get_info(pv);
 		Box::new(move |_| {
 			// For now, we just send our own info. In the future, we should merge the results from each upstream.
 			Ok(info.into())
@@ -337,9 +337,9 @@ impl Relay {
 
 		Ok(accepted_response())
 	}
-	fn get_info(&self) -> ServerInfo {
+	fn get_info(&self, pv: ProtocolVersion) -> ServerInfo {
 		ServerInfo {
-			protocol_version: ProtocolVersion::V_2025_06_18,
+			protocol_version: pv,
 			capabilities: ServerCapabilities {
 				completions: None,
 				experimental: None,

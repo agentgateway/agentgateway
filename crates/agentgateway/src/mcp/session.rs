@@ -198,10 +198,11 @@ impl Session {
 				});
 				let ctx = IncomingRequestContext::new(parts);
 				match &mut r.request {
-					ClientRequest::InitializeRequest(_) => {
+					ClientRequest::InitializeRequest(ir) => {
+						let pv = ir.params.protocol_version.clone();
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_initialize())
+							.send_fanout(r, ctx, self.relay.merge_initialize(pv))
 							.await
 					},
 					ClientRequest::ListToolsRequest(_) => {
