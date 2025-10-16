@@ -13,7 +13,8 @@ step-cli certificate create localhost \
   --ca ca-cert.pem \
   --ca-key ca-key.pem \
   --san localhost \
-  --no-password --insecure
+  --no-password --insecure \
+  --not-after 87600h # 10 years, since its just for testing
 
 echo "Done! Generated files:"
 echo "  CA: ca-key.pem, ca-cert.pem"
