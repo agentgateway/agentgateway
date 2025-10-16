@@ -4,7 +4,6 @@ package agentgateway.dev.resource;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/wrappers.proto";
-import "google/protobuf/any.proto";
 
 option go_package = "github.com/agentgateway/agentgateway/go/api;api";
 
@@ -97,7 +96,6 @@ message BackendAuthPolicy {
     Gcp gcp = 3;
     Aws aws = 4;
     Azure azure = 5;
-    google.protobuf.Any extension = 6;
   }
 }
 
