@@ -1,3 +1,15 @@
+## Quickstart (GitHub, no local install)
+
+1. Click **Code → Create codespace on main**.
+2. In the terminal:
+   cargo fmt --all
+   cargo clippy --all -- -D warnings
+   cargo test --all
+3. If you touched the UI:
+   cd ui
+   npm ci
+   npm test
+
 # Local Development
 
 This page contains instructions on how to run everything locally.
