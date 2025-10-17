@@ -371,10 +371,10 @@ export function renderExtAuthzForm({ data, onChange }: FormRendererProps) {
   return (
     <div className="space-y-6">
       <TargetInput
-        id="target"
+        id="host"
         label="Target (host:port)"
-        value={data.target}
-        onChange={(target) => onChange({ ...data, target })}
+        value={data.host}
+        onChange={(host) => onChange({ ...data, host })}
         placeholder="auth-service.example.com:8080"
         required
       />
