@@ -804,6 +804,23 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
 				})
 			},
+			Some(proto::agent::policy_spec::Kind::ExtProc(ep)) => {
+				let target = resolve_simple_reference(ep.target.as_ref())?;
+				let failure_mode =
+					match proto::agent::policy_spec::ext_proc::FailureMode::try_from(ep.failure_mode) {
+						Ok(proto::agent::policy_spec::ext_proc::FailureMode::FailOpen) => {
+							ext_proc::FailureMode::FailOpen
+						},
+						Ok(proto::agent::policy_spec::ext_proc::FailureMode::FailClosed) => {
+							ext_proc::FailureMode::FailClosed
+						},
+						_ => http::ext_proc::FailureMode::FailClosed,
+					};
+				Policy::ExtProc(ext_proc::ExtProc {
+					target: Arc::new(target),
+					failure_mode,
+				})
+			},
 			Some(proto::agent::policy_spec::Kind::ExtAuthz(ea)) => {
 				let target = resolve_simple_reference(ea.target.as_ref())?;
 				let failure_mode =

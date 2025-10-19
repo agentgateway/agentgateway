@@ -529,6 +529,15 @@ message PolicySpec {
     repeated string additional_origins = 1;
   }
 
+  message ExtProc {
+    enum FailureMode{
+      FAIL_CLOSED = 0;
+      FAIL_OPEN = 1;
+    }
+    BackendReference target = 1;
+    FailureMode failure_mode = 2;
+  }
+
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;
@@ -543,6 +552,7 @@ message PolicySpec {
     TransformationPolicy transformation = 11;
     RemoteRateLimit remote_rate_limit = 12;
     CSRF csrf = 13;
+    ExtProc ext_proc = 14;
   }
 }
 
