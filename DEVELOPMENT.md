@@ -1,4 +1,4 @@
-## Quickstart (GitHub, no local install)
+# Quickstart (GitHub, no local install)
 
 1. Click **Code → Create codespace on main**.
 2. In the terminal:
