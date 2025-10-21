@@ -320,10 +320,7 @@ impl App {
 		// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
 		let issuer = auth.issuer.trim_end_matches('/');
 		let ureq = ::http::Request::builder()
-			.uri(format!(
-				"{}/.well-known/oauth-authorization-server",
-				issuer
-			))
+			.uri(format!("{}/.well-known/oauth-authorization-server", issuer))
 			.body(Body::empty())?;
 		let upstream = client.simple_call(ureq).await?;
 		let limit = crate::http::response_buffer_limit(&upstream);
@@ -386,10 +383,7 @@ impl App {
 		// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
 		let issuer = auth.issuer.trim_end_matches('/');
 		let ureq = ::http::Request::builder()
-			.uri(format!(
-				"{}/clients-registrations/openid-connect",
-				issuer
-			))
+			.uri(format!("{}/clients-registrations/openid-connect", issuer))
 			.method(Method::POST)
 			.body(req.into_body())?;
 
