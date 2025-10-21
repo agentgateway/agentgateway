@@ -290,8 +290,8 @@ export interface McpTarget {
   name: string;
   filters?: TargetFilter[];
   // Target type - one of these will be set
-  sse?: SseTarget;
-  mcp?: McpConnectionTarget;
+  sse?: StreamHttpTarget;
+  mcp?: StreamHttpTarget;
   stdio?: StdioTarget;
   openapi?: OpenApiTarget;
 }
@@ -309,10 +309,10 @@ export interface TargetMatcher {
   Regex?: string;
 }
 
-export interface SseTarget {
+export interface StreamHttpTarget {
   host: string;
-  port: number; // uint32
-  path: string;
+  port?: number; // uint32
+  path?: string;
 }
 
 export interface StdioTarget {
@@ -337,8 +337,8 @@ export interface Target {
   name: string;
   listeners?: string[];
   filters?: TargetFilter[];
-  sse?: SseTarget;
-  mcp?: McpConnectionTarget;
+  sse?: StreamHttpTarget;
+  mcp?: StreamHttpTarget;
   openapi?: OpenApiTarget;
   stdio?: StdioTarget;
   a2a?: A2aTarget;
@@ -450,10 +450,4 @@ export type PlaygroundListener = z.infer<typeof PlaygroundListenerSchema>;
 
 export interface ListenerInfo extends Listener {
   displayEndpoint: string;
-}
-
-export interface McpConnectionTarget {
-  host: string;
-  port: number; // uint32
-  path: string;
 }

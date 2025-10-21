@@ -196,7 +196,7 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
-                                {backendContext.listener.name || "unnamed listener"}
+                                {backendContext.listener.name || "unnamed"}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -442,8 +442,7 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
             {editingBackend ? (
               <div className="p-3 bg-muted rounded-md">
                 <p className="text-sm">
-                  Port {editingBackend.bind.port} →{" "}
-                  {editingBackend.listener.name || "unnamed listener"} →{" "}
+                  Port {editingBackend.bind.port} → {editingBackend.listener.name || "unnamed"} →{" "}
                   {editingBackend.route.name || `Route ${editingBackend.routeIndex + 1}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -725,43 +724,13 @@ const McpBackendForm: React.FC<McpBackendFormProps> = ({
           {(target.type === "sse" || target.type === "mcp" || target.type === "openapi") && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Full URL *</Label>
+                <Label>URL *</Label>
                 <Input
                   value={target.fullUrl}
                   onChange={(e) => parseAndUpdateUrl(index, e.target.value)}
-                  placeholder="http://localhost:3000/api/mcp"
+                  placeholder="https://example.com/mcp"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Paste the full URL and it will be automatically parsed into host, port, and path
-                </p>
               </div>
-
-              {target.host && target.port && (
-                <div className="p-3 bg-muted/30 rounded-md">
-                  <p className="text-sm font-medium mb-2">Parsed Components:</p>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Host:</span>
-                        <span className="ml-2 font-mono">{target.host}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Port:</span>
-                        <span className="ml-2 font-mono">{target.port}</span>
-                      </div>
-                    </div>
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Path:</span>
-                      <span
-                        className="ml-2 font-mono truncate block max-w-full"
-                        title={target.path || "/"}
-                      >
-                        {target.path || "/"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 

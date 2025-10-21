@@ -1,4 +1,4 @@
-import { Route as RouteType, TcpRoute, Listener, Match, PathMatch } from "@/lib/types";
+import { Route as RouteType, TcpRoute, Listener, Match } from "@/lib/types";
 import { DEFAULT_HTTP_ROUTE_FORM, DEFAULT_TCP_ROUTE_FORM } from "./route-constants";
 
 // Helper function to determine if a listener protocol supports TCP routes
