@@ -3043,6 +3043,17 @@
                                         "stateless",
                                         "stateful"
                                       ]
+                                    },
+                                    "prefixMode": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ],
+                                      "enum": [
+                                        "always",
+                                        "conditional",
+                                        null
+                                      ]
                                     }
                                   },
                                   "additionalProperties": false,

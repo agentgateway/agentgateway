@@ -345,7 +345,14 @@ impl LocalBackend {
 					McpStatefulMode::Stateless => false,
 					McpStatefulMode::Stateful => true,
 				};
-				let m = McpBackend { targets, stateful };
+				let m = McpBackend {
+					targets,
+					stateful,
+					always_use_prefix: tgt.prefix_mode.as_ref().is_some_and(|pm| match pm {
+						McpPrefixMode::Always => true,
+						McpPrefixMode::Conditional => false,
+					}),
+				};
 				backends.push(Backend::MCP(name, m));
 				(backends, policies)
 			},
@@ -367,10 +374,20 @@ pub enum McpStatefulMode {
 }
 
 #[apply(schema_de!)]
+#[derive(Default)]
+pub enum McpPrefixMode {
+	Always,
+	#[default]
+	Conditional,
+}
+
+#[apply(schema_de!)]
 pub struct LocalMcpBackend {
 	pub targets: Vec<Arc<LocalMcpTarget>>,
 	#[serde(default)]
 	pub stateful_mode: McpStatefulMode,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub prefix_mode: Option<McpPrefixMode>,
 }
 
 #[apply(schema_de!)]

@@ -85,6 +85,7 @@ impl App {
 						name: t.name.clone(),
 						spec: t.spec.clone(),
 						backend_policies,
+						always_use_prefix: backend.always_use_prefix,
 					})
 				})
 				.collect_vec();
@@ -207,6 +208,7 @@ pub struct McpTarget {
 	pub name: Strng,
 	pub spec: crate::types::agent::McpTargetSpec,
 	pub backend_policies: BackendPolicies,
+	pub always_use_prefix: bool,
 }
 
 impl App {

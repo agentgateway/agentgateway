@@ -644,11 +644,19 @@ message MCPBackend {
     STATEFUL = 0;
     STATELESS = 1;
   }
+
+  enum PrefixMode {
+    CONDITIONAL = 0;
+    ALWAYS = 1;
+  }
+
   repeated MCPTarget targets = 2;
   // Whether or not this backend should serve stateful MCP connections.
   // We set this at the backend level because it would be illegal/nonsensical
   // to mix stateful and stateless targets in the same backend.
   StatefulMode stateful_mode = 3;
+  // Whether to always prefix the tool name using the target name
+  PrefixMode prefix_mode = 4;
 }
 
 message MCPTarget {

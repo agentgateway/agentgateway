@@ -518,6 +518,7 @@ pub type ServiceName = Strng;
 pub struct McpBackend {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
+	pub always_use_prefix: bool,
 }
 
 impl McpBackend {

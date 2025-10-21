@@ -343,6 +343,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.schema`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].name`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.statefulMode`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.prefixMode`||
 |`binds[].listeners[].routes[].backends[].(1)ai`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)name`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider`||

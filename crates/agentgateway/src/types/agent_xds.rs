@@ -438,6 +438,10 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 						proto::agent::mcp_backend::StatefulMode::Stateful => true,
 						proto::agent::mcp_backend::StatefulMode::Stateless => false,
 					},
+					always_use_prefix: match m.prefix_mode() {
+						proto::agent::mcp_backend::PrefixMode::Always => true,
+						proto::agent::mcp_backend::PrefixMode::Conditional => false,
+					},
 				},
 			),
 			_ => {

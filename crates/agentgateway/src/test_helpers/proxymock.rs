@@ -328,6 +328,7 @@ impl TestBind {
 					},
 				})],
 				stateful,
+				always_use_prefix: false,
 			},
 		);
 		{
@@ -368,6 +369,7 @@ impl TestBind {
 					})
 					.collect_vec(),
 				stateful,
+				always_use_prefix: false,
 			},
 		);
 		{

@@ -47,6 +47,7 @@ pub struct Relay {
 	// If we have 1 target only, we don't prefix everything with 'target_'.
 	// Else this is empty
 	default_target_name: Option<String>,
+	is_multiplexing: bool,
 }
 
 impl Relay {
@@ -56,7 +57,11 @@ impl Relay {
 		policies: McpAuthorizationSet,
 		client: PolicyClient,
 	) -> anyhow::Result<Self> {
+		let mut is_multiplexing = false;
 		let default_target_name = if backend.targets.len() != 1 {
+			is_multiplexing = true;
+			None
+		} else if backend.targets[0].always_use_prefix {
 			None
 		} else {
 			Some(backend.targets[0].name.to_string())
@@ -65,6 +70,7 @@ impl Relay {
 			upstreams: Arc::new(upstream::UpstreamGroup::new(pi, client, backend)?),
 			policies,
 			default_target_name,
+			is_multiplexing,
 		})
 	}
 
@@ -86,7 +92,7 @@ impl Relay {
 
 impl Relay {
 	pub fn is_multiplexing(&self) -> bool {
-		self.default_target_name.is_none()
+		self.is_multiplexing
 	}
 	pub fn default_target_name(&self) -> Option<String> {
 		self.default_target_name.clone()
