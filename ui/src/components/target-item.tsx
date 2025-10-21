@@ -48,14 +48,16 @@ export default function TargetItem({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="text-xs text-muted-foreground truncate max-w-[400px]">
-                  {target.sse && `${target.sse.host}:${target.sse.port}${target.sse.path}`}
+                  {target.mcp && `${target.mcp.host}`}
+                  {target.sse && `${target.sse.host}`}
                   {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
                   {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
                   {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                {target.sse && `${target.sse.host}:${target.sse.port}${target.sse.path}`}
+                {target.mcp && `${target.mcp.host}`}
+                {target.sse && `${target.sse.host}`}
                 {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
                 {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
                 {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}

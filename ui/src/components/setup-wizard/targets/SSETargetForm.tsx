@@ -31,10 +31,7 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
       if (existingTarget) {
         if (existingTarget.sse) {
           const sse = existingTarget.sse;
-          // TLS configuration is no longer part of SSE target in the new schema
-          const protocol = "http"; // Default to http since TLS is handled at listener level
-          const url = `${protocol}://${sse.host}:${sse.port}${sse.path}`;
-          setSseUrl(url);
+          setSseUrl(String(sse.host));
 
           // Headers, auth, and TLS are no longer part of SSE target in the new schema
           // These configurations are now handled at the listener/route level
@@ -59,23 +56,12 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
 
     const handleSubmit = async () => {
       try {
-        const urlObj = new URL(sseUrl);
-        let port: number;
-        if (urlObj.port) {
-          port = parseInt(urlObj.port, 10);
-        } else {
-          port = urlObj.protocol === "https:" ? 443 : 80;
-        }
-
         const target: TargetWithType = {
           name: targetName,
           type: "mcp",
           listeners: selectedListeners,
           sse: {
-            host: urlObj.hostname,
-            port: port,
-            path: urlObj.pathname + urlObj.search,
-            // Headers, auth, and TLS are no longer supported in the new schema
+            host: sseUrl,
           },
         };
 
@@ -106,7 +92,7 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
             type="url"
             value={sseUrl}
             onChange={(e) => setSseUrl(e.target.value)}
-            placeholder="http://localhost:3000/events"
+            placeholder="https://example.com/sse"
             required
           />
           <p className="text-sm text-muted-foreground">

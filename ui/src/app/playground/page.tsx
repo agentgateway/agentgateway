@@ -200,22 +200,18 @@ export default function PlaygroundPage() {
             // Generate route path and description with better pattern recognition
             let routePath = "/";
             let routePattern = "/*";
-            let pathType = "prefix";
 
             if (route.matches?.[0]?.path) {
               const pathMatch = route.matches[0].path;
               if (pathMatch.exact) {
                 routePath = pathMatch.exact;
                 routePattern = pathMatch.exact;
-                pathType = "exact";
               } else if (pathMatch.pathPrefix) {
                 routePath = pathMatch.pathPrefix;
                 routePattern = pathMatch.pathPrefix + "*";
-                pathType = "prefix";
               } else if (pathMatch.regex) {
                 routePath = "/";
                 routePattern = `~${pathMatch.regex}`;
-                pathType = "regex";
               }
             }
 
@@ -804,10 +800,6 @@ export default function PlaygroundPage() {
     setConnectionState((prev) => ({ ...prev, authToken: token }));
   };
 
-  const handleA2aTargetSelect = (target: string | null) => {
-    setA2aState((prev) => ({ ...prev, selectedTarget: target }));
-  };
-
   const handleA2aMessageChange = (message: string) => {
     setA2aState((prev) => ({ ...prev, message }));
   };
@@ -887,7 +879,7 @@ export default function PlaygroundPage() {
                   return Array.from(groupedRoutes.entries()).map(([groupKey, routeInfos]) => {
                     const firstRoute = routeInfos[0];
                     const port = firstRoute.bindPort;
-                    const listenerName = firstRoute.listener.name || "unnamed listener";
+                    const listenerName = firstRoute.listener.name || "unnamed";
                     const endpoint = firstRoute.endpoint;
 
                     return (
