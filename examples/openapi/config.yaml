@@ -3,7 +3,15 @@ binds:
 - port: 3000
   listeners:
   - routes:
-    - backends:
+    - policies:
+        cors:
+          allowOrigins:
+            - "*"
+          allowHeaders:
+            - mcp-protocol-version
+            - content-type
+            - cache-control
+      backends:
       - mcp:
           targets:
           - name: openapi
