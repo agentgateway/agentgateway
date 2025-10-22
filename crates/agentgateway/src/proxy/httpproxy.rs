@@ -1096,6 +1096,40 @@ async fn make_backend_call(
 				}));
 			},
 			RouteType::Passthrough => {
+				if req.uri().path().ends_with("/count_tokens")
+					&& let crate::llm::AIProvider::Bedrock(bedrock_provider) = &llm.provider
+				{
+					let mut req = crate::llm::bedrock::process_count_tokens_request(
+						bedrock_provider,
+						req,
+						route_policies.llm.as_deref(),
+					)
+					.await
+					.map_err(|e| ProxyError::Processing(e.into()))?;
+
+					llm
+						.provider
+						.setup_request(&mut req, route_type, None)
+						.map_err(ProxyError::Processing)?;
+
+					auth::apply_late_backend_auth(policies.backend_auth.as_ref(), &mut req).await?;
+
+					let transport =
+						build_transport(&inputs, &backend_call, policies.backend_tls.clone()).await?;
+					let call = client::Call {
+						req,
+						target: backend_call.target.clone(),
+						transport,
+					};
+
+					return Ok(Box::pin(async move {
+						let resp = inputs.upstream.call(call).await?;
+						crate::llm::bedrock::process_count_tokens_response(resp)
+							.await
+							.map_err(ProxyError::Processing)
+					}));
+				}
+
 				// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
 				// We do not need LLM policies nor token-based rate limits, etc.
 				llm
