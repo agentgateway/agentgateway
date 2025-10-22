@@ -648,6 +648,40 @@ fn default_as_none<T: Default + PartialEq>(i: T) -> Option<T> {
 	}
 }
 
+impl TryFrom<&proto::agent::policy_spec::McpAuth> for McpAuthentication {
+	type Error = ProtoError;
+
+	fn try_from(mcp_auth: &proto::agent::policy_spec::McpAuth) -> Result<Self, Self::Error> {
+		let issuer = mcp_auth.issuer.clone();
+		let audience = mcp_auth.audience.clone();
+		let jwks_url = mcp_auth.jwks_url.clone().unwrap_or_default();
+		let provider = mcp_auth
+			.provider
+			.and_then(|p| proto::agent::policy_spec::McpIdp::try_from(p).ok())
+			.map(|p| match p {
+				proto::agent::policy_spec::McpIdp::Auth0 => McpIDP::Auth0 {},
+				proto::agent::policy_spec::McpIdp::Keycloak => McpIDP::Keycloak {},
+			});
+		let resource_metadata = {
+			let mut extra: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
+			if let Some(rm) = &mcp_auth.resource_metadata {
+				for (k, v) in &rm.extra {
+					let j = serde_json::to_value(v).unwrap_or(serde_json::Value::Null);
+					extra.insert(k.clone(), j);
+				}
+			}
+			crate::types::agent::ResourceMetadata { extra }
+		};
+		Ok(McpAuthentication {
+			issuer,
+			audience,
+			jwks_url,
+			provider,
+			resource_metadata,
+		})
+	}
+}
+
 impl TryFrom<&proto::agent::policy_spec::Rbac> for Authorization {
 	type Error = ProtoError;
 

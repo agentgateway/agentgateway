@@ -4,6 +4,7 @@ package agentgateway.dev.resource;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
 
 option go_package = "github.com/agentgateway/agentgateway/go/api;api";
 
@@ -538,6 +539,23 @@ message PolicySpec {
     FailureMode failure_mode = 2;
   }
 
+  message MCPAuth {
+    string issuer = 1;
+    string audience = 2;
+    optional string jwks_url = 3; 
+    optional McpIDP provider = 4; 
+    ResourceMetadata resource_metadata = 5; 
+  }
+
+  enum McpIDP {
+    AUTH0 = 0;
+    KEYCLOAK = 1;
+  }
+
+  message ResourceMetadata {
+      map<string, google.protobuf.Value> extra = 1;
+  }
+
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;
@@ -553,6 +571,7 @@ message PolicySpec {
     RemoteRateLimit remote_rate_limit = 12;
     CSRF csrf = 13;
     ExtProc ext_proc = 14;
+    MCPAuth mcp_authentication = 15;
   }
 }
 
