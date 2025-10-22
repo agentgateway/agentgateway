@@ -15,10 +15,9 @@ import {
   ServiceBackend,
   TargetFilter,
   StdioTarget,
-  SseTarget,
   OpenApiTarget,
-  McpConnectionTarget,
   AiBackend,
+  StreamHttpTarget,
 } from "./types";
 
 export function configDumpToLocalConfig(configDump: any): LocalConfig {
@@ -192,9 +191,9 @@ function mapToMcpTarget(data: any): McpTarget | undefined {
   if (Array.isArray(data.filters))
     target.filters = data.filters.map(mapToTargetFilter).filter(Boolean);
   if (data.stdio) target.stdio = mapToStdioTarget(data.stdio);
-  else if (data.sse) target.sse = mapToSseTarget(data.sse);
+  else if (data.sse) target.sse = mapToStreamHttpTarget(data.sse);
   else if (data.openapi) target.openapi = mapToOpenApiTarget(data.openapi);
-  else if (data.mcp) target.mcp = mapToMcpConnectionTarget(data.mcp);
+  else if (data.mcp) target.mcp = mapToStreamHttpTarget(data.mcp);
   return target;
 }
 
@@ -208,19 +207,14 @@ function mapToStdioTarget(data: any): StdioTarget | undefined {
   return { cmd: data.cmd, args: data.args, env: data.env } as StdioTarget;
 }
 
-function mapToSseTarget(data: any): SseTarget | undefined {
+function mapToStreamHttpTarget(data: any): StreamHttpTarget | undefined {
   if (!data || typeof data.host !== "string" || typeof data.port !== "number") return undefined;
-  return { host: data.host, port: data.port, path: data.path } as SseTarget;
+  return { host: data.host, port: data.port, path: data.path } as StreamHttpTarget;
 }
 
 function mapToOpenApiTarget(data: any): OpenApiTarget | undefined {
   if (!data || typeof data.host !== "string" || typeof data.port !== "number") return undefined;
   return { host: data.host, port: data.port, schema: data.schema } as OpenApiTarget;
-}
-
-function mapToMcpConnectionTarget(data: any): McpConnectionTarget | undefined {
-  if (!data || typeof data.host !== "string" || typeof data.port !== "number") return undefined;
-  return { host: data.host, port: data.port, path: data.path } as McpConnectionTarget;
 }
 
 function mapToAiBackend(data: any): AiBackend | undefined {
