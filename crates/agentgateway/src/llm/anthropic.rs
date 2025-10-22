@@ -42,6 +42,10 @@ impl Provider {
 		match input_format {
 			InputFormat::Completions => resp.map(|b| translate_stream(b, buffer, log)),
 			InputFormat::Messages => resp.map(|b| passthrough_stream(b, buffer, log)),
+			InputFormat::Responses => {
+				// Anthropic doesn't support Responses format
+				unreachable!("Responses format should not be routed to Anthropic provider")
+			},
 		}
 	}
 
@@ -73,6 +77,10 @@ pub fn process_response(
 				serde_json::from_slice::<passthrough::Response>(bytes).map_err(AIError::ResponseParsing)?;
 
 			Ok(Box::new(resp))
+		},
+		InputFormat::Responses => {
+			// Anthropic doesn't support Responses format
+			unreachable!("Responses format should not be routed to Anthropic provider")
 		},
 	}
 }
@@ -264,9 +272,12 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 		match &req.reasoning_effort {
 			// Arbitrary constants come from LiteLLM defaults.
 			// OpenRouter uses percentages which may be more appropriate though (https://openrouter.ai/docs/use-cases/reasoning-tokens#reasoning-effort-level)
-			Some(ReasoningEffort::Low) => Some(types::ThinkingInput::Enabled {
-				budget_tokens: 1024,
-			}),
+			// Note: Anthropic's minimum budget_tokens is 1024
+			Some(ReasoningEffort::Minimal) | Some(ReasoningEffort::Low) => {
+				Some(types::ThinkingInput::Enabled {
+					budget_tokens: 1024,
+				})
+			},
 			Some(ReasoningEffort::Medium) => Some(types::ThinkingInput::Enabled {
 				budget_tokens: 2048,
 			}),
