@@ -107,6 +107,7 @@ static ROOT_CONTEXT: Lazy<Arc<Context<'static>>> = Lazy::new(root_context);
 pub struct ContextBuilder {
 	pub attributes: HashSet<String>,
 	pub context: ExpressionContext,
+	pub log_format: Option<crate::LoggingFormat>,
 }
 
 impl Default for ContextBuilder {
@@ -120,6 +121,7 @@ impl ContextBuilder {
 		Self {
 			attributes: Default::default(),
 			context: Default::default(),
+			log_format: None,
 		}
 	}
 	/// register_expression registers the given expressions attributes as required attributes.
@@ -289,6 +291,11 @@ impl ContextBuilder {
 		if let Some(r) = self.context.request.as_mut() {
 			r.end_time = Some(end_time);
 		}
+	}
+
+	/// Set the preferred log format for this request (json or text)
+	pub fn set_log_format(&mut self, fmt: crate::LoggingFormat) {
+		self.log_format = Some(fmt);
 	}
 
 	pub fn needs_llm_completion(&self) -> bool {

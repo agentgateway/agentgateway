@@ -94,6 +94,7 @@ pub struct RoutePolicies {
 	pub transformation: Option<http::transformation_cel::Transformation>,
 	pub llm: Option<Arc<llm::Policy>>,
 	pub csrf: Option<http::csrf::Csrf>,
+	pub logging: Option<crate::types::agent::LoggingPolicy>,
 }
 
 #[derive(Debug, Default)]
@@ -102,6 +103,7 @@ pub struct GatewayPolicies {
 	pub jwt: Option<http::jwt::Jwt>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
+	pub logging: Option<crate::types::agent::LoggingPolicy>,
 }
 
 impl GatewayPolicies {
@@ -111,6 +113,18 @@ impl GatewayPolicies {
 				ctx.register_expression(expr)
 			}
 		};
+		if let Some(lp) = &self.logging {
+			if let Some(f) = &lp.filter
+				&& let Ok(expr) = crate::cel::Expression::new(f.clone())
+			{
+				ctx.register_expression(&expr)
+			}
+			for v in lp.fields_add.values() {
+				if let Ok(expr) = crate::cel::Expression::new(v.clone()) {
+					ctx.register_expression(&expr)
+				}
+			}
+		}
 	}
 }
 
@@ -282,6 +296,9 @@ impl Store {
 				Policy::Csrf(p) => {
 					pol.csrf.get_or_insert_with(|| p.clone());
 				},
+				Policy::Logging(p) => {
+					pol.logging.get_or_insert_with(|| p.clone());
+				},
 				_ => {}, // others are not route policies
 			}
 		}
@@ -293,17 +310,17 @@ impl Store {
 	}
 
 	pub fn gateway_policies(&self, listener: ListenerKey, gateway: GatewayName) -> GatewayPolicies {
-		let gateway = self
+		let gw_set = self
 			.gateway_policies_by_target
-			.get(&PolicyTarget::Gateway(gateway));
-		let listener = self
+			.get(&PolicyTarget::Gateway(gateway.clone()));
+		let ls_set = self
 			.gateway_policies_by_target
-			.get(&PolicyTarget::Listener(listener));
-		let rules = listener
+			.get(&PolicyTarget::Listener(listener.clone()));
+		let rules = ls_set
 			.iter()
 			.copied()
 			.flatten()
-			.chain(gateway.iter().copied().flatten())
+			.chain(gw_set.iter().copied().flatten())
 			.filter_map(|n| self.gateway_policies_by_name.get(n))
 			.map(|p| &p.policy);
 
@@ -322,6 +339,27 @@ impl Store {
 				GatewayPolicy::Transformation(p) => {
 					pol.transformation.get_or_insert_with(|| p.clone());
 				},
+			}
+		}
+
+		// Merge standard policies targeted at Listener/Gateway that include Logging
+		let gw_norm = self.policies_by_target.get(&PolicyTarget::Gateway(gateway));
+
+		let ls_norm = self
+			.policies_by_target
+			.get(&PolicyTarget::Listener(listener));
+
+		// Construct iterator for listener then gateway precedence
+		let norm_rules = ls_norm
+			.iter()
+			.copied()
+			.flatten()
+			.chain(gw_norm.iter().copied().flatten())
+			.filter_map(|n| self.policies_by_name.get(n))
+			.map(|p| &p.policy);
+		for rule in norm_rules {
+			if let Policy::Logging(p) = rule {
+				pol.logging.get_or_insert_with(|| p.clone());
 			}
 		}
 
