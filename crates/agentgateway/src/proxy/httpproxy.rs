@@ -368,7 +368,7 @@ impl HTTPProxy {
 
 		let mut req = req.map(http::Body::new);
 
-		sensitive_headers(&mut req);
+		sensitive_headers(&mut req, &self.inputs.cfg.listener.sensitive_headers);
 		normalize_uri(&connection, &mut req).map_err(ProxyError::Processing)?;
 		let mut req_upgrade = hop_by_hop_headers(&mut req);
 
@@ -428,6 +428,7 @@ impl HTTPProxy {
 		log.listener_name = Some(selected_listener.name.clone());
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
+		// Listener-level sensitive headers removed; now controlled via policies
 		let mut gateway_policies = inputs.stores.read_binds().gateway_policies(
 			selected_listener.key.clone(),
 			selected_listener.gateway_name.clone(),
@@ -451,6 +452,10 @@ impl HTTPProxy {
 			.ext_proc
 			.take()
 			.map(|c| c.build(self.policy_client()));
+		// Apply explicit RedactHeaders aggregated at gateway level first
+		if !gateway_policies.redacted_headers.is_empty() {
+			sensitive_headers(&mut req, &gateway_policies.redacted_headers);
+		}
 		apply_gateway_policies(
 			&gateway_policies,
 			self.policy_client(),
@@ -490,6 +495,10 @@ impl HTTPProxy {
 				&selected_route.inline_policies,
 			)
 		};
+		// Apply explicit RedactHeaders aggregated at route level before request policies
+		if !route_policies.redacted_headers.is_empty() {
+			sensitive_headers(&mut req, &route_policies.redacted_headers);
+		}
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 
@@ -1304,9 +1313,14 @@ fn upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
 	}
 }
 
-fn sensitive_headers(req: &mut Request) {
+fn sensitive_headers(req: &mut Request, user_sensitive: &std::collections::HashSet<String>) {
 	for (name, value) in req.headers_mut() {
-		if name == http::header::AUTHORIZATION {
+		// Mark common sensitive headers
+		let key = name.as_str();
+		let lower = key.to_ascii_lowercase();
+		let is_configured_sensitive = user_sensitive.contains(lower.as_str());
+
+		if is_configured_sensitive || name == http::header::AUTHORIZATION {
 			value.set_sensitive(true)
 		}
 	}

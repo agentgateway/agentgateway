@@ -27,6 +27,47 @@ use crate::types::discovery::Identity;
 mod functions;
 mod strings;
 
+// Serialize HeaderMap while redacting values marked sensitive via HeaderValue::set_sensitive(true)
+mod header_map_sensitive {
+	use serde::Serializer;
+	use serde::ser::SerializeMap;
+
+	pub fn serialize<S>(map: &::http::HeaderMap, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		// If any value for a given header name is sensitive, redact the entire header.
+		use std::collections::BTreeMap;
+		let mut joined: BTreeMap<&str, String> = BTreeMap::new();
+		for (name, value) in map.iter() {
+			let key = name.as_str();
+			let entry = joined.entry(key).or_default();
+			if value.is_sensitive() {
+				// Override to redacted, don't join
+				*entry = "Sensitive".to_string();
+				continue;
+			}
+			if entry == "Sensitive" {
+				// Already redacted, don't join
+				continue;
+			}
+			if let Ok(s) = value.to_str() {
+				if entry.is_empty() {
+					entry.push_str(s);
+				} else {
+					entry.push_str(", ");
+					entry.push_str(s);
+				}
+			}
+		}
+		let mut ser = serializer.serialize_map(Some(joined.len()))?;
+		for (k, v) in joined {
+			ser.serialize_entry(k, &v)?;
+		}
+		ser.end()
+	}
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
 	#[error("execution: {0}")]
@@ -474,7 +515,10 @@ pub struct RequestContext {
 	/// The path of the request URI. For example, `/path`.
 	pub path: String,
 
-	#[serde(with = "http_serde::header_map")]
+	#[serde(
+		serialize_with = "header_map_sensitive::serialize",
+		deserialize_with = "http_serde::header_map::deserialize"
+	)]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "std::collections::HashMap<String, String>")

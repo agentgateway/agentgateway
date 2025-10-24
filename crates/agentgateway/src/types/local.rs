@@ -545,6 +545,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			ext_proc: value.ext_proc,
 			transformations: value.transformations,
 			jwt_auth: value.jwt_auth,
+			redact_headers: value.redact_headers,
 			..Default::default()
 		}
 	}
@@ -573,6 +574,10 @@ struct LocalGatewayPolicy {
 		)
 	)]
 	transformations: Option<crate::http::transformation_cel::Transformation>,
+
+	/// Redact headers in logs/tracing. Header names are case-insensitive.
+	#[serde(default)]
+	redact_headers: Option<Vec<String>>,
 }
 
 #[apply(schema_de!)]
@@ -661,6 +666,10 @@ struct FilterOrPolicy {
 	/// Handle CSRF protection by validating request origins against configured allowed origins.
 	#[serde(default)]
 	csrf: Option<http::csrf::Csrf>,
+
+	/// Redact headers in logs/tracing. Header names are case-insensitive.
+	#[serde(default)]
+	redact_headers: Option<Vec<String>>,
 
 	// TrafficPolicy
 	/// Timeout requests that exceed the configured duration.
@@ -983,6 +992,7 @@ async fn split_policies(
 		ext_proc,
 		timeout,
 		retry,
+		redact_headers,
 	} = pol;
 	if let Some(p) = request_header_modifier {
 		filters.push(RouteFilter::RequestHeaderModifier(p));
@@ -1047,6 +1057,11 @@ async fn split_policies(
 	}
 	if let Some(p) = csrf {
 		route_policies.push(Policy::Csrf(p))
+	}
+	if let Some(h) = redact_headers
+		&& !h.is_empty()
+	{
+		route_policies.push(Policy::RedactHeaders(h))
 	}
 	if let Some(p) = authorization {
 		route_policies.push(Policy::Authorization(p))

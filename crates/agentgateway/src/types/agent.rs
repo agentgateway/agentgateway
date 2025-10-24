@@ -1043,6 +1043,7 @@ pub enum GatewayPolicy {
 	ExtAuthz(ext_authz::ExtAuthz),
 	Transformation(crate::http::transformation_cel::Transformation),
 	ExtProc(ext_proc::ExtProc),
+	RedactHeaders(Vec<String>),
 }
 
 impl TryFrom<Policy> for GatewayPolicy {
@@ -1052,6 +1053,7 @@ impl TryFrom<Policy> for GatewayPolicy {
 			Policy::JwtAuth(p) => Ok(GatewayPolicy::JwtAuth(p)),
 			Policy::Transformation(p) => Ok(GatewayPolicy::Transformation(p)),
 			Policy::ExtProc(p) => Ok(GatewayPolicy::ExtProc(p)),
+			Policy::RedactHeaders(h) => Ok(GatewayPolicy::RedactHeaders(h)),
 			_ => anyhow::bail!("invalid gateway_policy type"),
 		}
 	}
@@ -1092,6 +1094,8 @@ pub enum Policy {
 	Transformation(crate::http::transformation_cel::Transformation),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	Csrf(crate::http::csrf::Csrf),
+	// Supported targets: Gateway < Route < RouteRule; headers are merged
+	RedactHeaders(Vec<String>),
 }
 
 #[apply(schema!)]

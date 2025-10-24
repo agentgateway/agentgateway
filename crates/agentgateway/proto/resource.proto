@@ -537,6 +537,11 @@ message PolicySpec {
     BackendReference target = 1;
     FailureMode failure_mode = 2;
   }
+  
+  // RedactHeaders marks headers to redact in logs/tracing. Header name matching is case-insensitive.
+  message RedactHeaders {
+    repeated string headers = 1;
+  }
 
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
@@ -553,6 +558,7 @@ message PolicySpec {
     RemoteRateLimit remote_rate_limit = 12;
     CSRF csrf = 13;
     ExtProc ext_proc = 14;
+    RedactHeaders redact_headers = 15;
   }
 }
 
