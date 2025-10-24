@@ -32,7 +32,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.90.0-slim-bookworm AS base-builder
+FROM docker.io/library/rust:1.90.0-trixie AS base-builder
 
 ARG TARGETARCH
 
@@ -57,14 +57,23 @@ COPY crates ./crates
 COPY common ./common
 COPY --from=node /app/out ./ui/out
 
-RUN --mount=type=cache,id=cargo,target=/usr/local/cargo/registry \
+RUN \
+    --mount=type=cache,id=cargo,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     cargo fetch --locked
 RUN --mount=type=cache,target=/app/target \
-    --mount=type=cache,id=cargo,target=/usr/local/cargo/registry \
-    cargo build --features ui  --target "$(cat /build/target)"  --profile ${PROFILE} && \
-    mkdir /out && \
-    mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
-
+    --mount=type=cache,id=cargo,target=/usr/local/cargo/registry  \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+    <<EOF
+cargo build --features ui  --target "$(cat /build/target)"  --profile ${PROFILE} || exit 1
+mkdir /out
+mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
+/out/agentgateway --version
+# Fail if version is not set
+if /out/agentgateway --version | grep -q '"unknown"'; then
+  exit 1
+fi
+EOF
 FROM gcr.io/distroless/cc-debian12 AS runner
 
 ARG TARGETARCH
