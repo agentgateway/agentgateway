@@ -962,6 +962,7 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 							crate::llm::policy::RequestRejection {
 								body: Bytes::from(resp.body.clone()),
 								status,
+								headers: None, // TODO: map from proto if headers are added there
 							}
 						} else {
 							//  use default response, since the response field is not optional on RequestGuard

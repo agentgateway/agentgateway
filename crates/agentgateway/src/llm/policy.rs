@@ -1,4 +1,5 @@
 use crate::http::auth::{BackendAuth, SimpleBackendAuth};
+use crate::http::filters::HeaderModifier;
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
@@ -393,10 +394,19 @@ pub enum RegexRule {
 
 impl RequestRejection {
 	pub fn as_response(&self) -> Response {
-		::http::response::Builder::new()
+		let mut response = ::http::response::Builder::new()
 			.status(self.status)
 			.body(http::Body::from(self.body.clone()))
-			.expect("static request should succeed")
+			.expect("static request should succeed");
+
+		// Apply header modifications if present
+		if let Some(ref headers) = self.headers
+			&& let Err(e) = headers.apply(response.headers_mut())
+		{
+			warn!("Failed to apply rejection response headers: {}", e);
+		}
+
+		response
 	}
 }
 
@@ -457,6 +467,9 @@ pub struct RequestRejection {
 	#[serde(default = "default_code", with = "http_serde::status_code")]
 	#[cfg_attr(feature = "schema", schemars(with = "std::num::NonZeroU16"))]
 	pub status: StatusCode,
+	/// Optional headers to add, set, or remove from the rejection response
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub headers: Option<HeaderModifier>,
 }
 
 impl Default for RequestRejection {
@@ -464,6 +477,7 @@ impl Default for RequestRejection {
 		Self {
 			body: default_body(),
 			status: default_code(),
+			headers: None,
 		}
 	}
 }
@@ -747,5 +761,100 @@ mod tests {
 			result.get("x-regex-header").unwrap(),
 			&HeaderValue::from_static("regex-match-123")
 		);
+	}
+
+	#[test]
+	fn test_rejection_with_json_headers() {
+		let rejection = RequestRejection {
+			body: Bytes::from(r#"{"error": {"message": "test", "type": "invalid_request_error"}}"#),
+			status: StatusCode::BAD_REQUEST,
+			headers: Some(HeaderModifier {
+				set: vec![
+					(strng::new("content-type"), strng::new("application/json")),
+					(strng::new("x-custom-header"), strng::new("custom-value")),
+				],
+				add: vec![],
+				remove: vec![],
+			}),
+		};
+
+		let response = rejection.as_response();
+		assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+		assert_eq!(
+			response.headers().get("content-type").unwrap(),
+			"application/json"
+		);
+		assert_eq!(
+			response.headers().get("x-custom-header").unwrap(),
+			"custom-value"
+		);
+	}
+
+	#[test]
+	fn test_rejection_add_multiple_header_values() {
+		let rejection = RequestRejection {
+			body: Bytes::from("blocked"),
+			status: StatusCode::FORBIDDEN,
+			headers: Some(HeaderModifier {
+				set: vec![],
+				add: vec![
+					(strng::new("x-blocked-category"), strng::new("violence")),
+					(strng::new("x-blocked-category"), strng::new("hate")),
+				],
+				remove: vec![],
+			}),
+		};
+
+		let response = rejection.as_response();
+		let values: Vec<_> = response
+			.headers()
+			.get_all("x-blocked-category")
+			.iter()
+			.map(|v| v.to_str().unwrap())
+			.collect();
+		assert_eq!(values, vec!["violence", "hate"]);
+	}
+
+	#[test]
+	fn test_rejection_backwards_compatibility() {
+		// Simulate old config without headers field
+		let rejection = RequestRejection {
+			body: Bytes::from("error message"),
+			status: StatusCode::FORBIDDEN,
+			headers: None,
+		};
+
+		let response = rejection.as_response();
+		assert_eq!(response.status(), StatusCode::FORBIDDEN);
+		// Should have no extra headers
+		assert!(response.headers().is_empty());
+	}
+
+	#[test]
+	fn test_rejection_default() {
+		let rejection = RequestRejection::default();
+		let response = rejection.as_response();
+		assert_eq!(response.status(), StatusCode::FORBIDDEN);
+		assert!(response.headers().is_empty());
+	}
+
+	#[test]
+	fn test_rejection_set_and_remove_headers() {
+		let rejection = RequestRejection {
+			body: Bytes::from("test"),
+			status: StatusCode::BAD_REQUEST,
+			headers: Some(HeaderModifier {
+				set: vec![(strng::new("content-type"), strng::new("application/json"))],
+				add: vec![],
+				remove: vec![strng::new("server")],
+			}),
+		};
+
+		let response = rejection.as_response();
+		assert_eq!(
+			response.headers().get("content-type").unwrap(),
+			"application/json"
+		);
+		assert!(response.headers().get("server").is_none());
 	}
 }
