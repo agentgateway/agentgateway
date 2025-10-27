@@ -13,7 +13,7 @@ use crate::telemetry::trc::Tracer;
 use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
 
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
-	let data_plane_pool = new_data_plane_pool(config.num_worker_threads);
+	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
 	// TODO consolidate this
 	trcng::init_tracer(trcng::Config {
@@ -53,7 +53,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let mut registry = Registry::default();
 	let sub_registry = metrics::sub_registry(&mut registry);
 	let xds_metrics = agent_xds::Metrics::new(sub_registry);
-	// TODO: metric for version
+	agent_core::metrics::TokioCollector::register(sub_registry, &data_plane_handle);
 
 	// TODO: use for XDS
 	let control_client = client::Client::new(&config.dns, None, config.backend.clone(), None);
@@ -186,8 +186,11 @@ struct DataPlaneTask {
 	fut: Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + Sync + 'static>>,
 }
 
-fn new_data_plane_pool(num_worker_threads: usize) -> mpsc::Sender<DataPlaneTask> {
+fn new_data_plane_pool(
+	num_worker_threads: usize,
+) -> (tokio::runtime::Handle, mpsc::Sender<DataPlaneTask>) {
 	let (tx, rx) = mpsc::channel();
+	let (tx_handle, rx_handle) = mpsc::channel();
 
 	let span = tracing::span::Span::current();
 	thread::spawn(move || {
@@ -202,6 +205,7 @@ fn new_data_plane_pool(num_worker_threads: usize) -> mpsc::Sender<DataPlaneTask>
 			.enable_all()
 			.build()
 			.unwrap();
+		tx_handle.send(runtime.handle().clone()).unwrap();
 		runtime.block_on(
 			async move {
 				let mut join_set = JoinSet::new();
@@ -233,5 +237,6 @@ fn new_data_plane_pool(num_worker_threads: usize) -> mpsc::Sender<DataPlaneTask>
 		);
 	});
 
-	tx
+	let handle = rx_handle.recv().unwrap();
+	(handle, tx)
 }
