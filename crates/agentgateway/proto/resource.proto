@@ -721,6 +721,8 @@ message AIBackend {
     MODELS = 3;
     // Sends requests to upstream as-is without LLM processing
     PASSTHROUGH = 4;
+    // Processes Anthropic /v1/messages/count_tokens format requests
+    ANTHROPIC_TOKEN_COUNT = 5;
   }
   message Provider {
     string name = 1;
