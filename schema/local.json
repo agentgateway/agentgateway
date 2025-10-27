@@ -1331,6 +1331,34 @@
                                             "minimum": 1,
                                             "maximum": 65535,
                                             "default": 403
+                                          },
+                                          "headers": {
+                                            "description": "Optional headers to add, set, or remove from the rejection response",
+                                            "type": [
+                                              "object",
+                                              "null"
+                                            ],
+                                            "properties": {
+                                              "add": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "set": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "remove": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string"
+                                                }
+                                              }
+                                            },
+                                            "additionalProperties": false
                                           }
                                         },
                                         "additionalProperties": false,
@@ -1381,6 +1409,34 @@
                                                             "minimum": 1,
                                                             "maximum": 65535,
                                                             "default": 403
+                                                          },
+                                                          "headers": {
+                                                            "description": "Optional headers to add, set, or remove from the rejection response",
+                                                            "type": [
+                                                              "object",
+                                                              "null"
+                                                            ],
+                                                            "properties": {
+                                                              "add": {
+                                                                "type": "object",
+                                                                "additionalProperties": {
+                                                                  "type": "string"
+                                                                }
+                                                              },
+                                                              "set": {
+                                                                "type": "object",
+                                                                "additionalProperties": {
+                                                                  "type": "string"
+                                                                }
+                                                              },
+                                                              "remove": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                  "type": "string"
+                                                                }
+                                                              }
+                                                            },
+                                                            "additionalProperties": false
                                                           }
                                                         },
                                                         "additionalProperties": false,
@@ -1621,6 +1677,34 @@
                                                             "minimum": 1,
                                                             "maximum": 65535,
                                                             "default": 403
+                                                          },
+                                                          "headers": {
+                                                            "description": "Optional headers to add, set, or remove from the rejection response",
+                                                            "type": [
+                                                              "object",
+                                                              "null"
+                                                            ],
+                                                            "properties": {
+                                                              "add": {
+                                                                "type": "object",
+                                                                "additionalProperties": {
+                                                                  "type": "string"
+                                                                }
+                                                              },
+                                                              "set": {
+                                                                "type": "object",
+                                                                "additionalProperties": {
+                                                                  "type": "string"
+                                                                }
+                                                              },
+                                                              "remove": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                  "type": "string"
+                                                                }
+                                                              }
+                                                            },
+                                                            "additionalProperties": false
                                                           }
                                                         },
                                                         "additionalProperties": false,
@@ -3577,6 +3661,34 @@
                                                       "minimum": 1,
                                                       "maximum": 65535,
                                                       "default": 403
+                                                    },
+                                                    "headers": {
+                                                      "description": "Optional headers to add, set, or remove from the rejection response",
+                                                      "type": [
+                                                        "object",
+                                                        "null"
+                                                      ],
+                                                      "properties": {
+                                                        "add": {
+                                                          "type": "object",
+                                                          "additionalProperties": {
+                                                            "type": "string"
+                                                          }
+                                                        },
+                                                        "set": {
+                                                          "type": "object",
+                                                          "additionalProperties": {
+                                                            "type": "string"
+                                                          }
+                                                        },
+                                                        "remove": {
+                                                          "type": "array",
+                                                          "items": {
+                                                            "type": "string"
+                                                          }
+                                                        }
+                                                      },
+                                                      "additionalProperties": false
                                                     }
                                                   },
                                                   "additionalProperties": false,
@@ -3627,6 +3739,34 @@
                                                                       "minimum": 1,
                                                                       "maximum": 65535,
                                                                       "default": 403
+                                                                    },
+                                                                    "headers": {
+                                                                      "description": "Optional headers to add, set, or remove from the rejection response",
+                                                                      "type": [
+                                                                        "object",
+                                                                        "null"
+                                                                      ],
+                                                                      "properties": {
+                                                                        "add": {
+                                                                          "type": "object",
+                                                                          "additionalProperties": {
+                                                                            "type": "string"
+                                                                          }
+                                                                        },
+                                                                        "set": {
+                                                                          "type": "object",
+                                                                          "additionalProperties": {
+                                                                            "type": "string"
+                                                                          }
+                                                                        },
+                                                                        "remove": {
+                                                                          "type": "array",
+                                                                          "items": {
+                                                                            "type": "string"
+                                                                          }
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false
                                                                     }
                                                                   },
                                                                   "additionalProperties": false,
@@ -3867,6 +4007,34 @@
                                                                       "minimum": 1,
                                                                       "maximum": 65535,
                                                                       "default": 403
+                                                                    },
+                                                                    "headers": {
+                                                                      "description": "Optional headers to add, set, or remove from the rejection response",
+                                                                      "type": [
+                                                                        "object",
+                                                                        "null"
+                                                                      ],
+                                                                      "properties": {
+                                                                        "add": {
+                                                                          "type": "object",
+                                                                          "additionalProperties": {
+                                                                            "type": "string"
+                                                                          }
+                                                                        },
+                                                                        "set": {
+                                                                          "type": "object",
+                                                                          "additionalProperties": {
+                                                                            "type": "string"
+                                                                          }
+                                                                        },
+                                                                        "remove": {
+                                                                          "type": "array",
+                                                                          "items": {
+                                                                            "type": "string"
+                                                                          }
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false
                                                                     }
                                                                   },
                                                                   "additionalProperties": false,
@@ -4592,6 +4760,34 @@
                                                                   "minimum": 1,
                                                                   "maximum": 65535,
                                                                   "default": 403
+                                                                },
+                                                                "headers": {
+                                                                  "description": "Optional headers to add, set, or remove from the rejection response",
+                                                                  "type": [
+                                                                    "object",
+                                                                    "null"
+                                                                  ],
+                                                                  "properties": {
+                                                                    "add": {
+                                                                      "type": "object",
+                                                                      "additionalProperties": {
+                                                                        "type": "string"
+                                                                      }
+                                                                    },
+                                                                    "set": {
+                                                                      "type": "object",
+                                                                      "additionalProperties": {
+                                                                        "type": "string"
+                                                                      }
+                                                                    },
+                                                                    "remove": {
+                                                                      "type": "array",
+                                                                      "items": {
+                                                                        "type": "string"
+                                                                      }
+                                                                    }
+                                                                  },
+                                                                  "additionalProperties": false
                                                                 }
                                                               },
                                                               "additionalProperties": false,
@@ -4642,6 +4838,34 @@
                                                                                   "minimum": 1,
                                                                                   "maximum": 65535,
                                                                                   "default": 403
+                                                                                },
+                                                                                "headers": {
+                                                                                  "description": "Optional headers to add, set, or remove from the rejection response",
+                                                                                  "type": [
+                                                                                    "object",
+                                                                                    "null"
+                                                                                  ],
+                                                                                  "properties": {
+                                                                                    "add": {
+                                                                                      "type": "object",
+                                                                                      "additionalProperties": {
+                                                                                        "type": "string"
+                                                                                      }
+                                                                                    },
+                                                                                    "set": {
+                                                                                      "type": "object",
+                                                                                      "additionalProperties": {
+                                                                                        "type": "string"
+                                                                                      }
+                                                                                    },
+                                                                                    "remove": {
+                                                                                      "type": "array",
+                                                                                      "items": {
+                                                                                        "type": "string"
+                                                                                      }
+                                                                                    }
+                                                                                  },
+                                                                                  "additionalProperties": false
                                                                                 }
                                                                               },
                                                                               "additionalProperties": false,
@@ -4882,6 +5106,34 @@
                                                                                   "minimum": 1,
                                                                                   "maximum": 65535,
                                                                                   "default": 403
+                                                                                },
+                                                                                "headers": {
+                                                                                  "description": "Optional headers to add, set, or remove from the rejection response",
+                                                                                  "type": [
+                                                                                    "object",
+                                                                                    "null"
+                                                                                  ],
+                                                                                  "properties": {
+                                                                                    "add": {
+                                                                                      "type": "object",
+                                                                                      "additionalProperties": {
+                                                                                        "type": "string"
+                                                                                      }
+                                                                                    },
+                                                                                    "set": {
+                                                                                      "type": "object",
+                                                                                      "additionalProperties": {
+                                                                                        "type": "string"
+                                                                                      }
+                                                                                    },
+                                                                                    "remove": {
+                                                                                      "type": "array",
+                                                                                      "items": {
+                                                                                        "type": "string"
+                                                                                      }
+                                                                                    }
+                                                                                  },
+                                                                                  "additionalProperties": false
                                                                                 }
                                                                               },
                                                                               "additionalProperties": false,
@@ -5992,6 +6244,34 @@
                                 "minimum": 1,
                                 "maximum": 65535,
                                 "default": 403
+                              },
+                              "headers": {
+                                "description": "Optional headers to add, set, or remove from the rejection response",
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "add": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "set": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "remove": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
                               }
                             },
                             "additionalProperties": false,
@@ -6042,6 +6322,34 @@
                                                 "minimum": 1,
                                                 "maximum": 65535,
                                                 "default": 403
+                                              },
+                                              "headers": {
+                                                "description": "Optional headers to add, set, or remove from the rejection response",
+                                                "type": [
+                                                  "object",
+                                                  "null"
+                                                ],
+                                                "properties": {
+                                                  "add": {
+                                                    "type": "object",
+                                                    "additionalProperties": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "set": {
+                                                    "type": "object",
+                                                    "additionalProperties": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "remove": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    }
+                                                  }
+                                                },
+                                                "additionalProperties": false
                                               }
                                             },
                                             "additionalProperties": false,
@@ -6282,6 +6590,34 @@
                                                 "minimum": 1,
                                                 "maximum": 65535,
                                                 "default": 403
+                                              },
+                                              "headers": {
+                                                "description": "Optional headers to add, set, or remove from the rejection response",
+                                                "type": [
+                                                  "object",
+                                                  "null"
+                                                ],
+                                                "properties": {
+                                                  "add": {
+                                                    "type": "object",
+                                                    "additionalProperties": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "set": {
+                                                    "type": "object",
+                                                    "additionalProperties": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "remove": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    }
+                                                  }
+                                                },
+                                                "additionalProperties": false
                                               }
                                             },
                                             "additionalProperties": false,
