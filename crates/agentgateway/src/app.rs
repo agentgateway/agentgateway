@@ -102,6 +102,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		stores.clone(),
 		shutdown.trigger(),
 		drain_rx.clone(),
+		data_plane_handle.clone(),
 	)
 	.await
 	.context("admin server starts")?;

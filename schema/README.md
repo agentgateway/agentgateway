@@ -51,6 +51,8 @@ This folder contains JSON schemas for various parts of the project
 |`config.backend.keepalives.interval`||
 |`config.backend.keepalives.retries`||
 |`config.backend.connectTimeout`||
+|`config.backend.poolIdleTimeout`|The maximum duration to keep an idle connection alive.|
+|`config.backend.poolMaxSize`|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
 |`config.listener`||
 |`config.listener.maxBufferSize`||
 |`config.listener.tlsHandshakeTimeout`||

@@ -328,6 +328,21 @@
             "connectTimeout": {
               "type": "string",
               "default": "10s"
+            },
+            "poolIdleTimeout": {
+              "description": "The maximum duration to keep an idle connection alive.",
+              "type": "string",
+              "default": "10s"
+            },
+            "poolMaxSize": {
+              "description": "The maximum number of connections allowed in the pool, per hostname. If set, this will limit\nthe total number of connections kept alive to any given host.\nNote: excess connections will still be created, they will just not remain idle.\nIf unset, there is no limit",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint",
+              "minimum": 0,
+              "default": null
             }
           },
           "additionalProperties": false,
@@ -338,7 +353,9 @@
               "interval": "3m0s",
               "retries": 9
             },
-            "connectTimeout": "10s"
+            "connectTimeout": "10s",
+            "poolIdleTimeout": "10s",
+            "poolMaxSize": null
           }
         },
         "listener": {
