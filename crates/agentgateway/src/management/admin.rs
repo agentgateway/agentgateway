@@ -266,11 +266,9 @@ async fn handle_tokio_tasks(
 	}
 
 	if let Ok(dump) = tokio::time::timeout(Duration::from_secs(10), dataplane_handle.dump()).await {
-		for (task) in dump.tasks().iter() {
+		for task in dump.tasks().iter() {
 			let trace = task.trace();
-			task_dump
-				.workload
-				.push(trace.to_string());
+			task_dump.workload.push(trace.to_string());
 		}
 	} else {
 		task_dump

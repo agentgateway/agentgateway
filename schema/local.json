@@ -354,7 +354,7 @@
               "retries": 9
             },
             "connectTimeout": "10s",
-            "poolIdleTimeout": "10s",
+            "poolIdleTimeout": "1m30s",
             "poolMaxSize": null
           }
         },

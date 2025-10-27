@@ -1,6 +1,8 @@
 [alias]
 xtask = "run --package xtask --"
 
+# Enable tokio_unstable for task dump
+# Not supported for non-linux
 [target.x86_64-unknown-linux-gnu]
 linker = "clang"
 rustflags = [
@@ -12,12 +14,3 @@ linker = "clang"
 rustflags = [
     "--cfg", "tokio_unstable"
 ]
-
-[target.aarch64-apple-darwin]
-rustflags = ["--cfg", "tokio_unstable"]
-
-[target.x86_64-apple-darwin]
-rustflags = ["--cfg", "tokio_unstable"]
-
-[target.x86_64-pc-windows-msvc]
-rustflags = ["--cfg", "tokio_unstable"]
