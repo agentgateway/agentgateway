@@ -58,6 +58,9 @@ jobs:
       id: build
       uses: docker/build-push-action@v6
       with:
+        build-args: |
+          VERSION=${{ env.VERSION }}
+          GIT_REVISION=${{ env.GITHUB_SHA }}
         platforms: ${{ matrix.platform }}
         labels: ${{ steps.meta.outputs.labels }}
         tags: ${{ env.REGISTRY_IMAGE }}
@@ -178,6 +181,8 @@ jobs:
         cache-from: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache-musl
         cache-to: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache-musl,mode=max
         build-args: |
+          VERSION=${{ env.VERSION }}
+          GIT_REVISION=${{ env.GITHUB_SHA }}
           BUILDER=musl
 
     - name: Export digest
