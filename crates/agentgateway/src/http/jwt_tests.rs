@@ -117,6 +117,16 @@ fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
 	format!("{h}.{p}.{s}")
 }
 
+fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
+	use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+	let header = json!({ "alg": "ES256" });
+	let payload = json!({ "iss": iss, "aud": aud, "exp": exp });
+	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let s = URL_SAFE_NO_PAD.encode(b"sig");
+	format!("{h}.{p}.{s}")
+}
+
 #[test]
 pub fn test_jwt_rejections_table() {
 	use std::time::{SystemTime, UNIX_EPOCH};
@@ -167,6 +177,16 @@ pub fn test_jwt_rejections_table() {
 			other => panic!("{name}: expected Invalid(..), got {:?}", other),
 		}
 	}
+
+	// MissingKeyId: token header without kid
+	let token_no_kid = build_unsigned_token_without_kid(issuer, allowed_aud, now + 600);
+	let res = jwt.validate_claims(&token_no_kid);
+	assert!(matches!(res, Err(TokenError::MissingKeyId)));
+
+	// UnknownKeyId: kid not found among providers
+	let token_unknown_kid = build_unsigned_token("non-existent-kid", issuer, allowed_aud, now + 600);
+	let res = jwt.validate_claims(&token_unknown_kid);
+	assert!(matches!(res, Err(TokenError::UnknownKeyId(_))));
 }
 
 #[tokio::test]
