@@ -1,25 +1,18 @@
-use std::collections::HashSet;
 use std::net::{IpAddr, SocketAddr};
-use std::num::NonZeroU16;
 use std::sync::Arc;
 
-use proto::agent::policy_spec::remote_rate_limit::Type as RlType;
 use rustls::ServerConfig;
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth, SimpleBackendAuth};
+use crate::http::auth::{AwsAuth, BackendAuth};
+use crate::http::authorization;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
-use crate::http::{
-	StatusCode, authorization, backendtls, csrf, ext_proc, filters, localratelimit, uri,
-};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto;
 use crate::types::proto::ProtoError;
 use crate::types::proto::agent::mcp_target::Protocol;
-use crate::types::proto::agent::policy_spec::inference_routing::FailureMode;
-use crate::types::proto::agent::policy_spec::local_rate_limit::Type;
 use crate::*;
 
 impl TryFrom<&proto::agent::TlsConfig> for TLSConfig {
@@ -45,17 +38,18 @@ impl TryFrom<&proto::agent::RouteBackend> for RouteBackendReference {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::RouteBackend) -> Result<Self, Self::Error> {
-		let kind = resolve_reference(s.backend.as_ref())?;
-		let filters = s
-			.filters
-			.iter()
-			.map(RouteFilter::try_from)
-			.collect::<Result<Vec<_>, _>>()?;
-		Ok(Self {
-			weight: s.weight as usize,
-			backend: kind,
-			filters,
-		})
+		todo!();
+		// let kind = resolve_reference(s.backend.as_ref())?;
+		// let filters = s
+		// 	.filters
+		// 	.iter()
+		// 	.map(RouteFilter::try_from)
+		// 	.collect::<Result<Vec<_>, _>>()?;
+		// Ok(Self {
+		// 	weight: s.weight as usize,
+		// 	backend: kind,
+		// 	filters,
+		// })
 	}
 }
 
@@ -135,41 +129,42 @@ impl TryFrom<proto::agent::TrafficPolicy> for TrafficPolicy {
 	type Error = ProtoError;
 
 	fn try_from(s: proto::agent::TrafficPolicy) -> Result<Self, Self::Error> {
-		let req = s.request_timeout.map(|v| v.try_into()).transpose()?;
-		let backend = s
-			.backend_request_timeout
-			.map(|v| v.try_into())
-			.transpose()?;
-
-		let retry = s
-			.retry
-			.map(
-				|retry_proto| -> Result<crate::http::retry::Policy, ProtoError> {
-					let codes: Result<Vec<http::StatusCode>, _> = retry_proto
-						.retry_status_codes
-						.iter()
-						.map(|&v| {
-							http::StatusCode::from_u16(v as u16)
-								.map_err(|_| ProtoError::Generic(format!("invalid status code: {v}")))
-						})
-						.collect();
-					Ok(crate::http::retry::Policy {
-						codes: codes?.into_boxed_slice(),
-						attempts: std::num::NonZeroU8::new(retry_proto.attempts as u8)
-							.unwrap_or_else(|| std::num::NonZeroU8::new(1).unwrap()),
-						backoff: retry_proto.backoff.map(|v| v.try_into()).transpose()?,
-					})
-				},
-			)
-			.transpose()?;
-
-		Ok(Self {
-			timeout: crate::http::timeout::Policy {
-				request_timeout: req,
-				backend_request_timeout: backend,
-			},
-			retry,
-		})
+		todo!();
+		// let req = s.request_timeout.map(|v| v.try_into()).transpose()?;
+		// let backend = s
+		// 	.backend_request_timeout
+		// 	.map(|v| v.try_into())
+		// 	.transpose()?;
+		//
+		// let retry = s
+		// 	.retry
+		// 	.map(
+		// 		|retry_proto| -> Result<crate::http::retry::Policy, ProtoError> {
+		// 			let codes: Result<Vec<http::StatusCode>, _> = retry_proto
+		// 				.retry_status_codes
+		// 				.iter()
+		// 				.map(|&v| {
+		// 					http::StatusCode::from_u16(v as u16)
+		// 						.map_err(|_| ProtoError::Generic(format!("invalid status code: {v}")))
+		// 				})
+		// 				.collect();
+		// 			Ok(crate::http::retry::Policy {
+		// 				codes: codes?.into_boxed_slice(),
+		// 				attempts: std::num::NonZeroU8::new(retry_proto.attempts as u8)
+		// 					.unwrap_or_else(|| std::num::NonZeroU8::new(1).unwrap()),
+		// 				backoff: retry_proto.backoff.map(|v| v.try_into()).transpose()?,
+		// 			})
+		// 		},
+		// 	)
+		// 	.transpose()?;
+		//
+		// Ok(Self {
+		// 	timeout: crate::http::timeout::Policy {
+		// 		request_timeout: req,
+		// 		backend_request_timeout: backend,
+		// 	},
+		// 	retry,
+		// })
 	}
 }
 
@@ -270,38 +265,39 @@ impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::Route) -> Result<Self, Self::Error> {
-		let r = Route {
-			key: strng::new(&s.key),
-			route_name: strng::new(&s.route_name),
-			rule_name: default_as_none(s.rule_name.as_str()).map(strng::new),
-			hostnames: s.hostnames.iter().map(strng::new).collect(),
-			matches: s
-				.matches
-				.iter()
-				.map(RouteMatch::try_from)
-				.collect::<Result<Vec<_>, _>>()?,
-			filters: s
-				.filters
-				.iter()
-				.map(RouteFilter::try_from)
-				.collect::<Result<Vec<_>, _>>()?,
-			backends: s
-				.backends
-				.iter()
-				.map(RouteBackendReference::try_from)
-				.collect::<Result<Vec<_>, _>>()?,
-			policies: s
-				.traffic_policy
-				.clone()
-				.map(TrafficPolicy::try_from)
-				.transpose()?,
-			inline_policies: s
-				.inline_policies
-				.iter()
-				.map(Policy::try_from)
-				.collect::<Result<Vec<_>, _>>()?,
-		};
-		Ok((r, strng::new(&s.listener_key)))
+		todo!();
+		// let r = Route {
+		// 	key: strng::new(&s.key),
+		// 	route_name: strng::new(&s.route_name),
+		// 	rule_name: default_as_none(s.rule_name.as_str()).map(strng::new),
+		// 	hostnames: s.hostnames.iter().map(strng::new).collect(),
+		// 	matches: s
+		// 		.matches
+		// 		.iter()
+		// 		.map(RouteMatch::try_from)
+		// 		.collect::<Result<Vec<_>, _>>()?,
+		// 	filters: s
+		// 		.filters
+		// 		.iter()
+		// 		.map(RouteFilter::try_from)
+		// 		.collect::<Result<Vec<_>, _>>()?,
+		// 	backends: s
+		// 		.backends
+		// 		.iter()
+		// 		.map(RouteBackendReference::try_from)
+		// 		.collect::<Result<Vec<_>, _>>()?,
+		// 	policies: s
+		// 		.traffic_policy
+		// 		.clone()
+		// 		.map(TrafficPolicy::try_from)
+		// 		.transpose()?,
+		// 	inline_policies: s
+		// 		.inline_policies
+		// 		.iter()
+		// 		.map(Policy::try_from)
+		// 		.collect::<Result<Vec<_>, _>>()?,
+		// };
+		// Ok((r, strng::new(&s.listener_key)))
 	}
 }
 
@@ -537,6 +533,7 @@ impl TryFrom<&proto::agent::RouteMatch> for RouteMatch {
 	}
 }
 
+/*
 impl TryFrom<&proto::agent::RouteFilter> for RouteFilter {
 	type Error = ProtoError;
 
@@ -639,6 +636,7 @@ impl TryFrom<&proto::agent::RouteFilter> for RouteFilter {
 		})
 	}
 }
+*/
 
 fn default_as_none<T: Default + PartialEq>(i: T) -> Option<T> {
 	if i == Default::default() {
@@ -743,6 +741,7 @@ impl TryFrom<&proto::agent::policy_spec::TransformationPolicy> for Transformatio
 	}
 }
 
+/*
 impl TryFrom<&proto::agent::PolicySpec> for Policy {
 	type Error = ProtoError;
 	fn try_from(spec: &proto::agent::PolicySpec) -> Result<Self, Self::Error> {
@@ -1058,29 +1057,32 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 		})
 	}
 }
+*/
+
 impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::Policy) -> Result<Self, Self::Error> {
-		let name = PolicyName::from(&s.name);
-		let target = s.target.as_ref().ok_or(ProtoError::MissingRequiredField)?;
-		let spec = s.spec.as_ref().ok_or(ProtoError::MissingRequiredField)?;
-		let target = match &target.kind {
-			Some(proto::agent::policy_target::Kind::Gateway(v)) => PolicyTarget::Gateway(v.into()),
-			Some(proto::agent::policy_target::Kind::Listener(v)) => PolicyTarget::Listener(v.into()),
-			Some(proto::agent::policy_target::Kind::Route(v)) => PolicyTarget::Route(v.into()),
-			Some(proto::agent::policy_target::Kind::RouteRule(v)) => PolicyTarget::RouteRule(v.into()),
-			Some(proto::agent::policy_target::Kind::Service(v)) => PolicyTarget::Service(v.into()),
-			Some(proto::agent::policy_target::Kind::Backend(v)) => PolicyTarget::Backend(v.into()),
-			Some(proto::agent::policy_target::Kind::SubBackend(v)) => PolicyTarget::SubBackend(v.into()),
-			_ => return Err(ProtoError::EnumParse("unknown target kind".to_string())),
-		};
-		let policy = spec.try_into()?;
-		Ok(TargetedPolicy {
-			name,
-			target,
-			policy,
-		})
+		todo!();
+		// let name = PolicyName::from(&s.name);
+		// let target = s.target.as_ref().ok_or(ProtoError::MissingRequiredField)?;
+		// let spec = s.spec.as_ref().ok_or(ProtoError::MissingRequiredField)?;
+		// let target = match &target.kind {
+		// 	Some(proto::agent::policy_target::Kind::Gateway(v)) => PolicyTarget::Gateway(v.into()),
+		// 	Some(proto::agent::policy_target::Kind::Listener(v)) => PolicyTarget::Listener(v.into()),
+		// 	Some(proto::agent::policy_target::Kind::Route(v)) => PolicyTarget::Route(v.into()),
+		// 	Some(proto::agent::policy_target::Kind::RouteRule(v)) => PolicyTarget::RouteRule(v.into()),
+		// 	Some(proto::agent::policy_target::Kind::Service(v)) => PolicyTarget::Service(v.into()),
+		// 	Some(proto::agent::policy_target::Kind::Backend(v)) => PolicyTarget::Backend(v.into()),
+		// 	Some(proto::agent::policy_target::Kind::SubBackend(v)) => PolicyTarget::SubBackend(v.into()),
+		// 	_ => return Err(ProtoError::EnumParse("unknown target kind".to_string())),
+		// };
+		// let policy = spec.try_into()?;
+		// Ok(TargetedPolicy {
+		// 	name,
+		// 	target,
+		// 	policy,
+		// })
 	}
 }
 
@@ -1265,7 +1267,7 @@ fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMat
 		.collect::<Result<Vec<_>, _>>()?;
 	Ok(headers)
 }
-
+/*
 #[cfg(test)]
 mod tests {
 	use serde_json::json;
@@ -1430,3 +1432,4 @@ mod tests {
 		Ok(())
 	}
 }
+*/

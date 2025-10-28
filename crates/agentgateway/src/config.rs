@@ -62,7 +62,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 					.context("GATEWAY is required")?,
 			)
 		} else {
-			("".to_string(), "".to_string())
+			("default".to_string(), "default".to_string())
 		};
 
 		let tok = parse("XDS_AUTH_TOKEN")?.or(raw.xds_auth_token);
@@ -378,7 +378,6 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				ns = std::env::var("POD_NAMESPACE").unwrap_or_else(|_| "".to_string())
 			),
 		},
-		listener: raw.listener,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?

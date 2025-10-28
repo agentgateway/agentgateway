@@ -49,6 +49,7 @@ use telemetry::{metrics, trc};
 
 use crate::control::{AuthSource, RootCert};
 use crate::telemetry::trc::Protocol;
+use crate::types::agent::GatewayName;
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -102,64 +103,8 @@ pub struct RawConfig {
 
 	#[serde(default)]
 	backend: BackendConfig,
-	#[serde(default)]
-	listener: ListenerConfig,
 
 	hbone: Option<RawHBONE>,
-}
-
-#[apply(schema!)]
-pub struct ListenerConfig {
-	#[serde(default = "defaults::max_buffer_size")]
-	max_buffer_size: usize,
-
-	#[serde(with = "serde_dur")]
-	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	#[serde(default = "defaults::tls_handshake_timeout")]
-	tls_handshake_timeout: Duration,
-
-	/// The maximum number of headers allowed in a request. Changing this value results in a performance
-	/// degradation, even if set to a lower value than the default (100)
-	#[serde(default)]
-	http1_max_headers: Option<usize>,
-	#[serde(with = "serde_dur")]
-	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	#[serde(default = "defaults::http1_idle_timeout")]
-	http1_idle_timeout: Duration,
-
-	#[serde(default)]
-	http2_window_size: Option<u32>,
-	#[serde(default)]
-	http2_connection_window_size: Option<u32>,
-	#[serde(default)]
-	http2_frame_size: Option<u32>,
-	#[serde(with = "serde_dur_option")]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	#[serde(default)]
-	http2_keepalive_interval: Option<Duration>,
-	#[serde(with = "serde_dur_option")]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	#[serde(default)]
-	http2_keepalive_timeout: Option<Duration>,
-}
-
-impl Default for ListenerConfig {
-	fn default() -> Self {
-		Self {
-			max_buffer_size: defaults::max_buffer_size(),
-			tls_handshake_timeout: defaults::tls_handshake_timeout(),
-
-			http1_max_headers: None,
-			http1_idle_timeout: defaults::http1_idle_timeout(),
-
-			http2_window_size: None,
-			http2_connection_window_size: None,
-			http2_frame_size: None,
-
-			http2_keepalive_interval: None,
-			http2_keepalive_timeout: None,
-		}
-	}
 }
 
 #[apply(schema!)]
@@ -453,7 +398,12 @@ pub struct Config {
 	pub threading_mode: ThreadingMode,
 
 	pub backend: BackendConfig,
-	pub listener: ListenerConfig,
+}
+
+impl Config {
+	pub fn gateway(&self) -> GatewayName {
+		strng::format!("{}/{}", self.xds.namespace, self.xds.gateway)
+	}
 }
 
 #[derive(serde::Serialize, Copy, PartialOrd, PartialEq, Eq, Clone, Debug, Default)]

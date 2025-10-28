@@ -3,8 +3,8 @@ mod binds;
 use std::sync::Arc;
 
 pub use binds::{
-	BackendPolicies, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies, RoutePolicies,
-	Store as BindStore,
+	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
+	RoutePolicies, Store as BindStore,
 };
 use serde::{Serialize, Serializer};
 mod discovery;
