@@ -581,6 +581,7 @@ pub fn auto_server(c: &ListenerConfig) -> auto::Builder<::hyper_util::rt::TokioE
 		http2_frame_size,
 		http2_keepalive_interval,
 		http2_keepalive_timeout,
+		..
 	} = c;
 
 	if let Some(m) = http1_max_headers {

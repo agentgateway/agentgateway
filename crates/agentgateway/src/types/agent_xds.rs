@@ -948,6 +948,9 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 					csrf_spec.additional_origins.iter().cloned().collect();
 				Policy::Csrf(csrf::Csrf::new(additional_origins))
 			},
+			Some(proto::agent::policy_spec::Kind::RedactHeaders(sh)) => {
+				Policy::RedactHeaders(sh.headers.clone())
+			},
 			Some(proto::agent::policy_spec::Kind::Ai(ai)) => {
 				let prompt_guard = ai.prompt_guard.as_ref().and_then(|pg| {
 					if pg.request.is_none() && pg.response.is_none() {

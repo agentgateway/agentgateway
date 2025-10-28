@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::io::Read;
@@ -141,6 +141,10 @@ pub struct ListenerConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	#[serde(default)]
 	http2_keepalive_timeout: Option<Duration>,
+
+	/// Case-insensitive list of header names to mark as sensitive
+	#[serde(default, deserialize_with = "deserialize_lowercase_hashset")]
+	pub sensitive_headers: HashSet<String>,
 }
 
 impl Default for ListenerConfig {
@@ -158,8 +162,23 @@ impl Default for ListenerConfig {
 
 			http2_keepalive_interval: None,
 			http2_keepalive_timeout: None,
+
+			sensitive_headers: HashSet::new(),
 		}
 	}
+}
+
+fn deserialize_lowercase_hashset<'de, D>(deserializer: D) -> Result<HashSet<String>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let list = Vec::<String>::deserialize(deserializer)?;
+	Ok(
+		list
+			.into_iter()
+			.map(|s| s.to_ascii_lowercase())
+			.collect::<HashSet<_>>(),
+	)
 }
 
 #[apply(schema!)]

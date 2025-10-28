@@ -45,6 +45,31 @@ fn expression() {
 	assert_eq!(Value::Bool(true), eval_request(expr, req).unwrap());
 }
 
+#[test]
+fn request_headers_respect_sensitive_redaction() {
+	// Build a request with a sensitive header
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://example.com")
+		.body(Body::empty())
+		.unwrap();
+	let mut v = ::http::HeaderValue::from_static("secret-value");
+	v.set_sensitive(true);
+	req.headers_mut().insert("x-test", v);
+
+	// Accessing request.headers should yield "Sensitive" for the redacted header
+	let expr = Expression::new(r#"request.headers["x-test"]"#).unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&expr);
+	cb.with_request(&req, "".to_string());
+	let exec = cb.build().unwrap();
+	let got = exec.eval(&expr).unwrap();
+	match got {
+		Value::String(s) => assert_eq!(s.as_str(), "Sensitive"),
+		other => panic!("unexpected value: {other:?}"),
+	}
+}
+
 #[divan::bench]
 fn bench_native(b: Bencher) {
 	let req = ::http::Request::builder()

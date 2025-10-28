@@ -408,6 +408,15 @@
                 "null"
               ],
               "default": null
+            },
+            "sensitiveHeaders": {
+              "description": "Case-insensitive list of header names to mark as sensitive (global default)",
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              },
+              "default": []
             }
           },
           "additionalProperties": false,
@@ -420,7 +429,8 @@
             "http2ConnectionWindowSize": null,
             "http2FrameSize": null,
             "http2KeepaliveInterval": null,
-            "http2KeepaliveTimeout": null
+            "http2KeepaliveTimeout": null,
+            "sensitiveHeaders": []
           }
         },
         "hbone": {
@@ -2729,6 +2739,17 @@
                               }
                             },
                             "additionalProperties": false,
+                            "default": null
+                          },
+                          "redactHeaders": {
+                            "description": "Redact headers in logs/tracing. Header names are case-insensitive.",
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
                             "default": null
                           },
                           "timeout": {
@@ -7392,6 +7413,17 @@
                 "additionalProperties": false,
                 "default": null
               },
+              "redactHeaders": {
+                "description": "Redact headers in logs/tracing. Header names are case-insensitive.",
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                },
+                "default": null
+              },
               "timeout": {
                 "description": "Timeout requests that exceed the configured duration.",
                 "type": [
@@ -7888,6 +7920,17 @@
                   }
                 },
                 "additionalProperties": false,
+                "default": null
+              },
+              "redactHeaders": {
+                "description": "Redact headers in logs/tracing. Header names are case-insensitive.",
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                },
                 "default": null
               }
             },

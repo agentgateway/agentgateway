@@ -368,7 +368,7 @@ impl HTTPProxy {
 
 		let mut req = req.map(http::Body::new);
 
-		sensitive_headers(&mut req);
+		sensitive_headers(&mut req, &self.inputs.cfg.listener.sensitive_headers);
 		normalize_uri(&connection, &mut req).map_err(ProxyError::Processing)?;
 		let mut req_upgrade = hop_by_hop_headers(&mut req);
 
@@ -388,10 +388,6 @@ impl HTTPProxy {
 			.cel
 			.ctx()
 			.with_source(&log.tcp_info, log.tls_info.as_ref());
-		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
-		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
-			log.cel.ctx().with_request_body(body);
-		}
 
 		let trace_parent = trc::TraceParent::from_request(&req);
 		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
@@ -437,14 +433,13 @@ impl HTTPProxy {
 			.cel
 			.ctx()
 			.with_source(&log.tcp_info, log.tls_info.as_ref());
-		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
-		// so we can do logging, etc when we find no routes.
-		// But we may find new expressions that now need the request.
-		// it is zero-cost at runtime to do it twice so NBD.
-		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
-		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
-			log.cel.ctx().with_request_body(body);
+		// Apply explicit RedactHeaders aggregated at gateway level BEFORE recording the request
+		// so the CEL request.headers capture respects HeaderValue::is_sensitive redactions.
+		if !gateway_policies.redacted_headers.is_empty() {
+			sensitive_headers(&mut req, &gateway_policies.redacted_headers);
 		}
+		// Defer capturing request into CEL until after route-level redactions,
+		// so logs reflect the final redacted header set.
 
 		let mut response_headers = HeaderMap::new();
 		let mut maybe_gateway_ext_proc = gateway_policies
@@ -490,6 +485,10 @@ impl HTTPProxy {
 				&selected_route.inline_policies,
 			)
 		};
+		// Apply explicit RedactHeaders aggregated at route level before request policies
+		if !route_policies.redacted_headers.is_empty() {
+			sensitive_headers(&mut req, &route_policies.redacted_headers);
+		}
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 
@@ -1304,9 +1303,14 @@ fn upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
 	}
 }
 
-fn sensitive_headers(req: &mut Request) {
+fn sensitive_headers(req: &mut Request, user_sensitive: &std::collections::HashSet<String>) {
 	for (name, value) in req.headers_mut() {
-		if name == http::header::AUTHORIZATION {
+		// Mark common sensitive headers
+		let key = name.as_str();
+		let lower = key.to_ascii_lowercase();
+		let is_configured_sensitive = user_sensitive.contains(lower.as_str());
+
+		if is_configured_sensitive || name == http::header::AUTHORIZATION {
 			value.set_sensitive(true)
 		}
 	}
