@@ -671,7 +671,7 @@ impl Drop for DropOnLog {
 		// Record HTTP request duration for all requests
 		log
 			.metrics
-			.http_request_duration
+			.request_duration
 			.get_or_create(&http_labels)
 			.observe(duration.as_secs_f64());
 

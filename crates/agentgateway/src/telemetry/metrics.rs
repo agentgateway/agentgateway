@@ -101,7 +101,8 @@ pub struct BuildLabel {
 #[derive(Debug)]
 pub struct Metrics {
 	pub requests: Counter,
-	pub downstream_connection: TCPCounter,
+	pub request_duration: Histogram<HTTPLabels>,
+	pub response_bytes: Family<HTTPLabels, counter::Counter>,
 
 	pub mcp_requests: Family<MCPCall, counter::Counter>,
 
@@ -110,15 +111,13 @@ pub struct Metrics {
 	pub gen_ai_time_per_output_token: Histogram<GenAILabels>,
 	pub gen_ai_time_to_first_token: Histogram<GenAILabels>,
 
-	pub response_bytes: Family<HTTPLabels, counter::Counter>,
+	pub tls_handshake_duration: Histogram<TCPLabels>,
 
-	pub http_request_duration: Histogram<HTTPLabels>,
-
+	pub downstream_connection: TCPCounter,
 	pub tcp_downstream_rx_bytes: Family<TCPLabels, counter::Counter>,
 	pub tcp_downstream_tx_bytes: Family<TCPLabels, counter::Counter>,
 
 	pub upstream_connect_duration: Histogram<ConnectLabels>,
-	pub tls_handshake_duration: Histogram<TCPLabels>,
 }
 
 // FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
@@ -269,12 +268,12 @@ impl Metrics {
 				);
 				m
 			},
-			http_request_duration: {
+			request_duration: {
 				let m = Family::<HTTPLabels, _>::new_with_constructor(move || {
 					PromHistogram::new(HTTP_REQUEST_DURATION_BUCKET)
 				});
 				registry.register_with_unit(
-					"http_request_duration",
+					"request_duration",
 					"Duration of HTTP requests (seconds)",
 					Unit::Seconds,
 					m.clone(),
