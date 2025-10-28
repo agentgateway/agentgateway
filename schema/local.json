@@ -2493,7 +2493,7 @@
                                         "type": "integer",
                                         "format": "uint32",
                                         "minimum": 0,
-                                        "default": 8192
+                                        "default": 0
                                       },
                                       "allowPartialMessage": {
                                         "description": "If true, send partial body when max_request_bytes is reached",
@@ -7181,7 +7181,7 @@
                             "type": "integer",
                             "format": "uint32",
                             "minimum": 0,
-                            "default": 8192
+                            "default": 0
                           },
                           "allowPartialMessage": {
                             "description": "If true, send partial body when max_request_bytes is reached",
