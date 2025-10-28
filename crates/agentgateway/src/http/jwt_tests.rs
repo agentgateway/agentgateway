@@ -168,3 +168,61 @@ pub fn test_jwt_rejections_table() {
 		}
 	}
 }
+
+#[tokio::test]
+pub async fn test_apply_strict_missing_token() {
+	use std::collections::HashMap;
+	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+	use std::sync::Arc;
+	use std::time::Instant;
+
+	use frozen_collections::FzHashSet;
+	use prometheus_client::registry::Registry;
+
+	use crate::telemetry::log;
+	use crate::telemetry::log::{LoggingFields, MetricFields, RequestLog};
+	use crate::telemetry::metrics::Metrics;
+	use crate::telemetry::trc;
+	use crate::transport::stream::TCPConnectionInfo;
+
+	// Build a Strict-mode Jwt with no providers (not needed for missing-token path)
+	let jwt = super::Jwt {
+		mode: super::Mode::Strict,
+		providers: vec![],
+	};
+
+	// Minimal Request without Authorization header
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+
+	// Minimal RequestLog
+	let log_cfg = log::Config {
+		filter: None,
+		fields: Arc::new(LoggingFields::default()),
+		metric_fields: Arc::new(MetricFields::default()),
+		excluded_metrics: FzHashSet::default(),
+		level: "info".to_string(),
+		format: crate::LoggingFormat::Text,
+	};
+	let tracing_cfg = trc::Config {
+		endpoint: None,
+		headers: HashMap::new(),
+		protocol: trc::Protocol::Grpc,
+		fields: Arc::new(LoggingFields::default()),
+		random_sampling: None,
+		client_sampling: None,
+	};
+	let cel = log::CelLogging::new(log_cfg, tracing_cfg);
+	let mut prom = Registry::default();
+	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
+	let start = Instant::now();
+	let start_time = agent_core::telemetry::render_current_time();
+	let tcp_info = TCPConnectionInfo {
+		peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),
+		local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
+		start,
+	};
+	let mut req_log = RequestLog::new(cel, metrics, start, start_time, tcp_info);
+
+	let res = jwt.apply(&mut req_log, &mut req).await;
+	assert!(matches!(res, Err(super::TokenError::Missing)));
+}
