@@ -127,6 +127,7 @@ fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
 	format!("{h}.{p}.{s}")
 }
 
+// Validate specific rejection reasons for tokens: audience, issuer, expiry, missing kid, unknown kid
 #[test]
 pub fn test_jwt_rejections_table() {
 	use std::time::{SystemTime, UNIX_EPOCH};
@@ -189,6 +190,7 @@ pub fn test_jwt_rejections_table() {
 	assert!(matches!(res, Err(TokenError::UnknownKeyId(_))));
 }
 
+// Strict mode: reject requests that are missing the Authorization header
 #[tokio::test]
 pub async fn test_apply_strict_missing_token() {
 	// Build a Strict-mode Jwt with no providers (not needed for missing-token path)
@@ -207,6 +209,7 @@ pub async fn test_apply_strict_missing_token() {
 	assert!(matches!(res, Err(super::TokenError::Missing)));
 }
 
+// Permissive mode: allow requests without a token and do not attach claims
 #[tokio::test]
 pub async fn test_apply_permissive_no_token_ok() {
 	let base = setup_test_jwt().0;
@@ -221,6 +224,7 @@ pub async fn test_apply_permissive_no_token_ok() {
 	assert!(req.extensions().get::<super::Claims>().is_none());
 }
 
+// Permissive mode: invalid token does not fail the request and keeps the header
 #[tokio::test]
 pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
@@ -242,6 +246,7 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 	let _ = (kid, issuer, allowed_aud); // silence unused
 }
 
+// Permissive mode: valid token attaches claims and removes the Authorization header
 #[tokio::test]
 pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header() {
 	use std::time::{SystemTime, UNIX_EPOCH};
@@ -264,6 +269,7 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 	assert!(req.extensions().get::<super::Claims>().is_some());
 }
 
+// Optional mode: allow requests without a token and do not attach claims
 #[tokio::test]
 pub async fn test_apply_optional_no_token_ok() {
 	let base = setup_test_jwt().0;
@@ -278,6 +284,7 @@ pub async fn test_apply_optional_no_token_ok() {
 	assert!(req.extensions().get::<super::Claims>().is_none());
 }
 
+// Optional mode: if a token is present but invalid, return an error
 #[tokio::test]
 pub async fn test_apply_optional_invalid_token_err() {
 	let base = setup_test_jwt().0;
@@ -295,6 +302,7 @@ pub async fn test_apply_optional_invalid_token_err() {
 	assert!(matches!(res, Err(TokenError::InvalidHeader(_))));
 }
 
+// Optional mode: valid token attaches claims and removes the Authorization header
 #[tokio::test]
 pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header() {
 	use std::time::{SystemTime, UNIX_EPOCH};
@@ -440,6 +448,7 @@ fn setup_test_multi_jwt(
 	)
 }
 
+// Multiple providers: tokens matching either provider's kid/issuer/audience are accepted
 #[test]
 pub fn test_validate_claims_multi_providers_accepts_both() {
 	use std::time::{SystemTime, UNIX_EPOCH};
