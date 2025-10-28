@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use serde_json::json;
 
+use super::{Jwt, Mode, TokenError};
 use super::Provider;
 
 #[test]
@@ -59,4 +60,196 @@ pub fn test_basic_jwks() {
 		p.keys.keys().collect_vec(),
 		vec!["XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI"]
 	);
+}
+
+#[test]
+pub fn test_jwt_audience_rejected() {
+	use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	// Build a JWKS with a known EC key
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+
+	// Provider configured for audience "allowed-aud"
+	let mut provider = Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		vec!["allowed-aud".to_string()],
+	)
+	.unwrap();
+
+	// Disable signature validation for the test so we don't need a private key
+	let kid = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
+	let key = provider.keys.get_mut(kid).unwrap();
+	key.validation.insecure_disable_signature_validation();
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	// Craft a token with mismatched audience
+	let header = json!({
+		"alg": "ES256",
+		"kid": kid,
+	});
+	let exp = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+	let payload = json!({
+		"iss": "https://example.com",
+		"aud": "wrong-aud",
+		"exp": exp,
+	});
+	let header_enc = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let payload_enc = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let sig_enc = URL_SAFE_NO_PAD.encode(b"sig");
+	let token = format!("{header_enc}.{payload_enc}.{sig_enc}");
+
+	let res = jwt.validate_claims(&token);
+	assert!(matches!(res, Err(TokenError::Invalid(_))));
+}
+
+#[test]
+pub fn test_jwt_issuer_rejected() {
+	use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+
+	// Provider expects issuer https://example.com and audience allowed-aud
+	let mut provider = Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		vec!["allowed-aud".to_string()],
+	)
+	.unwrap();
+
+	// Disable signature validation so we can use a synthetic token
+	let kid = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
+	let key = provider.keys.get_mut(kid).unwrap();
+	key.validation.insecure_disable_signature_validation();
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	// Build a token with wrong issuer
+	let header = json!({
+		"alg": "ES256",
+		"kid": kid,
+	});
+	let exp = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+	let payload = json!({
+		"iss": "https://wrong.example.com",
+		"aud": "allowed-aud",
+		"exp": exp,
+	});
+	let header_enc = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let payload_enc = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let sig_enc = URL_SAFE_NO_PAD.encode(b"sig");
+	let token = format!("{header_enc}.{payload_enc}.{sig_enc}");
+
+	let res = jwt.validate_claims(&token);
+	match res {
+		Err(TokenError::Invalid(e)) => {
+			assert!(matches!(e.kind(), jsonwebtoken::errors::ErrorKind::InvalidIssuer));
+		},
+		other => panic!("expected Invalid(InvalidIssuer), got {:?}", other),
+	}
+}
+
+#[test]
+pub fn test_jwt_expired_rejected() {
+	use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+
+	let mut provider = Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		vec!["allowed-aud".to_string()],
+	)
+	.unwrap();
+
+	// Disable signature validation so we can use a synthetic token
+	let kid = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
+	let key = provider.keys.get_mut(kid).unwrap();
+	key.validation.insecure_disable_signature_validation();
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	// Build a token with an expired exp
+	let header = json!({
+		"alg": "ES256",
+		"kid": kid,
+	});
+	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+	let payload = json!({
+		"iss": "https://example.com",
+		"aud": "allowed-aud",
+		"exp": now - 100000,
+	});
+	let header_enc = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let payload_enc = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let sig_enc = URL_SAFE_NO_PAD.encode(b"sig");
+	let token = format!("{header_enc}.{payload_enc}.{sig_enc}");
+
+	let res = jwt.validate_claims(&token);
+	match res {
+		Err(TokenError::Invalid(e)) => {
+			assert!(matches!(e.kind(), jsonwebtoken::errors::ErrorKind::ExpiredSignature));
+		},
+		other => panic!("expected Invalid(ExpiredSignature), got {:?}", other),
+	}
 }
