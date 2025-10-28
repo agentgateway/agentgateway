@@ -538,6 +538,22 @@ message PolicySpec {
     FailureMode failure_mode = 2;
   }
 
+  message Tracing {
+    string service_name = 1;
+
+    BackendReference provider_backend = 2;
+
+    bool spawn_upstream_span = 3;
+
+    repeated TracingAttribute attributes = 4;
+  }
+
+  message TracingAttribute {
+    string name = 1;
+
+    string value = 2;
+  }
+
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;
@@ -553,6 +569,7 @@ message PolicySpec {
     RemoteRateLimit remote_rate_limit = 12;
     CSRF csrf = 13;
     ExtProc ext_proc = 14;
+    Tracing tracing = 15;
   }
 }
 

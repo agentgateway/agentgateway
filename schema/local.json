@@ -2731,6 +2731,108 @@
                             "additionalProperties": false,
                             "default": null
                           },
+                          "tracing": {
+                            "description": "Configure dynamic OpenTelemetry tracing per listener/gateway.",
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "serviceName": {
+                                "type": "string"
+                              },
+                              "providerBackend": {
+                                "oneOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "invalid"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "service": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "object",
+                                            "properties": {
+                                              "namespace": {
+                                                "type": "string"
+                                              },
+                                              "hostname": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "namespace",
+                                              "hostname"
+                                            ]
+                                          },
+                                          "port": {
+                                            "type": "integer",
+                                            "format": "uint16",
+                                            "minimum": 0,
+                                            "maximum": 65535
+                                          }
+                                        },
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "name",
+                                          "port"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "service"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "host": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "host"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              "spawnUpstreamSpan": {
+                                "type": "boolean"
+                              },
+                              "attributes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name",
+                                    "value"
+                                  ]
+                                }
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "serviceName",
+                              "providerBackend",
+                              "spawnUpstreamSpan"
+                            ]
+                          },
                           "timeout": {
                             "description": "Timeout requests that exceed the configured duration.",
                             "type": [
@@ -7391,6 +7493,108 @@
                 },
                 "additionalProperties": false,
                 "default": null
+              },
+              "tracing": {
+                "description": "Configure dynamic OpenTelemetry tracing per listener/gateway.",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "serviceName": {
+                    "type": "string"
+                  },
+                  "providerBackend": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "invalid"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "service": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "object",
+                                "properties": {
+                                  "namespace": {
+                                    "type": "string"
+                                  },
+                                  "hostname": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "namespace",
+                                  "hostname"
+                                ]
+                              },
+                              "port": {
+                                "type": "integer",
+                                "format": "uint16",
+                                "minimum": 0,
+                                "maximum": 65535
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "name",
+                              "port"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "service"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "host": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "host"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "spawnUpstreamSpan": {
+                    "type": "boolean"
+                  },
+                  "attributes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "value"
+                      ]
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "serviceName",
+                  "providerBackend",
+                  "spawnUpstreamSpan"
+                ]
               },
               "timeout": {
                 "description": "Timeout requests that exceed the configured duration.",

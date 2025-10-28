@@ -15,6 +15,7 @@ pub use traceparent::TraceParent;
 
 use crate::cel;
 use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
+use crate::types::agent::{SimpleBackendReference, TracingConfig};
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
@@ -98,6 +99,62 @@ impl Tracer {
 		}))
 	}
 
+	/// Create a tracer from dynamic TracingConfig (policy-driven)
+	/// This is used for per-listener tracing configurations
+	pub fn create_tracer_from_config(
+		config: &TracingConfig,
+		_fields: Arc<LoggingFields>,
+	) -> anyhow::Result<Tracer> {
+		// For now, we need to extract endpoint information from the backend reference
+		// TODO: We'll integrate PolicyClient here to route through agentgateway policies
+
+		// Extract endpoint from backend reference
+		// This is a placeholder - we'll need to resolve the backend to get the actual endpoint
+		let endpoint = match &config.provider_backend {
+			SimpleBackendReference::Service { name, port } => {
+				// Construct endpoint from service reference
+				format!("http://{}:{}", name.hostname, port)
+			},
+			SimpleBackendReference::Backend(backend_name) => {
+				// For backend names, we'll need to resolve them
+				// For now, assume it's a direct hostname or URL
+				backend_name.to_string()
+			},
+			SimpleBackendReference::Invalid => {
+				anyhow::bail!("Invalid backend reference for tracing provider");
+			},
+		};
+
+		// Build the tracer provider with the service name from config
+		let result = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+			.with_resource(
+				Resource::builder()
+					.with_service_name(config.service_name.clone())
+					.with_attribute(KeyValue::new(
+						"service.version",
+						agent_core::version::BuildInfo::new().version,
+					))
+					.build(),
+			)
+			// TODO: Replace with PolicyClient-backed channel in step 8
+			.with_batch_exporter({
+				// Default to gRPC for now
+				opentelemetry_otlp::SpanExporter::builder()
+					.with_tonic()
+					.with_endpoint(&endpoint)
+					.build()?
+			})
+			.build();
+
+		let tracer = result.tracer("agentgateway");
+
+		Ok(Tracer {
+			tracer: Arc::new(tracer),
+			provider: result,
+			fields: _fields,
+		})
+	}
+
 	pub fn shutdown(&self) {
 		let _ = self.provider.shutdown();
 	}
@@ -113,7 +170,12 @@ impl Tracer {
 			.filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
 			.map(|(k, v)| KeyValue::new(Key::new(k.to_string()), to_otel(v)))
 			.collect_vec();
-		let out_span = request.outgoing_span.as_ref().unwrap();
+
+		// outgoing_span should always be present when tracer is enabled
+		let Some(out_span) = request.outgoing_span.as_ref() else {
+			return;
+		};
+
 		if !out_span.is_sampled() {
 			return;
 		}

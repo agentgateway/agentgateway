@@ -307,6 +307,19 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.csrf`|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`binds[].listeners[].routes[].policies.csrf.additionalOrigins`||
+|`binds[].listeners[].routes[].policies.tracing`|Configure dynamic OpenTelemetry tracing per listener/gateway.|
+|`binds[].listeners[].routes[].policies.tracing.serviceName`||
+|`binds[].listeners[].routes[].policies.tracing.providerBackend`||
+|`binds[].listeners[].routes[].policies.tracing.providerBackend.(1)service`||
+|`binds[].listeners[].routes[].policies.tracing.providerBackend.(1)service.name`||
+|`binds[].listeners[].routes[].policies.tracing.providerBackend.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.tracing.providerBackend.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.tracing.providerBackend.(1)service.port`||
+|`binds[].listeners[].routes[].policies.tracing.providerBackend.(1)host`||
+|`binds[].listeners[].routes[].policies.tracing.spawnUpstreamSpan`||
+|`binds[].listeners[].routes[].policies.tracing.attributes`||
+|`binds[].listeners[].routes[].policies.tracing.attributes[].name`||
+|`binds[].listeners[].routes[].policies.tracing.attributes[].value`||
 |`binds[].listeners[].routes[].policies.timeout`|Timeout requests that exceed the configured duration.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`||
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`||
@@ -805,6 +818,19 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.transformations.response.body`||
 |`policies[].policy.csrf`|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`policies[].policy.csrf.additionalOrigins`||
+|`policies[].policy.tracing`|Configure dynamic OpenTelemetry tracing per listener/gateway.|
+|`policies[].policy.tracing.serviceName`||
+|`policies[].policy.tracing.providerBackend`||
+|`policies[].policy.tracing.providerBackend.(1)service`||
+|`policies[].policy.tracing.providerBackend.(1)service.name`||
+|`policies[].policy.tracing.providerBackend.(1)service.name.namespace`||
+|`policies[].policy.tracing.providerBackend.(1)service.name.hostname`||
+|`policies[].policy.tracing.providerBackend.(1)service.port`||
+|`policies[].policy.tracing.providerBackend.(1)host`||
+|`policies[].policy.tracing.spawnUpstreamSpan`||
+|`policies[].policy.tracing.attributes`||
+|`policies[].policy.tracing.attributes[].name`||
+|`policies[].policy.tracing.attributes[].value`||
 |`policies[].policy.timeout`|Timeout requests that exceed the configured duration.|
 |`policies[].policy.timeout.requestTimeout`||
 |`policies[].policy.timeout.backendRequestTimeout`||
