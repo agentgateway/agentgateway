@@ -1005,6 +1005,61 @@ pub enum IpFamily {
 
 pub type PolicyName = Strng;
 
+/// Configuration for dynamic tracing policy
+#[apply(schema_ser!)]
+pub struct TracingConfig {
+	pub service_name: String,
+	pub provider_backend: SimpleBackendReference,
+	pub spawn_upstream_span: bool,
+	pub attributes: Vec<TracingAttribute>,
+}
+
+/// A single tracing attribute with a CEL expression
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct TracingAttribute {
+	pub name: String,
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub value: Arc<cel::Expression>,
+}
+
+impl serde::Serialize for TracingAttribute {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		use serde::ser::SerializeStruct;
+		let mut state = serializer.serialize_struct("TracingAttribute", 1)?;
+		state.serialize_field("name", &self.name)?;
+		state.end()
+	}
+}
+
+/// TracingPolicy holds both the configuration and the compiled OpenTelemetry tracer
+#[derive(Clone)]
+pub struct TracingPolicy {
+	pub config: TracingConfig,
+	pub tracer: Arc<crate::telemetry::trc::Tracer>,
+}
+
+impl std::fmt::Debug for TracingPolicy {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("TracingPolicy")
+			.field("config", &self.config)
+			.field("tracer", &"<tracer>")
+			.finish()
+	}
+}
+
+impl serde::Serialize for TracingPolicy {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.config.serialize(serializer)
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetedPolicy {
@@ -1092,6 +1147,8 @@ pub enum Policy {
 	Transformation(crate::http::transformation_cel::Transformation),
 	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	Csrf(crate::http::csrf::Csrf),
+	// Supported targets: Gateway < Listener; single policy allowed
+	Tracing(TracingPolicy),
 }
 
 #[apply(schema!)]

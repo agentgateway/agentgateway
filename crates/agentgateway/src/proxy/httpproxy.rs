@@ -394,27 +394,8 @@ impl HTTPProxy {
 		}
 
 		let trace_parent = trc::TraceParent::from_request(&req);
-		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
-		if trace_sampled {
-			log.tracer = self.inputs.tracer.clone();
-			let ns = match trace_parent {
-				Some(tp) => {
-					// Build a new span off the existing trace
-					let ns = tp.new_span();
-					log.incoming_span = Some(tp);
-					ns
-				},
-				None => {
-					// Build an entirely new trace
-					let mut ns = TraceParent::new();
-					ns.flags = 1;
-					ns
-				},
-			};
-			ns.insert_header(&mut req);
-			req.extensions_mut().insert(ns.clone());
-			log.outgoing_span = Some(ns);
-		}
+
+		// Note: We'll set up the tracer after listener selection to support per-listener tracing
 
 		if let Some(tracer) = &log.tracer {
 			log.cel.register(tracer.fields.as_ref());
@@ -428,6 +409,63 @@ impl HTTPProxy {
 		log.listener_name = Some(selected_listener.name.clone());
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
+
+		// Dynamic tracer lookup - check for TracingPolicy on listener or gateway
+		let tracing_policy = {
+			let binds = inputs.stores.read_binds();
+			binds.tracing_policy(
+				selected_listener.key.clone(),
+				selected_listener.gateway_name.clone(),
+			)
+		};
+
+		// Set up tracing with the dynamically selected tracer
+		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
+		if trace_sampled {
+			// Use policy-based tracer if available, otherwise fall back to static tracer
+			log.tracer = tracing_policy
+				.as_ref()
+				.map(|tp| tp.tracer.as_ref().clone())
+				.or_else(|| self.inputs.tracer.clone());
+
+			// Only create spans if we have a tracer
+			if log.tracer.is_some() {
+				let spawn_upstream = tracing_policy
+					.as_ref()
+					.map(|tp| tp.config.spawn_upstream_span)
+					.unwrap_or(true);
+
+				// Always create a span for telemetry
+				let ns = match trace_parent {
+					Some(tp) => {
+						// Build a new span off the existing trace
+						let ns = tp.new_span();
+						log.incoming_span = Some(tp);
+						ns
+					},
+					None => {
+						// Build an entirely new trace
+						let mut ns = TraceParent::new();
+						ns.flags = 1;
+						ns
+					},
+				};
+
+				// Only inject traceparent header to upstream if spawn_upstream_span is true
+				if spawn_upstream {
+					ns.insert_header(&mut req);
+					req.extensions_mut().insert(ns.clone());
+				}
+
+				// Always set outgoing_span for telemetry export
+				log.outgoing_span = Some(ns);
+			}
+		}
+
+		if let Some(tracer) = &log.tracer {
+			log.cel.register(tracer.fields.as_ref());
+		}
+
 		let mut gateway_policies = inputs.stores.read_binds().gateway_policies(
 			selected_listener.key.clone(),
 			selected_listener.gateway_name.clone(),

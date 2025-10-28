@@ -14,6 +14,8 @@ use crate::http::{
 };
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::McpAuthorization;
+use crate::telemetry::log::LoggingFields;
+use crate::telemetry::trc;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto;
 use crate::types::proto::ProtoError;
@@ -743,6 +745,36 @@ impl TryFrom<&proto::agent::policy_spec::TransformationPolicy> for Transformatio
 	}
 }
 
+impl TryFrom<&proto::agent::policy_spec::Tracing> for TracingConfig {
+	type Error = ProtoError;
+
+	fn try_from(spec: &proto::agent::policy_spec::Tracing) -> Result<Self, Self::Error> {
+		let provider_backend = resolve_simple_reference(spec.provider_backend.as_ref())?;
+
+		let attributes = spec
+			.attributes
+			.iter()
+			.map(|attr| {
+				cel::Expression::new(attr.value.clone())
+					.map_err(|e| {
+						ProtoError::Generic(format!("invalid tracing attribute CEL expression: {e}"))
+					})
+					.map(|expr| TracingAttribute {
+						name: attr.name.clone(),
+						value: Arc::new(expr),
+					})
+			})
+			.collect::<Result<Vec<_>, _>>()?;
+
+		Ok(TracingConfig {
+			service_name: spec.service_name.clone(),
+			provider_backend,
+			spawn_upstream_span: spec.spawn_upstream_span,
+			attributes,
+		})
+	}
+}
+
 impl TryFrom<&proto::agent::PolicySpec> for Policy {
 	type Error = ProtoError;
 	fn try_from(spec: &proto::agent::PolicySpec) -> Result<Self, Self::Error> {
@@ -1033,6 +1065,23 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 						.map(|(k, v)| (strng::new(k), strng::new(v)))
 						.collect(),
 				}))
+			},
+			Some(proto::agent::policy_spec::Kind::Tracing(tracing_spec)) => {
+				// Convert protobuf Tracing to TracingConfig
+				let tracing_config = TracingConfig::try_from(tracing_spec)?;
+
+				// Create empty LoggingFields for now (can be enhanced later with CEL fields)
+				let logging_fields = Arc::new(LoggingFields::default());
+
+				// Instantiate the tracer from the config
+				let tracer = trc::Tracer::create_tracer_from_config(&tracing_config, logging_fields)
+					.map_err(|e| ProtoError::Generic(format!("failed to create tracer: {e}")))?;
+
+				// Wrap in TracingPolicy
+				Policy::Tracing(TracingPolicy {
+					config: tracing_config,
+					tracer: Arc::new(tracer),
+				})
 			},
 			_ => return Err(ProtoError::EnumParse("unknown spec kind".to_string())),
 		})

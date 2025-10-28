@@ -328,6 +328,31 @@ impl Store {
 		pol
 	}
 
+	/// Get the tracing policy for a listener or gateway.
+	/// Listener-level policies take precedence over gateway-level policies.
+	pub fn tracing_policy(
+		&self,
+		listener: ListenerKey,
+		gateway: GatewayName,
+	) -> Option<crate::types::agent::TracingPolicy> {
+		let listener_policies = self
+			.policies_by_target
+			.get(&PolicyTarget::Listener(listener));
+		let gateway_policies = self.policies_by_target.get(&PolicyTarget::Gateway(gateway));
+
+		// Try listener first, then gateway
+		listener_policies
+			.iter()
+			.copied()
+			.flatten()
+			.chain(gateway_policies.iter().copied().flatten())
+			.filter_map(|n| self.policies_by_name.get(n))
+			.find_map(|p| match &p.policy {
+				crate::types::agent::Policy::Tracing(tp) => Some(tp.clone()),
+				_ => None,
+			})
+	}
+
 	pub fn backend_policies(
 		&self,
 		backend: BackendName,

@@ -662,6 +662,11 @@ struct FilterOrPolicy {
 	#[serde(default)]
 	csrf: Option<http::csrf::Csrf>,
 
+	// Tracing policy
+	/// Configure dynamic OpenTelemetry tracing per listener/gateway.
+	#[serde(default)]
+	tracing: Option<LocalTracingConfig>,
+
 	// TrafficPolicy
 	/// Timeout requests that exceed the configured duration.
 	#[serde(default)]
@@ -669,6 +674,24 @@ struct FilterOrPolicy {
 	/// Retry matching requests.
 	#[serde(default)]
 	retry: Option<retry::Policy>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalTracingConfig {
+	#[serde(rename = "serviceName")]
+	pub service_name: String,
+	#[serde(rename = "providerBackend")]
+	pub provider_backend: SimpleLocalBackend,
+	#[serde(rename = "spawnUpstreamSpan")]
+	pub spawn_upstream_span: bool,
+	#[serde(default)]
+	pub attributes: Vec<LocalTracingAttribute>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalTracingAttribute {
+	pub name: String,
+	pub value: String, // CEL expression as string
 }
 
 #[apply(schema_de!)]
@@ -981,6 +1004,7 @@ async fn split_policies(
 		csrf,
 		ext_authz,
 		ext_proc,
+		tracing,
 		timeout,
 		retry,
 	} = pol;
@@ -1100,6 +1124,73 @@ async fn split_policies(
 			.into_iter()
 			.for_each(|backend| external_backends.push(backend));
 		route_policies.push(Policy::RemoteRateLimit(pol))
+	}
+
+	// Tracing policy (Listener/Gateway level)
+	if let Some(local_config) = tracing {
+		// Extract endpoint directly from the local backend config
+		let endpoint = match &local_config.provider_backend {
+			SimpleLocalBackend::Service { name, port } => {
+				format!("http://{}:{}", name.hostname, port)
+			},
+			SimpleLocalBackend::Opaque(target) => {
+				// Target is already in "host:port" format
+				format!("http://{}", target)
+			},
+			SimpleLocalBackend::Invalid => {
+				anyhow::bail!("Invalid backend for tracing provider")
+			},
+		};
+
+		// Create a simple backend reference pointing to the endpoint
+		// We use Service variant with the hostname extracted from the endpoint
+		let (host, port_str) = endpoint
+			.strip_prefix("http://")
+			.unwrap_or(&endpoint)
+			.split_once(":")
+			.ok_or_else(|| anyhow::anyhow!("Invalid endpoint format: {}", endpoint))?;
+		let port: u16 = port_str.parse()?;
+
+		let bref = SimpleBackendReference::Service {
+			name: NamespacedHostname {
+				namespace: strng::new("default"),
+				hostname: strng::new(host),
+			},
+			port,
+		};
+
+		// Convert LocalTracingAttribute to TracingAttribute
+		let attributes: Result<Vec<crate::types::agent::TracingAttribute>, _> = local_config
+			.attributes
+			.into_iter()
+			.map(|attr| {
+				cel::Expression::new(attr.value)
+					.map(|expr| crate::types::agent::TracingAttribute {
+						name: attr.name,
+						value: Arc::new(expr),
+					})
+					.map_err(|e| anyhow::anyhow!("invalid CEL expression in tracing attribute: {}", e))
+			})
+			.collect();
+		let attributes = attributes?;
+
+		let config = crate::types::agent::TracingConfig {
+			service_name: local_config.service_name,
+			provider_backend: bref,
+			spawn_upstream_span: local_config.spawn_upstream_span,
+			attributes,
+		};
+
+		let tracer = crate::telemetry::trc::Tracer::create_tracer_from_config(
+			&config,
+			Arc::new(crate::telemetry::log::LoggingFields::default()),
+		)
+		.map_err(|e| anyhow::anyhow!("failed to create tracer from tracing policy: {}", e))?;
+
+		route_policies.push(Policy::Tracing(crate::types::agent::TracingPolicy {
+			config,
+			tracer: Arc::new(tracer),
+		}));
 	}
 
 	// Traffic policies
