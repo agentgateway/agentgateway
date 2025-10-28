@@ -49,10 +49,13 @@ EOF
 FROM ${BUILDER}-builder AS builder
 ARG TARGETARCH
 ARG PROFILE=release
+ARG VERSION
+ARG GIT_REVISION
 
 WORKDIR /app
 
 COPY Makefile Cargo.toml Cargo.lock ./
+COPY .cargo ./.cargo
 COPY crates ./crates
 COPY common ./common
 COPY --from=node /app/out ./ui/out
@@ -65,7 +68,9 @@ RUN --mount=type=cache,target=/app/target \
     --mount=type=cache,id=cargo,target=/usr/local/cargo/registry  \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     <<EOF
-cargo build --features ui  --target "$(cat /build/target)"  --profile ${PROFILE} || exit 1
+export VERSION="${VERSION}"
+export GIT_REVISION="${GIT_REVISION}"
+cargo build --features ui  --target "$(cat /build/target)" --profile ${PROFILE} || exit 1
 mkdir /out
 mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
 /out/agentgateway --version

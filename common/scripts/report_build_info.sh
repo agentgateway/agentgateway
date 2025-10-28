@@ -10,6 +10,6 @@ fi
 
 # used by common/scripts/gobuild.sh
 echo "agentgateway.dev.buildVersion=${VERSION:-$BUILD_GIT_REVISION}"
-echo "agentgateway.dev.buildGitRevision=${BUILD_GIT_REVISION}"
+echo "agentgateway.dev.buildGitRevision=${GIT_REVISION:-$BUILD_GIT_REVISION}"
 echo "agentgateway.dev.buildOS=$(uname -s)"
 echo "agentgateway.dev.buildArch=$(uname -m)"
