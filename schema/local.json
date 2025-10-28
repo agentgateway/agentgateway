@@ -2480,6 +2480,33 @@
                                     "format": "uint16",
                                     "minimum": 0,
                                     "maximum": 65535
+                                  },
+                                  "includeRequestBody": {
+                                    "description": "Options for including the request body in the authorization request",
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "properties": {
+                                      "maxRequestBytes": {
+                                        "description": "Maximum size of request body to buffer (default: 8192)",
+                                        "type": "integer",
+                                        "format": "uint32",
+                                        "minimum": 0,
+                                        "default": 0
+                                      },
+                                      "allowPartialMessage": {
+                                        "description": "If true, send partial body when max_request_bytes is reached",
+                                        "type": "boolean",
+                                        "default": false
+                                      },
+                                      "packAsBytes": {
+                                        "description": "If true, pack body as raw bytes in gRPC",
+                                        "type": "boolean",
+                                        "default": false
+                                      }
+                                    },
+                                    "additionalProperties": false
                                   }
                                 },
                                 "unevaluatedProperties": false,
@@ -7141,6 +7168,33 @@
                         "format": "uint16",
                         "minimum": 0,
                         "maximum": 65535
+                      },
+                      "includeRequestBody": {
+                        "description": "Options for including the request body in the authorization request",
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "maxRequestBytes": {
+                            "description": "Maximum size of request body to buffer (default: 8192)",
+                            "type": "integer",
+                            "format": "uint32",
+                            "minimum": 0,
+                            "default": 0
+                          },
+                          "allowPartialMessage": {
+                            "description": "If true, send partial body when max_request_bytes is reached",
+                            "type": "boolean",
+                            "default": false
+                          },
+                          "packAsBytes": {
+                            "description": "If true, pack body as raw bytes in gRPC",
+                            "type": "boolean",
+                            "default": false
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "unevaluatedProperties": false,
