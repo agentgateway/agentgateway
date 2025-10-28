@@ -668,6 +668,12 @@ impl Drop for DropOnLog {
 				.get_or_create(&http_labels)
 				.inc_by(log.response_bytes);
 		}
+		// Record HTTP request duration for all requests
+		log
+			.metrics
+			.http_request_duration
+			.get_or_create(&http_labels)
+			.observe(duration.as_secs_f64());
 
 		Self::add_llm_metrics(
 			&log,
