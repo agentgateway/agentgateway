@@ -244,6 +244,7 @@ struct TaskDump {
 	workload: Vec<String>,
 }
 
+#[cfg(target_os = "linux")]
 async fn handle_tokio_tasks(
 	_req: Request<Incoming>,
 	dataplane_handle: &Handle,
@@ -286,6 +287,20 @@ async fn handle_tokio_tasks(
 			.expect("builder with known status code should not fail"),
 	)
 }
+
+#[cfg(not(target_os = "linux"))]
+async fn handle_tokio_tasks(
+	_req: Request<Incoming>,
+	dataplane_handle: &Handle,
+) -> anyhow::Result<Response> {
+	Ok(
+		::http::Response::builder()
+			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+			.body("task dump is not available".into())
+			.expect("builder with known status code should not fail"),
+	)
+}
+
 async fn handle_config_dump(
 	handlers: &[Arc<dyn ConfigDumpHandler>],
 	dump: ConfigDump,

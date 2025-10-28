@@ -3,13 +3,7 @@ xtask = "run --package xtask --"
 
 # Enable tokio_unstable for task dump
 # Not supported for non-linux
-[target.x86_64-unknown-linux-gnu]
-linker = "clang"
-rustflags = [
-    "--cfg", "tokio_unstable"
-]
-
-[target.aarch64-unknown-linux-gnu]
+[target.'cfg(target_os = "linux")']
 linker = "clang"
 rustflags = [
     "--cfg", "tokio_unstable"
