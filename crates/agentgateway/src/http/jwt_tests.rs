@@ -171,6 +171,133 @@ pub fn test_jwt_rejections_table() {
 
 #[tokio::test]
 pub async fn test_apply_strict_missing_token() {
+	// Build a Strict-mode Jwt with no providers (not needed for missing-token path)
+	let jwt = super::Jwt {
+		mode: super::Mode::Strict,
+		providers: vec![],
+	};
+
+	// Minimal Request without Authorization header
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+
+	// Minimal RequestLog
+	let mut req_log = make_min_req_log();
+
+	let res = jwt.apply(&mut req_log, &mut req).await;
+	assert!(matches!(res, Err(super::TokenError::Missing)));
+}
+
+#[tokio::test]
+pub async fn test_apply_permissive_no_token_ok() {
+	let base = setup_test_jwt().0;
+	let jwt = Jwt {
+		mode: Mode::Permissive,
+		providers: base.providers.clone(),
+	};
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let mut log = make_min_req_log();
+	let res = jwt.apply(&mut log, &mut req).await;
+	assert!(res.is_ok());
+	assert!(req.extensions().get::<super::Claims>().is_none());
+}
+
+#[tokio::test]
+pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
+	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
+	let jwt = Jwt {
+		mode: Mode::Permissive,
+		providers: base.providers.clone(),
+	};
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_static("Bearer invalid-token"),
+	);
+	let mut log = make_min_req_log();
+	let res = jwt.apply(&mut log, &mut req).await;
+	assert!(res.is_ok());
+	// Header should remain present on failure in permissive mode
+	assert!(req.headers().get(crate::http::header::AUTHORIZATION).is_some());
+	assert!(req.extensions().get::<super::Claims>().is_none());
+	let _ = (kid, issuer, allowed_aud); // silence unused
+}
+
+#[tokio::test]
+pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
+	let jwt = Jwt {
+		mode: Mode::Permissive,
+		providers: base.providers.clone(),
+	};
+	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+	);
+	let mut log = make_min_req_log();
+	let res = jwt.apply(&mut log, &mut req).await;
+	assert!(res.is_ok());
+	assert!(req.headers().get(crate::http::header::AUTHORIZATION).is_none());
+	assert!(req.extensions().get::<super::Claims>().is_some());
+}
+
+#[tokio::test]
+pub async fn test_apply_optional_no_token_ok() {
+	let base = setup_test_jwt().0;
+	let jwt = Jwt {
+		mode: Mode::Optional,
+		providers: base.providers.clone(),
+	};
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let mut log = make_min_req_log();
+	let res = jwt.apply(&mut log, &mut req).await;
+	assert!(res.is_ok());
+	assert!(req.extensions().get::<super::Claims>().is_none());
+}
+
+#[tokio::test]
+pub async fn test_apply_optional_invalid_token_err() {
+	let base = setup_test_jwt().0;
+	let jwt = Jwt {
+		mode: Mode::Optional,
+		providers: base.providers.clone(),
+	};
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_static("Bearer invalid-token"),
+	);
+	let mut log = make_min_req_log();
+	let res = jwt.apply(&mut log, &mut req).await;
+	assert!(matches!(res, Err(TokenError::InvalidHeader(_))));
+}
+
+#[tokio::test]
+pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
+	let jwt = Jwt {
+		mode: Mode::Optional,
+		providers: base.providers.clone(),
+	};
+	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+	);
+	let mut log = make_min_req_log();
+	let res = jwt.apply(&mut log, &mut req).await;
+	assert!(res.is_ok());
+	assert!(req.headers().get(crate::http::header::AUTHORIZATION).is_none());
+	assert!(req.extensions().get::<super::Claims>().is_some());
+}
+
+fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	use std::collections::HashMap;
 	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 	use std::sync::Arc;
@@ -185,16 +312,6 @@ pub async fn test_apply_strict_missing_token() {
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
 
-	// Build a Strict-mode Jwt with no providers (not needed for missing-token path)
-	let jwt = super::Jwt {
-		mode: super::Mode::Strict,
-		providers: vec![],
-	};
-
-	// Minimal Request without Authorization header
-	let mut req = crate::http::Request::new(crate::http::Body::empty());
-
-	// Minimal RequestLog
 	let log_cfg = log::Config {
 		filter: None,
 		fields: Arc::new(LoggingFields::default()),
@@ -221,8 +338,5 @@ pub async fn test_apply_strict_missing_token() {
 		local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
 		start,
 	};
-	let mut req_log = RequestLog::new(cel, metrics, start, start_time, tcp_info);
-
-	let res = jwt.apply(&mut req_log, &mut req).await;
-	assert!(matches!(res, Err(super::TokenError::Missing)));
+	RequestLog::new(cel, metrics, start, start_time, tcp_info)
 }
