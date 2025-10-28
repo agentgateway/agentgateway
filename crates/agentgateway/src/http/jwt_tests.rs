@@ -340,3 +340,145 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	};
 	RequestLog::new(cel, metrics, start, start_time, tcp_info)
 }
+
+fn setup_test_multi_jwt(
+) -> (
+	Jwt,
+	(&'static str, &'static str, &'static str),
+	(&'static str, &'static str, &'static str),
+)
+{
+	let jwks1 = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "kid-1",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks2 = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "kid-2",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks1 = serde_json::from_value(jwks1).unwrap();
+	let jwks2 = serde_json::from_value(jwks2).unwrap();
+
+	let issuer1 = "https://issuer-1.example.com";
+	let issuer2 = "https://issuer-2.example.com";
+	let aud1 = "aud-1";
+	let aud2 = "aud-2";
+	let kid1 = "kid-1";
+	let kid2 = "kid-2";
+
+	let mut provider1 = Provider::from_jwks(
+		jwks1,
+		issuer1.to_string(),
+		vec![aud1.to_string()],
+	)
+	.unwrap();
+	provider1
+		.keys
+		.get_mut(kid1)
+		.unwrap()
+		.validation
+		.insecure_disable_signature_validation();
+
+	let mut provider2 = Provider::from_jwks(
+		jwks2,
+		issuer2.to_string(),
+		vec![aud2.to_string()],
+	)
+	.unwrap();
+	provider2
+		.keys
+		.get_mut(kid2)
+		.unwrap()
+		.validation
+		.insecure_disable_signature_validation();
+
+	(
+		Jwt {
+			mode: Mode::Strict,
+			providers: vec![provider1, provider2],
+		},
+		(kid1, issuer1, aud1),
+		(kid2, issuer2, aud2),
+	)
+}
+
+#[test]
+pub fn test_validate_claims_multi_providers_accepts_both() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let (jwt, (kid1, iss1, aud1), (kid2, iss2, aud2)) = setup_test_multi_jwt();
+	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+	let token1 = build_unsigned_token(kid1, iss1, aud1, now + 600);
+	let token2 = build_unsigned_token(kid2, iss2, aud2, now + 600);
+
+	assert!(jwt.validate_claims(&token1).is_ok());
+	assert!(jwt.validate_claims(&token2).is_ok());
+}
+
+#[test]
+pub fn test_validate_claims_multi_providers_unknown_kid() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let (jwt, (_kid1, iss1, aud1), _p2) = setup_test_multi_jwt();
+	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+	let token = build_unsigned_token("non-existent-kid", iss1, aud1, now + 600);
+	let res = jwt.validate_claims(&token);
+	assert!(matches!(res, Err(TokenError::UnknownKeyId(_))));
+}
+
+#[test]
+pub fn test_validate_claims_multi_providers_wrong_issuer_for_kid() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	use jsonwebtoken::errors::ErrorKind;
+	let (jwt, (kid1, _iss1, _aud1), (_kid2, iss2, aud2)) = setup_test_multi_jwt();
+	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+	// Use kid1 but the issuer from provider 2; should fail with InvalidIssuer
+	let token = build_unsigned_token(kid1, iss2, aud2, now + 600);
+	let res = jwt.validate_claims(&token);
+	match res {
+		Err(TokenError::Invalid(e)) => assert!(matches!(e.kind(), ErrorKind::InvalidIssuer)),
+		other => panic!("expected Invalid(..) with InvalidIssuer, got {:?}", other),
+	}
+}
+
+#[tokio::test]
+pub async fn test_apply_optional_valid_token_with_second_provider() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let (base, (_kid1, _iss1, _aud1), (kid2, iss2, aud2)) = setup_test_multi_jwt();
+	let jwt = Jwt {
+		mode: Mode::Optional,
+		providers: base.providers.clone(),
+	};
+	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+	let token = build_unsigned_token(kid2, iss2, aud2, now + 600);
+
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+	);
+	let mut log = make_min_req_log();
+	let res = jwt.apply(&mut log, &mut req).await;
+	assert!(res.is_ok());
+	assert!(req.headers().get(crate::http::header::AUTHORIZATION).is_none());
+	assert!(req.extensions().get::<super::Claims>().is_some());
+}
