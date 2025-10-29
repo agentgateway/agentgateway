@@ -1066,7 +1066,7 @@ async fn split_policies(
 			context: p.context,
 			failure_mode,
 			include_request_headers: vec![],
-			include_request_body: None,
+			include_request_body: p.include_request_body.map(Into::into),
 			timeout: None,
 		};
 		backend
@@ -1236,6 +1236,39 @@ pub struct LocalRequestMirror {
 }
 
 #[apply(schema_de!)]
+pub struct LocalBodyOptions {
+	/// Maximum size of request body to buffer (default: 8192)
+	#[serde(default)]
+	pub max_request_bytes: u32,
+	/// If true, send partial body when max_request_bytes is reached
+	#[serde(default)]
+	pub allow_partial_message: bool,
+	/// If true, pack body as raw bytes in gRPC
+	#[serde(default)]
+	pub pack_as_bytes: bool,
+}
+
+impl Default for LocalBodyOptions {
+	fn default() -> Self {
+		Self {
+			max_request_bytes: 8192,
+			allow_partial_message: false,
+			pack_as_bytes: false,
+		}
+	}
+}
+
+impl From<LocalBodyOptions> for http::ext_authz::BodyOptions {
+	fn from(opts: LocalBodyOptions) -> Self {
+		http::ext_authz::BodyOptions {
+			max_request_bytes: opts.max_request_bytes,
+			allow_partial_message: opts.allow_partial_message,
+			pack_as_bytes: opts.pack_as_bytes,
+		}
+	}
+}
+
+#[apply(schema_de!)]
 pub struct LocalExtAuthz {
 	#[serde(flatten)]
 	pub target: SimpleLocalBackend,
@@ -1246,6 +1279,9 @@ pub struct LocalExtAuthz {
 	pub fail_open: Option<bool>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub status_on_error: Option<u16>,
+	/// Options for including the request body in the authorization request
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub include_request_body: Option<LocalBodyOptions>,
 }
 
 #[apply(schema_de!)]

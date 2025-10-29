@@ -668,6 +668,12 @@ impl Drop for DropOnLog {
 				.get_or_create(&http_labels)
 				.inc_by(log.response_bytes);
 		}
+		// Record HTTP request duration for all requests
+		log
+			.metrics
+			.request_duration
+			.get_or_create(&http_labels)
+			.observe(duration.as_secs_f64());
 
 		Self::add_llm_metrics(
 			&log,
@@ -757,7 +763,7 @@ impl Drop for DropOnLog {
 					.map(display),
 			),
 			(
-				"mcp.resource",
+				"mcp.resource.type",
 				mcp.as_ref().and_then(|m| m.resource.as_ref()).map(display),
 			),
 			(

@@ -12,6 +12,8 @@ use tracing_core::field::Value;
 
 use crate::strng::{RichStrng, Strng};
 
+pub use crate::tokio_metrics::TokioCollector;
+
 pub const PREFIX: &str = "agentgateway";
 
 /// Creates a metrics sub registry for agentgateway.

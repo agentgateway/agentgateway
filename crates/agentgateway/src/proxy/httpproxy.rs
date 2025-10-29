@@ -43,6 +43,34 @@ fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference
 		.cloned()
 }
 
+fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &LoggingPolicy) {
+	// Merge filter/fields into config for this request
+	use crate::telemetry::log::{LoggingFields, OrderedStringMap};
+	let mut fields_add: Vec<(String, Arc<crate::cel::Expression>)> = Vec::new();
+	for (k, v) in lp.fields_add.iter() {
+		if let Ok(expr) = crate::cel::Expression::new(v.clone()) {
+			fields_add.push((k.clone(), Arc::new(expr)));
+		}
+	}
+	// fields_remove is a list of field names to drop
+	let fields_remove_set = lp
+		.fields_remove
+		.clone()
+		.into_iter()
+		.collect::<frozen_collections::FzHashSet<String>>();
+	let new_fields = LoggingFields {
+		remove: fields_remove_set,
+		add: fields_add.into_iter().collect::<OrderedStringMap<_>>(),
+	};
+	// Replace config on logger for this request
+	if let Some(f) = &lp.filter
+		&& let Ok(expr) = crate::cel::Expression::new(f.clone())
+	{
+		log.cel.filter = Some(Arc::new(expr));
+	}
+	log.cel.fields = Arc::new(new_fields);
+}
+
 async fn apply_request_policies(
 	policies: &store::RoutePolicies,
 	client: PolicyClient,
@@ -451,6 +479,10 @@ impl HTTPProxy {
 			.ext_proc
 			.take()
 			.map(|c| c.build(self.policy_client()));
+		// Apply logging at gateway
+		if let Some(lp) = &gateway_policies.logging {
+			apply_logging_policy_to_log(log, lp);
+		}
 		apply_gateway_policies(
 			&gateway_policies,
 			self.policy_client(),

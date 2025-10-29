@@ -962,6 +962,7 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 							crate::llm::policy::RequestRejection {
 								body: Bytes::from(resp.body.clone()),
 								status,
+								headers: None, // TODO: map from proto if headers are added there
 							}
 						} else {
 							//  use default response, since the response field is not optional on RequestGuard
@@ -1034,6 +1035,25 @@ impl TryFrom<&proto::agent::PolicySpec> for Policy {
 						.collect(),
 				}))
 			},
+			/* TODO: add gateway/frontend policies over xds
+			Some(proto::agent::policy_spec::Kind::Logging(lp)) => {
+				let fields_add: std::collections::HashMap<String, String> = lp
+					.fields
+					.as_ref()
+					.map(|f| f.add.clone())
+					.unwrap_or_default();
+				let fields_remove: Vec<String> = lp
+					.fields
+					.as_ref()
+					.map(|f| f.remove.clone())
+					.unwrap_or_default();
+				GatewayPolicy::Logging(LoggingPolicy {
+					filter: lp.filter.clone(),
+					fields_add,
+					fields_remove,
+				})
+			},
+			 */
 			_ => return Err(ProtoError::EnumParse("unknown spec kind".to_string())),
 		})
 	}

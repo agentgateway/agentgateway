@@ -114,7 +114,6 @@ sse-stream.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
 tikv-jemallocator = { workspace = true, optional = true }
-tokio = { workspace = true }
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
@@ -138,6 +137,12 @@ pprof.workspace = true
 # Windows only dependencies
 [target.'cfg(target_family = "windows")'.dependencies]
 which.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tokio = { workspace = true, features = ["taskdump"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+tokio = { workspace = true }
 
 [build-dependencies]
 anyhow.workspace = true

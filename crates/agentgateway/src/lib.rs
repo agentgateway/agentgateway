@@ -170,6 +170,17 @@ pub struct BackendConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::connect_timeout")]
 	connect_timeout: Duration,
+	/// The maximum duration to keep an idle connection alive.
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(default = "defaults::connect_timeout")]
+	pool_idle_timeout: Duration,
+	/// The maximum number of connections allowed in the pool, per hostname. If set, this will limit
+	/// the total number of connections kept alive to any given host.
+	/// Note: excess connections will still be created, they will just not remain idle.
+	/// If unset, there is no limit
+	#[serde(default)]
+	pool_max_size: Option<usize>,
 }
 
 impl Default for BackendConfig {
@@ -177,6 +188,8 @@ impl Default for BackendConfig {
 		crate::BackendConfig {
 			keepalives: Default::default(),
 			connect_timeout: defaults::connect_timeout(),
+			pool_idle_timeout: defaults::pool_idle_timeout(),
+			pool_max_size: None,
 		}
 	}
 }
@@ -225,6 +238,9 @@ mod defaults {
 	}
 	pub fn connect_timeout() -> Duration {
 		Duration::from_secs(10)
+	}
+	pub fn pool_idle_timeout() -> Duration {
+		Duration::from_secs(90)
 	}
 
 	pub fn max_buffer_size() -> usize {

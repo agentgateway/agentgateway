@@ -107,6 +107,7 @@ static ROOT_CONTEXT: Lazy<Arc<Context<'static>>> = Lazy::new(root_context);
 pub struct ContextBuilder {
 	pub attributes: HashSet<String>,
 	pub context: ExpressionContext,
+	pub log_format: Option<crate::LoggingFormat>,
 }
 
 impl Default for ContextBuilder {
@@ -120,6 +121,7 @@ impl ContextBuilder {
 		Self {
 			attributes: Default::default(),
 			context: Default::default(),
+			log_format: None,
 		}
 	}
 	/// register_expression registers the given expressions attributes as required attributes.

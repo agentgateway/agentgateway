@@ -71,6 +71,62 @@ curl http://localhost:3000   -H "Content-Type: application/json"   -H "Authoriza
 Response rejected due to inappropriate content
 ```
 
+### Custom Response Headers
+
+You can customize the HTTP headers in rejection responses. This is particularly useful for:
+- Returning JSON errors with proper `Content-Type` for OpenAI-compatible clients
+- Adding custom metadata to rejection responses
+- Removing unwanted default headers
+
+#### JSON Error Response (OpenAI-Compatible)
+
+```yaml
+promptGuard:
+  request:
+    regex:
+      action:
+        reject:
+          response:
+            status: 400
+            headers:
+              set:
+                content-type: "application/json"
+            body: |
+              {
+                "error": {
+                  "message": "Request blocked by content moderation",
+                  "type": "invalid_request_error",
+                  "code": "content_policy_violation"
+                }
+              }
+      rules:
+      - builtin: ssn
+```
+
+#### Multiple Header Values
+
+Headers can be set (single value), added (multiple values), or removed:
+
+```yaml
+rejection:
+  status: 403
+  headers:
+    set:
+      content-type: "application/json"
+      x-moderation-version: "v1"
+    add:
+      x-blocked-category: "violence"
+      x-blocked-category: "hate"
+    remove:
+      - server
+  body: '{"error": "Forbidden"}'
+```
+
+**Header Operations:**
+- `set`: Replace or create a header (overwrites existing value)
+- `add`: Append a header value (allows multiple values for the same header)
+- `remove`: Remove a header from the response
+
 ### Guardrails Webhook
 
 A webhook can be used to reject or mask content sent to or received from the LLM.

@@ -538,6 +538,23 @@ message PolicySpec {
     FailureMode failure_mode = 2;
   }
 
+  // Logging configuration policy
+  message Logging {
+    // CEL expression to filter out logs. If unset, all logs are considered.
+    google.protobuf.StringValue filter = 1;
+
+    // Additional log fields configuration
+    message Fields {
+      // Field keys to remove from logs
+      repeated string remove = 1;
+      // Field keys to add with CEL expressions
+      map<string, string> add = 2;
+    }
+
+    // Fields applied to logs
+    Fields fields = 2;
+  }
+
   oneof kind {
     LocalRateLimit local_rate_limit = 1;
     ExternalAuth ext_authz = 2;
@@ -553,6 +570,7 @@ message PolicySpec {
     RemoteRateLimit remote_rate_limit = 12;
     CSRF csrf = 13;
     ExtProc ext_proc = 14;
+    Logging logging = 15;
   }
 }
 

@@ -28,6 +28,7 @@ use crate::http::{
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::*;
+use std::collections::HashMap as StdHashMap;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1043,6 +1044,7 @@ pub enum GatewayPolicy {
 	ExtAuthz(ext_authz::ExtAuthz),
 	Transformation(crate::http::transformation_cel::Transformation),
 	ExtProc(ext_proc::ExtProc),
+	Logging(LoggingPolicy),
 }
 
 impl TryFrom<Policy> for GatewayPolicy {
@@ -1099,6 +1101,17 @@ pub struct A2aPolicy {}
 
 #[apply(schema!)]
 pub struct Authorization(pub RuleSet);
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoggingPolicy {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub filter: Option<String>,
+	#[serde(default, skip_serializing_if = "StdHashMap::is_empty")]
+	pub fields_add: StdHashMap<String, String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub fields_remove: Vec<String>,
+}
 
 // Do not use schema! as it will reject the `extra` field
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

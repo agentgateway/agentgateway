@@ -51,6 +51,8 @@ This folder contains JSON schemas for various parts of the project
 |`config.backend.keepalives.interval`||
 |`config.backend.keepalives.retries`||
 |`config.backend.connectTimeout`||
+|`config.backend.poolIdleTimeout`|The maximum duration to keep an idle connection alive.|
+|`config.backend.poolMaxSize`|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
 |`config.listener`||
 |`config.listener.maxBufferSize`||
 |`config.listener.tlsHandshakeTimeout`||
@@ -162,12 +164,20 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.rejection`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.rejection.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.rejection.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.rejection.headers.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.rejection.headers.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.rejection.headers.remove`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action.(1)reject`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action.(1)reject.response`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action.(1)reject.response.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action.(1)reject.response.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action.(1)reject.response.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action.(1)reject.response.headers.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action.(1)reject.response.headers.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.action.(1)reject.response.headers.remove`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.rules`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.rules[].(any)builtin`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request.regex.rules[].(any)pattern`||
@@ -192,6 +202,10 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.action.(1)reject.response`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.action.(1)reject.response.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.action.(1)reject.response.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.action.(1)reject.response.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.action.(1)reject.response.headers.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.action.(1)reject.response.headers.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.action.(1)reject.response.headers.remove`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.rules`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.rules[].(any)builtin`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response.regex.rules[].(any)pattern`||
@@ -286,6 +300,10 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)context`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)failOpen`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)statusOnError`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name`||
@@ -402,12 +420,20 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.rejection`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.rejection.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.rejection.headers.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.rejection.headers.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.rejection.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action.(1)reject`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action.(1)reject.response`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action.(1)reject.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action.(1)reject.response.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action.(1)reject.response.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action.(1)reject.response.headers.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action.(1)reject.response.headers.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.action.(1)reject.response.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.rules`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.rules[].(any)builtin`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.request.regex.rules[].(any)pattern`||
@@ -432,6 +458,10 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.action.(1)reject.response`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.action.(1)reject.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.action.(1)reject.response.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.action.(1)reject.response.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.action.(1)reject.response.headers.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.action.(1)reject.response.headers.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.action.(1)reject.response.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.rules`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.rules[].(any)builtin`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)promptGuard.response.regex.rules[].(any)pattern`||
@@ -512,12 +542,20 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.rejection`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.rejection.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.rejection.headers.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.rejection.headers.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.rejection.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action.(1)reject`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action.(1)reject.response`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action.(1)reject.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action.(1)reject.response.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action.(1)reject.response.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action.(1)reject.response.headers.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action.(1)reject.response.headers.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.action.(1)reject.response.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.rules`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.rules[].(any)builtin`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.request.regex.rules[].(any)pattern`||
@@ -542,6 +580,10 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.action.(1)reject.response`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.action.(1)reject.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.action.(1)reject.response.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.action.(1)reject.response.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.action.(1)reject.response.headers.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.action.(1)reject.response.headers.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.action.(1)reject.response.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.rules`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.rules[].(any)builtin`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].promptGuard.response.regex.rules[].(any)pattern`||
@@ -660,12 +702,20 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.promptGuard.request.rejection`||
 |`policies[].policy.ai.promptGuard.request.rejection.body`||
 |`policies[].policy.ai.promptGuard.request.rejection.status`||
+|`policies[].policy.ai.promptGuard.request.rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`policies[].policy.ai.promptGuard.request.rejection.headers.add`||
+|`policies[].policy.ai.promptGuard.request.rejection.headers.set`||
+|`policies[].policy.ai.promptGuard.request.rejection.headers.remove`||
 |`policies[].policy.ai.promptGuard.request.regex`||
 |`policies[].policy.ai.promptGuard.request.regex.action`||
 |`policies[].policy.ai.promptGuard.request.regex.action.(1)reject`||
 |`policies[].policy.ai.promptGuard.request.regex.action.(1)reject.response`||
 |`policies[].policy.ai.promptGuard.request.regex.action.(1)reject.response.body`||
 |`policies[].policy.ai.promptGuard.request.regex.action.(1)reject.response.status`||
+|`policies[].policy.ai.promptGuard.request.regex.action.(1)reject.response.headers`|Optional headers to add, set, or remove from the rejection response|
+|`policies[].policy.ai.promptGuard.request.regex.action.(1)reject.response.headers.add`||
+|`policies[].policy.ai.promptGuard.request.regex.action.(1)reject.response.headers.set`||
+|`policies[].policy.ai.promptGuard.request.regex.action.(1)reject.response.headers.remove`||
 |`policies[].policy.ai.promptGuard.request.regex.rules`||
 |`policies[].policy.ai.promptGuard.request.regex.rules[].(any)builtin`||
 |`policies[].policy.ai.promptGuard.request.regex.rules[].(any)pattern`||
@@ -690,6 +740,10 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.promptGuard.response.regex.action.(1)reject.response`||
 |`policies[].policy.ai.promptGuard.response.regex.action.(1)reject.response.body`||
 |`policies[].policy.ai.promptGuard.response.regex.action.(1)reject.response.status`||
+|`policies[].policy.ai.promptGuard.response.regex.action.(1)reject.response.headers`|Optional headers to add, set, or remove from the rejection response|
+|`policies[].policy.ai.promptGuard.response.regex.action.(1)reject.response.headers.add`||
+|`policies[].policy.ai.promptGuard.response.regex.action.(1)reject.response.headers.set`||
+|`policies[].policy.ai.promptGuard.response.regex.action.(1)reject.response.headers.remove`||
 |`policies[].policy.ai.promptGuard.response.regex.rules`||
 |`policies[].policy.ai.promptGuard.response.regex.rules[].(any)builtin`||
 |`policies[].policy.ai.promptGuard.response.regex.rules[].(any)pattern`||
@@ -784,6 +838,10 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)context`||
 |`policies[].policy.extAuthz.(any)failOpen`||
 |`policies[].policy.extAuthz.(any)statusOnError`||
+|`policies[].policy.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
+|`policies[].policy.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
+|`policies[].policy.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
+|`policies[].policy.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extProc`|Extend agentgateway with an external processor|
 |`policies[].policy.extProc.(any)(1)service`||
 |`policies[].policy.extProc.(any)(1)service.name`||

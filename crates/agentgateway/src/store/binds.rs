@@ -102,6 +102,8 @@ pub struct GatewayPolicies {
 	pub jwt: Option<http::jwt::Jwt>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
+	// TODO: this will move to a "frontend" policy later
+	pub logging: Option<crate::types::agent::LoggingPolicy>,
 }
 
 impl GatewayPolicies {
@@ -111,6 +113,18 @@ impl GatewayPolicies {
 				ctx.register_expression(expr)
 			}
 		};
+		if let Some(lp) = &self.logging {
+			if let Some(f) = &lp.filter
+				&& let Ok(expr) = crate::cel::Expression::new(f.clone())
+			{
+				ctx.register_expression(&expr)
+			}
+			for v in lp.fields_add.values() {
+				if let Ok(expr) = crate::cel::Expression::new(v.clone()) {
+					ctx.register_expression(&expr)
+				}
+			}
+		}
 	}
 }
 
@@ -321,6 +335,9 @@ impl Store {
 				},
 				GatewayPolicy::Transformation(p) => {
 					pol.transformation.get_or_insert_with(|| p.clone());
+				},
+				GatewayPolicy::Logging(p) => {
+					pol.logging.get_or_insert_with(|| p.clone());
 				},
 			}
 		}
