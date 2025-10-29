@@ -89,6 +89,10 @@ impl AgentGateway {
 			.await
 			.unwrap()
 	}
+
+	pub fn port(&self) -> u16 {
+		self.port
+	}
 }
 
 impl Drop for AgentGateway {
