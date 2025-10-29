@@ -225,37 +225,37 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 				let azure_auth = match a.kind {
 					Some(proto::agent::azure::Kind::ExplicitConfig(config)) => {
 						let src = match config.credential_source {
-							Some(proto::agent::azure_explicit_config::CredentialSource::ClientSecret(cs)) => {
-								crate::http::auth::AzureAuthCredentialSource::ClientSecret {
-									tenant_id: cs.tenant_id,
-									client_id: cs.client_id,
-									client_secret: cs.client_secret.into(),
-								}
-							},
-							Some(proto::agent::azure_explicit_config::CredentialSource::ManagedIdentityCredential(mic)) => {
-								crate::http::auth::AzureAuthCredentialSource::ManagedIdentity {
-									user_assigned_identity: mic.user_assigned_identity.map(|uami| {
-										uami.id.map(|id| match id {
-											proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ClientId(c) => {
-												crate::http::auth::AzureUserAssignedIdentity::ClientId(c)
-											},
-											proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ObjectId(o) => {
-												crate::http::auth::AzureUserAssignedIdentity::ObjectId(o)
-											},
-											proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ResourceId(r) => {
-												crate::http::auth::AzureUserAssignedIdentity::ResourceId(r)
-											},
-										}).expect("one of clientId, objectId, or resourceId must be set")
-									})
-								}
-							},
-							Some(proto::agent::azure_explicit_config::CredentialSource::WorkloadIdentityCredential(_)) => {
-								crate::http::auth::AzureAuthCredentialSource::WorkloadIdentity {}
-							},
-							None => {
-								return Err(ProtoError::MissingRequiredField);
-							},
-						};
+                            Some(proto::agent::azure_explicit_config::CredentialSource::ClientSecret(cs)) => {
+                                crate::http::auth::AzureAuthCredentialSource::ClientSecret {
+                                    tenant_id: cs.tenant_id,
+                                    client_id: cs.client_id,
+                                    client_secret: cs.client_secret.into(),
+                                }
+                            }
+                            Some(proto::agent::azure_explicit_config::CredentialSource::ManagedIdentityCredential(mic)) => {
+                                crate::http::auth::AzureAuthCredentialSource::ManagedIdentity {
+                                    user_assigned_identity: mic.user_assigned_identity.map(|uami| {
+                                        uami.id.map(|id| match id {
+                                            proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ClientId(c) => {
+                                                crate::http::auth::AzureUserAssignedIdentity::ClientId(c)
+                                            }
+                                            proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ObjectId(o) => {
+                                                crate::http::auth::AzureUserAssignedIdentity::ObjectId(o)
+                                            }
+                                            proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ResourceId(r) => {
+                                                crate::http::auth::AzureUserAssignedIdentity::ResourceId(r)
+                                            }
+                                        }).expect("one of clientId, objectId, or resourceId must be set")
+                                    })
+                                }
+                            }
+                            Some(proto::agent::azure_explicit_config::CredentialSource::WorkloadIdentityCredential(_)) => {
+                                crate::http::auth::AzureAuthCredentialSource::WorkloadIdentity {}
+                            }
+                            None => {
+                                return Err(ProtoError::MissingRequiredField);
+                            }
+                        };
 						crate::http::auth::AzureAuth::ExplicitConfig {
 							credential_source: src,
 						}
@@ -812,6 +812,21 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 	}
 }
 
+impl TryFrom<&proto::agent::TrafficPolicySpec> for PhasedTrafficPolicy {
+	type Error = ProtoError;
+
+	fn try_from(spec: &proto::agent::TrafficPolicySpec) -> Result<Self, Self::Error> {
+		let tp = TrafficPolicy::try_from(spec)?;
+		Ok(PhasedTrafficPolicy {
+			phase: match proto::agent::traffic_policy_spec::PolicyPhase::try_from(spec.phase)? {
+				proto::agent::traffic_policy_spec::PolicyPhase::Route => PolicyPhase::Route,
+				proto::agent::traffic_policy_spec::PolicyPhase::Gateway => PolicyPhase::Gateway,
+			},
+			policy: tp,
+		})
+	}
+}
+
 impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 	type Error = ProtoError;
 
@@ -1132,7 +1147,7 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 			.and_then(PolicyTarget::try_from)?;
 
 		let policy = match &p.kind {
-			Some(pol::Kind::Traffic(spec)) => PolicyType::Traffic(TrafficPolicy::try_from(spec)?),
+			Some(pol::Kind::Traffic(spec)) => PolicyType::Traffic(PhasedTrafficPolicy::try_from(spec)?),
 			Some(pol::Kind::Backend(spec)) => PolicyType::Backend(BackendPolicy::try_from(spec)?),
 			// Frontend policies are not represented by TargetedPolicy; reject here.
 			Some(pol::Kind::Frontend(_)) => {
@@ -1355,6 +1370,7 @@ mod tests {
 		};
 
 		let spec = proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
 			kind: Some(proto::agent::traffic_policy_spec::Kind::Csrf(csrf_spec)),
 		};
 

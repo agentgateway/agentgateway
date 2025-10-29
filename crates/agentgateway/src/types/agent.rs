@@ -1026,9 +1026,9 @@ pub enum PolicyPhase {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PhasedTrafficPolicy {
-	phase: PolicyPhase,
+	pub phase: PolicyPhase,
 	#[serde(flatten)]
-	policy: TrafficPolicy,
+	pub policy: TrafficPolicy,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
