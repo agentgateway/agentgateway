@@ -25,6 +25,7 @@ use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::{client, *};
 
 pub mod anthropic;
+pub mod azure;
 pub mod bedrock;
 pub mod gemini;
 pub mod openai;
@@ -123,6 +124,7 @@ pub enum AIProvider {
 	Vertex(vertex::Provider),
 	Anthropic(anthropic::Provider),
 	Bedrock(bedrock::Provider),
+	Azure(azure::Provider),
 }
 
 trait Provider {
@@ -207,6 +209,7 @@ impl AIProvider {
 			AIProvider::Gemini(_p) => gemini::Provider::NAME,
 			AIProvider::Vertex(_p) => vertex::Provider::NAME,
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
+			AIProvider::Azure(_p) => azure::Provider::NAME,
 		}
 	}
 	pub fn override_model(&self) -> Option<Strng> {
@@ -216,6 +219,7 @@ impl AIProvider {
 			AIProvider::Gemini(p) => p.model.clone(),
 			AIProvider::Vertex(p) => p.model.clone(),
 			AIProvider::Bedrock(p) => p.model.clone(),
+			AIProvider::Azure(p) => p.model.clone(),
 		}
 	}
 	pub fn default_connector(&self) -> (Target, BackendPolicies) {
@@ -244,6 +248,7 @@ impl AIProvider {
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
+			AIProvider::Azure(_) => (Target::Hostname(azure::DEFAULT_HOST, 443), btls),
 		}
 	}
 
@@ -327,6 +332,16 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::Azure(_) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					if override_path {
+						uri.path_and_query = Some(PathAndQuery::from_static(azure::DEFAULT_PATH));
+					}
+					uri.authority = Some(Authority::from_static(azure::DEFAULT_HOST_STR));
+					Ok(())
+				})?;
+				Ok(())
+			}),
 		}
 	}
 
@@ -498,7 +513,10 @@ impl AIProvider {
 		}
 
 		let new_request = match self {
-			AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Vertex(_) => req.to_openai()?,
+			AIProvider::OpenAI(_)
+			| AIProvider::Gemini(_)
+			| AIProvider::Vertex(_)
+			| AIProvider::Azure(_) => req.to_openai()?,
 			AIProvider::Anthropic(_) => req.to_anthropic()?,
 			AIProvider::Bedrock(p) => req.to_bedrock(p, Some(&parts.headers))?,
 		};
@@ -623,9 +641,10 @@ impl AIProvider {
 	) -> Result<Result<Box<dyn ResponseType>, ChatCompletionErrorResponse>, AIError> {
 		if status.is_success() {
 			let resp = match self {
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Vertex(_) => {
-					universal::passthrough::process_response(bytes, req.input_format)?
-				},
+				AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::Vertex(_)
+				| AIProvider::Azure(_) => universal::passthrough::process_response(bytes, req.input_format)?,
 				AIProvider::Anthropic(_) => anthropic::process_response(bytes, req.input_format)?,
 				AIProvider::Bedrock(_) => {
 					bedrock::process_response(req.request_model.as_str(), bytes, req.input_format)?
@@ -639,6 +658,7 @@ impl AIProvider {
 				AIProvider::Vertex(p) => p.process_error(bytes)?,
 				AIProvider::Anthropic(p) => p.process_error(bytes)?,
 				AIProvider::Bedrock(p) => p.process_error(bytes)?,
+				AIProvider::Azure(p) => p.process_error(bytes)?,
 			};
 			Ok(Err(openai_response))
 		}
