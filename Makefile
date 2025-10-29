@@ -7,7 +7,7 @@ GIT_REVISION ?= $(shell git rev-parse HEAD)
 IMAGE_TAG ?= $(VERSION)
 IMAGE_FULL_NAME ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 DOCKER_BUILDER ?= docker
-DOCKER_BUILD_ARGS ?= --build-arg VERSION=$(VERSION) --build-arg GIT_REVISION=$(GIT_REVISION) --build-arg PROFILE=quick-release
+DOCKER_BUILD_ARGS ?= --build-arg VERSION=$(VERSION) --build-arg GIT_REVISION=$(GIT_REVISION)
 KIND_CLUSTER_NAME ?= agentgateway
 
 # docker

@@ -79,7 +79,8 @@ if /out/agentgateway --version | grep -q '"unknown"'; then
   exit 1
 fi
 EOF
-FROM gcr.io/distroless/cc-debian12 AS runner
+
+FROM gcr.io/distroless/cc-debian13 AS runner
 
 ARG TARGETARCH
 
