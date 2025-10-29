@@ -763,7 +763,7 @@ impl Drop for DropOnLog {
 					.map(display),
 			),
 			(
-				"mcp.resource",
+				"mcp.resource.type",
 				mcp.as_ref().and_then(|m| m.resource.as_ref()).map(display),
 			),
 			(
