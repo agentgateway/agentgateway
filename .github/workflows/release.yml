@@ -60,7 +60,7 @@ jobs:
       with:
         build-args: |
           VERSION=${{ env.VERSION }}
-          GIT_REVISION=${{ env.GITHUB_SHA }}
+          GIT_REVISION=${{ github.sha }}
         platforms: ${{ matrix.platform }}
         labels: ${{ steps.meta.outputs.labels }}
         tags: ${{ env.REGISTRY_IMAGE }}
@@ -182,7 +182,7 @@ jobs:
         cache-to: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache-musl,mode=max
         build-args: |
           VERSION=${{ env.VERSION }}
-          GIT_REVISION=${{ env.GITHUB_SHA }}
+          GIT_REVISION=${{ github.sha }}
           BUILDER=musl
 
     - name: Export digest
