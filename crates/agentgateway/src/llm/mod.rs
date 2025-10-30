@@ -363,6 +363,18 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::Azure(_) => {
+				http::modify_req(req, |req| {
+					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
+						// Move bearer token in azure header
+						req.headers.remove(http::header::AUTHORIZATION);
+						let mut api_key = HeaderValue::from_str(authz.token())?;
+						api_key.set_sensitive(true);
+						req.headers.insert("api-key", api_key);
+					};
+					Ok(())
+				})
+			},
 			_ => Ok(()),
 		}
 	}
