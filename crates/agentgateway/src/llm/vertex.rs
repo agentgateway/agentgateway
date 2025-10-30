@@ -22,26 +22,6 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
-	pub async fn process_request(
-		&self,
-		mut req: universal::passthrough::Request,
-	) -> Result<universal::passthrough::Request, AIError> {
-		if let Some(provider_model) = &self.model {
-			req.model = Some(provider_model.to_string());
-		} else if req.model.is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
-		}
-		// Gemini compat mode is the same!
-		Ok(req)
-	}
-	pub fn process_response(
-		&self,
-		bytes: &Bytes,
-	) -> Result<universal::passthrough::Response, AIError> {
-		let resp = serde_json::from_slice::<universal::passthrough::Response>(bytes)
-			.map_err(AIError::ResponseParsing)?;
-		Ok(resp)
-	}
 	pub fn process_error(
 		&self,
 		bytes: &Bytes,
