@@ -53,16 +53,6 @@ This folder contains JSON schemas for various parts of the project
 |`config.backend.connectTimeout`||
 |`config.backend.poolIdleTimeout`|The maximum duration to keep an idle connection alive.|
 |`config.backend.poolMaxSize`|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
-|`config.listener`||
-|`config.listener.maxBufferSize`||
-|`config.listener.tlsHandshakeTimeout`||
-|`config.listener.http1MaxHeaders`|The maximum number of headers allowed in a request. Changing this value results in a performance<br>degradation, even if set to a lower value than the default (100)|
-|`config.listener.http1IdleTimeout`||
-|`config.listener.http2WindowSize`||
-|`config.listener.http2ConnectionWindowSize`||
-|`config.listener.http2FrameSize`||
-|`config.listener.http2KeepaliveInterval`||
-|`config.listener.http2KeepaliveTimeout`||
 |`config.hbone`||
 |`config.hbone.windowSize`||
 |`config.hbone.connectionWindowSize`||
@@ -693,7 +683,10 @@ This folder contains JSON schemas for various parts of the project
 |`frontendPolicies.tcp.keepalives.time`||
 |`frontendPolicies.tcp.keepalives.interval`||
 |`frontendPolicies.tcp.keepalives.retries`||
-|`frontendPolicies.accessLog`||
+|`frontendPolicies.accessLog`|Settings for request access logs.|
+|`frontendPolicies.accessLog.filter`||
+|`frontendPolicies.accessLog.fieldsAdd`||
+|`frontendPolicies.accessLog.fieldsRemove`||
 |`frontendPolicies.tracing`||
 |`policies`|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route/gateway.|
 |`policies[].name`||

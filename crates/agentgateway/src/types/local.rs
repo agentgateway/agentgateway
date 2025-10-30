@@ -599,8 +599,9 @@ struct LocalFrontendPolicies {
 	/// Settings for handling incoming TCP connections.
 	#[serde(default)]
 	pub tcp: Option<frontend::TCP>,
+	/// Settings for request access logs.
 	#[serde(default)]
-	pub access_log: Option<()>,
+	pub access_log: Option<frontend::LoggingPolicy>,
 	#[serde(default)]
 	pub tracing: Option<()>,
 }

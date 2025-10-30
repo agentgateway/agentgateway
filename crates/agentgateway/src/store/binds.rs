@@ -53,8 +53,27 @@ pub struct FrontendPolices {
 	pub http: Option<frontend::HTTP>,
 	pub tls: Option<frontend::TLS>,
 	pub tcp: Option<frontend::TCP>,
-	pub access_log: Option<()>,
+	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<()>,
+}
+
+impl FrontendPolices {
+	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		let Some(frontend::LoggingPolicy {
+			filter,
+			add: fields_add,
+			remove: _,
+		}) = &self.access_log
+		else {
+			return;
+		};
+		if let Some(f) = filter {
+			ctx.register_expression(f)
+		}
+		for (_, v) in fields_add.iter() {
+			ctx.register_expression(v)
+		}
+	}
 }
 
 #[derive(Default, Debug, Clone)]
@@ -135,8 +154,6 @@ pub struct GatewayPolicies {
 	pub jwt: Option<http::jwt::Jwt>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
-	// TODO: this will move to a "frontend" policy later
-	pub logging: Option<crate::types::agent::LoggingPolicy>,
 }
 
 impl GatewayPolicies {
@@ -146,18 +163,6 @@ impl GatewayPolicies {
 				ctx.register_expression(expr)
 			}
 		};
-		if let Some(lp) = &self.logging {
-			if let Some(f) = &lp.filter
-				&& let Ok(expr) = crate::cel::Expression::new(f.clone())
-			{
-				ctx.register_expression(&expr)
-			}
-			for v in lp.fields_add.values() {
-				if let Ok(expr) = crate::cel::Expression::new(v.clone()) {
-					ctx.register_expression(&expr)
-				}
-			}
-		}
 	}
 }
 
@@ -530,8 +535,8 @@ impl Store {
 				FrontendPolicy::TCP(p) => {
 					pol.tcp.get_or_insert_with(|| p.clone());
 				},
-				FrontendPolicy::AccessLog(_p) => {
-					pol.access_log.get_or_insert(());
+				FrontendPolicy::AccessLog(p) => {
+					pol.access_log.get_or_insert_with(|| p.clone());
 				},
 				FrontendPolicy::Tracing(_p) => {
 					pol.tracing.get_or_insert(());

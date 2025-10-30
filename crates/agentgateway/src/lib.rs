@@ -110,7 +110,7 @@ pub struct RawConfig {
 #[apply(schema!)]
 pub struct BackendConfig {
 	#[serde(default)]
-	keepalives: KeepaliveConfig,
+	keepalives: types::agent::KeepaliveConfig,
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::connect_timeout")]
@@ -118,7 +118,7 @@ pub struct BackendConfig {
 	/// The maximum duration to keep an idle connection alive.
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	#[serde(default = "defaults::connect_timeout")]
+	#[serde(default = "defaults::pool_idle_timeout")]
 	pool_idle_timeout: Duration,
 	/// The maximum number of connections allowed in the pool, per hostname. If set, this will limit
 	/// the total number of connections kept alive to any given host.
@@ -139,48 +139,9 @@ impl Default for BackendConfig {
 	}
 }
 
-#[apply(schema!)]
-pub struct KeepaliveConfig {
-	#[serde(default = "defaults::always_true")]
-	pub enabled: bool,
-	#[serde(with = "serde_dur")]
-	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	#[serde(default = "defaults::keepalive_time")]
-	pub time: Duration,
-	#[serde(with = "serde_dur")]
-	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	#[serde(default = "defaults::keepalive_interval")]
-	pub interval: Duration,
-	#[serde(default = "defaults::keepalive_retries")]
-	pub retries: u32,
-}
-
-impl Default for KeepaliveConfig {
-	fn default() -> Self {
-		KeepaliveConfig {
-			enabled: true,
-			time: defaults::keepalive_time(),
-			interval: defaults::keepalive_interval(),
-			retries: defaults::keepalive_retries(),
-		}
-	}
-}
-
 mod defaults {
 	use std::time::Duration;
 
-	pub fn always_true() -> bool {
-		true
-	}
-	pub fn keepalive_retries() -> u32 {
-		9
-	}
-	pub fn keepalive_interval() -> Duration {
-		Duration::from_secs(180)
-	}
-	pub fn keepalive_time() -> Duration {
-		Duration::from_secs(180)
-	}
 	pub fn connect_timeout() -> Duration {
 		Duration::from_secs(10)
 	}

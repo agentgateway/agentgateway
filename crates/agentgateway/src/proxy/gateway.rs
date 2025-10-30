@@ -277,7 +277,15 @@ impl Gateway {
 		);
 		match bind_protocol {
 			BindProtocol::http => {
-				let err = Self::proxy(bind_name, inputs, None, raw_stream, &policies, drain).await;
+				let err = Self::proxy(
+					bind_name,
+					inputs,
+					None,
+					raw_stream,
+					Arc::new(policies),
+					drain,
+				)
+				.await;
 				if let Err(e) = err {
 					warn!(src.addr = %peer_addr, "proxy error: {e}");
 				}
@@ -305,7 +313,7 @@ impl Gateway {
 							inputs,
 							Some(selected_listener),
 							stream,
-							&policies,
+							Arc::new(policies),
 							drain,
 						)
 						.await;
@@ -326,7 +334,7 @@ impl Gateway {
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
 		stream: Socket,
-		policies: &FrontendPolices,
+		policies: Arc<FrontendPolices>,
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
 		let target_address = stream.target_address();
@@ -383,9 +391,15 @@ impl Gateway {
 			hyper::service::service_fn(move |mut req| {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
+				let policies = policies.clone();
 
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
+				async move {
+					proxy
+						.proxy(connection, &policies, req)
+						.map(Ok::<_, Infallible>)
+						.await
+				}
 			}),
 		);
 		// Wrap it in the graceful watcher, will ensure GOAWAY/Connect:clone when we shutdown
@@ -577,7 +591,7 @@ impl Gateway {
 			pi,
 			None,
 			Socket::from_hbone(ext, hbone_addr, con),
-			policies.as_ref(),
+			policies.clone(),
 			drain,
 		)
 		.await;

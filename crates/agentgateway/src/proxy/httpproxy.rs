@@ -27,11 +27,14 @@ use crate::http::{
 };
 use crate::llm::{LLMRequest, RequestResult, RouteType};
 use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
-use crate::store::{BackendPolicies, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies};
+use crate::store::{
+	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
+};
 use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::frontend;
 use crate::{ProxyInputs, store, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
@@ -42,32 +45,20 @@ fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference
 		.cloned()
 }
 
-fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &LoggingPolicy) {
+fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
 	// Merge filter/fields into config for this request
-	use crate::telemetry::log::{LoggingFields, OrderedStringMap};
-	let mut fields_add: Vec<(String, Arc<crate::cel::Expression>)> = Vec::new();
-	for (k, v) in lp.fields_add.iter() {
-		if let Ok(expr) = crate::cel::Expression::new(v.clone()) {
-			fields_add.push((k.clone(), Arc::new(expr)));
-		}
+	if lp.filter.is_some() {
+		log.cel.filter = lp.filter.clone();
 	}
-	// fields_remove is a list of field names to drop
-	let fields_remove_set = lp
-		.fields_remove
-		.clone()
-		.into_iter()
-		.collect::<frozen_collections::FzHashSet<String>>();
-	let new_fields = LoggingFields {
-		remove: fields_remove_set,
-		add: fields_add.into_iter().collect::<OrderedStringMap<_>>(),
-	};
-	// Replace config on logger for this request
-	if let Some(f) = &lp.filter
-		&& let Ok(expr) = crate::cel::Expression::new(f.clone())
-	{
-		log.cel.filter = Some(Arc::new(expr));
+	if lp.add.is_empty() && lp.remove.is_empty() {
+		return;
 	}
-	log.cel.fields = Arc::new(new_fields);
+	if !lp.add.is_empty() {
+		log.cel.fields.add = lp.add.clone();
+	}
+	if !lp.remove.is_empty() {
+		log.cel.fields.remove = lp.remove.clone();
+	}
 }
 
 async fn apply_request_policies(
@@ -250,6 +241,7 @@ impl HTTPProxy {
 	pub async fn proxy(
 		&self,
 		connection: Arc<Extension>,
+		policies: &FrontendPolices,
 		mut req: ::http::Request<Incoming>,
 	) -> Response {
 		let start = Instant::now();
@@ -262,7 +254,7 @@ impl HTTPProxy {
 		let tcp = connection
 			.get::<TCPConnectionInfo>()
 			.expect("tcp connection must be set");
-		let mut log: DropOnLog = RequestLog::new(
+		let mut log = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
 				self.inputs.cfg.tracing.clone(),
@@ -271,8 +263,13 @@ impl HTTPProxy {
 			start,
 			start_time,
 			tcp.clone(),
-		)
-		.into();
+		);
+		policies.register_cel_expressions(log.cel.ctx());
+		if let Some(lp) = &policies.access_log {
+			apply_logging_policy_to_log(&mut log, lp);
+		}
+		let mut log: DropOnLog = log.into();
+
 		// Setup ResponsePolicies outside of proxy_internal, so we have can unconditionally run them even on errors
 		// or direct responses
 		let mut response_policies = ResponsePolicies::default();
@@ -406,7 +403,7 @@ impl HTTPProxy {
 		}
 
 		if let Some(tracer) = &log.tracer {
-			log.cel.register(tracer.fields.as_ref());
+			log.cel.register(&tracer.fields);
 		}
 
 		let selected_listener = selected_listener
@@ -440,10 +437,6 @@ impl HTTPProxy {
 			.ext_proc
 			.take()
 			.map(|c| c.build(self.policy_client()));
-		// Apply logging at gateway
-		if let Some(lp) = &gateway_policies.logging {
-			apply_logging_policy_to_log(log, lp);
-		}
 		apply_gateway_policies(
 			&gateway_policies,
 			self.policy_client(),

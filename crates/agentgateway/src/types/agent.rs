@@ -27,9 +27,8 @@ use crate::http::{
 };
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
-use crate::*;
-use std::collections::HashMap as StdHashMap;
 use crate::types::frontend;
+use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1087,7 +1086,7 @@ pub enum FrontendPolicy {
 	HTTP(frontend::HTTP),
 	TLS(frontend::TLS),
 	TCP(frontend::TCP),
-	AccessLog(()),
+	AccessLog(frontend::LoggingPolicy),
 	Tracing(()),
 }
 
@@ -1140,17 +1139,6 @@ pub struct A2aPolicy {}
 
 #[apply(schema!)]
 pub struct Authorization(pub RuleSet);
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LoggingPolicy {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub filter: Option<String>,
-	#[serde(default, skip_serializing_if = "StdHashMap::is_empty")]
-	pub fields_add: StdHashMap<String, String>,
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub fields_remove: Vec<String>,
-}
 
 // Do not use schema! as it will reject the `extra` field
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1308,7 +1296,18 @@ pub struct KeepaliveConfig {
 	pub retries: u32,
 }
 
-mod defaults {
+impl Default for KeepaliveConfig {
+	fn default() -> Self {
+		KeepaliveConfig {
+			enabled: true,
+			time: defaults::keepalive_time(),
+			interval: defaults::keepalive_interval(),
+			retries: defaults::keepalive_retries(),
+		}
+	}
+}
+
+pub mod defaults {
 	use std::time::Duration;
 
 	pub fn always_true() -> bool {

@@ -295,26 +295,67 @@ message PolicyTarget {
   }
 }
 
+message KeepaliveConfig {
+  // Time before sending keepalive probes
+  google.protobuf.Duration time = 1;
+
+  // Interval between keepalive probes
+  google.protobuf.Duration interval = 2;
+
+  // Number of keepalive retries before giving up
+  google.protobuf.UInt32Value retries = 3;
+}
+
 message FrontendPolicySpec {
-   // Logging configuration policy
+  message HTTP {
+    google.protobuf.UInt32Value max_buffer_size = 1;
+    google.protobuf.UInt64Value http1_max_headers = 2;
+    google.protobuf.Duration http1_idle_timeout = 3;
+    google.protobuf.UInt32Value http2_window_size = 4;
+    google.protobuf.UInt32Value http2_connection_window_size = 5;
+    google.protobuf.UInt32Value http2_frame_size = 6;
+    google.protobuf.Duration http2_keepalive_interval = 7;
+    google.protobuf.Duration http2_keepalive_timeout = 8;
+  }
+  message TLS {
+    // TLS handshake timeout
+    google.protobuf.Duration tls_handshake_timeout = 1;
+  }
+
+  message TCP {
+    // TCP keepalive configuration
+    KeepaliveConfig keepalives = 1;
+  }
+  // Logging configuration policy
   message Logging {
     // CEL expression to filter out logs. If unset, all logs are considered.
     google.protobuf.StringValue filter = 1;
+
+    message Field {
+      string name = 1;
+      string expression = 2;
+    }
 
     // Additional log fields configuration
     message Fields {
       // Field keys to remove from logs
       repeated string remove = 1;
       // Field keys to add with CEL expressions
-      map<string, string> add = 2;
+      repeated Field add = 2;
     }
 
     // Fields applied to logs
     Fields fields = 2;
   }
 
+  message Tracing {}
+
   oneof kind {
-    Logging logging = 1;
+    TCP tcp = 1;
+    TLS tls = 2;
+    HTTP http = 3;
+    Logging logging = 4;
+    Tracing tracing = 5;
   }
 }
 
@@ -324,7 +365,7 @@ message TrafficPolicySpec {
     repeated Descriptor descriptors = 2;
     BackendReference target = 3;
 
-    enum Type { REQUESTS = 0; TOKENS = 1; }
+    enum Type {REQUESTS = 0; TOKENS = 1;}
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
@@ -459,7 +500,7 @@ message TrafficPolicySpec {
 }
 
 message BackendPolicySpec {
-    message Ai {
+  message Ai {
     message Message {
       string role = 1;
       string content = 2;
@@ -556,7 +597,7 @@ message BackendPolicySpec {
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;
   }
-    message A2a {
+  message A2a {
   }
   message InferenceRouting {
     enum FailureMode {
@@ -585,7 +626,7 @@ message BackendPolicySpec {
 
   message McpAuthentication {
     message ResourceMetadata {
-        map<string, google.protobuf.Value> extra = 1;
+      map<string, google.protobuf.Value> extra = 1;
     }
 
     enum McpIDP {
@@ -621,7 +662,7 @@ message Policy {
   PolicyTarget target = 2;
   // Reserved tag number for removed PolicySpec field: spec(3)
   reserved 3;
-   oneof kind {
+  oneof kind {
     TrafficPolicySpec traffic = 4;
     BackendPolicySpec backend = 5;
     FrontendPolicySpec frontend = 6;

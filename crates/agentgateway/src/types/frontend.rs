@@ -1,5 +1,7 @@
+use crate::telemetry::log::OrderedStringMap;
 use crate::*;
 use crate::{apply, defaults};
+use frozen_collections::FzHashSet;
 use std::time::Duration;
 
 #[apply(schema!)]
@@ -69,4 +71,22 @@ impl Default for TLS {
 #[apply(schema!)]
 pub struct TCP {
 	pub keepalives: super::agent::KeepaliveConfig,
+}
+
+#[apply(schema!)]
+pub struct LoggingPolicy {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub filter: Option<Arc<cel::Expression>>,
+	#[serde(default, skip_serializing_if = "OrderedStringMap::is_empty")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashSet<String>")
+	)]
+	#[serde(default, skip_serializing_if = "FzHashSet::is_empty")]
+	pub remove: Arc<FzHashSet<String>>,
 }

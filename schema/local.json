@@ -358,88 +358,6 @@
             "poolMaxSize": null
           }
         },
-        "listener": {
-          "type": "object",
-          "properties": {
-            "maxBufferSize": {
-              "type": "integer",
-              "format": "uint",
-              "minimum": 0,
-              "default": 2097152
-            },
-            "tlsHandshakeTimeout": {
-              "type": "string",
-              "default": "15s"
-            },
-            "http1MaxHeaders": {
-              "description": "The maximum number of headers allowed in a request. Changing this value results in a performance\ndegradation, even if set to a lower value than the default (100)",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint",
-              "minimum": 0,
-              "default": null
-            },
-            "http1IdleTimeout": {
-              "type": "string",
-              "default": "10m0s"
-            },
-            "http2WindowSize": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0,
-              "default": null
-            },
-            "http2ConnectionWindowSize": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0,
-              "default": null
-            },
-            "http2FrameSize": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0,
-              "default": null
-            },
-            "http2KeepaliveInterval": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "default": null
-            },
-            "http2KeepaliveTimeout": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "default": null
-            }
-          },
-          "additionalProperties": false,
-          "default": {
-            "maxBufferSize": 2097152,
-            "tlsHandshakeTimeout": "15s",
-            "http1MaxHeaders": null,
-            "http1IdleTimeout": "10m0s",
-            "http2WindowSize": null,
-            "http2ConnectionWindowSize": null,
-            "http2FrameSize": null,
-            "http2KeepaliveInterval": null,
-            "http2KeepaliveTimeout": null
-          }
-        },
         "hbone": {
           "type": [
             "object",
@@ -6180,7 +6098,33 @@
           "default": null
         },
         "accessLog": {
-          "type": "null",
+          "description": "Settings for request access logs.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "filter": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "fieldsAdd": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "fieldsRemove": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false,
           "default": null
         },
         "tracing": {

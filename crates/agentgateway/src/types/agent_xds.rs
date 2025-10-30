@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::http::Scheme;
 use ::http::StatusCode;
+use frozen_collections::FzHashSet;
 use rustls::ServerConfig;
 
 use super::agent::*;
@@ -12,6 +13,7 @@ use crate::http::authorization;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::McpAuthorization;
+use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto;
 use crate::types::proto::ProtoError;
@@ -902,10 +904,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 							allow_partial_message: body_opts.allow_partial_message,
 							pack_as_bytes: body_opts.pack_as_bytes,
 						});
-				let timeout = ea.timeout.as_ref().map(|d| {
-					std::time::Duration::from_secs(d.seconds as u64)
-						+ std::time::Duration::from_nanos(d.nanos as u64)
-				});
+				let timeout = ea.timeout.map(convert_duration);
 
 				TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
 					target: Arc::new(target),
@@ -1115,6 +1114,109 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 	}
 }
 
+fn convert_duration(d: prost_types::Duration) -> Duration {
+	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
+}
+
+impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
+	type Error = ProtoError;
+
+	fn try_from(spec: &proto::agent::FrontendPolicySpec) -> Result<Self, Self::Error> {
+		use crate::types::frontend;
+		use crate::types::proto::agent::frontend_policy_spec as fps;
+
+		Ok(match &spec.kind {
+			Some(fps::Kind::Http(h)) => FrontendPolicy::HTTP(frontend::HTTP {
+				max_buffer_size: h
+					.max_buffer_size
+					.map(|v| v as usize)
+					.unwrap_or_else(crate::defaults::max_buffer_size),
+				http1_max_headers: h.http1_max_headers.map(|v| v as usize),
+				http1_idle_timeout: h
+					.http1_idle_timeout
+					.map(convert_duration)
+					.unwrap_or_else(crate::defaults::http1_idle_timeout),
+				http2_window_size: h.http2_window_size,
+				http2_connection_window_size: h.http2_connection_window_size,
+				http2_frame_size: h.http2_frame_size,
+				http2_keepalive_interval: h.http2_keepalive_interval.map(convert_duration),
+				http2_keepalive_timeout: h.http2_keepalive_timeout.map(convert_duration),
+			}),
+			Some(fps::Kind::Tls(t)) => FrontendPolicy::TLS(frontend::TLS {
+				tls_handshake_timeout: t
+					.tls_handshake_timeout
+					.map(convert_duration)
+					.unwrap_or_else(crate::defaults::tls_handshake_timeout),
+			}),
+			Some(fps::Kind::Tcp(t)) => FrontendPolicy::TCP(frontend::TCP {
+				keepalives: t
+					.keepalives
+					.as_ref()
+					.map(types::agent::KeepaliveConfig::try_from)
+					.transpose()?
+					.unwrap_or_default(),
+			}),
+			Some(fps::Kind::Logging(p)) => {
+				let (add, rm) = p
+					.fields
+					.as_ref()
+					.map(|f| {
+						let add = f
+							.add
+							.iter()
+							.map(|f| {
+								let expr = cel::Expression::new(&f.expression).map_err(|e| {
+									ProtoError::Generic(format!("invalid CEL expression in add field: {e}"))
+								})?;
+								Ok::<_, ProtoError>((f.name.clone(), Arc::new(expr)))
+							})
+							.collect::<Result<Vec<_>, _>>()?;
+						let rm = f.remove.clone();
+						Ok::<_, ProtoError>((OrderedStringMap::from_iter(add), rm))
+					})
+					.transpose()?
+					.unwrap_or_default();
+				FrontendPolicy::AccessLog(frontend::LoggingPolicy {
+					filter: p
+						.filter
+						.as_ref()
+						.map(cel::Expression::new)
+						.transpose()
+						.map_err(|e| {
+							ProtoError::Generic(format!("invalid CEL expression in filter field: {e}"))
+						})?
+						.map(Arc::new),
+					add: Arc::new(add),
+					remove: Arc::new(FzHashSet::new(rm)),
+				})
+			},
+			Some(fps::Kind::Tracing(_)) => FrontendPolicy::Tracing(()),
+			None => return Err(ProtoError::MissingRequiredField),
+		})
+	}
+}
+
+impl TryFrom<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
+	type Error = ProtoError;
+
+	fn try_from(k: &proto::agent::KeepaliveConfig) -> Result<Self, Self::Error> {
+		Ok(KeepaliveConfig {
+			enabled: true,
+			time: k
+				.time
+				.map(convert_duration)
+				.unwrap_or_else(types::agent::defaults::keepalive_time),
+			interval: k
+				.interval
+				.map(convert_duration)
+				.unwrap_or_else(types::agent::defaults::keepalive_interval),
+			retries: k
+				.retries
+				.unwrap_or_else(types::agent::defaults::keepalive_retries),
+		})
+	}
+}
+
 impl TryFrom<&proto::agent::PolicyTarget> for PolicyTarget {
 	type Error = ProtoError;
 
@@ -1150,11 +1252,7 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 			Some(pol::Kind::Traffic(spec)) => PolicyType::Traffic(PhasedTrafficPolicy::try_from(spec)?),
 			Some(pol::Kind::Backend(spec)) => PolicyType::Backend(BackendPolicy::try_from(spec)?),
 			// Frontend policies are not represented by TargetedPolicy; reject here.
-			Some(pol::Kind::Frontend(_)) => {
-				return Err(ProtoError::Generic(
-					"frontend policies are not supported in TargetedPolicy".to_string(),
-				));
-			},
+			Some(pol::Kind::Frontend(spec)) => PolicyType::Frontend(FrontendPolicy::try_from(spec)?),
 			None => return Err(ProtoError::MissingRequiredField),
 		};
 
