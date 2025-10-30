@@ -461,7 +461,7 @@ impl CaClient {
 		let response = response.into_inner();
 
 		// Parse the certificate chain
-		let mut cert_chain = response.cert_chain;
+		let cert_chain = response.cert_chain;
 		if cert_chain.is_empty() {
 			return Err(Error::EmptyResponse);
 		}
@@ -469,19 +469,26 @@ impl CaClient {
 		// TEST ONLY: Mock CA returns the private key in the cert chain with a special marker
 		// because rcgen doesn't support CSR parsing.
 		// Detect the test marker and use the provided key. Real CAs never return private keys.
-		const TEST_CERT_MARKER: &str = "X-Test-Certificate-Key";
-		let actual_private_key = if cert_chain.len() >= 2 && cert_chain[1].contains(TEST_CERT_MARKER) {
-			// Extract the test private key (strip the marker comment line)
-			let test_key_with_marker = cert_chain.remove(1);
-			let key_pem = test_key_with_marker
-				.lines()
-				.skip(1) // Skip the marker line
-				.collect::<Vec<_>>()
-				.join("\n");
-			key_pem.as_bytes().to_vec()
-		} else {
-			private_key
+		// Only enabled when the "testing" feature is active (used by integration tests).
+		#[cfg(feature = "testing")]
+		let actual_private_key = {
+			const TEST_CERT_MARKER: &str = "X-Test-Certificate-Key";
+			if cert_chain.len() >= 2 && cert_chain[1].contains(TEST_CERT_MARKER) {
+				// Extract the test private key (strip the marker comment line)
+				let test_key_with_marker = cert_chain.remove(1);
+				let key_pem = test_key_with_marker
+					.lines()
+					.skip(1) // Skip the marker line
+					.collect::<Vec<_>>()
+					.join("\n");
+				key_pem.as_bytes().to_vec()
+			} else {
+				private_key
+			}
 		};
+
+		#[cfg(not(feature = "testing"))]
+		let actual_private_key = private_key;
 
 		let leaf_cert = cert_chain[0].as_bytes();
 		let chain_certs = if cert_chain.len() > 1 {

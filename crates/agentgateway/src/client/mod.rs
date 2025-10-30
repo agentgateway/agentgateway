@@ -398,7 +398,7 @@ impl Connector {
 
 				let tls_connector = tokio_rustls::TlsConnector::from(tls_config);
 
-				// Use dummy value for domain because it doesn't matter.
+				// Use dummy value for domain because server name verification is not performed in this context.
 				let tls_stream = tls_connector
 					.connect(
 						rustls_pki_types::ServerName::IpAddress(std::net::Ipv4Addr::new(0, 0, 0, 0).into()),
