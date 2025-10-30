@@ -61,17 +61,34 @@ impl HboneTestServer {
 		let certs = generate_test_certs(&self.name);
 		let acceptor = create_tls_acceptor(certs);
 
+		// Track consecutive TLS errors to detect persistent configuration issues
+		const MAX_CONSECUTIVE_ERRORS: usize = 10;
+		let mut consecutive_errors = 0;
+
 		loop {
 			let (tcp_stream, _) = self.listener.accept().await.unwrap();
 			let tls_stream = match acceptor.accept(tcp_stream).await {
-				Ok(stream) => stream,
+				Ok(stream) => {
+					// Reset error counter on successful connection
+					consecutive_errors = 0;
+					stream
+				},
 				Err(e) => {
+					consecutive_errors += 1;
 					// Log as debug since transient TLS errors are expected during test startup
 					// when the client is still fetching certificates
 					debug!(
 						"TLS accept error (likely transient during startup): {:?}",
 						e
 					);
+
+					if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+						panic!(
+							"Test server '{}' failed with {} consecutive TLS errors. \
+							This indicates a persistent TLS configuration issue, not transient startup errors.",
+							self.name, consecutive_errors
+						);
+					}
 					continue;
 				},
 			};

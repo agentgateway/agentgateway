@@ -461,7 +461,11 @@ impl CaClient {
 		let response = response.into_inner();
 
 		// Parse the certificate chain
+		#[cfg(feature = "testing")]
+		let mut cert_chain = response.cert_chain;
+		#[cfg(not(feature = "testing"))]
 		let cert_chain = response.cert_chain;
+
 		if cert_chain.is_empty() {
 			return Err(Error::EmptyResponse);
 		}
