@@ -234,7 +234,7 @@ fn generate_test_certs(name: &str) -> rustls::ServerConfig {
 		.unwrap();
 
 	// Load CA cert for trust store
-	let mut root_cursor = std::io::Cursor::new(&super::shared_ca::TEST_ROOT[..]);
+	let mut root_cursor = std::io::Cursor::new(super::shared_ca::TEST_ROOT);
 	let ca_der = rustls_pemfile::certs(&mut root_cursor)
 		.next()
 		.unwrap()
