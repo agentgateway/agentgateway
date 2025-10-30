@@ -167,7 +167,6 @@ rmcp = { workspace = true, features = [
     "transport-streamable-http-client-reqwest",
     "transport-sse-client-reqwest",
 ] }
-openssl = { version = "0.10.74", features = ["vendored"] }
 
 
 [lints.clippy]

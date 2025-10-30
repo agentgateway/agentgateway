@@ -16,34 +16,45 @@ use tokio::net::TcpListener;
 use tracing::{debug, error, info};
 
 #[allow(dead_code)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Mode {
 	ReadDoubleWrite,
 	ReadWrite,
+	Forward(SocketAddr), // Forward connections to another HBONE server
 }
 
 static BUFFER_SIZE: usize = 2 * 1024 * 1024;
 
-/// HBONE test server that accepts mTLS connections on port 15008 and echoes data with a prefix
+/// HBONE test server that accepts mTLS connections and echoes data with a prefix
 pub struct HboneTestServer {
 	listener: TcpListener,
 	mode: Mode,
 	name: String,
 	waypoint_message: Vec<u8>, // Prefix to write before echoing data
+	port: u16,                 // The actual bound port
 }
 
 impl HboneTestServer {
+	/// Creates a new HBONE test server. If port is 0, the OS will assign an available port.
 	pub async fn new(mode: Mode, name: &str, waypoint_message: Vec<u8>, port: u16) -> Self {
 		let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
 		let addr = SocketAddr::from(([127, 0, 0, 1], port));
 		let listener = TcpListener::bind(addr).await.unwrap();
+		let actual_port = listener.local_addr().unwrap().port();
+
 		Self {
 			listener,
 			mode,
 			name: name.to_string(),
 			waypoint_message,
+			port: actual_port,
 		}
+	}
+
+	/// Returns the port this server is bound to
+	pub fn port(&self) -> u16 {
+		self.port
 	}
 
 	pub async fn run(self) {
@@ -65,8 +76,9 @@ impl HboneTestServer {
 				},
 			};
 
-			let mode = self.mode;
+			let mode = self.mode.clone();
 			let waypoint_message = self.waypoint_message.clone();
+			let name = self.name.clone();
 
 			tokio::spawn(async move {
 				if let Err(err) = http2::Builder::new(hyper_util::rt::TokioExecutor::new())
@@ -74,8 +86,10 @@ impl HboneTestServer {
 						TokioIo::new(tls_stream),
 						service_fn(move |req| {
 							let waypoint_message = waypoint_message.clone();
+							let mode = mode.clone();
+							let name = name.clone();
 							async move {
-								info!("waypoint: received request");
+								info!("{}: received request", name);
 								tokio::task::spawn(async move {
 									match hyper::upgrade::on(req).await {
 										Ok(upgraded) => {
@@ -127,74 +141,88 @@ where
 				}
 			}
 		},
+		Mode::Forward(forward_addr) => {
+			// Connect to the target HBONE server
+			let mut target_stream = tokio::net::TcpStream::connect(forward_addr)
+				.await
+				.expect("Failed to connect to forward target");
+
+			// Bidirectionally copy data between the two streams
+			// Use tokio::io::copy_bidirectional for proper full-duplex forwarding
+			if let Err(e) = tokio::io::copy_bidirectional(rw, &mut target_stream).await {
+				// Connection closed errors are expected during test cleanup
+				debug!("Connection closed during forward: {:?}", e);
+			}
+		},
 	}
 }
 
 fn generate_test_certs(name: &str) -> rustls::ServerConfig {
-	use openssl::asn1::Asn1Time;
-	use openssl::bn::BigNum;
-	use openssl::hash::MessageDigest;
-	use openssl::nid::Nid;
-	use openssl::pkey::PKey;
-	use openssl::rsa::Rsa;
-	use openssl::x509::X509Builder;
-	use openssl::x509::extension::{KeyUsage, SubjectAlternativeName};
-	use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-
-	let shared_ca = super::shared_ca::get_shared_ca();
-	let ca_key = &shared_ca.ca_key;
-	let ca_cert = &shared_ca.ca_cert;
-	let server_key = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
-	let mut cert_builder = X509Builder::new().unwrap();
-	cert_builder.set_version(2).unwrap();
-
-	let serial = {
-		let mut s = BigNum::new().unwrap();
-		s.rand(159, openssl::bn::MsbOption::MAYBE_ZERO, false)
-			.unwrap();
-		s.to_asn1_integer().unwrap()
+	// Generate certificates using rcgen with static test keys
+	use rand::RngCore;
+	use rcgen::{
+		CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
+		KeyUsagePurpose, SanType, SerialNumber,
 	};
-	cert_builder.set_serial_number(&serial).unwrap();
+	use rustls::pki_types::CertificateDer;
+	use std::time::{Duration, SystemTime};
 
-	let mut subject = openssl::x509::X509NameBuilder::new().unwrap();
-	subject.append_entry_by_nid(Nid::COMMONNAME, name).unwrap();
-	subject
-		.append_entry_by_nid(Nid::ORGANIZATIONNAME, "cluster.local")
-		.unwrap();
-	let subject = subject.build();
+	// Generate random serial number (159 bits)
+	let serial_number = {
+		let mut data = [0u8; 20];
+		rand::rng().fill_bytes(&mut data);
+		data[0] &= 0x7f;
+		data
+	};
 
-	cert_builder.set_subject_name(&subject).unwrap();
-	cert_builder
-		.set_issuer_name(ca_cert.subject_name())
-		.unwrap();
-	cert_builder
-		.set_not_before(&Asn1Time::days_from_now(0).unwrap())
-		.unwrap();
-	cert_builder
-		.set_not_after(&Asn1Time::days_from_now(365).unwrap())
-		.unwrap();
-	cert_builder.set_pubkey(&server_key).unwrap();
+	// Set up certificate parameters
+	let mut params = CertificateParams::default();
+	params.not_before = SystemTime::now().into();
+	params.not_after = (SystemTime::now() + Duration::from_secs(365 * 24 * 60 * 60)).into();
+	params.serial_number = Some(SerialNumber::from_slice(&serial_number));
 
+	let mut dn = DistinguishedName::new();
+	dn.push(DnType::OrganizationName, "cluster.local");
+	params.distinguished_name = dn;
+
+	params.key_usages = vec![
+		KeyUsagePurpose::DigitalSignature,
+		KeyUsagePurpose::KeyEncipherment,
+	];
+	params.extended_key_usages = vec![
+		ExtendedKeyUsagePurpose::ServerAuth,
+		ExtendedKeyUsagePurpose::ClientAuth,
+	];
+
+	// Set SPIFFE ID as SAN
 	let spiffe_id = format!("spiffe://cluster.local/ns/default/sa/{}", name);
-	let san = SubjectAlternativeName::new()
-		.uri(&spiffe_id)
-		.build(&cert_builder.x509v3_context(Some(ca_cert), None))
+	params.subject_alt_names = vec![SanType::URI(spiffe_id.try_into().unwrap())];
+
+	// Use static test key for consistency
+	let kp = KeyPair::from_pem(std::str::from_utf8(super::shared_ca::TEST_PKEY).unwrap()).unwrap();
+	let key_pem = kp.serialize_pem();
+
+	// Load CA key
+	let ca_kp =
+		KeyPair::from_pem(std::str::from_utf8(super::shared_ca::TEST_ROOT_KEY).unwrap()).unwrap();
+
+	// Sign certificate with CA
+	let issuer = Issuer::from_params(&params, &ca_kp);
+	let server_cert = params.signed_by(&kp, &issuer).unwrap();
+
+	// Convert to DER for rustls
+	let cert_der = CertificateDer::from(server_cert.der().to_vec());
+	let key_der = rustls_pemfile::private_key(&mut key_pem.as_bytes())
+		.unwrap()
 		.unwrap();
-	cert_builder.append_extension(san).unwrap();
 
-	let key_usage = KeyUsage::new()
-		.digital_signature()
-		.key_encipherment()
-		.build()
+	// Load CA cert for trust store
+	let mut root_cursor = std::io::Cursor::new(&super::shared_ca::TEST_ROOT[..]);
+	let ca_der = rustls_pemfile::certs(&mut root_cursor)
+		.next()
+		.unwrap()
 		.unwrap();
-	cert_builder.append_extension(key_usage).unwrap();
 
-	cert_builder.sign(ca_key, MessageDigest::sha256()).unwrap();
-	let server_cert = cert_builder.build();
-
-	let cert_der = CertificateDer::from(server_cert.to_der().unwrap());
-	let key_der = PrivateKeyDer::try_from(server_key.private_key_to_der().unwrap()).unwrap();
-	let ca_der = CertificateDer::from(ca_cert.to_der().unwrap());
 	let mut root_store = rustls::RootCertStore::empty();
 	root_store.add(ca_der).unwrap();
 

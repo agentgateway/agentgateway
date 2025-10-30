@@ -1,14 +1,17 @@
 // Mock Istio Certificate Service for testing HBONE mTLS
+//
+// Since rcgen doesn't support CSR parsing (https://github.com/rustls/rcgen/issues/228),
+// we generate certificates with a static key and return the private key in the cert chain.
+// This is a test-only approach - real CAs never return private keys.
 
-use openssl::asn1::Asn1Time;
-use openssl::bn::BigNum;
-use openssl::hash::MessageDigest;
-use openssl::nid::Nid;
-use openssl::pkey::{PKey, Private};
-use openssl::x509::extension::{KeyUsage, SubjectAlternativeName};
-use openssl::x509::{X509, X509Builder};
+use rand::RngCore;
+use rcgen::{
+	CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
+	KeyUsagePurpose, SanType, SerialNumber,
+};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 use tonic::{Request, Response, Status, transport::Server};
 
 pub mod istio {
@@ -24,109 +27,76 @@ use istio::ca::{
 
 #[derive(Debug)]
 pub struct MockCaService {
-	ca_key: Arc<PKey<Private>>,
-	ca_cert: Arc<X509>,
+	ca_key: Arc<KeyPair>,
+	ca_cert_pem: Arc<String>,
 }
 
 #[tonic::async_trait]
 impl IstioCertificateService for MockCaService {
 	async fn create_certificate(
 		&self,
-		request: Request<IstioCertificateRequest>,
+		_request: Request<IstioCertificateRequest>,
 	) -> Result<Response<IstioCertificateResponse>, Status> {
-		let req = request.into_inner();
+		// We ignore the CSR since rcgen doesn't support parsing it
+		// Instead, generate a certificate with a static key
 
-		let csr = openssl::x509::X509Req::from_pem(req.csr.as_bytes())
-			.map_err(|e| Status::invalid_argument(format!("Invalid CSR: {}", e)))?;
-
-		let pubkey = csr
-			.public_key()
-			.map_err(|e| Status::internal(format!("Failed to get public key: {}", e)))?;
-
-		let mut cert_builder = X509Builder::new()
-			.map_err(|e| Status::internal(format!("Failed to create cert builder: {}", e)))?;
-
-		cert_builder
-			.set_version(2)
-			.map_err(|e| Status::internal(format!("Failed to set version: {}", e)))?;
+		// Generate random serial number (159 bits)
 		let serial_number = {
-			let mut serial =
-				BigNum::new().map_err(|e| Status::internal(format!("Failed to create serial: {}", e)))?;
-			serial
-				.rand(159, openssl::bn::MsbOption::MAYBE_ZERO, false)
-				.map_err(|e| Status::internal(format!("Failed to rand serial: {}", e)))?;
-			serial
-				.to_asn1_integer()
-				.map_err(|e| Status::internal(format!("Failed to convert serial: {}", e)))?
+			let mut data = [0u8; 20];
+			rand::rng().fill_bytes(&mut data);
+			data[0] &= 0x7f;
+			data
 		};
-		cert_builder
-			.set_serial_number(&serial_number)
-			.map_err(|e| Status::internal(format!("Failed to set serial: {}", e)))?;
-		let mut subject_name = openssl::x509::X509NameBuilder::new()
-			.map_err(|e| Status::internal(format!("Failed to create subject: {}", e)))?;
-		subject_name
-			.append_entry_by_nid(Nid::COMMONNAME, "default")
-			.map_err(|e| Status::internal(format!("Failed to set CN: {}", e)))?;
-		subject_name
-			.append_entry_by_nid(Nid::ORGANIZATIONNAME, "cluster.local")
-			.map_err(|e| Status::internal(format!("Failed to set O: {}", e)))?;
-		let subject_name = subject_name.build();
-		cert_builder
-			.set_subject_name(&subject_name)
-			.map_err(|e| Status::internal(format!("Failed to set subject name: {}", e)))?;
 
-		cert_builder
-			.set_issuer_name(self.ca_cert.subject_name())
-			.map_err(|e| Status::internal(format!("Failed to set issuer: {}", e)))?;
-		let not_before = Asn1Time::days_from_now(0)
-			.map_err(|e| Status::internal(format!("Failed to create not_before: {}", e)))?;
-		let not_after = Asn1Time::days_from_now(365)
-			.map_err(|e| Status::internal(format!("Failed to create not_after: {}", e)))?;
-		cert_builder
-			.set_not_before(&not_before)
-			.map_err(|e| Status::internal(format!("Failed to set not_before: {}", e)))?;
-		cert_builder
-			.set_not_after(&not_after)
-			.map_err(|e| Status::internal(format!("Failed to set not_after: {}", e)))?;
+		// Set up certificate parameters
+		let mut params = CertificateParams::default();
+		params.not_before = SystemTime::now().into();
+		params.not_after = (SystemTime::now() + Duration::from_secs(365 * 24 * 60 * 60)).into();
+		params.serial_number = Some(SerialNumber::from_slice(&serial_number));
 
-		cert_builder
-			.set_pubkey(&pubkey)
-			.map_err(|e| Status::internal(format!("Failed to set pubkey: {}", e)))?;
+		let mut dn = DistinguishedName::new();
+		dn.push(DnType::OrganizationName, "cluster.local");
+		params.distinguished_name = dn;
+
+		params.key_usages = vec![
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::KeyEncipherment,
+		];
+		params.extended_key_usages = vec![
+			ExtendedKeyUsagePurpose::ServerAuth,
+			ExtendedKeyUsagePurpose::ClientAuth,
+		];
+
+		// Set SPIFFE ID as SAN
 		let spiffe_id = "spiffe://cluster.local/ns/default/sa/default";
-		let san = SubjectAlternativeName::new()
-			.uri(spiffe_id)
-			.build(&cert_builder.x509v3_context(Some(&self.ca_cert), None))
-			.map_err(|e| Status::internal(format!("Failed to build SAN: {}", e)))?;
-		cert_builder
-			.append_extension(san)
-			.map_err(|e| Status::internal(format!("Failed to add SAN: {}", e)))?;
-		let key_usage = KeyUsage::new()
-			.digital_signature()
-			.key_encipherment()
-			.build()
-			.map_err(|e| Status::internal(format!("Failed to build key usage: {}", e)))?;
-		cert_builder
-			.append_extension(key_usage)
-			.map_err(|e| Status::internal(format!("Failed to add key usage: {}", e)))?;
+		params.subject_alt_names =
+			vec![SanType::URI(spiffe_id.try_into().map_err(|e| {
+				Status::internal(format!("Failed to create SAN: {}", e))
+			})?)];
 
-		cert_builder
-			.sign(&self.ca_key, MessageDigest::sha256())
-			.map_err(|e| Status::internal(format!("Failed to sign cert: {}", e)))?;
+		// Use static test key for consistency
+		let kp = KeyPair::from_pem(std::str::from_utf8(super::shared_ca::TEST_PKEY).unwrap())
+			.map_err(|e| Status::internal(format!("Failed to load test key: {}", e)))?;
+		let key_pem = kp.serialize_pem();
 
-		let cert = cert_builder.build();
-		let cert_pem = cert
-			.to_pem()
-			.map_err(|e| Status::internal(format!("Failed to convert cert to PEM: {}", e)))?;
-		let ca_pem = self
-			.ca_cert
-			.to_pem()
-			.map_err(|e| Status::internal(format!("Failed to convert CA to PEM: {}", e)))?;
+		// Use the CA key
+		let ca_kp = &*self.ca_key;
 
+		// Sign the certificate with CA
+		let issuer = Issuer::from_params(&params, &ca_kp);
+		let cert = params
+			.signed_by(&kp, &issuer)
+			.map_err(|e| Status::internal(format!("Failed to sign certificate: {}", e)))?;
+		let cert_pem = cert.pem();
+
+		// For testing: return the private key in the cert chain so the client can use it
+		// This is necessary because we can't parse the CSR to use its public key
+		// We use a special marker to identify this as a test certificate
+		const TEST_CERT_MARKER: &str = "X-Test-Certificate-Key";
 		let cert_chain = vec![
-			String::from_utf8(cert_pem)
-				.map_err(|e| Status::internal(format!("Invalid UTF-8 in cert: {}", e)))?,
-			String::from_utf8(ca_pem)
-				.map_err(|e| Status::internal(format!("Invalid UTF-8 in CA: {}", e)))?,
+			cert_pem,
+			format!("# {}\n{}", TEST_CERT_MARKER, key_pem), // Test-only: include the private key with marker
+			self.ca_cert_pem.to_string(),
 		];
 
 		Ok(Response::new(IstioCertificateResponse { cert_chain }))
@@ -142,7 +112,7 @@ pub async fn start_mock_ca_server() -> anyhow::Result<SocketAddr> {
 
 	let ca_service = MockCaService {
 		ca_key: shared_ca.ca_key.clone(),
-		ca_cert: shared_ca.ca_cert.clone(),
+		ca_cert_pem: shared_ca.ca_cert_pem.clone(),
 	};
 
 	tokio::spawn(async move {
@@ -153,7 +123,23 @@ pub async fn start_mock_ca_server() -> anyhow::Result<SocketAddr> {
 			.expect("CA server failed");
 	});
 
-	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+	// Wait for server to be ready by attempting to connect
+	wait_for_tcp_server(addr).await?;
 
 	Ok(addr)
+}
+
+async fn wait_for_tcp_server(addr: SocketAddr) -> anyhow::Result<()> {
+	use std::time::Duration;
+	let timeout = Duration::from_secs(5);
+	let start = std::time::Instant::now();
+
+	while start.elapsed() < timeout {
+		if tokio::net::TcpStream::connect(addr).await.is_ok() {
+			return Ok(());
+		}
+		tokio::time::sleep(Duration::from_millis(10)).await;
+	}
+
+	Err(anyhow::anyhow!("Timeout waiting for server at {}", addr))
 }

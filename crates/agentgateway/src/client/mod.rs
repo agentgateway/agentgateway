@@ -180,6 +180,12 @@ pub enum Transport {
 	Plaintext,
 	Tls(BackendTLS),
 	Hbone(Option<BackendTLS>, Identity),
+	DoubleHbone {
+		gateway_address: SocketAddr, // Address of network gateway to connect to
+		gateway_identity: Identity,  // Identity of network gateway
+		waypoint_identity: Identity, // Identity of waypoint/workload
+		inner_tls: Option<BackendTLS>,
+	},
 }
 impl Transport {
 	pub fn name(&self) -> &'static str {
@@ -187,6 +193,7 @@ impl Transport {
 			Transport::Plaintext => "plaintext",
 			Transport::Tls(_) => "tls",
 			Transport::Hbone(_, _) => "hbone",
+			Transport::DoubleHbone { .. } => "doublehbone",
 		}
 	}
 }
@@ -215,6 +222,14 @@ impl Transport {
 					Scheme::HTTPS
 				} else {
 					// It is a tunnel, so the fact its HTTPS is transparent!
+					Scheme::HTTP
+				}
+			},
+			Transport::DoubleHbone { inner_tls, .. } => {
+				if inner_tls.is_some() {
+					Scheme::HTTPS
+				} else {
+					// Double tunnel, so HTTPS is transparent!
 					Scheme::HTTP
 				}
 			},
@@ -297,8 +312,140 @@ impl Connector {
 				let rw = agent_hbone::RWStream {
 					stream: upgraded,
 					buf: Default::default(),
+					drain_tx: None,
 				};
 				Socket::from_hbone(Arc::new(stream::Extension::new()), pool_key.dst, rw)
+			},
+			Transport::DoubleHbone {
+				gateway_address,
+				gateway_identity,
+				waypoint_identity,
+				inner_tls,
+			} => {
+				if inner_tls.is_some() {
+					return Err(crate::http::Error::new(anyhow::anyhow!(
+						"todo: inner TLS after double hbone is not currently supported"
+					)));
+				}
+
+				tracing::debug!(
+					"will use DOUBLE HBONE: gateway {} -> workload {}",
+					gateway_address,
+					ep
+				);
+
+				// Create outer HBONE connection to network gateway
+				// The outer HBONE CONNECT request uses the service hostname (target) as the authority
+				// This tells the gateway what service we want to reach
+				let outer_uri = Uri::builder()
+					.scheme(Scheme::HTTPS)
+					.authority(match &target {
+						Target::Hostname(host, port) => format!("{}:{}", host, port),
+						Target::Address(addr) => addr.to_string(),
+					})
+					.path_and_query("/")
+					.build()
+					.expect("uri build should not fail");
+				let outer_req = ::http::Request::builder()
+					.uri(outer_uri)
+					.method(hyper::Method::CONNECT)
+					.version(hyper::Version::HTTP_2)
+					.body(())
+					.expect("builder with known status code should not fail");
+
+				// Connect to the network gateway at its HBONE port
+				let outer_pool_key = Box::new(WorkloadKey {
+					dst_id: vec![gateway_identity.clone()],
+					dst: gateway_address,
+				});
+				let mut pool = self
+					.hbone_pool
+					.clone()
+					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
+
+				let outer_upgraded = Box::pin(pool.send_request_pooled(&outer_pool_key, outer_req))
+					.await
+					.map_err(crate::http::Error::new)?;
+
+				// Wrap upgraded to implement tokio's Async{Write,Read}
+				let outer_rw = agent_hbone::RWStream {
+					stream: outer_upgraded,
+					buf: Default::default(),
+					drain_tx: None,
+				};
+
+				// For the inner one, we do it manually to avoid connection pooling.
+				// Otherwise, we would only ever reach one workload in the remote cluster.
+				// We also need to abort tasks the right way to get graceful terminations.
+				let wl_key = WorkloadKey {
+					dst_id: vec![waypoint_identity.clone()],
+					dst: ep,
+				};
+
+				// Fetch certs and establish inner TLS connection.
+				let pool = self.hbone_pool.as_ref().ok_or_else(|| {
+					crate::http::Error::new(anyhow::anyhow!("hbone pool required for double hbone"))
+				})?;
+
+				// Use the pool's certificate fetcher to get TLS config for the waypoint
+				let tls_config = pool
+					.fetch_certificate(WorkloadKey {
+						dst_id: vec![waypoint_identity.clone()],
+						dst: ep,
+					})
+					.await
+					.map_err(crate::http::Error::new)?;
+
+				let tls_connector = tokio_rustls::TlsConnector::from(tls_config);
+
+				// Use dummy value for domain because it doesn't matter.
+				let tls_stream = tls_connector
+					.connect(
+						rustls_pki_types::ServerName::IpAddress(std::net::Ipv4Addr::new(0, 0, 0, 0).into()),
+						outer_rw,
+					)
+					.await
+					.map_err(crate::http::Error::new)?;
+
+				// Spawn inner CONNECT tunnel
+				let (drain_tx, drain_rx) = tokio::sync::watch::channel(false);
+				let hbone_cfg = self
+					.hbone_pool
+					.as_ref()
+					.ok_or_else(|| {
+						crate::http::Error::new(anyhow::anyhow!("hbone pool required for double hbone"))
+					})?
+					.config();
+				let mut sender =
+					agent_hbone::client::spawn_connection(hbone_cfg, tls_stream, drain_rx, wl_key)
+						.await
+						.map_err(crate::http::Error::new)?;
+
+				let inner_uri = Uri::builder()
+					.scheme(Scheme::HTTPS)
+					.authority(ep.to_string())
+					.path_and_query("/")
+					.build()
+					.expect("uri build should not fail");
+				let inner_req = ::http::Request::builder()
+					.uri(inner_uri)
+					.method(hyper::Method::CONNECT)
+					.version(hyper::Version::HTTP_2)
+					.body(())
+					.expect("builder with known status code should not fail");
+
+				let inner_upgraded = sender
+					.send_request(inner_req)
+					.await
+					.map_err(crate::http::Error::new)?;
+
+				let final_rw = agent_hbone::RWStream {
+					stream: inner_upgraded,
+					buf: Default::default(),
+					drain_tx: Some(drain_tx),
+				};
+
+				Socket::from_hbone(Arc::new(stream::Extension::new()), ep, final_rw)
 			},
 		};
 

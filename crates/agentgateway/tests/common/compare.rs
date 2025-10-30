@@ -330,14 +330,14 @@ impl ProxyComparison {
 }
 
 /// Note: this is racy, since we drop it. But it will at least prevent taking long-running ports.
-pub async fn find_free_port() -> Result<u16> {
+pub(super) async fn find_free_port() -> Result<u16> {
 	let listener = TcpListener::bind("127.0.0.1:0").await?;
 	let addr = listener.local_addr()?;
 	Ok(addr.port())
 }
 
 /// Helper function to wait for a port to be available
-pub async fn wait_for_port(port: u16) -> Result<()> {
+pub(super) async fn wait_for_port(port: u16) -> Result<()> {
 	let timeout_duration = Duration::from_secs(10);
 	let start = std::time::Instant::now();
 

@@ -107,6 +107,7 @@ impl TCPProxy {
 				target: target.clone(),
 				http_version_override: None,
 				transport_override: None,
+				network_gateway: None,
 				default_policies: None,
 			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
