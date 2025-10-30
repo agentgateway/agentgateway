@@ -309,7 +309,7 @@ message KeepaliveConfig {
 message FrontendPolicySpec {
   message HTTP {
     google.protobuf.UInt32Value max_buffer_size = 1;
-    google.protobuf.UInt64Value http1_max_headers = 2;
+    google.protobuf.UInt32Value http1_max_headers = 2;
     google.protobuf.Duration http1_idle_timeout = 3;
     google.protobuf.UInt32Value http2_window_size = 4;
     google.protobuf.UInt32Value http2_connection_window_size = 5;

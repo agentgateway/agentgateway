@@ -4750,7 +4750,7 @@ func (*AzureManagedIdentityCredential_UserAssignedIdentity_ResourceId) isAzureMa
 type FrontendPolicySpec_HTTP struct {
 	state                     protoimpl.MessageState `protogen:"open.v1"`
 	MaxBufferSize             *wrappers.UInt32Value  `protobuf:"bytes,1,opt,name=max_buffer_size,json=maxBufferSize,proto3" json:"max_buffer_size,omitempty"`
-	Http1MaxHeaders           *wrappers.UInt64Value  `protobuf:"bytes,2,opt,name=http1_max_headers,json=http1MaxHeaders,proto3" json:"http1_max_headers,omitempty"`
+	Http1MaxHeaders           *wrappers.UInt32Value  `protobuf:"bytes,2,opt,name=http1_max_headers,json=http1MaxHeaders,proto3" json:"http1_max_headers,omitempty"`
 	Http1IdleTimeout          *duration.Duration     `protobuf:"bytes,3,opt,name=http1_idle_timeout,json=http1IdleTimeout,proto3" json:"http1_idle_timeout,omitempty"`
 	Http2WindowSize           *wrappers.UInt32Value  `protobuf:"bytes,4,opt,name=http2_window_size,json=http2WindowSize,proto3" json:"http2_window_size,omitempty"`
 	Http2ConnectionWindowSize *wrappers.UInt32Value  `protobuf:"bytes,5,opt,name=http2_connection_window_size,json=http2ConnectionWindowSize,proto3" json:"http2_connection_window_size,omitempty"`
@@ -4798,7 +4798,7 @@ func (x *FrontendPolicySpec_HTTP) GetMaxBufferSize() *wrappers.UInt32Value {
 	return nil
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp1MaxHeaders() *wrappers.UInt64Value {
+func (x *FrontendPolicySpec_HTTP) GetHttp1MaxHeaders() *wrappers.UInt32Value {
 	if x != nil {
 		return x.Http1MaxHeaders
 	}
@@ -7800,7 +7800,7 @@ const file_resource_proto_rawDesc = "" +
 	"\atracing\x18\x05 \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.TracingH\x00R\atracing\x1a\xf8\x04\n" +
 	"\x04HTTP\x12D\n" +
 	"\x0fmax_buffer_size\x18\x01 \x01(\v2\x1c.google.protobuf.UInt32ValueR\rmaxBufferSize\x12H\n" +
-	"\x11http1_max_headers\x18\x02 \x01(\v2\x1c.google.protobuf.UInt64ValueR\x0fhttp1MaxHeaders\x12G\n" +
+	"\x11http1_max_headers\x18\x02 \x01(\v2\x1c.google.protobuf.UInt32ValueR\x0fhttp1MaxHeaders\x12G\n" +
 	"\x12http1_idle_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x10http1IdleTimeout\x12H\n" +
 	"\x11http2_window_size\x18\x04 \x01(\v2\x1c.google.protobuf.UInt32ValueR\x0fhttp2WindowSize\x12]\n" +
 	"\x1chttp2_connection_window_size\x18\x05 \x01(\v2\x1c.google.protobuf.UInt32ValueR\x19http2ConnectionWindowSize\x12F\n" +
@@ -8282,11 +8282,10 @@ var file_resource_proto_goTypes = []any{
 	nil,                             // 115: agentgateway.dev.resource.AIBackend.Provider.RoutesEntry
 	(*duration.Duration)(nil),       // 116: google.protobuf.Duration
 	(*wrappers.UInt32Value)(nil),    // 117: google.protobuf.UInt32Value
-	(*wrappers.UInt64Value)(nil),    // 118: google.protobuf.UInt64Value
-	(*wrappers.StringValue)(nil),    // 119: google.protobuf.StringValue
-	(*wrappers.BytesValue)(nil),     // 120: google.protobuf.BytesValue
-	(*wrappers.BoolValue)(nil),      // 121: google.protobuf.BoolValue
-	(*structpb.Value)(nil),          // 122: google.protobuf.Value
+	(*wrappers.StringValue)(nil),    // 118: google.protobuf.StringValue
+	(*wrappers.BytesValue)(nil),     // 119: google.protobuf.BytesValue
+	(*wrappers.BoolValue)(nil),      // 120: google.protobuf.BoolValue
+	(*structpb.Value)(nil),          // 121: google.protobuf.Value
 }
 var file_resource_proto_depIdxs = []int32{
 	16,  // 0: agentgateway.dev.resource.Resource.bind:type_name -> agentgateway.dev.resource.Bind
@@ -8378,7 +8377,7 @@ var file_resource_proto_depIdxs = []int32{
 	60,  // 86: agentgateway.dev.resource.MCPTarget.backend:type_name -> agentgateway.dev.resource.BackendReference
 	14,  // 87: agentgateway.dev.resource.MCPTarget.protocol:type_name -> agentgateway.dev.resource.MCPTarget.Protocol
 	117, // 88: agentgateway.dev.resource.FrontendPolicySpec.HTTP.max_buffer_size:type_name -> google.protobuf.UInt32Value
-	118, // 89: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_max_headers:type_name -> google.protobuf.UInt64Value
+	117, // 89: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_max_headers:type_name -> google.protobuf.UInt32Value
 	116, // 90: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_idle_timeout:type_name -> google.protobuf.Duration
 	117, // 91: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_window_size:type_name -> google.protobuf.UInt32Value
 	117, // 92: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_connection_window_size:type_name -> google.protobuf.UInt32Value
@@ -8387,7 +8386,7 @@ var file_resource_proto_depIdxs = []int32{
 	116, // 95: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_timeout:type_name -> google.protobuf.Duration
 	116, // 96: agentgateway.dev.resource.FrontendPolicySpec.TLS.tls_handshake_timeout:type_name -> google.protobuf.Duration
 	50,  // 97: agentgateway.dev.resource.FrontendPolicySpec.TCP.keepalives:type_name -> agentgateway.dev.resource.KeepaliveConfig
-	119, // 98: agentgateway.dev.resource.FrontendPolicySpec.Logging.filter:type_name -> google.protobuf.StringValue
+	118, // 98: agentgateway.dev.resource.FrontendPolicySpec.Logging.filter:type_name -> google.protobuf.StringValue
 	68,  // 99: agentgateway.dev.resource.FrontendPolicySpec.Logging.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
 	67,  // 100: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
 	79,  // 101: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.descriptors:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
@@ -8417,11 +8416,11 @@ var file_resource_proto_depIdxs = []int32{
 	104, // 125: agentgateway.dev.resource.BackendPolicySpec.Ai.model_aliases:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
 	60,  // 126: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.endpoint_picker:type_name -> agentgateway.dev.resource.BackendReference
 	9,   // 127: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
-	120, // 128: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.cert:type_name -> google.protobuf.BytesValue
-	120, // 129: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.key:type_name -> google.protobuf.BytesValue
-	120, // 130: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.root:type_name -> google.protobuf.BytesValue
-	121, // 131: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.insecure:type_name -> google.protobuf.BoolValue
-	119, // 132: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.hostname:type_name -> google.protobuf.StringValue
+	119, // 128: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.cert:type_name -> google.protobuf.BytesValue
+	119, // 129: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.key:type_name -> google.protobuf.BytesValue
+	119, // 130: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.root:type_name -> google.protobuf.BytesValue
+	120, // 131: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.insecure:type_name -> google.protobuf.BoolValue
+	118, // 132: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.hostname:type_name -> google.protobuf.StringValue
 	10,  // 133: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
 	105, // 134: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
 	90,  // 135: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.append:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
@@ -8433,7 +8432,7 @@ var file_resource_proto_depIdxs = []int32{
 	94,  // 141: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.action:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Action
 	93,  // 142: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.rules:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
 	40,  // 143: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.forward_header_matches:type_name -> agentgateway.dev.resource.HeaderMatch
-	119, // 144: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.model:type_name -> google.protobuf.StringValue
+	118, // 144: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.model:type_name -> google.protobuf.StringValue
 	23,  // 145: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.auth:type_name -> agentgateway.dev.resource.BackendAuthPolicy
 	95,  // 146: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
 	96,  // 147: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
@@ -8444,16 +8443,16 @@ var file_resource_proto_depIdxs = []int32{
 	100, // 152: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.request:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
 	99,  // 153: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.response:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
 	106, // 154: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	122, // 155: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
-	119, // 156: agentgateway.dev.resource.AIBackend.OpenAI.model:type_name -> google.protobuf.StringValue
-	119, // 157: agentgateway.dev.resource.AIBackend.Gemini.model:type_name -> google.protobuf.StringValue
-	119, // 158: agentgateway.dev.resource.AIBackend.Vertex.model:type_name -> google.protobuf.StringValue
-	119, // 159: agentgateway.dev.resource.AIBackend.Anthropic.model:type_name -> google.protobuf.StringValue
-	119, // 160: agentgateway.dev.resource.AIBackend.Bedrock.model:type_name -> google.protobuf.StringValue
-	119, // 161: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_identifier:type_name -> google.protobuf.StringValue
-	119, // 162: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_version:type_name -> google.protobuf.StringValue
+	121, // 155: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
+	118, // 156: agentgateway.dev.resource.AIBackend.OpenAI.model:type_name -> google.protobuf.StringValue
+	118, // 157: agentgateway.dev.resource.AIBackend.Gemini.model:type_name -> google.protobuf.StringValue
+	118, // 158: agentgateway.dev.resource.AIBackend.Vertex.model:type_name -> google.protobuf.StringValue
+	118, // 159: agentgateway.dev.resource.AIBackend.Anthropic.model:type_name -> google.protobuf.StringValue
+	118, // 160: agentgateway.dev.resource.AIBackend.Bedrock.model:type_name -> google.protobuf.StringValue
+	118, // 161: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_identifier:type_name -> google.protobuf.StringValue
+	118, // 162: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_version:type_name -> google.protobuf.StringValue
 	107, // 163: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
-	119, // 164: agentgateway.dev.resource.AIBackend.Provider.path_override:type_name -> google.protobuf.StringValue
+	118, // 164: agentgateway.dev.resource.AIBackend.Provider.path_override:type_name -> google.protobuf.StringValue
 	108, // 165: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
 	109, // 166: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
 	110, // 167: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
