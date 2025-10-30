@@ -3338,6 +3338,27 @@
                                                 "bedrock"
                                               ],
                                               "additionalProperties": false
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "azure": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "model": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    }
+                                                  },
+                                                  "additionalProperties": false
+                                                }
+                                              },
+                                              "required": [
+                                                "azure"
+                                              ],
+                                              "additionalProperties": false
                                             }
                                           ]
                                         },
@@ -4435,6 +4456,27 @@
                                                           },
                                                           "required": [
                                                             "bedrock"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "azure": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "additionalProperties": false
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "azure"
                                                           ],
                                                           "additionalProperties": false
                                                         }
