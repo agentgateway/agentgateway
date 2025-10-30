@@ -685,8 +685,8 @@ This folder contains JSON schemas for various parts of the project
 |`frontendPolicies.tcp.keepalives.retries`||
 |`frontendPolicies.accessLog`|Settings for request access logs.|
 |`frontendPolicies.accessLog.filter`||
-|`frontendPolicies.accessLog.fieldsAdd`||
-|`frontendPolicies.accessLog.fieldsRemove`||
+|`frontendPolicies.accessLog.add`||
+|`frontendPolicies.accessLog.remove`||
 |`frontendPolicies.tracing`||
 |`policies`|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route/gateway.|
 |`policies[].name`||
