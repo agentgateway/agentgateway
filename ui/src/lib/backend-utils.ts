@@ -35,6 +35,7 @@ export const AI_PROVIDERS = [
   { value: "vertex", label: "Vertex" },
   { value: "anthropic", label: "Anthropic" },
   { value: "bedrock", label: "Bedrock" },
+  { value: "azureOpenAI", label: "Azure OpenAI" },
 ] as const;
 
 /**
@@ -387,6 +388,13 @@ export const createAiProviderConfig = (form: typeof DEFAULT_BACKEND_FORM) => {
       provider.bedrock = {
         model: form.aiModel,
         region: form.aiRegion,
+      };
+      break;
+    case "azureOpenAI":
+      provider.azureOpenAI = {
+        host: form.aiHost,
+        apiVersion: form.aiApiVersion,
+        ...(form.aiModel && { model: form.aiModel }),
       };
       break;
   }

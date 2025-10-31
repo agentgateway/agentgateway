@@ -997,6 +997,29 @@ const AiBackendForm: React.FC<AiBackendFormProps> = ({ backendForm, setBackendFo
       </div>
     )}
 
+    {backendForm.aiProvider === "azureOpenAI" && (
+      <div className="space-y-2">
+        <Label htmlFor="ai-host">Host *</Label>
+        <Input
+          id="ai-host"
+          value={backendForm.aiHost}
+          onChange={(e) => setBackendForm((prev) => ({ ...prev, aiHost: e.target.value }))}
+          placeholder="my-resource-name.openai.azure.com"
+        />
+      </div>
+    )}
+    {backendForm.aiProvider === "azureOpenAI" && (
+      <div className="space-y-2">
+        <Label htmlFor="ai-api-version">API Version *</Label>
+        <Input
+          id="ai-api-version"
+          value={backendForm.aiApiVersion}
+          onChange={(e) => setBackendForm((prev) => ({ ...prev, aiApiVersion: e.target.value }))}
+          placeholder="v1, 2024-10-21, etc."
+        />
+      </div>
+    )}
+
     {/* AI Host Override */}
     <div className="space-y-4">
       <div className="space-y-2">
