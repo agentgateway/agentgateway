@@ -6,8 +6,8 @@ use chrono;
 use itertools::Itertools;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::time::Instant;
-use tracing::trace;
 
 use crate::http::{Body, Response};
 use crate::llm::anthropic::types as anthropic;
@@ -87,6 +87,11 @@ impl Provider {
 		} else {
 			strng::format!("/model/{model}/converse")
 		}
+	}
+
+	pub fn get_count_tokens_path(&self, model: &str) -> Strng {
+		let model = self.model.as_deref().unwrap_or(model);
+		strng::format!("/model/{model}/count-tokens")
 	}
 
 	pub fn get_host(&self) -> Strng {
@@ -352,11 +357,15 @@ pub(super) fn translate_stream_to_completions(
 	model: String,
 	message_id: String,
 ) -> Body {
+	struct ToolCallState {
+		json_buffer: String,
+		content_block_index: i32,
+	}
+
 	// This is static for all chunks!
 	let created = chrono::Utc::now().timestamp() as u32;
 	let mut saw_token = false;
-	// Track tool calls across events: (tool_id, tool_name, json_buffer)
-	let mut tool_calls: HashMap<i32, (String, String, String)> = HashMap::new();
+	let mut tool_calls: HashMap<i32, ToolCallState> = HashMap::new();
 
 	parse::aws_sse::transform(b, move |f| {
 		let res = types::ConverseStreamOutput::deserialize(f).ok()?;
@@ -375,16 +384,18 @@ pub(super) fn translate_stream_to_completions(
 
 		match res {
 			types::ConverseStreamOutput::ContentBlockStart(start) => {
-				// Track tool call starts for streaming
 				if let Some(types::ContentBlockStart::ToolUse(tu)) = start.start {
 					tool_calls.insert(
 						start.content_block_index,
-						(tu.tool_use_id.clone(), tu.name.clone(), String::new()),
+						ToolCallState {
+							json_buffer: String::new(),
+							content_block_index: start.content_block_index,
+						},
 					);
 					// Emit the start of a tool call
 					let d = universal::StreamResponseDelta {
 						tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
-							index: 0,
+							index: start.content_block_index as u32,
 							id: Some(tu.tool_use_id),
 							r#type: Some(universal::ToolType::Function),
 							function: Some(FunctionCallStream {
@@ -433,10 +444,10 @@ pub(super) fn translate_stream_to_completions(
 						},
 						types::ContentBlockDelta::ToolUse(tu) => {
 							// Accumulate tool call JSON and emit deltas
-							if let Some((_id, _name, buffer)) = tool_calls.get_mut(&d.content_block_index) {
-								buffer.push_str(&tu.input);
+							if let Some(state) = tool_calls.get_mut(&d.content_block_index) {
+								state.json_buffer.push_str(&tu.input);
 								dr.tool_calls = Some(vec![ChatCompletionMessageToolCallChunk {
-									index: 0,
+									index: state.content_block_index as u32,
 									id: None, // Only sent in the first chunk
 									r#type: None,
 									function: Some(FunctionCallStream {
@@ -561,18 +572,6 @@ pub(super) fn translate_request_messages(
 			},
 		}
 		result
-	});
-
-	// Check if messages contain ToolUse or ToolResult blocks (determines if toolConfig is required)
-	let has_tool_blocks = req.messages.iter().any(|msg| {
-		msg.content.iter().any(|block| {
-			matches!(
-				block,
-				anthropic::ContentBlock::ToolUse { .. }
-					| anthropic::ContentBlock::ToolResult { .. }
-					| anthropic::ContentBlock::ServerToolUse { .. }
-			)
-		})
 	});
 
 	// Convert typed Anthropic messages to Bedrock messages
@@ -731,8 +730,7 @@ pub(super) fn translate_request_messages(
 	};
 
 	// Convert typed tools to Bedrock tool config
-	// NOTE: Bedrock requires toolConfig to be present if messages contain ToolUse/ToolResult blocks,
-	// even if tools array is empty in the current request
+	// NOTE: Only send toolConfig if we have at least one tool. Bedrock rejects empty tools arrays.
 	let tool_config = if let Some(tools) = req.tools {
 		let bedrock_tools: Vec<types::Tool> = {
 			let mut result = Vec::with_capacity(tools.len() * 2);
@@ -753,46 +751,39 @@ pub(super) fn translate_request_messages(
 			result
 		};
 
-		let tool_choice = match req.tool_choice {
-			Some(anthropic::ToolChoice::Auto) => {
-				if thinking_enabled {
-					Some(types::ToolChoice::Any)
-				} else {
-					Some(types::ToolChoice::Auto)
-				}
-			},
-			Some(anthropic::ToolChoice::Any) => Some(types::ToolChoice::Any),
-			Some(anthropic::ToolChoice::Tool { name }) => {
-				if thinking_enabled {
-					Some(types::ToolChoice::Any)
-				} else {
-					Some(types::ToolChoice::Tool { name })
-				}
-			},
-			Some(anthropic::ToolChoice::None) | None => {
-				if thinking_enabled {
-					Some(types::ToolChoice::Any)
-				} else {
-					None
-				}
-			},
-		};
+		if bedrock_tools.is_empty() {
+			None
+		} else {
+			let tool_choice = match req.tool_choice {
+				Some(anthropic::ToolChoice::Auto) => {
+					if thinking_enabled {
+						Some(types::ToolChoice::Any)
+					} else {
+						Some(types::ToolChoice::Auto)
+					}
+				},
+				Some(anthropic::ToolChoice::Any) => Some(types::ToolChoice::Any),
+				Some(anthropic::ToolChoice::Tool { name }) => {
+					if thinking_enabled {
+						Some(types::ToolChoice::Any)
+					} else {
+						Some(types::ToolChoice::Tool { name })
+					}
+				},
+				Some(anthropic::ToolChoice::None) | None => {
+					if thinking_enabled {
+						Some(types::ToolChoice::Any)
+					} else {
+						None
+					}
+				},
+			};
 
-		Some(types::ToolConfiguration {
-			tools: bedrock_tools,
-			tool_choice,
-		})
-	} else if has_tool_blocks {
-		// Messages contain tool use/result blocks but no tools array provided
-		// Bedrock requires toolConfig with empty tools array in this case
-		Some(types::ToolConfiguration {
-			tools: vec![],
-			tool_choice: if thinking_enabled {
-				Some(types::ToolChoice::Any)
-			} else {
-				None
-			},
-		})
+			Some(types::ToolConfiguration {
+				tools: bedrock_tools,
+				tool_choice,
+			})
+		}
 	} else {
 		None
 	};
@@ -881,6 +872,111 @@ pub(super) fn translate_request_messages(
 	Ok(bedrock_request)
 }
 
+pub(super) fn translate_count_tokens_request(
+	req: anthropic::CountTokensRequest,
+	anthropic_version: &str,
+) -> Result<types::CountTokensRequest, AIError> {
+	use base64::Engine;
+
+	let mut body = req.rest;
+
+	body
+		.entry("max_tokens")
+		.or_insert(serde_json::Value::Number(1.into()));
+	body
+		.entry("anthropic_version")
+		.or_insert(serde_json::Value::String(anthropic_version.into()));
+
+	let body_json = serde_json::to_vec(&body).map_err(AIError::RequestMarshal)?;
+	let body_b64 = base64::engine::general_purpose::STANDARD.encode(&body_json);
+
+	Ok(types::CountTokensRequest {
+		input: types::CountTokensInputInvokeModel {
+			invoke_model: types::InvokeModelBody { body: body_b64 },
+		},
+	})
+}
+
+pub async fn process_count_tokens_request(
+	provider: &Provider,
+	req: crate::http::Request,
+	policies: Option<&crate::llm::policy::Policy>,
+) -> Result<crate::http::Request, AIError> {
+	use crate::http;
+
+	let buffer_limit = http::buffer_limit(&req);
+	let (parts, body) = req.into_parts();
+	let Ok(bytes) = http::read_body_with_limit(body, buffer_limit).await else {
+		return Err(AIError::RequestTooLarge);
+	};
+
+	let anthropic_version = parts
+		.headers
+		.get("anthropic-version")
+		.and_then(|v| v.to_str().ok())
+		.unwrap_or("2023-06-01");
+
+	let mut count_req: anthropic::CountTokensRequest =
+		serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+
+	if let Some(p) = policies
+		&& let Some(aliased) = p.model_aliases.get(count_req.model.as_str())
+	{
+		count_req.model = aliased.to_string();
+	}
+
+	let model = count_req.model.clone();
+
+	let bedrock_req = translate_count_tokens_request(count_req, anthropic_version)?;
+	let new_body = serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)?;
+
+	let mut req = crate::http::Request::from_parts(parts, new_body.into());
+
+	http::modify_req(&mut req, |req| {
+		http::modify_uri(req, |uri| {
+			let path = provider.get_count_tokens_path(&model);
+			uri.path_and_query = Some(http::uri::PathAndQuery::from_str(&path)?);
+			Ok(())
+		})
+	})
+	.map_err(|e: anyhow::Error| {
+		AIError::UnsupportedConversion(strng::format!("failed to set path: {}", e))
+	})?;
+
+	Ok(req)
+}
+
+pub fn translate_count_tokens_response(bedrock_bytes: &[u8]) -> Result<Vec<u8>, AIError> {
+	let resp: types::CountTokensResponse =
+		serde_json::from_slice(bedrock_bytes).map_err(AIError::ResponseParsing)?;
+	serde_json::to_vec(&resp).map_err(AIError::ResponseMarshal)
+}
+
+pub async fn process_count_tokens_response(
+	resp: crate::http::Response,
+) -> Result<crate::http::Response, anyhow::Error> {
+	use crate::http;
+
+	let lim = http::response_buffer_limit(&resp);
+	let (parts, body) = resp.into_parts();
+	let bytes = http::read_body_with_limit(body, lim).await?;
+
+	if parts.status.is_success() {
+		let response_bytes = translate_count_tokens_response(&bytes)
+			.map_err(|e| anyhow::anyhow!("Failed to translate count_tokens response: {}", e))?;
+
+		let mut parts = parts;
+		parts.headers.remove(http::header::CONTENT_LENGTH);
+
+		Ok(crate::http::Response::from_parts(
+			parts,
+			response_bytes.into(),
+		))
+	} else {
+		Ok(crate::http::Response::from_parts(parts, bytes.into()))
+	}
+}
+
 pub(super) fn translate_response_to_messages(
 	bedrock_resp: ConverseResponse,
 	model: &str,
@@ -903,8 +999,7 @@ fn translate_stream_to_messages(
 	parse::aws_sse::transform_multi(b, move |aws_event| {
 		let event = match types::ConverseStreamOutput::deserialize(aws_event) {
 			Ok(e) => e,
-			Err(e) => {
-				tracing::error!(error = %e, "failed to deserialize bedrock stream event");
+			Err(_e) => {
 				return vec![(
 					"error",
 					serde_json::json!({
@@ -1225,16 +1320,10 @@ impl ConverseResponseAdapter {
 			stop_reason,
 			usage,
 			metrics: _,
-			trace,
+			trace: _,
 			additional_model_response_fields: _,
 			performance_config: _,
 		} = resp;
-
-		if let Some(trace) = trace.as_ref()
-			&& let Some(guardrail_trace) = &trace.guardrail
-		{
-			trace!("Bedrock guardrail trace: {:?}", guardrail_trace);
-		}
 
 		let message = match output {
 			Some(types::ConverseOutput::Message(msg)) => msg,
@@ -1251,12 +1340,12 @@ impl ConverseResponseAdapter {
 
 	fn to_universal(&self) -> universal::Response {
 		let mut tool_calls: Vec<universal::MessageToolCall> = Vec::new();
-		let mut content = None;
+		let mut content_parts: Vec<String> = Vec::new();
 		let mut reasoning_content = None;
 		for block in &self.message.content {
 			match block {
 				ContentBlock::Text(text) => {
-					content = Some(text.clone());
+					content_parts.push(text.clone());
 				},
 				ContentBlock::ReasoningContent(reasoning) => {
 					// Extract text from either format
@@ -1286,6 +1375,12 @@ impl ConverseResponseAdapter {
 				},
 			}
 		}
+
+		let content = if content_parts.is_empty() {
+			None
+		} else {
+			Some(content_parts.join(""))
+		};
 
 		let message = universal::ResponseMessage {
 			role: universal::Role::Assistant,
@@ -1709,11 +1804,34 @@ pub(super) mod types {
 		pub performance_config: Option<PerformanceConfiguration>,
 	}
 
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	pub struct CountTokensRequest {
+		pub input: CountTokensInputInvokeModel,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	#[serde(rename_all = "camelCase")]
+	pub struct CountTokensInputInvokeModel {
+		pub invoke_model: InvokeModelBody,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	pub struct InvokeModelBody {
+		pub body: String,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	pub struct CountTokensResponse {
+		#[serde(alias = "inputTokens")]
+		pub input_tokens: i32,
+	}
+
 	#[derive(Clone, Serialize, Debug)]
 	pub struct ToolConfiguration {
 		/// An array of tools that you want to pass to a model.
 		pub tools: Vec<Tool>,
 		/// If supported by model, forces the model to request a tool.
+		#[serde(skip_serializing_if = "Option::is_none")]
 		pub tool_choice: Option<ToolChoice>,
 	}
 
@@ -1790,6 +1908,7 @@ pub(super) mod types {
 		#[serde(rename = "additionalModelResponseFields")]
 		pub additional_model_response_fields: Option<serde_json::Value>,
 		/// A trace object that contains information about the Guardrail behavior
+		#[allow(dead_code)]
 		pub trace: Option<ConverseTrace>,
 		/// Model performance settings for the request
 		#[serde(rename = "performanceConfig")]

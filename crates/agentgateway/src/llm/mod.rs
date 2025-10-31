@@ -114,6 +114,8 @@ pub enum RouteType {
 	Models,
 	/// Send the request to the upstream LLM provider as-is
 	Passthrough,
+	/// Anthropic /v1/messages/count_tokens
+	AnthropicTokenCount,
 }
 
 #[apply(schema!)]
