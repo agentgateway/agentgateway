@@ -20,24 +20,29 @@ use crate::llm::{AIBackend, AIProvider, NamedAIProvider, RouteType};
 use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
-	A2aPolicy, Authorization, Backend, BackendName, BackendReference, Bind, BindName, GatewayName,
-	GatewayTargetedPolicy, Listener, ListenerKey, ListenerProtocol, ListenerSet, McpAuthentication,
-	McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, Policy,
-	PolicyName, PolicyTarget, Route, RouteBackendReference, RouteFilter, RouteMatch, RouteName,
-	RouteRuleName, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec,
-	TCPRoute, TCPRouteBackendReference, TCPRouteSet, TLSConfig, Target, TargetedPolicy,
-	TrafficPolicy,
+	A2aPolicy, Authorization, Backend, BackendName, BackendPolicy, BackendReference, Bind, BindName,
+	FrontendPolicy, GatewayName, Listener, ListenerKey, ListenerProtocol, ListenerSet,
+	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
+	PolicyName, PolicyPhase, PolicyTarget, PolicyType, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteRuleName, RouteSet, SimpleBackendReference, SseTargetSpec,
+	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, TLSConfig, Target,
+	TargetedPolicy, TrafficPolicy,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
+use crate::types::frontend;
 use crate::*;
 
 impl NormalizedLocalConfig {
-	pub async fn from(client: client::Client, s: &str) -> anyhow::Result<NormalizedLocalConfig> {
+	pub async fn from(
+		client: client::Client,
+		gateway_name: GatewayName,
+		s: &str,
+	) -> anyhow::Result<NormalizedLocalConfig> {
 		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
 		let s = s.replace("# yaml-language-server: $schema", "#");
 		let s = shellexpand::full(&s)?;
 		let config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
-		let t = convert(client, config).await?;
+		let t = convert(client, gateway_name, config).await?;
 		Ok(t)
 	}
 }
@@ -46,7 +51,6 @@ impl NormalizedLocalConfig {
 pub struct NormalizedLocalConfig {
 	pub binds: Vec<Bind>,
 	pub policies: Vec<TargetedPolicy>,
-	pub gateway_policies: Vec<GatewayTargetedPolicy>,
 	pub backends: Vec<Backend>,
 	// Note: here we use LocalWorkload since it conveys useful info, we could maybe change but not a problem
 	// for now
@@ -62,16 +66,12 @@ pub struct LocalConfig {
 	config: Arc<Option<serde_json::value::Value>>,
 	#[serde(default)]
 	binds: Vec<LocalBind>,
+	#[serde(default)]
+	frontend_policies: LocalFrontendPolicies,
 	/// policies defines additional policies that can be attached to various other configurations.
-	/// This is an advanced feature; users should typically use the inline `policies` field under route.
+	/// This is an advanced feature; users should typically use the inline `policies` field under route/gateway.
 	#[serde(default)]
 	policies: Vec<LocalPolicy>,
-	/// gatewayPolicies define policies that run at the Gateway level. This includes a subset of possible
-	/// policy types.
-	/// In general, normal (route level) policies should be used, except you need the policy to influence
-	/// routing.
-	#[serde(default)]
-	gateway_policies: Vec<LocalGatewayTargetedPolicy>,
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	workloads: Vec<LocalWorkload>,
@@ -99,6 +99,8 @@ struct LocalListener {
 	tls: Option<LocalTLSServerConfig>,
 	routes: Option<Vec<LocalRoute>>,
 	tcp_routes: Option<Vec<LocalTCPRoute>>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	policies: Option<LocalGatewayPolicy>,
 }
 
 #[derive(Debug, Clone, Default, serde::Deserialize)]
@@ -236,21 +238,21 @@ impl LocalAIBackend {
 					policies.push(TargetedPolicy {
 						name: strng::format!("{backend_name}/{}-tls", p.name),
 						target: PolicyTarget::SubBackend(strng::format!("{}/{}", backend_name, p.name.clone())),
-						policy: Policy::BackendTLS(btls.try_into()?),
+						policy: BackendPolicy::BackendTLS(btls.try_into()?).into(),
 					});
 				}
 				if let Some(bauth) = p.backend_auth {
 					policies.push(TargetedPolicy {
 						name: strng::format!("{backend_name}/{}-auth", p.name),
 						target: PolicyTarget::SubBackend(strng::format!("{}/{}", backend_name, p.name.clone())),
-						policy: Policy::BackendAuth(bauth),
+						policy: BackendPolicy::BackendAuth(bauth).into(),
 					});
 				}
 				if let Some(llm) = p.policies {
 					policies.push(TargetedPolicy {
 						name: strng::format!("{backend_name}/{}-ai", p.name),
 						target: PolicyTarget::SubBackend(strng::format!("{}/{}", backend_name, p.name.clone())),
-						policy: Policy::AI(llm),
+						policy: BackendPolicy::AI(llm).into(),
 					});
 				}
 				group.push((
@@ -332,7 +334,7 @@ impl LocalBackend {
 						policies.push(TargetedPolicy {
 							name: strng::format!("implicit-tls/{}", name),
 							target: PolicyTarget::Backend(name.clone()),
-							policy: Policy::BackendTLS(LocalBackendTLS::default().try_into()?),
+							policy: BackendPolicy::BackendTLS(LocalBackendTLS::default().try_into()?).into(),
 						});
 					}
 					let t = McpTarget {
@@ -529,37 +531,29 @@ impl SimpleLocalBackend {
 struct LocalPolicy {
 	pub name: PolicyName,
 	pub target: PolicyTarget,
+
+	/// phase defines at what level the policy runs at. Gateway policies run pre-routing, while
+	/// Route policies apply post-routing.
+	/// Only a subset of policies are eligible as Gateway policies.
+	/// In general, normal (route level) policies should be used, except you need the policy to influence
+	/// routing.
+	#[serde(default)]
+	pub phase: PolicyPhase,
 	pub policy: FilterOrPolicy,
 }
 
 #[apply(schema_de!)]
-struct LocalGatewayTargetedPolicy {
-	pub name: PolicyName,
-	pub target: PolicyTarget,
-	pub policy: LocalGatewayPolicy,
-}
-
-impl From<LocalGatewayPolicy> for FilterOrPolicy {
-	fn from(value: LocalGatewayPolicy) -> Self {
-		Self {
-			ext_proc: value.ext_proc,
-			transformations: value.transformations,
-			jwt_auth: value.jwt_auth,
-			..Default::default()
-		}
-	}
-}
-
-#[apply(schema_de!)]
+#[derive(Default)]
 struct LocalGatewayPolicy {
-	/// Extend agentgateway with an external processor
-	#[serde(default)]
-	ext_proc: Option<LocalExtProc>,
-
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
-
+	/// Authenticate incoming requests by calling an external authorization server.
+	#[serde(default)]
+	ext_authz: Option<LocalExtAuthz>,
+	/// Extend agentgateway with an external processor
+	#[serde(default)]
+	ext_proc: Option<LocalExtProc>,
 	/// Modify requests and responses
 	#[serde(default)]
 	#[serde_as(
@@ -573,6 +567,43 @@ struct LocalGatewayPolicy {
 		)
 	)]
 	transformations: Option<crate::http::transformation_cel::Transformation>,
+}
+
+impl From<LocalGatewayPolicy> for FilterOrPolicy {
+	fn from(val: LocalGatewayPolicy) -> Self {
+		let LocalGatewayPolicy {
+			jwt_auth,
+			ext_authz,
+			ext_proc,
+			transformations,
+		} = val;
+		FilterOrPolicy {
+			jwt_auth,
+			ext_authz,
+			ext_proc,
+			transformations,
+			..Default::default()
+		}
+	}
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+struct LocalFrontendPolicies {
+	/// Settings for handling incoming HTTP requests.
+	#[serde(default)]
+	pub http: Option<frontend::HTTP>,
+	/// Settings for handling incoming TLS connections.
+	#[serde(default)]
+	pub tls: Option<frontend::TLS>,
+	/// Settings for handling incoming TCP connections.
+	#[serde(default)]
+	pub tcp: Option<frontend::TCP>,
+	/// Settings for request access logs.
+	#[serde(default)]
+	pub access_log: Option<frontend::LoggingPolicy>,
+	#[serde(default)]
+	pub tracing: Option<()>,
 }
 
 #[apply(schema_de!)]
@@ -678,17 +709,20 @@ struct TCPFilterOrPolicy {
 	backend_tls: Option<LocalBackendTLS>,
 }
 
-async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<NormalizedLocalConfig> {
+async fn convert(
+	client: client::Client,
+	gateway: GatewayName,
+	i: LocalConfig,
+) -> anyhow::Result<NormalizedLocalConfig> {
 	let LocalConfig {
 		config: _,
+		frontend_policies,
 		binds,
 		policies,
-		gateway_policies,
 		workloads,
 		services,
 	} = i;
 	let mut all_policies = vec![];
-	let mut all_gateway_policies = vec![];
 	let mut all_backends = vec![];
 	let mut all_binds = vec![];
 	for b in binds {
@@ -716,20 +750,14 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 
 	for p in policies {
 		let res = split_policies(client.clone(), &p.name, &mut all_backends, p.policy).await?;
-		if !res.filters.is_empty() {
-			anyhow::bail!("'policies' may not contain filters")
-		}
-		if res.traffic_policy != TrafficPolicy::default() {
-			anyhow::bail!("'policies' may not contain traffic policies")
-		}
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
 			anyhow::bail!("'policies' must contain exactly 1 policy")
 		}
 		let tp = res
 			.route_policies
 			.first()
-			.unwrap_or_else(|| res.backend_policies.first().unwrap())
-			.clone();
+			.map(|r| PolicyType::from((r.clone(), p.phase)))
+			.unwrap_or_else(|| res.backend_policies.first().unwrap().clone().into());
 		let tgt_policy = TargetedPolicy {
 			name: p.name,
 			target: p.target,
@@ -738,33 +766,11 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 		all_policies.push(tgt_policy);
 	}
 
-	for p in gateway_policies {
-		let res = split_policies(client.clone(), &p.name, &mut all_backends, p.policy.into()).await?;
-		if !res.filters.is_empty() {
-			anyhow::bail!("'gateway_policies' may not contain filters")
-		}
-		if res.traffic_policy != TrafficPolicy::default() {
-			anyhow::bail!("'gateway_policies' may not contain traffic policies")
-		}
-		if !res.backend_policies.is_empty() {
-			anyhow::bail!("'gateway_policies' may not contain backend policies")
-		}
-		if res.route_policies.len() != 1 {
-			anyhow::bail!("'gateway_policies' must contain exactly 1 policy")
-		}
-		let tp = res.route_policies.first().unwrap().clone();
-		let tgt_policy = GatewayTargetedPolicy {
-			name: p.name,
-			target: p.target,
-			policy: tp.try_into()?,
-		};
-		all_gateway_policies.push(tgt_policy);
-	}
+	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
-		gateway_policies: all_gateway_policies,
 		backends: all_backends,
 		workloads,
 		services,
@@ -780,6 +786,7 @@ async fn convert_listener(
 	let LocalListener {
 		name,
 		gateway_name,
+		policies,
 		hostname,
 		protocol,
 		tls,
@@ -818,9 +825,11 @@ async fn convert_listener(
 		},
 		LocalListenerProtocol::HBONE => ListenerProtocol::HBONE,
 	};
+
 	if tcp_routes.is_some() && routes.is_some() {
 		bail!("only 'routes' or 'tcpRoutes' may be set");
 	}
+
 	let name = name.unwrap_or_else(|| strng::format!("listener{}", idx));
 	let gateway_name: GatewayName = gateway_name.unwrap_or(bind_name);
 	let key: ListenerKey = strng::format!("{}/{}", name, gateway_name);
@@ -842,6 +851,17 @@ async fn convert_listener(
 		all_policies.extend_from_slice(&policies);
 		all_backends.extend_from_slice(&backends);
 		trs.insert(route)
+	}
+
+	if let Some(pol) = policies {
+		let pols = split_policies(client.clone(), &key, &mut all_backends, pol.into()).await?;
+		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
+			all_policies.push(TargetedPolicy {
+				name: strng::format!("listener/{key}/{idx}"),
+				target: PolicyTarget::Listener(key.clone()),
+				policy: (pol, PolicyPhase::Gateway).into(),
+			})
+		}
 	}
 
 	let l = Listener {
@@ -892,15 +912,14 @@ async fn convert_route(
 		let bref = RouteBackendReference {
 			weight: b.weight,
 			backend: bref,
-			filters: vec![],
-			// filters: b.filters,
+			inline_policies: vec![],
 		};
 		backend_refs.push(bref);
 		external_backends.extend_from_slice(&backends);
 		backend_policies.extend_from_slice(&policies_from_backends);
 	}
 	let mut be_pol = 0;
-	let backend_tgt = |p: Policy| {
+	let backend_tgt = |p: BackendPolicy| {
 		if backend_refs.len() != 1 {
 			anyhow::bail!("backend policies currently only work with exactly 1 backend")
 		}
@@ -909,7 +928,7 @@ async fn convert_route(
 		Ok(TargetedPolicy {
 			name: format!("{key}/backend-{be_pol}").into(),
 			target: PolicyTarget::Backend(be.backend.name()),
-			policy: p,
+			policy: p.into(),
 		})
 	};
 
@@ -930,9 +949,7 @@ async fn convert_route(
 		rule_name: Some(rule_name),
 		hostnames,
 		matches,
-		filters: resolved.filters,
 		backends: backend_refs,
-		policies: Some(resolved.traffic_policy),
 		inline_policies: resolved.route_policies,
 	};
 	Ok((route, external_policies, external_backends))
@@ -940,12 +957,47 @@ async fn convert_route(
 
 #[derive(Default)]
 struct ResolvedPolicies {
-	filters: Vec<RouteFilter>,
-	backend_policies: Vec<Policy>,
-	route_policies: Vec<Policy>,
-	traffic_policy: TrafficPolicy,
+	backend_policies: Vec<BackendPolicy>,
+	route_policies: Vec<TrafficPolicy>,
 }
 
+async fn split_frontend_policies(
+	gateway: GatewayName,
+	pol: LocalFrontendPolicies,
+) -> Result<Vec<TargetedPolicy>, Error> {
+	let mut pols = Vec::new();
+
+	let mut add = |p: FrontendPolicy, name: &str| {
+		pols.push(TargetedPolicy {
+			name: strng::format!("frontend/{name}"),
+			target: PolicyTarget::Gateway(gateway.clone()),
+			policy: p.into(),
+		});
+	};
+	let LocalFrontendPolicies {
+		http,
+		tls,
+		tcp,
+		access_log,
+		tracing,
+	} = pol;
+	if let Some(p) = http {
+		add(FrontendPolicy::HTTP(p), "http");
+	}
+	if let Some(p) = tls {
+		add(FrontendPolicy::TLS(p), "tls");
+	}
+	if let Some(p) = tcp {
+		add(FrontendPolicy::TCP(p), "tcp");
+	}
+	if let Some(p) = access_log {
+		add(FrontendPolicy::AccessLog(p), "accessLog");
+	}
+	if let Some(p) = tracing {
+		add(FrontendPolicy::Tracing(p), "tracing");
+	}
+	Ok(pols)
+}
 async fn split_policies(
 	client: Client,
 	key: &Strng,
@@ -954,10 +1006,8 @@ async fn split_policies(
 ) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
-		filters,
 		backend_policies,
 		route_policies,
-		traffic_policy,
 	} = &mut resolved;
 	let FilterOrPolicy {
 		request_header_modifier,
@@ -985,16 +1035,16 @@ async fn split_policies(
 		retry,
 	} = pol;
 	if let Some(p) = request_header_modifier {
-		filters.push(RouteFilter::RequestHeaderModifier(p));
+		route_policies.push(TrafficPolicy::RequestHeaderModifier(p));
 	}
 	if let Some(p) = response_header_modifier {
-		filters.push(RouteFilter::ResponseHeaderModifier(p));
+		route_policies.push(TrafficPolicy::ResponseHeaderModifier(p));
 	}
 	if let Some(p) = request_redirect {
-		filters.push(RouteFilter::RequestRedirect(p));
+		route_policies.push(TrafficPolicy::RequestRedirect(p));
 	}
 	if let Some(p) = url_rewrite {
-		filters.push(RouteFilter::UrlRewrite(p));
+		route_policies.push(TrafficPolicy::UrlRewrite(p));
 	}
 	if let Some(p) = request_mirror {
 		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/mirror", key), &p.backend);
@@ -1005,51 +1055,51 @@ async fn split_policies(
 		backend
 			.into_iter()
 			.for_each(|backend| external_backends.push(backend));
-		filters.push(RouteFilter::RequestMirror(pol));
+		route_policies.push(TrafficPolicy::RequestMirror(vec![pol]));
 	}
 
 	// Filters
 	if let Some(p) = direct_response {
-		filters.push(RouteFilter::DirectResponse(p));
+		route_policies.push(TrafficPolicy::DirectResponse(p));
 	}
 	if let Some(p) = cors {
-		filters.push(RouteFilter::CORS(p));
+		route_policies.push(TrafficPolicy::CORS(p));
 	}
 
 	// Backend policies
 	if let Some(p) = mcp_authorization {
-		backend_policies.push(Policy::McpAuthorization(p))
+		backend_policies.push(BackendPolicy::McpAuthorization(p))
 	}
 	if let Some(p) = mcp_authentication {
 		let jp = p.as_jwt()?;
-		backend_policies.push(Policy::McpAuthentication(p));
-		route_policies.push(Policy::JwtAuth(jp.try_into(client.clone()).await?));
+		backend_policies.push(BackendPolicy::McpAuthentication(p));
+		route_policies.push(TrafficPolicy::JwtAuth(jp.try_into(client.clone()).await?));
 	}
 	if let Some(p) = a2a {
-		backend_policies.push(Policy::A2a(p))
+		backend_policies.push(BackendPolicy::A2a(p))
 	}
 	if let Some(p) = backend_tls {
-		backend_policies.push(Policy::BackendTLS(p.try_into()?))
+		backend_policies.push(BackendPolicy::BackendTLS(p.try_into()?))
 	}
 	if let Some(p) = backend_auth {
-		backend_policies.push(Policy::BackendAuth(p))
+		backend_policies.push(BackendPolicy::BackendAuth(p))
 	}
 
 	// Route policies
 	if let Some(p) = ai {
-		route_policies.push(Policy::AI(Arc::new(p)))
+		route_policies.push(TrafficPolicy::AI(Arc::new(p)))
 	}
 	if let Some(p) = jwt_auth {
-		route_policies.push(Policy::JwtAuth(p.try_into(client.clone()).await?));
+		route_policies.push(TrafficPolicy::JwtAuth(p.try_into(client.clone()).await?));
 	}
 	if let Some(p) = transformations {
-		route_policies.push(Policy::Transformation(p));
+		route_policies.push(TrafficPolicy::Transformation(p));
 	}
 	if let Some(p) = csrf {
-		route_policies.push(Policy::Csrf(p))
+		route_policies.push(TrafficPolicy::Csrf(p))
 	}
 	if let Some(p) = authorization {
-		route_policies.push(Policy::Authorization(p))
+		route_policies.push(TrafficPolicy::Authorization(p))
 	}
 	if let Some(p) = ext_authz {
 		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/extauthz", key), &p.target);
@@ -1072,7 +1122,7 @@ async fn split_policies(
 		backend
 			.into_iter()
 			.for_each(|backend| external_backends.push(backend));
-		route_policies.push(Policy::ExtAuthz(pol))
+		route_policies.push(TrafficPolicy::ExtAuthz(pol))
 	}
 	if let Some(p) = ext_proc {
 		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/extproc", key), &p.target);
@@ -1084,10 +1134,10 @@ async fn split_policies(
 		backend
 			.into_iter()
 			.for_each(|backend| external_backends.push(backend));
-		route_policies.push(Policy::ExtProc(pol))
+		route_policies.push(TrafficPolicy::ExtProc(pol))
 	}
 	if !local_rate_limit.is_empty() {
-		route_policies.push(Policy::LocalRateLimit(local_rate_limit))
+		route_policies.push(TrafficPolicy::LocalRateLimit(local_rate_limit))
 	}
 	if let Some(p) = remote_rate_limit {
 		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/ratelimit", key), &p.target);
@@ -1099,15 +1149,15 @@ async fn split_policies(
 		backend
 			.into_iter()
 			.for_each(|backend| external_backends.push(backend));
-		route_policies.push(Policy::RemoteRateLimit(pol))
+		route_policies.push(TrafficPolicy::RemoteRateLimit(pol))
 	}
 
 	// Traffic policies
 	if let Some(p) = timeout {
-		traffic_policy.timeout = p;
+		route_policies.push(TrafficPolicy::Timeout(p));
 	}
 	if let Some(p) = retry {
-		traffic_policy.retry = Some(p);
+		route_policies.push(TrafficPolicy::Retry(p));
 	}
 	Ok(resolved)
 }
@@ -1150,7 +1200,7 @@ async fn convert_tcp_route(
 	}
 
 	let mut be_pol = 0;
-	let backend_tgt = |p: Policy| {
+	let backend_tgt = |p: BackendPolicy| {
 		if backends.len() != 1 {
 			anyhow::bail!("backend policies currently only work with exactly 1 backend")
 		}
@@ -1171,14 +1221,14 @@ async fn convert_tcp_route(
 		Ok(TargetedPolicy {
 			name: format!("{key}/backend-{be_pol}").into(),
 			target: PolicyTarget::Backend(be.backend.name()),
-			policy: p,
+			policy: p.into(),
 		})
 	};
 
 	if let Some(pol) = policies {
 		let TCPFilterOrPolicy { backend_tls } = pol;
 		if let Some(p) = backend_tls {
-			external_policies.push(backend_tgt(Policy::BackendTLS(p.try_into()?))?)
+			external_policies.push(backend_tgt(BackendPolicy::BackendTLS(p.try_into()?))?)
 		}
 	}
 	let route = TCPRoute {

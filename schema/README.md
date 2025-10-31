@@ -53,16 +53,6 @@ This folder contains JSON schemas for various parts of the project
 |`config.backend.connectTimeout`||
 |`config.backend.poolIdleTimeout`|The maximum duration to keep an idle connection alive.|
 |`config.backend.poolMaxSize`|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
-|`config.listener`||
-|`config.listener.maxBufferSize`||
-|`config.listener.tlsHandshakeTimeout`||
-|`config.listener.http1MaxHeaders`|The maximum number of headers allowed in a request. Changing this value results in a performance<br>degradation, even if set to a lower value than the default (100)|
-|`config.listener.http1IdleTimeout`||
-|`config.listener.http2WindowSize`||
-|`config.listener.http2ConnectionWindowSize`||
-|`config.listener.http2FrameSize`||
-|`config.listener.http2KeepaliveInterval`||
-|`config.listener.http2KeepaliveTimeout`||
 |`config.hbone`||
 |`config.hbone.windowSize`||
 |`config.hbone.connectionWindowSize`||
@@ -627,7 +617,78 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].tcpRoutes[].backends[].(1)service.port`||
 |`binds[].listeners[].tcpRoutes[].backends[].(1)host`||
 |`binds[].listeners[].tcpRoutes[].backends[].weight`||
-|`policies`|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route.|
+|`binds[].listeners[].policies`||
+|`binds[].listeners[].policies.jwtAuth`|Authenticate incoming JWT requests.|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].issuer`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].audiences`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)issuer`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)audiences`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)jwks`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)file`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`binds[].listeners[].policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
+|`binds[].listeners[].policies.extAuthz.(any)(1)service`||
+|`binds[].listeners[].policies.extAuthz.(any)(1)service.name`||
+|`binds[].listeners[].policies.extAuthz.(any)(1)service.name.namespace`||
+|`binds[].listeners[].policies.extAuthz.(any)(1)service.name.hostname`||
+|`binds[].listeners[].policies.extAuthz.(any)(1)service.port`||
+|`binds[].listeners[].policies.extAuthz.(any)(1)host`||
+|`binds[].listeners[].policies.extAuthz.(any)context`||
+|`binds[].listeners[].policies.extAuthz.(any)failOpen`||
+|`binds[].listeners[].policies.extAuthz.(any)statusOnError`||
+|`binds[].listeners[].policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
+|`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].policies.extProc`|Extend agentgateway with an external processor|
+|`binds[].listeners[].policies.extProc.(any)(1)service`||
+|`binds[].listeners[].policies.extProc.(any)(1)service.name`||
+|`binds[].listeners[].policies.extProc.(any)(1)service.name.namespace`||
+|`binds[].listeners[].policies.extProc.(any)(1)service.name.hostname`||
+|`binds[].listeners[].policies.extProc.(any)(1)service.port`||
+|`binds[].listeners[].policies.extProc.(any)(1)host`||
+|`binds[].listeners[].policies.extProc.(any)failureMode`||
+|`binds[].listeners[].policies.transformations`|Modify requests and responses|
+|`binds[].listeners[].policies.transformations.request`||
+|`binds[].listeners[].policies.transformations.request.add`||
+|`binds[].listeners[].policies.transformations.request.set`||
+|`binds[].listeners[].policies.transformations.request.remove`||
+|`binds[].listeners[].policies.transformations.request.body`||
+|`binds[].listeners[].policies.transformations.response`||
+|`binds[].listeners[].policies.transformations.response.add`||
+|`binds[].listeners[].policies.transformations.response.set`||
+|`binds[].listeners[].policies.transformations.response.remove`||
+|`binds[].listeners[].policies.transformations.response.body`||
+|`frontendPolicies`||
+|`frontendPolicies.http`|Settings for handling incoming HTTP requests.|
+|`frontendPolicies.http.maxBufferSize`||
+|`frontendPolicies.http.http1MaxHeaders`|The maximum number of headers allowed in a request. Changing this value results in a performance<br>degradation, even if set to a lower value than the default (100)|
+|`frontendPolicies.http.http1IdleTimeout`||
+|`frontendPolicies.http.http2WindowSize`||
+|`frontendPolicies.http.http2ConnectionWindowSize`||
+|`frontendPolicies.http.http2FrameSize`||
+|`frontendPolicies.http.http2KeepaliveInterval`||
+|`frontendPolicies.http.http2KeepaliveTimeout`||
+|`frontendPolicies.tls`|Settings for handling incoming TLS connections.|
+|`frontendPolicies.tls.tlsHandshakeTimeout`||
+|`frontendPolicies.tcp`|Settings for handling incoming TCP connections.|
+|`frontendPolicies.tcp.keepalives`||
+|`frontendPolicies.tcp.keepalives.enabled`||
+|`frontendPolicies.tcp.keepalives.time`||
+|`frontendPolicies.tcp.keepalives.interval`||
+|`frontendPolicies.tcp.keepalives.retries`||
+|`frontendPolicies.accessLog`|Settings for request access logs.|
+|`frontendPolicies.accessLog.filter`||
+|`frontendPolicies.accessLog.add`||
+|`frontendPolicies.accessLog.remove`||
+|`frontendPolicies.tracing`||
+|`policies`|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route/gateway.|
 |`policies[].name`||
 |`policies[].target`||
 |`policies[].target.(1)gateway`||
@@ -637,6 +698,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].target.(1)service`||
 |`policies[].target.(1)backend`||
 |`policies[].target.(1)subBackend`||
+|`policies[].phase`|phase defines at what level the policy runs at. Gateway policies run pre-routing, while<br>Route policies apply post-routing.<br>Only a subset of policies are eligible as Gateway policies.<br>In general, normal (route level) policies should be used, except you need the policy to influence<br>routing.|
 |`policies[].policy`||
 |`policies[].policy.requestHeaderModifier`|Headers to be modified in the request.|
 |`policies[].policy.requestHeaderModifier.add`||
@@ -870,50 +932,6 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.retry.attempts`||
 |`policies[].policy.retry.backoff`||
 |`policies[].policy.retry.codes`||
-|`gatewayPolicies`|gatewayPolicies define policies that run at the Gateway level. This includes a subset of possible<br>policy types.<br>In general, normal (route level) policies should be used, except you need the policy to influence<br>routing.|
-|`gatewayPolicies[].name`||
-|`gatewayPolicies[].target`||
-|`gatewayPolicies[].target.(1)gateway`||
-|`gatewayPolicies[].target.(1)listener`||
-|`gatewayPolicies[].target.(1)route`||
-|`gatewayPolicies[].target.(1)routeRule`||
-|`gatewayPolicies[].target.(1)service`||
-|`gatewayPolicies[].target.(1)backend`||
-|`gatewayPolicies[].target.(1)subBackend`||
-|`gatewayPolicies[].policy`||
-|`gatewayPolicies[].policy.extProc`|Extend agentgateway with an external processor|
-|`gatewayPolicies[].policy.extProc.(any)(1)service`||
-|`gatewayPolicies[].policy.extProc.(any)(1)service.name`||
-|`gatewayPolicies[].policy.extProc.(any)(1)service.name.namespace`||
-|`gatewayPolicies[].policy.extProc.(any)(1)service.name.hostname`||
-|`gatewayPolicies[].policy.extProc.(any)(1)service.port`||
-|`gatewayPolicies[].policy.extProc.(any)(1)host`||
-|`gatewayPolicies[].policy.extProc.(any)failureMode`||
-|`gatewayPolicies[].policy.jwtAuth`|Authenticate incoming JWT requests.|
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)mode`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].issuer`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].audiences`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].jwks`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)file`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)url`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)mode`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)issuer`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)audiences`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)jwks`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)jwks.(any)file`||
-|`gatewayPolicies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
-|`gatewayPolicies[].policy.transformations`|Modify requests and responses|
-|`gatewayPolicies[].policy.transformations.request`||
-|`gatewayPolicies[].policy.transformations.request.add`||
-|`gatewayPolicies[].policy.transformations.request.set`||
-|`gatewayPolicies[].policy.transformations.request.remove`||
-|`gatewayPolicies[].policy.transformations.request.body`||
-|`gatewayPolicies[].policy.transformations.response`||
-|`gatewayPolicies[].policy.transformations.response.add`||
-|`gatewayPolicies[].policy.transformations.response.set`||
-|`gatewayPolicies[].policy.transformations.response.remove`||
-|`gatewayPolicies[].policy.transformations.response.body`||
 |`workloads`||
 |`services`||
 ## CEL context

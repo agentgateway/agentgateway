@@ -332,7 +332,7 @@
             "poolIdleTimeout": {
               "description": "The maximum duration to keep an idle connection alive.",
               "type": "string",
-              "default": "10s"
+              "default": "1m30s"
             },
             "poolMaxSize": {
               "description": "The maximum number of connections allowed in the pool, per hostname. If set, this will limit\nthe total number of connections kept alive to any given host.\nNote: excess connections will still be created, they will just not remain idle.\nIf unset, there is no limit",
@@ -356,88 +356,6 @@
             "connectTimeout": "10s",
             "poolIdleTimeout": "1m30s",
             "poolMaxSize": null
-          }
-        },
-        "listener": {
-          "type": "object",
-          "properties": {
-            "maxBufferSize": {
-              "type": "integer",
-              "format": "uint",
-              "minimum": 0,
-              "default": 2097152
-            },
-            "tlsHandshakeTimeout": {
-              "type": "string",
-              "default": "15s"
-            },
-            "http1MaxHeaders": {
-              "description": "The maximum number of headers allowed in a request. Changing this value results in a performance\ndegradation, even if set to a lower value than the default (100)",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint",
-              "minimum": 0,
-              "default": null
-            },
-            "http1IdleTimeout": {
-              "type": "string",
-              "default": "10m0s"
-            },
-            "http2WindowSize": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0,
-              "default": null
-            },
-            "http2ConnectionWindowSize": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0,
-              "default": null
-            },
-            "http2FrameSize": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0,
-              "default": null
-            },
-            "http2KeepaliveInterval": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "default": null
-            },
-            "http2KeepaliveTimeout": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "default": null
-            }
-          },
-          "additionalProperties": false,
-          "default": {
-            "maxBufferSize": 2097152,
-            "tlsHandshakeTimeout": "15s",
-            "http1MaxHeaders": null,
-            "http1IdleTimeout": "10m0s",
-            "http2WindowSize": null,
-            "http2ConnectionWindowSize": null,
-            "http2FrameSize": null,
-            "http2KeepaliveInterval": null,
-            "http2KeepaliveTimeout": null
           }
         },
         "hbone": {
@@ -5578,6 +5496,466 @@
                     },
                     "additionalProperties": false
                   }
+                },
+                "policies": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "jwtAuth": {
+                      "description": "Authenticate incoming JWT requests.",
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "mode": {
+                                  "oneOf": [
+                                    {
+                                      "description": "A valid token, issued by a configured issuer, must be present.",
+                                      "type": "string",
+                                      "const": "strict"
+                                    },
+                                    {
+                                      "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                      "type": "string",
+                                      "const": "optional"
+                                    },
+                                    {
+                                      "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                      "type": "string",
+                                      "const": "permissive"
+                                    }
+                                  ],
+                                  "default": "optional"
+                                },
+                                "providers": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "issuer": {
+                                        "type": "string"
+                                      },
+                                      "audiences": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "jwks": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "file": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "file"
+                                            ]
+                                          },
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "url": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "url"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "issuer",
+                                      "audiences",
+                                      "jwks"
+                                    ]
+                                  }
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "providers"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "mode": {
+                                  "oneOf": [
+                                    {
+                                      "description": "A valid token, issued by a configured issuer, must be present.",
+                                      "type": "string",
+                                      "const": "strict"
+                                    },
+                                    {
+                                      "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                      "type": "string",
+                                      "const": "optional"
+                                    },
+                                    {
+                                      "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                      "type": "string",
+                                      "const": "permissive"
+                                    }
+                                  ],
+                                  "default": "optional"
+                                },
+                                "issuer": {
+                                  "type": "string"
+                                },
+                                "audiences": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "jwks": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "file": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "file"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "url": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "url"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "issuer",
+                                "audiences",
+                                "jwks"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "extAuthz": {
+                      "description": "Authenticate incoming requests by calling an external authorization server.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "failOpen": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ],
+                              "default": null
+                            },
+                            "statusOnError": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "format": "uint16",
+                              "minimum": 0,
+                              "maximum": 65535
+                            },
+                            "includeRequestBody": {
+                              "description": "Options for including the request body in the authorization request",
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "properties": {
+                                "maxRequestBytes": {
+                                  "description": "Maximum size of request body to buffer (default: 8192)",
+                                  "type": "integer",
+                                  "format": "uint32",
+                                  "minimum": 0,
+                                  "default": 0
+                                },
+                                "allowPartialMessage": {
+                                  "description": "If true, send partial body when max_request_bytes is reached",
+                                  "type": "boolean",
+                                  "default": false
+                                },
+                                "packAsBytes": {
+                                  "description": "If true, pack body as raw bytes in gRPC",
+                                  "type": "boolean",
+                                  "default": false
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "unevaluatedProperties": false,
+                          "oneOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "invalid"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "service": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "object",
+                                      "properties": {
+                                        "namespace": {
+                                          "type": "string"
+                                        },
+                                        "hostname": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "namespace",
+                                        "hostname"
+                                      ]
+                                    },
+                                    "port": {
+                                      "type": "integer",
+                                      "format": "uint16",
+                                      "minimum": 0,
+                                      "maximum": 65535
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name",
+                                    "port"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "service"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "host": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "host"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "extProc": {
+                      "description": "Extend agentgateway with an external processor",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "failureMode": {
+                              "type": "string",
+                              "enum": [
+                                "failClosed",
+                                "failOpen"
+                              ],
+                              "default": "failClosed"
+                            }
+                          },
+                          "unevaluatedProperties": false,
+                          "oneOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "invalid"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "service": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "object",
+                                      "properties": {
+                                        "namespace": {
+                                          "type": "string"
+                                        },
+                                        "hostname": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "namespace",
+                                        "hostname"
+                                      ]
+                                    },
+                                    "port": {
+                                      "type": "integer",
+                                      "format": "uint16",
+                                      "minimum": 0,
+                                      "maximum": 65535
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name",
+                                    "port"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "service"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "host": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "host"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "transformations": {
+                      "description": "Modify requests and responses",
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "request": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "add": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "default": {}
+                            },
+                            "set": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "default": {}
+                            },
+                            "remove": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "default": []
+                            },
+                            "body": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "response": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "add": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "default": {}
+                            },
+                            "set": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "default": {}
+                            },
+                            "remove": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "default": []
+                            },
+                            "body": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "additionalProperties": false,
+                      "default": null
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -5591,8 +5969,173 @@
         ]
       }
     },
+    "frontendPolicies": {
+      "type": "object",
+      "properties": {
+        "http": {
+          "description": "Settings for handling incoming HTTP requests.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "maxBufferSize": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0,
+              "default": 2097152
+            },
+            "http1MaxHeaders": {
+              "description": "The maximum number of headers allowed in a request. Changing this value results in a performance\ndegradation, even if set to a lower value than the default (100)",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint",
+              "minimum": 0,
+              "default": null
+            },
+            "http1IdleTimeout": {
+              "type": "string",
+              "default": "10m0s"
+            },
+            "http2WindowSize": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0,
+              "default": null
+            },
+            "http2ConnectionWindowSize": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0,
+              "default": null
+            },
+            "http2FrameSize": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0,
+              "default": null
+            },
+            "http2KeepaliveInterval": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
+            },
+            "http2KeepaliveTimeout": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
+            }
+          },
+          "additionalProperties": false,
+          "default": null
+        },
+        "tls": {
+          "description": "Settings for handling incoming TLS connections.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "tlsHandshakeTimeout": {
+              "type": "string",
+              "default": "15s"
+            }
+          },
+          "additionalProperties": false,
+          "default": null
+        },
+        "tcp": {
+          "description": "Settings for handling incoming TCP connections.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "keepalives": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "time": {
+                  "type": "string",
+                  "default": "3m0s"
+                },
+                "interval": {
+                  "type": "string",
+                  "default": "3m0s"
+                },
+                "retries": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0,
+                  "default": 9
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "keepalives"
+          ],
+          "default": null
+        },
+        "accessLog": {
+          "description": "Settings for request access logs.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "filter": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "add": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "remove": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "default": null
+        },
+        "tracing": {
+          "type": "null",
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
     "policies": {
-      "description": "policies defines additional policies that can be attached to various other configurations.\nThis is an advanced feature; users should typically use the inline `policies` field under route.",
+      "description": "policies defines additional policies that can be attached to various other configurations.\nThis is an advanced feature; users should typically use the inline `policies` field under route/gateway.",
       "type": "array",
       "items": {
         "type": "object",
@@ -5687,6 +6230,15 @@
                 "additionalProperties": false
               }
             ]
+          },
+          "phase": {
+            "description": "phase defines at what level the policy runs at. Gateway policies run pre-routing, while\nRoute policies apply post-routing.\nOnly a subset of policies are eligible as Gateway policies.\nIn general, normal (route level) policies should be used, except you need the policy to influence\nrouting.",
+            "type": "string",
+            "enum": [
+              "route",
+              "gateway"
+            ],
+            "default": "route"
           },
           "policy": {
             "type": "object",
@@ -7856,445 +8408,6 @@
                 "required": [
                   "codes"
                 ],
-                "default": null
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "name",
-          "target",
-          "policy"
-        ]
-      }
-    },
-    "gatewayPolicies": {
-      "description": "gatewayPolicies define policies that run at the Gateway level. This includes a subset of possible\npolicy types.\nIn general, normal (route level) policies should be used, except you need the policy to influence\nrouting.",
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "target": {
-            "oneOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "gateway": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "gateway"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "listener": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "listener"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "route": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "route"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "routeRule": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "routeRule"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "service": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "service"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "backend": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "backend"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "subBackend": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "subBackend"
-                ],
-                "additionalProperties": false
-              }
-            ]
-          },
-          "policy": {
-            "type": "object",
-            "properties": {
-              "extProc": {
-                "description": "Extend agentgateway with an external processor",
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "failureMode": {
-                        "type": "string",
-                        "enum": [
-                          "failClosed",
-                          "failOpen"
-                        ],
-                        "default": "failClosed"
-                      }
-                    },
-                    "unevaluatedProperties": false,
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "enum": [
-                          "invalid"
-                        ]
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "service": {
-                            "type": "object",
-                            "properties": {
-                              "name": {
-                                "type": "object",
-                                "properties": {
-                                  "namespace": {
-                                    "type": "string"
-                                  },
-                                  "hostname": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "namespace",
-                                  "hostname"
-                                ]
-                              },
-                              "port": {
-                                "type": "integer",
-                                "format": "uint16",
-                                "minimum": 0,
-                                "maximum": 65535
-                              }
-                            },
-                            "additionalProperties": false,
-                            "required": [
-                              "name",
-                              "port"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "service"
-                        ]
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "host": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "host"
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "jwtAuth": {
-                "description": "Authenticate incoming JWT requests.",
-                "anyOf": [
-                  {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "properties": {
-                          "mode": {
-                            "oneOf": [
-                              {
-                                "description": "A valid token, issued by a configured issuer, must be present.",
-                                "type": "string",
-                                "const": "strict"
-                              },
-                              {
-                                "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
-                                "type": "string",
-                                "const": "optional"
-                              },
-                              {
-                                "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
-                                "type": "string",
-                                "const": "permissive"
-                              }
-                            ],
-                            "default": "optional"
-                          },
-                          "providers": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "properties": {
-                                "issuer": {
-                                  "type": "string"
-                                },
-                                "audiences": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "jwks": {
-                                  "anyOf": [
-                                    {
-                                      "type": "object",
-                                      "properties": {
-                                        "file": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "file"
-                                      ]
-                                    },
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "object",
-                                      "properties": {
-                                        "url": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "url"
-                                      ]
-                                    }
-                                  ]
-                                }
-                              },
-                              "additionalProperties": false,
-                              "required": [
-                                "issuer",
-                                "audiences",
-                                "jwks"
-                              ]
-                            }
-                          }
-                        },
-                        "additionalProperties": false,
-                        "required": [
-                          "providers"
-                        ]
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "mode": {
-                            "oneOf": [
-                              {
-                                "description": "A valid token, issued by a configured issuer, must be present.",
-                                "type": "string",
-                                "const": "strict"
-                              },
-                              {
-                                "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
-                                "type": "string",
-                                "const": "optional"
-                              },
-                              {
-                                "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
-                                "type": "string",
-                                "const": "permissive"
-                              }
-                            ],
-                            "default": "optional"
-                          },
-                          "issuer": {
-                            "type": "string"
-                          },
-                          "audiences": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "jwks": {
-                            "anyOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "file": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "file"
-                                ]
-                              },
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "url": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "url"
-                                ]
-                              }
-                            ]
-                          }
-                        },
-                        "additionalProperties": false,
-                        "required": [
-                          "issuer",
-                          "audiences",
-                          "jwks"
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "transformations": {
-                "description": "Modify requests and responses",
-                "type": [
-                  "object",
-                  "null"
-                ],
-                "properties": {
-                  "request": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
-                    "properties": {
-                      "add": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        },
-                        "default": {}
-                      },
-                      "set": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        },
-                        "default": {}
-                      },
-                      "remove": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "default": []
-                      },
-                      "body": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
-                        "default": null
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  "response": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
-                    "properties": {
-                      "add": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        },
-                        "default": {}
-                      },
-                      "set": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        },
-                        "default": {}
-                      },
-                      "remove": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "default": []
-                      },
-                      "body": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
-                        "default": null
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                },
-                "additionalProperties": false,
                 "default": null
               }
             },

@@ -7,6 +7,7 @@ use tokio::fs;
 
 use crate::client::Client;
 use crate::store::Stores;
+use crate::types::agent::GatewayName;
 use crate::types::proto::agent::Resource as ADPResource;
 use crate::types::proto::workload::Address as XdsAddress;
 use crate::{ConfigSource, client, control, store};
@@ -63,6 +64,7 @@ impl StateManager {
 				stores: stores.clone(),
 				cfg: cfg.clone(),
 				client,
+				gateway: strng::format!("{}/{}", config.namespace, config.gateway),
 			};
 			local_client.run().await?;
 		}
@@ -87,6 +89,7 @@ pub struct LocalClient {
 	pub cfg: ConfigSource,
 	pub stores: Stores,
 	pub client: Client,
+	pub gateway: GatewayName,
 }
 
 impl LocalClient {
@@ -180,19 +183,18 @@ impl LocalClient {
 		let config_content = self.cfg.read_to_string().await?;
 		let config = crate::types::local::NormalizedLocalConfig::from(
 			self.client.clone(),
+			self.gateway.clone(),
 			config_content.as_str(),
 		)
 		.await?;
 		info!("loaded config from {:?}", self.cfg);
 
 		// Sync the state
-		let next_binds = self.stores.binds.sync_local(
-			config.binds,
-			config.policies,
-			config.gateway_policies,
-			config.backends,
-			prev.binds,
-		);
+		let next_binds =
+			self
+				.stores
+				.binds
+				.sync_local(config.binds, config.policies, config.backends, prev.binds);
 		let next_discovery =
 			self
 				.stores

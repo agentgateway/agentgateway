@@ -80,7 +80,8 @@ impl App {
 				.targets
 				.iter()
 				.map(|t| {
-					let backend_policies = binds.backend_policies(name.clone(), None, Some(t.name.clone()));
+					let backend_policies =
+						binds.backend_policies(Some(name.clone()), None, Some(t.name.clone()));
 					Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),

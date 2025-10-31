@@ -6,6 +6,13 @@ use std::fmt::{Debug, Display, Formatter};
 use std::net::IpAddr;
 use std::sync::Arc;
 
+use crate::http::jwt::Claims;
+use crate::llm;
+use crate::llm::{LLMInfo, LLMRequest};
+use crate::serdes::*;
+use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::agent::BackendInfo;
+use crate::types::discovery::Identity;
 use agent_core::strng::Strng;
 use bytes::Bytes;
 pub use cel::Value;
@@ -14,15 +21,7 @@ use cel::{Context, ExecutionError, ParseError, ParseErrors, Program};
 pub use functions::{FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_MAP_RECURSIVE};
 use once_cell::sync::Lazy;
 use prometheus_client::encoding::EncodeLabelValue;
-use serde::{Serialize, Serializer};
-
-use crate::http::jwt::Claims;
-use crate::llm;
-use crate::llm::{LLMInfo, LLMRequest};
-use crate::serdes::*;
-use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::BackendInfo;
-use crate::types::discovery::Identity;
+use serde::{Deserialize, Serialize, Serializer};
 
 mod functions;
 mod strings;
@@ -84,6 +83,27 @@ impl Serialize for Expression {
 		S: Serializer,
 	{
 		serializer.serialize_str(&self.original_expression)
+	}
+}
+
+impl<'de> Deserialize<'de> for Expression {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let e = String::deserialize(deserializer)?;
+		crate::cel::Expression::new(&e).map_err(|e| serde::de::Error::custom(e.to_string()))
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for Expression {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"Expression".into()
+	}
+
+	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({ "type": "string" })
 	}
 }
 

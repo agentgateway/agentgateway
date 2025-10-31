@@ -497,11 +497,12 @@ fn redirection_test() {
 		let got = inp
 			.redirect
 			.apply(&mut req, inp.path)
+			.ok()
+			.and_then(|r| r.direct_response)
 			.map(|resp| Want {
 				location: resp.hdr(http::header::LOCATION).to_string(),
 				code: resp.status(),
-			})
-			.ok();
+			});
 		assert_eq!(got, want, "{name}");
 	}
 }

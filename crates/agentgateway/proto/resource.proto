@@ -4,6 +4,7 @@ package agentgateway.dev.resource;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
 
 option go_package = "github.com/agentgateway/agentgateway/go/api;api";
 
@@ -59,10 +60,10 @@ message Route {
   string route_name = 4;
   repeated string hostnames = 5;
   repeated RouteMatch matches = 6;
-  repeated RouteFilter filters = 7;
   repeated RouteBackend backends = 8;
-  TrafficPolicy traffic_policy = 9;
-  repeated PolicySpec inline_policies = 10;
+  // Reserved tag numbers for removed fields: filters(7), traffic_policy(9), inline_policies(10)
+  reserved 7, 9, 10;
+  repeated TrafficPolicySpec traffic_policies = 11;
 }
 
 message TCPRoute {
@@ -77,10 +78,9 @@ message TCPRoute {
   repeated RouteBackend backends = 6;
 }
 
-message TrafficPolicy {
-  google.protobuf.Duration backend_request_timeout = 1;
-  google.protobuf.Duration request_timeout = 2;
-  Retry retry = 3;
+message Timeout {
+  google.protobuf.Duration request = 1;
+  google.protobuf.Duration backend_request = 2;
 }
 
 message Retry {
@@ -216,18 +216,6 @@ message HeaderMatch {
   }
 }
 
-message RouteFilter {
-  oneof kind {
-    HeaderModifier request_header_modifier = 1;
-    HeaderModifier response_header_modifier = 2;
-    RequestRedirect request_redirect = 3;
-    UrlRewrite url_rewrite = 4;
-    RequestMirror request_mirror = 5;
-    DirectResponse direct_response = 6;
-    CORS cors = 7;
-  }
-}
-
 message CORS {
   bool allow_credentials = 1;
   repeated string allow_headers = 2;
@@ -282,7 +270,9 @@ message Header {
 message RouteBackend {
   BackendReference backend = 1;
   int32 weight = 2;
-  repeated RouteFilter filters = 4;
+  // Reserved tag number for removed field: filters(4)
+  reserved 4;
+  repeated BackendPolicySpec backend_policies = 5;
 }
 
 message PolicyTarget {
@@ -304,13 +294,78 @@ message PolicyTarget {
     string sub_backend = 7;
   }
 }
-message PolicySpec {
+
+message KeepaliveConfig {
+  // Time before sending keepalive probes
+  google.protobuf.Duration time = 1;
+
+  // Interval between keepalive probes
+  google.protobuf.Duration interval = 2;
+
+  // Number of keepalive retries before giving up
+  google.protobuf.UInt32Value retries = 3;
+}
+
+message FrontendPolicySpec {
+  message HTTP {
+    google.protobuf.UInt32Value max_buffer_size = 1;
+    google.protobuf.UInt32Value http1_max_headers = 2;
+    google.protobuf.Duration http1_idle_timeout = 3;
+    google.protobuf.UInt32Value http2_window_size = 4;
+    google.protobuf.UInt32Value http2_connection_window_size = 5;
+    google.protobuf.UInt32Value http2_frame_size = 6;
+    google.protobuf.Duration http2_keepalive_interval = 7;
+    google.protobuf.Duration http2_keepalive_timeout = 8;
+  }
+  message TLS {
+    // TLS handshake timeout
+    google.protobuf.Duration tls_handshake_timeout = 1;
+  }
+
+  message TCP {
+    // TCP keepalive configuration
+    KeepaliveConfig keepalives = 1;
+  }
+  // Logging configuration policy
+  message Logging {
+    // CEL expression to filter out logs. If unset, all logs are considered.
+    google.protobuf.StringValue filter = 1;
+
+    message Field {
+      string name = 1;
+      string expression = 2;
+    }
+
+    // Additional log fields configuration
+    message Fields {
+      // Field keys to remove from logs
+      repeated string remove = 1;
+      // Field keys to add with CEL expressions
+      repeated Field add = 2;
+    }
+
+    // Fields applied to logs
+    Fields fields = 2;
+  }
+
+  message Tracing {}
+
+  oneof kind {
+    TCP tcp = 1;
+    TLS tls = 2;
+    HTTP http = 3;
+    Logging logging = 4;
+    Tracing tracing = 5;
+  }
+}
+
+message TrafficPolicySpec {
   message RemoteRateLimit {
     string domain = 1;
     repeated Descriptor descriptors = 2;
     BackendReference target = 3;
 
-    enum Type { REQUESTS = 0; TOKENS = 1; }
+    enum Type {REQUESTS = 0; TOKENS = 1;}
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
@@ -330,6 +385,121 @@ message PolicySpec {
     google.protobuf.Duration fill_interval = 3;
     Type type = 4;
   }
+  message ExternalAuth {
+    enum FailureMode {
+      DENY = 0;
+      ALLOW = 1;
+      DENY_WITH_STATUS = 2;
+    }
+    message BodyOptions {
+      uint32 max_request_bytes = 1;
+      bool allow_partial_message = 2;
+      bool pack_as_bytes = 3;
+    }
+    BackendReference target = 1;
+    map<string, string> context = 2;
+    FailureMode failure_mode = 3;
+    repeated string include_request_headers = 4;
+    BodyOptions include_request_body = 5;
+    google.protobuf.Duration timeout = 6;
+    google.protobuf.UInt32Value status_on_error = 7;
+  }
+  message RBAC {
+    repeated string allow = 1;
+    repeated string deny = 2;
+  }
+  // JWT authentication configuration
+  message JWT {
+    // Validation mode for JWT authentication
+    enum Mode {
+      // Default mode - if a token exists, validate it
+      OPTIONAL = 0;
+      // A valid token must be present
+      STRICT = 1;
+      // Requests are never rejected (useful for claims in later steps)
+      PERMISSIVE = 2;
+    }
+
+    // How the JWT validation should behave
+    Mode mode = 1;
+
+    // JWT issuer that must match the 'iss' claim
+    string issuer = 2;
+
+    // List of audiences - the 'aud' claim must be in this list
+    repeated string audiences = 3;
+
+    // JWKS configuration - where to get the keys for validation
+    oneof jwks_source {
+      // Inline JWKS as a JSON string
+      string inline = 4;
+    }
+  }
+
+  message TransformationPolicy {
+    message Transform {
+      repeated HeaderTransformation set = 1;
+      repeated HeaderTransformation add = 2;
+      repeated string remove = 3;
+      BodyTransformation body = 4;
+    }
+    Transform request = 1;
+    Transform response = 2;
+  }
+
+  message HeaderTransformation {
+    string name = 1;
+    string expression = 2;
+  }
+
+  message BodyTransformation {
+    string expression = 1;
+  }
+
+  // Cross-Site Request Forgery (CSRF) policy configuration.
+  message CSRF {
+    // Additional origins that are allowed for CSRF validation beyond the same-origin policy.
+    // If a request's origin header matches any of these exact origins, the request will be allowed.
+    // Each origin should be in the format "scheme://host[:port]" (e.g., "https://www.example.com")
+    repeated string additional_origins = 1;
+  }
+
+  message ExtProc {
+    enum FailureMode{
+      FAIL_CLOSED = 0;
+      FAIL_OPEN = 1;
+    }
+    BackendReference target = 1;
+    FailureMode failure_mode = 2;
+  }
+  enum PolicyPhase{
+    ROUTE = 0;
+    GATEWAY = 1;
+  }
+
+  PolicyPhase phase = 1;
+  oneof kind {
+    Timeout timeout = 2;
+    Retry retry = 3;
+    LocalRateLimit local_rate_limit = 4;
+    ExternalAuth ext_authz = 5;
+    RBAC authorization = 6;
+    JWT jwt = 7;
+    TransformationPolicy transformation = 8;
+    RemoteRateLimit remote_rate_limit = 9;
+    CSRF csrf = 10;
+    ExtProc ext_proc = 11;
+    HeaderModifier request_header_modifier = 12;
+    HeaderModifier response_header_modifier = 13;
+    RequestRedirect request_redirect = 14;
+    UrlRewrite url_rewrite = 15;
+    RequestMirror request_mirror = 16;
+    DirectResponse direct_response = 17;
+    CORS cors = 18;
+  }
+}
+
+message BackendPolicySpec {
   message Ai {
     message Message {
       string role = 1;
@@ -427,25 +597,6 @@ message PolicySpec {
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;
   }
-  message ExternalAuth {
-    enum FailureMode {
-      DENY = 0;
-      ALLOW = 1;
-      DENY_WITH_STATUS = 2;
-    }
-    message BodyOptions {
-      uint32 max_request_bytes = 1;
-      bool allow_partial_message = 2;
-      bool pack_as_bytes = 3;
-    }
-    BackendReference target = 1;
-    map<string, string> context = 2;
-    FailureMode failure_mode = 3;
-    repeated string include_request_headers = 4;
-    BodyOptions include_request_body = 5;
-    google.protobuf.Duration timeout = 6;
-    google.protobuf.UInt32Value status_on_error = 7;
-  }
   message A2a {
   }
   message InferenceRouting {
@@ -468,109 +619,40 @@ message PolicySpec {
     // If set, override the SNI explicitly. Otherwise, it is auto-derived.
     google.protobuf.StringValue hostname = 5;
   }
-  message RBAC {
+  message McpAuthorization {
     repeated string allow = 1;
     repeated string deny = 2;
   }
 
-  // JWT authentication configuration
-  message JWT {
-    // Validation mode for JWT authentication
-    enum Mode {
-      // Default mode - if a token exists, validate it
-      OPTIONAL = 0;
-      // A valid token must be present
-      STRICT = 1;
-      // Requests are never rejected (useful for claims in later steps)
-      PERMISSIVE = 2;
+  message McpAuthentication {
+    message ResourceMetadata {
+      map<string, google.protobuf.Value> extra = 1;
     }
 
-    // How the JWT validation should behave
-    Mode mode = 1;
-
-    // JWT issuer that must match the 'iss' claim
-    string issuer = 2;
-
-    // List of audiences - the 'aud' claim must be in this list
-    repeated string audiences = 3;
-
-    // JWKS configuration - where to get the keys for validation
-    oneof jwks_source {
-      // Inline JWKS as a JSON string
-      string inline = 4;
-    }
-  }
-
-  message TransformationPolicy {
-    message Transform {
-      repeated HeaderTransformation set = 1;
-      repeated HeaderTransformation add = 2;
-      repeated string remove = 3;
-      BodyTransformation body = 4;
-    }
-    Transform request = 1;
-    Transform response = 2;
-  }
-
-  message HeaderTransformation {
-    string name = 1;
-    string expression = 2;
-  }
-
-  message BodyTransformation {
-    string expression = 1;
-  }
-
-  // Cross-Site Request Forgery (CSRF) policy configuration.
-  message CSRF {
-    // Additional origins that are allowed for CSRF validation beyond the same-origin policy.
-    // If a request's origin header matches any of these exact origins, the request will be allowed.
-    // Each origin should be in the format "scheme://host[:port]" (e.g., "https://www.example.com")
-    repeated string additional_origins = 1;
-  }
-
-  message ExtProc {
-    enum FailureMode{
-      FAIL_CLOSED = 0;
-      FAIL_OPEN = 1;
-    }
-    BackendReference target = 1;
-    FailureMode failure_mode = 2;
-  }
-
-  // Logging configuration policy
-  message Logging {
-    // CEL expression to filter out logs. If unset, all logs are considered.
-    google.protobuf.StringValue filter = 1;
-
-    // Additional log fields configuration
-    message Fields {
-      // Field keys to remove from logs
-      repeated string remove = 1;
-      // Field keys to add with CEL expressions
-      map<string, string> add = 2;
+    enum McpIDP {
+      AUTH0 = 0;
+      KEYCLOAK = 1;
     }
 
-    // Fields applied to logs
-    Fields fields = 2;
+    string issuer = 1;
+    string audience = 2;
+    string jwks_url = 3;
+    McpIDP provider = 4;
+    ResourceMetadata resource_metadata = 5;
   }
 
   oneof kind {
-    LocalRateLimit local_rate_limit = 1;
-    ExternalAuth ext_authz = 2;
-    A2a a2a = 3;
-    InferenceRouting inference_routing = 4;
-    BackendTLS backend_tls = 5;
-    BackendAuthPolicy auth = 6;
-    RBAC authorization = 7;
-    RBAC mcp_authorization = 8;
-    Ai ai = 9;
-    JWT jwt = 10;
-    TransformationPolicy transformation = 11;
-    RemoteRateLimit remote_rate_limit = 12;
-    CSRF csrf = 13;
-    ExtProc ext_proc = 14;
-    Logging logging = 15;
+    A2a a2a = 1;
+    InferenceRouting inference_routing = 2;
+    BackendTLS backend_tls = 3;
+    BackendAuthPolicy auth = 4;
+    McpAuthorization mcp_authorization = 5;
+    McpAuthentication mcp_authentication = 6;
+    Ai ai = 7;
+    HeaderModifier request_header_modifier = 8;
+    HeaderModifier response_header_modifier = 9;
+    RequestRedirect request_redirect = 10;
+    RequestMirror request_mirror = 11;
   }
 }
 
@@ -578,7 +660,13 @@ message Policy {
   // Format is "<ns>/<name>"
   string name = 1;
   PolicyTarget target = 2;
-  PolicySpec spec = 3;
+  // Reserved tag number for removed PolicySpec field: spec(3)
+  reserved 3;
+  oneof kind {
+    TrafficPolicySpec traffic = 4;
+    BackendPolicySpec backend = 5;
+    FrontendPolicySpec frontend = 6;
+  }
 }
 message Backend {
   // Format is "<ns>/<name>"

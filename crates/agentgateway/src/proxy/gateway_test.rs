@@ -5,8 +5,8 @@ use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
-	Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, Policy, PolicyTarget, Route,
-	RouteFilter, RouteMatch, RouteSet, TargetedPolicy,
+	Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, Route, RouteMatch,
+	RouteSet, TargetedPolicy, TrafficPolicy,
 };
 use crate::*;
 use ::http::StatusCode;
@@ -59,7 +59,7 @@ async fn local_ratelimit() {
 	let _bind = bind.with_policy(TargetedPolicy {
 		name: strng::new("rl"),
 		target: PolicyTarget::Route("route".into()),
-		policy: Policy::LocalRateLimit(vec![
+		policy: TrafficPolicy::LocalRateLimit(vec![
 			http::localratelimit::RateLimitSpec {
 				max_tokens: 1,
 				tokens_per_fill: 1,
@@ -68,7 +68,8 @@ async fn local_ratelimit() {
 			}
 			.try_into()
 			.unwrap(),
-		]),
+		])
+		.into(),
 	});
 
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
@@ -190,20 +191,19 @@ async fn direct_response() {
 			method: None,
 			query: vec![],
 		}],
-		filters: vec![
-			RouteFilter::ResponseHeaderModifier(http::filters::HeaderModifier {
+		inline_policies: vec![
+			TrafficPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
 				add: vec![("x-filter".into(), "x-filter-val".into())],
 				set: vec![],
 				remove: vec![],
 			}),
-			RouteFilter::DirectResponse(crate::http::filters::DirectResponse {
+			TrafficPolicy::DirectResponse(crate::http::filters::DirectResponse {
 				body: Bytes::from_static(b"hello"),
 				status: StatusCode::UNPROCESSABLE_ENTITY,
 			}),
+			TrafficPolicy::Transformation(xfm),
 		],
-		inline_policies: vec![Policy::Transformation(xfm)],
 		backends: vec![],
-		policies: None,
 	});
 	let io = bind.serve_http(BIND_KEY);
 

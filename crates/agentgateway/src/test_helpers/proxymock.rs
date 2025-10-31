@@ -145,15 +145,13 @@ pub fn basic_named_route(target: Strng) -> Route {
 			method: None,
 			query: vec![],
 		}],
-		filters: Default::default(),
 		inline_policies: Default::default(),
 		rule_name: None,
 		backends: vec![RouteBackendReference {
 			weight: 1,
 			backend: BackendReference::Backend(target),
-			filters: Default::default(),
+			inline_policies: Default::default(),
 		}],
-		policies: None,
 	}
 }
 

@@ -20,7 +20,7 @@ use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
 pub struct Tracer {
 	pub tracer: Arc<opentelemetry_sdk::trace::SdkTracer>,
 	pub provider: SdkTracerProvider,
-	pub fields: Arc<LoggingFields>,
+	pub fields: LoggingFields,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Copy, Eq, PartialEq, Clone, Debug)]
@@ -37,7 +37,7 @@ pub struct Config {
 	pub endpoint: Option<String>,
 	pub headers: HashMap<String, String>,
 	pub protocol: Protocol,
-	pub fields: Arc<LoggingFields>,
+	pub fields: LoggingFields,
 	pub random_sampling: Option<Arc<cel::Expression>>,
 	pub client_sampling: Option<Arc<cel::Expression>>,
 }

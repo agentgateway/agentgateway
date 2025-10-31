@@ -28,8 +28,10 @@ use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::{FzHashSet, FzStringMap};
 use http_body::{Body, Frame, SizeHint};
+use indexmap::IndexMap;
 use itertools::Itertools;
-use serde::{Serialize, Serializer};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use tracing::{Level, trace};
 
@@ -83,7 +85,7 @@ impl<T: Debug> Debug for AsyncLog<T> {
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct Config {
 	pub filter: Option<Arc<cel::Expression>>,
-	pub fields: Arc<LoggingFields>,
+	pub fields: LoggingFields,
 	pub metric_fields: Arc<MetricFields>,
 	pub excluded_metrics: FzHashSet<String>,
 	pub level: String,
@@ -92,8 +94,8 @@ pub struct Config {
 
 #[derive(serde::Serialize, Default, Clone, Debug)]
 pub struct LoggingFields {
-	pub remove: FzHashSet<String>,
-	pub add: OrderedStringMap<Arc<cel::Expression>>,
+	pub remove: Arc<FzHashSet<String>>,
+	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
 }
 
 #[derive(serde::Serialize, Default, Clone, Debug)]
@@ -110,6 +112,9 @@ pub struct OrderedStringMap<V> {
 impl<V> OrderedStringMap<V> {}
 
 impl<V> OrderedStringMap<V> {
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
 	pub fn len(&self) -> usize {
 		self.map.len()
 	}
@@ -145,6 +150,16 @@ impl<V: Serialize> Serialize for OrderedStringMap<V> {
 	}
 }
 
+impl<'de, V: DeserializeOwned> Deserialize<'de> for OrderedStringMap<V> {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let im = IndexMap::<String, V>::deserialize(deserializer)?;
+		Ok(OrderedStringMap::from_iter(im))
+	}
+}
+
 impl<K, V> FromIterator<(K, V)> for OrderedStringMap<V>
 where
 	K: AsRef<str>,
@@ -173,7 +188,7 @@ pub struct TraceSampler {
 pub struct CelLogging {
 	pub cel_context: cel::ContextBuilder,
 	pub filter: Option<Arc<cel::Expression>>,
-	pub fields: Arc<LoggingFields>,
+	pub fields: LoggingFields,
 	pub metric_fields: Arc<MetricFields>,
 	pub tracing_sampler: TraceSampler,
 }
@@ -181,7 +196,7 @@ pub struct CelLogging {
 pub struct CelLoggingExecutor<'a> {
 	pub executor: cel::Executor<'a>,
 	pub filter: &'a Option<Arc<cel::Expression>>,
-	pub fields: &'a Arc<LoggingFields>,
+	pub fields: &'a LoggingFields,
 	pub metric_fields: &'a Arc<MetricFields>,
 }
 
@@ -229,6 +244,9 @@ impl<'a> CelLoggingExecutor<'a> {
 			let field = self.executor.eval(v.as_ref());
 			if let Err(err) = &field {
 				trace!(target: "cel", ?err, expression=?v, "expression failed");
+			}
+			if let Ok(cel::Value::Null) = &field {
+				trace!(target: "cel",  expression=?v, "expression evaluated to null");
 			}
 			let celv = field.ok().filter(|v| !matches!(v, cel::Value::Null));
 
@@ -604,7 +622,7 @@ impl Drop for DropOnLog {
 			custom: CustomField::default(),
 		};
 
-		let enable_custom_metrics = log.cel.metric_fields.add.len() > 0;
+		let enable_custom_metrics = !log.cel.metric_fields.add.is_empty();
 
 		let enable_trace = log.tracer.is_some();
 		// We will later check it also matches a filter, but filter is slower
@@ -716,7 +734,7 @@ impl Drop for DropOnLog {
 		let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
 		let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
 
-		let fields = cel_exec.fields.as_ref();
+		let fields = cel_exec.fields;
 
 		let mut kv = vec![
 			("gateway", log.gateway_name.display()),
