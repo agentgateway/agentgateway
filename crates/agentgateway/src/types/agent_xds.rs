@@ -1109,6 +1109,14 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				})
 				.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
+			Some(tps::Kind::BasicAuth(ba)) => {
+				let htpasswd = htpasswd_verify::Htpasswd::new(&ba.htpasswd_content);
+				TrafficPolicy::BasicAuth(http::basicauth::BasicAuthentication {
+					htpasswd_file: std::path::PathBuf::from(""), // Proto doesn't store file path
+					realm: ba.realm.clone(),
+					htpasswd: Some(htpasswd),
+				})
+			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}

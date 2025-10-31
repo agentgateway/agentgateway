@@ -131,6 +131,7 @@ pub struct RoutePolicies {
 	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
 	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
 	pub jwt: Option<http::jwt::Jwt>,
+	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub ext_proc: Option<ext_proc::ExtProc>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
@@ -318,6 +319,9 @@ impl Store {
 				},
 				TrafficPolicy::JwtAuth(p) => {
 					pol.jwt.get_or_insert_with(|| p.clone());
+				},
+				TrafficPolicy::BasicAuth(p) => {
+					pol.basic_auth.get_or_insert_with(|| p.clone());
 				},
 				TrafficPolicy::Transformation(p) => {
 					pol.transformation.get_or_insert_with(|| p.clone());

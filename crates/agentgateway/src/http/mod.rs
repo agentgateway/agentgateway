@@ -11,6 +11,7 @@ pub mod route;
 pub mod auth;
 pub mod authorization;
 pub mod backendtls;
+pub mod basicauth;
 pub mod compression;
 pub mod csrf;
 pub mod ext_authz;

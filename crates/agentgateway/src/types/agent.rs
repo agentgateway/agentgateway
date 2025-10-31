@@ -1103,6 +1103,7 @@ pub enum TrafficPolicy {
 	ExtAuthz(ext_authz::ExtAuthz),
 	ExtProc(ext_proc::ExtProc),
 	JwtAuth(crate::http::jwt::Jwt),
+	BasicAuth(crate::http::basicauth::BasicAuthentication),
 	Transformation(crate::http::transformation_cel::Transformation),
 	Csrf(crate::http::csrf::Csrf),
 
