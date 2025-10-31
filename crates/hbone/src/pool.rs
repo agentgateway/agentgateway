@@ -381,6 +381,19 @@ impl<K: Key> WorkloadHBONEPool<K> {
 		connection.send_request(request).await
 	}
 
+	/// Get the HBONE config used by this pool
+	pub fn config(&self) -> Arc<crate::Config> {
+		self.state.spawner.cfg.clone()
+	}
+
+	/// Fetch a certificate for the given workload key
+	pub async fn fetch_certificate(
+		&self,
+		key: K,
+	) -> anyhow::Result<Arc<rustls::client::ClientConfig>> {
+		self.state.spawner.certificates.fetch_certificate(key).await
+	}
+
 	// Obtain a pooled connection. Will prefer to retrieve an existing conn from the pool, but
 	// if none exist, or the existing conn is maxed out on streamcount, will spawn a new one,
 	// even if it is to the same dest+port.

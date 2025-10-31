@@ -584,6 +584,7 @@ impl Gateway {
 		let con = agent_hbone::RWStream {
 			stream: resp,
 			buf: Bytes::new(),
+			drain_tx: None,
 		};
 
 		let _ = Self::proxy(

@@ -19,6 +19,7 @@ pub struct AgentGateway {
 	port: u16,
 	task: tokio::task::JoinHandle<()>,
 	client: Client<HttpConnector, Body>,
+	shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl AgentGateway {
@@ -56,14 +57,21 @@ impl AgentGateway {
 		temp_dirs.push(temp);
 		info!("starting agent...");
 
-		let task = tokio::task::spawn(async {
+		let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+		let task = tokio::task::spawn(async move {
 			let config = agentgateway::config::parse_config(js, Some(config)).unwrap();
-			agentgateway::app::run(Arc::new(config))
-				.await
-				.unwrap()
-				.wait_termination()
-				.await
-				.unwrap()
+			let app = agentgateway::app::run(Arc::new(config)).await.unwrap();
+
+			// Wait for either shutdown signal or termination
+			tokio::select! {
+				_ = shutdown_rx => {
+					info!("graceful shutdown requested");
+				}
+				_ = app.wait_termination() => {
+					info!("app terminated");
+				}
+			}
 		});
 
 		info!("waiting for agent...");
@@ -78,7 +86,16 @@ impl AgentGateway {
 			port,
 			task,
 			client,
+			shutdown_tx: Some(shutdown_tx),
 		})
+	}
+
+	pub async fn shutdown(mut self) {
+		if let Some(tx) = self.shutdown_tx.take() {
+			let _ = tx.send(());
+			// The shutdown signal has been sent, the task will terminate gracefully
+		}
+		self.task.abort();
 	}
 
 	pub async fn send_request(&self, method: Method, url: &str) -> Response {
@@ -89,10 +106,18 @@ impl AgentGateway {
 			.await
 			.unwrap()
 	}
+
+	pub fn port(&self) -> u16 {
+		self.port
+	}
 }
 
 impl Drop for AgentGateway {
 	fn drop(&mut self) {
+		// Send shutdown signal if not already sent
+		if let Some(tx) = self.shutdown_tx.take() {
+			let _ = tx.send(());
+		}
 		self.task.abort();
 	}
 }
