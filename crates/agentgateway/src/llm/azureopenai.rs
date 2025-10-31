@@ -9,7 +9,7 @@ use crate::*;
 #[apply(schema!)]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>,
+	pub model: Option<Strng>, // this is the Azure OpenAI model deployment name
 	pub host: Strng,        // required
 	pub api_version: Strng, // required
 }
