@@ -120,6 +120,8 @@ pub enum ProxyError {
 	BackendUnsupportedMirror,
 	#[error("authentication failure: {0}")]
 	JwtAuthenticationFailure(http::jwt::TokenError),
+	#[error("basic authentication failure: {0}")]
+	BasicAuthenticationFailure(http::basicauth::BasicAuthError),
 	#[error("CSRF validation failed")]
 	CsrfValidationFailed,
 	#[error("service not found")]
@@ -193,6 +195,7 @@ impl ProxyError {
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::FORBIDDEN,
+			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
@@ -232,6 +235,20 @@ impl ProxyError {
 				rb = rb.header(http::x_headers::X_RATELIMIT_RESET, hv)
 			}
 		}
+		
+		// Add WWW-Authenticate header for basic auth failures
+		if let ProxyError::BasicAuthenticationFailure(ref err) = &self {
+			let realm = match err {
+				http::basicauth::BasicAuthError::Missing { realm } => realm,
+				http::basicauth::BasicAuthError::InvalidCredentials { realm } => realm,
+				_ => "Restricted", // Fallback for file errors
+			};
+			let auth_header = format!("Basic realm=\"{}\"", realm);
+			if let Ok(hv) = HeaderValue::try_from(auth_header) {
+				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
+			}
+		}
+		
 		rb.body(http::Body::from(msg)).unwrap()
 	}
 }

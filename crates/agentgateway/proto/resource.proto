@@ -436,6 +436,28 @@ message TrafficPolicySpec {
     }
   }
 
+  // Basic authentication configuration using htpasswd file
+  message BasicAuthentication {
+    // Validation mode for basic authentication
+    enum Mode {
+      // Requires valid credentials
+      STRICT = 0;
+      // If credentials exist, validate them (default)
+      OPTIONAL = 1;
+      // Requests are never rejected (useful for logging)
+      PERMISSIVE = 2;
+    }
+
+    // Htpasswd file content
+    string htpasswd_content = 1;
+    
+    // Realm name for WWW-Authenticate header
+    string realm = 2;
+    
+    // How the basic authentication should behave
+    Mode mode = 3;
+  }
+
   message TransformationPolicy {
     message Transform {
       repeated HeaderTransformation set = 1;
@@ -496,6 +518,7 @@ message TrafficPolicySpec {
     RequestMirror request_mirror = 16;
     DirectResponse direct_response = 17;
     CORS cors = 18;
+    BasicAuthentication basic_auth = 19;
   }
 }
 

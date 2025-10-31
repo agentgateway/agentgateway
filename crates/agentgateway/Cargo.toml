@@ -56,6 +56,7 @@ headers.workspace = true
 heck.workspace = true
 hex.workspace = true
 hickory-resolver.workspace = true
+htpasswd-verify.workspace = true
 http-body-util.workspace = true
 http-body.workspace = true
 http-serde.workspace = true
