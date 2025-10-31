@@ -600,6 +600,8 @@ export const populateFormFromBackend = (
     aiHostAddress: backend.ai?.hostOverride?.Address || "",
     aiHostHostname: backend.ai?.hostOverride?.Hostname?.[0] || "",
     aiHostPort: String(backend.ai?.hostOverride?.Hostname?.[1] || ""),
+    aiHost: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.host || "" : "",
+    aiApiVersion: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.apiVersion || "" : "",
   };
 };
 
