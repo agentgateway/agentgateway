@@ -1122,7 +1122,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					htpasswd_file: std::path::PathBuf::from(""), // Proto doesn't store file path
 					realm: ba.realm.clone(),
 					mode,
-					htpasswd: Some(htpasswd),
+					htpasswd,
 				})
 			},
 			None => return Err(ProtoError::MissingRequiredField),

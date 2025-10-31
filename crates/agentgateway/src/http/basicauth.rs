@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use axum_core::RequestExt;
@@ -20,10 +19,10 @@ mod tests;
 #[derive(thiserror::Error, Debug)]
 pub enum BasicAuthError {
 	#[error("no basic authentication credentials found")]
-	Missing,
+	Missing { realm: String },
 	
 	#[error("invalid credentials")]
-	InvalidCredentials,
+	InvalidCredentials { realm: String },
 	
 	#[error("failed to load htpasswd file: {0}")]
 	FileLoadError(String),
@@ -63,7 +62,7 @@ pub struct BasicAuthentication {
 	
 	/// Cached htpasswd data
 	#[serde(skip)]
-	pub htpasswd: Option<Htpasswd>,
+	pub htpasswd: Htpasswd,
 }
 
 fn default_realm() -> String {
@@ -82,26 +81,12 @@ impl BasicAuthentication {
 			htpasswd_file,
 			realm: realm.unwrap_or_else(default_realm),
 			mode,
-			htpasswd: Some(htpasswd),
+			htpasswd,
 		})
 	}
 	
-	/// Load htpasswd from file if not already loaded
-	fn ensure_loaded(&mut self) -> Result<(), BasicAuthError> {
-		if self.htpasswd.is_none() {
-			let content = std::fs::read_to_string(&self.htpasswd_file)
-				.map_err(|e| BasicAuthError::FileLoadError(e.to_string()))?;
-			self.htpasswd = Some(Htpasswd::new(&content));
-		}
-		Ok(())
-	}
-	
 	/// Apply basic authentication to a request
-	pub async fn apply(&mut self, _log: &mut RequestLog, req: &mut Request) -> Result<PolicyResponse, ProxyError> {
-		// Ensure htpasswd is loaded
-		self.ensure_loaded()
-			.map_err(|e| ProxyError::BasicAuthenticationFailure(e))?;
-		
+	pub async fn apply(&self, _log: &mut RequestLog, req: &mut Request) -> Result<PolicyResponse, ProxyError> {
 		// Extract Basic authorization header
 		let Ok(TypedHeader(Authorization(basic))) = req
 			.extract_parts::<TypedHeader<Authorization<Basic>>>()
@@ -109,7 +94,9 @@ impl BasicAuthentication {
 		else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
-				return Err(ProxyError::BasicAuthenticationFailure(BasicAuthError::Missing));
+				return Err(ProxyError::BasicAuthenticationFailure(BasicAuthError::Missing { 
+					realm: self.realm.clone()
+				}));
 			}
 			// Otherwise without credentials, don't attempt to authenticate
 			return Ok(PolicyResponse::default());
@@ -119,8 +106,7 @@ impl BasicAuthentication {
 		let password = basic.password();
 		
 		// Verify credentials
-		let htpasswd = self.htpasswd.as_ref().unwrap();
-		let valid = htpasswd.check(username, password);
+		let valid = self.htpasswd.check(username, password);
 		
 		if valid {
 			// Authentication successful
@@ -131,7 +117,9 @@ impl BasicAuthentication {
 				debug!("basic auth verification failed, continue due to permissive mode");
 				return Ok(PolicyResponse::default());
 			}
-			Err(ProxyError::BasicAuthenticationFailure(BasicAuthError::InvalidCredentials))
+			Err(ProxyError::BasicAuthenticationFailure(BasicAuthError::InvalidCredentials {
+				realm: self.realm.clone()
+			}))
 		}
 	}
 	
@@ -143,11 +131,16 @@ impl BasicAuthentication {
 
 impl Clone for BasicAuthentication {
 	fn clone(&self) -> Self {
+		// Reload htpasswd from file since Htpasswd doesn't implement Clone
+		let content = std::fs::read_to_string(&self.htpasswd_file)
+			.expect("htpasswd file should be readable");
+		let htpasswd = Htpasswd::new(&content);
+		
 		Self {
 			htpasswd_file: self.htpasswd_file.clone(),
 			realm: self.realm.clone(),
 			mode: self.mode,
-			htpasswd: None, // Don't clone the parsed htpasswd, will be loaded on demand
+			htpasswd,
 		}
 	}
 }

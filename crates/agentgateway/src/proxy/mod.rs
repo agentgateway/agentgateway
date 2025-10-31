@@ -237,9 +237,16 @@ impl ProxyError {
 		}
 		
 		// Add WWW-Authenticate header for basic auth failures
-		if let ProxyError::BasicAuthenticationFailure(_) = &self {
-			// Use a default realm - the actual realm should be set by the policy response
-			rb = rb.header(hyper::header::WWW_AUTHENTICATE, "Basic realm=\"Restricted\"");
+		if let ProxyError::BasicAuthenticationFailure(ref err) = &self {
+			let realm = match err {
+				http::basicauth::BasicAuthError::Missing { realm } => realm,
+				http::basicauth::BasicAuthError::InvalidCredentials { realm } => realm,
+				_ => "Restricted", // Fallback for file errors
+			};
+			let auth_header = format!("Basic realm=\"{}\"", realm);
+			if let Ok(hv) = HeaderValue::try_from(auth_header) {
+				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
+			}
 		}
 		
 		rb.body(http::Body::from(msg)).unwrap()

@@ -168,6 +168,5 @@ fn test_clone() {
 	assert_eq!(auth.htpasswd_file, cloned.htpasswd_file);
 	assert_eq!(auth.realm, cloned.realm);
 	assert_eq!(auth.mode, cloned.mode);
-	// htpasswd should not be cloned
-	assert!(cloned.htpasswd.is_none());
+	// htpasswd should be reloaded in clone
 }

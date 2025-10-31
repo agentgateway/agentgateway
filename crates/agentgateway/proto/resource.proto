@@ -440,9 +440,9 @@ message TrafficPolicySpec {
   message BasicAuthentication {
     // Validation mode for basic authentication
     enum Mode {
-      // Default mode - requires valid credentials
+      // Requires valid credentials
       STRICT = 0;
-      // If credentials exist, validate them
+      // If credentials exist, validate them (default)
       OPTIONAL = 1;
       // Requests are never rejected (useful for logging)
       PERMISSIVE = 2;

@@ -74,7 +74,7 @@ async fn apply_request_policies(
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
-	if let Some(mut b) = policies.basic_auth.clone() {
+	if let Some(b) = &policies.basic_auth {
 		b.apply(log, req).await?;
 	}
 	if let Some(x) = &policies.ext_authz {
