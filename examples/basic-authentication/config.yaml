@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=../../schema/local.json
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        basicAuth:
+          htpasswdFile: ./examples/basic-authentication/.htpasswd
+          realm: "Protected Area"
+        cors:
+          allowOrigins:
+          - "*"
+          allowHeaders:
+          - "*"
+      backends:
+      - http:
+          hostname: httpbin.org
+          port: 80
