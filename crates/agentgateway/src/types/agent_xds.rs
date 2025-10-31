@@ -1110,10 +1110,18 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
 			Some(tps::Kind::BasicAuth(ba)) => {
+				let mode = match tps::basic_authentication::Mode::try_from(ba.mode)
+					.map_err(|_| ProtoError::EnumParse("invalid Basic Auth mode".to_string()))?
+				{
+					tps::basic_authentication::Mode::Strict => http::basicauth::Mode::Strict,
+					tps::basic_authentication::Mode::Optional => http::basicauth::Mode::Optional,
+					tps::basic_authentication::Mode::Permissive => http::basicauth::Mode::Permissive,
+				};
 				let htpasswd = htpasswd_verify::Htpasswd::new(&ba.htpasswd_content);
 				TrafficPolicy::BasicAuth(http::basicauth::BasicAuthentication {
 					htpasswd_file: std::path::PathBuf::from(""), // Proto doesn't store file path
 					realm: ba.realm.clone(),
+					mode,
 					htpasswd: Some(htpasswd),
 				})
 			},

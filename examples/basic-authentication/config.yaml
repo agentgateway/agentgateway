@@ -7,6 +7,7 @@ binds:
         basicAuth:
           htpasswdFile: ./examples/basic-authentication/.htpasswd
           realm: "Protected Area"
+          mode: optional  # strict, optional (default), or permissive
         cors:
           allowOrigins:
           - "*"

@@ -16,10 +16,11 @@ fn create_test_htpasswd() -> NamedTempFile {
 #[test]
 fn test_basic_auth_creation() {
 	let file = create_test_htpasswd();
-	let auth = BasicAuthentication::new(file.path().to_path_buf(), None);
+	let auth = BasicAuthentication::new(file.path().to_path_buf(), None, Mode::Optional);
 	assert!(auth.is_ok());
 	let auth = auth.unwrap();
 	assert_eq!(auth.realm, "Restricted");
+	assert_eq!(auth.mode, Mode::Optional);
 }
 
 #[test]
@@ -28,10 +29,12 @@ fn test_basic_auth_custom_realm() {
 	let auth = BasicAuthentication::new(
 		file.path().to_path_buf(),
 		Some("Custom Realm".to_string()),
+		Mode::Strict,
 	);
 	assert!(auth.is_ok());
 	let auth = auth.unwrap();
 	assert_eq!(auth.realm, "Custom Realm");
+	assert_eq!(auth.mode, Mode::Strict);
 }
 
 #[test]
@@ -39,6 +42,7 @@ fn test_basic_auth_nonexistent_file() {
 	let auth = BasicAuthentication::new(
 		std::path::PathBuf::from("/nonexistent/file"),
 		None,
+		Mode::Optional,
 	);
 	assert!(auth.is_err());
 	assert!(matches!(auth.unwrap_err(), BasicAuthError::FileLoadError(_)));
@@ -47,7 +51,7 @@ fn test_basic_auth_nonexistent_file() {
 #[tokio::test]
 async fn test_valid_credentials() {
 	let file = create_test_htpasswd();
-	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None).unwrap();
+	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None, Mode::Optional).unwrap();
 	
 	// Create a mock request with valid credentials
 	let mut req = http::Request::builder()
@@ -65,9 +69,9 @@ async fn test_valid_credentials() {
 }
 
 #[tokio::test]
-async fn test_invalid_credentials() {
+async fn test_invalid_credentials_strict_mode() {
 	let file = create_test_htpasswd();
-	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None).unwrap();
+	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None, Mode::Strict).unwrap();
 	
 	// Create a mock request with invalid credentials
 	let mut req = http::Request::builder()
@@ -85,9 +89,30 @@ async fn test_invalid_credentials() {
 }
 
 #[tokio::test]
-async fn test_missing_credentials() {
+async fn test_invalid_credentials_permissive_mode() {
 	let file = create_test_htpasswd();
-	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None).unwrap();
+	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None, Mode::Permissive).unwrap();
+	
+	// Create a mock request with invalid credentials
+	let mut req = http::Request::builder()
+		.uri("http://example.com")
+		.header(
+			"Authorization",
+			"Basic dGVzdHVzZXI6d3JvbmdwYXNz", // testuser:wrongpass base64 encoded
+		)
+		.body(axum::body::Body::empty())
+		.unwrap();
+	
+	let mut log = crate::telemetry::log::RequestLog::default();
+	let result = auth.apply(&mut log, &mut req).await;
+	// Should succeed in permissive mode
+	assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_missing_credentials_strict_mode() {
+	let file = create_test_htpasswd();
+	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None, Mode::Strict).unwrap();
 	
 	// Create a mock request without credentials
 	let mut req = http::Request::builder()
@@ -100,14 +125,49 @@ async fn test_missing_credentials() {
 	assert!(result.is_err());
 }
 
+#[tokio::test]
+async fn test_missing_credentials_optional_mode() {
+	let file = create_test_htpasswd();
+	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None, Mode::Optional).unwrap();
+	
+	// Create a mock request without credentials
+	let mut req = http::Request::builder()
+		.uri("http://example.com")
+		.body(axum::body::Body::empty())
+		.unwrap();
+	
+	let mut log = crate::telemetry::log::RequestLog::default();
+	let result = auth.apply(&mut log, &mut req).await;
+	// Should succeed in optional mode when no credentials provided
+	assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_missing_credentials_permissive_mode() {
+	let file = create_test_htpasswd();
+	let mut auth = BasicAuthentication::new(file.path().to_path_buf(), None, Mode::Permissive).unwrap();
+	
+	// Create a mock request without credentials
+	let mut req = http::Request::builder()
+		.uri("http://example.com")
+		.body(axum::body::Body::empty())
+		.unwrap();
+	
+	let mut log = crate::telemetry::log::RequestLog::default();
+	let result = auth.apply(&mut log, &mut req).await;
+	// Should succeed in permissive mode
+	assert!(result.is_ok());
+}
+
 #[test]
 fn test_clone() {
 	let file = create_test_htpasswd();
-	let auth = BasicAuthentication::new(file.path().to_path_buf(), None).unwrap();
+	let auth = BasicAuthentication::new(file.path().to_path_buf(), None, Mode::Strict).unwrap();
 	let cloned = auth.clone();
 	
 	assert_eq!(auth.htpasswd_file, cloned.htpasswd_file);
 	assert_eq!(auth.realm, cloned.realm);
+	assert_eq!(auth.mode, cloned.mode);
 	// htpasswd should not be cloned
 	assert!(cloned.htpasswd.is_none());
 }

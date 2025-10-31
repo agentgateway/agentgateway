@@ -52,6 +52,7 @@ binds:
         basicAuth:
           htpasswdFile: ./examples/basic-authentication/.htpasswd
           realm: "Protected Area"
+          mode: optional  # strict, optional (default), or permissive
       backends:
       - http:
           hostname: httpbin.org
@@ -62,6 +63,10 @@ binds:
 
 - `htpasswdFile`: Path to the htpasswd file containing user credentials (required)
 - `realm`: Realm name shown in the browser authentication dialog (optional, default: "Restricted")
+- `mode`: Validation mode for authentication (optional, default: "optional")
+  - `strict`: Requires valid credentials - rejects requests without credentials or with invalid credentials
+  - `optional`: Validates credentials if provided - allows requests without credentials but validates any provided credentials
+  - `permissive`: Never rejects requests - useful for logging/authorization in later steps, accepts invalid credentials
 
 ## Htpasswd File Format
 
@@ -76,6 +81,66 @@ Supported password hashing algorithms:
 - Apache MD5: `$apr1$` prefix
 - SHA1: `{SHA}` prefix
 - Crypt: traditional Unix crypt
+
+## Authentication Modes
+
+Basic authentication supports three validation modes similar to JWT authentication:
+
+### Strict Mode
+Requires valid credentials for all requests. This is the most secure mode.
+
+```yaml
+basicAuth:
+  htpasswdFile: ./.htpasswd
+  mode: strict
+```
+
+**Behavior:**
+- No credentials → 401 Unauthorized
+- Invalid credentials → 401 Unauthorized  
+- Valid credentials → Request proceeds
+
+**Use cases:**
+- Protecting sensitive endpoints
+- APIs requiring authentication for all requests
+
+### Optional Mode (Default)
+Validates credentials if provided, but allows requests without credentials.
+
+```yaml
+basicAuth:
+  htpasswdFile: ./.htpasswd
+  mode: optional  # or omit mode field
+```
+
+**Behavior:**
+- No credentials → Request proceeds
+- Invalid credentials → 401 Unauthorized
+- Valid credentials → Request proceeds
+
+**Use cases:**
+- Mixed public/private content
+- APIs with optional authentication
+- Gradual authentication rollout
+
+### Permissive Mode
+Never rejects requests. Useful for logging or authorization in later policy steps.
+
+```yaml
+basicAuth:
+  htpasswdFile: ./.htpasswd
+  mode: permissive
+```
+
+**Behavior:**
+- No credentials → Request proceeds
+- Invalid credentials → Request proceeds (with warning log)
+- Valid credentials → Request proceeds
+
+**Use cases:**
+- Capturing user information for logging
+- Using credentials in authorization rules
+- A/B testing authentication flows
 
 ## Security Notes
 

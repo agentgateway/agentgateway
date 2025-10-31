@@ -32,6 +32,22 @@ pub enum BasicAuthError {
 	ParseError(String),
 }
 
+/// Validation mode for basic authentication
+#[apply(schema_ser!)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Mode {
+	/// A valid username/password must be present.
+	Strict,
+	/// If credentials exist, validate them.
+	/// This is the default option.
+	/// Warning: this allows requests without credentials!
+	#[default]
+	Optional,
+	/// Requests are never rejected. This is useful for usage in later steps (authorization, logging, etc).
+	/// Warning: this allows requests without credentials and accepts invalid credentials!
+	Permissive,
+}
+
 #[apply(schema_ser!)]
 pub struct BasicAuthentication {
 	/// Path to .htpasswd file containing user credentials
@@ -40,6 +56,10 @@ pub struct BasicAuthentication {
 	/// Realm name for the WWW-Authenticate header
 	#[serde(default = "default_realm")]
 	pub realm: String,
+	
+	/// Validation mode for basic authentication
+	#[serde(default)]
+	pub mode: Mode,
 	
 	/// Cached htpasswd data
 	#[serde(skip)]
@@ -52,7 +72,7 @@ fn default_realm() -> String {
 
 impl BasicAuthentication {
 	/// Create a new BasicAuthentication from a file path
-	pub fn new(htpasswd_file: PathBuf, realm: Option<String>) -> Result<Self, BasicAuthError> {
+	pub fn new(htpasswd_file: PathBuf, realm: Option<String>, mode: Mode) -> Result<Self, BasicAuthError> {
 		let content = std::fs::read_to_string(&htpasswd_file)
 			.map_err(|e| BasicAuthError::FileLoadError(e.to_string()))?;
 		
@@ -61,6 +81,7 @@ impl BasicAuthentication {
 		Ok(Self {
 			htpasswd_file,
 			realm: realm.unwrap_or_else(default_realm),
+			mode,
 			htpasswd: Some(htpasswd),
 		})
 	}
@@ -86,8 +107,12 @@ impl BasicAuthentication {
 			.extract_parts::<TypedHeader<Authorization<Basic>>>()
 			.await
 		else {
-			// No credentials provided, return 401 with WWW-Authenticate header
-			return Err(ProxyError::BasicAuthenticationFailure(BasicAuthError::Missing));
+			// In strict mode, we require credentials
+			if self.mode == Mode::Strict {
+				return Err(ProxyError::BasicAuthenticationFailure(BasicAuthError::Missing));
+			}
+			// Otherwise without credentials, don't attempt to authenticate
+			return Ok(PolicyResponse::default());
 		};
 		
 		let username = basic.username();
@@ -95,11 +120,17 @@ impl BasicAuthentication {
 		
 		// Verify credentials
 		let htpasswd = self.htpasswd.as_ref().unwrap();
-		if htpasswd.check(username, password) {
+		let valid = htpasswd.check(username, password);
+		
+		if valid {
 			// Authentication successful
 			Ok(PolicyResponse::default())
 		} else {
 			// Invalid credentials
+			if self.mode == Mode::Permissive {
+				debug!("basic auth verification failed, continue due to permissive mode");
+				return Ok(PolicyResponse::default());
+			}
 			Err(ProxyError::BasicAuthenticationFailure(BasicAuthError::InvalidCredentials))
 		}
 	}
@@ -115,6 +146,7 @@ impl Clone for BasicAuthentication {
 		Self {
 			htpasswd_file: self.htpasswd_file.clone(),
 			realm: self.realm.clone(),
+			mode: self.mode,
 			htpasswd: None, // Don't clone the parsed htpasswd, will be loaded on demand
 		}
 	}
@@ -125,6 +157,7 @@ impl std::fmt::Debug for BasicAuthentication {
 		f.debug_struct("BasicAuthentication")
 			.field("htpasswd_file", &self.htpasswd_file)
 			.field("realm", &self.realm)
+			.field("mode", &self.mode)
 			.finish()
 	}
 }
@@ -137,10 +170,14 @@ pub struct LocalBasicAuth {
 	/// Realm name for the WWW-Authenticate header
 	#[serde(default)]
 	pub realm: Option<String>,
+	
+	/// Validation mode for basic authentication
+	#[serde(default)]
+	pub mode: Mode,
 }
 
 impl LocalBasicAuth {
 	pub fn try_into(self) -> Result<BasicAuthentication, BasicAuthError> {
-		BasicAuthentication::new(self.htpasswd_file, self.realm)
+		BasicAuthentication::new(self.htpasswd_file, self.realm, self.mode)
 	}
 }

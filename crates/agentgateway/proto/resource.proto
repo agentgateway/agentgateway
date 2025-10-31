@@ -438,11 +438,24 @@ message TrafficPolicySpec {
 
   // Basic authentication configuration using htpasswd file
   message BasicAuthentication {
+    // Validation mode for basic authentication
+    enum Mode {
+      // Default mode - requires valid credentials
+      STRICT = 0;
+      // If credentials exist, validate them
+      OPTIONAL = 1;
+      // Requests are never rejected (useful for logging)
+      PERMISSIVE = 2;
+    }
+
     // Htpasswd file content
     string htpasswd_content = 1;
     
     // Realm name for WWW-Authenticate header
     string realm = 2;
+    
+    // How the basic authentication should behave
+    Mode mode = 3;
   }
 
   message TransformationPolicy {
