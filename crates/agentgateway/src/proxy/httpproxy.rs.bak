@@ -883,11 +883,7 @@ async fn make_backend_call(
 			BackendCall {
 				target,
 				backend_policies: effective_policies,
-				http_version_override: match provider.http_version {
-					Some(crate::llm::HttpVersionPref::Http1_1) => Some(::http::Version::HTTP_11),
-					Some(crate::llm::HttpVersionPref::Http2) => Some(::http::Version::HTTP_2),
-					None => None,
-				},
+				http_version_override: Some(::http::Version::HTTP_11),
 				transport_override: None,
 			}
 		},
