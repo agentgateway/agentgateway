@@ -99,16 +99,14 @@ pub fn select_best_route(
 			rule_name: None,
 			hostnames: vec![],
 			matches: vec![],
-			filters: vec![],
 			inline_policies: vec![],
-			policies: None,
 			backends: vec![RouteBackendReference {
 				weight: 1,
 				backend: BackendReference::Service {
 					name: svc.namespaced_hostname(),
 					port: dst.port(), // TODO: get from req
 				},
-				filters: Vec::new(),
+				inline_policies: Vec::new(),
 			}],
 		};
 		// If there is no route, use a default one

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, httpproxy};
+use crate::store::BackendPolicies;
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
@@ -94,20 +95,22 @@ impl TCPProxy {
 		let selected_backend =
 			select_tcp_backend(selected_route.as_ref()).ok_or(ProxyError::NoValidBackends)?;
 		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
+		let backend_policies = get_backend_policies(&self.inputs, &selected_backend.backend);
 
-		let service = match &selected_backend.backend {
-			SimpleBackend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
-			_ => None,
-		};
 		let backend_call = match &selected_backend.backend {
-			SimpleBackend::Service(svc, port) => {
-				httpproxy::build_service_call(inputs.as_ref(), None, &mut Some(log), None, svc, port)?
-			},
+			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
+				inputs.as_ref(),
+				backend_policies,
+				&mut Some(log),
+				None,
+				svc,
+				port,
+			)?,
 			SimpleBackend::Opaque(_, target) => BackendCall {
 				target: target.clone(),
 				http_version_override: None,
 				transport_override: None,
-				default_policies: None,
+				backend_policies,
 			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
@@ -119,15 +122,10 @@ impl TCPProxy {
 		log.endpoint = Some(backend_call.target.clone());
 		log.backend_info = Some(bi);
 
-		let policies =
-			inputs
-				.stores
-				.read_binds()
-				.backend_policies(selected_backend.backend.name(), service, None);
 		let transport = crate::proxy::httpproxy::build_transport(
 			&inputs,
 			&backend_call,
-			policies.backend_tls.clone(),
+			backend_call.backend_policies.backend_tls.clone(),
 		)
 		.await?;
 
@@ -194,4 +192,16 @@ fn resolve_backend(
 		weight: b.weight,
 		backend,
 	})
+}
+
+pub fn get_backend_policies(inputs: &ProxyInputs, backend: &SimpleBackend) -> BackendPolicies {
+	let service = match backend {
+		SimpleBackend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
+		_ => None,
+	};
+
+	inputs
+		.stores
+		.read_binds()
+		.backend_policies(Some(backend.name()), service, None)
 }

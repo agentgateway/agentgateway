@@ -3,7 +3,9 @@ use ::http::response;
 use ::http::uri::InvalidUri;
 
 use crate::http::uri::Scheme;
-use crate::http::{HeaderMap, HeaderName, HeaderValue, Request, Response, StatusCode, Uri};
+use crate::http::{
+	HeaderMap, HeaderName, HeaderValue, PolicyResponse, Request, Response, StatusCode, Uri,
+};
 use crate::types::agent::{HostRedirect, PathMatch, PathRedirect, SimpleBackendReference};
 use crate::*;
 
@@ -62,7 +64,7 @@ pub struct RequestRedirect {
 }
 
 impl RequestRedirect {
-	pub fn apply(&self, req: &mut Request, path_match: &PathMatch) -> Result<Response, Error> {
+	pub fn apply(&self, req: &mut Request, path_match: &PathMatch) -> Result<PolicyResponse, Error> {
 		let RequestRedirect {
 			scheme,
 			authority,
@@ -81,12 +83,12 @@ impl RequestRedirect {
 			.authority(authority)
 			.path_and_query(path_and_query)
 			.build()?;
-		Ok(
-			::http::Response::builder()
-				.status(status.unwrap_or(StatusCode::FOUND))
-				.header(http::header::LOCATION, new.to_string())
-				.body(http::Body::empty())?,
-		)
+		let dr = ::http::Response::builder()
+			.status(status.unwrap_or(StatusCode::FOUND))
+			.header(http::header::LOCATION, new.to_string())
+			.body(http::Body::empty())?;
+
+		Ok(PolicyResponse::default().with_response(dr))
 	}
 }
 

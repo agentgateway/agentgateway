@@ -27,8 +27,8 @@ use crate::http::{
 };
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
+use crate::types::frontend;
 use crate::*;
-use std::collections::HashMap as StdHashMap;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -150,13 +150,9 @@ pub struct Route {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub matches: Vec<RouteMatch>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub filters: Vec<RouteFilter>,
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub backends: Vec<RouteBackendReference>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub policies: Option<TrafficPolicy>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub inline_policies: Vec<Policy>,
+	pub inline_policies: Vec<TrafficPolicy>,
 }
 
 pub type RouteKey = Strng;
@@ -263,26 +259,6 @@ pub enum PathMatch {
 	),
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum RouteFilter {
-	RequestHeaderModifier(filters::HeaderModifier),
-	ResponseHeaderModifier(filters::HeaderModifier),
-	RequestRedirect(filters::RequestRedirect),
-	UrlRewrite(filters::UrlRewrite),
-	RequestMirror(filters::RequestMirror),
-	DirectResponse(filters::DirectResponse),
-	#[serde(rename = "cors")]
-	CORS(http::cors::Cors),
-}
-
-#[apply(schema!)]
-#[derive(Default, Eq, PartialEq)]
-pub struct TrafficPolicy {
-	pub timeout: timeout::Policy,
-	pub retry: Option<retry::Policy>,
-}
-
 #[apply(schema!)]
 #[derive(Eq, PartialEq)]
 pub enum HostRedirect {
@@ -307,7 +283,7 @@ pub struct RouteBackendReference {
 	#[serde(flatten)]
 	pub backend: BackendReference,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub filters: Vec<RouteFilter>,
+	pub inline_policies: Vec<BackendPolicy>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -318,7 +294,7 @@ pub struct RouteBackend {
 	#[serde(flatten)]
 	pub backend: Backend,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub filters: Vec<RouteFilter>,
+	pub inline_policies: Vec<BackendPolicy>,
 }
 
 #[allow(unused)]
@@ -1011,15 +987,82 @@ pub type PolicyName = Strng;
 pub struct TargetedPolicy {
 	pub name: PolicyName,
 	pub target: PolicyTarget,
-	pub policy: Policy,
+	pub policy: PolicyType,
+}
+
+impl From<BackendPolicy> for PolicyType {
+	fn from(value: BackendPolicy) -> Self {
+		Self::Backend(value)
+	}
+}
+
+impl From<FrontendPolicy> for PolicyType {
+	fn from(value: FrontendPolicy) -> Self {
+		Self::Frontend(value)
+	}
+}
+
+impl From<TrafficPolicy> for PolicyType {
+	fn from(value: TrafficPolicy) -> Self {
+		// Default to route for simplicity.
+		(value, PolicyPhase::Route).into()
+	}
+}
+impl From<(TrafficPolicy, PolicyPhase)> for PolicyType {
+	fn from((p, phase): (TrafficPolicy, PolicyPhase)) -> Self {
+		Self::Traffic(PhasedTrafficPolicy { phase, policy: p })
+	}
+}
+
+#[apply(schema!)]
+#[derive(Copy, Default, Eq, PartialEq)]
+pub enum PolicyPhase {
+	#[default]
+	Route,
+	Gateway,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GatewayTargetedPolicy {
-	pub name: PolicyName,
-	pub target: PolicyTarget,
-	pub policy: GatewayPolicy,
+pub struct PhasedTrafficPolicy {
+	pub phase: PolicyPhase,
+	#[serde(flatten)]
+	pub policy: TrafficPolicy,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PolicyType {
+	Frontend(FrontendPolicy),
+	Traffic(PhasedTrafficPolicy),
+	Backend(BackendPolicy),
+}
+
+impl PolicyType {
+	pub fn as_traffic_gateway_phase(&self) -> Option<&TrafficPolicy> {
+		match self {
+			PolicyType::Traffic(t) if t.phase == PolicyPhase::Gateway => Some(&t.policy),
+			_ => None,
+		}
+	}
+	pub fn as_traffic_route_phase(&self) -> Option<&TrafficPolicy> {
+		match self {
+			PolicyType::Traffic(t) if t.phase == PolicyPhase::Route => Some(&t.policy),
+			_ => None,
+		}
+	}
+	pub fn as_backend(&self) -> Option<&BackendPolicy> {
+		match self {
+			PolicyType::Backend(t) => Some(t),
+			_ => None,
+		}
+	}
+	pub fn as_frontend(&self) -> Option<&FrontendPolicy> {
+		match self {
+			PolicyType::Frontend(t) => Some(t),
+			_ => None,
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -1039,61 +1082,56 @@ pub enum PolicyTarget {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum GatewayPolicy {
-	JwtAuth(crate::http::jwt::Jwt),
-	ExtAuthz(ext_authz::ExtAuthz),
-	Transformation(crate::http::transformation_cel::Transformation),
-	ExtProc(ext_proc::ExtProc),
-	Logging(LoggingPolicy),
+pub enum FrontendPolicy {
+	HTTP(frontend::HTTP),
+	TLS(frontend::TLS),
+	TCP(frontend::TCP),
+	AccessLog(frontend::LoggingPolicy),
+	Tracing(()),
 }
 
-impl TryFrom<Policy> for GatewayPolicy {
-	type Error = anyhow::Error;
-	fn try_from(value: Policy) -> Result<Self, Self::Error> {
-		match value {
-			Policy::JwtAuth(p) => Ok(GatewayPolicy::JwtAuth(p)),
-			Policy::Transformation(p) => Ok(GatewayPolicy::Transformation(p)),
-			Policy::ExtProc(p) => Ok(GatewayPolicy::ExtProc(p)),
-			_ => anyhow::bail!("invalid gateway_policy type"),
-		}
-	}
-}
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Policy {
-	// Supported targets: Backend, only when Backend type is MCP
-	McpAuthorization(McpAuthorization),
-	// Supported targets: Backend, only when Backend type is MCP
-	McpAuthentication(McpAuthentication),
-	// Support targets: Backend; single policy allowed
-	A2a(A2aPolicy),
-	// Supported targets: Backend; single policy allowed
-	#[serde(rename = "backendTLS")]
-	BackendTLS(http::backendtls::BackendTLS),
-	// Supported targets: Backend; single policy allowed
-	BackendAuth(BackendAuth),
-	// Supported targets: Backend; single policy allowed
-	InferenceRouting(ext_proc::InferenceRouting),
-
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
+pub enum TrafficPolicy {
+	Timeout(timeout::Policy),
+	Retry(retry::Policy),
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	Authorization(Authorization),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	LocalRateLimit(Vec<crate::http::localratelimit::RateLimit>),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	RemoteRateLimit(remoteratelimit::RemoteRateLimit),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	ExtAuthz(ext_authz::ExtAuthz),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	ExtProc(ext_proc::ExtProc),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	JwtAuth(crate::http::jwt::Jwt),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	Transformation(crate::http::transformation_cel::Transformation),
-	// Supported targets: Gateway < Route < RouteRule; single policy allowed
 	Csrf(crate::http::csrf::Csrf),
+
+	RequestHeaderModifier(filters::HeaderModifier),
+	ResponseHeaderModifier(filters::HeaderModifier),
+	RequestRedirect(filters::RequestRedirect),
+	UrlRewrite(filters::UrlRewrite),
+	RequestMirror(Vec<filters::RequestMirror>),
+	DirectResponse(filters::DirectResponse),
+	#[serde(rename = "cors")]
+	CORS(http::cors::Cors),
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BackendPolicy {
+	McpAuthorization(McpAuthorization),
+	McpAuthentication(McpAuthentication),
+	A2a(A2aPolicy),
+	#[serde(rename = "backendTLS")]
+	BackendTLS(http::backendtls::BackendTLS),
+	BackendAuth(BackendAuth),
+	InferenceRouting(ext_proc::InferenceRouting),
+	AI(Arc<llm::Policy>),
+
+	RequestHeaderModifier(filters::HeaderModifier),
+	ResponseHeaderModifier(filters::HeaderModifier),
+	RequestRedirect(filters::RequestRedirect),
+	RequestMirror(Vec<filters::RequestMirror>),
 }
 
 #[apply(schema!)]
@@ -1101,17 +1139,6 @@ pub struct A2aPolicy {}
 
 #[apply(schema!)]
 pub struct Authorization(pub RuleSet);
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LoggingPolicy {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub filter: Option<String>,
-	#[serde(default, skip_serializing_if = "StdHashMap::is_empty")]
-	pub fields_add: StdHashMap<String, String>,
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub fields_remove: Vec<String>,
-}
 
 // Do not use schema! as it will reject the `extra` field
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1250,6 +1277,50 @@ impl Display for Target {
 			Target::Hostname(hostname, port) => format!("{hostname}:{port}"),
 		};
 		write!(f, "{str}")
+	}
+}
+
+#[apply(schema!)]
+pub struct KeepaliveConfig {
+	#[serde(default = "defaults::always_true")]
+	pub enabled: bool,
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(default = "defaults::keepalive_time")]
+	pub time: Duration,
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(default = "defaults::keepalive_interval")]
+	pub interval: Duration,
+	#[serde(default = "defaults::keepalive_retries")]
+	pub retries: u32,
+}
+
+impl Default for KeepaliveConfig {
+	fn default() -> Self {
+		KeepaliveConfig {
+			enabled: true,
+			time: defaults::keepalive_time(),
+			interval: defaults::keepalive_interval(),
+			retries: defaults::keepalive_retries(),
+		}
+	}
+}
+
+pub mod defaults {
+	use std::time::Duration;
+
+	pub fn always_true() -> bool {
+		true
+	}
+	pub fn keepalive_retries() -> u32 {
+		9
+	}
+	pub fn keepalive_interval() -> Duration {
+		Duration::from_secs(180)
+	}
+	pub fn keepalive_time() -> Duration {
+		Duration::from_secs(180)
 	}
 }
 

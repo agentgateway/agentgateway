@@ -12,6 +12,7 @@ use crate::telemetry::metrics::{Metrics as TelemetryMetrics, TCPLabels};
 use crate::transport::rewind;
 use crate::transport::rewind::RewindSocket;
 use crate::types::discovery::Identity;
+use crate::types::frontend::TCP;
 use agent_hbone::RWStream;
 use hyper_util::client::legacy::connect::{Connected, Connection};
 use prometheus_client::metrics::counter::Atomic;
@@ -265,6 +266,22 @@ impl Socket {
 			);
 		}
 		Socket::from_tcp(res)
+	}
+
+	pub fn apply_tcp_settings(&mut self, settings: &TCP) {
+		if let SocketType::Tcp(tcp) = &self.inner
+			&& settings.keepalives.enabled
+		{
+			let ka = socket2::TcpKeepalive::new()
+				.with_time(settings.keepalives.time)
+				.with_retries(settings.keepalives.retries)
+				.with_interval(settings.keepalives.interval);
+			tracing::trace!(
+				"set keepalive: {:?}",
+				socket2::SockRef::from(tcp).set_tcp_keepalive(&ka)
+			);
+		}
+		todo!()
 	}
 
 	pub fn counter(&self) -> Option<BytesCounter> {

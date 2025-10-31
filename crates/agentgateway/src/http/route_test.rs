@@ -37,11 +37,9 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener
 		key: name.into(),
 		hostnames: hostnames.into_iter().map(|s| s.into()).collect(),
 		matches,
-		filters: vec![],
 		route_name: Default::default(),
 		rule_name: None,
 		backends: vec![],
-		policies: None,
 		inline_policies: vec![],
 	};
 
@@ -717,11 +715,9 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 					key: name.into(),
 					hostnames: host.into_iter().map(|s| s.into()).collect(),
 					matches,
-					filters: vec![],
 					route_name: Default::default(),
 					rule_name: None,
 					backends: vec![],
-					policies: None,
 					inline_policies: vec![],
 				})
 				.collect(),
