@@ -3342,7 +3342,7 @@
                                             {
                                               "type": "object",
                                               "properties": {
-                                                "azure": {
+                                                "azureOpenAI": {
                                                   "type": "object",
                                                   "properties": {
                                                     "model": {
@@ -3350,13 +3350,23 @@
                                                         "string",
                                                         "null"
                                                       ]
+                                                    },
+                                                    "host": {
+                                                      "type": "string"
+                                                    },
+                                                    "apiVersion": {
+                                                      "type": "string"
                                                     }
                                                   },
-                                                  "additionalProperties": false
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "host",
+                                                    "apiVersion"
+                                                  ]
                                                 }
                                               },
                                               "required": [
-                                                "azure"
+                                                "azureOpenAI"
                                               ],
                                               "additionalProperties": false
                                             }
@@ -4462,7 +4472,7 @@
                                                         {
                                                           "type": "object",
                                                           "properties": {
-                                                            "azure": {
+                                                            "azureOpenAI": {
                                                               "type": "object",
                                                               "properties": {
                                                                 "model": {
@@ -4470,13 +4480,23 @@
                                                                     "string",
                                                                     "null"
                                                                   ]
+                                                                },
+                                                                "host": {
+                                                                  "type": "string"
+                                                                },
+                                                                "apiVersion": {
+                                                                  "type": "string"
                                                                 }
                                                               },
-                                                              "additionalProperties": false
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "host",
+                                                                "apiVersion"
+                                                              ]
                                                             }
                                                           },
                                                           "required": [
-                                                            "azure"
+                                                            "azureOpenAI"
                                                           ],
                                                           "additionalProperties": false
                                                         }

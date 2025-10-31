@@ -359,9 +359,11 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 									guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
 								})
 							},
-							Some(proto::agent::ai_backend::provider::Provider::Azure(azure)) => {
-								AIProvider::Azure(llm::azure::Provider {
-									model: azure.model.as_deref().map(strng::new),
+							Some(proto::agent::ai_backend::provider::Provider::Azureopenai(azureopenai)) => {
+								AIProvider::AzureOpenAI(llm::azureopenai::Provider {
+									model: azureopenai.model.as_deref().map(strng::new),
+									host: strng::new(&azureopenai.host),
+									api_version: strng::new(&azureopenai.api_version),
 								})
 							},
 							None => {

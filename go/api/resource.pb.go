@@ -6531,27 +6531,29 @@ func (x *AIBackend_Bedrock) GetGuardrailVersion() *wrappers.StringValue {
 	return nil
 }
 
-type AIBackend_Azure struct {
+type AIBackend_AzureOpenAI struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Model         *wrappers.StringValue  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Host          string                 `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
+	ApiVersion    string                 `protobuf:"bytes,3,opt,name=api_version,json=apiVersion,proto3" json:"api_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *AIBackend_Azure) Reset() {
-	*x = AIBackend_Azure{}
+func (x *AIBackend_AzureOpenAI) Reset() {
+	*x = AIBackend_AzureOpenAI{}
 	mi := &file_resource_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *AIBackend_Azure) String() string {
+func (x *AIBackend_AzureOpenAI) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AIBackend_Azure) ProtoMessage() {}
+func (*AIBackend_AzureOpenAI) ProtoMessage() {}
 
-func (x *AIBackend_Azure) ProtoReflect() protoreflect.Message {
+func (x *AIBackend_AzureOpenAI) ProtoReflect() protoreflect.Message {
 	mi := &file_resource_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -6563,16 +6565,30 @@ func (x *AIBackend_Azure) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AIBackend_Azure.ProtoReflect.Descriptor instead.
-func (*AIBackend_Azure) Descriptor() ([]byte, []int) {
+// Deprecated: Use AIBackend_AzureOpenAI.ProtoReflect.Descriptor instead.
+func (*AIBackend_AzureOpenAI) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{40, 6}
 }
 
-func (x *AIBackend_Azure) GetModel() *wrappers.StringValue {
+func (x *AIBackend_AzureOpenAI) GetModel() *wrappers.StringValue {
 	if x != nil {
 		return x.Model
 	}
 	return nil
+}
+
+func (x *AIBackend_AzureOpenAI) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *AIBackend_AzureOpenAI) GetApiVersion() string {
+	if x != nil {
+		return x.ApiVersion
+	}
+	return ""
 }
 
 type AIBackend_Provider struct {
@@ -6587,7 +6603,7 @@ type AIBackend_Provider struct {
 	//	*AIBackend_Provider_Vertex
 	//	*AIBackend_Provider_Anthropic
 	//	*AIBackend_Provider_Bedrock
-	//	*AIBackend_Provider_Azure
+	//	*AIBackend_Provider_Azureopenai
 	Provider isAIBackend_Provider_Provider `protobuf_oneof:"provider"`
 	// Routes defines how to identify the type of traffic to handle.
 	// The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").
@@ -6701,10 +6717,10 @@ func (x *AIBackend_Provider) GetBedrock() *AIBackend_Bedrock {
 	return nil
 }
 
-func (x *AIBackend_Provider) GetAzure() *AIBackend_Azure {
+func (x *AIBackend_Provider) GetAzureopenai() *AIBackend_AzureOpenAI {
 	if x != nil {
-		if x, ok := x.Provider.(*AIBackend_Provider_Azure); ok {
-			return x.Azure
+		if x, ok := x.Provider.(*AIBackend_Provider_Azureopenai); ok {
+			return x.Azureopenai
 		}
 	}
 	return nil
@@ -6741,8 +6757,8 @@ type AIBackend_Provider_Bedrock struct {
 	Bedrock *AIBackend_Bedrock `protobuf:"bytes,8,opt,name=bedrock,proto3,oneof"`
 }
 
-type AIBackend_Provider_Azure struct {
-	Azure *AIBackend_Azure `protobuf:"bytes,10,opt,name=azure,proto3,oneof"`
+type AIBackend_Provider_Azureopenai struct {
+	Azureopenai *AIBackend_AzureOpenAI `protobuf:"bytes,10,opt,name=azureopenai,proto3,oneof"`
 }
 
 func (*AIBackend_Provider_Openai) isAIBackend_Provider_Provider() {}
@@ -6755,7 +6771,7 @@ func (*AIBackend_Provider_Anthropic) isAIBackend_Provider_Provider() {}
 
 func (*AIBackend_Provider_Bedrock) isAIBackend_Provider_Provider() {}
 
-func (*AIBackend_Provider_Azure) isAIBackend_Provider_Provider() {}
+func (*AIBackend_Provider_Azureopenai) isAIBackend_Provider_Provider() {}
 
 type AIBackend_ProviderGroup struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -7199,7 +7215,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04kind\"7\n" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\x05R\x04port\"\xf4\r\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\"\xc1\x0e\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -7220,9 +7236,12 @@ const file_resource_proto_rawDesc = "" +
 	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x16\n" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x12O\n" +
 	"\x14guardrail_identifier\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\x13guardrailIdentifier\x12I\n" +
-	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersion\x1a;\n" +
-	"\x05Azure\x122\n" +
-	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x1a\xb6\x06\n" +
+	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersion\x1av\n" +
+	"\vAzureOpenAI\x122\n" +
+	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x12\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x12\x1f\n" +
+	"\vapi_version\x18\x03 \x01(\tR\n" +
+	"apiVersion\x1a\xc8\x06\n" +
 	"\bProvider\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12V\n" +
 	"\rhost_override\x18\x02 \x01(\v21.agentgateway.dev.resource.AIBackend.HostOverrideR\fhostOverride\x12A\n" +
@@ -7231,9 +7250,9 @@ const file_resource_proto_rawDesc = "" +
 	"\x06gemini\x18\x05 \x01(\v2+.agentgateway.dev.resource.AIBackend.GeminiH\x00R\x06gemini\x12E\n" +
 	"\x06vertex\x18\x06 \x01(\v2+.agentgateway.dev.resource.AIBackend.VertexH\x00R\x06vertex\x12N\n" +
 	"\tanthropic\x18\a \x01(\v2..agentgateway.dev.resource.AIBackend.AnthropicH\x00R\tanthropic\x12H\n" +
-	"\abedrock\x18\b \x01(\v2,.agentgateway.dev.resource.AIBackend.BedrockH\x00R\abedrock\x12B\n" +
-	"\x05azure\x18\n" +
-	" \x01(\v2*.agentgateway.dev.resource.AIBackend.AzureH\x00R\x05azure\x12Q\n" +
+	"\abedrock\x18\b \x01(\v2,.agentgateway.dev.resource.AIBackend.BedrockH\x00R\abedrock\x12T\n" +
+	"\vazureopenai\x18\n" +
+	" \x01(\v20.agentgateway.dev.resource.AIBackend.AzureOpenAIH\x00R\vazureopenai\x12Q\n" +
 	"\x06routes\x18\t \x03(\v29.agentgateway.dev.resource.AIBackend.Provider.RoutesEntryR\x06routes\x1ai\n" +
 	"\vRoutesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12D\n" +
@@ -7401,7 +7420,7 @@ var file_resource_proto_goTypes = []any{
 	(*AIBackend_Vertex)(nil),                          // 98: agentgateway.dev.resource.AIBackend.Vertex
 	(*AIBackend_Anthropic)(nil),                       // 99: agentgateway.dev.resource.AIBackend.Anthropic
 	(*AIBackend_Bedrock)(nil),                         // 100: agentgateway.dev.resource.AIBackend.Bedrock
-	(*AIBackend_Azure)(nil),                           // 101: agentgateway.dev.resource.AIBackend.Azure
+	(*AIBackend_AzureOpenAI)(nil),                     // 101: agentgateway.dev.resource.AIBackend.AzureOpenAI
 	(*AIBackend_Provider)(nil),                        // 102: agentgateway.dev.resource.AIBackend.Provider
 	(*AIBackend_ProviderGroup)(nil),                   // 103: agentgateway.dev.resource.AIBackend.ProviderGroup
 	nil,                                               // 104: agentgateway.dev.resource.AIBackend.Provider.RoutesEntry
@@ -7547,7 +7566,7 @@ var file_resource_proto_depIdxs = []int32{
 	109, // 132: agentgateway.dev.resource.AIBackend.Bedrock.model:type_name -> google.protobuf.StringValue
 	109, // 133: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_identifier:type_name -> google.protobuf.StringValue
 	109, // 134: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_version:type_name -> google.protobuf.StringValue
-	109, // 135: agentgateway.dev.resource.AIBackend.Azure.model:type_name -> google.protobuf.StringValue
+	109, // 135: agentgateway.dev.resource.AIBackend.AzureOpenAI.model:type_name -> google.protobuf.StringValue
 	95,  // 136: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
 	109, // 137: agentgateway.dev.resource.AIBackend.Provider.path_override:type_name -> google.protobuf.StringValue
 	96,  // 138: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
@@ -7555,7 +7574,7 @@ var file_resource_proto_depIdxs = []int32{
 	98,  // 140: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
 	99,  // 141: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
 	100, // 142: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
-	101, // 143: agentgateway.dev.resource.AIBackend.Provider.azure:type_name -> agentgateway.dev.resource.AIBackend.Azure
+	101, // 143: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
 	104, // 144: agentgateway.dev.resource.AIBackend.Provider.routes:type_name -> agentgateway.dev.resource.AIBackend.Provider.RoutesEntry
 	102, // 145: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
 	9,   // 146: agentgateway.dev.resource.AIBackend.Provider.RoutesEntry.value:type_name -> agentgateway.dev.resource.AIBackend.RouteType
@@ -7684,7 +7703,7 @@ func file_resource_proto_init() {
 		(*AIBackend_Provider_Vertex)(nil),
 		(*AIBackend_Provider_Anthropic)(nil),
 		(*AIBackend_Provider_Bedrock)(nil),
-		(*AIBackend_Provider_Azure)(nil),
+		(*AIBackend_Provider_Azureopenai)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

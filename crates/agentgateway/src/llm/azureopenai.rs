@@ -29,14 +29,14 @@ impl Provider {
 	}
 	pub fn get_path_for_model(&self, model: &str) -> Strng {
 		if self.api_version == "v1" {
-			return strng::format!("/openai/v1/chat/completions");
+			strng::format!("/openai/v1/chat/completions")
 		} else {
 			let model = self.model.as_deref().unwrap_or(model);
-			return strng::format!(
+			strng::format!(
 				"/openai/deployments/{}/chat/completions?api-version={}",
 				model,
 				self.api_version
-			);
+			)
 		}
 	}
 	pub fn get_host(&self) -> Strng {

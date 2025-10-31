@@ -25,7 +25,7 @@ use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::{client, *};
 
 pub mod anthropic;
-pub mod azure;
+pub mod azureopenai;
 pub mod bedrock;
 pub mod gemini;
 pub mod openai;
@@ -124,7 +124,7 @@ pub enum AIProvider {
 	Vertex(vertex::Provider),
 	Anthropic(anthropic::Provider),
 	Bedrock(bedrock::Provider),
-	Azure(azure::Provider),
+	AzureOpenAI(azureopenai::Provider),
 }
 
 trait Provider {
@@ -209,7 +209,7 @@ impl AIProvider {
 			AIProvider::Gemini(_p) => gemini::Provider::NAME,
 			AIProvider::Vertex(_p) => vertex::Provider::NAME,
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
-			AIProvider::Azure(_p) => azure::Provider::NAME,
+			AIProvider::AzureOpenAI(_p) => azureopenai::Provider::NAME,
 		}
 	}
 	pub fn override_model(&self) -> Option<Strng> {
@@ -219,7 +219,7 @@ impl AIProvider {
 			AIProvider::Gemini(p) => p.model.clone(),
 			AIProvider::Vertex(p) => p.model.clone(),
 			AIProvider::Bedrock(p) => p.model.clone(),
-			AIProvider::Azure(p) => p.model.clone(),
+			AIProvider::AzureOpenAI(p) => p.model.clone(),
 		}
 	}
 	pub fn default_connector(&self) -> (Target, BackendPolicies) {
@@ -248,7 +248,7 @@ impl AIProvider {
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
-			AIProvider::Azure(_) => (Target::Hostname(p.get_host(), 443), btls),
+			AIProvider::AzureOpenAI(p) => (Target::Hostname(p.get_host(), 443), btls),
 		}
 	}
 
@@ -332,7 +332,7 @@ impl AIProvider {
 					Ok(())
 				})
 			},
-			AIProvider::Azure(provider) => http::modify_req(req, |req| {
+			AIProvider::AzureOpenAI(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path && let Some(l) = llm_request {
 						let path = provider.get_path_for_model(l.request_model.as_str());
@@ -364,7 +364,7 @@ impl AIProvider {
 					Ok(())
 				})
 			},
-			AIProvider::Azure(_) => {
+			AIProvider::AzureOpenAI(_) => {
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
 						// Move bearer token in azure header
@@ -529,7 +529,7 @@ impl AIProvider {
 			AIProvider::OpenAI(_)
 			| AIProvider::Gemini(_)
 			| AIProvider::Vertex(_)
-			| AIProvider::Azure(_) => req.to_openai()?,
+			| AIProvider::AzureOpenAI(_) => req.to_openai()?,
 			AIProvider::Anthropic(_) => req.to_anthropic()?,
 			AIProvider::Bedrock(p) => req.to_bedrock(p, Some(&parts.headers))?,
 		};
@@ -657,7 +657,9 @@ impl AIProvider {
 				AIProvider::OpenAI(_)
 				| AIProvider::Gemini(_)
 				| AIProvider::Vertex(_)
-				| AIProvider::Azure(_) => universal::passthrough::process_response(bytes, req.input_format)?,
+				| AIProvider::AzureOpenAI(_) => {
+					universal::passthrough::process_response(bytes, req.input_format)?
+				},
 				AIProvider::Anthropic(_) => anthropic::process_response(bytes, req.input_format)?,
 				AIProvider::Bedrock(_) => {
 					bedrock::process_response(req.request_model.as_str(), bytes, req.input_format)?
@@ -671,7 +673,7 @@ impl AIProvider {
 				AIProvider::Vertex(p) => p.process_error(bytes)?,
 				AIProvider::Anthropic(p) => p.process_error(bytes)?,
 				AIProvider::Bedrock(p) => p.process_error(bytes)?,
-				AIProvider::Azure(p) => p.process_error(bytes)?,
+				AIProvider::AzureOpenAI(p) => p.process_error(bytes)?,
 			};
 			Ok(Err(openai_response))
 		}
