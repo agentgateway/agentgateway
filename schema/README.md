@@ -370,6 +370,10 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.region`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailIdentifier`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)azureOpenAI`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)azureOpenAI.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)azureOpenAI.host`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)azureOpenAI.apiVersion`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)pathOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
@@ -492,6 +496,10 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.region`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailIdentifier`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)azureOpenAI`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)azureOpenAI.model`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)azureOpenAI.host`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)azureOpenAI.apiVersion`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].pathOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|

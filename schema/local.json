@@ -3256,6 +3256,37 @@
                                                 "bedrock"
                                               ],
                                               "additionalProperties": false
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "azureOpenAI": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "model": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "host": {
+                                                      "type": "string"
+                                                    },
+                                                    "apiVersion": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "host",
+                                                    "apiVersion"
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "azureOpenAI"
+                                              ],
+                                              "additionalProperties": false
                                             }
                                           ]
                                         },
@@ -4353,6 +4384,37 @@
                                                           },
                                                           "required": [
                                                             "bedrock"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "azureOpenAI": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
+                                                                "host": {
+                                                                  "type": "string"
+                                                                },
+                                                                "apiVersion": {
+                                                                  "type": "string"
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "host",
+                                                                "apiVersion"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "azureOpenAI"
                                                           ],
                                                           "additionalProperties": false
                                                         }

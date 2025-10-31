@@ -33,7 +33,7 @@ export const DEFAULT_BACKEND_FORM = {
   }>,
   mcpStateful: true,
   // AI backend fields
-  aiProvider: "openAI" as "openAI" | "gemini" | "vertex" | "anthropic" | "bedrock",
+  aiProvider: "openAI" as "openAI" | "gemini" | "vertex" | "anthropic" | "bedrock" | "azureOpenAI",
   aiModel: "",
   aiRegion: "",
   aiProjectId: "",
@@ -41,6 +41,9 @@ export const DEFAULT_BACKEND_FORM = {
   aiHostAddress: "",
   aiHostHostname: "",
   aiHostPort: "",
+  // for azure openai
+  aiHost: "",
+  aiApiVersion: "",
 };
 
 export const DEFAULT_MCP_TARGET = {
@@ -100,6 +103,7 @@ export const AI_MODEL_PLACEHOLDERS = {
   vertex: "gemini-pro",
   anthropic: "claude-3-sonnet",
   bedrock: "anthropic.claude-3-sonnet",
+  azureOpenAI: "gpt-4",
 } as const;
 
 export const AI_REGION_PLACEHOLDERS = {

@@ -275,9 +275,10 @@ export interface AiBackend {
 export interface AiProvider {
   openAI?: { model?: string | null };
   gemini?: { model?: string | null };
-  vertex?: { model?: string | null; region?: string | null; projectId: string };
+  vertex?: { model?: string | null; region?: string | null; projectId?: string };
   anthropic?: { model?: string | null };
-  bedrock?: { model: string; region: string };
+  bedrock?: { model?: string | null; region?: string | null };
+  azureOpenAI?: { model?: string | null; host?: string | null; apiVersion?: string | null };
 }
 
 export enum McpStatefulMode {

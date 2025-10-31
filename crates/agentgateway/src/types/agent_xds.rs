@@ -450,6 +450,13 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 									guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
 								})
 							},
+							Some(proto::agent::ai_backend::provider::Provider::Azureopenai(azureopenai)) => {
+								AIProvider::AzureOpenAI(llm::azureopenai::Provider {
+									model: azureopenai.model.as_deref().map(strng::new),
+									host: strng::new(&azureopenai.host),
+									api_version: strng::new(&azureopenai.api_version),
+								})
+							},
 							None => {
 								return Err(ProtoError::Generic(format!(
 									"AI backend provider at index {provider_idx} is required"

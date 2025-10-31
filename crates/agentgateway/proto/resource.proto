@@ -708,6 +708,12 @@ message AIBackend {
     google.protobuf.StringValue guardrail_identifier = 3;
     google.protobuf.StringValue guardrail_version = 4;
   }
+  message AzureOpenAI {
+    google.protobuf.StringValue model = 1;
+    string host = 2;
+    string api_version = 3;
+  }
+
   // RouteType specifies how incoming requests should be processed
   // based on the URL path.
   enum RouteType {
@@ -732,6 +738,7 @@ message AIBackend {
       Vertex vertex = 6;
       Anthropic anthropic = 7;
       Bedrock bedrock = 8;
+      AzureOpenAI azureopenai = 10;
     }
     // Routes defines how to identify the type of traffic to handle.
     // The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").
