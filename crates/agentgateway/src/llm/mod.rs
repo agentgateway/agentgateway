@@ -248,7 +248,7 @@ impl AIProvider {
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
-			AIProvider::Azure(_) => (Target::Hostname(azure::DEFAULT_HOST, 443), btls),
+			AIProvider::Azure(_) => (Target::Hostname(p.get_host(), 443), btls),
 		}
 	}
 
@@ -332,12 +332,13 @@ impl AIProvider {
 					Ok(())
 				})
 			},
-			AIProvider::Azure(_) => http::modify_req(req, |req| {
+			AIProvider::Azure(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					if override_path {
-						uri.path_and_query = Some(PathAndQuery::from_static(azure::DEFAULT_PATH));
+					if override_path && let Some(l) = llm_request {
+						let path = provider.get_path_for_model(l.request_model.as_str());
+						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
 					}
-					uri.authority = Some(Authority::from_static(azure::DEFAULT_HOST_STR));
+					uri.authority = Some(Authority::from_str(&provider.get_host())?);
 					Ok(())
 				})?;
 				Ok(())
