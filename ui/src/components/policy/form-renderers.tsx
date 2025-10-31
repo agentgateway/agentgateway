@@ -1235,7 +1235,7 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
                       ? "bedrock"
                       : data.provider?.azureOpenAI
                         ? "azureOpenAI"
-                      : ""
+                        : ""
           }
           onValueChange={(value) => {
             let provider = null;
@@ -1452,7 +1452,7 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
                 },
               })
             }
-           placeholder="gpt-4o, gpt-4.1-mini, etc. (optional)"
+            placeholder="gpt-4o, gpt-4.1-mini, etc. (optional)"
           />
           <Label htmlFor="azureopenai-host">Host *</Label>
           <Input
