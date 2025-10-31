@@ -50,8 +50,6 @@ import {
 import {
   isTcpListener,
   getPathDisplayString,
-  populateEditForm,
-  populateTcpEditForm,
 } from "@/lib/route-utils";
 
 interface RouteTableProps {
@@ -170,7 +168,7 @@ export const RouteTable: React.FC<RouteTableProps> = ({
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
-                              {combinedRoute.listener.name || "unnamed listener"}
+                              {combinedRoute.listener.name || "unnamed"}
                             </Badge>
                           </TableCell>
                           <TableCell>
