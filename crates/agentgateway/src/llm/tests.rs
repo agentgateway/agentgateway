@@ -193,3 +193,25 @@ async fn test_anthropic() {
 		test_request("anthropic", r, request);
 	}
 }
+
+#[test]
+fn test_openai_responses() {
+	use openai::responses::passthrough;
+
+	let test_dir = Path::new("src/llm/tests");
+
+	let test_name = "response_openai_basic";
+	// Read input JSON
+	let input_path = test_dir.join(format!("{test_name}.json"));
+	let openai_str = &fs::read_to_string(&input_path).expect("Failed to read input file");
+	let openai_raw: Value = serde_json::from_str(openai_str).expect("Failed to parse input json");
+	let openai: passthrough::Response =
+		serde_json::from_str(openai_str).expect("Failed to parse input JSON");
+	let t = serde_json::to_string_pretty(&openai).unwrap();
+	let t2 = serde_json::to_string_pretty(&openai_raw).unwrap();
+	assert_eq!(
+		serde_json::from_str::<Value>(&t).unwrap(),
+		serde_json::from_str::<Value>(&t2).unwrap(),
+		"{t}\n{t2}"
+	);
+}

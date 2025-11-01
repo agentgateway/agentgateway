@@ -721,6 +721,8 @@ message AIBackend {
     MODELS = 3;
     // Sends requests to upstream as-is without LLM processing
     PASSTHROUGH = 4;
+    // Processes OpenAI /responses format requests
+    RESPONSES = 5;
   }
   message Provider {
     string name = 1;

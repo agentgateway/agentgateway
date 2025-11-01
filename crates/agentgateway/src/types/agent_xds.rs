@@ -488,6 +488,7 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 										Ok(ProtoRT::Messages) => llm::RouteType::Messages,
 										Ok(ProtoRT::Models) => llm::RouteType::Models,
 										Ok(ProtoRT::Passthrough) => llm::RouteType::Passthrough,
+										Ok(ProtoRT::Responses) => llm::RouteType::Responses,
 										Err(_) => {
 											warn!(
 												value = proto_route_type,
