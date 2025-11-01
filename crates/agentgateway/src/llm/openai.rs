@@ -235,6 +235,17 @@ pub mod responses {
 				// Passthrough - just serialize
 				serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
 			}
+
+			fn to_bedrock(
+				&self,
+				provider: &crate::llm::bedrock::Provider,
+				headers: Option<&::http::HeaderMap>,
+			) -> Result<Vec<u8>, AIError> {
+				let bedrock_request = crate::llm::bedrock::translate_request_to_converse_from_responses(
+					self, provider, headers,
+				)?;
+				serde_json::to_vec(&bedrock_request).map_err(AIError::RequestMarshal)
+			}
 		}
 
 		impl ResponseType for Response {

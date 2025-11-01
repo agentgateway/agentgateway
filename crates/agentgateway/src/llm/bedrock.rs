@@ -78,8 +78,8 @@ impl Provider {
 				resp.map(|body| translate_stream_to_messages(body, log, model, message_id))
 			},
 			crate::llm::InputFormat::Responses => {
-				// Bedrock doesn't support Responses format
-				unreachable!("Responses format should not be routed to Bedrock provider")
+				// NEW PATH: AWS EventStream → OpenAI Responses SSE
+				resp.map(|body| translate_stream_to_responses(body, log, model, message_id))
 			},
 		}
 	}
@@ -122,8 +122,14 @@ pub fn process_response(
 			Ok(Box::new(passthrough))
 		},
 		crate::llm::InputFormat::Responses => {
-			// Bedrock doesn't support Responses format
-			unreachable!("Responses format should not be routed to Bedrock provider")
+			// NEW PATH: Bedrock → OpenAI Responses format
+			let responses_resp = translate_response_to_responses(resp, model)?;
+			let passthrough = crate::json::convert::<
+				_,
+				crate::llm::openai::responses::passthrough::Response,
+			>(&responses_resp)
+			.map_err(AIError::ResponseParsing)?;
+			Ok(Box::new(passthrough))
 		},
 	}
 }
@@ -892,6 +898,307 @@ pub(super) fn translate_request_messages(
 	Ok(bedrock_request)
 }
 
+pub(super) fn translate_request_to_converse_from_responses(
+	req: &crate::llm::openai::responses::passthrough::Request,
+	provider: &Provider,
+	headers: Option<&http::HeaderMap>,
+) -> Result<ConverseRequest, AIError> {
+	let (messages, system_content) = convert_responses_input_to_bedrock(&req.input)?;
+
+	let inference_config = types::InferenceConfiguration {
+		max_tokens: req.max_output_tokens.unwrap_or(4096) as usize,
+		temperature: req.temperature,
+		top_p: req.top_p,
+		top_k: None,
+		stop_sequences: vec![],
+	};
+
+	let (mut tools, tool_choice) = extract_tools_from_responses_rest(&req.rest);
+
+	if tools.is_empty() {
+		tools = infer_tools_from_conversation_history(&messages);
+	}
+
+	let tool_config = if !tools.is_empty() {
+		Some(types::ToolConfiguration { tools, tool_choice })
+	} else {
+		None
+	};
+
+	let guardrail_config = if let (Some(identifier), Some(version)) =
+		(&provider.guardrail_identifier, &provider.guardrail_version)
+	{
+		Some(types::GuardrailConfiguration {
+			guardrail_identifier: identifier.to_string(),
+			guardrail_version: version.to_string(),
+			trace: Some("enabled".to_string()),
+		})
+	} else {
+		None
+	};
+
+	let metadata = extract_metadata_from_headers(headers);
+
+	let bedrock_request = ConverseRequest {
+		model_id: req.model.clone().unwrap_or_default(),
+		messages,
+		system: system_content,
+		inference_config: Some(inference_config),
+		tool_config,
+		guardrail_config,
+		additional_model_request_fields: None,
+		prompt_variables: None,
+		additional_model_response_field_paths: None,
+		request_metadata: metadata,
+		performance_config: None,
+	};
+
+	Ok(bedrock_request)
+}
+
+fn convert_responses_input_to_bedrock(
+	input: &async_openai::types::responses::Input,
+) -> Result<(Vec<types::Message>, Option<Vec<types::SystemContentBlock>>), AIError> {
+	use async_openai::types::responses::{
+		ContentType, Input, InputContent, InputItem, InputMessage, Role as ResponsesRole,
+	};
+
+	let mut messages: Vec<types::Message> = Vec::new();
+	let mut system_blocks: Vec<types::SystemContentBlock> = Vec::new();
+
+	// Convert Input format to items
+	let items = match input {
+		Input::Text(text) => {
+			vec![InputItem::Message(InputMessage {
+				kind: Default::default(),
+				role: ResponsesRole::User,
+				content: InputContent::TextInput(text.clone()),
+			})]
+		},
+		Input::Items(items) => items.clone(),
+	};
+
+	// Process each input item
+	for item in items {
+		match item {
+			InputItem::Message(msg) => {
+				// Extract role and content
+				let role = match msg.role {
+					ResponsesRole::User => types::Role::User,
+					ResponsesRole::Assistant => types::Role::Assistant,
+					ResponsesRole::System | ResponsesRole::Developer => {
+						// System and developer messages go to system array
+						let text = match &msg.content {
+							InputContent::TextInput(t) => t.clone(),
+							InputContent::InputItemContentList(parts) => {
+								// Extract text from content parts
+								parts
+									.iter()
+									.filter_map(|part| match part {
+										ContentType::InputText(input_text) => Some(input_text.text.clone()),
+										_ => None,
+									})
+									.collect::<Vec<_>>()
+									.join("\n")
+							},
+						};
+						system_blocks.push(types::SystemContentBlock::Text { text });
+						continue;
+					},
+				};
+
+				// Convert content to Bedrock content blocks
+				let content = match &msg.content {
+					InputContent::TextInput(text) => {
+						vec![ContentBlock::Text(text.clone())]
+					},
+					InputContent::InputItemContentList(parts) => {
+						let mut blocks = Vec::new();
+						for part in parts {
+							match part {
+								ContentType::InputText(input_text) => {
+									blocks.push(ContentBlock::Text(input_text.text.clone()));
+								},
+								ContentType::InputImage(_) => {
+									// Image support requires fetching URLs or resolving file_ids
+									tracing::error!("Image inputs not supported in Responses->Bedrock translation");
+									return Err(AIError::UnsupportedContent);
+								},
+								ContentType::InputFile(_) => {
+									continue;
+								},
+							}
+						}
+						blocks
+					},
+				};
+
+				messages.push(types::Message { role, content });
+			},
+			InputItem::Custom(custom_value) => {
+				#[derive(serde::Deserialize)]
+				struct CustomItem {
+					#[serde(rename = "type")]
+					item_type: Option<String>,
+					call_id: Option<String>,
+					name: Option<String>,
+					arguments: Option<String>,
+					output: Option<serde_json::Value>,
+				}
+
+				match serde_json::from_value::<CustomItem>(custom_value.clone()) {
+					Ok(item) => {
+						match item.item_type.as_deref() {
+							Some("function_call") => {
+								if let (Some(call_id), Some(name), Some(arguments)) =
+									(item.call_id, item.name, item.arguments)
+								{
+									let input: serde_json::Value =
+										serde_json::from_str(&arguments).unwrap_or(serde_json::json!({}));
+
+									messages.push(types::Message {
+										role: types::Role::Assistant,
+										content: vec![ContentBlock::ToolUse(types::ToolUseBlock {
+											tool_use_id: call_id,
+											name,
+											input,
+										})],
+									});
+								}
+							},
+							Some("function_call_output") => {
+								if let (Some(call_id), Some(output)) = (item.call_id, item.output) {
+									let result_content = if let Some(output_str) = output.as_str() {
+										vec![types::ToolResultContentBlock::Text(output_str.to_string())]
+									} else {
+										let json_str = serde_json::to_string(&output).unwrap_or_default();
+										vec![types::ToolResultContentBlock::Text(json_str)]
+									};
+
+									messages.push(types::Message {
+										role: types::Role::User,
+										content: vec![ContentBlock::ToolResult(types::ToolResultBlock {
+											tool_use_id: call_id,
+											content: result_content,
+											status: Some(types::ToolResultStatus::Success),
+										})],
+									});
+								}
+							},
+							_ => {
+								// Unknown custom type, skip
+								tracing::warn!("Unknown custom input item type: {:?}", item.item_type);
+								continue;
+							},
+						}
+					},
+					Err(e) => {
+						tracing::warn!("Failed to parse custom input item: {}", e);
+						continue;
+					},
+				}
+			},
+		}
+	}
+
+	let system_content = if system_blocks.is_empty() {
+		None
+	} else {
+		Some(system_blocks)
+	};
+
+	Ok((messages, system_content))
+}
+
+fn extract_tools_from_responses_rest(
+	rest: &serde_json::Value,
+) -> (Vec<types::Tool>, Option<types::ToolChoice>) {
+	use async_openai::types::responses::ToolDefinition;
+
+	let mut tools = Vec::new();
+	let mut tool_choice = None;
+
+	// Extract tools array from rest field
+	if let Some(tools_array) = rest.get("tools").and_then(|v| v.as_array()) {
+		for tool_value in tools_array {
+			if let Ok(ToolDefinition::Function(func)) =
+				serde_json::from_value::<ToolDefinition>(tool_value.clone())
+			{
+				tools.push(types::Tool::ToolSpec(types::ToolSpecification {
+					name: func.name,
+					description: func.description,
+					input_schema: Some(types::ToolInputSchema::Json(func.parameters)),
+				}));
+			}
+		}
+	}
+
+	// Extract tool_choice from rest field
+	if let Some(tc_value) = rest.get("tool_choice") {
+		tool_choice = match tc_value {
+			serde_json::Value::String(s) => match s.as_str() {
+				"auto" => Some(types::ToolChoice::Auto),
+				"required" | "any" => Some(types::ToolChoice::Any),
+				"none" => None,
+				_ => None,
+			},
+			serde_json::Value::Object(obj) => {
+				// Named tool choice: { "type": "function", "function": { "name": "tool_name" } }
+				obj
+					.get("function")
+					.and_then(|v| v.as_object())
+					.and_then(|func_obj| func_obj.get("name").and_then(|v| v.as_str()))
+					.map(|name| types::ToolChoice::Tool {
+						name: name.to_string(),
+					})
+			},
+			_ => None,
+		};
+	}
+
+	(tools, tool_choice)
+}
+
+/// Infer tool definitions from conversation history
+/// This is needed when continuing a conversation that has tool use/results but no explicit tool definitions
+fn infer_tools_from_conversation_history(messages: &[types::Message]) -> Vec<types::Tool> {
+	use std::collections::HashMap;
+
+	let mut tool_map: HashMap<String, types::Tool> = HashMap::new();
+
+	for msg in messages {
+		for block in &msg.content {
+			match block {
+				ContentBlock::ToolUse(tool_use) => {
+					if !tool_map.contains_key(&tool_use.name) {
+						tool_map.insert(
+							tool_use.name.clone(),
+							types::Tool::ToolSpec(types::ToolSpecification {
+								name: tool_use.name.clone(),
+								description: Some(format!("Tool: {}", tool_use.name)),
+								input_schema: Some(types::ToolInputSchema::Json(serde_json::json!({
+									"type": "object",
+									"properties": {},
+									"required": []
+								}))),
+							}),
+						);
+					}
+				},
+				ContentBlock::ToolResult(tool_result) => {
+					tracing::debug!(
+						"Found tool result for tool_use_id: {}",
+						tool_result.tool_use_id
+					);
+				},
+				_ => {},
+			}
+		}
+	}
+
+	tool_map.into_values().collect()
+}
+
 pub(super) fn translate_response_to_messages(
 	bedrock_resp: ConverseResponse,
 	model: &str,
@@ -1112,6 +1419,488 @@ fn translate_stream_to_messages(
 					}),
 				));
 
+				out
+			},
+		}
+	})
+}
+
+pub(super) fn translate_response_to_responses(
+	bedrock_resp: ConverseResponse,
+	model: &str,
+) -> Result<crate::llm::openai::responses::passthrough::Response, AIError> {
+	let adapter = ConverseResponseAdapter::from_response(bedrock_resp, model)?;
+
+	// Generate response ID
+	let id = format!("resp_{:016x}", rand::rng().random::<u64>());
+
+	// Convert Bedrock content blocks to Responses OutputContent
+	let output = convert_bedrock_content_to_responses_output(&adapter.message.content);
+
+	// Determine status from stop reason
+	let status = match adapter.stop_reason {
+		StopReason::EndTurn | StopReason::StopSequence => "completed",
+		StopReason::MaxTokens => "incomplete",
+		StopReason::ToolUse => "requires_action",
+		StopReason::ContentFiltered | StopReason::GuardrailIntervened => "failed",
+	}
+	.to_string();
+
+	// Build usage
+	let usage = adapter
+		.usage
+		.map(|u| crate::llm::openai::responses::passthrough::Usage {
+			input_tokens: u.input_tokens as u64,
+			output_tokens: u.output_tokens as u64,
+			rest: serde_json::Value::Object(serde_json::Map::new()),
+		});
+
+	Ok(crate::llm::openai::responses::passthrough::Response {
+		id,
+		status,
+		output,
+		model: adapter.model,
+		usage,
+		rest: serde_json::Value::Object(serde_json::Map::new()),
+	})
+}
+
+fn convert_bedrock_content_to_responses_output(
+	content: &[ContentBlock],
+) -> Vec<async_openai::types::responses::OutputContent> {
+	use async_openai::types::responses::{
+		Content, FunctionCall, OutputContent, OutputMessage, OutputStatus,
+	};
+
+	let mut outputs = Vec::new();
+
+	// Group content by type for proper message construction
+	let mut text_parts = Vec::new();
+	let mut tool_calls = Vec::new();
+
+	for block in content {
+		match block {
+			ContentBlock::Text(text) => {
+				text_parts.push(Content::OutputText(
+					async_openai::types::responses::OutputText {
+						text: text.clone(),
+						annotations: vec![],
+					},
+				));
+			},
+			ContentBlock::ReasoningContent(reasoning) => {
+				let text = match reasoning {
+					types::ReasoningContentBlock::Structured { reasoning_text } => {
+						reasoning_text.text.clone()
+					},
+					types::ReasoningContentBlock::Simple { text } => text.clone(),
+				};
+				text_parts.push(Content::OutputText(
+					async_openai::types::responses::OutputText {
+						text,
+						annotations: vec![],
+					},
+				));
+			},
+			ContentBlock::ToolUse(tool_use) => {
+				let arguments_str = serde_json::to_string(&tool_use.input).unwrap_or_default();
+				tool_calls.push(OutputContent::FunctionCall(FunctionCall {
+					id: tool_use.tool_use_id.clone(),
+					call_id: tool_use.tool_use_id.clone(),
+					name: tool_use.name.clone(),
+					arguments: arguments_str,
+					status: OutputStatus::Completed,
+				}));
+			},
+			ContentBlock::Image(_) | ContentBlock::ToolResult(_) | ContentBlock::CachePoint(_) => {
+				// Skip these in responses (not part of output)
+			},
+		}
+	}
+
+	if !text_parts.is_empty() {
+		outputs.push(OutputContent::Message(OutputMessage {
+			id: format!("msg_{:016x}", rand::rng().random::<u64>()),
+			role: async_openai::types::responses::Role::Assistant,
+			content: text_parts,
+			status: OutputStatus::Completed,
+		}));
+	}
+
+	outputs.extend(tool_calls);
+
+	outputs
+}
+
+fn translate_stream_to_responses(
+	b: Body,
+	log: AsyncLog<LLMInfo>,
+	model: String,
+	_message_id: String,
+) -> Body {
+	let mut saw_token = false;
+	let mut pending_stop_reason: Option<types::StopReason> = None;
+	let mut pending_usage: Option<types::TokenUsage> = None;
+	let mut seen_blocks: HashSet<i32> = HashSet::new();
+
+	// Track tool calls for streaming: (index -> (item_id, name, json_buffer))
+	let mut tool_calls: HashMap<i32, (String, String, String)> = HashMap::new();
+
+	// Track sequence numbers and item IDs
+	let mut sequence_number: u64 = 0;
+	let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
+
+	// Track message item ID for text content
+	let message_item_id = format!("msg_{:016x}", rand::rng().random::<u64>());
+
+	parse::aws_sse::transform_multi(b, move |aws_event| {
+		let event = match types::ConverseStreamOutput::deserialize(aws_event) {
+			Ok(e) => e,
+			Err(e) => {
+				tracing::error!(error = %e, "failed to deserialize bedrock stream event");
+				return vec![(
+					"error",
+					serde_json::json!({
+						"type": "error",
+						"error": {
+							"message": "Stream processing error"
+						}
+					}),
+				)];
+			},
+		};
+
+		match event {
+			types::ConverseStreamOutput::MessageStart(_start) => {
+				let mut events = Vec::new();
+
+				sequence_number += 1;
+				let created_event = serde_json::json!({
+					"type": "response.created",
+					"sequence_number": sequence_number,
+					"response": {
+						"id": response_id.clone(),
+						"object": "response",
+						"model": model.clone(),
+						"created_at": chrono::Utc::now().timestamp() as u64,
+						"status": "in_progress"
+					}
+				});
+				events.push(("event", created_event));
+
+				sequence_number += 1;
+				let item_added_event = serde_json::json!({
+					"type": "response.output_item.added",
+					"sequence_number": sequence_number,
+					"output_index": 0,
+					"item": {
+						"type": "message",
+						"id": message_item_id.clone(),
+						"role": "assistant",
+						"status": "in_progress",
+						"content": []
+					}
+				});
+				events.push(("event", item_added_event));
+
+				events
+			},
+			types::ConverseStreamOutput::ContentBlockStart(start) => {
+				seen_blocks.insert(start.content_block_index);
+
+				match start.start {
+					Some(types::ContentBlockStart::ToolUse(tu)) => {
+						let tool_call_item_id = format!("call_{:016x}", rand::rng().random::<u64>());
+						tool_calls.insert(
+							start.content_block_index,
+							(tool_call_item_id.clone(), tu.name.clone(), String::new()),
+						);
+
+						sequence_number += 1;
+						let item_added_event = serde_json::json!({
+							"type": "response.output_item.added",
+							"sequence_number": sequence_number,
+							"output_index": start.content_block_index as u32,
+							"item": {
+								"type": "function_call",
+								"id": tool_call_item_id,
+								"call_id": tool_call_item_id,
+								"name": tu.name,
+								"arguments": "",
+								"status": "in_progress"
+							}
+						});
+
+						vec![("event", item_added_event)]
+					},
+					Some(types::ContentBlockStart::Text) => {
+						sequence_number += 1;
+						let part_added_event = serde_json::json!({
+							"type": "response.content_part.added",
+							"sequence_number": sequence_number,
+							"item_id": message_item_id.clone(),
+							"output_index": start.content_block_index as u32,
+							"content_index": 0,
+							"part": {
+								"type": "text",
+								"text": ""
+							}
+						});
+
+						vec![("event", part_added_event)]
+					},
+					_ => {
+						sequence_number += 1;
+						let part_added_event = serde_json::json!({
+							"type": "response.content_part.added",
+							"sequence_number": sequence_number,
+							"item_id": message_item_id.clone(),
+							"output_index": start.content_block_index as u32,
+							"content_index": 0,
+							"part": {
+								"type": "text",
+								"text": ""
+							}
+						});
+
+						vec![("event", part_added_event)]
+					},
+				}
+			},
+			types::ConverseStreamOutput::ContentBlockDelta(delta) => {
+				let mut out = Vec::new();
+
+				if !saw_token {
+					saw_token = true;
+					log.non_atomic_mutate(|r| {
+						r.response.first_token = Some(Instant::now());
+					});
+				}
+
+				if let Some(d) = delta.delta {
+					match d {
+						types::ContentBlockDelta::Text(text) => {
+							sequence_number += 1;
+							let delta_event = serde_json::json!({
+								"type": "response.output_text.delta",
+								"sequence_number": sequence_number,
+								"item_id": message_item_id.clone(),
+								"output_index": delta.content_block_index as u32,
+								"content_index": 0,
+								"delta": text
+							});
+							out.push(("event", delta_event));
+						},
+						types::ContentBlockDelta::ReasoningContent(rc) => match rc {
+							types::ReasoningContentBlockDelta::Text(t) => {
+								sequence_number += 1;
+								let delta_event = serde_json::json!({
+									"type": "response.output_text.delta",
+									"sequence_number": sequence_number,
+									"item_id": message_item_id.clone(),
+									"output_index": delta.content_block_index as u32,
+									"content_index": 0,
+									"delta": t
+								});
+								out.push(("event", delta_event));
+							},
+							types::ReasoningContentBlockDelta::RedactedContent(_) => {
+								sequence_number += 1;
+								let delta_event = serde_json::json!({
+									"type": "response.output_text.delta",
+									"sequence_number": sequence_number,
+									"item_id": message_item_id.clone(),
+									"output_index": delta.content_block_index as u32,
+									"content_index": 0,
+									"delta": "[REDACTED]"
+								});
+								out.push(("event", delta_event));
+							},
+							_ => {},
+						},
+						types::ContentBlockDelta::ToolUse(tu) => {
+							if let Some((item_id, _name, buffer)) = tool_calls.get_mut(&delta.content_block_index)
+							{
+								buffer.push_str(&tu.input);
+
+								sequence_number += 1;
+								let delta_event = serde_json::json!({
+									"type": "response.function_call_arguments.delta",
+									"sequence_number": sequence_number,
+									"item_id": item_id.clone(),
+									"output_index": delta.content_block_index as u32,
+									"delta": tu.input
+								});
+								out.push(("event", delta_event));
+							}
+						},
+					}
+				}
+
+				out
+			},
+			types::ConverseStreamOutput::ContentBlockStop(stop) => {
+				let mut events = Vec::new();
+
+				if let Some((item_id, name, buffer)) = tool_calls.remove(&stop.content_block_index) {
+					sequence_number += 1;
+					let args_done_event = serde_json::json!({
+						"type": "response.function_call_arguments.done",
+						"sequence_number": sequence_number,
+						"item_id": item_id.clone(),
+						"output_index": stop.content_block_index as u32,
+						"name": name.clone(),
+						"arguments": buffer.clone()
+					});
+					events.push(("event", args_done_event));
+
+					sequence_number += 1;
+					let item_done_event = serde_json::json!({
+						"type": "response.output_item.done",
+						"sequence_number": sequence_number,
+						"output_index": stop.content_block_index as u32,
+						"item": {
+							"type": "function_call",
+							"id": item_id.clone(),
+							"call_id": item_id,
+							"name": name,
+							"arguments": buffer,
+							"status": "completed"
+						}
+					});
+					events.push(("event", item_done_event));
+				} else if seen_blocks.remove(&stop.content_block_index) {
+					sequence_number += 1;
+					let part_done_event = serde_json::json!({
+						"type": "response.content_part.done",
+						"sequence_number": sequence_number,
+						"item_id": message_item_id.clone(),
+						"output_index": stop.content_block_index as u32,
+						"content_index": 0,
+						"part": {
+							"type": "text"
+						}
+					});
+					events.push(("event", part_done_event));
+				}
+
+				events
+			},
+			types::ConverseStreamOutput::MessageStop(stop) => {
+				pending_stop_reason = Some(stop.stop_reason);
+				vec![]
+			},
+			types::ConverseStreamOutput::Metadata(meta) => {
+				if let Some(usage) = meta.usage {
+					pending_usage = Some(usage);
+					log.non_atomic_mutate(|r| {
+						r.response.output_tokens = Some(usage.output_tokens as u64);
+						r.response.input_tokens = Some(usage.input_tokens as u64);
+						r.response.total_tokens = Some(usage.total_tokens as u64);
+					});
+				}
+
+				let mut out = Vec::new();
+
+				sequence_number += 1;
+				let message_done_event = serde_json::json!({
+					"type": "response.output_item.done",
+					"sequence_number": sequence_number,
+					"output_index": 0,
+					"item": {
+						"type": "message",
+						"id": message_item_id.clone(),
+						"role": "assistant",
+						"status": "completed"
+					}
+				});
+				out.push(("event", message_done_event));
+
+				let stop = pending_stop_reason.take();
+				let usage_data = pending_usage.take();
+
+				let usage_obj = usage_data.map(|u| {
+					serde_json::json!({
+						"input_tokens": u.input_tokens as u32,
+						"output_tokens": u.output_tokens as u32,
+						"total_tokens": (u.input_tokens + u.output_tokens) as u32,
+						"input_tokens_details": {
+							"cached_tokens": u.cache_read_input_tokens.unwrap_or(0) as u32
+						},
+						"output_tokens_details": {
+							"reasoning_tokens": 0
+						}
+					})
+				});
+
+				sequence_number += 1;
+				let done_event = match stop {
+					Some(StopReason::EndTurn) | Some(StopReason::StopSequence) | None => {
+						serde_json::json!({
+							"type": "response.completed",
+							"sequence_number": sequence_number,
+							"response": {
+								"id": response_id.clone(),
+								"object": "response",
+								"model": model.clone(),
+								"created_at": chrono::Utc::now().timestamp() as u64,
+								"status": "completed",
+								"usage": usage_obj
+							}
+						})
+					},
+					Some(StopReason::MaxTokens) => {
+						serde_json::json!({
+							"type": "response.incomplete",
+							"sequence_number": sequence_number,
+							"response": {
+								"id": response_id.clone(),
+								"object": "response",
+								"model": model.clone(),
+								"created_at": chrono::Utc::now().timestamp() as u64,
+								"status": "incomplete",
+								"usage": usage_obj,
+								"incomplete_details": {
+									"reason": "max_tokens"
+								}
+							}
+						})
+					},
+					Some(StopReason::ContentFiltered) | Some(StopReason::GuardrailIntervened) => {
+						serde_json::json!({
+							"type": "response.failed",
+							"sequence_number": sequence_number,
+							"response": {
+								"id": response_id.clone(),
+								"object": "response",
+								"model": model.clone(),
+								"created_at": chrono::Utc::now().timestamp() as u64,
+								"status": "failed",
+								"usage": usage_obj,
+								"error": {
+									"code": "content_filter",
+									"message": "Content filtered by guardrails"
+								}
+							}
+						})
+					},
+					Some(StopReason::ToolUse) => {
+						serde_json::json!({
+							"type": "response.completed",
+							"sequence_number": sequence_number,
+							"response": {
+								"id": response_id.clone(),
+								"object": "response",
+								"model": model.clone(),
+								"created_at": chrono::Utc::now().timestamp() as u64,
+								"status": "completed",
+								"usage": usage_obj
+							}
+						})
+					},
+				};
+
+				out.push(("event", done_event));
 				out
 			},
 		}

@@ -515,6 +515,9 @@ impl AIProvider {
 			(InputFormat::Responses, AIProvider::OpenAI(_)) => {
 				// OpenAI supports responses input
 			},
+			(InputFormat::Responses, AIProvider::Bedrock(_)) => {
+				// Bedrock supports responses input via translation
+			},
 			(m, p) => {
 				// Messages with OpenAI compatible: currently only supports translating the request
 				return Err(AIError::UnsupportedConversion(strng::format!(
