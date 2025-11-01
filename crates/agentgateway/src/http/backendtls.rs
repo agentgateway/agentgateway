@@ -30,8 +30,8 @@ pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
 // TODO: xds support
 #[derive(Debug, Clone)]
 pub struct BackendTLS {
-	pub hostname_override: Option<ServerName<'static>>,
-	pub config: Arc<ClientConfig>,
+    pub hostname_override: Option<ServerName<'static>>,
+    pub config: Arc<ClientConfig>,
 }
 
 impl std::hash::Hash for BackendTLS {
@@ -56,6 +56,19 @@ impl serde::Serialize for BackendTLS {
 		// TODO: store raw pem so we can send it back
 		serializer.serialize_none()
 	}
+}
+
+impl BackendTLS {
+    /// Return a clone of this BackendTLS with ALPN restricted to HTTP/1.1.
+    /// This is useful to force HTTP/1.1 over TLS even if the server offers h2 via ALPN.
+    pub fn with_alpn_http11(&self) -> BackendTLS {
+        let mut cc = (*self.config).clone();
+        cc.alpn_protocols = vec![b"http/1.1".to_vec()];
+        BackendTLS {
+            hostname_override: self.hostname_override.clone(),
+            config: Arc::new(cc),
+        }
+    }
 }
 static SYSTEM_ROOT: Lazy<rustls_native_certs::CertificateResult> =
 	Lazy::new(rustls_native_certs::load_native_certs);
