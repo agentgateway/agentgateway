@@ -85,12 +85,12 @@ pub struct NamedAIProvider {
 	/// Optional HTTP version preference for this backend (defaults to auto)
 	#[serde(rename = "httpVersion", default)]
 	pub http_version: Option<HttpVersionPref>,
+}
 
 #[apply(schema!)]
 pub enum HttpVersionPref {
 	#[serde(rename = "1.1")] Http1_1,
 	#[serde(rename = "2")] Http2,
-}
 }
 
 const DEFAULT_ROUTE: &str = "*";

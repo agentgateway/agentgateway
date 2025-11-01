@@ -499,6 +499,7 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 									(strng::new(path), route_type)
 								})
 								.collect(),
+							http_version: None,
 						};
 						local_provider_group.push((provider_name, np));
 					}
