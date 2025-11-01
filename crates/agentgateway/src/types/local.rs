@@ -213,6 +213,9 @@ pub struct LocalNamedAIProvider {
 	pub backend_tls: Option<LocalBackendTLS>,
 	#[serde(default)]
 	pub backend_auth: Option<BackendAuth>,
+	/// Optional HTTP version preference ("1.1" or "2").
+	#[serde(rename = "httpVersion", default)]
+	pub http_version: Option<llm::HttpVersionPref>,
 
 	#[serde(flatten, default)]
 	pub policies: Option<Arc<llm::Policy>>,
@@ -264,6 +267,7 @@ impl LocalAIBackend {
 						path_override: p.path_override,
 						tokenize: p.tokenize,
 						routes: p.routes,
+						http_version: p.http_version,
 					},
 				));
 			}

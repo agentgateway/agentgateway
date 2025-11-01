@@ -869,10 +869,17 @@ async fn make_backend_call(
 					(tgt, pol)
 				},
 			};
-			// Defaults for the provider < Backend level policies < Sub Backend
-			let effective_policies = provider_defaults
-				.merge(policies)
-				.merge(sub_backend_policies);
+            // Defaults for the provider < Backend level policies < Sub Backend
+            let mut effective_policies = provider_defaults
+                .merge(policies)
+                .merge(sub_backend_policies);
+            // If the backend prefers HTTP/1.1, restrict TLS ALPN to http/1.1 to prevent
+            // upgrading to HTTP/2 via ALPN during TLS handshakes.
+            if matches!(provider.http_version, Some(crate::llm::HttpVersionPref::Http1_1)) {
+                if let Some(base_tls) = effective_policies.backend_tls.as_ref() {
+                    effective_policies.backend_tls = Some(base_tls.with_alpn_http11());
+                }
+            }
 			if let Some(po) = &provider.path_override {
 				http::modify_req_uri(&mut req, |p| {
 					p.path_and_query = Some(PathAndQuery::from_str(po)?);
@@ -883,7 +890,11 @@ async fn make_backend_call(
 			BackendCall {
 				target,
 				backend_policies: effective_policies,
-				http_version_override: None,
+				http_version_override: match provider.http_version {
+					Some(crate::llm::HttpVersionPref::Http1_1) => Some(::http::Version::HTTP_11),
+					Some(crate::llm::HttpVersionPref::Http2) => Some(::http::Version::HTTP_2),
+					None => None,
+				},
 				transport_override: None,
 			}
 		},
