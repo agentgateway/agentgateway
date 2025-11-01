@@ -503,6 +503,13 @@ impl HTTPProxy {
 		response_policies.gateway_transformation = gateway_policies.transformation.clone();
 		response_policies.ext_proc = maybe_ext_proc;
 		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
+		// Ensure JWT claims are available in CEL after registering route expressions.
+		// If JWT auth ran at the gateway phase, `with_jwt` might have been a no-op because
+		// the `jwt` attribute wasn't registered yet. Claims are stored on the request
+		// extensions, so we can add them to the CEL context now that route attributes are known.
+		if let Some(claims) = req.extensions().get::<crate::http::jwt::Claims>() {
+			log.cel.ctx().with_jwt(claims);
+		}
 		apply_request_policies(
 			&route_policies,
 			self.policy_client(),
