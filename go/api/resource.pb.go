@@ -582,6 +582,8 @@ const (
 	AIBackend_MODELS AIBackend_RouteType = 3
 	// Sends requests to upstream as-is without LLM processing
 	AIBackend_PASSTHROUGH AIBackend_RouteType = 4
+	// Processes OpenAI /responses format requests
+	AIBackend_RESPONSES AIBackend_RouteType = 5
 )
 
 // Enum value maps for AIBackend_RouteType.
@@ -592,6 +594,7 @@ var (
 		2: "MESSAGES",
 		3: "MODELS",
 		4: "PASSTHROUGH",
+		5: "RESPONSES",
 	}
 	AIBackend_RouteType_value = map[string]int32{
 		"UNSPECIFIED": 0,
@@ -599,6 +602,7 @@ var (
 		"MESSAGES":    2,
 		"MODELS":      3,
 		"PASSTHROUGH": 4,
+		"RESPONSES":   5,
 	}
 )
 
@@ -8067,7 +8071,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04kind\"7\n" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\x05R\x04port\"\xf3\f\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\"\x82\r\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -8105,14 +8109,15 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"\bprovider\x1a\\\n" +
 	"\rProviderGroup\x12K\n" +
-	"\tproviders\x18\x01 \x03(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\tproviders\"X\n" +
+	"\tproviders\x18\x01 \x03(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\tproviders\"g\n" +
 	"\tRouteType\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vCOMPLETIONS\x10\x01\x12\f\n" +
 	"\bMESSAGES\x10\x02\x12\n" +
 	"\n" +
 	"\x06MODELS\x10\x03\x12\x0f\n" +
-	"\vPASSTHROUGH\x10\x04\"\xd0\x02\n" +
+	"\vPASSTHROUGH\x10\x04\x12\r\n" +
+	"\tRESPONSES\x10\x05\"\xd0\x02\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +

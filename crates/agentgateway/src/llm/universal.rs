@@ -107,6 +107,10 @@ pub mod passthrough {
 					.map_err(AIError::ResponseParsing)?;
 				Ok(Box::new(passthrough))
 			},
+			InputFormat::Responses => {
+				// Responses format is OpenAI-specific, handled separately
+				unreachable!("Responses format should be handled in openai::responses module")
+			},
 		}
 	}
 

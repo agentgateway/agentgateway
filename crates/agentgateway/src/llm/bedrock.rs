@@ -77,6 +77,10 @@ impl Provider {
 				// NEW PATH: AWS EventStream → Anthropic SSE
 				resp.map(|body| translate_stream_to_messages(body, log, model, message_id))
 			},
+			crate::llm::InputFormat::Responses => {
+				// Bedrock doesn't support Responses format
+				unreachable!("Responses format should not be routed to Bedrock provider")
+			},
 		}
 	}
 
@@ -116,6 +120,10 @@ pub fn process_response(
 				crate::json::convert::<_, crate::llm::anthropic::passthrough::Response>(&anthropic_resp)
 					.map_err(AIError::ResponseParsing)?;
 			Ok(Box::new(passthrough))
+		},
+		crate::llm::InputFormat::Responses => {
+			// Bedrock doesn't support Responses format
+			unreachable!("Responses format should not be routed to Bedrock provider")
 		},
 	}
 }
@@ -305,12 +313,15 @@ pub(super) fn translate_request_completions(
 		}))
 	} else {
 		match &req.reasoning_effort {
-			Some(universal::ReasoningEffort::Low) => Some(serde_json::json!({
-				"thinking": {
-					"type": "enabled",
-					"budget_tokens": 1024
-				}
-			})),
+			// Note: Anthropic's minimum budget_tokens is 1024
+			Some(universal::ReasoningEffort::Minimal) | Some(universal::ReasoningEffort::Low) => {
+				Some(serde_json::json!({
+					"thinking": {
+						"type": "enabled",
+						"budget_tokens": 1024
+					}
+				}))
+			},
 			Some(universal::ReasoningEffort::Medium) => Some(serde_json::json!({
 				"thinking": {
 					"type": "enabled",
