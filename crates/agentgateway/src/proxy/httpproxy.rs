@@ -876,11 +876,9 @@ async fn make_backend_call(
             // If the backend prefers HTTP/1.1, restrict TLS ALPN to http/1.1 to prevent
             // upgrading to HTTP/2 via ALPN during TLS handshakes.
             if matches!(provider.http_version, Some(crate::llm::HttpVersionPref::Http1_1)) {
-                let base_tls = effective_policies
-                    .backend_tls
-                    .as_ref()
-                    .unwrap_or(&crate::http::backendtls::SYSTEM_TRUST);
-                effective_policies.backend_tls = Some(base_tls.with_alpn_http11());
+                if let Some(base_tls) = effective_policies.backend_tls.as_ref() {
+                    effective_policies.backend_tls = Some(base_tls.with_alpn_http11());
+                }
             }
 			if let Some(po) = &provider.path_override {
 				http::modify_req_uri(&mut req, |p| {

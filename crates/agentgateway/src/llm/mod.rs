@@ -87,10 +87,11 @@ pub struct NamedAIProvider {
 	pub http_version: Option<HttpVersionPref>,
 }
 
+#[derive(PartialEq, Eq)]
 #[apply(schema!)]
 pub enum HttpVersionPref {
-	#[serde(rename = "1.1")] Http1_1,
-	#[serde(rename = "2")] Http2,
+    #[serde(rename = "1.1")] Http1_1,
+    #[serde(rename = "2")] Http2,
 }
 
 const DEFAULT_ROUTE: &str = "*";
