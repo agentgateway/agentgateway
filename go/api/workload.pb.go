@@ -9,10 +9,10 @@
 package api
 
 import (
-	any1 "github.com/golang/protobuf/ptypes/any"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -965,7 +965,7 @@ type Workload struct {
 	// Capacity for this workload.
 	// This represents the amount of traffic the workload can handle, relative to other workloads
 	// If unset, the capacity is default to 1.
-	Capacity      *wrappers.UInt32Value `protobuf:"bytes,27,opt,name=capacity,proto3" json:"capacity,omitempty"`
+	Capacity      *wrapperspb.UInt32Value `protobuf:"bytes,27,opt,name=capacity,proto3" json:"capacity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1175,7 +1175,7 @@ func (x *Workload) GetExtensions() []*Extension {
 	return nil
 }
 
-func (x *Workload) GetCapacity() *wrappers.UInt32Value {
+func (x *Workload) GetCapacity() *wrapperspb.UInt32Value {
 	if x != nil {
 		return x.Capacity
 	}
@@ -1618,7 +1618,7 @@ type Extension struct {
 	// This should be unique amongst all extensions attached to an item.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// config provides some opaque configuration.
-	Config        *any1.Any `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
+	Config        *anypb.Any `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1660,7 +1660,7 @@ func (x *Extension) GetName() string {
 	return ""
 }
 
-func (x *Extension) GetConfig() *any1.Any {
+func (x *Extension) GetConfig() *anypb.Any {
 	if x != nil {
 		return x.Config
 	}
@@ -1844,8 +1844,8 @@ var file_workload_proto_goTypes = []any{
 	(*NamespacedHostname)(nil),      // 20: agentgateway.dev.workload.NamespacedHostname
 	(*Extension)(nil),               // 21: agentgateway.dev.workload.Extension
 	nil,                             // 22: agentgateway.dev.workload.Workload.ServicesEntry
-	(*wrappers.UInt32Value)(nil),    // 23: google.protobuf.UInt32Value
-	(*any1.Any)(nil),                // 24: google.protobuf.Any
+	(*wrapperspb.UInt32Value)(nil),  // 23: google.protobuf.UInt32Value
+	(*anypb.Any)(nil),               // 24: google.protobuf.Any
 }
 var file_workload_proto_depIdxs = []int32{
 	13, // 0: agentgateway.dev.workload.Address.workload:type_name -> agentgateway.dev.workload.Workload

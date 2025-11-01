@@ -7,11 +7,11 @@
 package api
 
 import (
-	duration "github.com/golang/protobuf/ptypes/duration"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	structpb "google.golang.org/protobuf/types/known/structpb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -1307,8 +1307,8 @@ func (x *TCPRoute) GetBackends() []*RouteBackend {
 
 type Timeout struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	Request        *duration.Duration     `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
-	BackendRequest *duration.Duration     `protobuf:"bytes,2,opt,name=backend_request,json=backendRequest,proto3" json:"backend_request,omitempty"`
+	Request        *durationpb.Duration   `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	BackendRequest *durationpb.Duration   `protobuf:"bytes,2,opt,name=backend_request,json=backendRequest,proto3" json:"backend_request,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1343,14 +1343,14 @@ func (*Timeout) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *Timeout) GetRequest() *duration.Duration {
+func (x *Timeout) GetRequest() *durationpb.Duration {
 	if x != nil {
 		return x.Request
 	}
 	return nil
 }
 
-func (x *Timeout) GetBackendRequest() *duration.Duration {
+func (x *Timeout) GetBackendRequest() *durationpb.Duration {
 	if x != nil {
 		return x.BackendRequest
 	}
@@ -1361,7 +1361,7 @@ type Retry struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	RetryStatusCodes []int32                `protobuf:"varint,1,rep,packed,name=retry_status_codes,json=retryStatusCodes,proto3" json:"retry_status_codes,omitempty"`
 	Attempts         int32                  `protobuf:"varint,2,opt,name=attempts,proto3" json:"attempts,omitempty"`
-	Backoff          *duration.Duration     `protobuf:"bytes,3,opt,name=backoff,proto3" json:"backoff,omitempty"`
+	Backoff          *durationpb.Duration   `protobuf:"bytes,3,opt,name=backoff,proto3" json:"backoff,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1410,7 +1410,7 @@ func (x *Retry) GetAttempts() int32 {
 	return 0
 }
 
-func (x *Retry) GetBackoff() *duration.Duration {
+func (x *Retry) GetBackoff() *durationpb.Duration {
 	if x != nil {
 		return x.Backoff
 	}
@@ -2623,7 +2623,7 @@ type CORS struct {
 	AllowOrigins     []string               `protobuf:"bytes,4,rep,name=allow_origins,json=allowOrigins,proto3" json:"allow_origins,omitempty"`
 	ExposeHeaders    []string               `protobuf:"bytes,5,rep,name=expose_headers,json=exposeHeaders,proto3" json:"expose_headers,omitempty"`
 	// max_age is in seconds, use google.protobuf.Duration if available, otherwise uint64 for seconds
-	MaxAge        *duration.Duration `protobuf:"bytes,6,opt,name=max_age,json=maxAge,proto3" json:"max_age,omitempty"`
+	MaxAge        *durationpb.Duration `protobuf:"bytes,6,opt,name=max_age,json=maxAge,proto3" json:"max_age,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2693,7 +2693,7 @@ func (x *CORS) GetExposeHeaders() []string {
 	return nil
 }
 
-func (x *CORS) GetMaxAge() *duration.Duration {
+func (x *CORS) GetMaxAge() *durationpb.Duration {
 	if x != nil {
 		return x.MaxAge
 	}
@@ -3354,11 +3354,11 @@ func (*PolicyTarget_SubBackend) isPolicyTarget_Kind() {}
 type KeepaliveConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Time before sending keepalive probes
-	Time *duration.Duration `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
+	Time *durationpb.Duration `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
 	// Interval between keepalive probes
-	Interval *duration.Duration `protobuf:"bytes,2,opt,name=interval,proto3" json:"interval,omitempty"`
+	Interval *durationpb.Duration `protobuf:"bytes,2,opt,name=interval,proto3" json:"interval,omitempty"`
 	// Number of keepalive retries before giving up
-	Retries       *wrappers.UInt32Value `protobuf:"bytes,3,opt,name=retries,proto3" json:"retries,omitempty"`
+	Retries       *wrapperspb.UInt32Value `protobuf:"bytes,3,opt,name=retries,proto3" json:"retries,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3393,21 +3393,21 @@ func (*KeepaliveConfig) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{35}
 }
 
-func (x *KeepaliveConfig) GetTime() *duration.Duration {
+func (x *KeepaliveConfig) GetTime() *durationpb.Duration {
 	if x != nil {
 		return x.Time
 	}
 	return nil
 }
 
-func (x *KeepaliveConfig) GetInterval() *duration.Duration {
+func (x *KeepaliveConfig) GetInterval() *durationpb.Duration {
 	if x != nil {
 		return x.Interval
 	}
 	return nil
 }
 
-func (x *KeepaliveConfig) GetRetries() *wrappers.UInt32Value {
+func (x *KeepaliveConfig) GetRetries() *wrapperspb.UInt32Value {
 	if x != nil {
 		return x.Retries
 	}
@@ -4748,15 +4748,15 @@ func (*AzureManagedIdentityCredential_UserAssignedIdentity_ResourceId) isAzureMa
 }
 
 type FrontendPolicySpec_HTTP struct {
-	state                     protoimpl.MessageState `protogen:"open.v1"`
-	MaxBufferSize             *wrappers.UInt32Value  `protobuf:"bytes,1,opt,name=max_buffer_size,json=maxBufferSize,proto3" json:"max_buffer_size,omitempty"`
-	Http1MaxHeaders           *wrappers.UInt32Value  `protobuf:"bytes,2,opt,name=http1_max_headers,json=http1MaxHeaders,proto3" json:"http1_max_headers,omitempty"`
-	Http1IdleTimeout          *duration.Duration     `protobuf:"bytes,3,opt,name=http1_idle_timeout,json=http1IdleTimeout,proto3" json:"http1_idle_timeout,omitempty"`
-	Http2WindowSize           *wrappers.UInt32Value  `protobuf:"bytes,4,opt,name=http2_window_size,json=http2WindowSize,proto3" json:"http2_window_size,omitempty"`
-	Http2ConnectionWindowSize *wrappers.UInt32Value  `protobuf:"bytes,5,opt,name=http2_connection_window_size,json=http2ConnectionWindowSize,proto3" json:"http2_connection_window_size,omitempty"`
-	Http2FrameSize            *wrappers.UInt32Value  `protobuf:"bytes,6,opt,name=http2_frame_size,json=http2FrameSize,proto3" json:"http2_frame_size,omitempty"`
-	Http2KeepaliveInterval    *duration.Duration     `protobuf:"bytes,7,opt,name=http2_keepalive_interval,json=http2KeepaliveInterval,proto3" json:"http2_keepalive_interval,omitempty"`
-	Http2KeepaliveTimeout     *duration.Duration     `protobuf:"bytes,8,opt,name=http2_keepalive_timeout,json=http2KeepaliveTimeout,proto3" json:"http2_keepalive_timeout,omitempty"`
+	state                     protoimpl.MessageState  `protogen:"open.v1"`
+	MaxBufferSize             *wrapperspb.UInt32Value `protobuf:"bytes,1,opt,name=max_buffer_size,json=maxBufferSize,proto3" json:"max_buffer_size,omitempty"`
+	Http1MaxHeaders           *wrapperspb.UInt32Value `protobuf:"bytes,2,opt,name=http1_max_headers,json=http1MaxHeaders,proto3" json:"http1_max_headers,omitempty"`
+	Http1IdleTimeout          *durationpb.Duration    `protobuf:"bytes,3,opt,name=http1_idle_timeout,json=http1IdleTimeout,proto3" json:"http1_idle_timeout,omitempty"`
+	Http2WindowSize           *wrapperspb.UInt32Value `protobuf:"bytes,4,opt,name=http2_window_size,json=http2WindowSize,proto3" json:"http2_window_size,omitempty"`
+	Http2ConnectionWindowSize *wrapperspb.UInt32Value `protobuf:"bytes,5,opt,name=http2_connection_window_size,json=http2ConnectionWindowSize,proto3" json:"http2_connection_window_size,omitempty"`
+	Http2FrameSize            *wrapperspb.UInt32Value `protobuf:"bytes,6,opt,name=http2_frame_size,json=http2FrameSize,proto3" json:"http2_frame_size,omitempty"`
+	Http2KeepaliveInterval    *durationpb.Duration    `protobuf:"bytes,7,opt,name=http2_keepalive_interval,json=http2KeepaliveInterval,proto3" json:"http2_keepalive_interval,omitempty"`
+	Http2KeepaliveTimeout     *durationpb.Duration    `protobuf:"bytes,8,opt,name=http2_keepalive_timeout,json=http2KeepaliveTimeout,proto3" json:"http2_keepalive_timeout,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -4791,56 +4791,56 @@ func (*FrontendPolicySpec_HTTP) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{36, 0}
 }
 
-func (x *FrontendPolicySpec_HTTP) GetMaxBufferSize() *wrappers.UInt32Value {
+func (x *FrontendPolicySpec_HTTP) GetMaxBufferSize() *wrapperspb.UInt32Value {
 	if x != nil {
 		return x.MaxBufferSize
 	}
 	return nil
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp1MaxHeaders() *wrappers.UInt32Value {
+func (x *FrontendPolicySpec_HTTP) GetHttp1MaxHeaders() *wrapperspb.UInt32Value {
 	if x != nil {
 		return x.Http1MaxHeaders
 	}
 	return nil
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp1IdleTimeout() *duration.Duration {
+func (x *FrontendPolicySpec_HTTP) GetHttp1IdleTimeout() *durationpb.Duration {
 	if x != nil {
 		return x.Http1IdleTimeout
 	}
 	return nil
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp2WindowSize() *wrappers.UInt32Value {
+func (x *FrontendPolicySpec_HTTP) GetHttp2WindowSize() *wrapperspb.UInt32Value {
 	if x != nil {
 		return x.Http2WindowSize
 	}
 	return nil
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp2ConnectionWindowSize() *wrappers.UInt32Value {
+func (x *FrontendPolicySpec_HTTP) GetHttp2ConnectionWindowSize() *wrapperspb.UInt32Value {
 	if x != nil {
 		return x.Http2ConnectionWindowSize
 	}
 	return nil
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp2FrameSize() *wrappers.UInt32Value {
+func (x *FrontendPolicySpec_HTTP) GetHttp2FrameSize() *wrapperspb.UInt32Value {
 	if x != nil {
 		return x.Http2FrameSize
 	}
 	return nil
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp2KeepaliveInterval() *duration.Duration {
+func (x *FrontendPolicySpec_HTTP) GetHttp2KeepaliveInterval() *durationpb.Duration {
 	if x != nil {
 		return x.Http2KeepaliveInterval
 	}
 	return nil
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp2KeepaliveTimeout() *duration.Duration {
+func (x *FrontendPolicySpec_HTTP) GetHttp2KeepaliveTimeout() *durationpb.Duration {
 	if x != nil {
 		return x.Http2KeepaliveTimeout
 	}
@@ -4850,7 +4850,7 @@ func (x *FrontendPolicySpec_HTTP) GetHttp2KeepaliveTimeout() *duration.Duration 
 type FrontendPolicySpec_TLS struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// TLS handshake timeout
-	TlsHandshakeTimeout *duration.Duration `protobuf:"bytes,1,opt,name=tls_handshake_timeout,json=tlsHandshakeTimeout,proto3" json:"tls_handshake_timeout,omitempty"`
+	TlsHandshakeTimeout *durationpb.Duration `protobuf:"bytes,1,opt,name=tls_handshake_timeout,json=tlsHandshakeTimeout,proto3" json:"tls_handshake_timeout,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -4885,7 +4885,7 @@ func (*FrontendPolicySpec_TLS) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{36, 1}
 }
 
-func (x *FrontendPolicySpec_TLS) GetTlsHandshakeTimeout() *duration.Duration {
+func (x *FrontendPolicySpec_TLS) GetTlsHandshakeTimeout() *durationpb.Duration {
 	if x != nil {
 		return x.TlsHandshakeTimeout
 	}
@@ -4941,7 +4941,7 @@ func (x *FrontendPolicySpec_TCP) GetKeepalives() *KeepaliveConfig {
 type FrontendPolicySpec_Logging struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// CEL expression to filter out logs. If unset, all logs are considered.
-	Filter *wrappers.StringValue `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
+	Filter *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
 	// Fields applied to logs
 	Fields        *FrontendPolicySpec_Logging_Fields `protobuf:"bytes,2,opt,name=fields,proto3" json:"fields,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -4978,7 +4978,7 @@ func (*FrontendPolicySpec_Logging) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{36, 3}
 }
 
-func (x *FrontendPolicySpec_Logging) GetFilter() *wrappers.StringValue {
+func (x *FrontendPolicySpec_Logging) GetFilter() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Filter
 	}
@@ -5199,7 +5199,7 @@ type TrafficPolicySpec_LocalRateLimit struct {
 	state         protoimpl.MessageState                `protogen:"open.v1"`
 	MaxTokens     uint64                                `protobuf:"varint,1,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
 	TokensPerFill uint64                                `protobuf:"varint,2,opt,name=tokens_per_fill,json=tokensPerFill,proto3" json:"tokens_per_fill,omitempty"`
-	FillInterval  *duration.Duration                    `protobuf:"bytes,3,opt,name=fill_interval,json=fillInterval,proto3" json:"fill_interval,omitempty"`
+	FillInterval  *durationpb.Duration                  `protobuf:"bytes,3,opt,name=fill_interval,json=fillInterval,proto3" json:"fill_interval,omitempty"`
 	Type          TrafficPolicySpec_LocalRateLimit_Type `protobuf:"varint,4,opt,name=type,proto3,enum=agentgateway.dev.resource.TrafficPolicySpec_LocalRateLimit_Type" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -5249,7 +5249,7 @@ func (x *TrafficPolicySpec_LocalRateLimit) GetTokensPerFill() uint64 {
 	return 0
 }
 
-func (x *TrafficPolicySpec_LocalRateLimit) GetFillInterval() *duration.Duration {
+func (x *TrafficPolicySpec_LocalRateLimit) GetFillInterval() *durationpb.Duration {
 	if x != nil {
 		return x.FillInterval
 	}
@@ -5270,8 +5270,8 @@ type TrafficPolicySpec_ExternalAuth struct {
 	FailureMode           TrafficPolicySpec_ExternalAuth_FailureMode  `protobuf:"varint,3,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.TrafficPolicySpec_ExternalAuth_FailureMode" json:"failure_mode,omitempty"`
 	IncludeRequestHeaders []string                                    `protobuf:"bytes,4,rep,name=include_request_headers,json=includeRequestHeaders,proto3" json:"include_request_headers,omitempty"`
 	IncludeRequestBody    *TrafficPolicySpec_ExternalAuth_BodyOptions `protobuf:"bytes,5,opt,name=include_request_body,json=includeRequestBody,proto3" json:"include_request_body,omitempty"`
-	Timeout               *duration.Duration                          `protobuf:"bytes,6,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	StatusOnError         *wrappers.UInt32Value                       `protobuf:"bytes,7,opt,name=status_on_error,json=statusOnError,proto3" json:"status_on_error,omitempty"`
+	Timeout               *durationpb.Duration                        `protobuf:"bytes,6,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	StatusOnError         *wrapperspb.UInt32Value                     `protobuf:"bytes,7,opt,name=status_on_error,json=statusOnError,proto3" json:"status_on_error,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -5341,14 +5341,14 @@ func (x *TrafficPolicySpec_ExternalAuth) GetIncludeRequestBody() *TrafficPolicyS
 	return nil
 }
 
-func (x *TrafficPolicySpec_ExternalAuth) GetTimeout() *duration.Duration {
+func (x *TrafficPolicySpec_ExternalAuth) GetTimeout() *durationpb.Duration {
 	if x != nil {
 		return x.Timeout
 	}
 	return nil
 }
 
-func (x *TrafficPolicySpec_ExternalAuth) GetStatusOnError() *wrappers.UInt32Value {
+func (x *TrafficPolicySpec_ExternalAuth) GetStatusOnError() *wrapperspb.UInt32Value {
 	if x != nil {
 		return x.StatusOnError
 	}
@@ -6153,15 +6153,15 @@ func (x *BackendPolicySpec_InferenceRouting) GetFailureMode() BackendPolicySpec_
 
 type BackendPolicySpec_BackendTLS struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Cert  *wrappers.BytesValue   `protobuf:"bytes,1,opt,name=cert,proto3" json:"cert,omitempty"`
-	Key   *wrappers.BytesValue   `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Cert  *wrapperspb.BytesValue `protobuf:"bytes,1,opt,name=cert,proto3" json:"cert,omitempty"`
+	Key   *wrapperspb.BytesValue `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
 	// Root to verify. If not set, system certs will be used.
 	// If no verification is desired, use 'insecure'
-	Root *wrappers.BytesValue `protobuf:"bytes,3,opt,name=root,proto3" json:"root,omitempty"`
+	Root *wrapperspb.BytesValue `protobuf:"bytes,3,opt,name=root,proto3" json:"root,omitempty"`
 	// Disable all verification
-	Insecure *wrappers.BoolValue `protobuf:"bytes,4,opt,name=insecure,proto3" json:"insecure,omitempty"`
+	Insecure *wrapperspb.BoolValue `protobuf:"bytes,4,opt,name=insecure,proto3" json:"insecure,omitempty"`
 	// If set, override the SNI explicitly. Otherwise, it is auto-derived.
-	Hostname      *wrappers.StringValue `protobuf:"bytes,5,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Hostname      *wrapperspb.StringValue `protobuf:"bytes,5,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6196,35 +6196,35 @@ func (*BackendPolicySpec_BackendTLS) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{38, 3}
 }
 
-func (x *BackendPolicySpec_BackendTLS) GetCert() *wrappers.BytesValue {
+func (x *BackendPolicySpec_BackendTLS) GetCert() *wrapperspb.BytesValue {
 	if x != nil {
 		return x.Cert
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_BackendTLS) GetKey() *wrappers.BytesValue {
+func (x *BackendPolicySpec_BackendTLS) GetKey() *wrapperspb.BytesValue {
 	if x != nil {
 		return x.Key
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_BackendTLS) GetRoot() *wrappers.BytesValue {
+func (x *BackendPolicySpec_BackendTLS) GetRoot() *wrapperspb.BytesValue {
 	if x != nil {
 		return x.Root
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_BackendTLS) GetInsecure() *wrappers.BoolValue {
+func (x *BackendPolicySpec_BackendTLS) GetInsecure() *wrapperspb.BoolValue {
 	if x != nil {
 		return x.Insecure
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_BackendTLS) GetHostname() *wrappers.StringValue {
+func (x *BackendPolicySpec_BackendTLS) GetHostname() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Hostname
 	}
@@ -6765,8 +6765,8 @@ func (x *BackendPolicySpec_Ai_Webhook) GetForwardHeaderMatches() []*HeaderMatch 
 type BackendPolicySpec_Ai_Moderation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Model to use. Defaults to `omni-moderation-latest`
-	Model         *wrappers.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
-	Auth          *BackendAuthPolicy    `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	Model         *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Auth          *BackendAuthPolicy      `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6801,7 +6801,7 @@ func (*BackendPolicySpec_Ai_Moderation) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{38, 0, 7}
 }
 
-func (x *BackendPolicySpec_Ai_Moderation) GetModel() *wrappers.StringValue {
+func (x *BackendPolicySpec_Ai_Moderation) GetModel() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Model
 	}
@@ -7142,8 +7142,8 @@ func (x *AIBackend_HostOverride) GetPort() int32 {
 }
 
 type AIBackend_OpenAI struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Model         *wrappers.StringValue  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Model         *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7178,7 +7178,7 @@ func (*AIBackend_OpenAI) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{42, 1}
 }
 
-func (x *AIBackend_OpenAI) GetModel() *wrappers.StringValue {
+func (x *AIBackend_OpenAI) GetModel() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Model
 	}
@@ -7186,8 +7186,8 @@ func (x *AIBackend_OpenAI) GetModel() *wrappers.StringValue {
 }
 
 type AIBackend_Gemini struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Model         *wrappers.StringValue  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Model         *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7222,7 +7222,7 @@ func (*AIBackend_Gemini) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{42, 2}
 }
 
-func (x *AIBackend_Gemini) GetModel() *wrappers.StringValue {
+func (x *AIBackend_Gemini) GetModel() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Model
 	}
@@ -7230,10 +7230,10 @@ func (x *AIBackend_Gemini) GetModel() *wrappers.StringValue {
 }
 
 type AIBackend_Vertex struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Model         *wrappers.StringValue  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
-	Region        string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
-	ProjectId     string                 `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Model         *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Region        string                  `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	ProjectId     string                  `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7268,7 +7268,7 @@ func (*AIBackend_Vertex) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{42, 3}
 }
 
-func (x *AIBackend_Vertex) GetModel() *wrappers.StringValue {
+func (x *AIBackend_Vertex) GetModel() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Model
 	}
@@ -7290,8 +7290,8 @@ func (x *AIBackend_Vertex) GetProjectId() string {
 }
 
 type AIBackend_Anthropic struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Model         *wrappers.StringValue  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Model         *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7326,7 +7326,7 @@ func (*AIBackend_Anthropic) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{42, 4}
 }
 
-func (x *AIBackend_Anthropic) GetModel() *wrappers.StringValue {
+func (x *AIBackend_Anthropic) GetModel() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Model
 	}
@@ -7334,11 +7334,11 @@ func (x *AIBackend_Anthropic) GetModel() *wrappers.StringValue {
 }
 
 type AIBackend_Bedrock struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	Model               *wrappers.StringValue  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
-	Region              string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
-	GuardrailIdentifier *wrappers.StringValue  `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3" json:"guardrail_identifier,omitempty"`
-	GuardrailVersion    *wrappers.StringValue  `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3" json:"guardrail_version,omitempty"`
+	state               protoimpl.MessageState  `protogen:"open.v1"`
+	Model               *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Region              string                  `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	GuardrailIdentifier *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3" json:"guardrail_identifier,omitempty"`
+	GuardrailVersion    *wrapperspb.StringValue `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3" json:"guardrail_version,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -7373,7 +7373,7 @@ func (*AIBackend_Bedrock) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{42, 5}
 }
 
-func (x *AIBackend_Bedrock) GetModel() *wrappers.StringValue {
+func (x *AIBackend_Bedrock) GetModel() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Model
 	}
@@ -7387,14 +7387,14 @@ func (x *AIBackend_Bedrock) GetRegion() string {
 	return ""
 }
 
-func (x *AIBackend_Bedrock) GetGuardrailIdentifier() *wrappers.StringValue {
+func (x *AIBackend_Bedrock) GetGuardrailIdentifier() *wrapperspb.StringValue {
 	if x != nil {
 		return x.GuardrailIdentifier
 	}
 	return nil
 }
 
-func (x *AIBackend_Bedrock) GetGuardrailVersion() *wrappers.StringValue {
+func (x *AIBackend_Bedrock) GetGuardrailVersion() *wrapperspb.StringValue {
 	if x != nil {
 		return x.GuardrailVersion
 	}
@@ -7405,7 +7405,7 @@ type AIBackend_Provider struct {
 	state        protoimpl.MessageState  `protogen:"open.v1"`
 	Name         string                  `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	HostOverride *AIBackend_HostOverride `protobuf:"bytes,2,opt,name=host_override,json=hostOverride,proto3" json:"host_override,omitempty"`
-	PathOverride *wrappers.StringValue   `protobuf:"bytes,3,opt,name=path_override,json=pathOverride,proto3" json:"path_override,omitempty"`
+	PathOverride *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=path_override,json=pathOverride,proto3" json:"path_override,omitempty"`
 	// Types that are valid to be assigned to Provider:
 	//
 	//	*AIBackend_Provider_Openai
@@ -7467,7 +7467,7 @@ func (x *AIBackend_Provider) GetHostOverride() *AIBackend_HostOverride {
 	return nil
 }
 
-func (x *AIBackend_Provider) GetPathOverride() *wrappers.StringValue {
+func (x *AIBackend_Provider) GetPathOverride() *wrapperspb.StringValue {
 	if x != nil {
 		return x.PathOverride
 	}
@@ -8280,11 +8280,11 @@ var file_resource_proto_goTypes = []any{
 	(*AIBackend_Provider)(nil),      // 113: agentgateway.dev.resource.AIBackend.Provider
 	(*AIBackend_ProviderGroup)(nil), // 114: agentgateway.dev.resource.AIBackend.ProviderGroup
 	nil,                             // 115: agentgateway.dev.resource.AIBackend.Provider.RoutesEntry
-	(*duration.Duration)(nil),       // 116: google.protobuf.Duration
-	(*wrappers.UInt32Value)(nil),    // 117: google.protobuf.UInt32Value
-	(*wrappers.StringValue)(nil),    // 118: google.protobuf.StringValue
-	(*wrappers.BytesValue)(nil),     // 119: google.protobuf.BytesValue
-	(*wrappers.BoolValue)(nil),      // 120: google.protobuf.BoolValue
+	(*durationpb.Duration)(nil),     // 116: google.protobuf.Duration
+	(*wrapperspb.UInt32Value)(nil),  // 117: google.protobuf.UInt32Value
+	(*wrapperspb.StringValue)(nil),  // 118: google.protobuf.StringValue
+	(*wrapperspb.BytesValue)(nil),   // 119: google.protobuf.BytesValue
+	(*wrapperspb.BoolValue)(nil),    // 120: google.protobuf.BoolValue
 	(*structpb.Value)(nil),          // 121: google.protobuf.Value
 }
 var file_resource_proto_depIdxs = []int32{
