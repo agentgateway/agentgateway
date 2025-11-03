@@ -66,7 +66,6 @@ async fn apply_request_policies(
 	client: PolicyClient,
 	log: &mut RequestLog,
 	req: &mut Request,
-	path_match: &PathMatch,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
 	if let Some(j) = &policies.jwt {
@@ -125,7 +124,7 @@ async fn apply_request_policies(
 		rhm.apply(req.headers_mut()).map_err(ProxyError::from)?;
 	}
 	if let Some(r) = &policies.url_rewrite {
-		r.apply(req, path_match).map_err(ProxyError::from)?;
+		r.apply(req).map_err(ProxyError::from)?;
 	}
 	if let Some(c) = &policies.cors {
 		c.apply(req)
@@ -133,7 +132,7 @@ async fn apply_request_policies(
 			.apply(response_policies.headers())?;
 	}
 	if let Some(rr) = &policies.request_redirect {
-		rr.apply(req, path_match)
+		rr.apply(req)
 			.map_err(ProxyError::from)?
 			.apply(response_policies.headers())?;
 	}
@@ -144,6 +143,63 @@ async fn apply_request_policies(
 	}
 
 	// Mirror, timeout, and retry are handled separately.
+
+	Ok(())
+}
+
+async fn apply_backend_policies(
+	backend_info: auth::BackendInfo,
+	policies: &store::BackendPolicies,
+	req: &mut Request,
+	log: &mut Option<&mut RequestLog>,
+	response_policies: &mut ResponsePolicies,
+) -> Result<(), ProxyResponse> {
+	let BackendPolicies {
+		backend_tls: _,
+		backend_auth,
+		a2a,
+		// Applied elsewhere
+		llm_provider: _,
+		// Applied elsewhere
+		llm: _,
+		// Applied elsewhere
+		inference_routing: _,
+		request_header_modifier,
+		response_header_modifier,
+		request_redirect,
+		// Applied elsewhere
+		request_mirror: _,
+	} = policies;
+	response_policies.backend_response_header = response_header_modifier.clone();
+	if let Some(auth) = backend_auth {
+		auth::apply_backend_auth(&backend_info, auth, req).await?;
+	}
+	if let Some(rhm) = request_header_modifier {
+		rhm.apply(req.headers_mut()).map_err(ProxyError::from)?;
+	}
+	if let Some(rr) = request_redirect {
+		rr.apply(req)
+			.map_err(ProxyError::from)?
+			.apply(response_policies.headers())?;
+	}
+
+	if let Some(a2a) = a2a {
+		let a2a_type = a2a::apply_to_request(a2a, req).await;
+		if let a2a::RequestType::Call(method) = a2a_type {
+			log.add(|l| {
+				l.a2a_method = Some(method);
+			});
+		}
+		if matches!(
+			a2a_type,
+			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_)
+		) {
+			log.add(|l| {
+				l.backend_protocol = Some(cel::BackendProtocol::a2a);
+			});
+		}
+		response_policies.a2a_type = a2a_type;
+	}
 
 	Ok(())
 }
@@ -445,10 +501,11 @@ impl HTTPProxy {
 		log.route_name = Some(selected_route.route_name.clone());
 		// Record the matched path for tracing/logging span names
 		log.path_match = Some(match &path_match {
-			crate::types::agent::PathMatch::Exact(p) => p.to_string(),
-			crate::types::agent::PathMatch::PathPrefix(p) => format!("{}/*", p),
-			crate::types::agent::PathMatch::Regex(r, _) => r.as_str().to_string(),
+			PathMatch::Exact(p) => p.to_string(),
+			PathMatch::PathPrefix(p) => format!("{}/*", p),
+			PathMatch::Regex(r, _) => r.as_str().to_string(),
 		});
+		req.extensions_mut().insert(path_match);
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
@@ -483,7 +540,6 @@ impl HTTPProxy {
 			self.policy_client(),
 			log,
 			&mut req,
-			&path_match,
 			response_policies,
 		)
 		.await?;
@@ -491,7 +547,11 @@ impl HTTPProxy {
 		let selected_backend =
 			select_backend(selected_route.as_ref(), &req).ok_or(ProxyError::NoValidBackends)?;
 		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
-		let backend_policies = get_backend_policies(self.inputs.as_ref(), &selected_backend.backend);
+		let backend_policies = get_backend_policies(
+			self.inputs.as_ref(),
+			&selected_backend.backend,
+			&selected_backend.inline_policies,
+		);
 		log.backend_info = Some(selected_backend.backend.backend_info());
 		if let Some(bp) = selected_backend.backend.backend_protocol() {
 			log.backend_protocol = Some(bp)
@@ -639,7 +699,7 @@ impl HTTPProxy {
 			backend_policies,
 			req,
 			Some(log),
-			&mut response_policies.response_headers,
+			response_policies,
 		)
 		.await?;
 
@@ -769,7 +829,11 @@ pub async fn build_transport(
 	)
 }
 
-fn get_backend_policies(inputs: &ProxyInputs, backend: &Backend) -> BackendPolicies {
+fn get_backend_policies(
+	inputs: &ProxyInputs,
+	backend: &Backend,
+	inline_policies: &[BackendPolicy],
+) -> BackendPolicies {
 	let service = match backend {
 		Backend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
 		_ => None,
@@ -778,7 +842,7 @@ fn get_backend_policies(inputs: &ProxyInputs, backend: &Backend) -> BackendPolic
 	inputs
 		.stores
 		.read_binds()
-		.backend_policies(Some(backend.name()), service, None)
+		.backend_policies(Some(backend.name()), service, None, inline_policies)
 }
 
 async fn make_backend_call(
@@ -788,7 +852,7 @@ async fn make_backend_call(
 	base_policies: BackendPolicies,
 	mut req: Request,
 	mut log: Option<&mut RequestLog>,
-	response_headers: &mut HeaderMap,
+	response_policies: &mut ResponsePolicies,
 ) -> Result<Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send>>, ProxyResponse> {
 	let client = inputs.upstream.clone();
 	let policy_client = PolicyClient {
@@ -811,6 +875,7 @@ async fn make_backend_call(
 					Some(backend.name()),
 					None,
 					Some(target.name()),
+					&[],
 				);
 
 				(&Backend::from(target), base_policies.merge(policies))
@@ -830,7 +895,7 @@ async fn make_backend_call(
 
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
 	let (override_dest, ext_proc_resp) = maybe_inference.mutate_request(&mut req).await?;
-	ext_proc_resp.apply(response_headers)?;
+	ext_proc_resp.apply(response_policies.headers())?;
 	log.add(|l| l.inference_pool = override_dest);
 
 	let backend_call = match backend {
@@ -838,10 +903,11 @@ async fn make_backend_call(
 			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
 			let k = strng::format!("{}/{}", n, provider.name);
-			let sub_backend_policies = inputs
-				.stores
-				.read_binds()
-				.backend_policies(None, None, Some(k));
+			let sub_backend_policies =
+				inputs
+					.stores
+					.read_binds()
+					.backend_policies(None, None, Some(k), &[]);
 
 			let (target, provider_defaults) = match &provider.host_override {
 				Some(target) => (
@@ -923,13 +989,15 @@ async fn make_backend_call(
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_name = backend.name();
 	let backend_info = auth::BackendInfo {
-		name: backend_name.as_str(),
+		name: backend_name.clone(),
 		inputs: inputs.clone(),
 	};
-	auth::apply_backend_auth(
-		&backend_info,
-		backend_call.backend_policies.backend_auth.as_ref(),
+	apply_backend_policies(
+		backend_info.clone(),
+		&backend_call.backend_policies,
 		&mut req,
+		&mut log,
+		response_policies,
 	)
 	.await?;
 
@@ -947,26 +1015,12 @@ async fn make_backend_call(
 		l.endpoint = Some(backend_call.target.clone());
 	});
 
-	let route_policies =
+	let llm_request_policies =
 		route_policies.merge_backend_policies(backend_call.backend_policies.llm.clone());
 
-	let a2a_type = a2a::apply_to_request(backend_call.backend_policies.a2a.as_ref(), &mut req).await;
-	if let a2a::RequestType::Call(method) = a2a_type {
-		log.add(|l| {
-			l.a2a_method = Some(method);
-		});
-	}
-	if matches!(
-		a2a_type,
-		a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_)
-	) {
-		log.add(|l| {
-			l.backend_protocol = Some(cel::BackendProtocol::a2a);
-		});
-	}
 	set_backend_cel_context(&mut log);
 
-	let (mut req, response_policies, llm_request) =
+	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
 			let route_type = llm.resolve_route(req.uri().path());
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
@@ -980,7 +1034,7 @@ async fn make_backend_call(
 							.provider
 							.process_completions_request(
 								&backend_info,
-								route_policies.llm.as_deref(),
+								llm_request_policies.llm.as_deref(),
 								req,
 								llm.tokenize,
 								&mut log,
@@ -992,7 +1046,7 @@ async fn make_backend_call(
 							.provider
 							.process_messages_request(
 								&backend_info,
-								route_policies.llm.as_deref(),
+								llm_request_policies.llm.as_deref(),
 								req,
 								llm.tokenize,
 								&mut log,
@@ -1018,12 +1072,12 @@ async fn make_backend_call(
 
 					// Apply all policies (rate limits)
 					let response_policies = apply_llm_request_policies(
-						&route_policies,
+						&llm_request_policies,
 						policy_client,
 						&mut log,
 						&mut req,
 						&llm_request,
-						response_headers,
+						&mut response_policies.response_headers,
 					)
 					.await?;
 					log.add(|l| l.llm_request = Some(llm_request.clone()));
@@ -1078,6 +1132,7 @@ async fn make_backend_call(
 		.as_ref()
 		.map(|l| l.cel.cel_context.needs_llm_completion())
 		.unwrap_or_default();
+	let a2a_type = response_policies.a2a_type.clone();
 	Ok(Box::pin(async move {
 		let mut resp = upstream.call(call).await?;
 		a2a::apply_to_response(
@@ -1095,7 +1150,7 @@ async fn make_backend_call(
 				.process_response(
 					&client,
 					llm_request,
-					response_policies,
+					llm_response_policies,
 					llm_response_log.expect("must be set"),
 					include_completion_in_log,
 					resp,
@@ -1323,6 +1378,7 @@ struct ResponsePolicies {
 	response_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
 	gateway_ext_proc: Option<ExtProcRequest>,
+	a2a_type: a2a::RequestType,
 }
 
 impl ResponsePolicies {
@@ -1403,7 +1459,7 @@ impl PolicyClient {
 	}
 	pub async fn call(&self, req: Request, backend: SimpleBackend) -> Result<Response, ProxyError> {
 		let backend = Backend::from(backend);
-		let pols = get_backend_policies(&self.inputs, &backend);
+		let pols = get_backend_policies(&self.inputs, &backend, &[]);
 		make_backend_call(
 			self.inputs.clone(),
 			Arc::new(LLMRequestPolicies::default()),
@@ -1436,7 +1492,7 @@ impl PolicyClient {
 		defaults: BackendPolicies,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
 		let backend = Backend::from(backend.clone());
-		let pols = defaults.merge(get_backend_policies(&self.inputs, &backend));
+		let pols = defaults.merge(get_backend_policies(&self.inputs, &backend, &[]));
 		Box::pin(async move {
 			make_backend_call(
 				self.inputs.clone(),

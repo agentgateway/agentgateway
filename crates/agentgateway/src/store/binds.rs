@@ -415,6 +415,7 @@ impl Store {
 		backend: Option<BackendName>,
 		service: Option<ServiceName>,
 		sub_backend: Option<SubBackendName>,
+		inline: &[BackendPolicy],
 	) -> BackendPolicies {
 		let backend_rules =
 			backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::Backend(t)));
@@ -432,6 +433,7 @@ impl Store {
 			.chain(service_rules.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_name.get(n))
 			.filter_map(|p| p.policy.as_backend());
+		let rules = inline.iter().chain(rules);
 
 		let mut pol = BackendPolicies::default();
 		for rule in rules {

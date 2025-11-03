@@ -354,7 +354,7 @@ impl AIProvider {
 
 	pub async fn process_completions_request(
 		&self,
-		backend_info: &crate::http::auth::BackendInfo<'_>,
+		backend_info: &crate::http::auth::BackendInfo,
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
@@ -404,7 +404,7 @@ impl AIProvider {
 
 	pub async fn process_messages_request(
 		&self,
-		backend_info: &crate::http::auth::BackendInfo<'_>,
+		backend_info: &crate::http::auth::BackendInfo,
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
@@ -443,7 +443,7 @@ impl AIProvider {
 	#[allow(clippy::too_many_arguments)]
 	async fn process_request(
 		&self,
-		backend_info: &crate::http::auth::BackendInfo<'_>,
+		backend_info: &crate::http::auth::BackendInfo,
 		policies: Option<&Policy>,
 		original_format: InputFormat,
 		mut req: impl RequestType,

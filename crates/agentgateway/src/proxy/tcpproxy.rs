@@ -203,5 +203,5 @@ pub fn get_backend_policies(inputs: &ProxyInputs, backend: &SimpleBackend) -> Ba
 	inputs
 		.stores
 		.read_binds()
-		.backend_policies(Some(backend.name()), service, None)
+		.backend_policies(Some(backend.name()), service, None, &[])
 }

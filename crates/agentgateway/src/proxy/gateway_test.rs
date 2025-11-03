@@ -4,9 +4,10 @@ use crate::http::{Body, transformation_cel};
 use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
+use crate::types::agent::BackendPolicy;
 use crate::types::agent::{
-	Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, Route, RouteMatch,
-	RouteSet, TargetedPolicy, TrafficPolicy,
+	BackendReference, Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, Route,
+	RouteBackendReference, RouteMatch, RouteSet, TargetedPolicy, TrafficPolicy,
 };
 use crate::*;
 use ::http::StatusCode;
@@ -263,6 +264,66 @@ async fn tls_termination() {
 	let io = t.serve_https(strng::new("bind"), Some("not-the-domain"));
 	let res = RequestBuilder::new(Method::GET, "http://lo").send(io).await;
 	assert_matches!(res, Err(_));
+}
+
+#[tokio::test]
+async fn header_manipulation() {
+	let mock = simple_mock().await;
+	let bind = base_gateway(&mock).with_route(Route {
+		key: "route2".into(),
+		route_name: "route2".into(),
+		rule_name: None,
+		hostnames: Default::default(),
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/p".into()),
+			method: None,
+			query: vec![],
+		}],
+		inline_policies: vec![
+			TrafficPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+				add: vec![("x-route-req".into(), "route-req".into())],
+				set: vec![],
+				remove: vec![],
+			}),
+			TrafficPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+				add: vec![("x-route-resp".into(), "route-resp".into())],
+				set: vec![],
+				remove: vec![],
+			}),
+		],
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			backend: BackendReference::Backend(mock.address().to_string().into()),
+			inline_policies: vec![
+				BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+					add: vec![("x-backend-req".into(), "backend-req".into())],
+					set: vec![],
+					remove: vec![],
+				}),
+				BackendPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+					add: vec![("x-backend-resp".into(), "backend-resp".into())],
+					set: vec![],
+					remove: vec![],
+				}),
+			],
+		}],
+	});
+	let io = bind.serve_http(BIND_KEY);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-route-resp"), "route-resp");
+	assert_eq!(res.hdr("x-backend-resp"), "backend-resp");
+	let body = read_body(res.into_body()).await;
+	assert_eq!(
+		body.headers.get("x-route-req").unwrap().as_bytes(),
+		b"route-req"
+	);
+	assert_eq!(
+		body.headers.get("x-backend-req").unwrap().as_bytes(),
+		b"backend-req"
+	);
 }
 
 async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value) {
