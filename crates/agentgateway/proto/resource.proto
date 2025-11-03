@@ -237,10 +237,13 @@ message HeaderModifier {
   repeated string remove = 3;
 }
 
-message RequestMirror {
-  BackendReference backend = 1;
-  // 0-100
-  double percentage = 2;
+message RequestMirrors {
+  message Mirror {
+    BackendReference backend = 1;
+    // 0-100
+    double percentage = 2;
+  }
+  repeated Mirror mirrors = 1;
 }
 
 message RequestRedirect {
@@ -493,7 +496,7 @@ message TrafficPolicySpec {
     HeaderModifier response_header_modifier = 13;
     RequestRedirect request_redirect = 14;
     UrlRewrite url_rewrite = 15;
-    RequestMirror request_mirror = 16;
+    RequestMirrors request_mirror = 16;
     DirectResponse direct_response = 17;
     CORS cors = 18;
   }
@@ -652,7 +655,7 @@ message BackendPolicySpec {
     HeaderModifier request_header_modifier = 8;
     HeaderModifier response_header_modifier = 9;
     RequestRedirect request_redirect = 10;
-    RequestMirror request_mirror = 11;
+    RequestMirrors request_mirror = 11;
   }
 }
 

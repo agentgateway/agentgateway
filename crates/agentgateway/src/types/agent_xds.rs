@@ -803,11 +803,18 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 				})
 			},
 			Some(bps::Kind::RequestMirror(m)) => {
-				let backend = resolve_simple_reference(m.backend.as_ref())?;
-				BackendPolicy::RequestMirror(vec![http::filters::RequestMirror {
-					backend,
-					percentage: m.percentage / 100.0,
-				}])
+				let mirrors = m
+					.mirrors
+					.iter()
+					.map(|m| {
+						let backend = resolve_simple_reference(m.backend.as_ref())?;
+						Ok::<_, ProtoError>(http::filters::RequestMirror {
+							backend,
+							percentage: m.percentage / 100.0,
+						})
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				BackendPolicy::RequestMirror(mirrors)
 			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
@@ -1086,11 +1093,18 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::UrlRewrite(http::filters::UrlRewrite { authority, path })
 			},
 			Some(tps::Kind::RequestMirror(m)) => {
-				let backend = resolve_simple_reference(m.backend.as_ref())?;
-				TrafficPolicy::RequestMirror(vec![http::filters::RequestMirror {
-					backend,
-					percentage: m.percentage / 100.0,
-				}])
+				let mirrors = m
+					.mirrors
+					.iter()
+					.map(|m| {
+						let backend = resolve_simple_reference(m.backend.as_ref())?;
+						Ok::<_, ProtoError>(http::filters::RequestMirror {
+							backend,
+							percentage: m.percentage / 100.0,
+						})
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				TrafficPolicy::RequestMirror(mirrors)
 			},
 			Some(tps::Kind::DirectResponse(dr)) => {
 				TrafficPolicy::DirectResponse(http::filters::DirectResponse {
