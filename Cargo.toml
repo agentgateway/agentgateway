@@ -78,6 +78,7 @@ h2 = "0.4"
 headers = "0.4"
 hex = "0.4"
 hickory-resolver = { version = "0.25", features = ["serde"] }
+htpasswd-verify = "0.3"
 httpdate = "1.0"
 http = "1.3"
 http-body = "1"

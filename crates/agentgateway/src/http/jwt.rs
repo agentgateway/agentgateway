@@ -326,7 +326,7 @@ impl Jwt {
 			log.jwt_sub = Some(sub.to_string());
 		};
 		log.cel.ctx().with_jwt(&claims);
-		// Remove the token. TODO: allow keep it
+		// Remove the token.
 		req.headers_mut().remove(http::header::AUTHORIZATION);
 		// Insert the claims into extensions so we can reference it later
 		req.extensions_mut().insert(claims);

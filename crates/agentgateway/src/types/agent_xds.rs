@@ -1123,6 +1123,41 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				})
 				.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
+			Some(tps::Kind::BasicAuth(ba)) => {
+				let mode = match tps::basic_authentication::Mode::try_from(ba.mode)
+					.map_err(|_| ProtoError::EnumParse("invalid Basic Auth mode".to_string()))?
+				{
+					tps::basic_authentication::Mode::Strict => http::basicauth::Mode::Strict,
+					tps::basic_authentication::Mode::Optional => http::basicauth::Mode::Optional,
+				};
+				TrafficPolicy::BasicAuth(http::basicauth::BasicAuthentication::new(
+					&ba.htpasswd_content,
+					ba.realm.clone(),
+					mode,
+				))
+			},
+			Some(tps::Kind::ApiKeyAuth(ba)) => {
+				let mode = match tps::api_key::Mode::try_from(ba.mode)
+					.map_err(|_| ProtoError::EnumParse("invalid API Key mode".to_string()))?
+				{
+					tps::api_key::Mode::Strict => http::apikey::Mode::Strict,
+					tps::api_key::Mode::Optional => http::apikey::Mode::Optional,
+				};
+				let keys = ba
+					.api_keys
+					.iter()
+					.map(|u| {
+						let meta = u
+							.metadata
+							.as_ref()
+							.map(serde_json::to_value)
+							.transpose()?
+							.unwrap_or_default();
+						Ok::<_, ProtoError>((http::apikey::APIKey::new(u.key.clone()), meta))
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(keys, mode))
+			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}

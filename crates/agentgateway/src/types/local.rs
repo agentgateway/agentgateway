@@ -567,6 +567,12 @@ struct LocalGatewayPolicy {
 		)
 	)]
 	transformations: Option<crate::http::transformation_cel::Transformation>,
+	/// Authenticate incoming requests using Basic Authentication with htpasswd.
+	#[serde(default)]
+	basic_auth: Option<crate::http::basicauth::LocalBasicAuth>,
+	/// Authenticate incoming requests using API Keys
+	#[serde(default)]
+	api_key: Option<crate::http::apikey::LocalAPIKeys>,
 }
 
 impl From<LocalGatewayPolicy> for FilterOrPolicy {
@@ -576,12 +582,16 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			ext_authz,
 			ext_proc,
 			transformations,
+			basic_auth,
+			api_key,
 		} = val;
 		FilterOrPolicy {
 			jwt_auth,
 			ext_authz,
 			ext_proc,
 			transformations,
+			basic_auth,
+			api_key,
 			..Default::default()
 		}
 	}
@@ -669,6 +679,12 @@ struct FilterOrPolicy {
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
+	/// Authenticate incoming requests using Basic Authentication with htpasswd.
+	#[serde(default)]
+	basic_auth: Option<crate::http::basicauth::LocalBasicAuth>,
+	/// Authenticate incoming requests using API Keys
+	#[serde(default)]
+	api_key: Option<crate::http::apikey::LocalAPIKeys>,
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
 	ext_authz: Option<LocalExtAuthz>,
@@ -1027,6 +1043,8 @@ async fn split_policies(
 		local_rate_limit,
 		remote_rate_limit,
 		jwt_auth,
+		basic_auth,
+		api_key,
 		transformations,
 		csrf,
 		ext_authz,
@@ -1091,6 +1109,12 @@ async fn split_policies(
 	}
 	if let Some(p) = jwt_auth {
 		route_policies.push(TrafficPolicy::JwtAuth(p.try_into(client.clone()).await?));
+	}
+	if let Some(p) = basic_auth {
+		route_policies.push(TrafficPolicy::BasicAuth(p.try_into()?));
+	}
+	if let Some(p) = api_key {
+		route_policies.push(TrafficPolicy::APIKey(p.into()));
 	}
 	if let Some(p) = transformations {
 		route_policies.push(TrafficPolicy::Transformation(p));

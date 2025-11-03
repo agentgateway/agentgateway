@@ -112,8 +112,14 @@ impl App {
 		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
 			ctx.with_request_body(body);
 		}
-		if let Some(jwt) = req.extensions().get::<Claims>() {
+		if let Some(jwt) = req.extensions().get::<jwt::Claims>() {
 			ctx.with_jwt(jwt);
+		}
+		if let Some(apikey) = req.extensions().get::<apikey::Claims>() {
+			ctx.with_api_key(apikey);
+		}
+		if let Some(apikey) = req.extensions().get::<basicauth::Claims>() {
+			ctx.with_basic_auth(apikey);
 		}
 		ctx.with_source(
 			req.extensions().get::<TCPConnectionInfo>().unwrap(),

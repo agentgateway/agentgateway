@@ -10,7 +10,7 @@ use agent_core::strng::Strng;
 use agent_core::{drain, metrics, strng};
 use axum::body::to_bytes;
 use bytes::Bytes;
-use http::{Method, Uri};
+use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use itertools::Itertools;
@@ -45,6 +45,25 @@ pub async fn send_request(
 	url: &str,
 ) -> Response {
 	RequestBuilder::new(method, url).send(io).await.unwrap()
+}
+
+pub async fn send_request_headers(
+	io: Client<MemoryConnector, Body>,
+	method: Method,
+	url: &str,
+	headers: &[(&str, &str)],
+) -> Response {
+	let hdrs = headers.iter().map(|(k, v)| {
+		(
+			HeaderName::try_from(*k).unwrap(),
+			HeaderValue::try_from(*v).unwrap(),
+		)
+	});
+	RequestBuilder::new(method, url)
+		.headers(HeaderMap::from_iter(hdrs))
+		.send(io)
+		.await
+		.unwrap()
 }
 
 pub async fn send_request_body(

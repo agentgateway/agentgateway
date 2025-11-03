@@ -6,7 +6,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use crate::http::jwt::Claims;
+use crate::http::{apikey, basicauth, jwt};
 use crate::llm;
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::serdes::*;
@@ -54,6 +54,8 @@ pub const BACKEND_ATTRIBUTE: &str = "backend";
 pub const RESPONSE_ATTRIBUTE: &str = "response";
 pub const RESPONSE_BODY_ATTRIBUTE: &str = "response.body";
 pub const JWT_ATTRIBUTE: &str = "jwt";
+pub const API_KEY_ATTRIBUTE: &str = "apiKey";
+pub const BASIC_AUTH_ATTRIBUTE: &str = "basicAuth";
 pub const MCP_ATTRIBUTE: &str = "mcp";
 pub const EXTAUTHZ_ATTRIBUTE: &str = "extauthz";
 pub const ALL_ATTRIBUTES: &[&str] = &[
@@ -67,6 +69,8 @@ pub const ALL_ATTRIBUTES: &[&str] = &[
 	RESPONSE_ATTRIBUTE,
 	RESPONSE_BODY_ATTRIBUTE,
 	JWT_ATTRIBUTE,
+	API_KEY_ATTRIBUTE,
+	BASIC_AUTH_ATTRIBUTE,
 	MCP_ATTRIBUTE,
 	EXTAUTHZ_ATTRIBUTE,
 ];
@@ -196,11 +200,25 @@ impl ContextBuilder {
 		self.attributes.contains(RESPONSE_BODY_ATTRIBUTE)
 	}
 
-	pub fn with_jwt(&mut self, info: &Claims) {
+	pub fn with_jwt(&mut self, info: &jwt::Claims) {
 		if !self.attributes.contains(JWT_ATTRIBUTE) {
 			return;
 		}
 		self.context.jwt = Some(info.clone())
+	}
+
+	pub fn with_api_key(&mut self, info: &apikey::Claims) {
+		if !self.attributes.contains(API_KEY_ATTRIBUTE) {
+			return;
+		}
+		self.context.api_key = Some(info.clone())
+	}
+
+	pub fn with_basic_auth(&mut self, info: &basicauth::Claims) {
+		if !self.attributes.contains(BASIC_AUTH_ATTRIBUTE) {
+			return;
+		}
+		self.context.basic_auth = Some(info.clone())
 	}
 
 	pub fn with_extauthz(&mut self, req: &crate::http::Request) {
@@ -327,6 +345,8 @@ impl ContextBuilder {
 			request,
 			response,
 			jwt,
+			api_key,
+			basic_auth,
 			llm,
 			source,
 			mcp: _,
@@ -337,6 +357,8 @@ impl ContextBuilder {
 		ctx.add_variable_from_value(REQUEST_ATTRIBUTE, opt_to_value(request)?);
 		ctx.add_variable_from_value(RESPONSE_ATTRIBUTE, opt_to_value(response)?);
 		ctx.add_variable_from_value(JWT_ATTRIBUTE, opt_to_value(jwt)?);
+		ctx.add_variable_from_value(BASIC_AUTH_ATTRIBUTE, opt_to_value(basic_auth)?);
+		ctx.add_variable_from_value(API_KEY_ATTRIBUTE, opt_to_value(api_key)?);
 		ctx.add_variable_from_value(MCP_ATTRIBUTE, opt_to_value(&mcp)?);
 		ctx.add_variable_from_value(BACKEND_ATTRIBUTE, opt_to_value(backend)?);
 		ctx.add_variable_from_value(LLM_ATTRIBUTE, opt_to_value(llm)?);
@@ -459,7 +481,11 @@ pub struct ExpressionContext {
 	/// `response` contains attributes about the HTTP response
 	pub response: Option<ResponseContext>,
 	/// `jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.
-	pub jwt: Option<Claims>,
+	pub jwt: Option<jwt::Claims>,
+	/// `apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.
+	pub api_key: Option<apikey::Claims>,
+	/// `basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.
+	pub basic_auth: Option<basicauth::Claims>,
 	/// `llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.
 	pub llm: Option<LLMContext>,
 	/// `source` contains attributes about the source of the request.

@@ -2469,6 +2469,108 @@
                               }
                             ]
                           },
+                          "basicAuth": {
+                            "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "htpasswd": {
+                                "description": ".htpasswd file contents/reference",
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "file": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "file"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              "realm": {
+                                "description": "Realm name for the WWW-Authenticate header",
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "default": null
+                              },
+                              "mode": {
+                                "description": "Validation mode for basic authentication",
+                                "oneOf": [
+                                  {
+                                    "description": "A valid username/password must be present.",
+                                    "type": "string",
+                                    "const": "strict"
+                                  },
+                                  {
+                                    "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+                                    "type": "string",
+                                    "const": "optional"
+                                  }
+                                ],
+                                "default": "optional"
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "htpasswd"
+                            ]
+                          },
+                          "apiKey": {
+                            "description": "Authenticate incoming requests using API Keys",
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "keys": {
+                                "description": "List of API keys",
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "metadata": true
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "key"
+                                  ]
+                                }
+                              },
+                              "mode": {
+                                "description": "Validation mode for API keys",
+                                "oneOf": [
+                                  {
+                                    "description": "A valid API Key must be present.",
+                                    "type": "string",
+                                    "const": "strict"
+                                  },
+                                  {
+                                    "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+                                    "type": "string",
+                                    "const": "optional"
+                                  }
+                                ],
+                                "default": "optional"
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "keys"
+                            ]
+                          },
                           "extAuthz": {
                             "description": "Authenticate incoming requests by calling an external authorization server.",
                             "anyOf": [
@@ -5953,6 +6055,108 @@
                       },
                       "additionalProperties": false,
                       "default": null
+                    },
+                    "basicAuth": {
+                      "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "htpasswd": {
+                          "description": ".htpasswd file contents/reference",
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "file": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "file"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "realm": {
+                          "description": "Realm name for the WWW-Authenticate header",
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "default": null
+                        },
+                        "mode": {
+                          "description": "Validation mode for basic authentication",
+                          "oneOf": [
+                            {
+                              "description": "A valid username/password must be present.",
+                              "type": "string",
+                              "const": "strict"
+                            },
+                            {
+                              "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+                              "type": "string",
+                              "const": "optional"
+                            }
+                          ],
+                          "default": "optional"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "htpasswd"
+                      ]
+                    },
+                    "apiKey": {
+                      "description": "Authenticate incoming requests using API Keys",
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "keys": {
+                          "description": "List of API keys",
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "metadata": true
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "key"
+                            ]
+                          }
+                        },
+                        "mode": {
+                          "description": "Validation mode for API keys",
+                          "oneOf": [
+                            {
+                              "description": "A valid API Key must be present.",
+                              "type": "string",
+                              "const": "strict"
+                            },
+                            {
+                              "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+                              "type": "string",
+                              "const": "optional"
+                            }
+                          ],
+                          "default": "optional"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "keys"
+                      ]
                     }
                   },
                   "additionalProperties": false
@@ -8041,6 +8245,108 @@
                   {
                     "type": "null"
                   }
+                ]
+              },
+              "basicAuth": {
+                "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "htpasswd": {
+                    "description": ".htpasswd file contents/reference",
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "file": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "file"
+                        ]
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "realm": {
+                    "description": "Realm name for the WWW-Authenticate header",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "default": null
+                  },
+                  "mode": {
+                    "description": "Validation mode for basic authentication",
+                    "oneOf": [
+                      {
+                        "description": "A valid username/password must be present.",
+                        "type": "string",
+                        "const": "strict"
+                      },
+                      {
+                        "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+                        "type": "string",
+                        "const": "optional"
+                      }
+                    ],
+                    "default": "optional"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "htpasswd"
+                ]
+              },
+              "apiKey": {
+                "description": "Authenticate incoming requests using API Keys",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "keys": {
+                    "description": "List of API keys",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "metadata": true
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "key"
+                      ]
+                    }
+                  },
+                  "mode": {
+                    "description": "Validation mode for API keys",
+                    "oneOf": [
+                      {
+                        "description": "A valid API Key must be present.",
+                        "type": "string",
+                        "const": "strict"
+                      },
+                      {
+                        "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+                        "type": "string",
+                        "const": "optional"
+                      }
+                    ],
+                    "default": "optional"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "keys"
                 ]
               },
               "extAuthz": {

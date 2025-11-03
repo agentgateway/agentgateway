@@ -439,6 +439,47 @@ message TrafficPolicySpec {
     }
   }
 
+  // Basic authentication configuration using htpasswd file
+  message BasicAuthentication {
+    // Validation mode for basic authentication
+    enum Mode {
+      // Requires valid credentials
+      STRICT = 0;
+      // If credentials exist, validate them (default)
+      OPTIONAL = 1;
+    }
+
+    // Htpasswd file content
+    string htpasswd_content = 1;
+
+    // Realm name for WWW-Authenticate header
+    google.protobuf.StringValue realm = 2;
+
+    // How the basic authentication should behave
+    Mode mode = 3;
+  }
+
+  // API Key authentication
+  message APIKey {
+    // Validation mode for API Key authentication
+    enum Mode {
+      // Requires valid credentials
+      STRICT = 0;
+      // If credentials exist, validate them (default)
+      OPTIONAL = 1;
+    }
+
+    message User {
+      string key = 1;
+      google.protobuf.Struct metadata = 2;
+    }
+
+    repeated User api_keys = 1;
+
+    // How the API key authentication should behave
+    Mode mode = 2;
+  }
+
   message TransformationPolicy {
     message Transform {
       repeated HeaderTransformation set = 1;
@@ -499,6 +540,8 @@ message TrafficPolicySpec {
     RequestMirrors request_mirror = 16;
     DirectResponse direct_response = 17;
     CORS cors = 18;
+    BasicAuthentication basic_auth = 19;
+    APIKey api_key_auth = 20;
   }
 }
 

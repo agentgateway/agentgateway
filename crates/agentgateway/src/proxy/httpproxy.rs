@@ -73,6 +73,12 @@ async fn apply_request_policies(
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
+	if let Some(b) = &policies.basic_auth {
+		b.apply(log, req).await?;
+	}
+	if let Some(b) = &policies.api_key {
+		b.apply(log, req).await?;
+	}
 	if let Some(x) = &policies.ext_authz {
 		x.check(client.clone(), req).await?
 	} else {
@@ -216,6 +222,12 @@ async fn apply_gateway_policies(
 		j.apply(log, req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+	}
+	if let Some(b) = &policies.basic_auth {
+		b.apply(log, req).await?;
+	}
+	if let Some(b) = &policies.api_key {
+		b.apply(log, req).await?;
 	}
 	if let Some(x) = &policies.ext_authz {
 		x.check(client.clone(), req).await?

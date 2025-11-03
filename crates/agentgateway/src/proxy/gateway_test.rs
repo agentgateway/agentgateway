@@ -17,6 +17,7 @@ use assert_matches::assert_matches;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::Rng;
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use x509_parser::nom::AsBytes;
 
@@ -326,6 +327,156 @@ async fn header_manipulation() {
 	);
 }
 
+#[tokio::test]
+async fn api_key() {
+	let (_mock, bind, io) = basic_setup().await;
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			name: strng::new("apikey"),
+			target: PolicyTarget::Route("route".into()),
+			policy: TrafficPolicy::APIKey(
+				http::apikey::LocalAPIKeys {
+					keys: vec![
+						http::apikey::LocalAPIKey {
+							key: http::apikey::APIKey::new("sk-123"),
+							metadata: Some(json!({"group": "eng"})),
+						},
+						http::apikey::LocalAPIKey {
+							key: http::apikey::APIKey::new("sk-456"),
+							metadata: Some(json!({"group": "sales"})),
+						},
+					],
+					mode: http::apikey::Mode::Strict,
+				}
+				.into(),
+			)
+			.into(),
+		})
+		.with_policy(TargetedPolicy {
+			name: strng::new("auth"),
+			target: PolicyTarget::Route("route".into()),
+			policy: TrafficPolicy::Authorization(deser(json!({
+				"rules": ["apiKey.group == 'eng'"]
+			})))
+			.into(),
+		});
+
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", "bearer sk-123")],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	// Match but fails authz
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", "bearer sk-456")],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	// No match
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", "bearer sk-789")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+	// No match
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 401);
+}
+
+#[tokio::test]
+async fn basic_auth() {
+	let (_mock, bind, io) = basic_setup().await;
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			name: strng::new("basic"),
+			target: PolicyTarget::Route("route".into()),
+			policy: TrafficPolicy::BasicAuth(
+				http::basicauth::LocalBasicAuth {
+					htpasswd: FileOrInline::Inline(
+						"user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00
+bcrypt_test:$2y$05$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa
+sha1_test:{SHA}W6ph5Mm5Pz8GgiULbPgzG37mj9g=
+crypt_test:bGVh02xkuGli2"
+							.to_string(),
+					),
+					realm: Some("my-realm".into()),
+					mode: http::basicauth::Mode::Strict,
+				}
+				.try_into()
+				.unwrap(),
+			)
+			.into(),
+		})
+		.with_policy(TargetedPolicy {
+			name: strng::new("auth"),
+			target: PolicyTarget::Route("route".into()),
+			policy: TrafficPolicy::Authorization(deser(json!({
+				"rules": ["basicAuth.username == 'user'"]
+			})))
+			.into(),
+		});
+
+	use base64::Engine;
+	let md5 = base64::prelude::BASE64_STANDARD.encode(b"user:password");
+	let sha1 = base64::prelude::BASE64_STANDARD.encode(b"sha1_test:password");
+	let bcrypt = base64::prelude::BASE64_STANDARD.encode(b"bcrypt_test:password");
+	let crypt = base64::prelude::BASE64_STANDARD.encode(b"crypt_test:password");
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {md5}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	// Match but fails authz
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {sha1}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {crypt}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {bcrypt}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	// No match
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 401);
+	let md5_wrong = base64::prelude::BASE64_STANDARD.encode(b"user:not-password");
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {md5_wrong}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+}
+
 async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value) {
 	let r = rand::rng().random::<u128>();
 	let res = send_request_body(io.clone(), Method::POST, &format!("http://lo/{r}"), body).await;
@@ -345,4 +496,8 @@ async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value)
 	let log = logs.first().unwrap();
 	let valid = is_json_subset(&want, log);
 	assert!(valid, "want={want:#?} got={log:#?}");
+}
+
+fn deser<T: DeserializeOwned>(v: serde_json::Value) -> T {
+	serde_json::from_value(v).unwrap()
 }

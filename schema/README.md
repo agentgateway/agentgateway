@@ -280,6 +280,16 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`binds[].listeners[].routes[].policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
+|`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
+|`binds[].listeners[].routes[].policies.basicAuth.htpasswd.(any)file`||
+|`binds[].listeners[].routes[].policies.basicAuth.realm`|Realm name for the WWW-Authenticate header|
+|`binds[].listeners[].routes[].policies.basicAuth.mode`|Validation mode for basic authentication|
+|`binds[].listeners[].routes[].policies.apiKey`|Authenticate incoming requests using API Keys|
+|`binds[].listeners[].routes[].policies.apiKey.keys`|List of API keys|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].key`||
+|`binds[].listeners[].routes[].policies.apiKey.keys[].metadata`||
+|`binds[].listeners[].routes[].policies.apiKey.mode`|Validation mode for API keys|
 |`binds[].listeners[].routes[].policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.name`||
@@ -665,6 +675,16 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].policies.transformations.response.set`||
 |`binds[].listeners[].policies.transformations.response.remove`||
 |`binds[].listeners[].policies.transformations.response.body`||
+|`binds[].listeners[].policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
+|`binds[].listeners[].policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
+|`binds[].listeners[].policies.basicAuth.htpasswd.(any)file`||
+|`binds[].listeners[].policies.basicAuth.realm`|Realm name for the WWW-Authenticate header|
+|`binds[].listeners[].policies.basicAuth.mode`|Validation mode for basic authentication|
+|`binds[].listeners[].policies.apiKey`|Authenticate incoming requests using API Keys|
+|`binds[].listeners[].policies.apiKey.keys`|List of API keys|
+|`binds[].listeners[].policies.apiKey.keys[].key`||
+|`binds[].listeners[].policies.apiKey.keys[].metadata`||
+|`binds[].listeners[].policies.apiKey.mode`|Validation mode for API keys|
 |`frontendPolicies`||
 |`frontendPolicies.http`|Settings for handling incoming HTTP requests.|
 |`frontendPolicies.http.maxBufferSize`||
@@ -890,6 +910,16 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.jwtAuth.(any)(any)jwks`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)file`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
+|`policies[].policy.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
+|`policies[].policy.basicAuth.htpasswd`|.htpasswd file contents/reference|
+|`policies[].policy.basicAuth.htpasswd.(any)file`||
+|`policies[].policy.basicAuth.realm`|Realm name for the WWW-Authenticate header|
+|`policies[].policy.basicAuth.mode`|Validation mode for basic authentication|
+|`policies[].policy.apiKey`|Authenticate incoming requests using API Keys|
+|`policies[].policy.apiKey.keys`|List of API keys|
+|`policies[].policy.apiKey.keys[].key`||
+|`policies[].policy.apiKey.keys[].metadata`||
+|`policies[].policy.apiKey.mode`|Validation mode for API keys|
 |`policies[].policy.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`policies[].policy.extAuthz.(any)(1)service`||
 |`policies[].policy.extAuthz.(any)(1)service.name`||
@@ -952,6 +982,10 @@ This folder contains JSON schemas for various parts of the project
 |`response.code`|The HTTP status code of the response.|
 |`response.body`|The body of the response. Warning: accessing the body will cause the body to be buffered.|
 |`jwt`|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
+|`apiKey`|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|
+|`apiKey.key`||
+|`basicAuth`|`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.|
+|`basicAuth.username`||
 |`llm`|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
 |`llm.streaming`|Whether the LLM response is streamed.|
 |`llm.requestModel`|The model requested for the LLM request. This may differ from the actual model used.|
