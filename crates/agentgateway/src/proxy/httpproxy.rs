@@ -370,14 +370,8 @@ impl HTTPProxy {
 		);
 		log.version = Some(req.version());
 
-		log
-			.cel
-			.ctx()
-			.with_source(&log.tcp_info, log.tls_info.as_ref());
-		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
-		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
-			log.cel.ctx().with_request_body(body);
-		}
+		// Record request now. We may do it later as well, after we have more expressions registered.
+		Self::apply_request_to_cel(log, &mut req).await;
 
 		let trace_parent = trc::TraceParent::from_request(&req);
 		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
@@ -419,18 +413,9 @@ impl HTTPProxy {
 			selected_listener.gateway_name.clone(),
 		);
 		gateway_policies.register_cel_expressions(log.cel.ctx());
-		log
-			.cel
-			.ctx()
-			.with_source(&log.tcp_info, log.tls_info.as_ref());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
-		// so we can do logging, etc when we find no routes.
-		// But we may find new expressions that now need the request.
-		// it is zero-cost at runtime to do it twice so NBD.
-		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
-		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
-			log.cel.ctx().with_request_body(body);
-		}
+		// (for logging, etc) and also after we register the expressions since new fields may be available.
+		Self::apply_request_to_cel(log, &mut req).await;
 
 		let mut response_headers = HeaderMap::new();
 		let mut maybe_gateway_ext_proc = gateway_policies
@@ -478,19 +463,9 @@ impl HTTPProxy {
 		};
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-
-		log
-			.cel
-			.ctx()
-			.with_source(&log.tcp_info, log.tls_info.as_ref());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
-		// so we can do logging, etc when we find no routes.
-		// But we may find new expressions that now need the request.
-		// it is zero-cost at runtime to do it twice so NBD.
-		let needs_body = log.cel.ctx().with_request(&req, log.start_time.clone());
-		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
-			log.cel.ctx().with_request_body(body);
-		}
+		// (for logging, etc) and also after we register the expressions since new fields may be available.
+		Self::apply_request_to_cel(log, &mut req).await;
 
 		let maybe_ext_proc = route_policies
 			.ext_proc
@@ -503,13 +478,6 @@ impl HTTPProxy {
 		response_policies.gateway_transformation = gateway_policies.transformation.clone();
 		response_policies.ext_proc = maybe_ext_proc;
 		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
-		// Ensure JWT claims are available in CEL after registering route expressions.
-		// If JWT auth ran at the gateway phase, `with_jwt` might have been a no-op because
-		// the `jwt` attribute wasn't registered yet. Claims are stored on the request
-		// extensions, so we can add them to the CEL context now that route attributes are known.
-		if let Some(claims) = req.extensions().get::<crate::http::jwt::Claims>() {
-			log.cel.ctx().with_jwt(claims);
-		}
 		apply_request_policies(
 			&route_policies,
 			self.policy_client(),
@@ -637,6 +605,20 @@ impl HTTPProxy {
 			last_res = Some(res);
 		}
 		unreachable!()
+	}
+
+	async fn apply_request_to_cel(log: &mut RequestLog, req: &mut Request) {
+		log
+			.cel
+			.ctx()
+			.with_source(&log.tcp_info, log.tls_info.as_ref());
+		let needs_body = log.cel.ctx().with_request(req, log.start_time.clone());
+		if needs_body && let Ok(body) = crate::http::inspect_body(req).await {
+			log.cel.ctx().with_request_body(body);
+		}
+		if let Some(claims) = req.extensions().get::<crate::http::jwt::Claims>() {
+			log.cel.ctx().with_jwt(claims);
+		}
 	}
 
 	#[allow(clippy::too_many_arguments)]
