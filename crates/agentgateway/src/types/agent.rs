@@ -1195,7 +1195,7 @@ impl McpAuthentication {
 		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: http::jwt::Mode::Optional,
 			issuer: self.issuer.clone(),
-			audiences: vec![self.audience.clone()],
+			audiences: Some(vec![self.audience.clone()]),
 			jwks: FileInlineOrRemote::Remote {
 				url: if !self.jwks_url.is_empty() {
 					self.jwks_url.parse()?

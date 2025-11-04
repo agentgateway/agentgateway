@@ -955,9 +955,13 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				};
 				let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
 					.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
-				let jwt_auth =
-					http::jwt::Jwt::from_jwks(jwk_set, mode, jwt.issuer.clone(), jwt.audiences.clone())
-						.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
+				let jwt_auth = http::jwt::Jwt::from_jwks(
+					jwk_set,
+					mode,
+					jwt.issuer.clone(),
+					Some(jwt.audiences.clone()),
+				)
+				.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
 				TrafficPolicy::JwtAuth(jwt_auth)
 			},
 			Some(tps::Kind::Transformation(tp)) => {

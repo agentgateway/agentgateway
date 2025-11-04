@@ -126,7 +126,7 @@ pub enum LocalJwtConfig {
 		#[serde(default)]
 		mode: Mode,
 		issuer: String,
-		audiences: Vec<String>,
+		audiences: Option<Vec<String>>,
 		jwks: serdes::FileInlineOrRemote,
 	},
 }
@@ -136,7 +136,7 @@ pub enum LocalJwtConfig {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct ProviderConfig {
 	pub issuer: String,
-	pub audiences: Vec<String>,
+	pub audiences: Option<Vec<String>>,
 	pub jwks: serdes::FileInlineOrRemote,
 }
 
@@ -193,7 +193,7 @@ impl Provider {
 	pub fn from_jwks(
 		jwks: JwkSet,
 		issuer: String,
-		audiences: Vec<String>,
+		audiences: Option<Vec<String>>,
 	) -> Result<Provider, JwkError> {
 		let mut keys = HashMap::new();
 		let to_supported_alg = |key_algorithm: Option<KeyAlgorithm>| match key_algorithm {
@@ -246,7 +246,13 @@ impl Provider {
 			// The new() requires 1 algorithm, so just pass the first before we override it
 			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
 			validation.algorithms = supported_algorithms;
-			validation.set_audience(&audiences);
+			// only set audience if audiences were provided
+			// otherwise, disable audience validation
+			if let Some(audiences) = &audiences {
+				validation.set_audience(audiences);
+			} else {
+				validation.validate_aud = false;
+			}
 			validation.set_issuer(std::slice::from_ref(&issuer));
 
 			keys.insert(
@@ -267,7 +273,7 @@ impl Jwt {
 		jwks: JwkSet,
 		mode: Mode,
 		issuer: String,
-		audiences: Vec<String>,
+		audiences: Option<Vec<String>>,
 	) -> Result<Jwt, JwkError> {
 		let provider = Provider::from_jwks(jwks, issuer, audiences)?;
 		Ok(Jwt {

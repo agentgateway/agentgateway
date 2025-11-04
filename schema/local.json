@@ -2344,7 +2344,10 @@
                                               "type": "string"
                                             },
                                             "audiences": {
-                                              "type": "array",
+                                              "type": [
+                                                "array",
+                                                "null"
+                                              ],
                                               "items": {
                                                 "type": "string"
                                               }
@@ -2382,7 +2385,6 @@
                                           "additionalProperties": false,
                                           "required": [
                                             "issuer",
-                                            "audiences",
                                             "jwks"
                                           ]
                                         }
@@ -2420,7 +2422,10 @@
                                         "type": "string"
                                       },
                                       "audiences": {
-                                        "type": "array",
+                                        "type": [
+                                          "array",
+                                          "null"
+                                        ],
                                         "items": {
                                           "type": "string"
                                         }
@@ -2458,7 +2463,6 @@
                                     "additionalProperties": false,
                                     "required": [
                                       "issuer",
-                                      "audiences",
                                       "jwks"
                                     ]
                                   }
@@ -5540,7 +5544,10 @@
                                         "type": "string"
                                       },
                                       "audiences": {
-                                        "type": "array",
+                                        "type": [
+                                          "array",
+                                          "null"
+                                        ],
                                         "items": {
                                           "type": "string"
                                         }
@@ -5578,7 +5585,6 @@
                                     "additionalProperties": false,
                                     "required": [
                                       "issuer",
-                                      "audiences",
                                       "jwks"
                                     ]
                                   }
@@ -5616,7 +5622,10 @@
                                   "type": "string"
                                 },
                                 "audiences": {
-                                  "type": "array",
+                                  "type": [
+                                    "array",
+                                    "null"
+                                  ],
                                   "items": {
                                     "type": "string"
                                   }
@@ -5654,7 +5663,6 @@
                               "additionalProperties": false,
                               "required": [
                                 "issuer",
-                                "audiences",
                                 "jwks"
                               ]
                             }
@@ -7918,7 +7926,10 @@
                                   "type": "string"
                                 },
                                 "audiences": {
-                                  "type": "array",
+                                  "type": [
+                                    "array",
+                                    "null"
+                                  ],
                                   "items": {
                                     "type": "string"
                                   }
@@ -7956,7 +7967,6 @@
                               "additionalProperties": false,
                               "required": [
                                 "issuer",
-                                "audiences",
                                 "jwks"
                               ]
                             }
@@ -7994,7 +8004,10 @@
                             "type": "string"
                           },
                           "audiences": {
-                            "type": "array",
+                            "type": [
+                              "array",
+                              "null"
+                            ],
                             "items": {
                               "type": "string"
                             }
@@ -8032,7 +8045,6 @@
                         "additionalProperties": false,
                         "required": [
                           "issuer",
-                          "audiences",
                           "jwks"
                         ]
                       }
