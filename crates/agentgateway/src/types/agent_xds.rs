@@ -959,23 +959,30 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					tps::jwt::Mode::Strict => http::jwt::Mode::Strict,
 					tps::jwt::Mode::Permissive => http::jwt::Mode::Permissive,
 				};
-				let jwks_json = match &jwt.jwks_source {
-					Some(tps::jwt::JwksSource::Inline(inline)) => inline.clone(),
-					None => {
-						return Err(ProtoError::Generic(
-							"JWT policy missing JWKS source".to_string(),
-						));
-					},
-				};
-				let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
-					.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
-				let audiences = if jwt.audiences.is_empty() {
-					None
-				} else {
-					Some(jwt.audiences.clone())
-				};
-				let jwt_auth = http::jwt::Jwt::from_jwks(jwk_set, mode, jwt.issuer.clone(), audiences)
-					.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
+				let providers = jwt
+					.providers
+					.iter()
+					.map(|p| {
+						let jwks_json = match &p.jwks_source {
+							Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline.clone(),
+							None => {
+								return Err(ProtoError::Generic(
+									"JWT policy missing JWKS source".to_string(),
+								));
+							},
+						};
+						let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
+							.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
+						let audiences = if p.audiences.is_empty() {
+							None
+						} else {
+							Some(p.audiences.clone())
+						};
+						http::jwt::Provider::from_jwks(jwk_set, p.issuer.clone(), audiences)
+							.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
 				TrafficPolicy::JwtAuth(jwt_auth)
 			},
 			Some(tps::Kind::Transformation(tp)) => {

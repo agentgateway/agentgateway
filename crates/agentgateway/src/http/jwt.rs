@@ -65,7 +65,7 @@ pub struct Jwt {
 }
 
 #[derive(Clone)]
-struct Provider {
+pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
 }
@@ -269,17 +269,14 @@ impl Provider {
 }
 
 impl Jwt {
-	pub fn from_jwks(
-		jwks: JwkSet,
+	pub fn from_providers(
+		providers: Vec<Provider>,
 		mode: Mode,
-		issuer: String,
-		audiences: Option<Vec<String>>,
-	) -> Result<Jwt, JwkError> {
-		let provider = Provider::from_jwks(jwks, issuer, audiences)?;
-		Ok(Jwt {
+	) -> Jwt {
+		Jwt {
 			mode,
-			providers: vec![provider],
-		})
+			providers,
+		}
 	}
 }
 

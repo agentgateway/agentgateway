@@ -411,6 +411,19 @@ message TrafficPolicySpec {
     repeated string allow = 1;
     repeated string deny = 2;
   }
+  message JWTProvider {
+    // JWT issuer that must match the 'iss' claim
+    string issuer = 1;
+
+    // List of audiences - the 'aud' claim must be in this list
+    repeated string audiences = 2;
+
+    // JWKS configuration - where to get the keys for validation
+    oneof jwks_source {
+      // Inline JWKS as a JSON string
+      string inline = 3;
+    }
+  }
   // JWT authentication configuration
   message JWT {
     // Validation mode for JWT authentication
@@ -425,18 +438,7 @@ message TrafficPolicySpec {
 
     // How the JWT validation should behave
     Mode mode = 1;
-
-    // JWT issuer that must match the 'iss' claim
-    string issuer = 2;
-
-    // List of audiences - the 'aud' claim must be in this list
-    repeated string audiences = 3;
-
-    // JWKS configuration - where to get the keys for validation
-    oneof jwks_source {
-      // Inline JWKS as a JSON string
-      string inline = 4;
-    }
+    repeated JWTProvider providers = 2;
   }
 
   // Basic authentication configuration using htpasswd file
