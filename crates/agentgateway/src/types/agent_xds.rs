@@ -960,13 +960,8 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				} else {
 					Some(jwt.audiences.clone())
 				};
-				let jwt_auth = http::jwt::Jwt::from_jwks(
-					jwk_set,
-					mode,
-					jwt.issuer.clone(),
-					audiences,
-				)
-				.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
+				let jwt_auth = http::jwt::Jwt::from_jwks(jwk_set, mode, jwt.issuer.clone(), audiences)
+					.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
 				TrafficPolicy::JwtAuth(jwt_auth)
 			},
 			Some(tps::Kind::Transformation(tp)) => {
