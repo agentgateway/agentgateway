@@ -16,7 +16,7 @@ use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::{mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::McpTargetSpec;
+use crate::types::agent::{McpTargetSpec, SimpleBackend, Target};
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -227,7 +227,13 @@ impl UpstreamGroup {
 					"" => "/sse",
 					_ => sse.path.as_str(),
 				};
-				let be = crate::proxy::resolve_simple_backend(&sse.backend, &self.pi)?;
+				let mut be = crate::proxy::resolve_simple_backend(&sse.backend, &self.pi)?;
+				
+				// For stateful backends, pin to a specific endpoint once
+				if self.backend.stateful {
+					be = self.pin_service_to_endpoint(be)?;
+				}
+				
 				let client = sse::Client::new(
 					be,
 					path.into(),
@@ -246,7 +252,13 @@ impl UpstreamGroup {
 					"" => "/mcp",
 					_ => mcp.path.as_str(),
 				};
-				let be = crate::proxy::resolve_simple_backend(&mcp.backend, &self.pi)?;
+				let mut be = crate::proxy::resolve_simple_backend(&mcp.backend, &self.pi)?;
+				
+				// For stateful backends, pin to a specific endpoint once
+				if self.backend.stateful {
+					be = self.pin_service_to_endpoint(be)?;
+				}
+				
 				let client = streamablehttp::Client::new(
 					be,
 					path.into(),
@@ -295,7 +307,13 @@ impl UpstreamGroup {
 						e
 					)
 				})?;
-				let be = crate::proxy::resolve_simple_backend(&open.backend, &self.pi)?;
+				let mut be = crate::proxy::resolve_simple_backend(&open.backend, &self.pi)?;
+				
+				// For stateful backends, pin to a specific endpoint once
+				if self.backend.stateful {
+					be = self.pin_service_to_endpoint(be)?;
+				}
+				
 				upstream::Upstream::OpenAPI(Box::new(openapi::Handler {
 					backend: be,
 					client: self.client.clone(),
@@ -307,5 +325,47 @@ impl UpstreamGroup {
 		};
 
 		Ok(target)
+	}
+
+	/// For stateful backends, convert a Service backend to an Opaque backend with a specific endpoint.
+	/// 
+	/// This ensures all requests from a client go to the same backend instance, solving the
+	/// round-robin problem. Instead of resolving the Service on every request (which causes
+	/// round-robin across replicas), we resolve it ONCE when creating the client.
+	fn pin_service_to_endpoint(
+		&self,
+		backend: SimpleBackend,
+	) -> Result<SimpleBackend, anyhow::Error> {
+		match backend {
+			SimpleBackend::Service(svc, port) => {
+				debug!(
+					"Stateful mode: pinning service {}/{} to a specific endpoint",
+					svc.namespace, svc.hostname
+				);
+
+				// Resolve the service to a specific endpoint address
+				let addr = crate::proxy::httpproxy::resolve_service_endpoint(
+					&self.pi,
+					&svc,
+					port,
+					None, // No override_dest - let it use load balancing
+				)
+				.map_err(|e| anyhow::anyhow!("Failed to resolve service endpoint: {}", e))?;
+
+				debug!(
+					"Pinned stateful MCP backend to {} (service: {}/{})",
+					addr, svc.namespace, svc.hostname
+				);
+
+				// Convert Service to Opaque backend with the specific address
+				// This prevents future requests from going through select_endpoint() again
+				Ok(SimpleBackend::Opaque(
+					strng::format!("{}/{}", svc.namespace, svc.hostname),
+					Target::Address(addr),
+				))
+			},
+			// Opaque backends are already pointing to a specific address - no change needed
+			other => Ok(other),
+		}
 	}
 }

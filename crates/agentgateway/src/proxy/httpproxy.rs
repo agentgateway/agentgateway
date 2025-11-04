@@ -1188,17 +1188,18 @@ fn set_backend_cel_context(log: &mut Option<&mut RequestLog>) {
 	});
 }
 
-pub fn build_service_call(
+/// Resolve a Service to a specific SocketAddr endpoint.
+/// 
+/// This uses the service's load balancing logic to select one endpoint and returns its address.
+/// If override_dest is provided, it will try to select that specific endpoint.
+pub fn resolve_service_endpoint(
 	inputs: &ProxyInputs,
-	backend_policies: BackendPolicies,
-	log: &mut Option<&mut RequestLog>,
-	override_dest: Option<SocketAddr>,
 	svc: &Arc<Service>,
-	port: &u16,
-) -> Result<BackendCall, ProxyError> {
-	let port = *port;
+	port: u16,
+	override_dest: Option<SocketAddr>,
+) -> Result<SocketAddr, ProxyError> {
 	let workloads = &inputs.stores.read_discovery().workloads;
-	let (ep, handle, wl) = svc
+	let (ep, _handle, wl) = svc
 		.endpoints
 		.select_endpoint(workloads, svc.as_ref(), port, override_dest)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
@@ -1213,6 +1214,34 @@ pub fn build_service_call(
 	} else {
 		return Err(ProxyError::NoHealthyEndpoints);
 	};
+	
+	let Some(ip) = wl.workload_ips.first() else {
+		return Err(ProxyError::NoHealthyEndpoints);
+	};
+	
+	Ok(SocketAddr::from((*ip, target_port)))
+}
+
+pub fn build_service_call(
+	inputs: &ProxyInputs,
+	backend_policies: BackendPolicies,
+	log: &mut Option<&mut RequestLog>,
+	override_dest: Option<SocketAddr>,
+	svc: &Arc<Service>,
+	port: &u16,
+) -> Result<BackendCall, ProxyError> {
+	let port = *port;
+	
+	// Get the endpoint selection details for logging and transport info
+	let workloads = &inputs.stores.read_discovery().workloads;
+	let (_ep, handle, wl) = svc
+		.endpoints
+		.select_endpoint(workloads, svc.as_ref(), port, override_dest)
+		.ok_or(ProxyError::NoHealthyEndpoints)?;
+
+	// Resolve to the actual socket address
+	let dest = resolve_service_endpoint(inputs, svc, port, override_dest)?;
+	
 	let http_version_override = if svc.port_is_http2(port) {
 		Some(::http::Version::HTTP_2)
 	} else if svc.port_is_http1(port) {
@@ -1220,10 +1249,7 @@ pub fn build_service_call(
 	} else {
 		None
 	};
-	let Some(ip) = wl.workload_ips.first() else {
-		return Err(ProxyError::NoHealthyEndpoints);
-	};
-	let dest = SocketAddr::from((*ip, target_port));
+	
 	log.add(move |l| l.request_handle = Some(handle));
 	Ok(BackendCall {
 		target: Target::Address(dest),
