@@ -556,6 +556,17 @@ pub enum McpTargetSpec {
 	OpenAPI(OpenAPITarget),
 }
 
+impl McpTargetSpec {
+	pub fn backend(&self) -> Option<&SimpleBackendReference> {
+		match self {
+			McpTargetSpec::Sse(s) => Some(&s.backend),
+			McpTargetSpec::Mcp(s) => Some(&s.backend),
+			McpTargetSpec::OpenAPI(s) => Some(&s.backend),
+			McpTargetSpec::Stdio { .. } => None,
+		}
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

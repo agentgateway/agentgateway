@@ -855,7 +855,12 @@ fn get_backend_policies(
 		Some(backend.backend.name()),
 		service,
 		None,
-		&[inline_policies, &backend.inline_policies],
+		// Precedence: Selector < Backend inline < backendRef inline
+		// Note this differs from the logical chain of objects (Route -> backendRef -> backend),
+		// because a backendRef is actually more specific: its one *specific usage* of the backend.
+		// For example, we may say to use TLS for a Backend, but in a specific TLSRoute backendRef we disable
+		// as it is already TLS.
+		&[&backend.inline_policies, inline_policies],
 	)
 }
 
@@ -882,14 +887,15 @@ async fn make_backend_call(
 				.mcp_state
 				.should_passthrough(name.clone(), mcp_backend, &req)
 			{
-				let target = super::resolve_simple_backend(&be, inputs.as_ref())?;
+				let (target, inline_policies) =
+					super::resolve_simple_backend_with_policies(&be, inputs.as_ref())?;
 				// The typical MCP flow will apply the top level Backend policies as default_policies
 				// When we passthrough, we should preserve this behavior.
 				let policies = inputs.stores.read_binds().backend_policies(
-					Some(backend.name()),
+					None,
 					None,
 					Some(target.name()),
-					&[],
+					&[&inline_policies],
 				);
 
 				(&Backend::from(target), base_policies.merge(policies))

@@ -9,7 +9,8 @@ use hyper_util_fork::client::legacy::Error as HyperError;
 
 use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
 use crate::types::agent::{
-	Backend, BackendReference, BackendWithPolicies, SimpleBackend, SimpleBackendReference,
+	Backend, BackendPolicy, BackendReference, BackendWithPolicies, SimpleBackend,
+	SimpleBackendReference,
 };
 use crate::*;
 
@@ -294,6 +295,13 @@ pub fn resolve_simple_backend(
 	b: &SimpleBackendReference,
 	pi: &ProxyInputs,
 ) -> Result<SimpleBackend, ProxyError> {
+	resolve_simple_backend_with_policies(b, pi).map(|b| b.0)
+}
+
+pub fn resolve_simple_backend_with_policies(
+	b: &SimpleBackendReference,
+	pi: &ProxyInputs,
+) -> Result<(SimpleBackend, Vec<BackendPolicy>), ProxyError> {
 	let backend = match b {
 		SimpleBackendReference::Service { name, port } => {
 			let svc = pi
@@ -302,7 +310,7 @@ pub fn resolve_simple_backend(
 				.services
 				.get_by_namespaced_host(name)
 				.ok_or(ProxyError::ServiceNotFound)?;
-			SimpleBackend::Service(svc, *port)
+			(SimpleBackend::Service(svc, *port), Vec::default())
 		},
 		SimpleBackendReference::Backend(_) => {
 			let be = pi
@@ -310,9 +318,12 @@ pub fn resolve_simple_backend(
 				.read_binds()
 				.backend(&b.name())
 				.ok_or(ProxyError::ServiceNotFound)?;
-			SimpleBackend::try_from(be.backend.clone()).map_err(|_| ProxyError::InvalidBackendType)?
+			(
+				SimpleBackend::try_from(be.backend.clone()).map_err(|_| ProxyError::InvalidBackendType)?,
+				be.inline_policies.clone(),
+			)
 		},
-		SimpleBackendReference::Invalid => SimpleBackend::Invalid,
+		SimpleBackendReference::Invalid => (SimpleBackend::Invalid, Vec::default()),
 	};
 	Ok(backend)
 }

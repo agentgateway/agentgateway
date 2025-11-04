@@ -459,6 +459,7 @@ impl Store {
 
 		let mut pol = BackendPolicies::default();
 		for rule in rules {
+			tracing::error!("howardjohn: resolve pol {rule:?}");
 			match &rule {
 				BackendPolicy::A2a(p) => {
 					pol.a2a.get_or_insert_with(|| p.clone());

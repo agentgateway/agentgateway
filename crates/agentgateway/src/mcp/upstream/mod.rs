@@ -176,22 +176,16 @@ impl Upstream {
 
 #[derive(Debug)]
 pub(crate) struct UpstreamGroup {
-	pi: Arc<ProxyInputs>,
 	backend: McpBackendGroup,
 	client: PolicyClient,
 	by_name: IndexMap<Strng, Arc<upstream::Upstream>>,
 }
 
 impl UpstreamGroup {
-	pub(crate) fn new(
-		pi: Arc<ProxyInputs>,
-		client: PolicyClient,
-		backend: McpBackendGroup,
-	) -> anyhow::Result<Self> {
+	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> anyhow::Result<Self> {
 		let mut s = Self {
 			backend,
 			client,
-			pi,
 			by_name: IndexMap::new(),
 		};
 		s.setup_connections()?;
@@ -227,9 +221,11 @@ impl UpstreamGroup {
 					"" => "/sse",
 					_ => sse.path.as_str(),
 				};
-				let be = crate::proxy::resolve_simple_backend(&sse.backend, &self.pi)?;
 				let client = sse::Client::new(
-					be,
+					target
+						.backend
+						.clone()
+						.expect("there must be a backend for SSE"),
 					path.into(),
 					self.client.clone(),
 					target.backend_policies.clone(),
@@ -246,9 +242,11 @@ impl UpstreamGroup {
 					"" => "/mcp",
 					_ => mcp.path.as_str(),
 				};
-				let be = crate::proxy::resolve_simple_backend(&mcp.backend, &self.pi)?;
 				let client = streamablehttp::Client::new(
-					be,
+					target
+						.backend
+						.clone()
+						.expect("there must be a backend for MCP"),
 					path.into(),
 					self.client.clone(),
 					target.backend_policies.clone(),
@@ -295,9 +293,11 @@ impl UpstreamGroup {
 						e
 					)
 				})?;
-				let be = crate::proxy::resolve_simple_backend(&open.backend, &self.pi)?;
 				upstream::Upstream::OpenAPI(Box::new(openapi::Handler {
-					backend: be,
+					backend: target
+						.backend
+						.clone()
+						.expect("there must be a backend for OpenAPI"),
 					client: self.client.clone(),
 					default_policies: target.backend_policies.clone(),
 					tools,  // From parse_openapi_schema

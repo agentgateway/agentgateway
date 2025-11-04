@@ -30,12 +30,7 @@ use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
-use crate::types::agent::{
-	Backend, BackendReference, Bind, BindName, Listener, ListenerProtocol, ListenerSet, McpBackend,
-	McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference, RouteMatch, RouteSet,
-	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
-};
+use crate::types::agent::{Backend, BackendReference, BackendWithPolicies, Bind, BindName, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference, RouteMatch, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy};
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
 
@@ -319,6 +314,11 @@ impl TestBind {
 	pub fn with_backend(self, b: SocketAddr) -> Self {
 		let b = Backend::Opaque(strng::format!("{}", b), Target::Address(b));
 		self.pi.stores.binds.write().insert_backend(b.into());
+		self
+	}
+
+	pub fn with_raw_backend(self, b: BackendWithPolicies) -> Self {
+		self.pi.stores.binds.write().insert_backend(b);
 		self
 	}
 

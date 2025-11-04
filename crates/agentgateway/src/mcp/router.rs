@@ -6,7 +6,6 @@ use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use http::Method;
 use http::uri::PathAndQuery;
-use itertools::Itertools;
 use rmcp::transport::StreamableHttpServerConfig;
 use tracing::warn;
 
@@ -19,12 +18,14 @@ use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::StreamableHttpService;
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
-	BackendName, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, SimpleBackendReference,
+	BackendName, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, SimpleBackend,
+	SimpleBackendReference,
 };
 use crate::{ProxyInputs, json};
 
@@ -80,16 +81,33 @@ impl App {
 				.targets
 				.iter()
 				.map(|t| {
+					let be = t
+						.spec
+						.backend()
+						.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, &pi))
+						.transpose()?;
+					let inline_pols = if let Some((_, pol)) = &be {
+						&[pol.as_slice()][..]
+					} else {
+						&[]
+					};
 					let backend_policies =
-						binds.backend_policies(Some(name.clone()), None, Some(t.name.clone()), &[]);
-					Arc::new(McpTarget {
+						binds.backend_policies(None, None, Some(t.name.clone()), inline_pols);
+					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),
+						backend: be.map(|b| b.0),
 						backend_policies,
 						always_use_prefix: backend.always_use_prefix,
-					})
+					}))
 				})
-				.collect_vec();
+				.collect::<Result<Vec<_>, _>>();
+			let Ok(nt) = nt else {
+				return ::http::Response::builder()
+					.status(StatusCode::INTERNAL_SERVER_ERROR)
+					.body(axum::body::Body::from("failed to resolve MCP backend"))
+					.unwrap();
+			};
 			(
 				McpBackendGroup { targets: nt },
 				authorization_policies,
@@ -145,7 +163,6 @@ impl App {
 				let sse = LegacySSEService::new(
 					move || {
 						Relay::new(
-							pi.clone(),
 							backends.clone(),
 							authorization_policies.clone(),
 							client.clone(),
@@ -181,7 +198,6 @@ impl App {
 				let streamable = StreamableHttpService::new(
 					move || {
 						Relay::new(
-							pi.clone(),
 							backends.clone(),
 							authorization_policies.clone(),
 							client.clone(),
@@ -215,6 +231,7 @@ pub struct McpTarget {
 	pub name: Strng,
 	pub spec: crate::types::agent::McpTargetSpec,
 	pub backend_policies: BackendPolicies,
+	pub backend: Option<SimpleBackend>,
 	pub always_use_prefix: bool,
 }
 

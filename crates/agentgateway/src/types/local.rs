@@ -1007,30 +1007,15 @@ async fn convert_route(
 		backend_refs.push(bref);
 		external_backends.extend_from_slice(&backends);
 	}
-	let mut be_pol = 0;
-	let backend_tgt = |p: BackendPolicy| {
-		if backend_refs.len() != 1 {
-			anyhow::bail!("backend policies currently only work with exactly 1 backend")
-		}
-		let be = backend_refs.first().unwrap();
-		be_pol += 1;
-		Ok(TargetedPolicy {
-			name: format!("{key}/backend-{be_pol}").into(),
-			target: PolicyTarget::Backend(be.backend.name()),
-			policy: p.into(),
-		})
-	};
-
 	let resolved = if let Some(pol) = policies {
 		split_policies(client, &key, &mut external_backends, pol).await?
 	} else {
 		ResolvedPolicies::default()
 	};
-	let external_policies = resolved
-		.backend_policies
-		.into_iter()
-		.map(backend_tgt)
-		.collect::<Result<Vec<_>, _>>()?;
+	for br in backend_refs.iter_mut() {
+		br.inline_policies
+			.extend_from_slice(&resolved.backend_policies);
+	}
 	let route = Route {
 		key,
 		route_name,
@@ -1040,7 +1025,7 @@ async fn convert_route(
 		backends: backend_refs,
 		inline_policies: resolved.route_policies,
 	};
-	Ok((route, external_policies, external_backends))
+	Ok((route, vec![], external_backends))
 }
 
 #[derive(Default)]
