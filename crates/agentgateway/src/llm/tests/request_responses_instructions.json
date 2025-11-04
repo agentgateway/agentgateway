@@ -1,0 +1,5 @@
+{
+  "model": "gpt-4o",
+  "max_output_tokens": 1024,
+  "input": "What is the weather like in San Francisco? Use the get_weather tool."
+}

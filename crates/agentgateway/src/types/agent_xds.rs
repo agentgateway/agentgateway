@@ -200,6 +200,7 @@ fn convert_backend_ai_policy(
 			.iter()
 			.map(|(k, v)| (strng::new(k), strng::new(v)))
 			.collect(),
+		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
 	})
 }
 
@@ -507,6 +508,8 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 										Ok(ProtoRT::Messages) => llm::RouteType::Messages,
 										Ok(ProtoRT::Models) => llm::RouteType::Models,
 										Ok(ProtoRT::Passthrough) => llm::RouteType::Passthrough,
+										Ok(ProtoRT::Responses) => llm::RouteType::Responses,
+										Ok(ProtoRT::AnthropicTokenCount) => llm::RouteType::AnthropicTokenCount,
 										Err(_) => {
 											warn!(
 												value = proto_route_type,
@@ -1411,6 +1414,17 @@ fn convert_prompt_enrichment(
 	}
 }
 
+fn convert_prompt_caching(
+	pc: &proto::agent::backend_policy_spec::ai::PromptCaching,
+) -> crate::llm::policy::PromptCachingConfig {
+	crate::llm::policy::PromptCachingConfig {
+		cache_system: pc.cache_system,
+		cache_messages: pc.cache_messages,
+		cache_tools: pc.cache_tools,
+		min_tokens: pc.min_tokens.map(|t| t as usize),
+	}
+}
+
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 ) -> Option<crate::llm::policy::Webhook> {
@@ -1673,6 +1687,7 @@ mod tests {
 				prompt_guard: None,
 				prompts: None,
 				model_aliases: Default::default(),
+				prompt_caching: None,
 			})),
 		};
 

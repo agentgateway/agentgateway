@@ -1,0 +1,20 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+expression: result
+---
+{
+  "modelId": "gpt-4o",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "Hello, world"
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 1024
+  }
+}

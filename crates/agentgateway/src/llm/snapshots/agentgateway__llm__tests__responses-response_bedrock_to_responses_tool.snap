@@ -1,0 +1,27 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+expression: result
+---
+{
+  "id": "[id]",
+  "status": "requires_action",
+  "output": [
+    {
+      "type": "function_call",
+      "id": "[id]",
+      "call_id": "[id]",
+      "name": "top_song",
+      "arguments": "{\"sign\":\"WZPZ\"}",
+      "status": "completed"
+    },
+    {
+      "type": "function_call",
+      "id": "[id]",
+      "call_id": "[id]",
+      "name": "hello",
+      "arguments": "{\"sign\":\"world\"}",
+      "status": "completed"
+    }
+  ],
+  "model": "gpt-4o"
+}

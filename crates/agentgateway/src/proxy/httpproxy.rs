@@ -1069,9 +1069,9 @@ async fn make_backend_call(
 			// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like
 			// prompt enrichment, prompt guard, etc.
 			match route_type {
-				RouteType::Completions | RouteType::Messages => {
-					let r = if route_type == RouteType::Completions {
-						llm
+				RouteType::Completions | RouteType::Messages | RouteType::Responses => {
+					let r = match route_type {
+						RouteType::Completions => llm
 							.provider
 							.process_completions_request(
 								&backend_info,
@@ -1081,9 +1081,8 @@ async fn make_backend_call(
 								&mut log,
 							)
 							.await
-							.map_err(|e| ProxyError::Processing(e.into()))?
-					} else {
-						llm
+							.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::Messages => llm
 							.provider
 							.process_messages_request(
 								&backend_info,
@@ -1093,7 +1092,19 @@ async fn make_backend_call(
 								&mut log,
 							)
 							.await
-							.map_err(|e| ProxyError::Processing(e.into()))?
+							.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::Responses => llm
+							.provider
+							.process_responses_request(
+								&backend_info,
+								llm_request_policies.llm.as_deref(),
+								req,
+								llm.tokenize,
+								&mut log,
+							)
+							.await
+							.map_err(|e| ProxyError::Processing(e.into()))?,
+						_ => unreachable!(),
 					};
 					let (mut req, llm_request) = match r {
 						RequestResult::Success(r, lr) => (r, lr),
@@ -1145,6 +1156,59 @@ async fn make_backend_call(
 						.setup_request(&mut req, route_type, None, true)
 						.map_err(ProxyError::Processing)?;
 					(req, LLMResponsePolicies::default(), None)
+				},
+				RouteType::AnthropicTokenCount => {
+					let crate::llm::AIProvider::Bedrock(bedrock_provider) = &llm.provider else {
+						return Ok(Box::pin(async move {
+							Ok(
+								::http::Response::builder()
+									.status(::http::StatusCode::NOT_IMPLEMENTED)
+									.header(::http::header::CONTENT_TYPE, "application/json")
+									.body(http::Body::from(
+										r#"{"error":"Provider does not support Anthropic count_tokens API"}"#,
+									))
+									.expect("Failed to build response"),
+							)
+						}));
+					};
+
+					let mut req = crate::llm::bedrock::process_count_tokens_request(
+						bedrock_provider,
+						req,
+						llm_request_policies.llm.as_deref(),
+					)
+					.await
+					.map_err(|e| ProxyError::Processing(e.into()))?;
+
+					llm
+						.provider
+						.setup_request(&mut req, route_type, None, true)
+						.map_err(ProxyError::Processing)?;
+
+					auth::apply_late_backend_auth(
+						backend_call.backend_policies.backend_auth.as_ref(),
+						&mut req,
+					)
+					.await?;
+
+					let transport = build_transport(
+						&inputs,
+						&backend_call,
+						backend_call.backend_policies.backend_tls.clone(),
+					)
+					.await?;
+					let call = client::Call {
+						req,
+						target: backend_call.target.clone(),
+						transport,
+					};
+
+					return Ok(Box::pin(async move {
+						let resp = inputs.upstream.call(call).await?;
+						crate::llm::bedrock::process_count_tokens_response(resp)
+							.await
+							.map_err(ProxyError::Processing)
+					}));
 				},
 			}
 		} else {

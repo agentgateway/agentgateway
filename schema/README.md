@@ -217,6 +217,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.prompts.prepend[].role`||
 |`binds[].listeners[].routes[].policies.ai.prompts.prepend[].content`||
 |`binds[].listeners[].routes[].policies.ai.modelAliases`||
+|`binds[].listeners[].routes[].policies.ai.promptCaching`||
+|`binds[].listeners[].routes[].policies.ai.promptCaching.cacheSystem`||
+|`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessages`||
+|`binds[].listeners[].routes[].policies.ai.promptCaching.cacheTools`||
+|`binds[].listeners[].routes[].policies.ai.promptCaching.minTokens`||
 |`binds[].listeners[].routes[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.backendTLS.key`||
@@ -480,6 +485,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.prompts.prepend[].role`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.prompts.prepend[].content`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.modelAliases`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptCaching`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptCaching.cacheSystem`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptCaching.cacheMessages`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptCaching.cacheTools`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptCaching.minTokens`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.key`||
@@ -629,6 +639,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.prompts.prepend[].role`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.prompts.prepend[].content`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.modelAliases`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.cacheSystem`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.cacheMessages`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.cacheTools`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.minTokens`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.key`||
@@ -752,6 +767,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts.prepend[].role`||
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts.prepend[].content`||
 |`binds[].listeners[].routes[].backends[].policies.ai.modelAliases`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheSystem`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessages`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheTools`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.key`||
@@ -1034,6 +1054,11 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.prompts.prepend[].role`||
 |`policies[].policy.ai.prompts.prepend[].content`||
 |`policies[].policy.ai.modelAliases`||
+|`policies[].policy.ai.promptCaching`||
+|`policies[].policy.ai.promptCaching.cacheSystem`||
+|`policies[].policy.ai.promptCaching.cacheMessages`||
+|`policies[].policy.ai.promptCaching.cacheTools`||
+|`policies[].policy.ai.promptCaching.minTokens`||
 |`policies[].policy.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.backendTLS.cert`||
 |`policies[].policy.backendTLS.key`||

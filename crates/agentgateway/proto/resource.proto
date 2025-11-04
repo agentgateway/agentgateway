@@ -648,12 +648,20 @@ message BackendPolicySpec {
 
     PromptGuard prompt_guard = 1;
     // Default JSON key-value pairs to add to the LLM request if the key is not set in the request.
+    message PromptCaching {
+      bool cache_system = 1;
+      bool cache_messages = 2;
+      bool cache_tools = 3;
+      optional uint32 min_tokens = 4;
+    }
+
     map<string, string> defaults = 2;
     // Override JSON key-value pairs to set in the LLM request regardless of whether they are set in the request.
     map<string, string> overrides = 3;
     PromptEnrichment prompts = 4;
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;
+    PromptCaching prompt_caching = 6;
   }
   message A2a {
   }
@@ -786,6 +794,10 @@ message AIBackend {
     MODELS = 3;
     // Sends requests to upstream as-is without LLM processing
     PASSTHROUGH = 4;
+    // Processes OpenAI /responses format requests
+    RESPONSES = 5;
+    // Processes Anthropic /v1/messages/count_tokens format requests
+    ANTHROPIC_TOKEN_COUNT = 6;
   }
   message Provider {
     string name = 1;

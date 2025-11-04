@@ -234,6 +234,10 @@ impl LLMRequestPolicies {
 			} else {
 				be.model_aliases.clone()
 			},
+			prompt_caching: be
+				.prompt_caching
+				.clone()
+				.or_else(|| re.prompt_caching.clone()),
 		}));
 		Arc::new(route_policies)
 	}

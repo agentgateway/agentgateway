@@ -1843,6 +1843,36 @@
                                 "additionalProperties": {
                                   "type": "string"
                                 }
+                              },
+                              "promptCaching": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "cacheSystem": {
+                                    "type": "boolean",
+                                    "default": true
+                                  },
+                                  "cacheMessages": {
+                                    "type": "boolean",
+                                    "default": true
+                                  },
+                                  "cacheTools": {
+                                    "type": "boolean",
+                                    "default": false
+                                  },
+                                  "minTokens": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "format": "uint",
+                                    "minimum": 0,
+                                    "default": 1024
+                                  }
+                                },
+                                "additionalProperties": false
                               }
                             },
                             "additionalProperties": false,
@@ -3794,6 +3824,36 @@
                                       "additionalProperties": {
                                         "type": "string"
                                       }
+                                    },
+                                    "promptCaching": {
+                                      "type": [
+                                        "object",
+                                        "null"
+                                      ],
+                                      "properties": {
+                                        "cacheSystem": {
+                                          "type": "boolean",
+                                          "default": true
+                                        },
+                                        "cacheMessages": {
+                                          "type": "boolean",
+                                          "default": true
+                                        },
+                                        "cacheTools": {
+                                          "type": "boolean",
+                                          "default": false
+                                        },
+                                        "minTokens": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "format": "uint",
+                                          "minimum": 0,
+                                          "default": 1024
+                                        }
+                                      },
+                                      "additionalProperties": false
                                     }
                                   },
                                   "additionalProperties": false,
@@ -5403,6 +5463,36 @@
                                                   "additionalProperties": {
                                                     "type": "string"
                                                   }
+                                                },
+                                                "promptCaching": {
+                                                  "type": [
+                                                    "object",
+                                                    "null"
+                                                  ],
+                                                  "properties": {
+                                                    "cacheSystem": {
+                                                      "type": "boolean",
+                                                      "default": true
+                                                    },
+                                                    "cacheMessages": {
+                                                      "type": "boolean",
+                                                      "default": true
+                                                    },
+                                                    "cacheTools": {
+                                                      "type": "boolean",
+                                                      "default": false
+                                                    },
+                                                    "minTokens": {
+                                                      "type": [
+                                                        "integer",
+                                                        "null"
+                                                      ],
+                                                      "format": "uint",
+                                                      "minimum": 0,
+                                                      "default": 1024
+                                                    }
+                                                  },
+                                                  "additionalProperties": false
                                                 }
                                               },
                                               "additionalProperties": false,
@@ -6762,6 +6852,36 @@
                                                               "additionalProperties": {
                                                                 "type": "string"
                                                               }
+                                                            },
+                                                            "promptCaching": {
+                                                              "type": [
+                                                                "object",
+                                                                "null"
+                                                              ],
+                                                              "properties": {
+                                                                "cacheSystem": {
+                                                                  "type": "boolean",
+                                                                  "default": true
+                                                                },
+                                                                "cacheMessages": {
+                                                                  "type": "boolean",
+                                                                  "default": true
+                                                                },
+                                                                "cacheTools": {
+                                                                  "type": "boolean",
+                                                                  "default": false
+                                                                },
+                                                                "minTokens": {
+                                                                  "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                  ],
+                                                                  "format": "uint",
+                                                                  "minimum": 0,
+                                                                  "default": 1024
+                                                                }
+                                                              },
+                                                              "additionalProperties": false
                                                             }
                                                           },
                                                           "additionalProperties": false,
@@ -9372,6 +9492,36 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "promptCaching": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "cacheSystem": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "cacheMessages": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "cacheTools": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "minTokens": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "format": "uint",
+                        "minimum": 0,
+                        "default": 1024
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": false,
