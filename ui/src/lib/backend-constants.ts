@@ -38,6 +38,7 @@ export const DEFAULT_BACKEND_FORM = {
   aiRegion: "",
   aiProjectId: "",
   aiHostOverride: "",
+  aiPathOverride: "",
 };
 
 export const DEFAULT_MCP_TARGET = {

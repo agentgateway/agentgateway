@@ -1006,5 +1006,16 @@ const AiBackendForm: React.FC<AiBackendFormProps> = ({ backendForm, setBackendFo
         placeholder="api.custom-ai-provider.com:443"
       />
     </div>
+
+    {/* AI Path Override */}
+    <div className="space-y-2">
+      <Label htmlFor="ai-path-override">Path Override (optional)</Label>
+      <Input
+        id="ai-path-override"
+        value={backendForm.aiPathOverride}
+        onChange={(e) => setBackendForm((prev) => ({ ...prev, aiPathOverride: e.target.value }))}
+        placeholder="/v1/chat/completions"
+      />
+    </div>
   </div>
 );

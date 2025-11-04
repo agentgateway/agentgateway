@@ -406,6 +406,11 @@ export const createAiBackend = (form: typeof DEFAULT_BACKEND_FORM, weight: numbe
     aiConfig.hostOverride = ensurePortInAddress(form.aiHostOverride.trim(), DEFAULT_PORTS.https);
   }
 
+  // Add path override if specified
+  if (form.aiPathOverride && form.aiPathOverride.trim()) {
+    aiConfig.pathOverride = form.aiPathOverride.trim();
+  }
+
   return addWeightIfNeeded({ ai: aiConfig }, weight);
 };
 
@@ -583,6 +588,7 @@ export const populateFormFromBackend = (
     aiRegion: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.region || "" : "",
     aiProjectId: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.projectId || "" : "",
     aiHostOverride: backend.ai?.hostOverride || "",
+    aiPathOverride: backend.ai?.pathOverride || "",
   };
 };
 

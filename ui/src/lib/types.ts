@@ -270,6 +270,7 @@ export interface AiBackend {
   name: string;
   provider: AiProvider;
   hostOverride?: string | null; // String format: "hostname:port" or "ip:port"
+  pathOverride?: string | null; // String format: "/path"
 }
 
 export interface AiProvider {
