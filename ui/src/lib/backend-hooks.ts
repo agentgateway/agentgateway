@@ -279,8 +279,6 @@ export const useBackendOperations = () => {
         if (route.backends) {
           route.backends[editingBackend.backendIndex] = newBackend;
         }
-
-        toast.success(`${backendType.toUpperCase()} backend "${form.name}" updated successfully`);
       } else {
         // Add new backend
         if (!config.binds[bindIndex].listeners[listenerIndex].routes![routeIndex].backends) {
@@ -289,17 +287,27 @@ export const useBackendOperations = () => {
         config.binds[bindIndex].listeners[listenerIndex].routes![routeIndex].backends.push(
           newBackend
         );
-
-        toast.success(`${backendType.toUpperCase()} backend "${form.name}" added successfully`);
       }
 
       // Update the configuration
       await updateConfig(config);
       await refreshListeners();
       onSuccess();
+
+      toast.success(
+        `${backendType.toUpperCase()} backend "${form.name}" ${editingBackend ? "updated" : "added"} successfully`
+      );
     } catch (err) {
       console.error(`Error ${editingBackend ? "updating" : "adding"} backend:`, err);
-      toast.error(`Failed to ${editingBackend ? "update" : "add"} backend`);
+
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (errorMessage.includes("backend policies currently only work with exactly 1 backend")) {
+        toast.error(
+          `Cannot ${editingBackend ? "update" : "add"} backend: Backend policies require exactly 1 backend.`
+        );
+      } else {
+        toast.error(`Failed to ${editingBackend ? "update" : "add"} backend`);
+      }
     } finally {
       setIsSubmitting(false);
     }

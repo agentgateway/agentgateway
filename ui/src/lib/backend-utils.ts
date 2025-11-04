@@ -193,7 +193,7 @@ export const validateCommonFields = (
   editingBackend?: boolean,
   backendType?: string
 ): boolean => {
-  if (backendType !== "ai" && backendType !== "mcp" && !form.name.trim()) return false;
+  if (backendType !== "mcp" && !form.name.trim()) return false;
 
   // Only validate route selection when adding (not editing)
   if (!editingBackend && (!form.selectedBindPort || form.selectedRouteIndex === "")) return false;
@@ -397,15 +397,13 @@ export const createAiProviderConfig = (form: typeof DEFAULT_BACKEND_FORM) => {
 export const createAiBackend = (form: typeof DEFAULT_BACKEND_FORM, weight: number): Backend => {
   const aiConfig: any = {
     provider: createAiProviderConfig(form),
+    name: form.name,
   };
 
   // Add host override if specified
-  if (form.aiHostOverrideType === "address") {
-    aiConfig.hostOverride = { Address: ensurePortInAddress(form.aiHostAddress) };
-  } else if (form.aiHostOverrideType === "hostname") {
-    aiConfig.hostOverride = {
-      Hostname: [form.aiHostHostname, parseInt(form.aiHostPort || "80")],
-    };
+  if (form.aiHostOverride && form.aiHostOverride.trim()) {
+    // add default port if there isn't one specified
+    aiConfig.hostOverride = ensurePortInAddress(form.aiHostOverride.trim(), DEFAULT_PORTS.https);
   }
 
   return addWeightIfNeeded({ ai: aiConfig }, weight);
@@ -494,7 +492,7 @@ export const populateFormFromBackend = (
   const backendType = getBackendType(backend);
 
   return {
-    name: backendType === "ai" || backendType === "mcp" ? "" : getBackendName(backend) || "",
+    name: backendType === "mcp" ? "" : getBackendName(backend) || "",
     weight: String(backend.weight || 1),
     selectedBindPort: String(bind.port),
     selectedListenerName: listener.name || "",
@@ -584,14 +582,7 @@ export const populateFormFromBackend = (
     aiModel: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.model || "" : "",
     aiRegion: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.region || "" : "",
     aiProjectId: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.projectId || "" : "",
-    aiHostOverrideType: backend.ai?.hostOverride?.Address
-      ? "address"
-      : backend.ai?.hostOverride?.Hostname
-        ? "hostname"
-        : "none",
-    aiHostAddress: backend.ai?.hostOverride?.Address || "",
-    aiHostHostname: backend.ai?.hostOverride?.Hostname?.[0] || "",
-    aiHostPort: String(backend.ai?.hostOverride?.Hostname?.[1] || ""),
+    aiHostOverride: backend.ai?.hostOverride || "",
   };
 };
 

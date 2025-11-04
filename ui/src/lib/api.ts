@@ -417,10 +417,7 @@ export async function createA2aTarget(
 
       // Only add hostOverride if a2a target has values
       if (target.a2a) {
-        newAiBackend.ai!.hostOverride = {
-          Address: target.a2a.host,
-          Hostname: [target.a2a.host, target.a2a.port],
-        };
+        newAiBackend.ai!.hostOverride = `${target.a2a.host}:${target.a2a.port}`;
       }
 
       route.backends.push(newAiBackend);
@@ -432,10 +429,7 @@ export async function createA2aTarget(
 
         // Only set hostOverride if a2a target has values
         if (target.a2a) {
-          aiBackend.ai.hostOverride = {
-            Address: target.a2a.host,
-            Hostname: [target.a2a.host, target.a2a.port],
-          };
+          aiBackend.ai.hostOverride = `${target.a2a.host}:${target.a2a.port}`;
         } else {
           // Remove hostOverride if no a2a config
           delete aiBackend.ai.hostOverride;
