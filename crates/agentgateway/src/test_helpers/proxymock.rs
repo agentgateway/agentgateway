@@ -30,7 +30,12 @@ use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
-use crate::types::agent::{Backend, BackendReference, BackendWithPolicies, Bind, BindName, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference, RouteMatch, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy};
+use crate::types::agent::{
+	Backend, BackendReference, BackendWithPolicies, Bind, BindName, Listener, ListenerProtocol,
+	ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference,
+	RouteMatch, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
+};
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
 
