@@ -613,7 +613,11 @@ where
 		},
 		Serde::Inline(s) => s,
 	};
-	let schema: OpenAPI = yamlviajson::from_str(s.as_str()).map_err(serde::de::Error::custom)?;
+	// OpenAPI can be huge, so grow our stack
+	let schema: OpenAPI = stacker::grow(2 * 1024 * 1024, || {
+		yamlviajson::from_str(s.as_str()).map_err(serde::de::Error::custom)
+	})?;
+
 	Ok(Arc::new(schema))
 }
 
