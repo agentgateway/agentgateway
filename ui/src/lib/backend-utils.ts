@@ -84,15 +84,7 @@ export const getBackendName = (backend: Backend): string => {
     return "MCP Backend";
   }
   if (backend.ai) {
-    if (backend.ai.provider) {
-      const provider = Object.keys(backend.ai.provider)[0];
-      const config = Object.values(backend.ai.provider)[0] as any;
-      if (config?.model) {
-        return `${provider.toUpperCase()}: ${config.model}`;
-      }
-      return `${provider.toUpperCase()} Backend`;
-    }
-    return "AI Backend";
+    return backend.ai.name;
   }
   if (backend.service) return backend.service.name?.hostname || "";
   if (backend.host) {
