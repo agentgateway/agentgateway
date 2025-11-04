@@ -324,10 +324,10 @@ pub enum Backend {
 	Invalid,
 }
 
-impl Into<BackendWithPolicies> for Backend {
-	fn into(self) -> BackendWithPolicies {
+impl From<Backend> for BackendWithPolicies {
+	fn from(val: Backend) -> Self {
 		BackendWithPolicies {
-			backend: self,
+			backend: val,
 			inline_policies: vec![],
 		}
 	}

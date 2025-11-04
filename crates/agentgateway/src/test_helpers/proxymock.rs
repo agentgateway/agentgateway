@@ -129,18 +129,16 @@ pub fn setup_llm_mock(
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test(config).unwrap();
-	let (be, _) = crate::types::local::LocalAIBackend::Provider(LocalNamedAIProvider {
+	let be = crate::types::local::LocalAIBackend::Provider(LocalNamedAIProvider {
 		name: "default".into(),
 		provider,
 		host_override: Some(Target::Address(*mock.address())),
 		path_override: None,
 		tokenize,
-		backend_tls: None,
-		backend_auth: None,
 		policies: None,
 		routes: Default::default(),
 	})
-	.translate(strng::format!("{}", mock.address()))
+	.translate()
 	.unwrap();
 	let b = Backend::AI(strng::format!("{}", mock.address()), be);
 	t.pi.stores.binds.write().insert_backend(b.into());

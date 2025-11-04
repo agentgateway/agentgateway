@@ -454,8 +454,7 @@ impl Store {
 		let rules = inline_policies
 			.iter()
 			.rev()
-			.map(|p| p.iter())
-			.flatten()
+			.flat_map(|p| p.iter())
 			.chain(rules);
 
 		let mut pol = BackendPolicies::default();

@@ -424,6 +424,11 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 				for group in &a.provider_groups {
 					let mut local_provider_group = Vec::new();
 					for (provider_idx, provider_config) in group.providers.iter().enumerate() {
+						let pols = provider_config
+							.inline_policies
+							.iter()
+							.map(BackendPolicy::try_from)
+							.collect::<Result<Vec<_>, _>>()?;
 						let provider = match &provider_config.provider {
 							Some(proto::agent::ai_backend::provider::Provider::Openai(openai)) => {
 								AIProvider::OpenAI(llm::openai::Provider {
@@ -481,6 +486,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 										.map_err(|e| ProtoError::Generic(e.to_string()))
 								})
 								.transpose()?,
+							inline_policies: pols,
 							routes: provider_config
 								.routes
 								.iter()

@@ -8,7 +8,9 @@ pub use gateway::Gateway;
 use hyper_util_fork::client::legacy::Error as HyperError;
 
 use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
-use crate::types::agent::{Backend, BackendReference, BackendWithPolicies, SimpleBackend, SimpleBackendReference};
+use crate::types::agent::{
+	Backend, BackendReference, BackendWithPolicies, SimpleBackend, SimpleBackendReference,
+};
 use crate::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -261,7 +263,10 @@ impl ProxyError {
 	}
 }
 
-pub fn resolve_backend(b: &BackendReference, pi: &ProxyInputs) -> Result<BackendWithPolicies, ProxyError> {
+pub fn resolve_backend(
+	b: &BackendReference,
+	pi: &ProxyInputs,
+) -> Result<BackendWithPolicies, ProxyError> {
 	let backend = match b {
 		BackendReference::Service { name, port } => {
 			let svc = pi
@@ -305,8 +310,7 @@ pub fn resolve_simple_backend(
 				.read_binds()
 				.backend(&b.name())
 				.ok_or(ProxyError::ServiceNotFound)?;
-			SimpleBackend::try_from(be.backend.clone())
-				.map_err(|_| ProxyError::InvalidBackendType)?
+			SimpleBackend::try_from(be.backend.clone()).map_err(|_| ProxyError::InvalidBackendType)?
 		},
 		SimpleBackendReference::Invalid => SimpleBackend::Invalid,
 	};
