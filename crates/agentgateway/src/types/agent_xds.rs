@@ -955,11 +955,16 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				};
 				let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
 					.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
+				let audiences = if jwt.audiences.is_empty() {
+					None
+				} else {
+					Some(jwt.audiences.clone())
+				};
 				let jwt_auth = http::jwt::Jwt::from_jwks(
 					jwk_set,
 					mode,
 					jwt.issuer.clone(),
-					Some(jwt.audiences.clone()),
+					audiences,
 				)
 				.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
 				TrafficPolicy::JwtAuth(jwt_auth)
