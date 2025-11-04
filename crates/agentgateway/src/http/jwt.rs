@@ -269,14 +269,8 @@ impl Provider {
 }
 
 impl Jwt {
-	pub fn from_providers(
-		providers: Vec<Provider>,
-		mode: Mode,
-	) -> Jwt {
-		Jwt {
-			mode,
-			providers,
-		}
+	pub fn from_providers(providers: Vec<Provider>, mode: Mode) -> Jwt {
+		Jwt { mode, providers }
 	}
 }
 
