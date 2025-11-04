@@ -19,15 +19,7 @@ use crate::http::{filters, retry, timeout};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, RouteType};
 use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
-use crate::types::agent::{
-	A2aPolicy, Authorization, Backend, BackendName, BackendPolicy, BackendReference, Bind, BindName,
-	FrontendPolicy, GatewayName, Listener, ListenerKey, ListenerProtocol, ListenerSet,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyName, PolicyPhase, PolicyTarget, PolicyType, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteRuleName, RouteSet, SimpleBackendReference, SseTargetSpec,
-	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, TLSConfig, Target,
-	TargetedPolicy, TrafficPolicy,
-};
+use crate::types::agent::{A2aPolicy, Authorization, Backend, BackendName, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindName, FrontendPolicy, GatewayName, Listener, ListenerKey, ListenerProtocol, ListenerSet, McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyName, PolicyPhase, PolicyTarget, PolicyType, Route, RouteBackendReference, RouteMatch, RouteName, RouteRuleName, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, TLSConfig, Target, TargetedPolicy, TrafficPolicy};
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::frontend;
 use crate::*;
@@ -51,7 +43,7 @@ impl NormalizedLocalConfig {
 pub struct NormalizedLocalConfig {
 	pub binds: Vec<Bind>,
 	pub policies: Vec<TargetedPolicy>,
-	pub backends: Vec<Backend>,
+	pub backends: Vec<BackendWithPolicies>,
 	// Note: here we use LocalWorkload since it conveys useful info, we could maybe change but not a problem
 	// for now
 	pub workloads: Vec<LocalWorkload>,
@@ -209,6 +201,7 @@ pub struct LocalNamedAIProvider {
 		schemars(with = "std::collections::HashMap<String, String>")
 	)]
 	pub routes: IndexMap<Strng, RouteType>,
+	// TODO: remove this
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<LocalBackendTLS>,
 	#[serde(default)]
@@ -787,7 +780,8 @@ async fn convert(
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
-		backends: all_backends,
+		// TODO: use inline policies!
+		backends: all_backends.into_iter().map(Into::into).collect(),
 		workloads,
 		services,
 	})

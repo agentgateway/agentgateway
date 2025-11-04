@@ -291,8 +291,7 @@ pub struct RouteBackendReference {
 pub struct RouteBackend {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
-	#[serde(flatten)]
-	pub backend: Backend,
+	pub backend: BackendWithPolicies,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<BackendPolicy>,
 }
@@ -300,6 +299,15 @@ pub struct RouteBackend {
 #[allow(unused)]
 fn default_weight() -> usize {
 	1
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackendWithPolicies {
+	pub backend: Backend,
+
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub inline_policies: Vec<BackendPolicy>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -314,6 +322,15 @@ pub enum Backend {
 	AI(BackendName, crate::llm::AIBackend),
 	Dynamic {},
 	Invalid,
+}
+
+impl Into<BackendWithPolicies> for Backend {
+	fn into(self) -> BackendWithPolicies {
+		BackendWithPolicies {
+			backend: self,
+			inline_policies: vec![],
+		}
+	}
 }
 
 pub fn serialize_backend_tuple<S: Serializer, T: serde::Serialize>(

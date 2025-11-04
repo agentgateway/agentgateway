@@ -18,9 +18,10 @@ use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{
-	A2aPolicy, Backend, BackendName, BackendPolicy, Bind, BindName, FrontendPolicy, GatewayName,
-	Listener, ListenerKey, ListenerSet, McpAuthentication, PolicyName, PolicyTarget, Route, RouteKey,
-	RouteName, RouteRuleName, ServiceName, SubBackendName, TCPRoute, TargetedPolicy, TrafficPolicy,
+	A2aPolicy, Backend, BackendName, BackendPolicy, BackendWithPolicies, Bind, BindName,
+	FrontendPolicy, GatewayName, Listener, ListenerKey, ListenerSet, McpAuthentication, PolicyName,
+	PolicyTarget, Route, RouteKey, RouteName, RouteRuleName, ServiceName, SubBackendName, TCPRoute,
+	TargetedPolicy, TrafficPolicy,
 };
 use crate::types::frontend;
 use crate::types::proto::agent::resource::Kind as XdsKind;
@@ -38,7 +39,7 @@ pub struct Store {
 	policies_by_name: HashMap<PolicyName, Arc<TargetedPolicy>>,
 	policies_by_target: HashMap<PolicyTarget, HashSet<PolicyName>>,
 
-	backends_by_name: HashMap<BackendName, Arc<Backend>>,
+	backends_by_name: HashMap<BackendName, Arc<BackendWithPolicies>>,
 
 	// Listeners we got before a Bind arrived
 	staged_listeners: HashMap<BindName, HashMap<ListenerKey, Listener>>,
@@ -431,7 +432,8 @@ impl Store {
 		backend: Option<BackendName>,
 		service: Option<ServiceName>,
 		sub_backend: Option<SubBackendName>,
-		inline: &[BackendPolicy],
+		// Set of inline policies. Last one wins
+		inline_policies: &[&[BackendPolicy]],
 	) -> BackendPolicies {
 		let backend_rules =
 			backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::Backend(t)));
@@ -449,7 +451,12 @@ impl Store {
 			.chain(service_rules.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_name.get(n))
 			.filter_map(|p| p.policy.as_backend());
-		let rules = inline.iter().chain(rules);
+		let rules = inline_policies
+			.iter()
+			.rev()
+			.map(|p| p.iter())
+			.flatten()
+			.chain(rules);
 
 		let mut pol = BackendPolicies::default();
 		for rule in rules {
@@ -573,7 +580,7 @@ impl Store {
 		self.by_name.values().cloned().collect()
 	}
 
-	pub fn backend(&self, r: &BackendName) -> Option<Arc<Backend>> {
+	pub fn backend(&self, r: &BackendName) -> Option<Arc<BackendWithPolicies>> {
 		self.backends_by_name.get(r).cloned()
 	}
 
@@ -706,9 +713,9 @@ impl Store {
 		let _ = self.tx.send(Event::Add(arc));
 	}
 
-	pub fn insert_backend(&mut self, b: Backend) {
-		let name = b.name();
-		if let Backend::AI(_, t) = &b
+	pub fn insert_backend(&mut self, b: BackendWithPolicies) {
+		let name = b.backend.name();
+		if let Backend::AI(_, t) = &b.backend
 			&& t.providers.any(|p| p.tokenize)
 		{
 			preload_tokenizers()
@@ -902,7 +909,7 @@ impl Store {
 		Ok(())
 	}
 	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
-		let backend: Backend = (&raw).try_into()?;
+		let backend: BackendWithPolicies = (&raw).try_into()?;
 		self.insert_backend(backend);
 		Ok(())
 	}
@@ -922,7 +929,7 @@ pub struct StoreUpdater {
 pub struct Dump {
 	binds: Vec<Arc<Bind>>,
 	policies: Vec<Arc<TargetedPolicy>>,
-	backends: Vec<Arc<Backend>>,
+	backends: Vec<Arc<BackendWithPolicies>>,
 }
 
 impl StoreUpdater {
@@ -966,7 +973,7 @@ impl StoreUpdater {
 		&self,
 		binds: Vec<Bind>,
 		policies: Vec<TargetedPolicy>,
-		backends: Vec<Backend>,
+		backends: Vec<BackendWithPolicies>,
 		prev: PreviousState,
 	) -> PreviousState {
 		let mut s = self.state.write().expect("mutex acquired");
@@ -984,8 +991,8 @@ impl StoreUpdater {
 			s.insert_bind(b);
 		}
 		for b in backends {
-			old_backends.remove(&b.name());
-			next_state.backends.insert(b.name());
+			old_backends.remove(&b.backend.name());
+			next_state.backends.insert(b.backend.name());
 			s.insert_backend(b);
 		}
 		for p in policies {

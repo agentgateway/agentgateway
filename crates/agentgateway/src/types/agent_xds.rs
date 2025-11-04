@@ -396,10 +396,15 @@ impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
 	}
 }
 
-impl TryFrom<&proto::agent::Backend> for Backend {
+impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::Backend) -> Result<Self, Self::Error> {
+		let pols = s
+			.inline_policies
+			.iter()
+			.map(BackendPolicy::try_from)
+			.collect::<Result<Vec<_>, _>>()?;
 		let name = BackendName::from(&s.name);
 		let backend = match &s.kind {
 			Some(proto::agent::backend::Kind::Static(s)) => Backend::Opaque(
@@ -539,7 +544,10 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 				return Err(ProtoError::Generic("unknown backend".to_string()));
 			},
 		};
-		Ok(backend)
+		Ok(Self {
+			backend,
+			inline_policies: pols,
+		})
 	}
 }
 
@@ -1568,12 +1576,14 @@ mod tests {
 						provider: Some(ai_backend::provider::Provider::Openai(ai_backend::OpenAi {
 							model: None,
 						})),
+						inline_policies: vec![],
 					}],
 				}],
 			})),
+			inline_policies: vec![],
 		};
 
-		let backend = Backend::try_from(&proto_backend)?;
+		let backend = BackendWithPolicies::try_from(&proto_backend)?.backend;
 		if let Backend::AI(name, ai_backend) = backend {
 			assert_eq!(name.as_str(), "test/backend");
 			let (provider, _handle) = ai_backend.select_provider().expect("should have provider");

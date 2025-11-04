@@ -722,6 +722,7 @@ message Backend {
     AIBackend ai = 3;
     MCPBackend mcp = 4;
   }
+  repeated BackendPolicySpec inline_policies = 5;
 }
 
 message StaticBackend {
@@ -784,6 +785,7 @@ message AIBackend {
     // The special "*" wildcard matches any path.
     // If not specified, all traffic is treated as ROUTE_TYPE_COMPLETIONS.
     map<string, RouteType> routes = 9;
+    repeated BackendPolicySpec inline_policies = 10;
   }
   message ProviderGroup {
     repeated Provider providers = 1;

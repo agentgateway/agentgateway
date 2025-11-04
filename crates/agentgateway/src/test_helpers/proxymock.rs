@@ -143,7 +143,7 @@ pub fn setup_llm_mock(
 	.translate(strng::format!("{}", mock.address()))
 	.unwrap();
 	let b = Backend::AI(strng::format!("{}", mock.address()), be);
-	t.pi.stores.binds.write().insert_backend(b);
+	t.pi.stores.binds.write().insert_backend(b.into());
 	let t = t.with_bind(simple_bind(basic_route(*mock.address())));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
@@ -320,7 +320,7 @@ impl TestBind {
 
 	pub fn with_backend(self, b: SocketAddr) -> Self {
 		let b = Backend::Opaque(strng::format!("{}", b), Target::Address(b));
-		self.pi.stores.binds.write().insert_backend(b);
+		self.pi.stores.binds.write().insert_backend(b.into());
 		self
 	}
 
@@ -350,8 +350,8 @@ impl TestBind {
 		);
 		{
 			let mut bw = self.pi.stores.binds.write();
-			bw.insert_backend(opb);
-			bw.insert_backend(b);
+			bw.insert_backend(opb.into());
+			bw.insert_backend(b.into());
 		}
 		self
 	}
@@ -392,12 +392,9 @@ impl TestBind {
 		{
 			let mut bw = self.pi.stores.binds.write();
 			for (_, b, _) in servers {
-				bw.insert_backend(Backend::Opaque(
-					strng::format!("basic-{}", b),
-					Target::Address(b),
-				))
+				bw.insert_backend(Backend::Opaque(strng::format!("basic-{}", b), Target::Address(b)).into())
 			}
-			bw.insert_backend(b);
+			bw.insert_backend(b.into());
 		}
 		self
 	}

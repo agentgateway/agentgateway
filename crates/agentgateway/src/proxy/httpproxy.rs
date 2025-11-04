@@ -564,8 +564,8 @@ impl HTTPProxy {
 			&selected_backend.backend,
 			&selected_backend.inline_policies,
 		);
-		log.backend_info = Some(selected_backend.backend.backend_info());
-		if let Some(bp) = selected_backend.backend.backend_protocol() {
+		log.backend_info = Some(selected_backend.backend.backend.backend_info());
+		if let Some(bp) = selected_backend.backend.backend.backend_protocol() {
 			log.backend_protocol = Some(bp)
 		}
 
@@ -707,7 +707,7 @@ impl HTTPProxy {
 		let call = make_backend_call(
 			self.inputs.clone(),
 			route_policies.clone(),
-			&selected_backend.backend,
+			&selected_backend.backend.backend,
 			backend_policies,
 			req,
 			Some(log),
@@ -843,18 +843,20 @@ pub async fn build_transport(
 
 fn get_backend_policies(
 	inputs: &ProxyInputs,
-	backend: &Backend,
+	backend: &BackendWithPolicies,
 	inline_policies: &[BackendPolicy],
 ) -> BackendPolicies {
-	let service = match backend {
+	let service = match &backend.backend {
 		Backend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
 		_ => None,
 	};
 
-	inputs
-		.stores
-		.read_binds()
-		.backend_policies(Some(backend.name()), service, None, inline_policies)
+	inputs.stores.read_binds().backend_policies(
+		Some(backend.backend.name()),
+		service,
+		None,
+		&[inline_policies, &backend.inline_policies],
+	)
 }
 
 async fn make_backend_call(
@@ -1470,12 +1472,12 @@ impl PolicyClient {
 		self.call(req, backend).await
 	}
 	pub async fn call(&self, req: Request, backend: SimpleBackend) -> Result<Response, ProxyError> {
-		let backend = Backend::from(backend);
+		let backend = Backend::from(backend).into();
 		let pols = get_backend_policies(&self.inputs, &backend, &[]);
 		make_backend_call(
 			self.inputs.clone(),
 			Arc::new(LLMRequestPolicies::default()),
-			&backend,
+			&backend.backend,
 			pols,
 			req,
 			None,
@@ -1503,13 +1505,13 @@ impl PolicyClient {
 		backend: &'a SimpleBackend,
 		defaults: BackendPolicies,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
-		let backend = Backend::from(backend.clone());
+		let backend = Backend::from(backend.clone()).into();
 		let pols = defaults.merge(get_backend_policies(&self.inputs, &backend, &[]));
 		Box::pin(async move {
 			make_backend_call(
 				self.inputs.clone(),
 				Arc::new(LLMRequestPolicies::default()),
-				&backend,
+				&backend.backend,
 				pols,
 				req,
 				None,
