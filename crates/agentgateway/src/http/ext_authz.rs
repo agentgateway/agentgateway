@@ -80,7 +80,7 @@ pub struct ExtAuthz {
 	pub context: Option<HashMap<String, String>>,
 	/// Additional metadata to send to the authorization service.
 	/// This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
-	/// If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatiblity.
+	/// If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<HashMap<String, Arc<cel::Expression>>>,
 	/// Behavior when the authorization service is unavailable or returns an error
