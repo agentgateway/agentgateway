@@ -421,9 +421,14 @@ impl Connector {
 						.await
 						.map_err(crate::http::Error::new)?;
 
+				// For inner HBONE, use the target (hostname or IP), not ep (which may be a placeholder)
+				let inner_authority = match &target {
+					Target::Hostname(host, port) => format!("{}:{}", host, port),
+					Target::Address(addr) => addr.to_string(),
+				};
 				let inner_uri = Uri::builder()
 					.scheme(Scheme::HTTPS)
-					.authority(ep.to_string())
+					.authority(inner_authority)
 					.path_and_query("/")
 					.build()
 					.expect("uri build should not fail");
@@ -573,9 +578,25 @@ impl Client {
 			target,
 			transport,
 		} = call;
-		let dest = match &target {
-			Target::Address(addr) => *addr,
-			Target::Hostname(hostname, port) => {
+		// For double HBONE, we don't need to resolve the hostname locally
+		// The gateway will resolve it. Use a placeholder dest (won't be used).
+		let dest = match (&target, &transport) {
+			(Target::Address(addr), _) => *addr,
+			(
+				Target::Hostname(hostname, _port),
+				Transport::DoubleHbone {
+					gateway_address, ..
+				},
+			) => {
+				// Don't resolve hostname for double HBONE - gateway will handle it
+				tracing::debug!(
+					hostname=%hostname,
+					"skipping DNS resolution for double hbone, gateway will resolve"
+				);
+				*gateway_address // Placeholder, won't be used for actual connection
+			},
+			(Target::Hostname(hostname, port), _) => {
+				// For non-double-HBONE, resolve hostname locally
 				let ip = self
 					.resolver
 					.resolve(hostname.clone())
@@ -634,9 +655,25 @@ impl Client {
 			target,
 			transport,
 		} = call;
-		let dest = match &target {
-			Target::Address(addr) => *addr,
-			Target::Hostname(hostname, port) => {
+		// For double HBONE, we don't need to resolve the hostname locally
+		// The gateway will resolve it. Use a placeholder dest (won't be used).
+		let dest = match (&target, &transport) {
+			(Target::Address(addr), _) => *addr,
+			(
+				Target::Hostname(hostname, _port),
+				Transport::DoubleHbone {
+					gateway_address, ..
+				},
+			) => {
+				// Don't resolve hostname for double HBONE - gateway will handle it
+				tracing::debug!(
+					hostname=%hostname,
+					"skipping DNS resolution for double hbone (HTTP), gateway will resolve"
+				);
+				*gateway_address // Placeholder, won't be used for actual connection
+			},
+			(Target::Hostname(hostname, port), _) => {
+				// For non-double-HBONE, resolve hostname locally
 				let ip = self
 					.resolver
 					.resolve(hostname.clone())

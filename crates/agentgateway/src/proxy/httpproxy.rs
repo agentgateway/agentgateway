@@ -1270,10 +1270,7 @@ pub fn build_service_call(
 	} else {
 		None
 	};
-	let Some(ip) = wl.workload_ips.first() else {
-		return Err(ProxyError::NoHealthyEndpoints);
-	};
-	let dest = SocketAddr::from((*ip, target_port));
+
 	log.add(move |l| l.request_handle = Some(handle));
 
 	// Check if we need double hbone (workload on remote network with gateway)
@@ -1319,8 +1316,25 @@ pub fn build_service_call(
 		None
 	};
 
+	// For double HBONE, use hostname-based target so the gateway can resolve it
+	let target = if network_gateway.is_some() {
+		tracing::debug!(
+			hostname=%svc.hostname,
+			port=%port,
+			"using hostname-based target for double hbone"
+		);
+		Target::Hostname(svc.hostname.clone(), port)
+	} else {
+		// For direct connections, we need the workload IP
+		let Some(ip) = wl.workload_ips.first() else {
+			return Err(ProxyError::NoHealthyEndpoints);
+		};
+		let dest = SocketAddr::from((*ip, target_port));
+		Target::Address(dest)
+	};
+
 	Ok(BackendCall {
-		target: Target::Address(dest),
+		target,
 		http_version_override,
 		transport_override: Some((wl.protocol, wl.identity())),
 		network_gateway,
