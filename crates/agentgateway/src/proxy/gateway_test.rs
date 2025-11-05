@@ -4,9 +4,12 @@ use crate::http::{Body, transformation_cel};
 use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
+use crate::types::agent::Backend;
+use crate::types::agent::Target;
+use crate::types::agent::{BackendPolicy, BackendWithPolicies};
 use crate::types::agent::{
-	Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, Route, RouteMatch,
-	RouteSet, TargetedPolicy, TrafficPolicy,
+	BackendReference, Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, Route,
+	RouteBackendReference, RouteMatch, RouteSet, TargetedPolicy, TrafficPolicy,
 };
 use crate::*;
 use ::http::StatusCode;
@@ -16,6 +19,7 @@ use assert_matches::assert_matches;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::Rng;
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use x509_parser::nom::AsBytes;
 
@@ -265,6 +269,299 @@ async fn tls_termination() {
 	assert_matches!(res, Err(_));
 }
 
+#[tokio::test]
+async fn header_manipulation() {
+	let mock = simple_mock().await;
+	let bind = base_gateway(&mock).with_route(Route {
+		key: "route2".into(),
+		route_name: "route2".into(),
+		rule_name: None,
+		hostnames: Default::default(),
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/p".into()),
+			method: None,
+			query: vec![],
+		}],
+		inline_policies: vec![
+			TrafficPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+				add: vec![("x-route-req".into(), "route-req".into())],
+				set: vec![],
+				remove: vec![],
+			}),
+			TrafficPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+				add: vec![("x-route-resp".into(), "route-resp".into())],
+				set: vec![],
+				remove: vec![],
+			}),
+		],
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			backend: BackendReference::Backend(mock.address().to_string().into()),
+			inline_policies: vec![
+				BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+					add: vec![("x-backend-req".into(), "backend-req".into())],
+					set: vec![],
+					remove: vec![],
+				}),
+				BackendPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+					add: vec![("x-backend-resp".into(), "backend-resp".into())],
+					set: vec![],
+					remove: vec![],
+				}),
+			],
+		}],
+	});
+	let io = bind.serve_http(BIND_KEY);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-route-resp"), "route-resp");
+	assert_eq!(res.hdr("x-backend-resp"), "backend-resp");
+	let body = read_body(res.into_body()).await;
+	assert_eq!(
+		body.headers.get("x-route-req").unwrap().as_bytes(),
+		b"route-req"
+	);
+	assert_eq!(
+		body.headers.get("x-backend-req").unwrap().as_bytes(),
+		b"backend-req"
+	);
+}
+
+#[tokio::test]
+async fn inline_backend_policies() {
+	let mock = simple_mock().await;
+	let bind = base_gateway(&mock)
+		.with_route(Route {
+			key: "route2".into(),
+			route_name: "route2".into(),
+			rule_name: None,
+			hostnames: Default::default(),
+			matches: vec![RouteMatch {
+				headers: vec![],
+				path: PathMatch::PathPrefix("/p".into()),
+				method: None,
+				query: vec![],
+			}],
+			inline_policies: vec![
+				TrafficPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+					add: vec![("x-route-req".into(), "route-req".into())],
+					set: vec![],
+					remove: vec![],
+				}),
+				TrafficPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+					add: vec![("x-route-resp".into(), "route-resp".into())],
+					set: vec![],
+					remove: vec![],
+				}),
+			],
+			backends: vec![RouteBackendReference {
+				weight: 1,
+				backend: BackendReference::Backend(mock.address().to_string().into()),
+				inline_policies: vec![
+					BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+						add: vec![("x-backend-route-req".into(), "backend-route-req".into())],
+						set: vec![],
+						remove: vec![],
+					}),
+					BackendPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+						add: vec![("x-backend-route-resp".into(), "backend-route-resp".into())],
+						set: vec![],
+						remove: vec![],
+					}),
+				],
+			}],
+		})
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				strng::format!("{}", mock.address()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![
+				BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+					add: vec![("x-backend-req".into(), "backend-req".into())],
+					set: vec![],
+					remove: vec![],
+				}),
+				BackendPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+					add: vec![("x-backend-resp".into(), "backend-resp".into())],
+					set: vec![],
+					remove: vec![],
+				}),
+			],
+		});
+	let io = bind.serve_http(BIND_KEY);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), 200);
+	// We should get the route rule, and the inline backend rule. The Backend rule takes precedence
+	// over the HTTPRoute.backendRef.filters though, so that one is ignored (no deep merging, either).
+	assert_eq!(res.hdr("x-route-resp"), "route-resp");
+	assert_eq!(res.hdr("x-backend-route-resp"), "backend-route-resp");
+	assert_eq!(res.hdr("x-backend-resp"), "");
+	let body = read_body(res.into_body()).await;
+	assert_eq!(
+		body.headers.get("x-route-req").unwrap().as_bytes(),
+		b"route-req"
+	);
+	assert!(body.headers.get("x-backend-req").is_none(),);
+	assert_eq!(
+		body.headers.get("x-backend-route-req").unwrap().as_bytes(),
+		b"backend-route-req"
+	);
+}
+
+#[tokio::test]
+async fn api_key() {
+	let (_mock, bind, io) = basic_setup().await;
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			name: strng::new("apikey"),
+			target: PolicyTarget::Route("route".into()),
+			policy: TrafficPolicy::APIKey(
+				http::apikey::LocalAPIKeys {
+					keys: vec![
+						http::apikey::LocalAPIKey {
+							key: http::apikey::APIKey::new("sk-123"),
+							metadata: Some(json!({"group": "eng"})),
+						},
+						http::apikey::LocalAPIKey {
+							key: http::apikey::APIKey::new("sk-456"),
+							metadata: Some(json!({"group": "sales"})),
+						},
+					],
+					mode: http::apikey::Mode::Strict,
+				}
+				.into(),
+			)
+			.into(),
+		})
+		.with_policy(TargetedPolicy {
+			name: strng::new("auth"),
+			target: PolicyTarget::Route("route".into()),
+			policy: TrafficPolicy::Authorization(deser(json!({
+				"rules": ["apiKey.group == 'eng'"]
+			})))
+			.into(),
+		});
+
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", "bearer sk-123")],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	// Match but fails authz
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", "bearer sk-456")],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	// No match
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", "bearer sk-789")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+	// No match
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 401);
+}
+
+#[tokio::test]
+async fn basic_auth() {
+	let (_mock, bind, io) = basic_setup().await;
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			name: strng::new("basic"),
+			target: PolicyTarget::Route("route".into()),
+			policy: TrafficPolicy::BasicAuth(
+				http::basicauth::LocalBasicAuth {
+					htpasswd: FileOrInline::Inline(
+						"user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00
+bcrypt_test:$2y$05$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa
+sha1_test:{SHA}W6ph5Mm5Pz8GgiULbPgzG37mj9g=
+crypt_test:bGVh02xkuGli2"
+							.to_string(),
+					),
+					realm: Some("my-realm".into()),
+					mode: http::basicauth::Mode::Strict,
+				}
+				.try_into()
+				.unwrap(),
+			)
+			.into(),
+		})
+		.with_policy(TargetedPolicy {
+			name: strng::new("auth"),
+			target: PolicyTarget::Route("route".into()),
+			policy: TrafficPolicy::Authorization(deser(json!({
+				"rules": ["basicAuth.username == 'user'"]
+			})))
+			.into(),
+		});
+
+	use base64::Engine;
+	let md5 = base64::prelude::BASE64_STANDARD.encode(b"user:password");
+	let sha1 = base64::prelude::BASE64_STANDARD.encode(b"sha1_test:password");
+	let bcrypt = base64::prelude::BASE64_STANDARD.encode(b"bcrypt_test:password");
+	let crypt = base64::prelude::BASE64_STANDARD.encode(b"crypt_test:password");
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {md5}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	// Match but fails authz
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {sha1}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {crypt}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {bcrypt}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	// No match
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 401);
+	let md5_wrong = base64::prelude::BASE64_STANDARD.encode(b"user:not-password");
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", &format!("basic {md5_wrong}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+}
+
 async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value) {
 	let r = rand::rng().random::<u128>();
 	let res = send_request_body(io.clone(), Method::POST, &format!("http://lo/{r}"), body).await;
@@ -284,4 +581,8 @@ async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value)
 	let log = logs.first().unwrap();
 	let valid = is_json_subset(&want, log);
 	assert!(valid, "want={want:#?} got={log:#?}");
+}
+
+fn deser<T: DeserializeOwned>(v: serde_json::Value) -> T {
+	serde_json::from_value(v).unwrap()
 }

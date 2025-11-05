@@ -6,10 +6,7 @@ use crate::http::{Body, Response, filters};
 use crate::json;
 use crate::types::agent::A2aPolicy;
 
-pub async fn apply_to_request(pol: Option<&A2aPolicy>, req: &mut Request<Body>) -> RequestType {
-	if pol.is_none() {
-		return RequestType::Unknown;
-	};
+pub async fn apply_to_request(_: &A2aPolicy, req: &mut Request<Body>) -> RequestType {
 	// Possible options are POST a JSON-RPC message or GET /.well-known/agent.json
 	// For agent card, we will process only on the response
 	classify_request(req).await
@@ -52,7 +49,9 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 	}
 }
 
+#[derive(Debug, Clone, Default)]
 pub enum RequestType {
+	#[default]
 	Unknown,
 	AgentCard(http::Uri),
 	Call(&'static str),

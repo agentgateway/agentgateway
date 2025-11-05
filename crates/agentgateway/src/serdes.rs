@@ -243,6 +243,15 @@ where
 	Ok(SecretString::from(k.trim().to_string()))
 }
 
+pub fn deser_key<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let input = String::deserialize(deserializer)?;
+
+	Ok(SecretString::from(input))
+}
+
 pub fn de_as<'de, I, O, D>(deserializer: D) -> Result<O, D::Error>
 where
 	D: Deserializer<'de>,

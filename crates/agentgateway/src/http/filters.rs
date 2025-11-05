@@ -64,7 +64,9 @@ pub struct RequestRedirect {
 }
 
 impl RequestRedirect {
-	pub fn apply(&self, req: &mut Request, path_match: &PathMatch) -> Result<PolicyResponse, Error> {
+	pub fn apply(&self, req: &mut Request) -> Result<PolicyResponse, Error> {
+		const DEFAULT_PATH: &PathMatch = &PathMatch::PathPrefix(strng::literal!("/"));
+		let path_match = req.extensions().get::<PathMatch>().unwrap_or(DEFAULT_PATH);
 		let RequestRedirect {
 			scheme,
 			authority,
@@ -106,7 +108,13 @@ pub struct OriginalUrl(pub Uri);
 pub struct AutoHostname();
 
 impl UrlRewrite {
-	pub fn apply(&self, req: &mut Request, path_match: &PathMatch) -> Result<(), Error> {
+	pub fn apply(&self, req: &mut Request) -> Result<(), Error> {
+		const DEFAULT_PATH: &PathMatch = &PathMatch::PathPrefix(strng::literal!("/"));
+		let path_match = req
+			.extensions()
+			.get::<PathMatch>()
+			.unwrap_or(DEFAULT_PATH)
+			.clone();
 		let UrlRewrite { authority, path } = self;
 		let orig = req.uri().clone();
 		req.extensions_mut().insert(OriginalUrl(orig));
@@ -116,7 +124,7 @@ impl UrlRewrite {
 		if matches!(authority, Some(HostRedirect::Auto)) {
 			req.extensions_mut().insert(AutoHostname());
 		}
-		let path_and_query = rewrite_path(path, path_match, req.uri())?;
+		let path_and_query = rewrite_path(path, &path_match, req.uri())?;
 		let new = Uri::builder()
 			.scheme(scheme)
 			.authority(new_authority)

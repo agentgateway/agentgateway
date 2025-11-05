@@ -118,6 +118,38 @@
       ],
       "additionalProperties": true
     },
+    "apiKey": {
+      "description": "`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key"
+      ]
+    },
+    "basicAuth": {
+      "description": "`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "username": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "username"
+      ]
+    },
     "llm": {
       "description": "`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.",
       "type": [

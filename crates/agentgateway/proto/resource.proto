@@ -237,10 +237,13 @@ message HeaderModifier {
   repeated string remove = 3;
 }
 
-message RequestMirror {
-  BackendReference backend = 1;
-  // 0-100
-  double percentage = 2;
+message RequestMirrors {
+  message Mirror {
+    BackendReference backend = 1;
+    // 0-100
+    double percentage = 2;
+  }
+  repeated Mirror mirrors = 1;
 }
 
 message RequestRedirect {
@@ -408,6 +411,19 @@ message TrafficPolicySpec {
     repeated string allow = 1;
     repeated string deny = 2;
   }
+  message JWTProvider {
+    // JWT issuer that must match the 'iss' claim
+    string issuer = 1;
+
+    // List of audiences - the 'aud' claim must be in this list
+    repeated string audiences = 2;
+
+    // JWKS configuration - where to get the keys for validation
+    oneof jwks_source {
+      // Inline JWKS as a JSON string
+      string inline = 3;
+    }
+  }
   // JWT authentication configuration
   message JWT {
     // Validation mode for JWT authentication
@@ -422,18 +438,48 @@ message TrafficPolicySpec {
 
     // How the JWT validation should behave
     Mode mode = 1;
+    repeated JWTProvider providers = 2;
+  }
 
-    // JWT issuer that must match the 'iss' claim
-    string issuer = 2;
-
-    // List of audiences - the 'aud' claim must be in this list
-    repeated string audiences = 3;
-
-    // JWKS configuration - where to get the keys for validation
-    oneof jwks_source {
-      // Inline JWKS as a JSON string
-      string inline = 4;
+  // Basic authentication configuration using htpasswd file
+  message BasicAuthentication {
+    // Validation mode for basic authentication
+    enum Mode {
+      // Requires valid credentials
+      STRICT = 0;
+      // If credentials exist, validate them (default)
+      OPTIONAL = 1;
     }
+
+    // Htpasswd file content
+    string htpasswd_content = 1;
+
+    // Realm name for WWW-Authenticate header
+    google.protobuf.StringValue realm = 2;
+
+    // How the basic authentication should behave
+    Mode mode = 3;
+  }
+
+  // API Key authentication
+  message APIKey {
+    // Validation mode for API Key authentication
+    enum Mode {
+      // Requires valid credentials
+      STRICT = 0;
+      // If credentials exist, validate them (default)
+      OPTIONAL = 1;
+    }
+
+    message User {
+      string key = 1;
+      google.protobuf.Struct metadata = 2;
+    }
+
+    repeated User api_keys = 1;
+
+    // How the API key authentication should behave
+    Mode mode = 2;
   }
 
   message TransformationPolicy {
@@ -493,9 +539,11 @@ message TrafficPolicySpec {
     HeaderModifier response_header_modifier = 13;
     RequestRedirect request_redirect = 14;
     UrlRewrite url_rewrite = 15;
-    RequestMirror request_mirror = 16;
+    RequestMirrors request_mirror = 16;
     DirectResponse direct_response = 17;
     CORS cors = 18;
+    BasicAuthentication basic_auth = 19;
+    APIKey api_key_auth = 20;
   }
 }
 
@@ -652,7 +700,7 @@ message BackendPolicySpec {
     HeaderModifier request_header_modifier = 8;
     HeaderModifier response_header_modifier = 9;
     RequestRedirect request_redirect = 10;
-    RequestMirror request_mirror = 11;
+    RequestMirrors request_mirror = 11;
   }
 }
 
@@ -676,6 +724,7 @@ message Backend {
     AIBackend ai = 3;
     MCPBackend mcp = 4;
   }
+  repeated BackendPolicySpec inline_policies = 5;
 }
 
 message StaticBackend {
@@ -738,13 +787,14 @@ message AIBackend {
       Vertex vertex = 6;
       Anthropic anthropic = 7;
       Bedrock bedrock = 8;
-      AzureOpenAI azureopenai = 10;
+      AzureOpenAI azureopenai = 11;
     }
     // Routes defines how to identify the type of traffic to handle.
     // The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").
     // The special "*" wildcard matches any path.
     // If not specified, all traffic is treated as ROUTE_TYPE_COMPLETIONS.
     map<string, RouteType> routes = 9;
+    repeated BackendPolicySpec inline_policies = 10;
   }
   message ProviderGroup {
     repeated Provider providers = 1;

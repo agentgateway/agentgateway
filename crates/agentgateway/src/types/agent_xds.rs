@@ -396,10 +396,15 @@ impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
 	}
 }
 
-impl TryFrom<&proto::agent::Backend> for Backend {
+impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::Backend) -> Result<Self, Self::Error> {
+		let pols = s
+			.inline_policies
+			.iter()
+			.map(BackendPolicy::try_from)
+			.collect::<Result<Vec<_>, _>>()?;
 		let name = BackendName::from(&s.name);
 		let backend = match &s.kind {
 			Some(proto::agent::backend::Kind::Static(s)) => Backend::Opaque(
@@ -419,6 +424,11 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 				for group in &a.provider_groups {
 					let mut local_provider_group = Vec::new();
 					for (provider_idx, provider_config) in group.providers.iter().enumerate() {
+						let pols = provider_config
+							.inline_policies
+							.iter()
+							.map(BackendPolicy::try_from)
+							.collect::<Result<Vec<_>, _>>()?;
 						let provider = match &provider_config.provider {
 							Some(proto::agent::ai_backend::provider::Provider::Openai(openai)) => {
 								AIProvider::OpenAI(llm::openai::Provider {
@@ -483,6 +493,7 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 										.map_err(|e| ProtoError::Generic(e.to_string()))
 								})
 								.transpose()?,
+							inline_policies: pols,
 							routes: provider_config
 								.routes
 								.iter()
@@ -546,7 +557,10 @@ impl TryFrom<&proto::agent::Backend> for Backend {
 				return Err(ProtoError::Generic("unknown backend".to_string()));
 			},
 		};
-		Ok(backend)
+		Ok(Self {
+			backend,
+			inline_policies: pols,
+		})
 	}
 }
 
@@ -810,11 +824,18 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 				})
 			},
 			Some(bps::Kind::RequestMirror(m)) => {
-				let backend = resolve_simple_reference(m.backend.as_ref())?;
-				BackendPolicy::RequestMirror(vec![http::filters::RequestMirror {
-					backend,
-					percentage: m.percentage / 100.0,
-				}])
+				let mirrors = m
+					.mirrors
+					.iter()
+					.map(|m| {
+						let backend = resolve_simple_reference(m.backend.as_ref())?;
+						Ok::<_, ProtoError>(http::filters::RequestMirror {
+							backend,
+							percentage: m.percentage / 100.0,
+						})
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				BackendPolicy::RequestMirror(mirrors)
 			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
@@ -945,19 +966,30 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					tps::jwt::Mode::Strict => http::jwt::Mode::Strict,
 					tps::jwt::Mode::Permissive => http::jwt::Mode::Permissive,
 				};
-				let jwks_json = match &jwt.jwks_source {
-					Some(tps::jwt::JwksSource::Inline(inline)) => inline.clone(),
-					None => {
-						return Err(ProtoError::Generic(
-							"JWT policy missing JWKS source".to_string(),
-						));
-					},
-				};
-				let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
-					.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
-				let jwt_auth =
-					http::jwt::Jwt::from_jwks(jwk_set, mode, jwt.issuer.clone(), jwt.audiences.clone())
-						.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
+				let providers = jwt
+					.providers
+					.iter()
+					.map(|p| {
+						let jwks_json = match &p.jwks_source {
+							Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline.clone(),
+							None => {
+								return Err(ProtoError::Generic(
+									"JWT policy missing JWKS source".to_string(),
+								));
+							},
+						};
+						let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
+							.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
+						let audiences = if p.audiences.is_empty() {
+							None
+						} else {
+							Some(p.audiences.clone())
+						};
+						http::jwt::Provider::from_jwks(jwk_set, p.issuer.clone(), audiences)
+							.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
 				TrafficPolicy::JwtAuth(jwt_auth)
 			},
 			Some(tps::Kind::Transformation(tp)) => {
@@ -1093,11 +1125,18 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::UrlRewrite(http::filters::UrlRewrite { authority, path })
 			},
 			Some(tps::Kind::RequestMirror(m)) => {
-				let backend = resolve_simple_reference(m.backend.as_ref())?;
-				TrafficPolicy::RequestMirror(vec![http::filters::RequestMirror {
-					backend,
-					percentage: m.percentage / 100.0,
-				}])
+				let mirrors = m
+					.mirrors
+					.iter()
+					.map(|m| {
+						let backend = resolve_simple_reference(m.backend.as_ref())?;
+						Ok::<_, ProtoError>(http::filters::RequestMirror {
+							backend,
+							percentage: m.percentage / 100.0,
+						})
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				TrafficPolicy::RequestMirror(mirrors)
 			},
 			Some(tps::Kind::DirectResponse(dr)) => {
 				TrafficPolicy::DirectResponse(http::filters::DirectResponse {
@@ -1116,6 +1155,41 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				})
 				.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
+			Some(tps::Kind::BasicAuth(ba)) => {
+				let mode = match tps::basic_authentication::Mode::try_from(ba.mode)
+					.map_err(|_| ProtoError::EnumParse("invalid Basic Auth mode".to_string()))?
+				{
+					tps::basic_authentication::Mode::Strict => http::basicauth::Mode::Strict,
+					tps::basic_authentication::Mode::Optional => http::basicauth::Mode::Optional,
+				};
+				TrafficPolicy::BasicAuth(http::basicauth::BasicAuthentication::new(
+					&ba.htpasswd_content,
+					ba.realm.clone(),
+					mode,
+				))
+			},
+			Some(tps::Kind::ApiKeyAuth(ba)) => {
+				let mode = match tps::api_key::Mode::try_from(ba.mode)
+					.map_err(|_| ProtoError::EnumParse("invalid API Key mode".to_string()))?
+				{
+					tps::api_key::Mode::Strict => http::apikey::Mode::Strict,
+					tps::api_key::Mode::Optional => http::apikey::Mode::Optional,
+				};
+				let keys = ba
+					.api_keys
+					.iter()
+					.map(|u| {
+						let meta = u
+							.metadata
+							.as_ref()
+							.map(serde_json::to_value)
+							.transpose()?
+							.unwrap_or_default();
+						Ok::<_, ProtoError>((http::apikey::APIKey::new(u.key.clone()), meta))
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(keys, mode))
+			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}
@@ -1522,12 +1596,14 @@ mod tests {
 						provider: Some(ai_backend::provider::Provider::Openai(ai_backend::OpenAi {
 							model: None,
 						})),
+						inline_policies: vec![],
 					}],
 				}],
 			})),
+			inline_policies: vec![],
 		};
 
-		let backend = Backend::try_from(&proto_backend)?;
+		let backend = BackendWithPolicies::try_from(&proto_backend)?.backend;
 		if let Backend::AI(name, ai_backend) = backend {
 			assert_eq!(name.as_str(), "test/backend");
 			let (provider, _handle) = ai_backend.select_provider().expect("should have provider");
