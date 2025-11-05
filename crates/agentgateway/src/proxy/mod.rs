@@ -8,7 +8,10 @@ pub use gateway::Gateway;
 use hyper_util_fork::client::legacy::Error as HyperError;
 
 use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
-use crate::types::agent::{Backend, BackendReference, SimpleBackend, SimpleBackendReference};
+use crate::types::agent::{
+	Backend, BackendPolicy, BackendReference, BackendWithPolicies, SimpleBackend,
+	SimpleBackendReference,
+};
 use crate::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -41,6 +44,8 @@ impl ProxyResponse {
 			| ProxyError::BackendUnsupportedMirror
 			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
+			ProxyError::BasicAuthenticationFailure(_) => ProxyResponseReason::BasicAuth,
+			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
 			ProxyError::AuthorizationFailed | ProxyError::CsrfValidationFailed => {
 				ProxyResponseReason::Authorization
@@ -80,6 +85,10 @@ pub enum ProxyResponseReason {
 	Internal,
 	/// JWT authentication failed
 	JwtAuth,
+	/// Basic authentication failed
+	BasicAuth,
+	/// API Key authentication failed
+	APIKeyAuth,
 	/// External Authorization failed
 	ExtAuth,
 	/// Authorization failed
@@ -120,6 +129,10 @@ pub enum ProxyError {
 	BackendUnsupportedMirror,
 	#[error("authentication failure: {0}")]
 	JwtAuthenticationFailure(http::jwt::TokenError),
+	#[error("basic authentication failure: {0}")]
+	BasicAuthenticationFailure(http::basicauth::Error),
+	#[error("api key authentication failure: {0}")]
+	APIKeyAuthenticationFailure(http::apikey::Error),
 	#[error("CSRF validation failed")]
 	CsrfValidationFailed,
 	#[error("service not found")]
@@ -192,7 +205,9 @@ impl ProxyError {
 			ProxyError::FilterError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
-			ProxyError::JwtAuthenticationFailure(_) => StatusCode::FORBIDDEN,
+			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
@@ -232,11 +247,27 @@ impl ProxyError {
 				rb = rb.header(http::x_headers::X_RATELIMIT_RESET, hv)
 			}
 		}
+
+		// Add WWW-Authenticate header for basic auth failures
+		if let ProxyError::BasicAuthenticationFailure(err) = &self {
+			let realm = match err {
+				http::basicauth::Error::Missing { realm } => realm,
+				http::basicauth::Error::InvalidCredentials { realm } => realm,
+			};
+			let auth_header = format!("Basic realm=\"{}\"", realm);
+			if let Ok(hv) = HeaderValue::try_from(auth_header) {
+				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
+			}
+		}
+
 		rb.body(http::Body::from(msg)).unwrap()
 	}
 }
 
-pub fn resolve_backend(b: &BackendReference, pi: &ProxyInputs) -> Result<Backend, ProxyError> {
+pub fn resolve_backend(
+	b: &BackendReference,
+	pi: &ProxyInputs,
+) -> Result<BackendWithPolicies, ProxyError> {
 	let backend = match b {
 		BackendReference::Service { name, port } => {
 			let svc = pi
@@ -245,7 +276,7 @@ pub fn resolve_backend(b: &BackendReference, pi: &ProxyInputs) -> Result<Backend
 				.services
 				.get_by_namespaced_host(name)
 				.ok_or(ProxyError::ServiceNotFound)?;
-			Backend::Service(svc, *port)
+			Backend::Service(svc, *port).into()
 		},
 		BackendReference::Backend(_) => {
 			let be = pi
@@ -255,7 +286,7 @@ pub fn resolve_backend(b: &BackendReference, pi: &ProxyInputs) -> Result<Backend
 				.ok_or(ProxyError::ServiceNotFound)?;
 			Arc::unwrap_or_clone(be)
 		},
-		BackendReference::Invalid => Backend::Invalid,
+		BackendReference::Invalid => Backend::Invalid.into(),
 	};
 	Ok(backend)
 }
@@ -264,6 +295,13 @@ pub fn resolve_simple_backend(
 	b: &SimpleBackendReference,
 	pi: &ProxyInputs,
 ) -> Result<SimpleBackend, ProxyError> {
+	resolve_simple_backend_with_policies(b, pi).map(|b| b.0)
+}
+
+pub fn resolve_simple_backend_with_policies(
+	b: &SimpleBackendReference,
+	pi: &ProxyInputs,
+) -> Result<(SimpleBackend, Vec<BackendPolicy>), ProxyError> {
 	let backend = match b {
 		SimpleBackendReference::Service { name, port } => {
 			let svc = pi
@@ -272,7 +310,7 @@ pub fn resolve_simple_backend(
 				.services
 				.get_by_namespaced_host(name)
 				.ok_or(ProxyError::ServiceNotFound)?;
-			SimpleBackend::Service(svc, *port)
+			(SimpleBackend::Service(svc, *port), Vec::default())
 		},
 		SimpleBackendReference::Backend(_) => {
 			let be = pi
@@ -280,10 +318,12 @@ pub fn resolve_simple_backend(
 				.read_binds()
 				.backend(&b.name())
 				.ok_or(ProxyError::ServiceNotFound)?;
-			SimpleBackend::try_from(Arc::unwrap_or_clone(be))
-				.map_err(|_| ProxyError::InvalidBackendType)?
+			(
+				SimpleBackend::try_from(be.backend.clone()).map_err(|_| ProxyError::InvalidBackendType)?,
+				be.inline_policies.clone(),
+			)
 		},
-		SimpleBackendReference::Invalid => SimpleBackend::Invalid,
+		SimpleBackendReference::Invalid => (SimpleBackend::Invalid, Vec::default()),
 	};
 	Ok(backend)
 }

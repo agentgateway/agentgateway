@@ -65,7 +65,7 @@ pub struct Jwt {
 }
 
 #[derive(Clone)]
-struct Provider {
+pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
 }
@@ -126,7 +126,7 @@ pub enum LocalJwtConfig {
 		#[serde(default)]
 		mode: Mode,
 		issuer: String,
-		audiences: Vec<String>,
+		audiences: Option<Vec<String>>,
 		jwks: serdes::FileInlineOrRemote,
 	},
 }
@@ -136,7 +136,7 @@ pub enum LocalJwtConfig {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct ProviderConfig {
 	pub issuer: String,
-	pub audiences: Vec<String>,
+	pub audiences: Option<Vec<String>>,
 	pub jwks: serdes::FileInlineOrRemote,
 }
 
@@ -193,7 +193,7 @@ impl Provider {
 	pub fn from_jwks(
 		jwks: JwkSet,
 		issuer: String,
-		audiences: Vec<String>,
+		audiences: Option<Vec<String>>,
 	) -> Result<Provider, JwkError> {
 		let mut keys = HashMap::new();
 		let to_supported_alg = |key_algorithm: Option<KeyAlgorithm>| match key_algorithm {
@@ -246,7 +246,13 @@ impl Provider {
 			// The new() requires 1 algorithm, so just pass the first before we override it
 			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
 			validation.algorithms = supported_algorithms;
-			validation.set_audience(&audiences);
+			// only set audience if audiences were provided
+			// otherwise, disable audience validation
+			if let Some(audiences) = &audiences {
+				validation.set_audience(audiences);
+			} else {
+				validation.validate_aud = false;
+			}
 			validation.set_issuer(std::slice::from_ref(&issuer));
 
 			keys.insert(
@@ -263,17 +269,8 @@ impl Provider {
 }
 
 impl Jwt {
-	pub fn from_jwks(
-		jwks: JwkSet,
-		mode: Mode,
-		issuer: String,
-		audiences: Vec<String>,
-	) -> Result<Jwt, JwkError> {
-		let provider = Provider::from_jwks(jwks, issuer, audiences)?;
-		Ok(Jwt {
-			mode,
-			providers: vec![provider],
-		})
+	pub fn from_providers(providers: Vec<Provider>, mode: Mode) -> Jwt {
+		Jwt { mode, providers }
 	}
 }
 
@@ -326,7 +323,7 @@ impl Jwt {
 			log.jwt_sub = Some(sub.to_string());
 		};
 		log.cel.ctx().with_jwt(&claims);
-		// Remove the token. TODO: allow keep it
+		// Remove the token.
 		req.headers_mut().remove(http::header::AUTHORIZATION);
 		// Insert the claims into extensions so we can reference it later
 		req.extensions_mut().insert(claims);

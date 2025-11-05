@@ -5,6 +5,7 @@ use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::proxy::ProxyError;
 use crate::serdes::deser_key_from_file;
+use crate::types::agent::BackendName;
 use crate::*;
 
 #[apply(schema!)]
@@ -110,19 +111,17 @@ pub enum BackendAuth {
 	Azure(AzureAuth),
 }
 
-pub struct BackendInfo<'a> {
-	pub name: &'a str,
+#[derive(Clone)]
+pub struct BackendInfo {
+	pub name: BackendName,
 	pub inputs: Arc<ProxyInputs>,
 }
 
 pub async fn apply_backend_auth(
-	backend_info: &BackendInfo<'_>,
-	auth: Option<&BackendAuth>,
+	backend_info: &BackendInfo,
+	auth: &BackendAuth,
 	req: &mut Request,
 ) -> Result<(), ProxyError> {
-	let Some(auth) = auth else {
-		return Ok(());
-	};
 	match auth {
 		BackendAuth::Passthrough {} => {
 			// They should have a JWT policy defined. That will strip the token. Here we add it back

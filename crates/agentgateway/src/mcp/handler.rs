@@ -17,7 +17,6 @@ use rmcp::model::{
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
 
-use crate::ProxyInputs;
 use crate::cel::ContextBuilder;
 use crate::http::Response;
 use crate::http::jwt::Claims;
@@ -52,7 +51,6 @@ pub struct Relay {
 
 impl Relay {
 	pub fn new(
-		pi: Arc<ProxyInputs>,
 		backend: McpBackendGroup,
 		policies: McpAuthorizationSet,
 		client: PolicyClient,
@@ -67,7 +65,7 @@ impl Relay {
 			Some(backend.targets[0].name.to_string())
 		};
 		Ok(Self {
-			upstreams: Arc::new(upstream::UpstreamGroup::new(pi, client, backend)?),
+			upstreams: Arc::new(upstream::UpstreamGroup::new(client, backend)?),
 			policies,
 			default_target_name,
 			is_multiplexing,

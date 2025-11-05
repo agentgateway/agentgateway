@@ -20,7 +20,7 @@ use crate::llm::universal::{
 };
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
-use crate::types::agent::Target;
+use crate::types::agent::{BackendPolicy, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::{client, *};
 
@@ -66,7 +66,8 @@ impl AIBackend {
 	}
 }
 
-#[apply(schema!)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NamedAIProvider {
 	pub name: Strng,
 	pub provider: AIProvider,
@@ -77,11 +78,9 @@ pub struct NamedAIProvider {
 	/// This comes with the cost of an expensive operation.
 	#[serde(default)]
 	pub tokenize: bool,
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "std::collections::HashMap<String, String>")
-	)]
 	pub routes: IndexMap<Strng, RouteType>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub inline_policies: Vec<BackendPolicy>,
 }
 
 const DEFAULT_ROUTE: &str = "*";
@@ -354,7 +353,7 @@ impl AIProvider {
 
 	pub async fn process_completions_request(
 		&self,
-		backend_info: &crate::http::auth::BackendInfo<'_>,
+		backend_info: &crate::http::auth::BackendInfo,
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
@@ -404,7 +403,7 @@ impl AIProvider {
 
 	pub async fn process_messages_request(
 		&self,
-		backend_info: &crate::http::auth::BackendInfo<'_>,
+		backend_info: &crate::http::auth::BackendInfo,
 		policies: Option<&Policy>,
 		req: Request,
 		tokenize: bool,
@@ -443,7 +442,7 @@ impl AIProvider {
 	#[allow(clippy::too_many_arguments)]
 	async fn process_request(
 		&self,
-		backend_info: &crate::http::auth::BackendInfo<'_>,
+		backend_info: &crate::http::auth::BackendInfo,
 		policies: Option<&Policy>,
 		original_format: InputFormat,
 		mut req: impl RequestType,

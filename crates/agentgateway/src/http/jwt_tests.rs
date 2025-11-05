@@ -24,7 +24,7 @@ pub fn test_azure_jwks() {
 	let p = Provider::from_jwks(
 		jwks,
 		"https://login.microsoftonline.com/test/v2.0".to_string(),
-		vec!["test-aud".to_string()],
+		Some(vec!["test-aud".to_string()]),
 	)
 	.unwrap();
 	assert_eq!(
@@ -52,7 +52,7 @@ pub fn test_basic_jwks() {
 	let p = Provider::from_jwks(
 		jwks,
 		"https://example.com".to_string(),
-		vec!["test-aud".to_string()],
+		Some(vec!["test-aud".to_string()]),
 	)
 	.unwrap();
 	assert_eq!(
