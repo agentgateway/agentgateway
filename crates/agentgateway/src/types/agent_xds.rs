@@ -926,10 +926,23 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 							pack_as_bytes: body_opts.pack_as_bytes,
 						});
 				let timeout = ea.timeout.map(convert_duration);
-
+				let metadata: HashMap<_, _> = ea
+					.metadata
+					.iter()
+					.map(|(k, v)| {
+						let ve = cel::Expression::new(v)
+							.map_err(|e| ProtoError::Generic(format!("invalid metadata expression: {e}")))?;
+						Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
+					})
+					.collect::<Result<_, _>>()?;
 				TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
 					target: Arc::new(target),
 					context: Some(ea.context.clone()),
+					metadata: if metadata.is_empty() {
+						None
+					} else {
+						Some(metadata)
+					},
 					failure_mode,
 					include_request_headers: ea
 						.include_request_headers

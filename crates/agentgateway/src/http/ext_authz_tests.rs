@@ -13,6 +13,7 @@ impl Default for ExtAuthz {
 		Self {
 			target: Arc::new(SimpleBackendReference::Invalid),
 			context: None,
+			metadata: None,
 			failure_mode: FailureMode::default(),
 			include_request_headers: Vec::new(),
 			include_request_body: None,
