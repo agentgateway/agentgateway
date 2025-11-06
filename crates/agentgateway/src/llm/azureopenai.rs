@@ -30,6 +30,9 @@ impl Provider {
 	pub fn get_path_for_model(&self, model: &str) -> Strng {
 		if self.api_version == "v1" {
 			strng::format!("/openai/v1/chat/completions")
+		} else if self.api_version == "preview" {
+			// v1 preview API
+			strng::format!("/openai/v1/chat/completions?api-version=preview")
 		} else {
 			let model = self.model.as_deref().unwrap_or(model);
 			strng::format!(
