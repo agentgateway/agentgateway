@@ -1,8 +1,8 @@
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{Jwt, Mode, TokenError};
 use super::Provider;
+use super::{Jwt, Mode, TokenError};
 
 #[test]
 pub fn test_azure_jwks() {
@@ -82,12 +82,8 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 	let allowed_aud = "allowed-aud";
 	let kid = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
 
-	let mut provider = Provider::from_jwks(
-		jwks,
-		issuer.to_string(),
-		vec![allowed_aud.to_string()],
-	)
-	.unwrap();
+	let mut provider =
+		Provider::from_jwks(jwks, issuer.to_string(), vec![allowed_aud.to_string()]).unwrap();
 	// Test-only: allow synthetic tokens without a real signature
 	provider
 		.keys
@@ -108,7 +104,7 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 }
 
 fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
-	use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+	use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 	let header = json!({ "alg": "ES256", "kid": kid });
 	let payload = json!({ "iss": iss, "aud": aud, "exp": exp });
 	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
@@ -118,7 +114,7 @@ fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
 }
 
 fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
-	use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+	use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 	let header = json!({ "alg": "ES256" });
 	let payload = json!({ "iss": iss, "aud": aud, "exp": exp });
 	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
@@ -130,11 +126,14 @@ fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
 // Validate specific rejection reasons for tokens: audience, issuer, expiry, missing kid, unknown kid
 #[test]
 pub fn test_jwt_rejections_table() {
-	use std::time::{SystemTime, UNIX_EPOCH};
 	use jsonwebtoken::errors::ErrorKind;
+	use std::time::{SystemTime, UNIX_EPOCH};
 
 	let (jwt, kid, issuer, allowed_aud) = setup_test_jwt();
-	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
 
 	#[derive(Copy, Clone)]
 	enum Expected {
@@ -157,13 +156,7 @@ pub fn test_jwt_rejections_table() {
 			now + 600,
 			Expected::Iss,
 		),
-		(
-			"expired",
-			issuer,
-			allowed_aud,
-			now - 100_000,
-			Expected::Exp,
-		),
+		("expired", issuer, allowed_aud, now - 100_000, Expected::Exp),
 	];
 
 	for (name, iss, aud, exp, expected) in cases {
@@ -241,7 +234,12 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 	let res = jwt.apply(&mut log, &mut req).await;
 	assert!(res.is_ok());
 	// Header should remain present on failure in permissive mode
-	assert!(req.headers().get(crate::http::header::AUTHORIZATION).is_some());
+	assert!(
+		req
+			.headers()
+			.get(crate::http::header::AUTHORIZATION)
+			.is_some()
+	);
 	assert!(req.extensions().get::<super::Claims>().is_none());
 	let _ = (kid, issuer, allowed_aud); // silence unused
 }
@@ -255,7 +253,10 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		mode: Mode::Permissive,
 		providers: base.providers.clone(),
 	};
-	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
 	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -265,7 +266,12 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 	let mut log = make_min_req_log();
 	let res = jwt.apply(&mut log, &mut req).await;
 	assert!(res.is_ok());
-	assert!(req.headers().get(crate::http::header::AUTHORIZATION).is_none());
+	assert!(
+		req
+			.headers()
+			.get(crate::http::header::AUTHORIZATION)
+			.is_none()
+	);
 	assert!(req.extensions().get::<super::Claims>().is_some());
 }
 
@@ -311,7 +317,10 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 		mode: Mode::Optional,
 		providers: base.providers.clone(),
 	};
-	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
 	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -321,7 +330,12 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 	let mut log = make_min_req_log();
 	let res = jwt.apply(&mut log, &mut req).await;
 	assert!(res.is_ok());
-	assert!(req.headers().get(crate::http::header::AUTHORIZATION).is_none());
+	assert!(
+		req
+			.headers()
+			.get(crate::http::header::AUTHORIZATION)
+			.is_none()
+	);
 	assert!(req.extensions().get::<super::Claims>().is_some());
 }
 
@@ -369,13 +383,11 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	RequestLog::new(cel, metrics, start, start_time, tcp_info)
 }
 
-fn setup_test_multi_jwt(
-) -> (
+fn setup_test_multi_jwt() -> (
 	Jwt,
 	(&'static str, &'static str, &'static str),
 	(&'static str, &'static str, &'static str),
-)
-{
+) {
 	let jwks1 = json!({
 		"keys": [
 			{
@@ -412,12 +424,8 @@ fn setup_test_multi_jwt(
 	let kid1 = "kid-1";
 	let kid2 = "kid-2";
 
-	let mut provider1 = Provider::from_jwks(
-		jwks1,
-		issuer1.to_string(),
-		vec![aud1.to_string()],
-	)
-	.unwrap();
+	let mut provider1 =
+		Provider::from_jwks(jwks1, issuer1.to_string(), vec![aud1.to_string()]).unwrap();
 	provider1
 		.keys
 		.get_mut(kid1)
@@ -425,12 +433,8 @@ fn setup_test_multi_jwt(
 		.validation
 		.insecure_disable_signature_validation();
 
-	let mut provider2 = Provider::from_jwks(
-		jwks2,
-		issuer2.to_string(),
-		vec![aud2.to_string()],
-	)
-	.unwrap();
+	let mut provider2 =
+		Provider::from_jwks(jwks2, issuer2.to_string(), vec![aud2.to_string()]).unwrap();
 	provider2
 		.keys
 		.get_mut(kid2)
@@ -453,7 +457,10 @@ fn setup_test_multi_jwt(
 pub fn test_validate_claims_multi_providers_accepts_both() {
 	use std::time::{SystemTime, UNIX_EPOCH};
 	let (jwt, (kid1, iss1, aud1), (kid2, iss2, aud2)) = setup_test_multi_jwt();
-	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
 
 	let token1 = build_unsigned_token(kid1, iss1, aud1, now + 600);
 	let token2 = build_unsigned_token(kid2, iss2, aud2, now + 600);
