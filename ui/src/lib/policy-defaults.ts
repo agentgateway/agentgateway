@@ -91,6 +91,7 @@ export function getDefaultPolicyData(type: PolicyType) {
       return {
         provider: null,
         hostOverride: null,
+        pathOverride: null,
         promptGuard: null,
       };
     case "a2a":

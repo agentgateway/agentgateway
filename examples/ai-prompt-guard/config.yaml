@@ -16,7 +16,18 @@ binds:
                 action:
                   reject:
                     response:
-                      body: "Request rejected due to inappropriate content"
+                      status: 400
+                      headers:
+                        set:
+                          content-type: "application/json"
+                      body: |
+                        {
+                          "error": {
+                            "message": "Request rejected: Content contains sensitive information",
+                            "type": "invalid_request_error",
+                            "code": "content_policy_violation"
+                          }
+                        }
                 rules:
                 - pattern: SSN
                   name: SSN
@@ -27,6 +38,17 @@ binds:
                 action:
                   reject:
                     response:
-                      body: "Response rejected due to inappropriate content"
+                      status: 400
+                      headers:
+                        set:
+                          content-type: "application/json"
+                      body: |
+                        {
+                          "error": {
+                            "message": "Response blocked: Contains sensitive information",
+                            "type": "invalid_request_error",
+                            "code": "pii_detected"
+                          }
+                        }
                 rules:
                 - builtin: email

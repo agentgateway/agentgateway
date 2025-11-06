@@ -269,7 +269,8 @@ export interface McpBackend {
 export interface AiBackend {
   name: string;
   provider: AiProvider;
-  hostOverride?: HostBackend | null;
+  hostOverride?: string | null; // String format: "hostname:port" or "ip:port"
+  pathOverride?: string | null; // String format: "/path"
 }
 
 export interface AiProvider {

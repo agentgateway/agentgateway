@@ -288,9 +288,9 @@ message AttributeContext {
   // information to the auth server without modifying the proto definition. It maps to the
   // internal opaque context in the filter chain.
   map<string, string> context_extensions = 10;
-//
-//  // Dynamic metadata associated with the request.
-//  config.core.v3.Metadata metadata_context = 11;
+
+  // Dynamic metadata associated with the request.
+  Metadata metadata_context = 11;
 //
 //  // Metadata associated with the selected route.
 //  config.core.v3.Metadata route_metadata_context = 13;
@@ -581,4 +581,22 @@ message SocketAddress {
   // .. attention::
   //     Network namespaces are only configurable on Linux. Otherwise, this field has no effect.
   string network_namespace_filepath = 7;
+}
+
+message Metadata {
+  // Key is the reverse DNS filter name, e.g. com.acme.widget. The ``envoy.*``
+  // namespace is reserved for Envoy's built-in filters.
+  // If both ``filter_metadata`` and
+  // :ref:`typed_filter_metadata <envoy_v3_api_field_config.core.v3.Metadata.typed_filter_metadata>`
+  // fields are present in the metadata with same keys,
+  // only ``typed_filter_metadata`` field will be parsed.
+  map<string, google.protobuf.Struct> filter_metadata = 1;
+
+  // Key is the reverse DNS filter name, e.g. com.acme.widget. The ``envoy.*``
+  // namespace is reserved for Envoy's built-in filters.
+  // The value is encoded as google.protobuf.Any.
+  // If both :ref:`filter_metadata <envoy_v3_api_field_config.core.v3.Metadata.filter_metadata>`
+  // and ``typed_filter_metadata`` fields are present in the metadata with same keys,
+  // only ``typed_filter_metadata`` field will be parsed.
+//  map<string, google.protobuf.Any> typed_filter_metadata = 2;
 }

@@ -51,7 +51,6 @@ import {
   BACKEND_TYPES,
   BACKEND_TABLE_HEADERS,
   HOST_TYPES,
-  AI_HOST_OVERRIDE_TYPES,
   AI_MODEL_PLACEHOLDERS,
   AI_REGION_PLACEHOLDERS,
 } from "@/lib/backend-constants";
@@ -409,7 +408,7 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
             }
           >
             {/* Only show name input for backends that support custom names */}
-            {selectedBackendType !== "ai" && selectedBackendType !== "mcp" && (
+            {selectedBackendType !== "mcp" && (
               <div className="space-y-2">
                 <Label htmlFor="backend-name">Name *</Label>
                 <Input
@@ -998,65 +997,25 @@ const AiBackendForm: React.FC<AiBackendFormProps> = ({ backendForm, setBackendFo
     )}
 
     {/* AI Host Override */}
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Host Override (optional)</Label>
-        <div className="flex space-x-4">
-          {AI_HOST_OVERRIDE_TYPES.map(({ value, label }) => (
-            <Button
-              key={value}
-              type="button"
-              variant={backendForm.aiHostOverrideType === value ? "default" : "outline"}
-              onClick={() =>
-                setBackendForm((prev) => ({ ...prev, aiHostOverrideType: value as any }))
-              }
-              size="sm"
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-2">
+      <Label htmlFor="ai-host-override">Host Override (optional)</Label>
+      <Input
+        id="ai-host-override"
+        value={backendForm.aiHostOverride}
+        onChange={(e) => setBackendForm((prev) => ({ ...prev, aiHostOverride: e.target.value }))}
+        placeholder="api.custom-ai-provider.com:443"
+      />
+    </div>
 
-      {backendForm.aiHostOverrideType === "address" && (
-        <div className="space-y-2">
-          <Label htmlFor="ai-host-address">Host Address</Label>
-          <Input
-            id="ai-host-address"
-            value={backendForm.aiHostAddress}
-            onChange={(e) => setBackendForm((prev) => ({ ...prev, aiHostAddress: e.target.value }))}
-            placeholder="api.custom-ai-provider.com:443"
-          />
-        </div>
-      )}
-
-      {backendForm.aiHostOverrideType === "hostname" && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="ai-host-hostname">Hostname</Label>
-            <Input
-              id="ai-host-hostname"
-              value={backendForm.aiHostHostname}
-              onChange={(e) =>
-                setBackendForm((prev) => ({ ...prev, aiHostHostname: e.target.value }))
-              }
-              placeholder="api.custom-ai-provider.com"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ai-host-port">Port</Label>
-            <Input
-              id="ai-host-port"
-              type="number"
-              min="1"
-              max="65535"
-              value={backendForm.aiHostPort}
-              onChange={(e) => setBackendForm((prev) => ({ ...prev, aiHostPort: e.target.value }))}
-              placeholder="443"
-            />
-          </div>
-        </div>
-      )}
+    {/* AI Path Override */}
+    <div className="space-y-2">
+      <Label htmlFor="ai-path-override">Path Override (optional)</Label>
+      <Input
+        id="ai-path-override"
+        value={backendForm.aiPathOverride}
+        onChange={(e) => setBackendForm((prev) => ({ ...prev, aiPathOverride: e.target.value }))}
+        placeholder="/v1/chat/completions"
+      />
     </div>
   </div>
 );

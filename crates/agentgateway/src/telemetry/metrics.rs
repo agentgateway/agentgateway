@@ -101,7 +101,8 @@ pub struct BuildLabel {
 #[derive(Debug)]
 pub struct Metrics {
 	pub requests: Counter,
-	pub downstream_connection: TCPCounter,
+	pub request_duration: Histogram<HTTPLabels>,
+	pub response_bytes: Family<HTTPLabels, counter::Counter>,
 
 	pub mcp_requests: Family<MCPCall, counter::Counter>,
 
@@ -110,13 +111,13 @@ pub struct Metrics {
 	pub gen_ai_time_per_output_token: Histogram<GenAILabels>,
 	pub gen_ai_time_to_first_token: Histogram<GenAILabels>,
 
-	pub response_bytes: Family<HTTPLabels, counter::Counter>,
+	pub tls_handshake_duration: Histogram<TCPLabels>,
 
+	pub downstream_connection: TCPCounter,
 	pub tcp_downstream_rx_bytes: Family<TCPLabels, counter::Counter>,
 	pub tcp_downstream_tx_bytes: Family<TCPLabels, counter::Counter>,
 
 	pub upstream_connect_duration: Histogram<ConnectLabels>,
-	pub tls_handshake_duration: Histogram<TCPLabels>,
 }
 
 // FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
@@ -267,6 +268,18 @@ impl Metrics {
 				);
 				m
 			},
+			request_duration: {
+				let m = Family::<HTTPLabels, _>::new_with_constructor(move || {
+					PromHistogram::new(HTTP_REQUEST_DURATION_BUCKET)
+				});
+				registry.register_with_unit(
+					"request_duration",
+					"Duration of HTTP requests (seconds)",
+					Unit::Seconds,
+					m.clone(),
+				);
+				m
+			},
 			tcp_downstream_rx_bytes: {
 				let m = Family::<TCPLabels, _>::default();
 				registry.register_with_unit(
@@ -347,6 +360,11 @@ const CONNECT_DURATION_BUCKET: [f64; 10] = [
 	0.924,  // 924 ms
 	2.71,   // 2.71 s
 	8.0,    // 8 s
+];
+// HTTP request duration buckets - general purpose for all HTTP traffic
+// Covers 1ms to ~80 seconds with exponential growth
+const HTTP_REQUEST_DURATION_BUCKET: [f64; 14] = [
+	0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 80.0,
 ];
 // https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/#metric-gen_aiservertime_per_output_token
 // NOTE: the spec has SHOULD, but is not smart enough to handle the faster LLMs.

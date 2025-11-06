@@ -12,6 +12,7 @@ use agent_core::{signal, telemetry};
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::{CONTENT_TYPE, HeaderValue};
+use tokio::runtime::Handle;
 use tokio::time;
 use tracing::{info, warn};
 use tracing_subscriber::filter;
@@ -43,6 +44,7 @@ struct State {
 	shutdown_trigger: signal::ShutdownTrigger,
 	config_dump_handlers: Vec<Arc<dyn ConfigDumpHandler>>,
 	admin_fallback: Option<Arc<dyn AdminFallback>>,
+	dataplane_handle: Handle,
 }
 
 pub struct Service {
@@ -83,6 +85,7 @@ impl Service {
 		stores: crate::store::Stores,
 		shutdown_trigger: signal::ShutdownTrigger,
 		drain_rx: DrainWatcher,
+		dataplane_handle: Handle,
 	) -> anyhow::Result<Self> {
 		Server::<State>::bind(
 			"admin",
@@ -94,6 +97,7 @@ impl Service {
 				shutdown_trigger,
 				config_dump_handlers: vec![],
 				admin_fallback: None,
+				dataplane_handle,
 			},
 		)
 		.await
@@ -127,6 +131,7 @@ impl Service {
 					)
 					.await,
 				),
+				"/debug/tasks" => handle_tokio_tasks(req, &state.dataplane_handle).await,
 				"/config_dump" => {
 					handle_config_dump(
 						&state.config_dump_handlers,
@@ -231,6 +236,70 @@ async fn handle_server_shutdown(
 		},
 		_ => empty_response(hyper::StatusCode::METHOD_NOT_ALLOWED),
 	}
+}
+
+#[cfg(target_os = "linux")]
+#[derive(serde::Serialize)]
+struct TaskDump {
+	admin: Vec<String>,
+	workload: Vec<String>,
+}
+
+#[cfg(target_os = "linux")]
+async fn handle_tokio_tasks(
+	_req: Request<Incoming>,
+	dataplane_handle: &Handle,
+) -> anyhow::Result<Response> {
+	let mut task_dump = TaskDump {
+		admin: Vec::new(),
+		workload: Vec::new(),
+	};
+
+	let handle = tokio::runtime::Handle::current();
+	if let Ok(dump) = tokio::time::timeout(Duration::from_secs(5), handle.dump()).await {
+		for task in dump.tasks().iter() {
+			let trace = task.trace();
+			task_dump.admin.push(trace.to_string());
+		}
+	} else {
+		task_dump
+			.admin
+			.push("failed to dump admin workload tasks".to_string());
+	}
+
+	if let Ok(dump) = tokio::time::timeout(Duration::from_secs(10), dataplane_handle.dump()).await {
+		for task in dump.tasks().iter() {
+			let trace = task.trace();
+			task_dump.workload.push(trace.to_string());
+		}
+	} else {
+		task_dump
+			.workload
+			.push("failed to dump workload tasks".to_string());
+	}
+
+	let json_body = serde_json::to_string(&task_dump)?;
+
+	Ok(
+		::http::Response::builder()
+			.status(hyper::StatusCode::OK)
+			.header("Content-Type", "application/json")
+			.body(json_body.into())
+			.expect("builder with known status code should not fail"),
+	)
+}
+
+#[cfg(not(target_os = "linux"))]
+async fn handle_tokio_tasks(
+	_req: Request<Incoming>,
+	_dataplane_handle: &Handle,
+) -> anyhow::Result<Response> {
+	Ok(
+		::http::Response::builder()
+			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+			.body("task dump is not available".into())
+			.expect("builder with known status code should not fail"),
+	)
 }
 
 async fn handle_config_dump(

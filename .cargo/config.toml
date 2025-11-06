@@ -1,2 +1,9 @@
 [alias]
 xtask = "run --package xtask --"
+
+# Enable tokio_unstable for task dump
+# Not supported for non-linux
+[target.'cfg(target_os = "linux")']
+rustflags = [
+    "--cfg", "tokio_unstable"
+]

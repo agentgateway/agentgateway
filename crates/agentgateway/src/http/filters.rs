@@ -3,7 +3,9 @@ use ::http::response;
 use ::http::uri::InvalidUri;
 
 use crate::http::uri::Scheme;
-use crate::http::{HeaderMap, HeaderName, HeaderValue, Request, Response, StatusCode, Uri};
+use crate::http::{
+	HeaderMap, HeaderName, HeaderValue, PolicyResponse, Request, Response, StatusCode, Uri,
+};
 use crate::types::agent::{HostRedirect, PathMatch, PathRedirect, SimpleBackendReference};
 use crate::*;
 
@@ -62,7 +64,9 @@ pub struct RequestRedirect {
 }
 
 impl RequestRedirect {
-	pub fn apply(&self, req: &mut Request, path_match: &PathMatch) -> Result<Response, Error> {
+	pub fn apply(&self, req: &mut Request) -> Result<PolicyResponse, Error> {
+		const DEFAULT_PATH: &PathMatch = &PathMatch::PathPrefix(strng::literal!("/"));
+		let path_match = req.extensions().get::<PathMatch>().unwrap_or(DEFAULT_PATH);
 		let RequestRedirect {
 			scheme,
 			authority,
@@ -81,12 +85,12 @@ impl RequestRedirect {
 			.authority(authority)
 			.path_and_query(path_and_query)
 			.build()?;
-		Ok(
-			::http::Response::builder()
-				.status(status.unwrap_or(StatusCode::FOUND))
-				.header(http::header::LOCATION, new.to_string())
-				.body(http::Body::empty())?,
-		)
+		let dr = ::http::Response::builder()
+			.status(status.unwrap_or(StatusCode::FOUND))
+			.header(http::header::LOCATION, new.to_string())
+			.body(http::Body::empty())?;
+
+		Ok(PolicyResponse::default().with_response(dr))
 	}
 }
 
@@ -104,17 +108,24 @@ pub struct OriginalUrl(pub Uri);
 pub struct AutoHostname();
 
 impl UrlRewrite {
-	pub fn apply(&self, req: &mut Request, path_match: &PathMatch) -> Result<(), Error> {
+	pub fn apply(&self, req: &mut Request) -> Result<(), Error> {
+		const DEFAULT_PATH: &PathMatch = &PathMatch::PathPrefix(strng::literal!("/"));
+		let path_match = req
+			.extensions()
+			.get::<PathMatch>()
+			.unwrap_or(DEFAULT_PATH)
+			.clone();
 		let UrlRewrite { authority, path } = self;
 		let orig = req.uri().clone();
 		req.extensions_mut().insert(OriginalUrl(orig));
 		let scheme = req.uri().scheme().cloned().unwrap_or(Scheme::HTTP);
 
 		let new_authority = rewrite_host(authority, req.uri(), Some(&scheme), &scheme)?;
-		if matches!(authority, Some(HostRedirect::Auto)) {
-			req.extensions_mut().insert(AutoHostname());
+		// AutoHostname is the default, so if they explicitly set something (other than Auto), disable it.
+		if !matches!(authority, Some(HostRedirect::Auto) | None) {
+			req.extensions_mut().remove::<AutoHostname>();
 		}
-		let path_and_query = rewrite_path(path, path_match, req.uri())?;
+		let path_and_query = rewrite_path(path, &path_match, req.uri())?;
 		let new = Uri::builder()
 			.scheme(scheme)
 			.authority(new_authority)
@@ -159,7 +170,9 @@ fn rewrite_host(
 ) -> Result<http::uri::Authority, Error> {
 	match &rewrite {
 		// For Auto, we need to handle it later after we pick the backend!
-		None | Some(HostRedirect::Auto) => orig.authority().cloned().ok_or(Error::InvalidURI),
+		None | Some(HostRedirect::None) | Some(HostRedirect::Auto) => {
+			orig.authority().cloned().ok_or(Error::InvalidURI)
+		},
 		Some(HostRedirect::Full(hp)) => Ok(hp.as_str().try_into()?),
 		Some(HostRedirect::Host(h)) => {
 			if original_scheme == Some(&Scheme::HTTP) || original_scheme == Some(&Scheme::HTTPS) {

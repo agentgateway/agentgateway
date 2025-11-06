@@ -367,15 +367,21 @@ impl Client {
 		metrics: Option<Arc<crate::metrics::Metrics>>,
 	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
+		let mut b =
+			::hyper_util_fork::client::legacy::Client::builder(::hyper_util::rt::TokioExecutor::new());
+		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
+		b.pool_idle_timeout(backend_config.pool_idle_timeout);
+		b.timer(hyper_util::rt::tokio::TokioTimer::new());
+		if let Some(pool_max) = backend_config.pool_max_size {
+			b.pool_max_idle_per_host(pool_max);
+		};
+
 		let connector = Connector {
 			hbone_pool,
 			backend_config: Arc::new(backend_config),
 			metrics,
 		};
-		let client =
-			::hyper_util_fork::client::legacy::Client::builder(::hyper_util::rt::TokioExecutor::new())
-				.timer(hyper_util::rt::tokio::TokioTimer::new())
-				.build_with_pool_key(connector.clone());
+		let client = b.build_with_pool_key(connector.clone());
 		Client {
 			resolver: Arc::new(resolver),
 			client,

@@ -62,7 +62,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 					.context("GATEWAY is required")?,
 			)
 		} else {
-			("".to_string(), "".to_string())
+			("default".to_string(), "default".to_string())
 		};
 
 		let tok = parse("XDS_AUTH_TOKEN")?.or(raw.xds_auth_token);
@@ -261,24 +261,24 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			headers: otlp_headers,
 			protocol: otlp_protocol,
 
-			fields: Arc::new(
-				raw
-					.tracing
-					.as_ref()
-					.and_then(|f| f.fields.clone())
-					.map(|fields| {
-						Ok::<_, anyhow::Error>(LoggingFields {
-							remove: fields.remove.into_iter().collect(),
-							add: fields
+			fields: raw
+				.tracing
+				.as_ref()
+				.and_then(|f| f.fields.clone())
+				.map(|fields| {
+					Ok::<_, anyhow::Error>(LoggingFields {
+						remove: Arc::new(fields.remove.into_iter().collect()),
+						add: Arc::new(
+							fields
 								.add
 								.iter()
 								.map(|(k, v)| cel::Expression::new(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
-						})
+						),
 					})
-					.transpose()?
-					.unwrap_or_default(),
-			),
+				})
+				.transpose()?
+				.unwrap_or_default(),
 			random_sampling: raw
 				.tracing
 				.as_ref()
@@ -312,23 +312,23 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.as_ref()
 				.and_then(|l| l.format.clone())
 				.unwrap_or_default(),
-			fields: Arc::new(
-				raw
-					.logging
-					.and_then(|f| f.fields)
-					.map(|fields| {
-						Ok::<_, anyhow::Error>(LoggingFields {
-							remove: fields.remove.into_iter().collect(),
-							add: fields
+			fields: raw
+				.logging
+				.and_then(|f| f.fields)
+				.map(|fields| {
+					Ok::<_, anyhow::Error>(LoggingFields {
+						remove: Arc::new(fields.remove.into_iter().collect()),
+						add: Arc::new(
+							fields
 								.add
 								.iter()
 								.map(|(k, v)| cel::Expression::new(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
-						})
+						),
 					})
-					.transpose()?
-					.unwrap_or_default(),
-			),
+				})
+				.transpose()?
+				.unwrap_or_default(),
 			excluded_metrics: raw
 				.metrics
 				.as_ref()
@@ -378,7 +378,6 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				ns = std::env::var("POD_NAMESPACE").unwrap_or_else(|_| "".to_string())
 			),
 		},
-		listener: raw.listener,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?

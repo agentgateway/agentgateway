@@ -10,7 +10,7 @@ use agent_core::strng::Strng;
 use agent_core::{drain, metrics, strng};
 use axum::body::to_bytes;
 use bytes::Bytes;
-use http::{Method, Uri};
+use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use itertools::Itertools;
@@ -31,9 +31,9 @@ use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::types::agent::{
-	Backend, BackendReference, Bind, BindName, Listener, ListenerProtocol, ListenerSet, McpBackend,
-	McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference, RouteMatch, RouteSet,
-	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	Backend, BackendReference, BackendWithPolicies, Bind, BindName, Listener, ListenerProtocol,
+	ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference,
+	RouteMatch, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
 };
 use crate::types::local::LocalNamedAIProvider;
@@ -45,6 +45,25 @@ pub async fn send_request(
 	url: &str,
 ) -> Response {
 	RequestBuilder::new(method, url).send(io).await.unwrap()
+}
+
+pub async fn send_request_headers(
+	io: Client<MemoryConnector, Body>,
+	method: Method,
+	url: &str,
+	headers: &[(&str, &str)],
+) -> Response {
+	let hdrs = headers.iter().map(|(k, v)| {
+		(
+			HeaderName::try_from(*k).unwrap(),
+			HeaderValue::try_from(*v).unwrap(),
+		)
+	});
+	RequestBuilder::new(method, url)
+		.headers(HeaderMap::from_iter(hdrs))
+		.send(io)
+		.await
+		.unwrap()
 }
 
 pub async fn send_request_body(
@@ -110,21 +129,19 @@ pub fn setup_llm_mock(
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test(config).unwrap();
-	let (be, _) = crate::types::local::LocalAIBackend::Provider(LocalNamedAIProvider {
+	let be = crate::types::local::LocalAIBackend::Provider(LocalNamedAIProvider {
 		name: "default".into(),
 		provider,
 		host_override: Some(Target::Address(*mock.address())),
 		path_override: None,
 		tokenize,
-		backend_tls: None,
-		backend_auth: None,
 		policies: None,
 		routes: Default::default(),
 	})
-	.translate(strng::format!("{}", mock.address()))
+	.translate()
 	.unwrap();
 	let b = Backend::AI(strng::format!("{}", mock.address()), be);
-	t.pi.stores.binds.write().insert_backend(b);
+	t.pi.stores.binds.write().insert_backend(b.into());
 	let t = t.with_bind(simple_bind(basic_route(*mock.address())));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
@@ -145,15 +162,13 @@ pub fn basic_named_route(target: Strng) -> Route {
 			method: None,
 			query: vec![],
 		}],
-		filters: Default::default(),
 		inline_policies: Default::default(),
 		rule_name: None,
 		backends: vec![RouteBackendReference {
 			weight: 1,
 			backend: BackendReference::Backend(target),
-			filters: Default::default(),
+			inline_policies: Default::default(),
 		}],
-		policies: None,
 	}
 }
 
@@ -306,6 +321,11 @@ impl TestBind {
 
 	pub fn with_backend(self, b: SocketAddr) -> Self {
 		let b = Backend::Opaque(strng::format!("{}", b), Target::Address(b));
+		self.pi.stores.binds.write().insert_backend(b.into());
+		self
+	}
+
+	pub fn with_raw_backend(self, b: BackendWithPolicies) -> Self {
 		self.pi.stores.binds.write().insert_backend(b);
 		self
 	}
@@ -336,8 +356,8 @@ impl TestBind {
 		);
 		{
 			let mut bw = self.pi.stores.binds.write();
-			bw.insert_backend(opb);
-			bw.insert_backend(b);
+			bw.insert_backend(opb.into());
+			bw.insert_backend(b.into());
 		}
 		self
 	}
@@ -378,12 +398,9 @@ impl TestBind {
 		{
 			let mut bw = self.pi.stores.binds.write();
 			for (_, b, _) in servers {
-				bw.insert_backend(Backend::Opaque(
-					strng::format!("basic-{}", b),
-					Target::Address(b),
-				))
+				bw.insert_backend(Backend::Opaque(strng::format!("basic-{}", b), Target::Address(b)).into())
 			}
-			bw.insert_backend(b);
+			bw.insert_backend(b.into());
 		}
 		self
 	}

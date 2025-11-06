@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agent_core::{telemetry, version};
+use agent_core::{strng, telemetry, version};
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use clap::Parser;
 use tracing::info;
@@ -129,7 +129,12 @@ async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result
 	let client = client::Client::new(&config.dns, None, BackendConfig::default(), None);
 	if let Some(cfg) = config.xds.local_config {
 		let cs = cfg.read_to_string().await?;
-		agentgateway::types::local::NormalizedLocalConfig::from(client, cs.as_str()).await?;
+		agentgateway::types::local::NormalizedLocalConfig::from(
+			client,
+			strng::literal!("default/default"),
+			cs.as_str(),
+		)
+		.await?;
 	} else {
 		println!("No local configuration");
 	}
