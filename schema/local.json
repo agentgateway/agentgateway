@@ -8637,8 +8637,101 @@
           "default": null
         },
         "tracing": {
-          "type": "null",
-          "default": null
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "serviceName": {
+              "type": "string"
+            },
+            "providerBackend": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "invalid"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "object",
+                          "properties": {
+                            "namespace": {
+                              "type": "string"
+                            },
+                            "hostname": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "namespace",
+                            "hostname"
+                          ]
+                        },
+                        "port": {
+                          "type": "integer",
+                          "format": "uint16",
+                          "minimum": 0,
+                          "maximum": 65535
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "port"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "service"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "attributes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "value"
+                ]
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "serviceName",
+            "providerBackend"
+          ]
         }
       },
       "additionalProperties": false

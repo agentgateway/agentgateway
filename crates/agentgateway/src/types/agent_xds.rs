@@ -1388,8 +1388,61 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					remove: Arc::new(FzHashSet::new(rm)),
 				})
 			},
-			Some(fps::Kind::Tracing(_)) => FrontendPolicy::Tracing(()),
+			Some(fps::Kind::Tracing(t)) => {
+				// Convert protobuf to TracingConfig
+				let tracing_config = types::agent::TracingConfig::try_from(t)?;
+
+				// Create LoggingFields with the CEL attributes from TracingConfig
+				let logging_fields = {
+					let add_map = crate::telemetry::log::OrderedStringMap::from_iter(
+						tracing_config
+							.attributes
+							.iter()
+							.map(|attr| (attr.name.clone(), attr.value.clone())),
+					);
+					Arc::new(crate::telemetry::log::LoggingFields {
+						remove: Arc::new(Default::default()),
+						add: Arc::new(add_map),
+					})
+				};
+
+				// Instantiate the tracer
+				let tracer =
+					crate::telemetry::trc::Tracer::create_tracer_from_config(&tracing_config, logging_fields)
+						.map_err(|e| ProtoError::Generic(format!("failed to create tracer: {e}")))?;
+
+				FrontendPolicy::Tracing(types::agent::TracingPolicy {
+					config: tracing_config,
+					tracer: Arc::new(tracer),
+				})
+			},
 			None => return Err(ProtoError::MissingRequiredField),
+		})
+	}
+}
+impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::TracingConfig {
+	type Error = ProtoError;
+
+	fn try_from(t: &proto::agent::frontend_policy_spec::Tracing) -> Result<Self, Self::Error> {
+		let provider_backend = resolve_simple_reference(t.provider_backend.as_ref())?;
+
+		let attributes = t
+			.attributes
+			.iter()
+			.map(|a| {
+				let expr = cel::Expression::new(&a.value)
+					.map_err(|e| ProtoError::Generic(format!("invalid CEL in attribute: {e}")))?;
+				Ok::<_, ProtoError>(types::agent::TracingAttribute {
+					name: a.name.clone(),
+					value: Arc::new(expr),
+				})
+			})
+			.collect::<Result<Vec<_>, ProtoError>>()?;
+
+		Ok(types::agent::TracingConfig {
+			service_name: t.service_name.clone(),
+			provider_backend,
+			attributes,
 		})
 	}
 }

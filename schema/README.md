@@ -938,6 +938,17 @@ This folder contains JSON schemas for various parts of the project
 |`frontendPolicies.accessLog.add`||
 |`frontendPolicies.accessLog.remove`||
 |`frontendPolicies.tracing`||
+|`frontendPolicies.tracing.serviceName`||
+|`frontendPolicies.tracing.providerBackend`||
+|`frontendPolicies.tracing.providerBackend.(1)service`||
+|`frontendPolicies.tracing.providerBackend.(1)service.name`||
+|`frontendPolicies.tracing.providerBackend.(1)service.name.namespace`||
+|`frontendPolicies.tracing.providerBackend.(1)service.name.hostname`||
+|`frontendPolicies.tracing.providerBackend.(1)service.port`||
+|`frontendPolicies.tracing.providerBackend.(1)host`||
+|`frontendPolicies.tracing.attributes`||
+|`frontendPolicies.tracing.attributes[].name`||
+|`frontendPolicies.tracing.attributes[].value`||
 |`policies`|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route/gateway.|
 |`policies[].name`||
 |`policies[].target`||
