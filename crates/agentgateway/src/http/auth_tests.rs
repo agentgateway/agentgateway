@@ -20,10 +20,10 @@ async fn test_backend_auth_passthrough_happy_path() {
 	assert!(req.headers().get(http::header::AUTHORIZATION).is_none());
 
 	let backend_info = BackendInfo {
-		name: "test",
+		name: "test".into(),
 		inputs,
 	};
-	apply_backend_auth(&backend_info, Some(&BackendAuth::Passthrough {}), &mut req)
+	apply_backend_auth(&backend_info, &BackendAuth::Passthrough {}, &mut req)
 		.await
 		.expect("apply backend auth");
 
