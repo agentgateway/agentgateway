@@ -142,6 +142,16 @@ async fn apply_request_policies(
 	if let Some(rhm) = &policies.request_header_modifier {
 		rhm.apply(req.headers_mut()).map_err(ProxyError::from)?;
 	}
+
+	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
+	// setting hostname_rewrite = None
+	if policies
+		.hostname_rewrite
+		.unwrap_or(HostRedirectOverride::Auto)
+		== HostRedirectOverride::Auto
+	{
+		req.extensions_mut().insert(AutoHostname());
+	}
 	if let Some(r) = &policies.url_rewrite {
 		r.apply(req).map_err(ProxyError::from)?;
 	}
@@ -558,8 +568,6 @@ impl HTTPProxy {
 		response_policies.ext_proc = maybe_ext_proc;
 		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
 
-		// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite
-		req.extensions_mut().insert(AutoHostname());
 		apply_request_policies(
 			&route_policies,
 			self.policy_client(),

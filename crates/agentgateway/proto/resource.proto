@@ -524,6 +524,14 @@ message TrafficPolicySpec {
     GATEWAY = 1;
   }
 
+  message HostRewrite {
+    enum Mode {
+      NONE = 0;
+      AUTO = 1;
+    }
+    Mode mode = 1;
+  }
+
   PolicyPhase phase = 1;
   oneof kind {
     Timeout timeout = 2;
@@ -545,6 +553,7 @@ message TrafficPolicySpec {
     CORS cors = 18;
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
+    HostRewrite host_rewrite = 21;
   }
 }
 

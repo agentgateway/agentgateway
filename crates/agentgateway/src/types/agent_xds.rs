@@ -15,9 +15,10 @@ use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
-use crate::types::proto;
 use crate::types::proto::ProtoError;
 use crate::types::proto::agent::mcp_target::Protocol;
+use crate::types::proto::agent::traffic_policy_spec::host_rewrite::Mode;
+use crate::types::{agent, proto};
 use crate::*;
 
 impl TryFrom<&proto::agent::TlsConfig> for TLSConfig {
@@ -1195,6 +1196,13 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					})
 					.collect::<Result<Vec<_>, _>>()?;
 				TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(keys, mode))
+			},
+			Some(tps::Kind::HostRewrite(hr)) => {
+				let mode = tps::host_rewrite::Mode::try_from(hr.mode)?;
+				TrafficPolicy::HostRewrite(match mode {
+					Mode::None => agent::HostRedirectOverride::None,
+					Mode::Auto => agent::HostRedirectOverride::Auto,
+				})
 			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
