@@ -6,7 +6,6 @@ use chrono;
 use itertools::Itertools;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
 use std::time::Instant;
 use tracing::trace;
 
@@ -49,7 +48,11 @@ impl Provider {
 	) -> Result<universal::ChatCompletionErrorResponse, AIError> {
 		// Log the raw error response for debugging
 		if let Ok(raw_str) = std::str::from_utf8(bytes) {
-			tracing::error!("Bedrock error response body: {}", raw_str);
+			tracing::debug!(
+				model = ?self.model,
+				region = %self.region,
+				"Bedrock error response body: {}", raw_str
+			);
 		}
 		let resp =
 			serde_json::from_slice::<ConverseErrorResponse>(bytes).map_err(AIError::ResponseParsing)?;
@@ -85,18 +88,18 @@ impl Provider {
 		}
 	}
 
-	pub fn get_path_for_model(&self, streaming: bool, model: &str) -> Strng {
+	pub fn get_path_for_route(
+		&self,
+		route_type: super::RouteType,
+		streaming: bool,
+		model: &str,
+	) -> Strng {
 		let model = self.model.as_deref().unwrap_or(model);
-		if streaming {
-			strng::format!("/model/{model}/converse-stream")
-		} else {
-			strng::format!("/model/{model}/converse")
+		match route_type {
+			super::RouteType::AnthropicTokenCount => strng::format!("/model/{model}/count-tokens"),
+			_ if streaming => strng::format!("/model/{model}/converse-stream"),
+			_ => strng::format!("/model/{model}/converse"),
 		}
-	}
-
-	pub fn get_count_tokens_path(&self, model: &str) -> Strng {
-		let model = self.model.as_deref().unwrap_or(model);
-		strng::format!("/model/{model}/count-tokens")
 	}
 
 	pub fn get_host(&self) -> Strng {
@@ -145,6 +148,9 @@ pub(super) fn translate_count_tokens_request(
 
 	let mut body = req.rest;
 
+	// AWS Bedrock's count-tokens endpoint wraps InvokeModel, which requires a valid
+	// Anthropic Messages API request. The `max_tokens` parameter is required by Anthropic's API.
+	// We set it to 1 (the minimum valid value) since token counting doesn't generate output.
 	body
 		.entry("max_tokens")
 		.or_insert(serde_json::Value::Number(1.into()));
@@ -162,53 +168,12 @@ pub(super) fn translate_count_tokens_request(
 	})
 }
 
-pub async fn process_count_tokens_request(
-	provider: &Provider,
-	req: crate::http::Request,
-	policies: Option<&crate::llm::policy::Policy>,
-) -> Result<crate::http::Request, AIError> {
-	use crate::http;
-
-	let buffer_limit = http::buffer_limit(&req);
-	let (parts, body) = req.into_parts();
-	let Ok(bytes) = http::read_body_with_limit(body, buffer_limit).await else {
-		return Err(AIError::RequestTooLarge);
-	};
-
-	let anthropic_version = parts
-		.headers
-		.get("anthropic-version")
-		.and_then(|v| v.to_str().ok())
-		.unwrap_or("2023-06-01");
-
-	let mut count_req: anthropic::CountTokensRequest =
-		serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
-
-	if let Some(p) = policies
-		&& let Some(aliased) = p.model_aliases.get(count_req.model.as_str())
-	{
-		count_req.model = aliased.to_string();
-	}
-
-	let model = count_req.model.clone();
-
+pub(super) fn process_count_tokens_request(
+	count_req: anthropic::CountTokensRequest,
+	anthropic_version: &str,
+) -> Result<Vec<u8>, AIError> {
 	let bedrock_req = translate_count_tokens_request(count_req, anthropic_version)?;
-	let new_body = serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)?;
-
-	let mut req = crate::http::Request::from_parts(parts, new_body.into());
-
-	http::modify_req(&mut req, |req| {
-		http::modify_uri(req, |uri| {
-			let path = provider.get_count_tokens_path(&model);
-			uri.path_and_query = Some(http::uri::PathAndQuery::from_str(&path)?);
-			Ok(())
-		})
-	})
-	.map_err(|e: anyhow::Error| {
-		AIError::UnsupportedConversion(strng::format!("failed to set path: {}", e))
-	})?;
-
-	Ok(req)
+	serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)
 }
 
 pub fn translate_count_tokens_response(bedrock_bytes: &[u8]) -> Result<Vec<u8>, AIError> {
@@ -455,6 +420,7 @@ pub(super) fn translate_request_completions(
 	};
 
 	let model_id = req.model.unwrap_or_default();
+	let supports_caching = supports_prompt_caching(&model_id);
 	let system_content = if system_text.is_empty() {
 		None
 	} else {
@@ -463,11 +429,11 @@ pub(super) fn translate_request_completions(
 			"Prompt caching policy: {:?}, model: {}, supports caching: {}",
 			prompt_caching.map(|c| (c.cache_system, c.cache_messages, c.cache_tools)),
 			model_id,
-			supports_prompt_caching(&model_id)
+			supports_caching
 		);
 		if let Some(caching) = prompt_caching
 			&& caching.cache_system
-			&& supports_prompt_caching(&model_id)
+			&& supports_caching
 		{
 			let meets_minimum = if let Some(min_tokens) = caching.min_tokens {
 				estimate_system_tokens(&system_blocks) >= min_tokens
@@ -498,11 +464,11 @@ pub(super) fn translate_request_completions(
 	};
 
 	if let Some(caching) = prompt_caching {
-		if caching.cache_messages && supports_prompt_caching(&bedrock_request.model_id) {
+		if caching.cache_messages && supports_caching {
 			insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
 		}
 		if caching.cache_tools
-			&& supports_prompt_caching(&bedrock_request.model_id)
+			&& supports_caching
 			&& let Some(ref mut tool_config) = bedrock_request.tool_config
 			&& !tool_config.tools.is_empty()
 		{
@@ -1037,6 +1003,8 @@ pub(super) fn translate_request_responses(
 		ContentType, Input, InputContent, InputItem, InputMessage, Role as ResponsesRole,
 	};
 
+	let supports_caching = supports_prompt_caching(&req.model);
+
 	// Convert input to Bedrock messages and system content
 	let mut messages: Vec<types::Message> = Vec::new();
 	let mut system_blocks: Vec<types::SystemContentBlock> = Vec::new();
@@ -1212,7 +1180,7 @@ pub(super) fn translate_request_responses(
 	// Apply system prompt caching if configured
 	if let Some(caching) = prompt_caching
 		&& caching.cache_system
-		&& supports_prompt_caching(&req.model)
+		&& supports_caching
 		&& let Some(ref mut system) = system_content
 	{
 		let meets_minimum = if let Some(min_tokens) = caching.min_tokens {
@@ -1321,11 +1289,11 @@ pub(super) fn translate_request_responses(
 
 	// Apply user message and tool caching
 	if let Some(caching) = prompt_caching {
-		if caching.cache_messages && supports_prompt_caching(&req.model) {
+		if caching.cache_messages && supports_caching {
 			insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
 		}
 		if caching.cache_tools
-			&& supports_prompt_caching(&req.model)
+			&& supports_caching
 			&& let Some(ref mut tool_config) = bedrock_request.tool_config
 			&& !tool_config.tools.is_empty()
 		{
@@ -1415,8 +1383,8 @@ pub(super) fn translate_stream_to_messages(
 						usage: anthropic::Usage {
 							input_tokens: 0,
 							output_tokens: 0,
-							cache_creation_input_tokens: 0,
-							cache_read_input_tokens: 0,
+							cache_creation_input_tokens: None,
+							cache_read_input_tokens: None,
 						},
 					},
 				};
@@ -2077,8 +2045,8 @@ fn to_anthropic_message_delta_usage(
 	crate::llm::anthropic::types::MessageDeltaUsage {
 		input_tokens: usage.input_tokens,
 		output_tokens: usage.output_tokens,
-		cache_creation_input_tokens: usage.cache_write_input_tokens.unwrap_or(0),
-		cache_read_input_tokens: usage.cache_read_input_tokens.unwrap_or(0),
+		cache_creation_input_tokens: usage.cache_write_input_tokens,
+		cache_read_input_tokens: usage.cache_read_input_tokens,
 	}
 }
 
@@ -2351,14 +2319,14 @@ impl ConverseResponseAdapter {
 			.map(|u| anthropic::Usage {
 				input_tokens: u.input_tokens,
 				output_tokens: u.output_tokens,
-				cache_creation_input_tokens: u.cache_write_input_tokens.unwrap_or(0),
-				cache_read_input_tokens: u.cache_read_input_tokens.unwrap_or(0),
+				cache_creation_input_tokens: u.cache_write_input_tokens,
+				cache_read_input_tokens: u.cache_read_input_tokens,
 			})
 			.unwrap_or(anthropic::Usage {
 				input_tokens: 0,
 				output_tokens: 0,
-				cache_creation_input_tokens: 0,
-				cache_read_input_tokens: 0,
+				cache_creation_input_tokens: None,
+				cache_read_input_tokens: None,
 			});
 
 		Ok(anthropic::MessagesResponse {

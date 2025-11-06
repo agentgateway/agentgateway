@@ -461,8 +461,8 @@ pub(super) fn translate_anthropic_response(_req: universal::Response) -> types::
 		usage: types::Usage {
 			input_tokens: 0,
 			output_tokens: 0,
-			cache_creation_input_tokens: 0,
-			cache_read_input_tokens: 0,
+			cache_creation_input_tokens: None,
+			cache_read_input_tokens: None,
 		},
 	}
 }
@@ -1122,9 +1122,11 @@ pub(super) mod types {
 		/// Cumulative output tokens
 		pub output_tokens: usize,
 		/// Cumulative cache creation tokens
-		pub cache_creation_input_tokens: usize,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_creation_input_tokens: Option<usize>,
 		/// Cumulative cache read tokens
-		pub cache_read_input_tokens: usize,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_read_input_tokens: Option<usize>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -1189,10 +1191,12 @@ pub(super) mod types {
 		pub output_tokens: usize,
 
 		/// The number of input tokens used to create the cache entry.
-		pub cache_creation_input_tokens: usize,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_creation_input_tokens: Option<usize>,
 
 		/// The number of input tokens read from the cache.
-		pub cache_read_input_tokens: usize,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_read_input_tokens: Option<usize>,
 	}
 
 	/// Tool definition

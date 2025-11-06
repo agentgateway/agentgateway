@@ -323,7 +323,8 @@ impl AIProvider {
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						if override_path && let Some(l) = llm_request {
-							let path = provider.get_path_for_model(l.streaming, l.request_model.as_str());
+							let path =
+								provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
 							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
 						}
 						uri.authority = Some(Authority::from_str(&provider.get_host())?);
@@ -504,6 +505,64 @@ impl AIProvider {
 				log,
 			)
 			.await
+	}
+
+	pub async fn process_count_tokens_request(
+		&self,
+		req: Request,
+		policies: Option<&Policy>,
+	) -> Result<(Request, LLMRequest), AIError> {
+		use crate::http;
+
+		match self {
+			AIProvider::Bedrock(_) => {
+				// Buffer and parse request body
+				let buffer_limit = http::buffer_limit(&req);
+				let (parts, body) = req.into_parts();
+				let Ok(bytes) = http::read_body_with_limit(body, buffer_limit).await else {
+					return Err(AIError::RequestTooLarge);
+				};
+
+				let anthropic_version = parts
+					.headers
+					.get("anthropic-version")
+					.and_then(|v| v.to_str().ok())
+					.unwrap_or("2023-06-01");
+
+				let mut count_req: crate::llm::anthropic::types::CountTokensRequest =
+					serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+
+				// Apply model alias resolution (consistent with other routes)
+				if let Some(p) = policies
+					&& let Some(aliased) = p.model_aliases.get(count_req.model.as_str())
+				{
+					count_req.model = aliased.to_string();
+				}
+
+				let model = count_req.model.clone();
+
+				// Translate to Bedrock format
+				let new_body = bedrock::process_count_tokens_request(count_req, anthropic_version)?;
+
+				let req = Request::from_parts(parts, new_body.into());
+
+				// Create LLMRequest for logging and path setup
+				let llm_request = LLMRequest {
+					input_tokens: None,
+					input_format: InputFormat::Messages,
+					request_model: model.into(),
+					provider: self.provider(),
+					streaming: false,
+					params: LLMRequestParams::default(),
+				};
+
+				Ok((req, llm_request))
+			},
+			_ => Err(AIError::UnsupportedConversion(strng::format!(
+				"Provider {} does not support Anthropic count_tokens API",
+				self.provider()
+			))),
+		}
 	}
 
 	#[allow(clippy::too_many_arguments)]
