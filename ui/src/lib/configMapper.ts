@@ -232,6 +232,7 @@ function mapToAiBackend(data: any): AiBackend | undefined {
     name: data.name,
     provider: providerData,
     hostOverride: hostOverrideRaw ? mapToHostBackend(hostOverrideRaw) : undefined,
+    pathOverride: data.target?.pathOverride,
   } as AiBackend;
 }
 

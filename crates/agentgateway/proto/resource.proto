@@ -401,6 +401,7 @@ message TrafficPolicySpec {
     }
     BackendReference target = 1;
     map<string, string> context = 2;
+    map<string, string> metadata = 8;
     FailureMode failure_mode = 3;
     repeated string include_request_headers = 4;
     BodyOptions include_request_body = 5;

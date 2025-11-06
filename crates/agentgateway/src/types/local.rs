@@ -1195,6 +1195,7 @@ async fn split_policies(
 		let pol = http::ext_authz::ExtAuthz {
 			target: Arc::new(bref),
 			context: p.context,
+			metadata: p.metadata,
 			failure_mode,
 			include_request_headers: vec![],
 			include_request_body: p.include_request_body.map(Into::into),
@@ -1414,6 +1415,8 @@ pub struct LocalExtAuthz {
 	pub target: SimpleLocalBackend,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub context: Option<HashMap<String, String>>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub metadata: Option<HashMap<String, Arc<cel::Expression>>>,
 	// Backwards compatibility: support both old and new failure handling approaches
 	#[serde(default)]
 	pub fail_open: Option<bool>,

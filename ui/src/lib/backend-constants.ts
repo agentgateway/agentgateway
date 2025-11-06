@@ -37,10 +37,8 @@ export const DEFAULT_BACKEND_FORM = {
   aiModel: "",
   aiRegion: "",
   aiProjectId: "",
-  aiHostOverrideType: "none" as "none" | "address" | "hostname",
-  aiHostAddress: "",
-  aiHostHostname: "",
-  aiHostPort: "",
+  aiHostOverride: "",
+  aiPathOverride: "",
   // for azure openai
   aiHost: "",
   aiApiVersion: "",
@@ -89,12 +87,6 @@ export const BACKEND_TYPE_COLORS = {
 export const HOST_TYPES = [
   { value: "address", label: "Direct Address" },
   { value: "hostname", label: "Hostname + Port" },
-] as const;
-
-export const AI_HOST_OVERRIDE_TYPES = [
-  { value: "none", label: "None" },
-  { value: "address", label: "Address" },
-  { value: "hostname", label: "Hostname" },
 ] as const;
 
 export const AI_MODEL_PLACEHOLDERS = {
