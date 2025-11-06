@@ -1431,91 +1431,40 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
 
       {/* Host Override */}
       <div className="space-y-3">
-        <Label>Host Override (Optional)</Label>
+        <Label htmlFor="host-override">Host Override (Optional)</Label>
         <p className="text-sm text-muted-foreground">
           Override the default host for the AI provider
         </p>
-        <Select
-          value={
-            data.hostOverride?.Address
-              ? "address"
-              : data.hostOverride?.Hostname
-                ? "hostname"
-                : "none"
+        <Input
+          id="host-override"
+          value={data.hostOverride}
+          onChange={(e) =>
+            onChange({
+              ...data,
+              hostOverride: e.target.value,
+            })
           }
-          onValueChange={(value) => {
-            let hostOverride = null;
-            if (value === "address") {
-              hostOverride = { Address: "" };
-            } else if (value === "hostname") {
-              hostOverride = { Hostname: ["", 443] };
-            }
-            onChange({ ...data, hostOverride });
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="No host override" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No host override</SelectItem>
-            <SelectItem value="address">IP Address</SelectItem>
-            <SelectItem value="hostname">Hostname</SelectItem>
-          </SelectContent>
-        </Select>
+          placeholder="api.custom-ai-provider.com:443"
+        />
+      </div>
 
-        {data.hostOverride?.Address !== undefined && (
-          <div className="ml-6">
-            <Label htmlFor="host-address">IP Address</Label>
-            <TargetInput
-              id="host-address"
-              label="IP Address"
-              value={data.hostOverride.Address || ""}
-              onChange={(address) =>
-                onChange({
-                  ...data,
-                  hostOverride: { Address: address },
-                })
-              }
-              placeholder="192.168.1.100"
-            />
-          </div>
-        )}
-
-        {data.hostOverride?.Hostname && (
-          <div className="ml-6 space-y-3">
-            <Label htmlFor="host-hostname">Hostname</Label>
-            <Input
-              id="host-hostname"
-              value={data.hostOverride.Hostname[0] || ""}
-              onChange={(e) =>
-                onChange({
-                  ...data,
-                  hostOverride: {
-                    Hostname: [e.target.value, data.hostOverride.Hostname[1]],
-                  },
-                })
-              }
-              placeholder="api.example.com"
-            />
-            <Label htmlFor="host-port">Port</Label>
-            <Input
-              id="host-port"
-              type="number"
-              min="1"
-              max="65535"
-              value={data.hostOverride.Hostname[1] || 443}
-              onChange={(e) =>
-                onChange({
-                  ...data,
-                  hostOverride: {
-                    Hostname: [data.hostOverride.Hostname[0], parseInt(e.target.value) || 443],
-                  },
-                })
-              }
-              placeholder="443"
-            />
-          </div>
-        )}
+      {/* Path Override */}
+      <div className="space-y-3">
+        <Label htmlFor="path-override">Path Override (Optional)</Label>
+        <p className="text-sm text-muted-foreground">
+          Override the default path for the AI provider
+        </p>
+        <Input
+          id="path-override"
+          value={data.pathOverride}
+          onChange={(e) =>
+            onChange({
+              ...data,
+              pathOverride: e.target.value,
+            })
+          }
+          placeholder="/v1/chat/completions"
+        />
       </div>
     </div>
   );

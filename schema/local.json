@@ -2590,6 +2590,15 @@
                                       "type": "string"
                                     }
                                   },
+                                  "metadata": {
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
                                   "failOpen": {
                                     "type": [
                                       "boolean",
@@ -7444,6 +7453,15 @@
                                 "type": "string"
                               }
                             },
+                            "metadata": {
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
                             "failOpen": {
                               "type": [
                                 "boolean",
@@ -10022,6 +10040,15 @@
                     "type": "object",
                     "properties": {
                       "context": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "metadata": {
                         "type": [
                           "object",
                           "null"

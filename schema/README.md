@@ -298,6 +298,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)host`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)context`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)metadata`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)failOpen`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)statusOnError`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
@@ -827,6 +828,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.port`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)host`||
 |`binds[].listeners[].policies.extAuthz.(any)context`||
+|`binds[].listeners[].policies.extAuthz.(any)metadata`||
 |`binds[].listeners[].policies.extAuthz.(any)failOpen`||
 |`binds[].listeners[].policies.extAuthz.(any)statusOnError`||
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
@@ -1105,6 +1107,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)(1)service.port`||
 |`policies[].policy.extAuthz.(any)(1)host`||
 |`policies[].policy.extAuthz.(any)context`||
+|`policies[].policy.extAuthz.(any)metadata`||
 |`policies[].policy.extAuthz.(any)failOpen`||
 |`policies[].policy.extAuthz.(any)statusOnError`||
 |`policies[].policy.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|

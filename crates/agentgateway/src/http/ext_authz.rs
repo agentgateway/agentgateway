@@ -6,15 +6,16 @@ use ::http::{HeaderMap, StatusCode, Version};
 use prost_types::Timestamp;
 use serde_json::Value as JsonValue;
 
-use crate::http::HeaderOrPseudo;
+use crate::cel::{Executor, Expression};
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
 use crate::http::ext_authz::proto::check_response::HttpResponse;
 use crate::http::ext_authz::proto::{
-	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, OkHttpResponse,
+	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, Metadata, OkHttpResponse,
 };
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
+use crate::http::{HeaderOrPseudo, jwt};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
@@ -73,9 +74,15 @@ pub enum FailureMode {
 pub struct ExtAuthz {
 	/// Reference to the external authorization service backend
 	pub target: Arc<SimpleBackendReference>,
-	/// Additional context to send to the authorization service
+	/// Additional context to send to the authorization service.
+	/// This maps to the `context_extensions` field of the request, and only allows static values.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub context: Option<HashMap<String, String>>,
+	/// Additional metadata to send to the authorization service.
+	/// This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
+	/// If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub metadata: Option<HashMap<String, Arc<cel::Expression>>>,
 	/// Behavior when the authorization service is unavailable or returns an error
 	#[serde(default)]
 	pub failure_mode: FailureMode,
@@ -144,6 +151,7 @@ impl ExtAuthz {
 
 	pub async fn check(
 		&self,
+		exec: &Executor<'_>,
 		client: PolicyClient,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
@@ -316,6 +324,7 @@ impl ExtAuthz {
 				source,
 				destination,
 				request: Some(request),
+				metadata_context: self.build_metadata(exec, req)?,
 				context_extensions: self.context.clone().unwrap_or_default(),
 				tls_session,
 			}),
@@ -443,10 +452,55 @@ impl ExtAuthz {
 		}
 		Ok(res)
 	}
+
+	fn build_metadata(
+		&self,
+		exec: &Executor,
+		req: &mut Request,
+	) -> Result<Option<Metadata>, ProxyError> {
+		Ok(match &self.metadata {
+			Some(meta) => {
+				let m = meta
+					.iter()
+					.filter_map(|(k, v)| match Self::eval(exec, v) {
+						Ok(r) => Some((k.to_string(), r)),
+						Err(e) => {
+							trace!("failed to evaluate: {e}");
+							None
+						},
+					})
+					.collect();
+				Some(Metadata { filter_metadata: m })
+			},
+			None => {
+				if let Some(jc) = req.extensions().get::<jwt::Claims>() {
+					Some(Metadata {
+						filter_metadata: HashMap::from([(
+							"envoy.filters.http.jwt_authn".to_string(),
+							json_to_struct(serde_json::json!({"jwt_payload": jc.inner.clone()}))?,
+						)]),
+					})
+				} else {
+					None
+				}
+			},
+		})
+	}
+
+	fn eval(exec: &Executor, v: &Expression) -> anyhow::Result<prost_wkt_types::Struct> {
+		let res = exec.eval(v)?;
+		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
+		let pb = json_to_struct(js)?;
+		Ok(pb)
+	}
 }
 
 fn convert_prost_value_to_json(value: &prost_wkt_types::Value) -> Result<JsonValue, ProxyError> {
 	serde_json::to_value(value).map_err(|e| ProxyError::Processing(e.into()))
+}
+
+fn json_to_struct(value: serde_json::Value) -> Result<prost_wkt_types::Struct, ProxyError> {
+	serde_json::from_value(value).map_err(|e| ProxyError::Processing(e.into()))
 }
 
 /// Apply HTTP/2 pseudo-headers returned by the ext_authz server to the inbound request

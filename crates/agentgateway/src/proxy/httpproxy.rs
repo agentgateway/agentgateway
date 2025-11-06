@@ -61,6 +61,20 @@ fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolic
 	}
 }
 
+fn build_ctx<'a>(
+	exec: &'a once_cell::sync::OnceCell<cel::Executor<'static>>,
+	log: &RequestLog,
+) -> Result<&'a cel::Executor<'static>, ProxyError> {
+	let res = exec.get_or_try_init(|| {
+		log
+			.cel
+			.ctx_borrow()
+			.build()
+			.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))
+	})?;
+	Ok(res)
+}
+
 async fn apply_request_policies(
 	policies: &store::RoutePolicies,
 	client: PolicyClient,
@@ -79,8 +93,11 @@ async fn apply_request_policies(
 	if let Some(b) = &policies.api_key {
 		b.apply(log, req).await?;
 	}
+
+	let exec = once_cell::sync::OnceCell::new();
+
 	if let Some(x) = &policies.ext_authz {
-		x.check(client.clone(), req).await?
+		x.check(build_ctx(&exec, log)?, client.clone(), req).await?
 	} else {
 		http::PolicyResponse::default()
 	}
@@ -88,11 +105,8 @@ async fn apply_request_policies(
 	// Extract dynamic metadata for CEL context
 	log.cel.ctx().with_extauthz(req);
 
-	let exec = std::cell::LazyCell::new(|| log.cel.ctx().build());
-	let cel_err = |_| ProxyError::ProcessingString("failed to build cel context".to_string());
-
 	if let Some(j) = &policies.authorization {
-		j.apply(exec.deref().as_ref().map_err(cel_err)?)
+		j.apply(build_ctx(&exec, log)?)
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
 	}
 
@@ -101,9 +115,7 @@ async fn apply_request_policies(
 	}
 
 	if let Some(rrl) = &policies.remote_rate_limit {
-		rrl
-			.check(client, req, exec.deref().as_ref().map_err(cel_err)?)
-			.await?
+		rrl.check(client, req, build_ctx(&exec, log)?).await?
 	} else {
 		http::PolicyResponse::default()
 	}
@@ -117,7 +129,7 @@ async fn apply_request_policies(
 	.apply(response_policies.headers())?;
 
 	if let Some(j) = &policies.transformation {
-		j.apply_request(req, exec.deref().as_ref().map_err(cel_err)?);
+		j.apply_request(req, build_ctx(&exec, log)?);
 	}
 
 	if let Some(csrf) = &policies.csrf {
@@ -229,8 +241,10 @@ async fn apply_gateway_policies(
 	if let Some(b) = &policies.api_key {
 		b.apply(log, req).await?;
 	}
+
+	let exec = once_cell::sync::OnceCell::new();
 	if let Some(x) = &policies.ext_authz {
-		x.check(client.clone(), req).await?
+		x.check(build_ctx(&exec, log)?, client.clone(), req).await?
 	} else {
 		http::PolicyResponse::default()
 	}
@@ -246,12 +260,7 @@ async fn apply_gateway_policies(
 	.apply(response_headers)?;
 
 	if let Some(j) = &policies.transformation {
-		let exec = log
-			.cel
-			.ctx()
-			.build()
-			.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))?;
-		j.apply_request(req, &exec);
+		j.apply_request(req, build_ctx(&exec, log)?);
 	}
 
 	Ok(())

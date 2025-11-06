@@ -357,6 +357,10 @@ impl CelLogging {
 		&mut self.cel_context
 	}
 
+	pub fn ctx_borrow(&self) -> &ContextBuilder {
+		&self.cel_context
+	}
+
 	pub fn build(&self) -> Result<CelLoggingExecutor, cel::Error> {
 		let CelLogging {
 			cel_context,

@@ -36,6 +36,8 @@ pub enum Error {
 	Parses(#[from] ParseErrors),
 	#[error("variable: {0}")]
 	Variable(String),
+	#[error("failed to convert to json")]
+	JsonConvert,
 }
 
 impl From<Box<dyn std::error::Error>> for Error {
