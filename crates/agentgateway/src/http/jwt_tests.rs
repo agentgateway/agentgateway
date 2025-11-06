@@ -82,8 +82,12 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 	let allowed_aud = "allowed-aud";
 	let kid = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
 
-	let mut provider =
-		Provider::from_jwks(jwks, issuer.to_string(), Some(vec![allowed_aud.to_string()])).unwrap();
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![allowed_aud.to_string()]),
+	)
+	.unwrap();
 	// Test-only: allow synthetic tokens without a real signature
 	#[allow(deprecated)]
 	{
@@ -428,12 +432,7 @@ fn setup_test_multi_jwt() -> (
 	let kid2 = "kid-2";
 
 	let mut provider1 =
-		Provider::from_jwks(
-			jwks1,
-			issuer1.to_string(),
-			Some(vec![aud1.to_string()]),
-		)
-		.unwrap();
+		Provider::from_jwks(jwks1, issuer1.to_string(), Some(vec![aud1.to_string()])).unwrap();
 	#[allow(deprecated)]
 	{
 		provider1
@@ -445,12 +444,7 @@ fn setup_test_multi_jwt() -> (
 	}
 
 	let mut provider2 =
-		Provider::from_jwks(
-			jwks2,
-			issuer2.to_string(),
-			Some(vec![aud2.to_string()]),
-		)
-		.unwrap();
+		Provider::from_jwks(jwks2, issuer2.to_string(), Some(vec![aud2.to_string()])).unwrap();
 	#[allow(deprecated)]
 	{
 		provider2
