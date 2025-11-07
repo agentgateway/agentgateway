@@ -4,6 +4,8 @@ use serde_json::json;
 use super::Provider;
 use super::{Jwt, Mode, TokenError};
 
+type ProviderInfo = (&'static str, &'static str, &'static str);
+
 #[test]
 pub fn test_azure_jwks() {
 	// Regression test for https://github.com/agentgateway/agentgateway/issues/477
@@ -390,11 +392,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	RequestLog::new(cel, metrics, start, start_time, tcp_info)
 }
 
-fn setup_test_multi_jwt() -> (
-	Jwt,
-	(&'static str, &'static str, &'static str),
-	(&'static str, &'static str, &'static str),
-) {
+fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 	let jwks1 = json!({
 		"keys": [
 			{
