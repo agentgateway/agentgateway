@@ -747,7 +747,8 @@
                                       {
                                         "type": "string",
                                         "enum": [
-                                          "auto"
+                                          "auto",
+                                          "none"
                                         ]
                                       },
                                       {
@@ -858,7 +859,8 @@
                                       {
                                         "type": "string",
                                         "enum": [
-                                          "auto"
+                                          "auto",
+                                          "none"
                                         ]
                                       },
                                       {
@@ -3049,7 +3051,8 @@
                                             {
                                               "type": "string",
                                               "enum": [
-                                                "auto"
+                                                "auto",
+                                                "none"
                                               ]
                                             },
                                             {
@@ -4655,7 +4658,8 @@
                                                         {
                                                           "type": "string",
                                                           "enum": [
-                                                            "auto"
+                                                            "auto",
+                                                            "none"
                                                           ]
                                                         },
                                                         {
@@ -6011,7 +6015,8 @@
                                                                     {
                                                                       "type": "string",
                                                                       "enum": [
-                                                                        "auto"
+                                                                        "auto",
+                                                                        "none"
                                                                       ]
                                                                     },
                                                                     {
@@ -8267,7 +8272,8 @@
                           {
                             "type": "string",
                             "enum": [
-                              "auto"
+                              "auto",
+                              "none"
                             ]
                           },
                           {
@@ -8378,7 +8384,8 @@
                           {
                             "type": "string",
                             "enum": [
-                              "auto"
+                              "auto",
+                              "none"
                             ]
                           },
                           {
