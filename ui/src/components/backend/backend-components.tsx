@@ -1009,12 +1009,12 @@ const AiBackendForm: React.FC<AiBackendFormProps> = ({ backendForm, setBackendFo
     )}
     {backendForm.aiProvider === "azureOpenAI" && (
       <div className="space-y-2">
-        <Label htmlFor="ai-api-version">API Version *</Label>
+        <Label htmlFor="ai-api-version">API Version (optional)</Label>
         <Input
           id="ai-api-version"
           value={backendForm.aiApiVersion}
           onChange={(e) => setBackendForm((prev) => ({ ...prev, aiApiVersion: e.target.value }))}
-          placeholder="v1, 2024-10-21, etc."
+          placeholder="v1, preview, 2024-10-21, etc. (defaults to v1)"
         />
       </div>
     )}
