@@ -47,10 +47,7 @@ import {
   ROUTE_TABLE_HEADERS,
   ROUTE_TYPE_CONFIGS,
 } from "@/lib/route-constants";
-import {
-  isTcpListener,
-  getPathDisplayString,
-} from "@/lib/route-utils";
+import { isTcpListener, getPathDisplayString } from "@/lib/route-utils";
 
 interface RouteTableProps {
   allRoutesByBind: Map<number, CombinedRouteWithContext[]>;
