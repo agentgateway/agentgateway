@@ -178,6 +178,7 @@ pub enum LocalBackend {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
 #[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalAIBackend {
 	Provider(LocalNamedAIProvider),
