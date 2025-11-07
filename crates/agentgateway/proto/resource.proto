@@ -770,7 +770,7 @@ message AIBackend {
   message AzureOpenAI {
     google.protobuf.StringValue model = 1;
     string host = 2;
-    string api_version = 3;
+    google.protobuf.StringValue api_version = 3;
   }
 
   // RouteType specifies how incoming requests should be processed

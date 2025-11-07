@@ -4532,13 +4532,15 @@
                                                       "type": "string"
                                                     },
                                                     "apiVersion": {
-                                                      "type": "string"
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
                                                     }
                                                   },
                                                   "additionalProperties": false,
                                                   "required": [
-                                                    "host",
-                                                    "apiVersion"
+                                                    "host"
                                                   ]
                                                 }
                                               },
@@ -5889,13 +5891,15 @@
                                                                   "type": "string"
                                                                 },
                                                                 "apiVersion": {
-                                                                  "type": "string"
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
                                                                 }
                                                               },
                                                               "additionalProperties": false,
                                                               "required": [
-                                                                "host",
-                                                                "apiVersion"
+                                                                "host"
                                                               ]
                                                             }
                                                           },

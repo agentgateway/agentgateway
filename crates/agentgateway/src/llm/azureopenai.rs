@@ -10,8 +10,9 @@ use crate::*;
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>, // this is the Azure OpenAI model deployment name
-	pub host: Strng,        // required
-	pub api_version: Strng, // required
+	pub host: Strng, // required
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub api_version: Option<Strng>, // optional, defaults to "v1"
 }
 
 impl super::Provider for Provider {
@@ -28,9 +29,10 @@ impl Provider {
 		Ok(resp)
 	}
 	pub fn get_path_for_model(&self, model: &str) -> Strng {
-		if self.api_version == "v1" {
+		let api_version = self.api_version();
+		if api_version == "v1" {
 			strng::format!("/openai/v1/chat/completions")
-		} else if self.api_version == "preview" {
+		} else if api_version == "preview" {
 			// v1 preview API
 			strng::format!("/openai/v1/chat/completions?api-version=preview")
 		} else {
@@ -38,11 +40,15 @@ impl Provider {
 			strng::format!(
 				"/openai/deployments/{}/chat/completions?api-version={}",
 				model,
-				self.api_version
+				api_version
 			)
 		}
 	}
 	pub fn get_host(&self) -> Strng {
 		self.host.clone()
+	}
+
+	fn api_version(&self) -> &str {
+		self.api_version.as_deref().unwrap_or("v1")
 	}
 }

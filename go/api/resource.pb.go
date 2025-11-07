@@ -7915,7 +7915,7 @@ type AIBackend_AzureOpenAI struct {
 	state         protoimpl.MessageState  `protogen:"open.v1"`
 	Model         *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
 	Host          string                  `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
-	ApiVersion    string                  `protobuf:"bytes,3,opt,name=api_version,json=apiVersion,proto3" json:"api_version,omitempty"`
+	ApiVersion    *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=api_version,json=apiVersion,proto3" json:"api_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7964,11 +7964,11 @@ func (x *AIBackend_AzureOpenAI) GetHost() string {
 	return ""
 }
 
-func (x *AIBackend_AzureOpenAI) GetApiVersion() string {
+func (x *AIBackend_AzureOpenAI) GetApiVersion() *wrapperspb.StringValue {
 	if x != nil {
 		return x.ApiVersion
 	}
-	return ""
+	return nil
 }
 
 type AIBackend_Provider struct {
@@ -8698,7 +8698,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04kind\"7\n" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\x05R\x04port\"\x98\x0f\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\"\xb7\x0f\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -8719,11 +8719,11 @@ const file_resource_proto_rawDesc = "" +
 	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x16\n" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x12O\n" +
 	"\x14guardrail_identifier\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\x13guardrailIdentifier\x12I\n" +
-	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersion\x1av\n" +
+	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersion\x1a\x94\x01\n" +
 	"\vAzureOpenAI\x122\n" +
 	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x12\n" +
-	"\x04host\x18\x02 \x01(\tR\x04host\x12\x1f\n" +
-	"\vapi_version\x18\x03 \x01(\tR\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x12=\n" +
+	"\vapi_version\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\n" +
 	"apiVersion\x1a\x9f\a\n" +
 	"\bProvider\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12V\n" +
@@ -9116,23 +9116,24 @@ var file_resource_proto_depIdxs = []int32{
 	129, // 174: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_identifier:type_name -> google.protobuf.StringValue
 	129, // 175: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_version:type_name -> google.protobuf.StringValue
 	129, // 176: agentgateway.dev.resource.AIBackend.AzureOpenAI.model:type_name -> google.protobuf.StringValue
-	117, // 177: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
-	129, // 178: agentgateway.dev.resource.AIBackend.Provider.path_override:type_name -> google.protobuf.StringValue
-	118, // 179: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
-	119, // 180: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
-	120, // 181: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
-	121, // 182: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
-	122, // 183: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
-	123, // 184: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
-	126, // 185: agentgateway.dev.resource.AIBackend.Provider.routes:type_name -> agentgateway.dev.resource.AIBackend.Provider.RoutesEntry
-	56,  // 186: agentgateway.dev.resource.AIBackend.Provider.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	124, // 187: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
-	14,  // 188: agentgateway.dev.resource.AIBackend.Provider.RoutesEntry.value:type_name -> agentgateway.dev.resource.AIBackend.RouteType
-	189, // [189:189] is the sub-list for method output_type
-	189, // [189:189] is the sub-list for method input_type
-	189, // [189:189] is the sub-list for extension type_name
-	189, // [189:189] is the sub-list for extension extendee
-	0,   // [0:189] is the sub-list for field type_name
+	129, // 177: agentgateway.dev.resource.AIBackend.AzureOpenAI.api_version:type_name -> google.protobuf.StringValue
+	117, // 178: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
+	129, // 179: agentgateway.dev.resource.AIBackend.Provider.path_override:type_name -> google.protobuf.StringValue
+	118, // 180: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
+	119, // 181: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
+	120, // 182: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
+	121, // 183: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
+	122, // 184: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
+	123, // 185: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
+	126, // 186: agentgateway.dev.resource.AIBackend.Provider.routes:type_name -> agentgateway.dev.resource.AIBackend.Provider.RoutesEntry
+	56,  // 187: agentgateway.dev.resource.AIBackend.Provider.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	124, // 188: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
+	14,  // 189: agentgateway.dev.resource.AIBackend.Provider.RoutesEntry.value:type_name -> agentgateway.dev.resource.AIBackend.RouteType
+	190, // [190:190] is the sub-list for method output_type
+	190, // [190:190] is the sub-list for method input_type
+	190, // [190:190] is the sub-list for extension type_name
+	190, // [190:190] is the sub-list for extension extendee
+	0,   // [0:190] is the sub-list for field type_name
 }
 
 func init() { file_resource_proto_init() }

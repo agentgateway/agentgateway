@@ -465,7 +465,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 								AIProvider::AzureOpenAI(llm::azureopenai::Provider {
 									model: azureopenai.model.as_deref().map(strng::new),
 									host: strng::new(&azureopenai.host),
-									api_version: strng::new(&azureopenai.api_version),
+									api_version: azureopenai.api_version.as_deref().map(strng::new),
 								})
 							},
 							None => {
