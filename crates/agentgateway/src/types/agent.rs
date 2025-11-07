@@ -27,7 +27,7 @@ use crate::http::{
 };
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
-use crate::types::{agent, frontend};
+use crate::types::{agent, backend, frontend};
 use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1165,6 +1165,10 @@ pub enum BackendPolicy {
 	McpAuthorization(McpAuthorization),
 	McpAuthentication(McpAuthentication),
 	A2a(A2aPolicy),
+	#[serde(rename = "http")]
+	HTTP(backend::HTTP),
+	#[serde(rename = "tcp")]
+	TCP(backend::TCP),
 	#[serde(rename = "backendTLS")]
 	BackendTLS(http::backendtls::BackendTLS),
 	BackendAuth(BackendAuth),
