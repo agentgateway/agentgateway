@@ -1256,7 +1256,7 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
                 provider = { bedrock: { model: "", region: "" } };
                 break;
               case "azureOpenAI":
-                provider = { azureOpenAI: { model: null, host: "", apiVersion: "" } };
+                provider = { azureOpenAI: { model: null, host: "", apiVersion: null } };
                 break;
             }
             onChange({ ...data, provider });
@@ -1437,23 +1437,6 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
 
       {data.provider?.azureOpenAI && (
         <div className="space-y-3">
-          <Label htmlFor="azureopenai-model">Model</Label>
-          <Input
-            id="azureopenai-model"
-            value={data.provider.azureOpenAI.model || ""}
-            onChange={(e) =>
-              onChange({
-                ...data,
-                provider: {
-                  azureOpenAI: {
-                    ...data.provider.azureOpenAI,
-                    model: e.target.value || null,
-                  },
-                },
-              })
-            }
-            placeholder="gpt-4o, gpt-4.1-mini, etc. (optional)"
-          />
           <Label htmlFor="azureopenai-host">Host *</Label>
           <Input
             id="azureopenai-host"
@@ -1471,7 +1454,24 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
             }
             placeholder="my-resource-name.openai.azure.com"
           />
-          <Label htmlFor="azureopenai-api-version">API Version *</Label>
+          <Label htmlFor="azureopenai-model">Model</Label>
+          <Input
+            id="azureopenai-model"
+            value={data.provider.azureOpenAI.model || ""}
+            onChange={(e) =>
+              onChange({
+                ...data,
+                provider: {
+                  azureOpenAI: {
+                    ...data.provider.azureOpenAI,
+                    model: e.target.value || null,
+                  },
+                },
+              })
+            }
+            placeholder="gpt-4o, gpt-4.1-mini, etc. (optional)"
+          />
+          <Label htmlFor="azureopenai-api-version">API Version</Label>
           <Input
             id="azureopenai-api-version"
             value={data.provider.azureOpenAI.apiVersion || ""}
@@ -1486,7 +1486,7 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
                 },
               })
             }
-            placeholder="v1, 2024-10-21, etc."
+            placeholder="v1, preview, 2024-10-21, etc. (optional, defaults to v1)"
           />
         </div>
       )}

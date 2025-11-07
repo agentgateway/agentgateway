@@ -385,8 +385,8 @@ export const createAiProviderConfig = (form: typeof DEFAULT_BACKEND_FORM) => {
     case "azureOpenAI":
       provider.azureOpenAI = {
         host: form.aiHost,
-        apiVersion: form.aiApiVersion,
         ...(form.aiModel && { model: form.aiModel }),
+        ...(form.aiApiVersion && { apiVersion: form.aiApiVersion }),
       };
       break;
   }
