@@ -209,7 +209,12 @@ impl Policy {
 	) -> HeaderMap {
 		let mut headers = HeaderMap::new();
 		for HeaderMatch { name, value } in header_matches {
-			let Some(have) = http_headers.get(name.as_str()) else {
+			// Only handle regular headers (HeaderMap doesn't contain pseudo headers)
+			let header_name = match name {
+				crate::http::HeaderOrPseudo::Header(h) => h,
+				_ => continue, // Skip pseudo headers
+			};
+			let Some(have) = http_headers.get(header_name.as_str()) else {
 				continue;
 			};
 			match value {
@@ -220,19 +225,19 @@ impl Policy {
 				},
 				HeaderValueMatch::Regex(want) => {
 					// Must be a valid string to do regex match
-					let Some(have) = have.to_str().ok() else {
+					let Some(have_str) = have.to_str().ok() else {
 						continue;
 					};
-					let Some(m) = want.find(have) else {
+					let Some(m) = want.find(have_str) else {
 						continue;
 					};
 					// Make sure we matched the entire thing
-					if !(m.start() == 0 && m.end() == have.len()) {
+					if !(m.start() == 0 && m.end() == have_str.len()) {
 						continue;
 					}
 				},
 			}
-			headers.insert(name, have.clone());
+			headers.insert(header_name, have.clone());
 		}
 		headers
 	}
@@ -762,19 +767,23 @@ mod tests {
 
 		let header_matches = vec![
 			HeaderMatch {
-				name: HeaderName::from_static("x-test-header"),
+				name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static("x-test-header")),
 				value: HeaderValueMatch::Exact(HeaderValue::from_static("test-value")),
 			},
 			HeaderMatch {
-				name: HeaderName::from_static("x-another-header"),
+				name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static(
+					"x-another-header",
+				)),
 				value: HeaderValueMatch::Exact(HeaderValue::from_static("wrong-value")),
 			},
 			HeaderMatch {
-				name: HeaderName::from_static("x-regex-header"),
+				name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static("x-regex-header")),
 				value: HeaderValueMatch::Regex(regex::Regex::new(r"regex-match-\d+").unwrap()),
 			},
 			HeaderMatch {
-				name: HeaderName::from_static("x-missing-header"),
+				name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static(
+					"x-missing-header",
+				)),
 				value: HeaderValueMatch::Exact(HeaderValue::from_static("some-value")),
 			},
 		];

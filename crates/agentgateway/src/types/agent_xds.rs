@@ -1552,11 +1552,11 @@ fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMat
 				"invalid header match value".to_string(),
 			)),
 			Some(proto::agent::header_match::Value::Exact(e)) => Ok(HeaderMatch {
-				name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
+				name: crate::http::HeaderOrPseudo::try_from(h.name.as_str())?,
 				value: HeaderValueMatch::Exact(crate::http::HeaderValue::from_bytes(e.as_bytes())?),
 			}),
 			Some(proto::agent::header_match::Value::Regex(e)) => Ok(HeaderMatch {
-				name: crate::http::HeaderName::from_bytes(h.name.as_bytes())?,
+				name: crate::http::HeaderOrPseudo::try_from(h.name.as_str())?,
 				value: HeaderValueMatch::Regex(regex::Regex::new(e)?),
 			}),
 		})
