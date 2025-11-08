@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::http::Request;
+use crate::http::{HeaderValue, Request};
 use crate::types::agent;
 use crate::types::agent::{
 	BackendReference, HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, PathMatch,
@@ -149,25 +149,43 @@ pub fn select_best_route(
 				return false;
 			}
 			for HeaderMatch { name, value } in &m.headers {
-				let Some(have) = request.headers().get(name.as_str()) else {
-					return false;
+				// Get the header value, handling both regular headers and pseudo headers
+				let have = match name {
+					crate::http::HeaderOrPseudo::Header(header_name) => {
+						let Some(h) = request.headers().get(header_name.as_str()) else {
+							return false;
+						};
+						h.clone()
+					},
+					pseudo_header => {
+						let Some(pseudo_value) =
+							crate::http::get_pseudo_header_value(pseudo_header, request)
+						else {
+							return false;
+						};
+						// Convert the pseudo header value to HeaderValue
+						let Ok(h) = HeaderValue::try_from(pseudo_value) else {
+							return false;
+						};
+						h
+					},
 				};
 				match value {
 					HeaderValueMatch::Exact(want) => {
-						if have != want {
+						if have != *want {
 							return false;
 						}
 					},
 					HeaderValueMatch::Regex(want) => {
 						// Must be a valid string to do regex match
-						let Some(have) = have.to_str().ok() else {
+						let Some(have_str) = have.to_str().ok() else {
 							return false;
 						};
-						let Some(m) = want.find(have) else {
+						let Some(m) = want.find(have_str) else {
 							return false;
 						};
 						// Make sure we matched the entire thing
-						if !(m.start() == 0 && m.end() == have.len()) {
+						if !(m.start() == 0 && m.end() == have_str.len()) {
 							return false;
 						}
 					},

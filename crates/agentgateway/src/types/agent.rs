@@ -23,7 +23,8 @@ use serde_json::Value;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::RuleSet;
 use crate::http::{
-	HeaderName, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
+	HeaderName, HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit,
+	retry, timeout,
 };
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
@@ -212,7 +213,7 @@ pub struct MethodMatch {
 pub struct HeaderMatch {
 	#[serde(serialize_with = "ser_display", deserialize_with = "de_parse")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	pub name: HeaderName,
+	pub name: HeaderOrPseudo,
 	pub value: HeaderValueMatch,
 }
 
