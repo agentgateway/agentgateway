@@ -1275,12 +1275,12 @@ fn set_backend_cel_context(log: &mut Option<&mut RequestLog>) {
 }
 
 pub fn build_service_call(
-	inputs: &ProxyInputs,
-	backend_policies: BackendPolicies,
-	log: &mut Option<&mut RequestLog>,
-	override_dest: Option<SocketAddr>,
-	svc: &Arc<Service>,
-	port: &u16,
+    inputs: &ProxyInputs,
+    backend_policies: BackendPolicies,
+    log: &mut Option<&mut RequestLog>,
+    override_dest: Option<SocketAddr>,
+    svc: &Arc<Service>,
+    port: &u16,
 ) -> Result<BackendCall, ProxyError> {
 	let port = *port;
 	let workloads = &inputs.stores.read_discovery().workloads;
@@ -1310,13 +1310,27 @@ pub fn build_service_call(
 		return Err(ProxyError::NoHealthyEndpoints);
 	};
 	let dest = SocketAddr::from((*ip, target_port));
-	log.add(move |l| l.request_handle = Some(handle));
-	Ok(BackendCall {
-		target: Target::Address(dest),
-		http_version_override,
-		transport_override: Some((wl.protocol, wl.identity())),
-		backend_policies,
-	})
+    log.add(move |l| l.request_handle = Some(handle));
+
+    // Apply ALPN clamp for Service backends when policy enforces HTTP/1.1 and TLS is configured
+    let mut backend_policies = backend_policies;
+    if backend_policies
+        .http
+        .as_ref()
+        .is_some_and(|h| h.is_http11())
+    {
+        if let Some(base_tls) = backend_policies.backend_tls.as_ref() {
+            backend_policies.backend_tls = Some(base_tls.with_alpn_http11());
+            log.add(|l| l.upstream_tls_alpn = Some("http/1.1".to_string()));
+        }
+    }
+
+    Ok(BackendCall {
+        target: Target::Address(dest),
+        http_version_override,
+        transport_override: Some((wl.protocol, wl.identity())),
+        backend_policies,
+    })
 }
 
 fn should_retry(res: &Result<Response, ProxyResponse>, pol: &retry::Policy) -> bool {
