@@ -86,7 +86,8 @@ pub struct BackendPolicies {
     pub llm: Option<Arc<llm::Policy>>,
     pub inference_routing: Option<InferenceRouting>,
 
-    pub http: Option<crate::http::backend::HTTP>,
+    pub http: Option<crate::types::backend::HTTP>,
+    pub tcp: Option<crate::types::backend::TCP>,
 
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: Option<filters::HeaderModifier>,
@@ -105,6 +106,7 @@ impl BackendPolicies {
             llm: other.llm.or(self.llm),
             inference_routing: other.inference_routing.or(self.inference_routing),
             http: other.http.or(self.http),
+            tcp: other.tcp.or(self.tcp),
             request_header_modifier: other
                 .request_header_modifier
                 .or(self.request_header_modifier),
@@ -488,6 +490,9 @@ impl Store {
                 },
                 BackendPolicy::HTTP(p) => {
                     pol.http.get_or_insert_with(|| p.clone());
+                },
+                BackendPolicy::TCP(p) => {
+                    pol.tcp.get_or_insert_with(|| p.clone());
                 },
 
 				BackendPolicy::RequestHeaderModifier(p) => {

@@ -1,21 +1,16 @@
-use agentgateway::http::backend::{HTTP, HttpVersion};
+use agentgateway::types::backend::HTTP;
 
 #[test]
-fn http_policy_version_override() {
-    // Default (unset): no override
+fn http_policy_is_http11() {
+    // Default (unset): no version
     let pol = HTTP { version: None };
-    assert!(pol.version_override().is_none());
+    assert!(!pol.is_http11());
 
     // HTTP/1.1
-    let pol = HTTP { version: Some(HttpVersion::Http1_1) };
-    assert_eq!(pol.version_override(), Some(http::Version::HTTP_11));
+    let pol = HTTP { version: Some(http::Version::HTTP_11) };
     assert!(pol.is_http11());
-    assert!(!pol.is_http2());
 
     // HTTP/2
-    let pol = HTTP { version: Some(HttpVersion::Http2) };
-    assert_eq!(pol.version_override(), Some(http::Version::HTTP_2));
-    assert!(pol.is_http2());
+    let pol = HTTP { version: Some(http::Version::HTTP_2) };
     assert!(!pol.is_http11());
 }
-

@@ -11,7 +11,6 @@ pub mod route;
 pub mod apikey;
 pub mod auth;
 pub mod authorization;
-pub mod backend;
 pub mod backendtls;
 pub mod basicauth;
 pub mod compression;

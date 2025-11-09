@@ -632,7 +632,10 @@ pub struct LocalBackendPolicies {
     pub backend_auth: Option<BackendAuth>,
     /// HTTP version preference for upstream backend connections.
     #[serde(default)]
-    pub http: Option<crate::http::backend::HTTP>,
+    pub http: Option<crate::types::backend::HTTP>,
+    /// TCP policy for upstream backend connections.
+    #[serde(default)]
+    pub tcp: Option<crate::types::backend::TCP>,
 }
 
 impl LocalBackendPolicies {
@@ -647,6 +650,7 @@ impl LocalBackendPolicies {
             backend_tls,
             backend_auth,
             http,
+            tcp,
         } = self;
         let mut pols = vec![];
 		if let Some(p) = request_header_modifier {
@@ -672,6 +676,9 @@ impl LocalBackendPolicies {
         }
         if let Some(p) = http {
             pols.push(BackendPolicy::HTTP(p))
+        }
+        if let Some(p) = tcp {
+            pols.push(BackendPolicy::TCP(p))
         }
         if let Some(p) = ai {
             pols.push(BackendPolicy::AI(Arc::new(p)))

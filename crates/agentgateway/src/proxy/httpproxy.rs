@@ -179,6 +179,7 @@ async fn apply_request_policies(
 async fn apply_backend_policies(
 	backend_info: auth::BackendInfo,
 	policies: &store::BackendPolicies,
+	backend_call: &BackendCall,
 	req: &mut Request,
 	log: &mut Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
@@ -187,6 +188,9 @@ async fn apply_backend_policies(
         backend_tls: _,
         backend_auth,
         a2a,
+        http,
+        // Doesn't currently have any options to set, todo
+        tcp: _,
         // Applied elsewhere
         llm_provider: _,
         // Applied elsewhere
@@ -198,9 +202,14 @@ async fn apply_backend_policies(
         request_redirect,
         // Applied elsewhere
         request_mirror: _,
-        ..
     } = policies;
 	response_policies.backend_response_header = response_header_modifier.clone();
+
+	// Apply HTTP version policy with centralized logic
+	if let Some(http) = http {
+		http.apply(req, backend_call.http_version_override, log);
+	}
+
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
 	}
@@ -987,43 +996,13 @@ async fn make_backend_call(
                 })
                 .map_err(ProxyError::Processing)?;
             }
-            // Determine upstream HTTP version: policy > appProtocol (N/A for AI) > heuristics
-            let mut http_version_override = effective_policies
-                .http
-                .as_ref()
-                .and_then(|h| h.version_override());
 
-            if http_version_override.is_none() {
-                // Heuristics:
-                // - TLS downstream → HTTP/1.1 (except gRPC)
-                // - Plaintext → mirror downstream request version
-                let has_downstream_tls = req.extensions().get::<TLSConnectionInfo>().is_some();
-                let is_grpc = req
-                    .headers()
-                    .get(header::CONTENT_TYPE)
-                    .and_then(|h| h.to_str().ok())
-                    .map(|ct| ct.starts_with("application/grpc"))
-                    .unwrap_or(false);
-                http_version_override = if has_downstream_tls {
-                    if is_grpc {
-                        Some(::http::Version::HTTP_2)
-                    } else {
-                        Some(::http::Version::HTTP_11)
-                    }
-                } else {
-                    Some(req.version())
-                };
-            }
-
-            if let Some(ver) = http_version_override {
-                debug!("selected upstream HTTP version: {:?}", ver);
-                log.add(move |l| l.upstream_http_version = Some(ver));
-            }
-
+            // For AI backends, version selection is handled centrally in HTTP::apply()
+            // via the policies.http field. No version_override needed here.
             BackendCall {
                 target,
                 backend_policies: effective_policies,
-                http_version_override,
+                http_version_override: None,
                 transport_override: None,
             }
 		},
@@ -1080,26 +1059,13 @@ async fn make_backend_call(
 	apply_backend_policies(
 		backend_info.clone(),
 		&backend_call.backend_policies,
+		&backend_call,
 		&mut req,
 		&mut log,
 		response_policies,
 	)
 	.await?;
 
-    match backend_call.http_version_override {
-        Some(::http::Version::HTTP_2) => {
-            req.headers_mut().remove(http::header::TRANSFER_ENCODING);
-            req.headers_mut().remove(http::header::CONNECTION);
-            *req.version_mut() = ::http::Version::HTTP_2;
-        },
-        Some(::http::Version::HTTP_11) => {
-            *req.version_mut() = ::http::Version::HTTP_11;
-        },
-        _ => {},
-    };
-    // Record selected upstream version for observability parity across all backend types
-    let selected_upstream_version = req.version();
-    log.add(move |l| l.upstream_http_version = Some(selected_upstream_version));
 	log.add(|l| {
 		l.endpoint = Some(backend_call.target.clone());
 	});
