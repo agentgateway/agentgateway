@@ -27,7 +27,7 @@ use crate::http::{
 };
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
-use crate::types::frontend;
+use crate::types::{agent, frontend};
 use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -266,6 +266,14 @@ pub enum HostRedirect {
 	Host(Strng),
 	Port(NonZeroU16),
 	Auto,
+	None,
+}
+
+#[apply(schema!)]
+#[derive(Eq, PartialEq, Copy)]
+pub enum HostRedirectOverride {
+	Auto,
+	None,
 }
 
 #[apply(schema!)]
@@ -1144,6 +1152,7 @@ pub enum TrafficPolicy {
 	ResponseHeaderModifier(filters::HeaderModifier),
 	RequestRedirect(filters::RequestRedirect),
 	UrlRewrite(filters::UrlRewrite),
+	HostRewrite(agent::HostRedirectOverride),
 	RequestMirror(Vec<filters::RequestMirror>),
 	DirectResponse(filters::DirectResponse),
 	#[serde(rename = "cors")]

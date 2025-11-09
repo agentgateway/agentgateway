@@ -109,6 +109,7 @@ serde_regex.workspace = true
 serde_urlencoded.workspace = true
 serde_with.workspace = true
 serde_yaml.workspace = true
+serde-untagged.workspace = true
 stacker.workspace = true
 shellexpand.workspace = true
 socket2.workspace = true

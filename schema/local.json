@@ -747,7 +747,8 @@
                                       {
                                         "type": "string",
                                         "enum": [
-                                          "auto"
+                                          "auto",
+                                          "none"
                                         ]
                                       },
                                       {
@@ -858,7 +859,8 @@
                                       {
                                         "type": "string",
                                         "enum": [
-                                          "auto"
+                                          "auto",
+                                          "none"
                                         ]
                                       },
                                       {
@@ -1841,6 +1843,36 @@
                                 "additionalProperties": {
                                   "type": "string"
                                 }
+                              },
+                              "promptCaching": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "cacheSystem": {
+                                    "type": "boolean",
+                                    "default": true
+                                  },
+                                  "cacheMessages": {
+                                    "type": "boolean",
+                                    "default": true
+                                  },
+                                  "cacheTools": {
+                                    "type": "boolean",
+                                    "default": false
+                                  },
+                                  "minTokens": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "format": "uint",
+                                    "minimum": 0,
+                                    "default": 1024
+                                  }
+                                },
+                                "additionalProperties": false
                               }
                             },
                             "additionalProperties": false,
@@ -3049,7 +3081,8 @@
                                             {
                                               "type": "string",
                                               "enum": [
-                                                "auto"
+                                                "auto",
+                                                "none"
                                               ]
                                             },
                                             {
@@ -3791,6 +3824,36 @@
                                       "additionalProperties": {
                                         "type": "string"
                                       }
+                                    },
+                                    "promptCaching": {
+                                      "type": [
+                                        "object",
+                                        "null"
+                                      ],
+                                      "properties": {
+                                        "cacheSystem": {
+                                          "type": "boolean",
+                                          "default": true
+                                        },
+                                        "cacheMessages": {
+                                          "type": "boolean",
+                                          "default": true
+                                        },
+                                        "cacheTools": {
+                                          "type": "boolean",
+                                          "default": false
+                                        },
+                                        "minTokens": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "format": "uint",
+                                          "minimum": 0,
+                                          "default": 1024
+                                        }
+                                      },
+                                      "additionalProperties": false
                                     }
                                   },
                                   "additionalProperties": false,
@@ -4512,6 +4575,39 @@
                                                 "bedrock"
                                               ],
                                               "additionalProperties": false
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "azureOpenAI": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "model": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "host": {
+                                                      "type": "string"
+                                                    },
+                                                    "apiVersion": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "host"
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "azureOpenAI"
+                                              ],
+                                              "additionalProperties": false
                                             }
                                           ]
                                         },
@@ -4624,7 +4720,8 @@
                                                         {
                                                           "type": "string",
                                                           "enum": [
-                                                            "auto"
+                                                            "auto",
+                                                            "none"
                                                           ]
                                                         },
                                                         {
@@ -5366,6 +5463,36 @@
                                                   "additionalProperties": {
                                                     "type": "string"
                                                   }
+                                                },
+                                                "promptCaching": {
+                                                  "type": [
+                                                    "object",
+                                                    "null"
+                                                  ],
+                                                  "properties": {
+                                                    "cacheSystem": {
+                                                      "type": "boolean",
+                                                      "default": true
+                                                    },
+                                                    "cacheMessages": {
+                                                      "type": "boolean",
+                                                      "default": true
+                                                    },
+                                                    "cacheTools": {
+                                                      "type": "boolean",
+                                                      "default": false
+                                                    },
+                                                    "minTokens": {
+                                                      "type": [
+                                                        "integer",
+                                                        "null"
+                                                      ],
+                                                      "format": "uint",
+                                                      "minimum": 0,
+                                                      "default": 1024
+                                                    }
+                                                  },
+                                                  "additionalProperties": false
                                                 }
                                               },
                                               "additionalProperties": false,
@@ -5837,6 +5964,39 @@
                                                             "bedrock"
                                                           ],
                                                           "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "azureOpenAI": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "model": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                },
+                                                                "host": {
+                                                                  "type": "string"
+                                                                },
+                                                                "apiVersion": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "host"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "azureOpenAI"
+                                                          ],
+                                                          "additionalProperties": false
                                                         }
                                                       ]
                                                     },
@@ -5949,7 +6109,8 @@
                                                                     {
                                                                       "type": "string",
                                                                       "enum": [
-                                                                        "auto"
+                                                                        "auto",
+                                                                        "none"
                                                                       ]
                                                                     },
                                                                     {
@@ -6691,6 +6852,36 @@
                                                               "additionalProperties": {
                                                                 "type": "string"
                                                               }
+                                                            },
+                                                            "promptCaching": {
+                                                              "type": [
+                                                                "object",
+                                                                "null"
+                                                              ],
+                                                              "properties": {
+                                                                "cacheSystem": {
+                                                                  "type": "boolean",
+                                                                  "default": true
+                                                                },
+                                                                "cacheMessages": {
+                                                                  "type": "boolean",
+                                                                  "default": true
+                                                                },
+                                                                "cacheTools": {
+                                                                  "type": "boolean",
+                                                                  "default": false
+                                                                },
+                                                                "minTokens": {
+                                                                  "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                  ],
+                                                                  "format": "uint",
+                                                                  "minimum": 0,
+                                                                  "default": 1024
+                                                                }
+                                                              },
+                                                              "additionalProperties": false
                                                             }
                                                           },
                                                           "additionalProperties": false,
@@ -8205,7 +8396,8 @@
                           {
                             "type": "string",
                             "enum": [
-                              "auto"
+                              "auto",
+                              "none"
                             ]
                           },
                           {
@@ -8316,7 +8508,8 @@
                           {
                             "type": "string",
                             "enum": [
-                              "auto"
+                              "auto",
+                              "none"
                             ]
                           },
                           {
@@ -9299,6 +9492,36 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "promptCaching": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "cacheSystem": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "cacheMessages": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "cacheTools": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "minTokens": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "format": "uint",
+                        "minimum": 0,
+                        "default": 1024
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": false,

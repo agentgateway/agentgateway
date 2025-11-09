@@ -311,6 +311,9 @@ impl TestBind {
 		self.pi.stores.binds.write().insert_bind(bind);
 		self
 	}
+	pub fn inputs(&self) -> Arc<ProxyInputs> {
+		self.pi.clone()
+	}
 	pub fn with_route(self, r: Route) -> Self {
 		self.pi.stores.binds.write().insert_route(r, LISTENER_KEY);
 		self

@@ -67,6 +67,7 @@ pub trait RequestType: Send + Sync {
 		&self,
 		_provider: &Provider,
 		_headers: Option<&::http::HeaderMap>,
+		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> Result<Vec<u8>, AIError> {
 		Err(AIError::UnsupportedConversion(strng::literal!("bedrock")))
 	}
@@ -106,6 +107,9 @@ pub mod passthrough {
 				let passthrough = json::convert::<_, anthropic::passthrough::Response>(&anthropic)
 					.map_err(AIError::ResponseParsing)?;
 				Ok(Box::new(passthrough))
+			},
+			InputFormat::Responses => {
+				unreachable!("Responses format should not be routed to Universal (OpenAI) provider")
 			},
 		}
 	}
@@ -256,9 +260,11 @@ pub mod passthrough {
 			&self,
 			provider: &Provider,
 			headers: Option<&::http::HeaderMap>,
+			prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 		) -> Result<Vec<u8>, AIError> {
 			let typed = json::convert::<_, universal::Request>(self).map_err(AIError::RequestMarshal)?;
-			let xlated = llm::bedrock::translate_request_completions(typed, provider, headers);
+			let xlated =
+				llm::bedrock::translate_request_completions(typed, provider, headers, prompt_caching);
 			serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 		}
 

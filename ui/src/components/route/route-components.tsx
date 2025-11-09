@@ -47,12 +47,7 @@ import {
   ROUTE_TABLE_HEADERS,
   ROUTE_TYPE_CONFIGS,
 } from "@/lib/route-constants";
-import {
-  isTcpListener,
-  getPathDisplayString,
-  populateEditForm,
-  populateTcpEditForm,
-} from "@/lib/route-utils";
+import { isTcpListener, getPathDisplayString } from "@/lib/route-utils";
 
 interface RouteTableProps {
   allRoutesByBind: Map<number, CombinedRouteWithContext[]>;
@@ -170,7 +165,7 @@ export const RouteTable: React.FC<RouteTableProps> = ({
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
-                              {combinedRoute.listener.name || "unnamed listener"}
+                              {combinedRoute.listener.name || "unnamed"}
                             </Badge>
                           </TableCell>
                           <TableCell>

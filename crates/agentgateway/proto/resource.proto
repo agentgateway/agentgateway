@@ -524,6 +524,14 @@ message TrafficPolicySpec {
     GATEWAY = 1;
   }
 
+  message HostRewrite {
+    enum Mode {
+      NONE = 0;
+      AUTO = 1;
+    }
+    Mode mode = 1;
+  }
+
   PolicyPhase phase = 1;
   oneof kind {
     Timeout timeout = 2;
@@ -545,6 +553,7 @@ message TrafficPolicySpec {
     CORS cors = 18;
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
+    HostRewrite host_rewrite = 21;
   }
 }
 
@@ -639,12 +648,20 @@ message BackendPolicySpec {
 
     PromptGuard prompt_guard = 1;
     // Default JSON key-value pairs to add to the LLM request if the key is not set in the request.
+    message PromptCaching {
+      bool cache_system = 1;
+      bool cache_messages = 2;
+      bool cache_tools = 3;
+      optional uint32 min_tokens = 4;
+    }
+
     map<string, string> defaults = 2;
     // Override JSON key-value pairs to set in the LLM request regardless of whether they are set in the request.
     map<string, string> overrides = 3;
     PromptEnrichment prompts = 4;
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;
+    PromptCaching prompt_caching = 6;
   }
   message A2a {
   }
@@ -758,6 +775,12 @@ message AIBackend {
     google.protobuf.StringValue guardrail_identifier = 3;
     google.protobuf.StringValue guardrail_version = 4;
   }
+  message AzureOpenAI {
+    google.protobuf.StringValue model = 1;
+    string host = 2;
+    google.protobuf.StringValue api_version = 3;
+  }
+
   // RouteType specifies how incoming requests should be processed
   // based on the URL path.
   enum RouteType {
@@ -771,6 +794,10 @@ message AIBackend {
     MODELS = 3;
     // Sends requests to upstream as-is without LLM processing
     PASSTHROUGH = 4;
+    // Processes OpenAI /responses format requests
+    RESPONSES = 5;
+    // Processes Anthropic /v1/messages/count_tokens format requests
+    ANTHROPIC_TOKEN_COUNT = 6;
   }
   message Provider {
     string name = 1;
@@ -782,6 +809,7 @@ message AIBackend {
       Vertex vertex = 6;
       Anthropic anthropic = 7;
       Bedrock bedrock = 8;
+      AzureOpenAI azureopenai = 11;
     }
     // Routes defines how to identify the type of traffic to handle.
     // The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").

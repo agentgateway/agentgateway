@@ -180,6 +180,10 @@ pub async fn apply_late_backend_auth(
 	Ok(())
 }
 
+#[cfg(test)]
+#[path = "auth_tests.rs"]
+mod tests;
+
 mod gcp {
 	use anyhow::anyhow;
 	use google_cloud_auth::credentials;

@@ -67,10 +67,6 @@ export default function Home() {
     return binds?.reduce((total, bind) => total + bind.listeners.length, 0) || 0;
   };
 
-  const getTotalTargets = () => {
-    return targets?.length || 0;
-  };
-
   const getTotalRoutes = () => {
     let total = 0;
     binds?.forEach((bind) => {

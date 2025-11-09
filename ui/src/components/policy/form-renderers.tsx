@@ -1233,7 +1233,9 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
                     ? "anthropic"
                     : data.provider?.bedrock
                       ? "bedrock"
-                      : ""
+                      : data.provider?.azureOpenAI
+                        ? "azureOpenAI"
+                        : ""
           }
           onValueChange={(value) => {
             let provider = null;
@@ -1253,6 +1255,9 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
               case "bedrock":
                 provider = { bedrock: { model: "", region: "" } };
                 break;
+              case "azureOpenAI":
+                provider = { azureOpenAI: { model: null, host: "", apiVersion: null } };
+                break;
             }
             onChange({ ...data, provider });
           }}
@@ -1266,6 +1271,7 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
             <SelectItem value="vertex">Google Vertex AI</SelectItem>
             <SelectItem value="anthropic">Anthropic</SelectItem>
             <SelectItem value="bedrock">AWS Bedrock</SelectItem>
+            <SelectItem value="azureOpenAI">Azure OpenAI</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1425,6 +1431,62 @@ export function renderAiForm({ data, onChange }: FormRendererProps) {
               })
             }
             placeholder="us-east-1, us-west-2, etc."
+          />
+        </div>
+      )}
+
+      {data.provider?.azureOpenAI && (
+        <div className="space-y-3">
+          <Label htmlFor="azureopenai-host">Host *</Label>
+          <Input
+            id="azureopenai-host"
+            value={data.provider.azureOpenAI.host || ""}
+            onChange={(e) =>
+              onChange({
+                ...data,
+                provider: {
+                  azureOpenAI: {
+                    ...data.provider.azureOpenAI,
+                    host: e.target.value,
+                  },
+                },
+              })
+            }
+            placeholder="my-resource-name.openai.azure.com"
+          />
+          <Label htmlFor="azureopenai-model">Model</Label>
+          <Input
+            id="azureopenai-model"
+            value={data.provider.azureOpenAI.model || ""}
+            onChange={(e) =>
+              onChange({
+                ...data,
+                provider: {
+                  azureOpenAI: {
+                    ...data.provider.azureOpenAI,
+                    model: e.target.value || null,
+                  },
+                },
+              })
+            }
+            placeholder="gpt-4o, gpt-4.1-mini, etc. (optional)"
+          />
+          <Label htmlFor="azureopenai-api-version">API Version</Label>
+          <Input
+            id="azureopenai-api-version"
+            value={data.provider.azureOpenAI.apiVersion || ""}
+            onChange={(e) =>
+              onChange({
+                ...data,
+                provider: {
+                  azureOpenAI: {
+                    ...data.provider.azureOpenAI,
+                    apiVersion: e.target.value,
+                  },
+                },
+              })
+            }
+            placeholder="v1, preview, 2024-10-21, etc. (optional, defaults to v1)"
           />
         </div>
       )}

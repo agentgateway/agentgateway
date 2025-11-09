@@ -28,6 +28,35 @@ pub struct Policy {
 		skip_serializing_if = "HashMap::is_empty"
 	)]
 	pub model_aliases: HashMap<Strng, Strng>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub prompt_caching: Option<PromptCachingConfig>,
+}
+
+#[apply(schema!)]
+#[serde(default)]
+pub struct PromptCachingConfig {
+	#[serde(rename = "cacheSystem")]
+	pub cache_system: bool,
+
+	#[serde(rename = "cacheMessages")]
+	pub cache_messages: bool,
+
+	#[serde(rename = "cacheTools")]
+	pub cache_tools: bool,
+
+	#[serde(rename = "minTokens")]
+	pub min_tokens: Option<usize>,
+}
+
+impl Default for PromptCachingConfig {
+	fn default() -> Self {
+		Self {
+			cache_system: true,
+			cache_messages: true,
+			cache_tools: false,
+			min_tokens: Some(1024),
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -857,4 +886,75 @@ mod tests {
 		);
 		assert!(response.headers().get("server").is_none());
 	}
+}
+
+#[test]
+fn test_prompt_caching_policy_deserialization() {
+	use serde_json::json;
+
+	let json = json!({
+		"promptCaching": {
+			"cacheSystem": true,
+			"cacheMessages": true,
+			"cacheTools": false,
+			"minTokens": 1024
+		}
+	});
+
+	let policy: Policy = serde_json::from_value(json).unwrap();
+	let caching = policy.prompt_caching.unwrap();
+
+	assert!(caching.cache_system);
+	assert!(caching.cache_messages);
+	assert!(!caching.cache_tools);
+	assert_eq!(caching.min_tokens, Some(1024));
+}
+
+#[test]
+fn test_prompt_caching_policy_defaults() {
+	use serde_json::json;
+
+	// Empty config should have system and messages enabled by default
+	let json = json!({
+		"promptCaching": {}
+	});
+
+	let policy: Policy = serde_json::from_value(json).unwrap();
+	let caching = policy.prompt_caching.unwrap();
+
+	assert!(caching.cache_system); // Default: true
+	assert!(caching.cache_messages); // Default: true
+	assert!(!caching.cache_tools); // Default: false
+	assert_eq!(caching.min_tokens, Some(1024)); // Default: 1024
+}
+
+#[test]
+fn test_policy_without_prompt_caching_field() {
+	use serde_json::json;
+
+	let json = json!({
+		"modelAliases": {
+			"gpt-4": "anthropic.claude-3-sonnet-20240229-v1:0"
+		}
+	});
+
+	let policy: Policy = serde_json::from_value(json).unwrap();
+
+	// prompt_caching should be None when not specified
+	assert!(policy.prompt_caching.is_none());
+}
+
+#[test]
+fn test_prompt_caching_explicit_disable() {
+	use serde_json::json;
+
+	// Explicitly disable caching
+	let json = json!({
+		"promptCaching": null
+	});
+
+	let policy: Policy = serde_json::from_value(json).unwrap();
+
+	// Should be None when explicitly set to null
+	assert!(policy.prompt_caching.is_none());
 }

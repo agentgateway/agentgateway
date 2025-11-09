@@ -1,0 +1,34 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+expression: result
+---
+{
+  "id": "[id]",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
+      "name": "top_song",
+      "input": {
+        "sign": "WZPZ"
+      }
+    },
+    {
+      "type": "tool_use",
+      "id": "tooluse_kZJMlvQmRJ6eAyxxx",
+      "name": "hello",
+      "input": {
+        "sign": "world"
+      }
+    }
+  ],
+  "model": "claude-3-5-sonnet-20241022",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

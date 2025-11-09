@@ -181,7 +181,7 @@ impl CachedResolver {
 		};
 
 		// Return next IP
-		entry.next().await.ok_or(anyhow!("no ip"))
+		entry.next().await.ok_or_else(|| anyhow!("no ip"))
 	}
 }
 

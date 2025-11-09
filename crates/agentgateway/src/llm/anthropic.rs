@@ -42,6 +42,9 @@ impl Provider {
 		match input_format {
 			InputFormat::Completions => resp.map(|b| translate_stream(b, buffer, log)),
 			InputFormat::Messages => resp.map(|b| passthrough_stream(b, buffer, log)),
+			InputFormat::Responses => {
+				unreachable!("Responses format should not be routed to Anthropic provider")
+			},
 		}
 	}
 
@@ -73,6 +76,9 @@ pub fn process_response(
 				serde_json::from_slice::<passthrough::Response>(bytes).map_err(AIError::ResponseParsing)?;
 
 			Ok(Box::new(resp))
+		},
+		InputFormat::Responses => {
+			unreachable!("Responses format should not be routed to Anthropic provider")
 		},
 	}
 }
@@ -264,9 +270,12 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 		match &req.reasoning_effort {
 			// Arbitrary constants come from LiteLLM defaults.
 			// OpenRouter uses percentages which may be more appropriate though (https://openrouter.ai/docs/use-cases/reasoning-tokens#reasoning-effort-level)
-			Some(ReasoningEffort::Low) => Some(types::ThinkingInput::Enabled {
-				budget_tokens: 1024,
-			}),
+			// Note: Anthropic's minimum budget_tokens is 1024
+			Some(ReasoningEffort::Minimal) | Some(ReasoningEffort::Low) => {
+				Some(types::ThinkingInput::Enabled {
+					budget_tokens: 1024,
+				})
+			},
 			Some(ReasoningEffort::Medium) => Some(types::ThinkingInput::Enabled {
 				budget_tokens: 2048,
 			}),
@@ -967,6 +976,13 @@ pub(super) mod types {
 		Disabled {},
 	}
 
+	#[derive(Clone, Serialize, Deserialize, Debug)]
+	pub struct CountTokensRequest {
+		pub model: String,
+		#[serde(flatten)]
+		pub rest: serde_json::Map<String, serde_json::Value>,
+	}
+
 	/// Response body for the Messages API.
 	#[derive(Debug, Serialize, Deserialize, Clone)]
 	pub struct MessagesResponse {
@@ -1052,6 +1068,31 @@ pub(super) mod types {
 		Ping,
 	}
 
+	impl MessagesStreamEvent {
+		/// Get the SSE event name for this event type
+		#[allow(dead_code)] // Used by Bedrock streaming translation
+		pub fn event_name(&self) -> &'static str {
+			match self {
+				Self::MessageStart { .. } => "message_start",
+				Self::ContentBlockStart { .. } => "content_block_start",
+				Self::ContentBlockDelta { .. } => "content_block_delta",
+				Self::ContentBlockStop { .. } => "content_block_stop",
+				Self::MessageDelta { .. } => "message_delta",
+				Self::MessageStop => "message_stop",
+				Self::Ping => "ping",
+			}
+		}
+
+		/// Convert to (event_name, self) tuple for transform_multi
+		#[allow(dead_code)] // Used by Bedrock streaming translation
+		pub fn into_sse_tuple(self) -> (&'static str, Self) {
+			let name = self.event_name();
+			(name, self)
+		}
+	}
+
+	// Note: event_name() and into_sse_tuple() are used by Bedrock streaming translation
+
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 	#[serde(rename_all = "snake_case", tag = "type")]
 	#[allow(clippy::enum_variant_names)]
@@ -1076,7 +1117,16 @@ pub(super) mod types {
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 	pub struct MessageDeltaUsage {
+		/// Cumulative input tokens
+		pub input_tokens: usize,
+		/// Cumulative output tokens
 		pub output_tokens: usize,
+		/// Cumulative cache creation tokens
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_creation_input_tokens: Option<usize>,
+		/// Cumulative cache read tokens
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_read_input_tokens: Option<usize>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -1360,11 +1410,14 @@ pub mod passthrough {
 			&self,
 			provider: &crate::llm::bedrock::Provider,
 			headers: Option<&::http::HeaderMap>,
+			_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 		) -> Result<Vec<u8>, AIError> {
 			let typed = json::convert::<_, anthropic::types::MessagesRequest>(self)
 				.map_err(AIError::RequestMarshal)?;
 			let bedrock_request =
 				crate::llm::bedrock::translate_request_messages(typed, provider, headers)?;
+			// Note: translate_request_messages already handles cache_control from Anthropic format
+			// No need to apply prompt_caching policy here (would be redundant)
 			serde_json::to_vec(&bedrock_request).map_err(AIError::RequestMarshal)
 		}
 	}

@@ -176,14 +176,41 @@ pub enum LocalBackend {
 	Invalid,
 }
 
-#[apply(schema_de!)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
 #[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalAIBackend {
 	Provider(LocalNamedAIProvider),
 	Groups { groups: Vec<LocalAIProviders> },
 }
 
+// Custom impl to avoid terrible 'not match any variant of untagged' errors.
+impl<'de> Deserialize<'de> for LocalAIBackend {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		serde_untagged::UntaggedEnumVisitor::new()
+			.map(|map| {
+				let v: serde_json::Value = map.deserialize()?;
+
+				if let serde_json::Value::Object(m) = &v
+					&& m.len() == 1
+					&& let Some(g) = m.get("groups")
+				{
+					Ok(LocalAIBackend::Groups {
+						groups: Vec::<LocalAIProviders>::deserialize(g).map_err(serde::de::Error::custom)?,
+					})
+				} else {
+					Ok(LocalAIBackend::Provider(
+						LocalNamedAIProvider::deserialize(&v).map_err(serde::de::Error::custom)?,
+					))
+				}
+			})
+			.deserialize(deserializer)
+	}
+}
 #[apply(schema_de!)]
 pub struct LocalAIProviders {
 	providers: Vec<LocalNamedAIProvider>,

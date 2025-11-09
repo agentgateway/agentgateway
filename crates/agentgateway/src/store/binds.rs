@@ -23,12 +23,12 @@ use crate::types::agent::{
 	PolicyTarget, Route, RouteKey, RouteName, RouteRuleName, ServiceName, SubBackendName, TCPRoute,
 	TargetedPolicy, TrafficPolicy,
 };
-use crate::types::frontend;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
 	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Policy as XdsPolicy,
 	Resource as ADPResource, Route as XdsRoute, TcpRoute as XdsTcpRoute,
 };
+use crate::types::{agent, frontend};
 use crate::*;
 
 #[derive(Debug)]
@@ -146,6 +146,7 @@ pub struct RoutePolicies {
 	pub response_header_modifier: Option<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub url_rewrite: Option<filters::UrlRewrite>,
+	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub direct_response: Option<filters::DirectResponse>,
 	pub cors: Option<http::cors::Cors>,
@@ -233,6 +234,10 @@ impl LLMRequestPolicies {
 			} else {
 				be.model_aliases.clone()
 			},
+			prompt_caching: be
+				.prompt_caching
+				.clone()
+				.or_else(|| re.prompt_caching.clone()),
 		}));
 		Arc::new(route_policies)
 	}
@@ -364,6 +369,9 @@ impl Store {
 				TrafficPolicy::UrlRewrite(p) => {
 					pol.url_rewrite.get_or_insert_with(|| p.clone());
 				},
+				TrafficPolicy::HostRewrite(p) => {
+					pol.hostname_rewrite.get_or_insert(*p);
+				},
 				TrafficPolicy::RequestMirror(p) => {
 					if pol.request_mirror.is_empty() {
 						pol.request_mirror = p.clone();
@@ -459,7 +467,6 @@ impl Store {
 
 		let mut pol = BackendPolicies::default();
 		for rule in rules {
-			tracing::error!("howardjohn: resolve pol {rule:?}");
 			match &rule {
 				BackendPolicy::A2a(p) => {
 					pol.a2a.get_or_insert_with(|| p.clone());
