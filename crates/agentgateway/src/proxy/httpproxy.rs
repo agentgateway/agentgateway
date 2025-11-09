@@ -1086,16 +1086,20 @@ async fn make_backend_call(
 	)
 	.await?;
 
-	match backend_call.http_version_override {
-		Some(::http::Version::HTTP_2) => {
-			req.headers_mut().remove(http::header::TRANSFER_ENCODING);
-			*req.version_mut() = ::http::Version::HTTP_2;
-		},
-		Some(::http::Version::HTTP_11) => {
-			*req.version_mut() = ::http::Version::HTTP_11;
-		},
-		_ => {},
-	};
+    match backend_call.http_version_override {
+        Some(::http::Version::HTTP_2) => {
+            req.headers_mut().remove(http::header::TRANSFER_ENCODING);
+            req.headers_mut().remove(http::header::CONNECTION);
+            *req.version_mut() = ::http::Version::HTTP_2;
+        },
+        Some(::http::Version::HTTP_11) => {
+            *req.version_mut() = ::http::Version::HTTP_11;
+        },
+        _ => {},
+    };
+    // Record selected upstream version for observability parity across all backend types
+    let selected_upstream_version = req.version();
+    log.add(move |l| l.upstream_http_version = Some(selected_upstream_version));
 	log.add(|l| {
 		l.endpoint = Some(backend_call.target.clone());
 	});
