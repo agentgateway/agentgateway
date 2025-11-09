@@ -2,13 +2,50 @@ use crate::apply;
 use crate::telemetry::log::RequestLog;
 use crate::transport::stream::TLSConnectionInfo;
 use crate::*;
+use serde::{Deserialize, Deserializer};
 
 #[apply(schema!)]
 #[derive(Default)]
 pub struct HTTP {
-	#[serde(with = "http_serde::option::version")]
+	#[serde(
+		default,
+		deserialize_with = "deserialize_http_version",
+		serialize_with = "serialize_http_version"
+	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub version: Option<::http::Version>,
+}
+
+fn deserialize_http_version<'de, D>(d: D) -> Result<Option<::http::Version>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	use serde::de::Error;
+	let s: Option<String> = Option::deserialize(d)?;
+	match s.as_deref() {
+		None => Ok(None),
+		Some("1.1") | Some("HTTP/1.1") => Ok(Some(::http::Version::HTTP_11)),
+		Some("2") | Some("HTTP/2") | Some("HTTP/2.0") => Ok(Some(::http::Version::HTTP_2)),
+		Some(other) => Err(D::Error::custom(format!(
+			"expected version '1.1', '2', 'HTTP/1.1', or 'HTTP/2(.0)', got '{}'",
+			other
+		))),
+	}
+}
+
+fn serialize_http_version<S>(
+	version: &Option<::http::Version>,
+	s: S,
+) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	match version {
+		None => s.serialize_none(),
+		Some(::http::Version::HTTP_11) => s.serialize_str("1.1"),
+		Some(::http::Version::HTTP_2) => s.serialize_str("2"),
+		Some(_) => s.serialize_none(), // Unsupported versions serialize as null
+	}
 }
 
 impl HTTP {

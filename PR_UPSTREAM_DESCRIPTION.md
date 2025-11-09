@@ -5,7 +5,7 @@ Summary
 - Introduces a general backend HTTP policy (`policies.http.version: "1.1" | "2"`) applicable to all backends (AI and Service).
 - Enforces HTTP/1.1 deterministically over TLS by restricting ALPN to `http/1.1` when policy is set to `"1.1"`.
 - Adds lightweight observability: structured fields `upstream.http_version` and `upstream.tls.alpn` in request logs (parity across backend types) plus a debug trace of the selection.
-- Implements precedence and heuristics in AI path: `policy > appProtocol > heuristics` (TLS→h1, gRPC→h2, plaintext mirrors downstream version).
+- Centralizes version selection via backend policy `HTTP::apply(...)`: `policy > appProtocol > heuristics` (TLS→h1, gRPC→h2, plaintext mirrors downstream version).
 
 Motivation
 
@@ -40,16 +40,15 @@ backends:
 
 Key Changes
 
-- New policy type: `http::backend::HTTP` with `HttpVersion` ("1.1" | "2").
-  - file: crates/agentgateway/src/http/backend.rs
-- Policy plumbing:
+- New policy type: `types::backend::HTTP` using native `http::Version` (via `http_serde::option::version`).
+  - file: crates/agentgateway/src/types/backend.rs
+- Policy plumbing and centralized apply:
   - `BackendPolicy::HTTP` added; merge logic and YAML parsing wired in.
-  - files: crates/agentgateway/src/types/agent.rs, crates/agentgateway/src/store/binds.rs, crates/agentgateway/src/types/local.rs
-- Proxy (AI path): precedence + heuristics, and ALPN clamp for policy="1.1".
-  - file: crates/agentgateway/src/proxy/httpproxy.rs
-- TLS/ALPN: add `BackendTLS::with_alpn_http11()` helper.
+  - `apply_backend_policies(...)` calls `HTTP::apply(req, version_override, log)` to set the version once.
+  - files: crates/agentgateway/src/types/agent.rs, crates/agentgateway/src/store/binds.rs, crates/agentgateway/src/types/local.rs, crates/agentgateway/src/proxy/httpproxy.rs
+- TLS/ALPN determinism: add `BackendTLS::with_alpn_http11()` and apply when policy selects `"1.1"` and backend TLS is configured.
   - file: crates/agentgateway/src/http/backendtls.rs
-- Observability: add `upstream.http_version`, `upstream.tls.alpn` to logs.
+- Observability: add `upstream.http_version`, `upstream.tls.alpn` to logs (parity across backend types).
   - file: crates/agentgateway/src/telemetry/log.rs
   - Note: `upstream.tls.alpn` reflects the configured/clamped ALPN when policy="1.1". Negotiated ALPN can be added in a follow-up if needed.
 
@@ -58,10 +57,10 @@ Compatibility
 - Backward compatible. The policy is optional. If omitted, behavior follows existing `appProtocol` for Service backends and heuristics for AI.
 - Does not implicitly enable TLS.
 
-Testing
+- Testing
 
 - Unit
-  - `crates/agentgateway/tests/http_policy.rs`: verifies `HTTP` policy helpers (`version_override`, `is_http11`, `is_http2`).
+  - `crates/agentgateway/tests/http_policy.rs`: verifies `HTTP` policy helpers (e.g., `is_http11`).
 - Integration (manual/E2E)
   - TLS upstream advertising h2 + `policies.http.version: "1.1"` ⇒ ALPN is `http/1.1`; upstream HTTP/1.1 is used.
   - Plaintext HTTP/1.1-only backends ⇒ no h2c prior knowledge.
