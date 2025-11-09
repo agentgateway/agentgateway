@@ -146,11 +146,12 @@ pub struct LLMRequest {
 	pub params: LLMRequestParams,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InputFormat {
 	Completions,
 	Messages,
 	Responses,
+	CountTokens,
 }
 
 #[derive(Default, Clone, Debug, Serialize)]
@@ -514,7 +515,7 @@ impl AIProvider {
 		&self,
 		req: Request,
 		policies: Option<&Policy>,
-	) -> Result<(Request, LLMRequest), AIError> {
+	) -> Result<RequestResult, AIError> {
 		use crate::http;
 
 		match self {
@@ -552,17 +553,17 @@ impl AIProvider {
 				// Create LLMRequest for logging and path setup
 				let llm_request = LLMRequest {
 					input_tokens: None,
-					input_format: InputFormat::Messages,
+					input_format: InputFormat::CountTokens,
 					request_model: model.into(),
 					provider: self.provider(),
 					streaming: false,
 					params: LLMRequestParams::default(),
 				};
 
-				Ok((req, llm_request))
+				Ok(RequestResult::Success(req, llm_request))
 			},
 			_ => Err(AIError::UnsupportedConversion(strng::format!(
-				"Provider {} does not support Anthropic count_tokens API",
+				"InputFormat::CountTokens not supported by provider {}",
 				self.provider()
 			))),
 		}
@@ -663,6 +664,21 @@ impl AIProvider {
 		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		// count_tokens has simplified response handling (just format translation)
+		if req.input_format == InputFormat::CountTokens {
+			return match self {
+				AIProvider::Bedrock(_) => bedrock::process_count_tokens_response(resp)
+					.await
+					.map_err(|e| {
+						AIError::UnsupportedConversion(strng::format!(
+							"Failed to process count_tokens response: {}",
+							e
+						))
+					}),
+				_ => unreachable!("CountTokens already validated at request time"),
+			};
+		}
+
 		if req.streaming {
 			return self
 				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)

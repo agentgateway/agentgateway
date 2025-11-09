@@ -111,6 +111,9 @@ pub mod passthrough {
 			InputFormat::Responses => {
 				unreachable!("Responses format should not be routed to Universal (OpenAI) provider")
 			},
+			InputFormat::CountTokens => {
+				unreachable!("CountTokens should be handled by process_count_tokens_response")
+			},
 		}
 	}
 

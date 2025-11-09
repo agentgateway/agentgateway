@@ -85,6 +85,9 @@ impl Provider {
 			crate::llm::InputFormat::Responses => {
 				resp.map(|body| translate_stream_to_responses(body, log, model, message_id))
 			},
+			crate::llm::InputFormat::CountTokens => {
+				unreachable!("CountTokens should be handled by process_count_tokens_response")
+			},
 		}
 	}
 
@@ -136,6 +139,9 @@ pub fn process_response(
 			>(&responses_resp)
 			.map_err(AIError::ResponseParsing)?;
 			Ok(Box::new(passthrough))
+		},
+		crate::llm::InputFormat::CountTokens => {
+			unreachable!("CountTokens should be handled by process_count_tokens_response")
 		},
 	}
 }
@@ -276,6 +282,7 @@ fn translate_stop_reason(resp: &StopReason) -> universal::FinishReason {
 		StopReason::ContentFiltered => universal::FinishReason::ContentFilter,
 		StopReason::GuardrailIntervened => universal::FinishReason::ContentFilter,
 		StopReason::ToolUse => universal::FinishReason::ToolCalls,
+		StopReason::ModelContextWindowExceeded => universal::FinishReason::Length,
 	}
 }
 
@@ -1618,7 +1625,7 @@ pub(super) fn translate_response_to_responses(
 	// Determine status from stop reason
 	let status = match adapter.stop_reason {
 		StopReason::EndTurn | StopReason::StopSequence => "completed",
-		StopReason::MaxTokens => "incomplete",
+		StopReason::MaxTokens | StopReason::ModelContextWindowExceeded => "incomplete",
 		StopReason::ToolUse => "requires_action",
 		StopReason::ContentFiltered | StopReason::GuardrailIntervened => "failed",
 	}
@@ -1965,7 +1972,7 @@ pub(super) fn translate_stream_to_responses(
 							}
 						})
 					},
-					Some(StopReason::MaxTokens) => {
+					Some(StopReason::MaxTokens) | Some(StopReason::ModelContextWindowExceeded) => {
 						serde_json::json!({
 							"type": "response.incomplete",
 							"sequence_number": sequence_number,
@@ -2033,6 +2040,7 @@ fn translate_stop_reason_to_anthropic(stop_reason: StopReason) -> anthropic::Sto
 	match stop_reason {
 		StopReason::EndTurn => anthropic::StopReason::EndTurn,
 		StopReason::MaxTokens => anthropic::StopReason::MaxTokens,
+		StopReason::ModelContextWindowExceeded => anthropic::StopReason::ModelContextWindowExceeded,
 		StopReason::StopSequence => anthropic::StopReason::StopSequence,
 		StopReason::ToolUse => anthropic::StopReason::ToolUse,
 		StopReason::ContentFiltered | StopReason::GuardrailIntervened => anthropic::StopReason::Refusal,
@@ -2857,6 +2865,7 @@ pub(super) mod types {
 		EndTurn,
 		GuardrailIntervened,
 		MaxTokens,
+		ModelContextWindowExceeded,
 		StopSequence,
 		ToolUse,
 	}

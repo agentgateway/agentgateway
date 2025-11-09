@@ -1128,7 +1128,10 @@ async fn make_backend_call(
 			// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like
 			// prompt enrichment, prompt guard, etc.
 			match route_type {
-				RouteType::Completions | RouteType::Messages | RouteType::Responses => {
+				RouteType::Completions
+				| RouteType::Messages
+				| RouteType::Responses
+				| RouteType::AnthropicTokenCount => {
 					let r = match route_type {
 						RouteType::Completions => llm
 							.provider
@@ -1163,6 +1166,11 @@ async fn make_backend_call(
 							)
 							.await
 							.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::AnthropicTokenCount => llm
+							.provider
+							.process_count_tokens_request(req, llm_request_policies.llm.as_deref())
+							.await
+							.map_err(|e| ProxyError::Processing(e.into()))?,
 						_ => unreachable!(),
 					};
 					let (mut req, llm_request) = match r {
@@ -1181,16 +1189,21 @@ async fn make_backend_call(
 						)
 						.map_err(ProxyError::Processing)?;
 
-					// Apply all policies (rate limits)
-					let response_policies = apply_llm_request_policies(
-						&llm_request_policies,
-						policy_client.clone(),
-						&mut log,
-						&mut req,
-						&llm_request,
-						&mut response_policies.response_headers,
-					)
-					.await?;
+					// Apply all policies (rate limits, prompt guards, enrichment)
+					// count_tokens skips policies (no tokens generated, no prompts to manipulate)
+					let response_policies = if route_type == RouteType::AnthropicTokenCount {
+						LLMResponsePolicies::default()
+					} else {
+						apply_llm_request_policies(
+							&llm_request_policies,
+							policy_client.clone(),
+							&mut log,
+							&mut req,
+							&llm_request,
+							&mut response_policies.response_headers,
+						)
+						.await?
+					};
 					log.add(|l| l.llm_request = Some(llm_request.clone()));
 					(req, response_policies, Some(llm_request))
 				},
@@ -1215,25 +1228,6 @@ async fn make_backend_call(
 						.setup_request(&mut req, route_type, None, true)
 						.map_err(ProxyError::Processing)?;
 					(req, LLMResponsePolicies::default(), None)
-				},
-				RouteType::AnthropicTokenCount => {
-					let (mut req, llm_request) = llm
-						.provider
-						.process_count_tokens_request(req, llm_request_policies.llm.as_deref())
-						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?;
-
-					llm
-						.provider
-						.setup_request(
-							&mut req,
-							route_type,
-							Some(&llm_request),
-							llm.use_default_policies(),
-						)
-						.map_err(ProxyError::Processing)?;
-
-					(req, LLMResponsePolicies::default(), Some(llm_request))
 				},
 			}
 		} else {
@@ -1269,12 +1263,6 @@ async fn make_backend_call(
 		.map(|l| l.cel.cel_context.needs_llm_completion())
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
-	// Capture route type before moving call
-	let route_type = backend_call
-		.backend_policies
-		.llm_provider
-		.as_ref()
-		.map(|llm| llm.resolve_route(call.req.uri().path()));
 	Ok(Box::pin(async move {
 		let mut resp = upstream.call(call).await?;
 		a2a::apply_to_response(
@@ -1284,14 +1272,7 @@ async fn make_backend_call(
 		)
 		.await
 		.map_err(ProxyError::Processing)?;
-		let mut resp = if let Some(rt) = route_type
-			&& rt == RouteType::AnthropicTokenCount
-		{
-			// count_tokens has simpler response handling (no streaming, no logging)
-			crate::llm::bedrock::process_count_tokens_response(resp)
-				.await
-				.map_err(ProxyError::Processing)?
-		} else if let (Some(llm), Some(llm_request)) =
+		let mut resp = if let (Some(llm), Some(llm_request)) =
 			(backend_call.backend_policies.llm_provider, llm_request)
 		{
 			llm

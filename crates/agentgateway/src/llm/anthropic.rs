@@ -45,6 +45,9 @@ impl Provider {
 			InputFormat::Responses => {
 				unreachable!("Responses format should not be routed to Anthropic provider")
 			},
+			InputFormat::CountTokens => {
+				unreachable!("CountTokens should be handled by process_count_tokens_response")
+			},
 		}
 	}
 }
@@ -76,6 +79,9 @@ pub fn process_response(
 		},
 		InputFormat::Responses => {
 			unreachable!("Responses format should not be routed to Anthropic provider")
+		},
+		InputFormat::CountTokens => {
+			unreachable!("CountTokens should be handled by process_count_tokens_response")
 		},
 	}
 }
