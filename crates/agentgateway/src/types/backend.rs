@@ -2,7 +2,7 @@ use crate::apply;
 use crate::telemetry::log::RequestLog;
 use crate::transport::stream::TLSConnectionInfo;
 use crate::*;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 
 #[apply(schema!)]
 #[derive(Default)]
