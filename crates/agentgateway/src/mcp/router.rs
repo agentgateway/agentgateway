@@ -92,7 +92,7 @@ impl App {
 						&[]
 					};
 					let backend_policies =
-						binds.backend_policies(None, None, Some(t.name.clone()), inline_pols);
+						binds.backend_policies(None, None, Some(t.name.clone()), inline_pols, None, None);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),

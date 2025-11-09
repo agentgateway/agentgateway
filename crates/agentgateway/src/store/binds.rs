@@ -440,8 +440,9 @@ impl Store {
 		backend: Option<BackendName>,
 		service: Option<ServiceName>,
 		sub_backend: Option<SubBackendName>,
-		// Set of inline policies. Last one wins
 		inline_policies: &[&[BackendPolicy]],
+		route: Option<RouteName>,
+		gateway: Option<GatewayName>,
 	) -> BackendPolicies {
 		let backend_rules =
 			backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::Backend(t)));
@@ -449,14 +450,20 @@ impl Store {
 			service.and_then(|t| self.policies_by_target.get(&PolicyTarget::Service(t)));
 		let sub_backend_rules =
 			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::SubBackend(t)));
+		let route_rules = route.and_then(|t| self.policies_by_target.get(&PolicyTarget::Route(t)));
+		let gateway_rules =
+			gateway.and_then(|t| self.policies_by_target.get(&PolicyTarget::Gateway(t)));
 
-		// Subbackend > Backend > Service
-		let rules = sub_backend_rules
+		// Route > SubBackend > Backend > Service > Gateway
+		// Most specific (route context) to least specific (gateway-wide default)
+		let rules = route_rules
 			.iter()
 			.copied()
 			.flatten()
+			.chain(sub_backend_rules.iter().copied().flatten())
 			.chain(backend_rules.iter().copied().flatten())
 			.chain(service_rules.iter().copied().flatten())
+			.chain(gateway_rules.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_name.get(n))
 			.filter_map(|p| p.policy.as_backend());
 		let rules = inline_policies
