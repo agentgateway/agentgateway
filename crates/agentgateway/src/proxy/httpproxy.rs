@@ -183,22 +183,23 @@ async fn apply_backend_policies(
 	log: &mut Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
-	let BackendPolicies {
-		backend_tls: _,
-		backend_auth,
-		a2a,
-		// Applied elsewhere
-		llm_provider: _,
-		// Applied elsewhere
-		llm: _,
-		// Applied elsewhere
-		inference_routing: _,
-		request_header_modifier,
-		response_header_modifier,
-		request_redirect,
-		// Applied elsewhere
-		request_mirror: _,
-	} = policies;
+    let BackendPolicies {
+        backend_tls: _,
+        backend_auth,
+        a2a,
+        // Applied elsewhere
+        llm_provider: _,
+        // Applied elsewhere
+        llm: _,
+        // Applied elsewhere
+        inference_routing: _,
+        request_header_modifier,
+        response_header_modifier,
+        request_redirect,
+        // Applied elsewhere
+        request_mirror: _,
+        ..
+    } = policies;
 	response_policies.backend_response_header = response_header_modifier.clone();
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
@@ -950,38 +951,81 @@ async fn make_backend_call(
 					.read_binds()
 					.backend_policies(None, None, Some(k), &[]);
 
-			let (target, provider_defaults) = match &provider.host_override {
-				Some(target) => (
-					target.clone(),
-					BackendPolicies {
-						// Attach LLM provider, but don't use default setup
-						llm_provider: Some(provider.clone()),
-						..Default::default()
-					},
-				),
-				None => {
-					let (tgt, mut pol) = provider.provider.default_connector();
-					pol.llm_provider = Some(provider.clone());
-					(tgt, pol)
-				},
-			};
-			// Defaults for the provider < Backend level policies < Sub Backend
-			let effective_policies = provider_defaults
-				.merge(policies)
-				.merge(sub_backend_policies);
-			if let Some(po) = &provider.path_override {
-				http::modify_req_uri(&mut req, |p| {
-					p.path_and_query = Some(PathAndQuery::from_str(po)?);
-					Ok(())
-				})
-				.map_err(ProxyError::Processing)?;
-			}
-			BackendCall {
-				target,
-				backend_policies: effective_policies,
-				http_version_override: None,
-				transport_override: None,
-			}
+            let (target, provider_defaults) = match &provider.host_override {
+                Some(target) => (
+                    target.clone(),
+                    BackendPolicies {
+                        // Attach LLM provider, but don't use default setup
+                        llm_provider: Some(provider.clone()),
+                        ..Default::default()
+                    },
+                ),
+                None => {
+                    let (tgt, mut pol) = provider.provider.default_connector();
+                    pol.llm_provider = Some(provider.clone());
+                    (tgt, pol)
+                },
+            };
+            // Defaults for the provider < Backend level policies < Sub Backend
+            let mut effective_policies = provider_defaults
+                .merge(policies)
+                .merge(sub_backend_policies);
+
+            // If the backend HTTP policy enforces HTTP/1.1, restrict TLS ALPN to http/1.1 to prevent
+            // upgrading to HTTP/2 via ALPN during TLS handshakes.
+            if effective_policies.http.as_ref().map_or(false, |h| h.is_http11()) {
+                if let Some(base_tls) = effective_policies.backend_tls.as_ref() {
+                    effective_policies.backend_tls = Some(base_tls.with_alpn_http11());
+                    // Record configured ALPN restriction for observability
+                    log.add(|l| l.upstream_tls_alpn = Some("http/1.1".to_string()));
+                }
+            }
+            if let Some(po) = &provider.path_override {
+                http::modify_req_uri(&mut req, |p| {
+                    p.path_and_query = Some(PathAndQuery::from_str(po)?);
+                    Ok(())
+                })
+                .map_err(ProxyError::Processing)?;
+            }
+            // Determine upstream HTTP version: policy > appProtocol (N/A for AI) > heuristics
+            let mut http_version_override = effective_policies
+                .http
+                .as_ref()
+                .and_then(|h| h.version_override());
+
+            if http_version_override.is_none() {
+                // Heuristics:
+                // - TLS downstream → HTTP/1.1 (except gRPC)
+                // - Plaintext → mirror downstream request version
+                let has_downstream_tls = req.extensions().get::<TLSConnectionInfo>().is_some();
+                let is_grpc = req
+                    .headers()
+                    .get(header::CONTENT_TYPE)
+                    .and_then(|h| h.to_str().ok())
+                    .map(|ct| ct.starts_with("application/grpc"))
+                    .unwrap_or(false);
+                http_version_override = if has_downstream_tls {
+                    if is_grpc {
+                        Some(::http::Version::HTTP_2)
+                    } else {
+                        Some(::http::Version::HTTP_11)
+                    }
+                } else {
+                    Some(req.version())
+                };
+            }
+
+            if let Some(ver) = http_version_override {
+                debug!("selected upstream HTTP version: {:?}", ver);
+                log.add(move |l| l.upstream_http_version = Some(ver));
+            }
+
+            BackendCall {
+                target,
+                backend_policies: effective_policies,
+                http_version_override,
+                transport_override: None,
+            }
 		},
 		Backend::Service(svc, port) => {
 			build_service_call(&inputs, policies, &mut log, override_dest, svc, port)?

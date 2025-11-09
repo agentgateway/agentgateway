@@ -627,24 +627,28 @@ pub struct LocalBackendPolicies {
 	/// Send TLS to the backend.
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<http::backendtls::LocalBackendTLS>,
-	/// Authenticate to the backend.
-	#[serde(default)]
-	pub backend_auth: Option<BackendAuth>,
+    /// Authenticate to the backend.
+    #[serde(default)]
+    pub backend_auth: Option<BackendAuth>,
+    /// HTTP version preference for upstream backend connections.
+    #[serde(default)]
+    pub http: Option<crate::http::backend::HTTP>,
 }
 
 impl LocalBackendPolicies {
-	pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
-		let LocalBackendPolicies {
-			request_header_modifier,
-			response_header_modifier,
-			request_redirect,
-			mcp_authorization,
-			a2a,
-			ai,
-			backend_tls,
-			backend_auth,
-		} = self;
-		let mut pols = vec![];
+    pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
+        let LocalBackendPolicies {
+            request_header_modifier,
+            response_header_modifier,
+            request_redirect,
+            mcp_authorization,
+            a2a,
+            ai,
+            backend_tls,
+            backend_auth,
+            http,
+        } = self;
+        let mut pols = vec![];
 		if let Some(p) = request_header_modifier {
 			pols.push(BackendPolicy::RequestHeaderModifier(p));
 		}
@@ -663,14 +667,17 @@ impl LocalBackendPolicies {
 		if let Some(p) = backend_tls {
 			pols.push(BackendPolicy::BackendTLS(p.try_into()?))
 		}
-		if let Some(p) = backend_auth {
-			pols.push(BackendPolicy::BackendAuth(p))
-		}
-		if let Some(p) = ai {
-			pols.push(BackendPolicy::AI(Arc::new(p)))
-		}
-		Ok(pols)
-	}
+        if let Some(p) = backend_auth {
+            pols.push(BackendPolicy::BackendAuth(p))
+        }
+        if let Some(p) = http {
+            pols.push(BackendPolicy::HTTP(p))
+        }
+        if let Some(p) = ai {
+            pols.push(BackendPolicy::AI(Arc::new(p)))
+        }
+        Ok(pols)
+    }
 }
 
 #[apply(schema_de!)]

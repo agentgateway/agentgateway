@@ -473,46 +473,48 @@ impl RequestLog {
 		start: Instant,
 		start_time: String,
 		tcp_info: TCPConnectionInfo,
-	) -> Self {
-		RequestLog {
-			cel,
-			metrics,
-			start,
-			start_time,
-			tcp_info,
-			tls_info: None,
-			tracer: None,
-			endpoint: None,
-			bind_name: None,
-			gateway_name: None,
-			listener_name: None,
-			route_rule_name: None,
-			route_name: None,
-			backend_info: None,
-			backend_protocol: None,
-			host: None,
-			method: None,
-			path: None,
-			path_match: None,
-			version: None,
-			status: None,
-			reason: None,
-			retry_after: None,
-			jwt_sub: None,
-			retry_attempt: None,
-			error: None,
-			grpc_status: Default::default(),
-			mcp_status: Default::default(),
-			incoming_span: None,
-			outgoing_span: None,
-			llm_request: None,
-			llm_response: Default::default(),
-			a2a_method: None,
-			inference_pool: None,
-			request_handle: None,
-			response_bytes: 0,
-		}
-	}
+    ) -> Self {
+        RequestLog {
+            cel,
+            metrics,
+            start,
+            start_time,
+            tcp_info,
+            tls_info: None,
+            tracer: None,
+            endpoint: None,
+            bind_name: None,
+            gateway_name: None,
+            listener_name: None,
+            route_rule_name: None,
+            route_name: None,
+            backend_info: None,
+            backend_protocol: None,
+            upstream_http_version: None,
+            upstream_tls_alpn: None,
+            host: None,
+            method: None,
+            path: None,
+            path_match: None,
+            version: None,
+            status: None,
+            reason: None,
+            retry_after: None,
+            jwt_sub: None,
+            retry_attempt: None,
+            error: None,
+            grpc_status: Default::default(),
+            mcp_status: Default::default(),
+            incoming_span: None,
+            outgoing_span: None,
+            llm_request: None,
+            llm_response: Default::default(),
+            a2a_method: None,
+            inference_pool: None,
+            request_handle: None,
+            response_bytes: 0,
+        }
+    }
 }
 #[derive(Debug)]
 pub struct RequestLog {
@@ -536,7 +538,10 @@ pub struct RequestLog {
 	pub route_rule_name: Option<RouteRuleName>,
 	pub route_name: Option<RouteName>,
 	pub backend_info: Option<BackendInfo>,
-	pub backend_protocol: Option<cel::BackendProtocol>,
+    pub backend_protocol: Option<cel::BackendProtocol>,
+    // Upstream connection properties (selected/requested)
+    pub upstream_http_version: Option<::http::Version>,
+    pub upstream_tls_alpn: Option<String>,
 
 	pub host: Option<String>,
 	pub method: Option<::http::Method>,
@@ -571,7 +576,7 @@ pub struct RequestLog {
 }
 
 impl RequestLog {
-	pub fn trace_sampled(&self, tp: Option<&TraceParent>) -> bool {
+    pub fn trace_sampled(&self, tp: Option<&TraceParent>) -> bool {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
@@ -740,22 +745,24 @@ impl Drop for DropOnLog {
 
 		let fields = cel_exec.fields;
 
-		let mut kv = vec![
-			("gateway", log.gateway_name.display()),
-			("listener", log.listener_name.display()),
-			("route_rule", log.route_rule_name.display()),
-			("route", log.route_name.display()),
-			("endpoint", log.endpoint.display()),
-			("src.addr", Some(display(&log.tcp_info.peer_addr))),
-			("http.method", log.method.display()),
-			("http.host", log.host.display()),
-			("http.path", log.path.display()),
-			// TODO: incoming vs outgoing
-			("http.version", log.version.as_ref().map(debug)),
-			(
-				"http.status",
-				log.status.as_ref().map(|s| s.as_u16().into()),
-			),
+        let mut kv = vec![
+            ("gateway", log.gateway_name.display()),
+            ("listener", log.listener_name.display()),
+            ("route_rule", log.route_rule_name.display()),
+            ("route", log.route_name.display()),
+            ("endpoint", log.endpoint.display()),
+            ("src.addr", Some(display(&log.tcp_info.peer_addr))),
+            ("http.method", log.method.display()),
+            ("http.host", log.host.display()),
+            ("http.path", log.path.display()),
+            // TODO: incoming vs outgoing
+            ("http.version", log.version.as_ref().map(debug)),
+            ("upstream.http_version", log.upstream_http_version.as_ref().map(debug)),
+            ("upstream.tls.alpn", log.upstream_tls_alpn.as_ref().map(|s| display(s))),
+            (
+                "http.status",
+                log.status.as_ref().map(|s| s.as_u16().into()),
+            ),
 			("grpc.status", grpc.map(Into::into)),
 			(
 				"tls.sni",

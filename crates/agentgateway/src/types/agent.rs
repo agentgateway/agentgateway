@@ -1171,6 +1171,9 @@ pub enum BackendPolicy {
 	InferenceRouting(ext_proc::InferenceRouting),
 	AI(Arc<llm::Policy>),
 
+	#[serde(rename = "http")]
+	HTTP(http::backend::HTTP),
+
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(filters::HeaderModifier),
 	RequestRedirect(filters::RequestRedirect),

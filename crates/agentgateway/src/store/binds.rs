@@ -79,12 +79,14 @@ impl FrontendPolices {
 
 #[derive(Default, Debug, Clone)]
 pub struct BackendPolicies {
-	pub backend_tls: Option<BackendTLS>,
-	pub backend_auth: Option<BackendAuth>,
-	pub a2a: Option<A2aPolicy>,
-	pub llm_provider: Option<Arc<llm::NamedAIProvider>>,
-	pub llm: Option<Arc<llm::Policy>>,
-	pub inference_routing: Option<InferenceRouting>,
+    pub backend_tls: Option<BackendTLS>,
+    pub backend_auth: Option<BackendAuth>,
+    pub a2a: Option<A2aPolicy>,
+    pub llm_provider: Option<Arc<llm::NamedAIProvider>>,
+    pub llm: Option<Arc<llm::Policy>>,
+    pub inference_routing: Option<InferenceRouting>,
+
+    pub http: Option<crate::http::backend::HTTP>,
 
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: Option<filters::HeaderModifier>,
@@ -94,17 +96,18 @@ pub struct BackendPolicies {
 
 impl BackendPolicies {
 	// Merges self and other. Other has precedence
-	pub fn merge(self, other: BackendPolicies) -> BackendPolicies {
-		Self {
-			backend_tls: other.backend_tls.or(self.backend_tls),
-			backend_auth: other.backend_auth.or(self.backend_auth),
-			a2a: other.a2a.or(self.a2a),
-			llm_provider: other.llm_provider.or(self.llm_provider),
-			llm: other.llm.or(self.llm),
-			inference_routing: other.inference_routing.or(self.inference_routing),
-			request_header_modifier: other
-				.request_header_modifier
-				.or(self.request_header_modifier),
+    pub fn merge(self, other: BackendPolicies) -> BackendPolicies {
+        Self {
+            backend_tls: other.backend_tls.or(self.backend_tls),
+            backend_auth: other.backend_auth.or(self.backend_auth),
+            a2a: other.a2a.or(self.a2a),
+            llm_provider: other.llm_provider.or(self.llm_provider),
+            llm: other.llm.or(self.llm),
+            inference_routing: other.inference_routing.or(self.inference_routing),
+            http: other.http.or(self.http),
+            request_header_modifier: other
+                .request_header_modifier
+                .or(self.request_header_modifier),
 			response_header_modifier: other
 				.response_header_modifier
 				.or(self.response_header_modifier),
@@ -466,23 +469,26 @@ impl Store {
 			.chain(rules);
 
 		let mut pol = BackendPolicies::default();
-		for rule in rules {
-			match &rule {
-				BackendPolicy::A2a(p) => {
-					pol.a2a.get_or_insert_with(|| p.clone());
-				},
-				BackendPolicy::BackendTLS(p) => {
-					pol.backend_tls.get_or_insert_with(|| p.clone());
-				},
-				BackendPolicy::BackendAuth(p) => {
-					pol.backend_auth.get_or_insert_with(|| p.clone());
-				},
-				BackendPolicy::InferenceRouting(p) => {
-					pol.inference_routing.get_or_insert_with(|| p.clone());
-				},
-				BackendPolicy::AI(p) => {
-					pol.llm.get_or_insert_with(|| p.clone());
-				},
+        for rule in rules {
+            match &rule {
+                BackendPolicy::A2a(p) => {
+                    pol.a2a.get_or_insert_with(|| p.clone());
+                },
+                BackendPolicy::BackendTLS(p) => {
+                    pol.backend_tls.get_or_insert_with(|| p.clone());
+                },
+                BackendPolicy::BackendAuth(p) => {
+                    pol.backend_auth.get_or_insert_with(|| p.clone());
+                },
+                BackendPolicy::InferenceRouting(p) => {
+                    pol.inference_routing.get_or_insert_with(|| p.clone());
+                },
+                BackendPolicy::AI(p) => {
+                    pol.llm.get_or_insert_with(|| p.clone());
+                },
+                BackendPolicy::HTTP(p) => {
+                    pol.http.get_or_insert_with(|| p.clone());
+                },
 
 				BackendPolicy::RequestHeaderModifier(p) => {
 					pol.request_header_modifier.get_or_insert_with(|| p.clone());
@@ -501,13 +507,13 @@ impl Store {
 					}
 				},
 
-				// TODO??
-				BackendPolicy::McpAuthorization(_) => {},
-				BackendPolicy::McpAuthentication(_) => {},
-			}
-		}
-		pol
-	}
+                // TODO??
+                BackendPolicy::McpAuthorization(_) => {},
+                BackendPolicy::McpAuthentication(_) => {},
+            }
+        }
+        pol
+    }
 
 	pub fn mcp_policies(
 		&self,
