@@ -205,10 +205,10 @@ async fn apply_backend_policies(
     } = policies;
 	response_policies.backend_response_header = response_header_modifier.clone();
 
-	// Apply HTTP version policy with centralized logic
-	if let Some(http) = http {
-		http.apply(req, backend_call.http_version_override, log);
-	}
+    // Apply HTTP version policy with centralized logic.
+    // If no policy is present, apply a default policy to run heuristics.
+    let http_pol = http.clone().unwrap_or_default();
+    http_pol.apply(req, backend_call.http_version_override, log);
 
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
