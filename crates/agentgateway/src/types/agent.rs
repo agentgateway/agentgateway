@@ -27,7 +27,7 @@ use crate::http::{
 };
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
-use crate::types::{agent, frontend};
+use crate::types::{agent, backend, frontend};
 use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1170,6 +1170,11 @@ pub enum BackendPolicy {
 	BackendAuth(BackendAuth),
 	InferenceRouting(ext_proc::InferenceRouting),
 	AI(Arc<llm::Policy>),
+
+	#[serde(rename = "http")]
+	HTTP(backend::HTTP),
+	#[serde(rename = "tcp")]
+	TCP(backend::TCP),
 
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(filters::HeaderModifier),

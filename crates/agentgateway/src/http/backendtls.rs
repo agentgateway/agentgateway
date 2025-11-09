@@ -57,6 +57,18 @@ impl serde::Serialize for BackendTLS {
 		serializer.serialize_none()
 	}
 }
+
+impl BackendTLS {
+    /// Return a clone of this BackendTLS with ALPN restricted to HTTP/1.1.
+    pub fn with_alpn_http11(&self) -> BackendTLS {
+        let mut cc = (*self.config).clone();
+        cc.alpn_protocols = vec![b"http/1.1".into()];
+        BackendTLS {
+            hostname_override: self.hostname_override.clone(),
+            config: Arc::new(cc),
+        }
+    }
+}
 static SYSTEM_ROOT: Lazy<rustls_native_certs::CertificateResult> =
 	Lazy::new(rustls_native_certs::load_native_certs);
 
