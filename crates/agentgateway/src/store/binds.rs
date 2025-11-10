@@ -229,16 +229,20 @@ impl LLMRequestPolicies {
 			return Arc::new(route_policies);
 		};
 
+		// Backend aliases replace route aliases entirely (consistent with defaults/overrides)
+		let (merged_aliases, merged_wildcard_patterns) = if be.model_aliases.is_empty() {
+			(re.model_aliases.clone(), Arc::clone(&re.wildcard_patterns))
+		} else {
+			(be.model_aliases.clone(), Arc::clone(&be.wildcard_patterns))
+		};
+
 		route_policies.llm = Some(Arc::new(llm::Policy {
 			prompt_guard: be.prompt_guard.clone().or_else(|| re.prompt_guard.clone()),
 			defaults: be.defaults.clone().or_else(|| re.defaults.clone()),
 			overrides: be.overrides.clone().or_else(|| re.overrides.clone()),
 			prompts: be.prompts.clone().or_else(|| re.prompts.clone()),
-			model_aliases: if be.model_aliases.is_empty() {
-				re.model_aliases.clone()
-			} else {
-				be.model_aliases.clone()
-			},
+			model_aliases: merged_aliases,
+			wildcard_patterns: merged_wildcard_patterns,
 			prompt_caching: be
 				.prompt_caching
 				.clone()

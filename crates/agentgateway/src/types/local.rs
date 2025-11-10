@@ -682,7 +682,8 @@ impl LocalBackendPolicies {
 		if let Some(p) = backend_auth {
 			pols.push(BackendPolicy::BackendAuth(p))
 		}
-		if let Some(p) = ai {
+		if let Some(mut p) = ai {
+			p.compile_model_alias_patterns();
 			pols.push(BackendPolicy::AI(Arc::new(p)))
 		}
 		Ok(pols)
@@ -1186,7 +1187,8 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 	}
 
 	// Route policies
-	if let Some(p) = ai {
+	if let Some(mut p) = ai {
+		p.compile_model_alias_patterns();
 		route_policies.push(TrafficPolicy::AI(Arc::new(p)))
 	}
 	if let Some(p) = jwt_auth {

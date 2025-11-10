@@ -537,7 +537,7 @@ impl AIProvider {
 
 				// Apply model alias resolution (consistent with other routes)
 				if let Some(p) = policies
-					&& let Some(aliased) = p.model_aliases.get(count_req.model.as_str())
+					&& let Some(aliased) = p.resolve_model_alias(count_req.model.as_str())
 				{
 					count_req.model = aliased.to_string();
 				}
@@ -606,7 +606,7 @@ impl AIProvider {
 		if let Some(p) = policies {
 			// Apply model alias resolution
 			if let Some(model) = req.model()
-				&& let Some(aliased) = p.model_aliases.get(model.as_str())
+				&& let Some(aliased) = p.resolve_model_alias(model.as_str())
 			{
 				*model = aliased.to_string();
 			}
