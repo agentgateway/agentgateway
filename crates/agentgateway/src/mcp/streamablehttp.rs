@@ -153,7 +153,7 @@ impl StreamableHttpService {
 		let mut resp = session.send(part, message).await;
 
 		if set_session_id {
-			let Ok(sid) = session.id.parse() else {
+			let Ok(sid): Result<http::HeaderValue, _> = session.id.parse() else {
 				return internal_error_response("create session id header");
 			};
 			// Phase 1: Return both headers for backwards compatibility
