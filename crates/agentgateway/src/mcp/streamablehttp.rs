@@ -15,12 +15,13 @@ use crate::*;
 // MCP spec-compliant session header name
 const MCP_SESSION_ID_HEADER: &str = "Mcp-Session-Id";
 
-/// Extract session ID from request headers, checking both spec-compliant and legacy headers.
-/// Prefers MCP_SESSION_ID_HEADER (spec-compliant) over HEADER_SESSION_ID (legacy).
+/// Extract session ID from request headers, checking both spec-compliant and deprecated headers.
+/// Prefers MCP_SESSION_ID_HEADER (spec-compliant) over HEADER_SESSION_ID (deprecated).
+/// Support for HEADER_SESSION_ID will be removed in Phase 3.
 fn get_session_id_from_headers(headers: &http::HeaderMap) -> Option<&str> {
 	headers
 		.get(MCP_SESSION_ID_HEADER)
-		.or_else(|| headers.get(HEADER_SESSION_ID))
+		.or_else(|| headers.get(HEADER_SESSION_ID)) // DEPRECATED: Remove in Phase 3
 		.and_then(|v| v.to_str().ok())
 }
 
@@ -158,7 +159,8 @@ impl StreamableHttpService {
 			// Phase 1: Return both headers for backwards compatibility
 			// Spec-compliant header (primary)
 			resp.headers_mut().insert(MCP_SESSION_ID_HEADER, sid.clone());
-			// Legacy header for existing clients/load balancers
+			// DEPRECATED: Legacy header for existing clients/load balancers
+			// TODO: Remove in Phase 3 after operators migrate to Mcp-Session-Id
 			resp.headers_mut().insert(HEADER_SESSION_ID, sid);
 		}
 		resp
