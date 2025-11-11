@@ -20,6 +20,19 @@ use crate::store::BackendPolicies;
 use crate::types::agent::SimpleBackend;
 use crate::{json, *};
 
+// MCP spec-compliant session header name
+const MCP_SESSION_ID_HEADER: &str = "Mcp-Session-Id";
+
+/// Extract session ID from response headers, checking both spec-compliant and legacy headers.
+/// Prefers MCP_SESSION_ID_HEADER (spec-compliant) over HEADER_SESSION_ID (legacy).
+fn get_session_id_from_headers(headers: &http::HeaderMap) -> Option<String> {
+	headers
+		.get(MCP_SESSION_ID_HEADER)
+		.or_else(|| headers.get(HEADER_SESSION_ID))
+		.and_then(|v| v.to_str().ok())
+		.map(|s| s.to_string())
+}
+
 #[derive(Clone, Debug)]
 pub struct Client {
 	backend: Arc<SimpleBackend>,
@@ -103,11 +116,7 @@ impl Client {
 		}
 
 		let content_type = resp.headers().get(CONTENT_TYPE);
-		let session_id = resp
-			.headers()
-			.get(HEADER_SESSION_ID)
-			.and_then(|v| v.to_str().ok())
-			.map(|s| s.to_string());
+		let session_id = get_session_id_from_headers(resp.headers());
 
 		match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
@@ -180,11 +189,7 @@ impl Client {
 		}
 
 		let content_type = resp.headers().get(CONTENT_TYPE);
-		let session_id = resp
-			.headers()
-			.get(HEADER_SESSION_ID)
-			.and_then(|v| v.to_str().ok())
-			.map(|s| s.to_string());
+		let session_id = get_session_id_from_headers(resp.headers());
 		match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
 				let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
@@ -199,8 +204,9 @@ impl Client {
 
 	fn maybe_insert_session_id(&self, req: &mut Request) -> Result<(), ClientError> {
 		if let Some(session_id) = self.session_id.load().clone() {
+			// Always send the spec-compliant header
 			req.headers_mut().insert(
-				HEADER_SESSION_ID,
+				MCP_SESSION_ID_HEADER,
 				session_id.as_ref().parse().map_err(ClientError::new)?,
 			);
 		}

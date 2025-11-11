@@ -12,6 +12,18 @@ use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
 use crate::*;
 
+// MCP spec-compliant session header name
+const MCP_SESSION_ID_HEADER: &str = "Mcp-Session-Id";
+
+/// Extract session ID from request headers, checking both spec-compliant and legacy headers.
+/// Prefers MCP_SESSION_ID_HEADER (spec-compliant) over HEADER_SESSION_ID (legacy).
+fn get_session_id_from_headers(headers: &http::HeaderMap) -> Option<&str> {
+	headers
+		.get(MCP_SESSION_ID_HEADER)
+		.or_else(|| headers.get(HEADER_SESSION_ID))
+		.and_then(|v| v.to_str().ok())
+}
+
 pub struct StreamableHttpService {
 	config: StreamableHttpServerConfig,
 	session_manager: Arc<SessionManager>,
@@ -109,10 +121,7 @@ impl StreamableHttpService {
 			return session.stateless_send_and_initialize(part, message).await;
 		}
 
-		let session_id = part
-			.headers
-			.get(HEADER_SESSION_ID)
-			.and_then(|v| v.to_str().ok());
+		let session_id = get_session_id_from_headers(&part.headers);
 		let (session, set_session_id) = if let Some(session_id) = session_id {
 			let Some(session) = self.session_manager.get_session(session_id) else {
 				return http_error(http::StatusCode::NOT_FOUND, "Session not found");
@@ -146,7 +155,8 @@ impl StreamableHttpService {
 			let Ok(sid) = session.id.parse() else {
 				return internal_error_response("create session id header");
 			};
-			resp.headers_mut().insert(HEADER_SESSION_ID, sid);
+			// Always return the spec-compliant header in responses
+			resp.headers_mut().insert(MCP_SESSION_ID_HEADER, sid);
 		}
 		resp
 	}
@@ -165,11 +175,7 @@ impl StreamableHttpService {
 			);
 		}
 
-		let Some(session_id) = request
-			.headers()
-			.get(HEADER_SESSION_ID)
-			.and_then(|v| v.to_str().ok())
-		else {
+		let Some(session_id) = get_session_id_from_headers(request.headers()) else {
 			return http_error(StatusCode::UNPROCESSABLE_ENTITY, "Session ID is required");
 		};
 
@@ -183,11 +189,7 @@ impl StreamableHttpService {
 
 	pub async fn handle_delete(&self, request: Request) -> Response {
 		// check session id
-		let session_id = request
-			.headers()
-			.get(HEADER_SESSION_ID)
-			.and_then(|v| v.to_str().ok());
-		let Some(session_id) = session_id else {
+		let Some(session_id) = get_session_id_from_headers(request.headers()) else {
 			// unauthorized
 			return http_error(
 				StatusCode::UNAUTHORIZED,
