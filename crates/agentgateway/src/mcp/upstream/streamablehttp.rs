@@ -204,11 +204,12 @@ impl Client {
 
 	fn maybe_insert_session_id(&self, req: &mut Request) -> Result<(), ClientError> {
 		if let Some(session_id) = self.session_id.load().clone() {
-			// Always send the spec-compliant header
-			req.headers_mut().insert(
-				MCP_SESSION_ID_HEADER,
-				session_id.as_ref().parse().map_err(ClientError::new)?,
-			);
+			let header_value = session_id.as_ref().parse().map_err(ClientError::new)?;
+			// Phase 1: Send both headers for backwards compatibility
+			// Spec-compliant header (primary)
+			req.headers_mut().insert(MCP_SESSION_ID_HEADER, header_value.clone());
+			// Legacy header for existing servers
+			req.headers_mut().insert(HEADER_SESSION_ID, header_value);
 		}
 		Ok(())
 	}

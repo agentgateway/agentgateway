@@ -155,8 +155,11 @@ impl StreamableHttpService {
 			let Ok(sid) = session.id.parse() else {
 				return internal_error_response("create session id header");
 			};
-			// Always return the spec-compliant header in responses
-			resp.headers_mut().insert(MCP_SESSION_ID_HEADER, sid);
+			// Phase 1: Return both headers for backwards compatibility
+			// Spec-compliant header (primary)
+			resp.headers_mut().insert(MCP_SESSION_ID_HEADER, sid.clone());
+			// Legacy header for existing clients/load balancers
+			resp.headers_mut().insert(HEADER_SESSION_ID, sid);
 		}
 		resp
 	}
