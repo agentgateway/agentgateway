@@ -334,6 +334,11 @@ impl Connector {
 					ep
 				);
 
+				// Fetch the pool once and reuse throughout this branch
+				let pool = self.hbone_pool.as_ref().ok_or_else(|| {
+					crate::http::Error::new(anyhow::anyhow!("hbone pool required for double hbone"))
+				})?;
+
 				// Create outer HBONE connection to network gateway
 				// The outer HBONE CONNECT request uses the service hostname (target) as the authority
 				// This tells the gateway what service we want to reach
@@ -358,12 +363,9 @@ impl Connector {
 					dst_id: vec![gateway_identity.clone()],
 					dst: gateway_address,
 				});
-				let mut pool = self
-					.hbone_pool
-					.clone()
-					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
+				let mut pool_clone = pool.clone();
 
-				let outer_upgraded = Box::pin(pool.send_request_pooled(&outer_pool_key, outer_req))
+				let outer_upgraded = Box::pin(pool_clone.send_request_pooled(&outer_pool_key, outer_req))
 					.await
 					.map_err(crate::http::Error::new)?;
 
@@ -381,11 +383,6 @@ impl Connector {
 					dst_id: vec![waypoint_identity.clone()],
 					dst: ep,
 				};
-
-				// Fetch certs and establish inner TLS connection.
-				let pool = self.hbone_pool.as_ref().ok_or_else(|| {
-					crate::http::Error::new(anyhow::anyhow!("hbone pool required for double hbone"))
-				})?;
 
 				// Use the pool's certificate fetcher to get TLS config for the waypoint
 				let tls_config = pool
@@ -409,13 +406,7 @@ impl Connector {
 
 				// Spawn inner CONNECT tunnel
 				let (drain_tx, drain_rx) = tokio::sync::watch::channel(false);
-				let hbone_cfg = self
-					.hbone_pool
-					.as_ref()
-					.ok_or_else(|| {
-						crate::http::Error::new(anyhow::anyhow!("hbone pool required for double hbone"))
-					})?
-					.config();
+				let hbone_cfg = pool.config();
 				let mut sender =
 					agent_hbone::client::spawn_connection(hbone_cfg, tls_stream, drain_rx, wl_key)
 						.await
