@@ -155,6 +155,12 @@ async fn apply_request_policies(
 	if let Some(r) = &policies.url_rewrite {
 		r.apply(req).map_err(ProxyError::from)?;
 	}
+	if let Some(ip_allowlist) = &policies.ip_allowlist {
+		ip_allowlist
+			.apply(req)
+			.map_err(ProxyError::from)?
+			.apply(response_policies.headers())?;
+	}
 	if let Some(c) = &policies.cors {
 		c.apply(req)
 			.map_err(ProxyError::from)?
