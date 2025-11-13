@@ -21,7 +21,7 @@ use crate::types::agent::{SimpleBackendReference, TracingConfig};
 pub struct Tracer {
 	pub tracer: Arc<opentelemetry_sdk::trace::SdkTracer>,
 	pub provider: SdkTracerProvider,
-	pub fields: LoggingFields,
+	pub fields: Arc<LoggingFields>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Copy, Eq, PartialEq, Clone, Debug)]
@@ -95,7 +95,7 @@ impl Tracer {
 		Ok(Some(Tracer {
 			tracer: Arc::new(tracer),
 			provider: result,
-			fields: cfg.fields.clone(),
+			fields: Arc::new(cfg.fields.clone()),
 		}))
 	}
 
@@ -140,12 +140,13 @@ impl Tracer {
 			})
 			.build();
 
+		// TODO: Make tracer name configurable
 		let tracer = result.tracer("agentgateway");
 
 		Ok(Tracer {
 			tracer: Arc::new(tracer),
 			provider: result,
-			fields: (*fields).clone(),
+			fields,
 		})
 	}
 

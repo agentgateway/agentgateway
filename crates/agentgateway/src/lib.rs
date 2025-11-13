@@ -436,7 +436,7 @@ pub struct ProxyInputs {
 	upstream: client::Client,
 
 	metrics: Arc<metrics::Metrics>,
-	tracer: Option<trc::Tracer>,
+	tracer: Option<std::sync::Arc<trc::Tracer>>,
 
 	mcp_state: mcp::App,
 	ca: Option<Arc<CaClient>>,

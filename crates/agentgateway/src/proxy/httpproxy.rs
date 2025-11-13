@@ -536,12 +536,12 @@ impl HTTPProxy {
 			log.tracer = frontend_policies
 				.tracing
 				.as_ref()
-				.map(|tp| (*tp.tracer).clone())
+				.map(|tp| tp.tracer.clone())
 				.or(self.inputs.tracer.clone());
 
 			// Register CEL expressions from the tracer
 			if let Some(tracer) = &log.tracer {
-				log.cel.register(&tracer.fields);
+				log.cel.register(tracer.fields.as_ref());
 			}
 		}
 
