@@ -309,7 +309,9 @@ impl AIProvider {
 				Ok(())
 			}),
 			AIProvider::Vertex(provider) => {
-				let path = provider.get_path_for_model();
+				let request_model = llm_request.map(|l| l.request_model.as_str());
+				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
+				let path = provider.get_path_for_model(request_model, streaming);
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
@@ -628,7 +630,12 @@ impl AIProvider {
 			}
 		}
 
+		let request_model = llm_info.request_model.as_str();
 		let new_request = match self {
+			AIProvider::Vertex(provider) if provider.is_anthropic_model(Some(request_model)) => {
+				let body = req.to_anthropic()?;
+				provider.prepare_anthropic_request_body(body)?
+			},
 			AIProvider::OpenAI(_)
 			| AIProvider::Gemini(_)
 			| AIProvider::Vertex(_)
@@ -759,12 +766,17 @@ impl AIProvider {
 		status: StatusCode,
 		bytes: &Bytes,
 	) -> Result<Result<Box<dyn ResponseType>, ChatCompletionErrorResponse>, AIError> {
+		let request_model = req.request_model.as_str();
 		if status.is_success() {
 			let resp = match self {
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::Vertex(_)
-				| AIProvider::AzureOpenAI(_) => {
+				AIProvider::Vertex(provider) => {
+					if provider.is_anthropic_model(Some(request_model)) {
+						anthropic::process_response(bytes, req.input_format)?
+					} else {
+						universal::passthrough::process_response(bytes, req.input_format)?
+					}
+				},
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_) => {
 					universal::passthrough::process_response(bytes, req.input_format)?
 				},
 				AIProvider::Anthropic(_) => anthropic::process_response(bytes, req.input_format)?,
@@ -775,9 +787,16 @@ impl AIProvider {
 			Ok(Ok(resp))
 		} else {
 			let openai_response = match self {
+				AIProvider::Vertex(provider) => {
+					if provider.is_anthropic_model(Some(request_model)) {
+						let anthropic_provider = anthropic::Provider { model: None };
+						anthropic_provider.process_error(bytes)?
+					} else {
+						provider.process_error(bytes)?
+					}
+				},
 				AIProvider::OpenAI(p) => p.process_error(bytes)?,
 				AIProvider::Gemini(p) => p.process_error(bytes)?,
-				AIProvider::Vertex(p) => p.process_error(bytes)?,
 				AIProvider::Anthropic(p) => p.process_error(bytes)?,
 				AIProvider::Bedrock(p) => p.process_error(bytes)?,
 				AIProvider::AzureOpenAI(p) => p.process_error(bytes)?,
