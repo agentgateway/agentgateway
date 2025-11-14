@@ -483,8 +483,46 @@ impl HTTPProxy {
 
 		let trace_parent = trc::TraceParent::from_request(&req);
 		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
+
+		let selected_listener = selected_listener
+			.or_else(|| listeners.best_match(&host))
+			.ok_or(ProxyError::ListenerNotFound)?;
+		log.bind_name = Some(bind_name.clone());
+		log.gateway_name = Some(selected_listener.gateway_name.clone());
+		log.listener_name = Some(selected_listener.name.clone());
+
+		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
+
+		// Get frontend policies for dynamic tracing
+		let frontend_policies = inputs
+			.stores
+			.read_binds()
+			.frontend_policies(selected_listener.gateway_name.clone());
+
+		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
 		if trace_sampled {
-			log.tracer = self.inputs.tracer.clone();
+			log.tracer = frontend_policies
+				.tracing
+				.as_ref()
+				.map(|tp| {
+					debug!(
+						service_name=%tp.config.service_name,
+						attrs_count=%tp.config.attributes.len(),
+						"Using dynamic tracer from frontend policy"
+					);
+					tp.tracer.clone()
+				})
+				.or_else(|| {
+					debug!("No frontend tracing policy found, using static tracer");
+					self.inputs.tracer.clone()
+				});
+
+			// Register CEL expressions from the tracer
+			if let Some(tracer) = &log.tracer {
+				log.cel.register(tracer.fields.as_ref());
+			}
+
+			// Now create outgoing span with the correct tracer already set
 			let ns = match trace_parent {
 				Some(tp) => {
 					// Build a new span off the existing trace
@@ -502,47 +540,6 @@ impl HTTPProxy {
 			ns.insert_header(&mut req);
 			req.extensions_mut().insert(ns.clone());
 			log.outgoing_span = Some(ns);
-		}
-
-		let selected_listener = selected_listener
-			.or_else(|| listeners.best_match(&host))
-			.ok_or(ProxyError::ListenerNotFound)?;
-		log.bind_name = Some(bind_name.clone());
-		log.gateway_name = Some(selected_listener.gateway_name.clone());
-		log.listener_name = Some(selected_listener.name.clone());
-
-		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
-
-		// Get frontend policies for dynamic tracing
-		debug!(gateway=%selected_listener.gateway_name, "Looking up frontend policies");
-		let frontend_policies = inputs
-			.stores
-			.read_binds()
-			.frontend_policies(selected_listener.gateway_name.clone());
-
-		// Debug: Check if tracing policy is found
-		if let Some(tp) = &frontend_policies.tracing {
-			debug!(
-				service_name=%tp.config.service_name,
-				attrs_count=%tp.config.attributes.len(),
-				"Using dynamic tracer from frontend policy"
-			);
-		} else {
-			debug!("No frontend tracing policy found, using static tracer");
-		}
-
-		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
-		if trace_sampled {
-			log.tracer = frontend_policies
-				.tracing
-				.as_ref()
-				.map(|tp| tp.tracer.clone())
-				.or(self.inputs.tracer.clone());
-
-			// Register CEL expressions from the tracer
-			if let Some(tracer) = &log.tracer {
-				log.cel.register(tracer.fields.as_ref());
-			}
 		}
 
 		let mut gateway_policies = inputs.stores.read_binds().gateway_policies(
