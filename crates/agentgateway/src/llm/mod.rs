@@ -789,15 +789,14 @@ impl AIProvider {
 			let openai_response = match self {
 				AIProvider::Vertex(provider) => {
 					if provider.is_anthropic_model(Some(request_model)) {
-						let anthropic_provider = anthropic::Provider { model: None };
-						anthropic_provider.process_error(bytes)?
+						anthropic::process_error(bytes)?
 					} else {
 						provider.process_error(bytes)?
 					}
 				},
 				AIProvider::OpenAI(p) => p.process_error(bytes)?,
 				AIProvider::Gemini(p) => p.process_error(bytes)?,
-				AIProvider::Anthropic(p) => p.process_error(bytes)?,
+				AIProvider::Anthropic(_) => anthropic::process_error(bytes)?,
 				AIProvider::Bedrock(p) => p.process_error(bytes)?,
 				AIProvider::AzureOpenAI(p) => p.process_error(bytes)?,
 			};

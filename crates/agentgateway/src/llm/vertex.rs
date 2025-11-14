@@ -57,15 +57,9 @@ impl Provider {
 		&self,
 		bytes: &Bytes,
 	) -> Result<universal::ChatCompletionErrorResponse, AIError> {
-		match serde_json::from_slice::<universal::ChatCompletionErrorResponse>(bytes) {
-			Ok(resp) => Ok(resp),
-			Err(_) => {
-				let anthropic_error =
-					serde_json::from_slice::<anthropic::types::MessagesErrorResponse>(bytes)
-						.map_err(AIError::ResponseParsing)?;
-				anthropic::translate_error(anthropic_error)
-			},
-		}
+		let resp = serde_json::from_slice::<universal::ChatCompletionErrorResponse>(bytes)
+			.map_err(AIError::ResponseParsing)?;
+		Ok(resp)
 	}
 	pub fn get_path_for_model(&self, request_model: Option<&str>, streaming: bool) -> Strng {
 		let location = self

@@ -47,15 +47,12 @@ impl Provider {
 			},
 		}
 	}
+}
 
-	pub fn process_error(
-		&self,
-		bytes: &Bytes,
-	) -> Result<universal::ChatCompletionErrorResponse, AIError> {
-		let resp =
-			serde_json::from_slice::<MessagesErrorResponse>(bytes).map_err(AIError::ResponseParsing)?;
-		translate_error(resp)
-	}
+pub fn process_error(bytes: &Bytes) -> Result<universal::ChatCompletionErrorResponse, AIError> {
+	let resp =
+		serde_json::from_slice::<MessagesErrorResponse>(bytes).map_err(AIError::ResponseParsing)?;
+	translate_error(resp)
 }
 
 pub fn process_response(
