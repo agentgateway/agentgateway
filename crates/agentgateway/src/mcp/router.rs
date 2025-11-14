@@ -86,13 +86,8 @@ impl App {
 						.backend()
 						.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, &pi))
 						.transpose()?;
-					let inline_pols = if let Some((_, pol)) = &be {
-						&[pol.as_slice()][..]
-					} else {
-						&[]
-					};
-					let backend_policies =
-						binds.backend_policies(None, None, Some(t.name.clone()), inline_pols, None, None);
+					let inline_pols = be.as_ref().map(|pol| pol.1.as_slice());
+					let backend_policies = binds.sub_backend_policies(t.name.clone(), inline_pols);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),

@@ -30,6 +30,7 @@ use crate::llm::{LLMRequest, RequestResult, RouteType};
 use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
+	RoutePath,
 };
 use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
@@ -541,15 +542,17 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
-		let mut route_policies = {
-			inputs.stores.read_binds().route_policies(
-				selected_route.rule_name.clone(),
-				selected_route.route_name.clone(),
-				selected_listener.key.clone(),
-				selected_listener.gateway_name.clone(),
-				&selected_route.inline_policies,
-			)
+		let route_path = RoutePath {
+			route_rule: selected_route.rule_name.clone(),
+			route: selected_route.route_name.clone(),
+			listener: selected_listener.key.clone(),
+			gateway: selected_listener.gateway_name.clone(),
 		};
+
+		let mut route_policies = inputs
+			.stores
+			.read_binds()
+			.route_policies(route_path.clone(), &selected_route.inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
@@ -584,8 +587,7 @@ impl HTTPProxy {
 			self.inputs.as_ref(),
 			&selected_backend.backend,
 			&selected_backend.inline_policies,
-			Some(selected_route.route_name.clone()),
-			Some(selected_listener.gateway_name.clone()),
+			Some(route_path.clone()),
 		);
 		log.backend_info = Some(selected_backend.backend.backend.backend_info());
 		if let Some(bp) = selected_backend.backend.backend.backend_protocol() {
@@ -868,8 +870,7 @@ fn get_backend_policies(
 	inputs: &ProxyInputs,
 	backend: &BackendWithPolicies,
 	inline_policies: &[BackendPolicy],
-	route: Option<RouteName>,
-	gateway: Option<GatewayName>,
+	path: Option<RoutePath>,
 ) -> BackendPolicies {
 	let service = match &backend.backend {
 		Backend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
@@ -877,12 +878,15 @@ fn get_backend_policies(
 	};
 
 	inputs.stores.read_binds().backend_policies(
-		Some(backend.backend.name()),
+		backend.backend.name(),
 		service,
-		None,
+		// Precedence: Selector < Backend inline < backendRef inline
+		// Note this differs from the logical chain of objects (Route -> backendRef -> backend),
+		// because a backendRef is actually more specific: its one *specific usage* of the backend.
+		// For example, we may say to use TLS for a Backend, but in a specific TLSRoute backendRef we disable
+		// as it is already TLS.
 		&[&backend.inline_policies, inline_policies],
-		route,
-		gateway,
+		path,
 	)
 }
 
@@ -914,14 +918,10 @@ async fn make_backend_call(
 				// The typical MCP flow will apply the top level Backend policies as default_policies
 				// When we passthrough, we should preserve this behavior.
 				let target_name = target.name();
-				let policies = inputs.stores.read_binds().backend_policies(
-					None,
-					None,
-					Some(target_name),
-					&[&inline_policies],
-					None,
-					None,
-				);
+				let policies = inputs
+					.stores
+					.read_binds()
+					.sub_backend_policies(target_name, Some(&inline_policies));
 
 				(&Backend::from(target), base_policies.merge(policies))
 			} else {
@@ -948,11 +948,10 @@ async fn make_backend_call(
 			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
 			let k = strng::format!("{}/{}", n, provider.name);
-			let sub_backend_policies =
-				inputs
-					.stores
-					.read_binds()
-					.backend_policies(None, None, Some(k), &[], None, None);
+			let sub_backend_policies = inputs
+				.stores
+				.read_binds()
+				.sub_backend_policies(k, Some(&provider.inline_policies));
 
 			let (target, provider_defaults) = match &provider.host_override {
 				Some(target) => (
@@ -1547,7 +1546,7 @@ impl PolicyClient {
 	}
 	pub async fn call(&self, req: Request, backend: SimpleBackend) -> Result<Response, ProxyError> {
 		let backend = Backend::from(backend).into();
-		let pols = get_backend_policies(&self.inputs, &backend, &[], None, None);
+		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
 		make_backend_call(
 			self.inputs.clone(),
 			Arc::new(LLMRequestPolicies::default()),
@@ -1580,13 +1579,7 @@ impl PolicyClient {
 		defaults: BackendPolicies,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
 		let backend = Backend::from(backend.clone()).into();
-		let pols = defaults.merge(get_backend_policies(
-			&self.inputs,
-			&backend,
-			&[],
-			None,
-			None,
-		));
+		let pols = defaults.merge(get_backend_policies(&self.inputs, &backend, &[], None));
 		Box::pin(async move {
 			make_backend_call(
 				self.inputs.clone(),

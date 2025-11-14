@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, httpproxy};
-use crate::store::BackendPolicies;
+use crate::store::{BackendPolicies, RoutePath};
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
@@ -91,11 +91,19 @@ impl TCPProxy {
 		log.route_rule_name = selected_route.rule_name.clone();
 		log.route_name = Some(selected_route.route_name.clone());
 
+		let route_path = RoutePath {
+			route_rule: selected_route.rule_name.clone(),
+			route: selected_route.route_name.clone(),
+			listener: selected_listener.key.clone(),
+			gateway: selected_listener.gateway_name.clone(),
+		};
+
+
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 		let selected_backend =
 			select_tcp_backend(selected_route.as_ref()).ok_or(ProxyError::NoValidBackends)?;
 		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
-		let backend_policies = get_backend_policies(&self.inputs, &selected_backend.backend);
+		let backend_policies = get_backend_policies(&self.inputs, &selected_backend.backend, route_path);
 
 		let backend_call = match &selected_backend.backend {
 			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
@@ -194,7 +202,7 @@ fn resolve_backend(
 	})
 }
 
-pub fn get_backend_policies(inputs: &ProxyInputs, backend: &SimpleBackend) -> BackendPolicies {
+pub fn get_backend_policies(inputs: &ProxyInputs, backend: &SimpleBackend, route_path: RoutePath) -> BackendPolicies {
 	let service = match backend {
 		SimpleBackend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
 		_ => None,
@@ -203,5 +211,5 @@ pub fn get_backend_policies(inputs: &ProxyInputs, backend: &SimpleBackend) -> Ba
 	inputs
 		.stores
 		.read_binds()
-		.backend_policies(Some(backend.name()), service, None, &[], None, None)
+		.backend_policies(backend.name(), service, &[], Some(route_path))
 }

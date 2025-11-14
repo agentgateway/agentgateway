@@ -255,6 +255,16 @@ impl Default for Store {
 		Self::new()
 	}
 }
+
+// RoutePath describes the objects traversed to reach the given route
+#[derive(Debug, Clone)]
+pub struct RoutePath {
+	pub gateway: GatewayName,
+	pub listener: ListenerKey,
+	pub route: RouteName,
+	pub route_rule: Option<RouteRuleName>,
+}
+
 impl Store {
 	pub fn new() -> Self {
 		let (tx, _) = tokio::sync::broadcast::channel(1000);
@@ -276,27 +286,25 @@ impl Store {
 		tokio_stream::wrappers::BroadcastStream::new(sub)
 	}
 
-	pub fn route_policies(
-		&self,
-		route_rule: Option<RouteRuleName>,
-		route: RouteName,
-		listener: ListenerKey,
-		gateway: GatewayName,
-		inline: &[TrafficPolicy],
-	) -> RoutePolicies {
+	pub fn route_policies(&self, path: RoutePath, inline: &[TrafficPolicy]) -> RoutePolicies {
 		// Changes we must do:
 		// * Index the store by the target
 		// * Avoid the N lookups, or at least the boilerplate, for each type
 		// Changes we may want to consider:
 		// * We do this lookup under one lock, but we will lookup backend rules and listener rules under a different
 		//   lock. This can lead to inconsistent state..
-		let gateway = self.policies_by_target.get(&PolicyTarget::Gateway(gateway));
+		let gateway = self
+			.policies_by_target
+			.get(&PolicyTarget::Gateway(path.gateway));
 		let listener = self
 			.policies_by_target
-			.get(&PolicyTarget::Listener(listener));
-		let route = self.policies_by_target.get(&PolicyTarget::Route(route));
-		let route_rule =
-			route_rule.and_then(|rr| self.policies_by_target.get(&PolicyTarget::RouteRule(rr)));
+			.get(&PolicyTarget::Listener(path.listener));
+		let route = self
+			.policies_by_target
+			.get(&PolicyTarget::Route(path.route));
+		let route_rule = path
+			.route_rule
+			.and_then(|rr| self.policies_by_target.get(&PolicyTarget::RouteRule(rr)));
 		let rules = route_rule
 			.iter()
 			.copied()
@@ -434,15 +442,58 @@ impl Store {
 
 		pol
 	}
-
+	// sub_backend_policies looks up the sub-backends policies. Generally, these will be queried separately
+	// from the primary backend policies and then merged, just due to the lifecycle of when the sub-backend
+	// is selected.
+	pub fn sub_backend_policies(
+		&self,
+		sub_backend: SubBackendName,
+		inline_policies: Option<&[BackendPolicy]>,
+	) -> BackendPolicies {
+		self.internal_backend_policies(
+			None,
+			None,
+			Some(sub_backend),
+			if let Some(s) = &inline_policies {
+				std::slice::from_ref(&s)
+			} else {
+				&[]
+			},
+			None,
+			None,
+			None,
+			None,
+		)
+	}
 	pub fn backend_policies(
+		&self,
+		backend: BackendName,
+		service: Option<ServiceName>,
+		inline_policies: &[&[BackendPolicy]],
+		path: Option<RoutePath>,
+	) -> BackendPolicies {
+		self.internal_backend_policies(
+			Some(backend),
+			service,
+			None,
+			inline_policies,
+			path.as_ref().map(|p| p.gateway.clone()),
+			path.as_ref().map(|p| p.listener.clone()),
+			path.as_ref().map(|p| p.route.clone()),
+			path.as_ref().and_then(|p| p.route_rule.clone()),
+		)
+	}
+
+	fn internal_backend_policies(
 		&self,
 		backend: Option<BackendName>,
 		service: Option<ServiceName>,
 		sub_backend: Option<SubBackendName>,
 		inline_policies: &[&[BackendPolicy]],
-		route: Option<RouteName>,
 		gateway: Option<GatewayName>,
+		listener: Option<ListenerKey>,
+		route: Option<RouteName>,
+		route_rule: Option<RouteRuleName>,
 	) -> BackendPolicies {
 		let backend_rules =
 			backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::Backend(t)));
@@ -450,19 +501,25 @@ impl Store {
 			service.and_then(|t| self.policies_by_target.get(&PolicyTarget::Service(t)));
 		let sub_backend_rules =
 			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::SubBackend(t)));
+		let route_rule_rules =
+			route_rule.and_then(|t| self.policies_by_target.get(&PolicyTarget::RouteRule(t)));
 		let route_rules = route.and_then(|t| self.policies_by_target.get(&PolicyTarget::Route(t)));
+		let listener_rules =
+			listener.and_then(|t| self.policies_by_target.get(&PolicyTarget::Listener(t)));
 		let gateway_rules =
 			gateway.and_then(|t| self.policies_by_target.get(&PolicyTarget::Gateway(t)));
 
-		// Route > SubBackend > Backend > Service > Gateway
+		// RouteRule > Route > SubBackend > Backend > Service > Gateway
 		// Most specific (route context) to least specific (gateway-wide default)
-		let rules = route_rules
+		let rules = route_rule_rules
 			.iter()
 			.copied()
 			.flatten()
 			.chain(sub_backend_rules.iter().copied().flatten())
+			.chain(route_rules.iter().copied().flatten())
 			.chain(backend_rules.iter().copied().flatten())
 			.chain(service_rules.iter().copied().flatten())
+			.chain(listener_rules.iter().copied().flatten())
 			.chain(gateway_rules.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_name.get(n))
 			.filter_map(|p| p.policy.as_backend());

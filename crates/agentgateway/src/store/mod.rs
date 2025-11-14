@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 pub use binds::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
-	RoutePolicies, Store as BindStore,
+	RoutePolicies, Store as BindStore, RoutePath,
 };
 use serde::{Serialize, Serializer};
 mod discovery;
