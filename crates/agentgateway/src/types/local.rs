@@ -1226,7 +1226,7 @@ async fn split_policies(
 			failure_mode,
 			include_request_headers: vec![],
 			include_request_body: p.include_request_body.map(Into::into),
-			timeout: None,
+			timeout: p.timeout,
 		};
 		backend
 			.into_iter()
@@ -1452,6 +1452,14 @@ pub struct LocalExtAuthz {
 	/// Options for including the request body in the authorization request
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub include_request_body: Option<LocalBodyOptions>,
+	/// Timeout for the authorization request (default: 200ms)
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub timeout: Option<Duration>,
 }
 
 #[apply(schema_de!)]
