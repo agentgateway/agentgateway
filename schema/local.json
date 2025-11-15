@@ -2673,6 +2673,13 @@
                                       }
                                     },
                                     "additionalProperties": false
+                                  },
+                                  "timeout": {
+                                    "description": "Timeout for the authorization request (default: 200ms)",
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
                                   }
                                 },
                                 "unevaluatedProperties": false,
@@ -7695,6 +7702,13 @@
                                 }
                               },
                               "additionalProperties": false
+                            },
+                            "timeout": {
+                              "description": "Timeout for the authorization request (default: 200ms)",
+                              "type": [
+                                "string",
+                                "null"
+                              ]
                             }
                           },
                           "unevaluatedProperties": false,
@@ -10322,6 +10336,13 @@
                           }
                         },
                         "additionalProperties": false
+                      },
+                      "timeout": {
+                        "description": "Timeout for the authorization request (default: 200ms)",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       }
                     },
                     "unevaluatedProperties": false,

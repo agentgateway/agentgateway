@@ -310,6 +310,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
 |`binds[].listeners[].routes[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name`||
@@ -863,6 +864,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
 |`binds[].listeners[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].policies.extProc.(any)(1)service.name`||
@@ -1147,6 +1149,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`policies[].policy.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`policies[].policy.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
 |`policies[].policy.extProc`|Extend agentgateway with an external processor|
 |`policies[].policy.extProc.(any)(1)service`||
 |`policies[].policy.extProc.(any)(1)service.name`||
