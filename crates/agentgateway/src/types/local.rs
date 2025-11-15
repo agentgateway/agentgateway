@@ -291,11 +291,11 @@ impl LocalBackend {
 						let bb = BackendWithPolicies {
 							backend: b,
 							inline_policies: if tls {
-								vec![]
-							} else {
 								vec![BackendPolicy::BackendTLS(
 									LocalBackendTLS::default().try_into()?,
 								)]
+							} else {
+								vec![]
 							},
 						};
 						backends.push(bb);
