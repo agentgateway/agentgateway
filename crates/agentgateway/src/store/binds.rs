@@ -455,7 +455,7 @@ impl Store {
 			None,
 			Some(sub_backend),
 			if let Some(s) = &inline_policies {
-				std::slice::from_ref(&s)
+				std::slice::from_ref(s)
 			} else {
 				&[]
 			},
@@ -484,6 +484,7 @@ impl Store {
 		)
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	fn internal_backend_policies(
 		&self,
 		backend: Option<BackendName>,

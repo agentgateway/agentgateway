@@ -98,12 +98,12 @@ impl TCPProxy {
 			gateway: selected_listener.gateway_name.clone(),
 		};
 
-
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 		let selected_backend =
 			select_tcp_backend(selected_route.as_ref()).ok_or(ProxyError::NoValidBackends)?;
 		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
-		let backend_policies = get_backend_policies(&self.inputs, &selected_backend.backend, route_path);
+		let backend_policies =
+			get_backend_policies(&self.inputs, &selected_backend.backend, route_path);
 
 		let backend_call = match &selected_backend.backend {
 			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
@@ -202,7 +202,11 @@ fn resolve_backend(
 	})
 }
 
-pub fn get_backend_policies(inputs: &ProxyInputs, backend: &SimpleBackend, route_path: RoutePath) -> BackendPolicies {
+pub fn get_backend_policies(
+	inputs: &ProxyInputs,
+	backend: &SimpleBackend,
+	route_path: RoutePath,
+) -> BackendPolicies {
 	let service = match backend {
 		SimpleBackend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
 		_ => None,
