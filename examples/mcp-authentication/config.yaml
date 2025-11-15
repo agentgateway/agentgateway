@@ -30,8 +30,9 @@ binds:
           - '*'
         mcpAuthentication:
           issuer: http://localhost:9000
-          jwksUrl: http://localhost:9000/.well-known/jwks.json
           audience: http://localhost:3000/stdio/mcp
+          jwks:
+            url: http://localhost:9000/.well-known/jwks.json
           resourceMetadata:
             resource: http://localhost:3000/stdio/mcp
             scopesSupported:
@@ -65,8 +66,9 @@ binds:
           - '*'
         mcpAuthentication:
           issuer: http://localhost:9000
-          jwksUrl: http://localhost:9000/.well-known/jwks.json
           audience: http://localhost:3000/remote/mcp
+          jwks:
+            url: http://localhost:9000/.well-known/jwks.json
           resourceMetadata:
             resource: http://localhost:3000/remote/mcp
             scopesSupported:
@@ -108,8 +110,9 @@ binds:
           - '*'
         mcpAuthentication:
           issuer: http://localhost:7080/realms/mcp
-          jwksUrl: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
           audience: mcp_proxy
+          jwks:
+            url: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
           provider:
             keycloak: {}
           resourceMetadata:
@@ -150,8 +153,9 @@ binds:
     #       - '*'
     #     mcpAuthentication:
     #       issuer: https://dev-y6sikgx3n3shy7ci.eu.auth0.com
-    #       jwksUrl: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
     #       audience: urn:agent-gateway
+    #       jwks:
+    #         url: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
     #       provider:
     #         auth0: {}
     #       resourceMetadata:

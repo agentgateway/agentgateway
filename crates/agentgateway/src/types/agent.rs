@@ -1228,20 +1228,20 @@ impl ResourceMetadata {
 pub struct McpAuthentication {
 	pub issuer: String,
 	pub audience: String,
-	pub jwks_url: String,
 	pub provider: Option<McpIDP>,
 	pub resource_metadata: ResourceMetadata,
+	#[serde(skip_serializing)]
+	pub jwks: FileInlineOrRemote,
+	#[serde(skip)]
+	pub jwt_validator: Option<Arc<crate::http::jwt::Jwt>>,
 }
 
 impl McpAuthentication {
 	pub fn as_jwt(&self) -> anyhow::Result<http::jwt::LocalJwtConfig> {
-		Ok(http::jwt::LocalJwtConfig::Single {
-			mode: http::jwt::Mode::Optional,
-			issuer: self.issuer.clone(),
-			audiences: Some(vec![self.audience.clone()]),
-			jwks: FileInlineOrRemote::Remote {
-				url: if !self.jwks_url.is_empty() {
-					self.jwks_url.parse()?
+		let jwks = match &self.jwks {
+			FileInlineOrRemote::Remote { url } => FileInlineOrRemote::Remote {
+				url: if !url.to_string().is_empty() {
+					url.clone()
 				} else {
 					match &self.provider {
 						None | Some(McpIDP::Auth0 { .. }) => {
@@ -1250,10 +1250,17 @@ impl McpAuthentication {
 						Some(McpIDP::Keycloak { .. }) => {
 							format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
 						},
-						// Some(McpIDP::Keycloak { realm }) => format!("{}/realms/{realm}/protocol/openid-connect/certs", self.issuer).parse()?,
 					}
 				},
 			},
+			FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. } => self.jwks.clone(),
+		};
+
+		Ok(http::jwt::LocalJwtConfig::Single {
+			mode: http::jwt::Mode::Optional,
+			issuer: self.issuer.clone(),
+			audiences: Some(vec![self.audience.clone()]),
+			jwks,
 		})
 	}
 }
@@ -1306,7 +1313,7 @@ impl TryFrom<&str> for Target {
 
 	fn try_from(hostport: &str) -> Result<Self, Self::Error> {
 		let Some((host, port)) = hostport.split_once(":") else {
-			anyhow::bail!("invalid host:port: {}", hostport);
+			anyhow::bail!("invalid host:port: {hostport}");
 		};
 		let port: u16 = port.parse()?;
 		(host, port).try_into()

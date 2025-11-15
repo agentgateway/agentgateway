@@ -3,6 +3,10 @@ use std::sync::Arc;
 use agent_core::prelude::Strng;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum_core::RequestExt;
+use axum_extra::TypedHeader;
+use axum_extra::headers::Authorization;
+use axum_extra::headers::authorization::Bearer;
 use bytes::Bytes;
 use http::Method;
 use http::uri::PathAndQuery;
@@ -144,12 +148,37 @@ impl App {
 		// MCP context is added later
 		req.extensions_mut().insert(Arc::new(ctx));
 
-		// Check if authentication is required and JWT token is missing
-		if let Some(auth) = &authn
-			&& req.extensions().get::<Claims>().is_none()
-			&& !Self::is_well_known_endpoint(req.uri().path())
-		{
-			return Self::create_auth_required_response(&req, auth).into_response();
+		// skip well-known OAuth endpoints for authn
+		if !Self::is_well_known_endpoint(req.uri().path()) {
+			let has_claims = req.extensions().get::<Claims>().is_some();
+			let validator = authn.as_ref().and_then(|a| a.jwt_validator.as_ref());
+
+			match (authn.as_ref(), validator, has_claims) {
+				// if mcp authn is configured, has a validator, and has no claims yet, validate
+				(Some(auth), Some(validator), false) => {
+					if let Ok(TypedHeader(Authorization(bearer))) = req
+						.extract_parts::<TypedHeader<Authorization<Bearer>>>()
+						.await
+					{
+						match validator.validate_claims(bearer.token()) {
+							Ok(claims) => {
+								req.headers_mut().remove(http::header::AUTHORIZATION);
+								req.extensions_mut().insert(claims);
+							},
+							Err(_e) => {
+								return Self::create_auth_required_response(&req, auth).into_response();
+							},
+						}
+					}
+					// MCP authn validation happens in optional mode, so if no token is present, do nothing
+				},
+				// if mcp authn is configured, has no validator, and no claims, reject
+				(Some(auth), None, false) => {
+					return Self::create_auth_required_response(&req, auth).into_response();
+				},
+				// if no mcp authn is configured or JWT already validated (claims exist), do nothing
+				_ => {},
+			}
 		}
 
 		match (req.uri().path(), req.method(), authn) {

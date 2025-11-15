@@ -1164,9 +1164,6 @@
                               "audience": {
                                 "type": "string"
                               },
-                              "jwksUrl": {
-                                "type": "string"
-                              },
                               "provider": {
                                 "anyOf": [
                                   {
@@ -1207,14 +1204,44 @@
                               "resourceMetadata": {
                                 "type": "object",
                                 "additionalProperties": true
+                              },
+                              "jwks": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "file": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "file"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "url"
+                                    ]
+                                  }
+                                ],
+                                "writeOnly": true
                               }
                             },
                             "additionalProperties": false,
                             "required": [
                               "issuer",
                               "audience",
-                              "jwksUrl",
-                              "resourceMetadata"
+                              "resourceMetadata",
+                              "jwks"
                             ],
                             "default": null
                           },
@@ -8827,9 +8854,6 @@
                   "audience": {
                     "type": "string"
                   },
-                  "jwksUrl": {
-                    "type": "string"
-                  },
                   "provider": {
                     "anyOf": [
                       {
@@ -8870,14 +8894,44 @@
                   "resourceMetadata": {
                     "type": "object",
                     "additionalProperties": true
+                  },
+                  "jwks": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "file": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "file"
+                        ]
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    ],
+                    "writeOnly": true
                   }
                 },
                 "additionalProperties": false,
                 "required": [
                   "issuer",
                   "audience",
-                  "jwksUrl",
-                  "resourceMetadata"
+                  "resourceMetadata",
+                  "jwks"
                 ],
                 "default": null
               },

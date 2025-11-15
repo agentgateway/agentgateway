@@ -101,14 +101,42 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 			_ => None,
 		};
 
+		if m.jwks_inline.is_empty() {
+			return Err(ProtoError::Generic(
+				"MCP Authentication requires jwks_inline to be set. \
+				The control plane must fetch the JWKS and provide it as inline JSON."
+					.to_string(),
+			));
+		}
+		let jwks_json = m.jwks_inline.clone();
+
+		let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json).map_err(|e| {
+			ProtoError::Generic(format!("failed to parse JWKS for MCP Authentication: {e}"))
+		})?;
+
+		let audiences = Some(vec![m.audience.clone()]);
+		let jwt_provider = http::jwt::Provider::from_jwks(jwk_set, m.issuer.clone(), audiences)
+			.map_err(|e| {
+				ProtoError::Generic(format!(
+					"failed to create JWT provider for MCP Authentication: {e}"
+				))
+			})?;
+
+		// Create JWT validator with Optional mode (default for MCP auth)
+		let jwt_validator =
+			http::jwt::Jwt::from_providers(vec![jwt_provider], http::jwt::Mode::Optional);
+
+		let jwks = FileInlineOrRemote::Inline(jwks_json);
+
 		Ok(McpAuthentication {
 			issuer: m.issuer.clone(),
 			audience: m.audience.clone(),
-			jwks_url: m.jwks_url.clone(),
 			provider,
 			resource_metadata: ResourceMetadata {
 				extra: Default::default(),
 			},
+			jwks,
+			jwt_validator: Some(std::sync::Arc::new(jwt_validator)),
 		})
 	}
 }
@@ -1600,7 +1628,7 @@ mod tests {
 			// to verify the contents
 			Ok(())
 		} else {
-			panic!("Expected CSRF policy variant, got: {:?}", policy);
+			panic!("Expected CSRF policy variant, got: {policy:?}");
 		}
 	}
 
