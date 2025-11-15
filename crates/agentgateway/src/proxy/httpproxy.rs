@@ -1255,12 +1255,14 @@ async fn make_backend_call(
 		.map(|l| l.cel.cel_context.needs_llm_completion())
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
-	// Capture route type before moving call
-	let route_type = backend_call
+	// Bedrock count_tokens requires special response handling (no streaming, no logging)
+	let is_bedrock_count_tokens = backend_call
 		.backend_policies
 		.llm_provider
 		.as_ref()
-		.map(|llm| llm.resolve_route(call.req.uri().path()));
+		.map(|llm| matches!(llm.provider, crate::llm::AIProvider::Bedrock(_)))
+		.unwrap_or(false)
+		&& call.req.uri().path().ends_with("/count-tokens");
 	Ok(Box::pin(async move {
 		let mut resp = upstream.call(call).await?;
 		a2a::apply_to_response(
@@ -1270,9 +1272,7 @@ async fn make_backend_call(
 		)
 		.await
 		.map_err(ProxyError::Processing)?;
-		let mut resp = if let Some(rt) = route_type
-			&& rt == RouteType::AnthropicTokenCount
-		{
+		let mut resp = if is_bedrock_count_tokens {
 			// count_tokens has simpler response handling (no streaming, no logging)
 			crate::llm::bedrock::process_count_tokens_response(resp)
 				.await
