@@ -771,9 +771,7 @@ mod tests {
 				value: HeaderValueMatch::Exact(HeaderValue::from_static("test-value")),
 			},
 			HeaderMatch {
-				name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static(
-					"x-another-header",
-				)),
+				name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static("x-another-header")),
 				value: HeaderValueMatch::Exact(HeaderValue::from_static("wrong-value")),
 			},
 			HeaderMatch {
@@ -781,9 +779,7 @@ mod tests {
 				value: HeaderValueMatch::Regex(regex::Regex::new(r"regex-match-\d+").unwrap()),
 			},
 			HeaderMatch {
-				name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static(
-					"x-missing-header",
-				)),
+				name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static("x-missing-header")),
 				value: HeaderValueMatch::Exact(HeaderValue::from_static("some-value")),
 			},
 		];

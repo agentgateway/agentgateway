@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::http::{HeaderValue, Request};
+use crate::http::Request;
 use crate::types::agent;
 use crate::types::agent::{
 	BackendReference, HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, PathMatch,
@@ -149,30 +149,12 @@ pub fn select_best_route(
 				return false;
 			}
 			for HeaderMatch { name, value } in &m.headers {
-				// Get the header value, handling both regular headers and pseudo headers
-				let have = match name {
-					crate::http::HeaderOrPseudo::Header(header_name) => {
-						let Some(h) = request.headers().get(header_name.as_str()) else {
-							return false;
-						};
-						h.clone()
-					},
-					pseudo_header => {
-						let Some(pseudo_value) =
-							crate::http::get_pseudo_header_value(pseudo_header, request)
-						else {
-							return false;
-						};
-						// Convert the pseudo header value to HeaderValue
-						let Ok(h) = HeaderValue::try_from(pseudo_value) else {
-							return false;
-						};
-						h
-					},
+				let Some(have) = http::get_pseudo_or_header_value(name, request) else {
+					return false;
 				};
 				match value {
 					HeaderValueMatch::Exact(want) => {
-						if have != *want {
+						if have.as_ref() != *want {
 							return false;
 						}
 					},

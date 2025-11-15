@@ -120,6 +120,18 @@ impl std::fmt::Display for HeaderOrPseudo {
 	}
 }
 
+/// Extract the value for a pseudo header or header from the request
+pub fn get_pseudo_or_header_value<'a>(
+	pseudo: &HeaderOrPseudo,
+	req: &'a Request,
+) -> Option<std::borrow::Cow<'a, HeaderValue>> {
+	match pseudo {
+		HeaderOrPseudo::Header(v) => req.headers().get(v).map(std::borrow::Cow::Borrowed),
+		_ => get_pseudo_header_value(pseudo, req)
+			.and_then(|v| HeaderValue::try_from(&v).ok().map(std::borrow::Cow::Owned)),
+	}
+}
+
 /// Extract the value for a pseudo header from the request
 pub fn get_pseudo_header_value(pseudo: &HeaderOrPseudo, req: &Request) -> Option<String> {
 	match pseudo {

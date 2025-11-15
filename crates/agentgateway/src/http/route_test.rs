@@ -324,18 +324,14 @@ fn test_header_matching() {
 		(
 			"exact-header",
 			vec![HeaderMatch {
-				name: crate::http::HeaderOrPseudo::Header(
-					http::HeaderName::from_static("content-type"),
-				),
+				name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("content-type")),
 				value: HeaderValueMatch::Exact(http::HeaderValue::from_static("application/json")),
 			}],
 		),
 		(
 			"regex-header",
 			vec![HeaderMatch {
-				name: crate::http::HeaderOrPseudo::Header(
-					http::HeaderName::from_static("user-agent"),
-				),
+				name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("user-agent")),
 				value: HeaderValueMatch::Regex(Regex::new(r"^Mozilla/.*$").unwrap()),
 			}],
 		),
@@ -343,17 +339,11 @@ fn test_header_matching() {
 			"multiple-headers",
 			vec![
 				HeaderMatch {
-					name: crate::http::HeaderOrPseudo::Header(
-						http::HeaderName::from_static("content-type"),
-					),
-					value: HeaderValueMatch::Exact(http::HeaderValue::from_static(
-						"application/json",
-					)),
+					name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("content-type")),
+					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("application/json")),
 				},
 				HeaderMatch {
-					name: crate::http::HeaderOrPseudo::Header(
-						http::HeaderName::from_static("authorization"),
-					),
+					name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("authorization")),
 					value: HeaderValueMatch::Regex(Regex::new(r"^Bearer .*$").unwrap()),
 				},
 			],
@@ -472,9 +462,7 @@ fn test_pseudo_header_matching() {
 			vec![
 				HeaderMatch {
 					name: crate::http::HeaderOrPseudo::Authority,
-					value: HeaderValueMatch::Exact(http::HeaderValue::from_static(
-						"api.example.com",
-					)),
+					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("api.example.com")),
 				},
 				HeaderMatch {
 					name: crate::http::HeaderOrPseudo::Method,
@@ -733,17 +721,11 @@ fn test_route_precedence() {
 			None,
 			vec![
 				HeaderMatch {
-					name: crate::http::HeaderOrPseudo::Header(
-						http::HeaderName::from_static("content-type"),
-					),
-					value: HeaderValueMatch::Exact(http::HeaderValue::from_static(
-						"application/json",
-					)),
+					name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("content-type")),
+					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("application/json")),
 				},
 				HeaderMatch {
-					name: crate::http::HeaderOrPseudo::Header(
-						http::HeaderName::from_static("authorization"),
-					),
+					name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("authorization")),
 					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("Bearer token")),
 				},
 			],
@@ -754,9 +736,7 @@ fn test_route_precedence() {
 			PathMatch::PathPrefix("/api/".into()),
 			None,
 			vec![HeaderMatch {
-				name: crate::http::HeaderOrPseudo::Header(
-					http::HeaderName::from_static("content-type"),
-				),
+				name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("content-type")),
 				value: HeaderValueMatch::Exact(http::HeaderValue::from_static("application/json")),
 			}],
 		),

@@ -23,8 +23,7 @@ use serde_json::Value;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::RuleSet;
 use crate::http::{
-	HeaderName, HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit,
-	retry, timeout,
+	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
 };
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
