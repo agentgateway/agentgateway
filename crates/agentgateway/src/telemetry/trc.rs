@@ -144,6 +144,8 @@ impl Tracer {
 				&& let Some(serde_json::Value::String(s)) = v
 			{
 				span_name = Some(s);
+			} else if let Some(eval) = v.as_ref().map(ValueBag::capture_serde1) {
+				attributes.push(KeyValue::new(Key::new(k.to_string()), to_otel(&eval)));
 			}
 		}
 

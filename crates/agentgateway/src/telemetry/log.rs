@@ -22,7 +22,7 @@ use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
 use agent_core::metrics::CustomField;
 use agent_core::strng;
-use agent_core::strng::RichStrng;
+use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{OptionExt, ValueBag, debug, display};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
@@ -541,7 +541,7 @@ pub struct RequestLog {
 	pub host: Option<String>,
 	pub method: Option<::http::Method>,
 	pub path: Option<String>,
-	pub path_match: Option<String>,
+	pub path_match: Option<Strng>,
 	pub version: Option<::http::Version>,
 	pub status: Option<crate::http::StatusCode>,
 	pub reason: Option<ProxyResponseReason>,

@@ -533,9 +533,15 @@ impl HTTPProxy {
 		log.route_name = Some(selected_route.route_name.clone());
 		// Record the matched path for tracing/logging span names
 		log.path_match = Some(match &path_match {
-			PathMatch::Exact(p) => p.to_string(),
-			PathMatch::PathPrefix(p) => format!("{}/*", p),
-			PathMatch::Regex(r, _) => r.as_str().to_string(),
+			PathMatch::Exact(p) => p.clone(),
+			PathMatch::PathPrefix(p) => {
+				if p == "/" {
+					strng::literal!("/*")
+				} else {
+					strng::format!("{}/*", p)
+				}
+			},
+			PathMatch::Regex(r, _) => r.as_str().into(),
 		});
 		req.extensions_mut().insert(path_match);
 
