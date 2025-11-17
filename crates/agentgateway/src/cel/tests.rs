@@ -17,6 +17,148 @@ fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 	exec.eval(&exp)
 }
 
+// Test case structure: (expression, request builder function, expected JSON output)
+type TestCase = (&'static str, fn() -> crate::http::Request, serde_json::Value);
+
+// Comprehensive test cases to be used across multiple tests
+fn test_cases() -> Vec<TestCase> {
+	vec![
+		// Simple method access
+		(
+			r#"request.method"#,
+			|| {
+				::http::Request::builder()
+					.method(Method::GET)
+					.uri("http://example.com")
+					.body(Body::empty())
+					.unwrap()
+			},
+			serde_json::json!("GET"),
+		),
+		// Header access
+		(
+			r#"request.headers["x-custom"]"#,
+			|| {
+				::http::Request::builder()
+					.method(Method::GET)
+					.uri("http://example.com")
+					.header("x-custom", "test-value")
+					.body(Body::empty())
+					.unwrap()
+			},
+			serde_json::json!("test-value"),
+		),
+		// Boolean expression
+		(
+			r#"request.method == "POST" && request.headers["content-type"] == "application/json""#,
+			|| {
+				::http::Request::builder()
+					.method(Method::POST)
+					.uri("http://example.com")
+					.header("content-type", "application/json")
+					.body(Body::empty())
+					.unwrap()
+			},
+			serde_json::json!(true),
+		),
+		// String concatenation
+		(
+			r#""Method: " + request.method"#,
+			|| {
+				::http::Request::builder()
+					.method(Method::DELETE)
+					.uri("http://example.com")
+					.body(Body::empty())
+					.unwrap()
+			},
+			serde_json::json!("Method: DELETE"),
+		),
+		// URI path access
+		(
+			r#"request.path"#,
+			|| {
+				::http::Request::builder()
+					.method(Method::GET)
+					.uri("http://example.com/api/v1/users")
+					.body(Body::empty())
+					.unwrap()
+			},
+			serde_json::json!("/api/v1/users"),
+		),
+		// Complex boolean logic
+		(
+			r#"request.method == "GET" && request.path.startsWith("/api/")"#,
+			|| {
+				::http::Request::builder()
+					.method(Method::GET)
+					.uri("http://example.com/api/users")
+					.body(Body::empty())
+					.unwrap()
+			},
+			serde_json::json!(true),
+		),
+		// Conditional expression
+		(
+			r#"request.method == "POST" ? "write" : "read""#,
+			|| {
+				::http::Request::builder()
+					.method(Method::GET)
+					.uri("http://example.com")
+					.body(Body::empty())
+					.unwrap()
+			},
+			serde_json::json!("read"),
+		),
+		// Numeric comparison
+		(
+			r#"request.headers["x-priority"].toInt() > 5"#,
+			|| {
+				::http::Request::builder()
+					.method(Method::GET)
+					.uri("http://example.com")
+					.header("x-priority", "10")
+					.body(Body::empty())
+					.unwrap()
+			},
+			serde_json::json!(true),
+		),
+	]
+}
+
+// Comprehensive test that validates the full compile -> build -> eval flow
+#[test]
+fn test_comprehensive_cel_flow() {
+	for (expr_str, req_builder, expected_json) in test_cases() {
+		// Phase 1: Compile - parse the expression
+		let expr = Expression::new(expr_str)
+			.unwrap_or_else(|e| panic!("Failed to compile expression '{}': {}", expr_str, e));
+
+		// Phase 2: Build - set up context with request
+		let req = req_builder();
+		let mut cb = ContextBuilder::new();
+		cb.register_expression(&expr);
+		cb.with_request(&req, "".to_string());
+		let exec = cb
+			.build()
+			.unwrap_or_else(|e| panic!("Failed to build context for '{}': {}", expr_str, e));
+
+		// Phase 3: Execute - evaluate the expression
+		let result = exec
+			.eval(&expr)
+			.unwrap_or_else(|e| panic!("Failed to eval expression '{}': {}", expr_str, e));
+
+		// Assert result matches expected
+		let result_json = result
+			.json()
+			.unwrap_or_else(|e| panic!("Failed to convert result to JSON for '{}': {}", expr_str, e));
+		assert_eq!(
+			expected_json, result_json,
+			"Expression '{}' produced unexpected result",
+			expr_str
+		);
+	}
+}
+
 #[test]
 fn test_eval() {
 	let expr = Arc::new(Expression::new(r#"request.method"#).unwrap());
@@ -208,4 +350,115 @@ fn test_properties() {
 	// Test extauthz namespace recognition
 	test(r#"extauthz.user_id"#, &["extauthz.user_id"]);
 	test(r#"extauthz.role == "admin""#, &["extauthz.role"]);
+}
+
+// ============================================================================
+// Comprehensive Benchmarks
+// ============================================================================
+
+// Benchmark: Compile phase - Expression::new() for each test case
+#[divan::bench]
+fn bench_comprehensive_compile(b: Bencher) {
+	let cases = test_cases();
+	b.bench(|| {
+		for (expr_str, _, _) in &cases {
+			let _ = divan::black_box(Expression::new(expr_str).unwrap());
+		}
+	});
+}
+
+// Benchmark: Build phase - ContextBuilder::build() for each test case
+#[divan::bench]
+fn bench_comprehensive_build(b: Bencher) {
+	let cases = test_cases();
+	// Pre-compile expressions
+	let compiled: Vec<_> = cases
+		.iter()
+		.map(|(expr_str, req_builder, _)| {
+			let expr = Expression::new(expr_str).unwrap();
+			let req = req_builder();
+			(expr, req)
+		})
+		.collect();
+
+	b.bench(|| {
+		for (expr, req) in &compiled {
+			let mut cb = ContextBuilder::new();
+			cb.register_expression(expr);
+			cb.with_request(req, "".to_string());
+			let _ = divan::black_box(cb.build().unwrap());
+		}
+	});
+}
+
+// Benchmark: Execute phase - exec.eval() for each test case
+#[divan::bench]
+fn bench_comprehensive_execute(b: Bencher) {
+	let cases = test_cases();
+	// Pre-compile and build contexts
+	let prepared: Vec<_> = cases
+		.iter()
+		.map(|(expr_str, req_builder, _)| {
+			let expr = Expression::new(expr_str).unwrap();
+			let req = req_builder();
+			let mut cb = ContextBuilder::new();
+			cb.register_expression(&expr);
+			cb.with_request(&req, "".to_string());
+			let exec = cb.build().unwrap();
+			(expr, exec)
+		})
+		.collect();
+
+	b.bench(|| {
+		for (expr, exec) in &prepared {
+			let _ = divan::black_box(exec.eval(expr).unwrap());
+		}
+	});
+}
+
+// Individual benchmarks for each phase on a single representative expression
+#[divan::bench]
+fn bench_single_compile(b: Bencher) {
+	let expr_str = r#"request.method == "GET" && request.headers["x-custom"] == "value""#;
+	b.bench(|| {
+		let _ = divan::black_box(Expression::new(expr_str).unwrap());
+	});
+}
+
+#[divan::bench]
+fn bench_single_build(b: Bencher) {
+	let expr = Expression::new(r#"request.method == "GET" && request.headers["x-custom"] == "value""#).unwrap();
+	b.with_inputs(|| {
+		::http::Request::builder()
+			.method(Method::GET)
+			.uri("http://example.com")
+			.header("x-custom", "value")
+			.body(Body::empty())
+			.unwrap()
+	})
+	.bench_refs(|req| {
+		let mut cb = ContextBuilder::new();
+		cb.register_expression(&expr);
+		cb.with_request(req, "".to_string());
+		divan::black_box(cb.build().unwrap())
+	});
+}
+
+#[divan::bench]
+fn bench_single_execute(b: Bencher) {
+	let expr = Expression::new(r#"request.method == "GET" && request.headers["x-custom"] == "value""#).unwrap();
+	let req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://example.com")
+		.header("x-custom", "value")
+		.body(Body::empty())
+		.unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&expr);
+	cb.with_request(&req, "".to_string());
+	let exec = cb.build().unwrap();
+
+	b.bench(|| {
+		divan::black_box(exec.eval(&expr).unwrap())
+	});
 }
