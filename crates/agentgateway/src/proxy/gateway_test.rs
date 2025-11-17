@@ -273,7 +273,9 @@ async fn tls_termination() {
 
 #[tokio::test]
 async fn tls_backend_connection() {
-	// Test that the gateway can send TLS traffic to a backend
+	// Test that the gateway can send TLS traffic to a backend.
+	// This test verifies that the gateway properly establishes TLS connections to backends
+	// using the BackendTLS policy with CA certificate verification.
 	use tokio::net::TcpListener;
 	use tokio_rustls::TlsAcceptor;
 	use rustls::ServerConfig;
@@ -367,7 +369,9 @@ async fn tls_backend_connection() {
 
 #[tokio::test]
 async fn tls_mutual_tls() {
-	// Test mutual TLS - both client cert and backend validation
+	// Test mutual TLS - both client cert and backend validation.
+	// This test verifies that the gateway can present a client certificate to backends
+	// that require mutual TLS authentication.
 	use tokio::net::TcpListener;
 	use tokio_rustls::TlsAcceptor;
 	use rustls::ServerConfig;
@@ -471,7 +475,9 @@ async fn tls_mutual_tls() {
 
 #[tokio::test]
 async fn tls_insecure_backend() {
-	// Test TLS connection with insecure flag (skip certificate verification)
+	// Test TLS connection with insecure flag (skip certificate verification).
+	// This test verifies that the gateway can connect to backends with self-signed
+	// or invalid certificates when the insecure flag is enabled.
 	use tokio::net::TcpListener;
 	use tokio_rustls::TlsAcceptor;
 	use rustls::ServerConfig;
