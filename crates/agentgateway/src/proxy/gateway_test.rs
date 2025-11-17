@@ -16,11 +16,13 @@ use ::http::StatusCode;
 use ::http::{Method, Version};
 use agent_core::strng;
 use assert_matches::assert_matches;
+use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
+use std::sync::Arc;
 use x509_parser::nom::AsBytes;
 
 #[tokio::test]
@@ -267,6 +269,296 @@ async fn tls_termination() {
 	let io = t.serve_https(strng::new("bind"), Some("not-the-domain"));
 	let res = RequestBuilder::new(Method::GET, "http://lo").send(io).await;
 	assert_matches!(res, Err(_));
+}
+
+#[tokio::test]
+async fn tls_backend_connection() {
+	// Test that the gateway can send TLS traffic to a backend
+	use tokio::net::TcpListener;
+	use tokio_rustls::TlsAcceptor;
+	use rustls::ServerConfig;
+	use crate::transport::tls;
+	use crate::types::agent::parse_cert;
+	use crate::types::agent::parse_key;
+
+	// Start a TLS server as the backend
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let backend_addr = listener.local_addr().unwrap();
+
+	// Load server certificates for the backend
+	let cert_pem = include_bytes!("../../../examples/tls/certs/cert.pem");
+	let key_pem = include_bytes!("../../../examples/tls/certs/key.pem");
+	let certs = parse_cert(cert_pem).unwrap();
+	let key = parse_key(key_pem).unwrap();
+
+	let server_config = ServerConfig::builder_with_provider(tls::provider())
+		.with_protocol_versions(tls::ALL_TLS_VERSIONS)
+		.expect("server config must be valid")
+		.with_no_client_auth()
+		.with_single_cert(certs, key)
+		.unwrap();
+	let acceptor = TlsAcceptor::from(Arc::new(server_config));
+
+	// Spawn the TLS backend server
+	tokio::spawn(async move {
+		while let Ok((stream, _)) = listener.accept().await {
+			let acceptor = acceptor.clone();
+			tokio::spawn(async move {
+				if let Ok(tls_stream) = acceptor.accept(stream).await {
+					// Handle the connection with hyper
+					let io = hyper_util::rt::TokioIo::new(tls_stream);
+					let service = hyper::service::service_fn(|req: hyper::Request<hyper::body::Incoming>| async move {
+						// Echo back request info as JSON
+						let dump = RequestDump {
+							method: req.method().clone(),
+							uri: req.uri().clone(),
+							headers: req.headers().clone(),
+							body: Bytes::new(),
+						};
+						let body = serde_json::to_vec(&dump).unwrap();
+						Ok::<_, hyper::Error>(hyper::Response::new(body))
+					});
+					let _ = hyper::server::conn::http1::Builder::new()
+						.serve_connection(io, service)
+						.await;
+				}
+			});
+		}
+	});
+
+	// Set up the gateway with TLS backend
+	let route = basic_route(backend_addr);
+	let backend = Backend::Opaque(strng::format!("{}", backend_addr), Target::Address(backend_addr));
+	
+	// Configure backend TLS
+	let backend_tls = crate::http::backendtls::ResolvedBackendTLS {
+		cert: None,
+		key: None,
+		root: Some(include_bytes!("../../../examples/tls/certs/ca-cert.pem").to_vec()),
+		hostname: Some("localhost".to_string()),
+		insecure: false,
+		insecure_host: false,
+		alpn: None,
+	}
+	.try_into()
+	.unwrap();
+
+	let backend_with_tls = BackendWithPolicies {
+		backend,
+		inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
+	};
+
+	let bind = simple_bind(route);
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(backend_with_tls)
+		.with_bind(bind);
+
+	let io = t.serve_http(BIND_KEY);
+
+	// Give the backend server time to start
+	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+	let res = send_request(io, Method::POST, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::POST);
+}
+
+#[tokio::test]
+async fn tls_mutual_tls() {
+	// Test mutual TLS - both client cert and backend validation
+	use tokio::net::TcpListener;
+	use tokio_rustls::TlsAcceptor;
+	use rustls::ServerConfig;
+	use rustls::server::WebPkiClientVerifier;
+	use crate::transport::tls;
+	use crate::types::agent::parse_cert;
+	use crate::types::agent::parse_key;
+
+	// Start a TLS server that requires client certificates
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let backend_addr = listener.local_addr().unwrap();
+
+	// Load server certificates
+	let cert_pem = include_bytes!("../../../examples/tls/certs/cert.pem");
+	let key_pem = include_bytes!("../../../examples/tls/certs/key.pem");
+	let ca_cert_pem = include_bytes!("../../../examples/tls/certs/ca-cert.pem");
+	let certs = parse_cert(cert_pem).unwrap();
+	let key = parse_key(key_pem).unwrap();
+
+	// Set up client certificate verification
+	let mut roots = rustls::RootCertStore::empty();
+	let ca_certs = parse_cert(ca_cert_pem).unwrap();
+	for cert in ca_certs {
+		roots.add(cert).unwrap();
+	}
+	let client_verifier = WebPkiClientVerifier::builder(Arc::new(roots))
+		.build()
+		.unwrap();
+
+	let server_config = ServerConfig::builder_with_provider(tls::provider())
+		.with_protocol_versions(tls::ALL_TLS_VERSIONS)
+		.expect("server config must be valid")
+		.with_client_cert_verifier(client_verifier)
+		.with_single_cert(certs, key)
+		.unwrap();
+	let acceptor = TlsAcceptor::from(Arc::new(server_config));
+
+	// Spawn the mTLS backend server
+	tokio::spawn(async move {
+		while let Ok((stream, _)) = listener.accept().await {
+			let acceptor = acceptor.clone();
+			tokio::spawn(async move {
+				if let Ok(tls_stream) = acceptor.accept(stream).await {
+					let io = hyper_util::rt::TokioIo::new(tls_stream);
+					let service = hyper::service::service_fn(|req: hyper::Request<hyper::body::Incoming>| async move {
+						let dump = RequestDump {
+							method: req.method().clone(),
+							uri: req.uri().clone(),
+							headers: req.headers().clone(),
+							body: Bytes::new(),
+						};
+						let body = serde_json::to_vec(&dump).unwrap();
+						Ok::<_, hyper::Error>(hyper::Response::new(body))
+					});
+					let _ = hyper::server::conn::http1::Builder::new()
+						.serve_connection(io, service)
+						.await;
+				}
+			});
+		}
+	});
+
+	// Set up the gateway with mTLS
+	let route = basic_route(backend_addr);
+	let backend = Backend::Opaque(strng::format!("{}", backend_addr), Target::Address(backend_addr));
+	
+	// Configure backend TLS with client certificate
+	let backend_tls = crate::http::backendtls::ResolvedBackendTLS {
+		cert: Some(include_bytes!("../../../examples/tls/certs/cert.pem").to_vec()),
+		key: Some(include_bytes!("../../../examples/tls/certs/key.pem").to_vec()),
+		root: Some(include_bytes!("../../../examples/tls/certs/ca-cert.pem").to_vec()),
+		hostname: Some("localhost".to_string()),
+		insecure: false,
+		insecure_host: false,
+		alpn: None,
+	}
+	.try_into()
+	.unwrap();
+
+	let backend_with_mtls = BackendWithPolicies {
+		backend,
+		inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
+	};
+
+	let bind = simple_bind(route);
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(backend_with_mtls)
+		.with_bind(bind);
+
+	let io = t.serve_http(BIND_KEY);
+
+	// Give the backend server time to start
+	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::GET);
+}
+
+#[tokio::test]
+async fn tls_insecure_backend() {
+	// Test TLS connection with insecure flag (skip certificate verification)
+	use tokio::net::TcpListener;
+	use tokio_rustls::TlsAcceptor;
+	use rustls::ServerConfig;
+	use crate::transport::tls;
+	use crate::types::agent::parse_cert;
+	use crate::types::agent::parse_key;
+
+	// Start a TLS server as the backend
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let backend_addr = listener.local_addr().unwrap();
+
+	// Load server certificates
+	let cert_pem = include_bytes!("../../../examples/tls/certs/cert.pem");
+	let key_pem = include_bytes!("../../../examples/tls/certs/key.pem");
+	let certs = parse_cert(cert_pem).unwrap();
+	let key = parse_key(key_pem).unwrap();
+
+	let server_config = ServerConfig::builder_with_provider(tls::provider())
+		.with_protocol_versions(tls::ALL_TLS_VERSIONS)
+		.expect("server config must be valid")
+		.with_no_client_auth()
+		.with_single_cert(certs, key)
+		.unwrap();
+	let acceptor = TlsAcceptor::from(Arc::new(server_config));
+
+	// Spawn the TLS backend server
+	tokio::spawn(async move {
+		while let Ok((stream, _)) = listener.accept().await {
+			let acceptor = acceptor.clone();
+			tokio::spawn(async move {
+				if let Ok(tls_stream) = acceptor.accept(stream).await {
+					let io = hyper_util::rt::TokioIo::new(tls_stream);
+					let service = hyper::service::service_fn(|req: hyper::Request<hyper::body::Incoming>| async move {
+						let dump = RequestDump {
+							method: req.method().clone(),
+							uri: req.uri().clone(),
+							headers: req.headers().clone(),
+							body: Bytes::new(),
+						};
+						let body = serde_json::to_vec(&dump).unwrap();
+						Ok::<_, hyper::Error>(hyper::Response::new(body))
+					});
+					let _ = hyper::server::conn::http1::Builder::new()
+						.serve_connection(io, service)
+						.await;
+				}
+			});
+		}
+	});
+
+	// Set up the gateway with insecure backend TLS (no CA validation)
+	let route = basic_route(backend_addr);
+	let backend = Backend::Opaque(strng::format!("{}", backend_addr), Target::Address(backend_addr));
+	
+	// Configure backend TLS with insecure flag
+	let backend_tls = crate::http::backendtls::ResolvedBackendTLS {
+		cert: None,
+		key: None,
+		root: None,
+		hostname: None,
+		insecure: true,
+		insecure_host: false,
+		alpn: None,
+	}
+	.try_into()
+	.unwrap();
+
+	let backend_with_tls = BackendWithPolicies {
+		backend,
+		inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
+	};
+
+	let bind = simple_bind(route);
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(backend_with_tls)
+		.with_bind(bind);
+
+	let io = t.serve_http(BIND_KEY);
+
+	// Give the backend server time to start
+	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+	let res = send_request(io, Method::PUT, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::PUT);
 }
 
 #[tokio::test]
