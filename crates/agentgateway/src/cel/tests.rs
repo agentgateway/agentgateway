@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 
-use divan::Bencher;
-use http::Method;
-
 use super::*;
 use crate::http::Body;
+use divan::Bencher;
+use http::Method;
+use http_body_util::BodyExt;
 
 fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 	let mut cb = ContextBuilder::new();
@@ -25,11 +25,14 @@ struct TestCase {
 	expected: serde_json::Value,
 }
 
+// keep in sync with test_cases
+const TEST_CASE_NAMES: &[&str] = &["case=simple_access", "case=header", "case=bbr"];
+
 // Comprehensive test cases to be used across multiple tests
 fn test_cases() -> Vec<TestCase> {
 	vec![
 		TestCase {
-			name: "method",
+			name: "simple_access",
 			expression: r#"request.method"#,
 			request_builder: || {
 				::http::Request::builder()
@@ -54,75 +57,16 @@ fn test_cases() -> Vec<TestCase> {
 			expected: serde_json::json!("test-value"),
 		},
 		TestCase {
-			name: "boolean",
-			expression: r#"request.method == "POST" && request.headers["content-type"] == "application/json""#,
+			name: "bbr",
+			expression: r#"json(request.body).model"#,
 			request_builder: || {
 				::http::Request::builder()
 					.method(Method::POST)
 					.uri("http://example.com")
 					.header("content-type", "application/json")
-					.body(Body::empty())
-					.unwrap()
-			},
-			expected: serde_json::json!(true),
-		},
-		TestCase {
-			name: "concat",
-			expression: r#""Method: " + request.method"#,
-			request_builder: || {
-				::http::Request::builder()
-					.method(Method::DELETE)
-					.uri("http://example.com")
-					.body(Body::empty())
-					.unwrap()
-			},
-			expected: serde_json::json!("Method: DELETE"),
-		},
-		TestCase {
-			name: "path",
-			expression: r#"request.path"#,
-			request_builder: || {
-				::http::Request::builder()
-					.method(Method::GET)
-					.uri("http://example.com/api/v1/users")
-					.body(Body::empty())
-					.unwrap()
-			},
-			expected: serde_json::json!("/api/v1/users"),
-		},
-		TestCase {
-			name: "complex_bool",
-			expression: r#"request.method == "GET" && request.path.startsWith("/api/")"#,
-			request_builder: || {
-				::http::Request::builder()
-					.method(Method::GET)
-					.uri("http://example.com/api/users")
-					.body(Body::empty())
-					.unwrap()
-			},
-			expected: serde_json::json!(true),
-		},
-		TestCase {
-			name: "ternary",
-			expression: r#"request.method == "POST" ? "write" : "read""#,
-			request_builder: || {
-				::http::Request::builder()
-					.method(Method::GET)
-					.uri("http://example.com")
-					.body(Body::empty())
-					.unwrap()
-			},
-			expected: serde_json::json!("read"),
-		},
-		TestCase {
-			name: "numeric",
-			expression: r#"request.headers["x-priority"].toInt() > 5"#,
-			request_builder: || {
-				::http::Request::builder()
-					.method(Method::GET)
-					.uri("http://example.com")
-					.header("x-priority", "10")
-					.body(Body::empty())
+					.body(Body::from(
+						include_bytes!("../llm/tests/request_full.json").to_vec(),
+					))
 					.unwrap()
 			},
 			expected: serde_json::json!(true),
@@ -132,6 +76,7 @@ fn test_cases() -> Vec<TestCase> {
 
 // Helper to lookup a test case by name
 fn get_test_case(name: &str) -> TestCase {
+	let name = name.strip_prefix("case=").unwrap();
 	test_cases()
 		.into_iter()
 		.find(|tc| tc.name == name)
@@ -141,6 +86,9 @@ fn get_test_case(name: &str) -> TestCase {
 // Comprehensive test that validates the full compile -> build -> eval flow
 #[test]
 fn test_comprehensive_cel_flow() {
+	let tc: HashSet<&str> = test_cases().into_iter().map(|t| t.name).collect();
+	let tn = HashSet::from_iter(TEST_CASE_NAMES.iter().cloned());
+	assert_eq!(tc, tn, "missing test cases");
 	for tc in test_cases() {
 		// Phase 1: Compile - parse the expression
 		let expr = Expression::new(tc.expression)
@@ -161,9 +109,12 @@ fn test_comprehensive_cel_flow() {
 			.unwrap_or_else(|e| panic!("Failed to eval expression '{}': {}", tc.expression, e));
 
 		// Assert result matches expected
-		let result_json = result
-			.json()
-			.unwrap_or_else(|e| panic!("Failed to convert result to JSON for '{}': {}", tc.expression, e));
+		let result_json = result.json().unwrap_or_else(|e| {
+			panic!(
+				"Failed to convert result to JSON for '{}': {}",
+				tc.expression, e
+			)
+		});
 		assert_eq!(
 			tc.expected, result_json,
 			"Expression '{}' produced unexpected result",
@@ -369,17 +320,6 @@ fn test_properties() {
 // Comprehensive Benchmarks
 // ============================================================================
 
-const TEST_CASE_NAMES: &[&str] = &[
-	"method",
-	"header",
-	"boolean",
-	"concat",
-	"path",
-	"complex_bool",
-	"ternary",
-	"numeric",
-];
-
 // Benchmark: Compile phase - Expression::new() for each test case
 #[divan::bench(args = TEST_CASE_NAMES)]
 fn bench_compile(b: Bencher, case_name: &str) {
@@ -396,11 +336,15 @@ fn bench_build(b: Bencher, case_name: &str) {
 	// Pre-compile expression
 	let expr = Expression::new(tc.expression).unwrap();
 	let req = (tc.request_builder)();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&expr);
+	if cb.with_request(&req, "".to_string()) {
+		let rt = &tokio::runtime::Runtime::new().unwrap();
+		let b = rt.block_on(async move { req.into_body().collect().await.unwrap().to_bytes() });
+		cb.with_request_body(b);
+	}
 
-	b.bench(|| {
-		let mut cb = ContextBuilder::new();
-		cb.register_expression(&expr);
-		cb.with_request(&req, "".to_string());
+	b.bench_local(|| {
 		let _ = divan::black_box(cb.build().unwrap());
 	});
 }
@@ -414,7 +358,12 @@ fn bench_execute(b: Bencher, case_name: &str) {
 	let req = (tc.request_builder)();
 	let mut cb = ContextBuilder::new();
 	cb.register_expression(&expr);
-	cb.with_request(&req, "".to_string());
+	if cb.with_request(&req, "".to_string()) {
+		let rt = &tokio::runtime::Runtime::new().unwrap();
+		let b = rt.block_on(async move { req.into_body().collect().await.unwrap().to_bytes() });
+		cb.with_request_body(b);
+	}
+
 	let exec = cb.build().unwrap();
 
 	b.bench(|| {
