@@ -286,8 +286,8 @@ async fn tls_backend_connection() {
 	let backend_addr = listener.local_addr().unwrap();
 
 	// Load server certificates for the backend
-	let cert_pem = include_bytes!("../../../examples/tls/certs/cert.pem");
-	let key_pem = include_bytes!("../../../examples/tls/certs/key.pem");
+	let cert_pem = include_bytes!("../../../../examples/tls/certs/cert.pem");
+	let key_pem = include_bytes!("../../../../examples/tls/certs/key.pem");
 	let certs = parse_cert(cert_pem).unwrap();
 	let key = parse_key(key_pem).unwrap();
 
@@ -334,7 +334,7 @@ async fn tls_backend_connection() {
 	let backend_tls = crate::http::backendtls::ResolvedBackendTLS {
 		cert: None,
 		key: None,
-		root: Some(include_bytes!("../../../examples/tls/certs/ca-cert.pem").to_vec()),
+		root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
 		hostname: Some("localhost".to_string()),
 		insecure: false,
 		insecure_host: false,
@@ -381,9 +381,9 @@ async fn tls_mutual_tls() {
 	let backend_addr = listener.local_addr().unwrap();
 
 	// Load server certificates
-	let cert_pem = include_bytes!("../../../examples/tls/certs/cert.pem");
-	let key_pem = include_bytes!("../../../examples/tls/certs/key.pem");
-	let ca_cert_pem = include_bytes!("../../../examples/tls/certs/ca-cert.pem");
+	let cert_pem = include_bytes!("../../../../examples/tls/certs/cert.pem");
+	let key_pem = include_bytes!("../../../../examples/tls/certs/key.pem");
+	let ca_cert_pem = include_bytes!("../../../../examples/tls/certs/ca-cert.pem");
 	let certs = parse_cert(cert_pem).unwrap();
 	let key = parse_key(key_pem).unwrap();
 
@@ -436,9 +436,9 @@ async fn tls_mutual_tls() {
 	
 	// Configure backend TLS with client certificate
 	let backend_tls = crate::http::backendtls::ResolvedBackendTLS {
-		cert: Some(include_bytes!("../../../examples/tls/certs/cert.pem").to_vec()),
-		key: Some(include_bytes!("../../../examples/tls/certs/key.pem").to_vec()),
-		root: Some(include_bytes!("../../../examples/tls/certs/ca-cert.pem").to_vec()),
+		cert: Some(include_bytes!("../../../../examples/tls/certs/cert.pem").to_vec()),
+		key: Some(include_bytes!("../../../../examples/tls/certs/key.pem").to_vec()),
+		root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
 		hostname: Some("localhost".to_string()),
 		insecure: false,
 		insecure_host: false,
@@ -484,8 +484,8 @@ async fn tls_insecure_backend() {
 	let backend_addr = listener.local_addr().unwrap();
 
 	// Load server certificates
-	let cert_pem = include_bytes!("../../../examples/tls/certs/cert.pem");
-	let key_pem = include_bytes!("../../../examples/tls/certs/key.pem");
+	let cert_pem = include_bytes!("../../../../examples/tls/certs/cert.pem");
+	let key_pem = include_bytes!("../../../../examples/tls/certs/key.pem");
 	let certs = parse_cert(cert_pem).unwrap();
 	let key = parse_key(key_pem).unwrap();
 
