@@ -64,7 +64,6 @@ enum ErrorKind {
 	Canceled,
 	ChannelClosed,
 	Connect,
-	UserUnsupportedVersion,
 	SendRequest,
 	NoPoolKey,
 }
@@ -270,10 +269,9 @@ where
 
 		if pooled.is_http1() {
 			if req.version() == Version::HTTP_2 {
-				warn!("Connection is HTTP/1, but request requires HTTP/2");
-				return Err(TrySendError::Nope(
-					e!(UserUnsupportedVersion).with_connect_info(pooled.conn_info.clone()),
-				));
+				// This means we negotiated down in ALPN
+				*req.version_mut() = Version::HTTP_11;
+				trace!("Connection is HTTP/1, but request was HTTP/2");
 			}
 
 			if self.config.set_host {
@@ -545,7 +543,7 @@ where
 						};
 
 						#[cfg_attr(not(feature = "http2"), allow(unused))]
-						let is_h2 = is_ver_h2 || connected.alpn == Alpn::H2;
+						let is_h2 = (is_ver_h2 && connected.alpn == Alpn::None) || connected.alpn == Alpn::H2;
 
 						Either::Left(Box::pin(async move {
 							let tx = if is_h2 {

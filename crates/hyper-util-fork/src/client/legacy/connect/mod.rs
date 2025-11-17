@@ -133,6 +133,7 @@ pub(super) struct Extra(Box<dyn ExtraInner>);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Alpn {
+	H1,
 	H2,
 	None,
 }
@@ -205,9 +206,10 @@ impl Connected {
 		self
 	}
 
-	/// Determines if the connected transport negotiated HTTP/2 as its next protocol.
-	pub fn is_negotiated_h2(&self) -> bool {
-		self.alpn == Alpn::H2
+	/// Set that the connected transport negotiated HTTP/1.1 as its next protocol.
+	pub fn negotiated_h1(mut self) -> Connected {
+		self.alpn = Alpn::H1;
+		self
 	}
 
 	/// Poison this connection

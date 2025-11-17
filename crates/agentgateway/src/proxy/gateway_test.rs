@@ -1,6 +1,6 @@
 use crate::http::tests_common::*;
 use crate::http::transformation_cel::Transformation;
-use crate::http::{Body, transformation_cel};
+use crate::http::{Body, Response, transformation_cel};
 use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
@@ -11,11 +11,13 @@ use crate::types::agent::{
 	BackendReference, Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, Route,
 	RouteBackendReference, RouteMatch, RouteSet, TargetedPolicy, TrafficPolicy,
 };
+use crate::types::backend;
 use crate::*;
 use ::http::StatusCode;
 use ::http::{Method, Version};
 use agent_core::strng;
 use assert_matches::assert_matches;
+use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::Rng;
@@ -29,6 +31,7 @@ async fn basic_handling() {
 	let res = send_request(io, Method::POST, "http://lo").await;
 	assert_eq!(res.status(), 200);
 	let body = read_body(res.into_body()).await;
+	assert_eq!(body.version, Version::HTTP_11);
 	assert_eq!(body.method, Method::POST);
 }
 
@@ -55,6 +58,7 @@ async fn basic_http2() {
 		.await
 		.unwrap();
 	assert_eq!(res.status(), 200);
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
 }
 
 #[tokio::test]
@@ -267,6 +271,208 @@ async fn tls_termination() {
 	let io = t.serve_https(strng::new("bind"), Some("not-the-domain"));
 	let res = RequestBuilder::new(Method::GET, "http://lo").send(io).await;
 	assert_matches!(res, Err(_));
+}
+
+#[tokio::test]
+async fn tls_backend_connection() {
+	let (mock, certs) = tls_mock().await;
+	let backend_tls = http::backendtls::ResolvedBackendTLS {
+		root: Some(certs.root_cert.pem().into_bytes()),
+		hostname: Some("localhost".to_string()),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				strng::format!("{}", mock.address()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
+		})
+		.with_bind(simple_bind(basic_route(*mock.address())));
+
+	let res = send_http_version(&t, Version::HTTP_2).await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+
+	let res = send_http_version(&t, Version::HTTP_11).await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+}
+
+#[tokio::test]
+async fn tls_backend_connection_alpn() {
+	let (mock, certs) = tls_mock().await;
+	let backend_tls = http::backendtls::ResolvedBackendTLS {
+		root: Some(certs.root_cert.pem().into_bytes()),
+		hostname: Some("localhost".to_string()),
+		alpn: Some(vec!["http/1.1".to_string()]),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				strng::format!("{}", mock.address()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
+		})
+		.with_bind(simple_bind(basic_route(*mock.address())));
+
+	let res = send_http_version(&t, Version::HTTP_11).await;
+	assert_eq!(res.status(), 200);
+	// We should keep HTTP/1.1! We negotiated to ALPN HTTP/1.1 so must send that.
+	assert_eq!(
+		read_body(res.into_body()).await.version,
+		::http::Version::HTTP_11
+	);
+
+	let res = send_http_version(&t, Version::HTTP_2).await;
+	assert_eq!(res.status(), 200);
+	// We should downgrade! We negotiated to ALPN HTTP/1.1 so must send that.
+	assert_eq!(
+		read_body(res.into_body()).await.version,
+		::http::Version::HTTP_11
+	);
+}
+
+#[tokio::test]
+async fn tls_backend_http2_version() {
+	let (mock, certs) = tls_mock().await;
+	let backend_tls = http::backendtls::ResolvedBackendTLS {
+		root: Some(certs.root_cert.pem().into_bytes()),
+		hostname: Some("localhost".to_string()),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+	let backend_version = backend::HTTP {
+		version: Some(Version::HTTP_2),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				strng::format!("{}", mock.address()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![
+				BackendPolicy::BackendTLS(backend_tls),
+				BackendPolicy::HTTP(backend_version),
+			],
+		})
+		.with_bind(simple_bind(basic_route(*mock.address())));
+
+	let res = send_http_version(&t, Version::HTTP_2).await;
+	assert_eq!(res.status(), 200);
+	// We explicitly set HTTP2, and the ALPN allows it
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+
+	let res = send_http_version(&t, Version::HTTP_11).await;
+	assert_eq!(res.status(), 200);
+	// We explicitly set HTTP2, and the ALPN allows it
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+}
+
+#[tokio::test]
+async fn tls_backend_http1_version() {
+	let (mock, certs) = tls_mock().await;
+	let backend_tls = http::backendtls::ResolvedBackendTLS {
+		root: Some(certs.root_cert.pem().into_bytes()),
+		hostname: Some("localhost".to_string()),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+	let backend_version = backend::HTTP {
+		version: Some(Version::HTTP_11),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				strng::format!("{}", mock.address()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![
+				BackendPolicy::BackendTLS(backend_tls),
+				BackendPolicy::HTTP(backend_version),
+			],
+		})
+		.with_bind(simple_bind(basic_route(*mock.address())));
+
+	let res = send_http_version(&t, Version::HTTP_2).await;
+	assert_eq!(res.status(), 200);
+	// We explicitly set HTTP_11, and the ALPN allows it. We should downgrade their request!
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_11);
+
+	let res = send_http_version(&t, Version::HTTP_11).await;
+	assert_eq!(res.status(), 200);
+	// We explicitly set HTTP_11, and the ALPN allows it
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_11);
+}
+
+#[tokio::test]
+async fn tls_backend_version_with_alpn() {
+	let (mock, certs) = tls_mock().await;
+	let backend_tls = http::backendtls::ResolvedBackendTLS {
+		alpn: Some(vec!["http/1.1".to_string()]),
+		root: Some(certs.root_cert.pem().into_bytes()),
+		hostname: Some("localhost".to_string()),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+	let backend_version = backend::HTTP {
+		version: Some(Version::HTTP_2),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				strng::format!("{}", mock.address()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![
+				BackendPolicy::BackendTLS(backend_tls),
+				BackendPolicy::HTTP(backend_version),
+			],
+		})
+		.with_bind(simple_bind(basic_route(*mock.address())));
+
+	let res = send_http_version(&t, Version::HTTP_2).await;
+	assert_eq!(res.status(), 200);
+	// Explicit ALPN takes precedence over explicit backend version
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_11);
+
+	let res = send_http_version(&t, Version::HTTP_11).await;
+	assert_eq!(res.status(), 200);
+	// Explicit ALPN takes precedence over explicit backend version
+	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_11);
+}
+
+async fn send_http_version(t: &TestBind, v: Version) -> Response {
+	let io = if v == Version::HTTP_11 {
+		t.serve_http(strng::new("bind"))
+	} else {
+		t.serve_http2(strng::new("bind"))
+	};
+	RequestBuilder::new(Method::GET, "http://lo")
+		.version(v)
+		.send(io)
+		.await
+		.unwrap()
 }
 
 #[tokio::test]

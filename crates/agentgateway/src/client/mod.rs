@@ -17,7 +17,7 @@ use tonic::codegen::Service;
 use tracing::event;
 use typespec_client_core::http::Sanitizer;
 
-use crate::http::backendtls::BackendTLS;
+use crate::http::backendtls::VersionedBackendTLS;
 use crate::http::filters;
 use crate::proxy::ProxyError;
 use crate::transport::hbone::WorkloadKey;
@@ -98,7 +98,7 @@ impl azure_core::http::HttpClient for Client {
 					))),
 				},
 				transport: if url.scheme() == "https" {
-					Transport::Tls(http::backendtls::SYSTEM_TRUST.clone())
+					Transport::Tls(http::backendtls::SYSTEM_TRUST.base_config())
 				} else {
 					Transport::Plaintext
 				},
@@ -178,13 +178,13 @@ pub struct TCPCall {
 pub enum Transport {
 	#[default]
 	Plaintext,
-	Tls(BackendTLS),
-	Hbone(Option<BackendTLS>, Identity),
+	Tls(VersionedBackendTLS),
+	Hbone(Option<VersionedBackendTLS>, Identity),
 	DoubleHbone {
 		gateway_address: SocketAddr, // Address of network gateway to connect to
 		gateway_identity: Identity,  // Identity of network gateway
 		waypoint_identity: Identity, // Identity of waypoint/workload
-		inner_tls: Option<BackendTLS>,
+		inner_tls: Option<VersionedBackendTLS>,
 	},
 }
 impl Transport {
@@ -198,8 +198,8 @@ impl Transport {
 	}
 }
 
-impl From<Option<BackendTLS>> for Transport {
-	fn from(tls: Option<BackendTLS>) -> Self {
+impl From<Option<VersionedBackendTLS>> for Transport {
+	fn from(tls: Option<VersionedBackendTLS>) -> Self {
 		if let Some(tls) = tls {
 			client::Transport::Tls(tls)
 		} else {
@@ -547,7 +547,7 @@ impl Client {
 			.map(|p| p.as_u16())
 			.unwrap_or_else(|| if scheme == &Scheme::HTTPS { 443 } else { 80 });
 		let transport = if scheme == &Scheme::HTTPS {
-			Transport::Tls(http::backendtls::SYSTEM_TRUST.clone())
+			Transport::Tls(http::backendtls::SYSTEM_TRUST.base_config())
 		} else {
 			Transport::Plaintext
 		};
@@ -719,7 +719,8 @@ impl Client {
 			.await
 			.map_err(ProxyError::UpstreamCallFailed);
 		let dur = format!("{}ms", start.elapsed().as_millis());
-
+		// If version changed due to ALPN negotiation, make sure we get the real version
+		let version = resp.as_ref().map(|resp| resp.version()).unwrap_or(version);
 		event!(
 			target: "upstream request",
 			parent: None,

@@ -1,6 +1,7 @@
 [patch.crates-io]
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "4364354fa41897a0c2001d891c0a9a38eafedb82" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "163f20f551c2cf6032254b6dbbe246b91ce727ad" }
+wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b96083125fdabc3e62f92790ee15ae3a10d" }
 
 [workspace]
 resolver = "2"
@@ -190,7 +191,7 @@ tracing-subscriber = { version = "0.3", features = [
     "json",
 ] }
 url = "2.5"
-wiremock = "0.6.3"
+wiremock = { version = "0.6.3", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
 which = "8.0.0"
 cel = { version = "0.11.4", features = [

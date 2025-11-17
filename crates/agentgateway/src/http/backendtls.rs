@@ -27,26 +27,87 @@ pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
 	.unwrap()
 });
 
-// TODO: xds support
+// a ClientConfig stores the ALPN, but we need to set it per request possibly. This struct helps manage that.
+#[derive(Clone, Debug)]
+pub struct PerAlpnConfig {
+	config: Arc<ClientConfig>,
+	allow_custom_alpn: bool,
+	h1: std::sync::OnceLock<Arc<ClientConfig>>,
+	h2: std::sync::OnceLock<Arc<ClientConfig>>,
+}
+
+impl PerAlpnConfig {
+	pub fn new(config: Arc<ClientConfig>, allow_custom_alpn: bool) -> Self {
+		Self {
+			config,
+			allow_custom_alpn,
+			h1: Default::default(),
+			h2: Default::default(),
+		}
+	}
+
+	fn config_for(&self, version_override: Option<http::Version>) -> Arc<ClientConfig> {
+		match version_override {
+			Some(http::Version::HTTP_11) if self.allow_custom_alpn => self
+				.h1
+				.get_or_init(|| {
+					let mut nc = Arc::unwrap_or_clone(self.config.clone());
+					nc.alpn_protocols = vec![b"http/1.1".to_vec()];
+					Arc::new(nc)
+				})
+				.clone(),
+			Some(http::Version::HTTP_2) if self.allow_custom_alpn => self
+				.h2
+				.get_or_init(|| {
+					let mut nc = Arc::unwrap_or_clone(self.config.clone());
+					nc.alpn_protocols = vec![b"h2".to_vec()];
+					Arc::new(nc)
+				})
+				.clone(),
+			_ => self.config.clone(),
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct BackendTLS {
+	pub hostname_override: Option<ServerName<'static>>,
+	pub config: PerAlpnConfig,
+}
+
+impl BackendTLS {
+	pub fn base_config(&self) -> VersionedBackendTLS {
+		self.config_for(None)
+	}
+
+	pub fn config_for(&self, version_override: Option<http::Version>) -> VersionedBackendTLS {
+		VersionedBackendTLS {
+			hostname_override: self.hostname_override.clone(),
+			config: self.config.config_for(version_override),
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct VersionedBackendTLS {
 	pub hostname_override: Option<ServerName<'static>>,
 	pub config: Arc<ClientConfig>,
 }
 
-impl std::hash::Hash for BackendTLS {
+impl std::hash::Hash for VersionedBackendTLS {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		// Hash the pointer address
 		Arc::as_ptr(&self.config).hash(state);
 	}
 }
 
-impl PartialEq for BackendTLS {
+impl PartialEq for VersionedBackendTLS {
 	fn eq(&self, other: &Self) -> bool {
-		Arc::ptr_eq(&self.config, &other.config)
+		Arc::ptr_eq(&self.config, &other.config) && self.hostname_override == other.hostname_override
 	}
 }
-impl Eq for BackendTLS {}
+
+impl Eq for VersionedBackendTLS {}
 
 impl serde::Serialize for BackendTLS {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -77,6 +138,7 @@ pub struct LocalBackendTLS {
 	alpn: Option<Vec<String>>,
 }
 
+#[derive(Default)]
 pub struct ResolvedBackendTLS {
 	pub cert: Option<Vec<u8>>,
 	pub key: Option<Vec<u8>>,
@@ -128,6 +190,7 @@ impl ResolvedBackendTLS {
 			cc.dangerous()
 				.set_certificate_verifier(Arc::new(tls::insecure::NoVerifier));
 		}
+		let allow_custom_alpn = self.alpn.is_none();
 		if let Some(a) = self.alpn {
 			cc.alpn_protocols = a.into_iter().map(|b| b.as_bytes().to_vec()).collect();
 		} else {
@@ -135,7 +198,7 @@ impl ResolvedBackendTLS {
 		}
 		Ok(BackendTLS {
 			hostname_override: self.hostname.map(|s| s.try_into()).transpose()?,
-			config: Arc::new(cc),
+			config: PerAlpnConfig::new(Arc::new(cc), allow_custom_alpn),
 		})
 	}
 }

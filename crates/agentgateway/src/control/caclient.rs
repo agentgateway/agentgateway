@@ -28,7 +28,7 @@ use istio::ca::IstioCertificateRequest;
 use istio::ca::istio_certificate_service_client::IstioCertificateServiceClient;
 
 use crate::control::{AuthSource, RootCert};
-use crate::http::backendtls::BackendTLS;
+use crate::http::backendtls::VersionedBackendTLS;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -140,7 +140,7 @@ impl WorkloadCertificate {
 		}
 	}
 
-	pub fn legacy_mtls(&self, identity: Vec<Identity>) -> Result<BackendTLS, Error> {
+	pub fn legacy_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
 		// TODO: this is (way) too expensive to build per request
 		let roots = self.roots.clone();
 		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
@@ -156,12 +156,12 @@ impl WorkloadCertificate {
 		cc.alpn_protocols = vec![b"istio".into()];
 		cc.resumption = Resumption::disabled();
 		// cc.enable_sni = false;
-		Ok(BackendTLS {
+		Ok(VersionedBackendTLS {
 			hostname_override: None,
 			config: Arc::new(cc),
 		})
 	}
-	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> Result<BackendTLS, Error> {
+	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
 		// TODO: this is (way) too expensive to build per request
 		let roots = self.roots.clone();
 		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
@@ -177,7 +177,7 @@ impl WorkloadCertificate {
 		cc.alpn_protocols = vec![b"h2".into()];
 		cc.resumption = Resumption::disabled();
 		cc.enable_sni = false;
-		Ok(BackendTLS {
+		Ok(VersionedBackendTLS {
 			hostname_override: None,
 			config: Arc::new(cc),
 		})

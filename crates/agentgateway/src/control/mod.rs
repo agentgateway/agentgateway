@@ -16,7 +16,7 @@ use tower::Service;
 
 use crate::client::Transport;
 use crate::http::HeaderValue;
-use crate::http::backendtls::{BackendTLS, SYSTEM_TRUST};
+use crate::http::backendtls::{BackendTLS, PerAlpnConfig, SYSTEM_TRUST};
 use crate::types::agent::Target;
 use crate::*;
 
@@ -56,7 +56,7 @@ impl RootCert {
 		ccb.alpn_protocols = vec![b"h2".to_vec()];
 		Ok(BackendTLS {
 			hostname_override: None,
-			config: Arc::new(ccb),
+			config: PerAlpnConfig::new(Arc::new(ccb), false),
 		})
 	}
 }
@@ -289,7 +289,7 @@ fn get_target(raw: &str, ca: BackendTLS) -> anyhow::Result<(Target, Transport)> 
 
 	let transport = match uri.scheme_str() {
 		Some("http") => Transport::Plaintext,
-		Some("https") => Transport::Tls(ca),
+		Some("https") => Transport::Tls(ca.base_config()),
 		_ => anyhow::bail!("Unsupported scheme: {}", uri.scheme_str().unwrap_or("none")),
 	};
 

@@ -852,7 +852,9 @@ pub async fn build_transport(
 	inputs: &ProxyInputs,
 	backend_call: &BackendCall,
 	backend_tls: Option<BackendTLS>,
+	backend_http_version_override: Option<::http::Version>,
 ) -> Result<Transport, ProxyError> {
+	let backend_tls = backend_tls.map(|btls| btls.config_for(backend_http_version_override));
 	// Check if we need double hbone
 	if let (
 		Some((gw_addr, gw_identity)),
@@ -1241,6 +1243,12 @@ async fn make_backend_call(
 		&inputs,
 		&backend_call,
 		backend_call.backend_policies.backend_tls.clone(),
+		backend_call
+			.backend_policies
+			.http
+			.as_ref()
+			.and_then(|h| h.version)
+			.or(backend_call.http_version_override),
 	)
 	.await?;
 	let call = client::Call {

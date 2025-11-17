@@ -115,13 +115,14 @@ impl Connection for Socket {
 impl hyper_util_fork::client::legacy::connect::Connection for Socket {
 	fn connected(&self) -> hyper_util_fork::client::legacy::connect::Connected {
 		let mut con = hyper_util_fork::client::legacy::connect::Connected::new();
-		if self
+		match self
 			.ext
 			.get::<TLSConnectionInfo>()
 			.and_then(|c| c.negotiated_alpn)
-			== Some(Alpn::H2)
 		{
-			con = con.negotiated_h2()
+			Some(Alpn::H2) => con = con.negotiated_h2(),
+			Some(Alpn::Http11) => con = con.negotiated_h1(),
+			_ => {},
 		}
 		con
 	}

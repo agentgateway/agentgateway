@@ -5,6 +5,22 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::http::backendtls::BackendTLS;
+use crate::http::{Body, Response};
+use crate::llm::AIProvider;
+use crate::proxy::Gateway;
+use crate::proxy::request_builder::RequestBuilder;
+use crate::store::Stores;
+use crate::transport::stream::{Socket, TCPConnectionInfo};
+use crate::transport::tls;
+use crate::types::agent::{
+	Backend, BackendReference, BackendWithPolicies, Bind, BindName, Listener, ListenerProtocol,
+	ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference,
+	RouteMatch, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
+};
+use crate::types::local::LocalNamedAIProvider;
+use crate::{ProxyInputs, client, mcp};
 use agent_core::drain::{DrainTrigger, DrainWatcher};
 use agent_core::strng::Strng;
 use agent_core::{drain, metrics, strng};
@@ -21,23 +37,8 @@ use serde_json::Value;
 use tokio::io::DuplexStream;
 use tokio_rustls::TlsConnector;
 use tracing::{info, trace};
+use wiremock::tls_certs::MockTlsCertificates;
 use wiremock::{Mock, MockServer, ResponseTemplate};
-
-use crate::http::backendtls::BackendTLS;
-use crate::http::{Body, Response};
-use crate::llm::AIProvider;
-use crate::proxy::Gateway;
-use crate::proxy::request_builder::RequestBuilder;
-use crate::store::Stores;
-use crate::transport::stream::{Socket, TCPConnectionInfo};
-use crate::types::agent::{
-	Backend, BackendReference, BackendWithPolicies, Bind, BindName, Listener, ListenerProtocol,
-	ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference,
-	RouteMatch, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
-};
-use crate::types::local::LocalNamedAIProvider;
-use crate::{ProxyInputs, client, mcp};
 
 pub async fn send_request(
 	io: Client<MemoryConnector, Body>,
@@ -89,6 +90,9 @@ pub struct RequestDump {
 
 	#[serde(with = "http_serde::header_map")]
 	pub headers: ::http::HeaderMap,
+
+	#[serde(with = "http_serde::version")]
+	pub version: ::http::Version,
 
 	pub body: Bytes,
 }
@@ -243,12 +247,36 @@ pub async fn simple_mock() -> MockServer {
 				uri: req.url.to_string().parse().unwrap(),
 				headers: req.headers.clone(),
 				body: Bytes::copy_from_slice(&req.body),
+				version: req.version,
 			};
 			ResponseTemplate::new(200).set_body_json(r)
 		})
 		.mount(&mock)
 		.await;
 	mock
+}
+
+// Spawn a mock TLS server. It will always respond on h2,http/1.1 ALPN
+pub async fn tls_mock() -> (MockServer, MockTlsCertificates) {
+	let _ = rustls::crypto::CryptoProvider::install_default(Arc::unwrap_or_clone(tls::provider()));
+	let certs = wiremock::tls_certs::MockTlsCertificates::random();
+	let mock = wiremock::MockServer::builder()
+		.start_https(certs.get_server_config())
+		.await;
+	Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(|req: &wiremock::Request| {
+			let r = RequestDump {
+				method: req.method.clone(),
+				uri: req.url.to_string().parse().unwrap(),
+				headers: req.headers.clone(),
+				body: Bytes::copy_from_slice(&req.body),
+				version: req.version,
+			};
+			ResponseTemplate::new(200).set_body_json(r)
+		})
+		.mount(&mock)
+		.await;
+	(mock, certs)
 }
 
 pub struct TestBind {
@@ -287,7 +315,7 @@ impl tower::Service<Uri> for MemoryConnector {
 		if let Some(tls_config) = self.tls_config.clone() {
 			Box::pin(async move {
 				let (ext, counter, inner) = io.into_parts();
-				let tls = TlsConnector::from(tls_config.config)
+				let tls = TlsConnector::from(tls_config.base_config().config)
 					.connect(
 						tls_config
 							.hostname_override
