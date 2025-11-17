@@ -36,7 +36,7 @@ use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::frontend;
+use crate::types::{backend, frontend};
 use crate::{ProxyInputs, store, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
@@ -205,9 +205,11 @@ async fn apply_backend_policies(
 	} = &backend_call.backend_policies;
 	response_policies.backend_response_header = response_header_modifier.clone();
 
-	if let Some(http) = http {
-		http.apply(req, backend_call.http_version_override);
-	}
+	let dh = backend::HTTP::default();
+	http
+		.as_ref()
+		.unwrap_or(&dh)
+		.apply(req, backend_call.http_version_override);
 
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
