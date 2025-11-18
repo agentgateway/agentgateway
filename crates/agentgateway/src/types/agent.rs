@@ -27,6 +27,7 @@ use crate::http::{
 };
 use crate::mcp::McpAuthorization;
 use crate::types::discovery::{NamespacedHostname, Service};
+use crate::types::local::SimpleLocalBackend;
 use crate::types::{agent, backend, frontend};
 use crate::*;
 
@@ -397,10 +398,29 @@ impl TryFrom<Backend> for SimpleBackend {
 
 #[derive(Eq, PartialEq)]
 #[apply(schema_ser!)]
+#[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackend"))]
 pub enum SimpleBackendReference {
 	Service { name: NamespacedHostname, port: u16 },
 	Backend(BackendName), // Hostname or IP
+	InlineBackend(Target),
 	Invalid,
+}
+
+impl<'de> serde::Deserialize<'de> for SimpleBackendReference {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let slb = SimpleLocalBackend::deserialize(deserializer)?;
+		match slb {
+			SimpleLocalBackend::Service { name, port } => {
+				Ok(SimpleBackendReference::Service { name, port })
+			},
+			SimpleLocalBackend::Opaque(t) => Ok(SimpleBackendReference::InlineBackend(t)),
+			SimpleLocalBackend::Backend(n) => Ok(SimpleBackendReference::Backend(n)),
+			SimpleLocalBackend::Invalid => Ok(SimpleBackendReference::Invalid),
+		}
+	}
 }
 
 impl SimpleBackendReference {
@@ -410,6 +430,7 @@ impl SimpleBackendReference {
 				strng::format!("service/{}/{}:{port}", name.namespace, name.hostname)
 			},
 			SimpleBackendReference::Backend(name) => name.clone(),
+			SimpleBackendReference::InlineBackend(t) => t.to_string().into(),
 			SimpleBackendReference::Invalid => strng::format!("invalid"),
 		}
 	}
@@ -425,6 +446,7 @@ impl SimpleBackend {
 			SimpleBackend::Invalid => "invalid".to_string(),
 		}
 	}
+
 	pub fn name(&self) -> BackendName {
 		match self {
 			SimpleBackend::Service(svc, port) => {

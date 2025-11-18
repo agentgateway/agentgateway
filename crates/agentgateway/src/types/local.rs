@@ -14,7 +14,6 @@ use serde_with::{TryFromInto, serde_as};
 use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
-use crate::http::ext_proc::FailureMode;
 use crate::http::{filters, retry, timeout};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, RouteType};
 use crate::mcp::McpAuthorization;
@@ -510,12 +509,21 @@ pub struct LocalTCPRouteBackend {
 
 #[apply(schema_de!)]
 pub enum SimpleLocalBackend {
+	/// Service reference. Service must be defined in the top level services list.
 	Service {
 		name: NamespacedHostname,
 		port: u16,
 	},
+	/// Hostname or IP address
 	#[serde(rename = "host")]
-	Opaque(Target), // Hostname or IP
+	Opaque(
+		/// Hostname or IP address
+		Target,
+	),
+	Backend(
+		/// Explicit backend reference. Backend must be defined in the top level backends list
+		BackendName,
+	),
 	Invalid,
 }
 
@@ -523,6 +531,7 @@ impl SimpleLocalBackend {
 	pub fn as_backend(&self, name: BackendName) -> Option<Backend> {
 		match self {
 			SimpleLocalBackend::Service { .. } => None, // These stay as references
+			SimpleLocalBackend::Backend(_) => None,     // These stay as references
 			SimpleLocalBackend::Opaque(tgt) => Some(Backend::Opaque(name, tgt.clone())),
 			SimpleLocalBackend::Invalid => Some(Backend::Invalid),
 		}
@@ -552,10 +561,10 @@ struct LocalGatewayPolicy {
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
-	ext_authz: Option<LocalExtAuthz>,
+	ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
-	ext_proc: Option<LocalExtProc>,
+	ext_proc: Option<crate::http::ext_proc::ExtProc>,
 	/// Modify requests and responses
 	#[serde(default)]
 	#[serde_as(
@@ -733,7 +742,7 @@ struct FilterOrPolicy {
 
 	/// Mirror incoming requests to another destination.
 	#[serde(default)]
-	request_mirror: Option<LocalRequestMirror>,
+	request_mirror: Option<filters::RequestMirror>,
 
 	/// Directly respond to the request with a static response.
 	#[serde(default)]
@@ -770,7 +779,7 @@ struct FilterOrPolicy {
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
 	/// Rate limit incoming requests. State is managed by a remote server.
 	#[serde(default)]
-	remote_rate_limit: Option<LocalRemoteRateLimit>,
+	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
@@ -782,10 +791,10 @@ struct FilterOrPolicy {
 	api_key: Option<crate::http::apikey::LocalAPIKeys>,
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
-	ext_authz: Option<LocalExtAuthz>,
+	ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
-	ext_proc: Option<LocalExtProc>,
+	ext_proc: Option<crate::http::ext_proc::ExtProc>,
 	/// Modify requests and responses
 	#[serde(default)]
 	#[serde_as(
@@ -860,7 +869,7 @@ async fn convert(
 	}
 
 	for p in policies {
-		let res = split_policies(client.clone(), &p.name, &mut all_backends, p.policy).await?;
+		let res = split_policies(client.clone(), p.policy).await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
 			anyhow::bail!("'policies' must contain exactly 1 policy")
 		}
@@ -966,7 +975,7 @@ async fn convert_listener(
 	}
 
 	if let Some(pol) = policies {
-		let pols = split_policies(client.clone(), &key, &mut all_backends, pol.into()).await?;
+		let pols = split_policies(client.clone(), pol.into()).await?;
 		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
 			all_policies.push(TargetedPolicy {
 				name: strng::format!("listener/{key}/{idx}"),
@@ -1035,7 +1044,7 @@ async fn convert_route(
 		external_backends.extend_from_slice(&backends);
 	}
 	let resolved = if let Some(pol) = policies {
-		split_policies(client, &key, &mut external_backends, pol).await?
+		split_policies(client, pol).await?
 	} else {
 		ResolvedPolicies::default()
 	};
@@ -1098,12 +1107,7 @@ async fn split_frontend_policies(
 	}
 	Ok(pols)
 }
-async fn split_policies(
-	client: Client,
-	key: &Strng,
-	external_backends: &mut Vec<BackendWithPolicies>,
-	pol: FilterOrPolicy,
-) -> Result<ResolvedPolicies, Error> {
+async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
 		backend_policies,
@@ -1149,15 +1153,7 @@ async fn split_policies(
 		route_policies.push(TrafficPolicy::UrlRewrite(p));
 	}
 	if let Some(p) = request_mirror {
-		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/mirror", key), &p.backend);
-		let pol = filters::RequestMirror {
-			backend: bref,
-			percentage: p.percentage,
-		};
-		backend
-			.into_iter()
-			.for_each(|backend| external_backends.push(backend.into()));
-		route_policies.push(TrafficPolicy::RequestMirror(vec![pol]));
+		route_policies.push(TrafficPolicy::RequestMirror(vec![p]));
 	}
 
 	// Filters
@@ -1210,55 +1206,16 @@ async fn split_policies(
 		route_policies.push(TrafficPolicy::Authorization(p))
 	}
 	if let Some(p) = ext_authz {
-		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/extauthz", key), &p.target);
-		// Convert to FailureMode
-		let failure_mode = match (p.fail_open, p.status_on_error) {
-			(Some(true), _) => crate::http::ext_authz::FailureMode::Allow,
-			(Some(false), Some(code)) => crate::http::ext_authz::FailureMode::DenyWithStatus(code),
-			(Some(false), None) | (None, None) => crate::http::ext_authz::FailureMode::Deny,
-			(None, Some(code)) => crate::http::ext_authz::FailureMode::DenyWithStatus(code),
-		};
-
-		let pol = http::ext_authz::ExtAuthz {
-			target: Arc::new(bref),
-			context: p.context,
-			metadata: p.metadata,
-			failure_mode,
-			include_request_headers: vec![],
-			include_request_body: p.include_request_body.map(Into::into),
-			timeout: p.timeout,
-		};
-		backend
-			.into_iter()
-			.for_each(|backend| external_backends.push(backend.into()));
-		route_policies.push(TrafficPolicy::ExtAuthz(pol))
+		route_policies.push(TrafficPolicy::ExtAuthz(p))
 	}
 	if let Some(p) = ext_proc {
-		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/extproc", key), &p.target);
-
-		let pol = http::ext_proc::ExtProc {
-			target: Arc::new(bref),
-			failure_mode: p.failure_mode,
-		};
-		backend
-			.into_iter()
-			.for_each(|backend| external_backends.push(backend.into()));
-		route_policies.push(TrafficPolicy::ExtProc(pol))
+		route_policies.push(TrafficPolicy::ExtProc(p))
 	}
 	if !local_rate_limit.is_empty() {
 		route_policies.push(TrafficPolicy::LocalRateLimit(local_rate_limit))
 	}
 	if let Some(p) = remote_rate_limit {
-		let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/ratelimit", key), &p.target);
-		let pol = http::remoteratelimit::RemoteRateLimit {
-			domain: p.domain,
-			target: Arc::new(bref),
-			descriptors: Arc::new(p.descriptors),
-		};
-		backend
-			.into_iter()
-			.for_each(|backend| external_backends.push(backend.into()));
-		route_policies.push(TrafficPolicy::RemoteRateLimit(pol))
+		route_policies.push(TrafficPolicy::RemoteRateLimit(p))
 	}
 
 	// Traffic policies
@@ -1394,86 +1351,4 @@ impl TryInto<TLSConfig> for LocalTLSServerConfig {
 			config: Arc::new(ccb),
 		})
 	}
-}
-
-#[apply(schema_de!)]
-pub struct LocalRequestMirror {
-	pub backend: SimpleLocalBackend,
-	// 0.0-1.0
-	pub percentage: f64,
-}
-
-#[apply(schema_de!)]
-pub struct LocalBodyOptions {
-	/// Maximum size of request body to buffer (default: 8192)
-	#[serde(default)]
-	pub max_request_bytes: u32,
-	/// If true, send partial body when max_request_bytes is reached
-	#[serde(default)]
-	pub allow_partial_message: bool,
-	/// If true, pack body as raw bytes in gRPC
-	#[serde(default)]
-	pub pack_as_bytes: bool,
-}
-
-impl Default for LocalBodyOptions {
-	fn default() -> Self {
-		Self {
-			max_request_bytes: 8192,
-			allow_partial_message: false,
-			pack_as_bytes: false,
-		}
-	}
-}
-
-impl From<LocalBodyOptions> for http::ext_authz::BodyOptions {
-	fn from(opts: LocalBodyOptions) -> Self {
-		http::ext_authz::BodyOptions {
-			max_request_bytes: opts.max_request_bytes,
-			allow_partial_message: opts.allow_partial_message,
-			pack_as_bytes: opts.pack_as_bytes,
-		}
-	}
-}
-
-#[apply(schema_de!)]
-pub struct LocalExtAuthz {
-	#[serde(flatten)]
-	pub target: SimpleLocalBackend,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub context: Option<HashMap<String, String>>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub metadata: Option<HashMap<String, Arc<cel::Expression>>>,
-	// Backwards compatibility: support both old and new failure handling approaches
-	#[serde(default)]
-	pub fail_open: Option<bool>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub status_on_error: Option<u16>,
-	/// Options for including the request body in the authorization request
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub include_request_body: Option<LocalBodyOptions>,
-	/// Timeout for the authorization request (default: 200ms)
-	#[serde(
-		default,
-		skip_serializing_if = "Option::is_none",
-		with = "serde_dur_option"
-	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	pub timeout: Option<Duration>,
-}
-
-#[apply(schema_de!)]
-pub struct LocalExtProc {
-	#[serde(flatten)]
-	pub target: SimpleLocalBackend,
-	#[serde(default)]
-	pub failure_mode: FailureMode,
-}
-
-#[apply(schema_de!)]
-pub struct LocalRemoteRateLimit {
-	pub domain: String,
-	#[serde(flatten)]
-	pub target: SimpleLocalBackend,
-	pub descriptors: crate::http::remoteratelimit::DescriptorSet,
 }

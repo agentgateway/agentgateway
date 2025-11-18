@@ -38,6 +38,7 @@ pub enum RequestOrResponse<'a> {
 
 use std::fmt::Debug;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::task::{Context, Poll};
 
 pub use ::http::uri::{Authority, Scheme};
@@ -52,7 +53,7 @@ use url::Url;
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::BufferLimit;
 
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +93,26 @@ impl Serialize for HeaderOrPseudo {
 			HeaderOrPseudo::Authority => ":authority".serialize(serializer),
 			HeaderOrPseudo::Path => ":path".serialize(serializer),
 			HeaderOrPseudo::Status => ":status".serialize(serializer),
+		}
+	}
+}
+
+impl<'de> Deserialize<'de> for HeaderOrPseudo {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let s = String::deserialize(deserializer)?;
+
+		match s.as_str() {
+			":method" => Ok(HeaderOrPseudo::Method),
+			":scheme" => Ok(HeaderOrPseudo::Scheme),
+			":authority" => Ok(HeaderOrPseudo::Authority),
+			":path" => Ok(HeaderOrPseudo::Path),
+			":status" => Ok(HeaderOrPseudo::Status),
+			_ => Ok(HeaderOrPseudo::Header(
+				HeaderName::from_str(&s).map_err(serde::de::Error::custom)?,
+			)),
 		}
 	}
 }

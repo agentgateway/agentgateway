@@ -964,6 +964,7 @@
                                     ]
                                   },
                                   {
+                                    "description": "Service reference. Service must be defined in the top level services list.",
                                     "type": "object",
                                     "properties": {
                                       "service": {
@@ -1004,14 +1005,29 @@
                                     "additionalProperties": false
                                   },
                                   {
+                                    "description": "Hostname or IP address",
                                     "type": "object",
                                     "properties": {
                                       "host": {
+                                        "description": "Hostname or IP address",
                                         "type": "string"
                                       }
                                     },
                                     "required": [
                                       "host"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "backend": {
+                                        "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "backend"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -1026,7 +1042,8 @@
                             "required": [
                               "backend",
                               "percentage"
-                            ]
+                            ],
+                            "default": null
                           },
                           "directResponse": {
                             "description": "Directly respond to the request with a static response.",
@@ -2283,6 +2300,7 @@
                                     ]
                                   },
                                   {
+                                    "description": "Service reference. Service must be defined in the top level services list.",
                                     "type": "object",
                                     "properties": {
                                       "service": {
@@ -2322,14 +2340,28 @@
                                     ]
                                   },
                                   {
+                                    "description": "Hostname or IP address",
                                     "type": "object",
                                     "properties": {
                                       "host": {
+                                        "description": "Hostname or IP address",
                                         "type": "string"
                                       }
                                     },
                                     "required": [
                                       "host"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "backend": {
+                                        "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "backend"
                                     ]
                                   }
                                 ]
@@ -2337,7 +2369,8 @@
                               {
                                 "type": "null"
                               }
-                            ]
+                            ],
+                            "default": null
                           },
                           "jwtAuth": {
                             "description": "Authenticate incoming JWT requests.",
@@ -2614,6 +2647,7 @@
                                 "type": "object",
                                 "properties": {
                                   "context": {
+                                    "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
                                     "type": [
                                       "object",
                                       "null"
@@ -2623,6 +2657,7 @@
                                     }
                                   },
                                   "metadata": {
+                                    "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
                                     "type": [
                                       "object",
                                       "null"
@@ -2631,21 +2666,40 @@
                                       "type": "string"
                                     }
                                   },
-                                  "failOpen": {
-                                    "type": [
-                                      "boolean",
-                                      "null"
+                                  "failureMode": {
+                                    "description": "Behavior when the authorization service is unavailable or returns an error",
+                                    "oneOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "allow",
+                                          "deny"
+                                        ]
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "denyWithStatus": {
+                                            "type": "integer",
+                                            "format": "uint16",
+                                            "minimum": 0,
+                                            "maximum": 65535
+                                          }
+                                        },
+                                        "required": [
+                                          "denyWithStatus"
+                                        ],
+                                        "additionalProperties": false
+                                      }
                                     ],
-                                    "default": null
+                                    "default": "deny"
                                   },
-                                  "statusOnError": {
-                                    "type": [
-                                      "integer",
-                                      "null"
-                                    ],
-                                    "format": "uint16",
-                                    "minimum": 0,
-                                    "maximum": 65535
+                                  "includeRequestHeaders": {
+                                    "description": "Specific headers to include in the authorization request (empty = all headers)",
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
                                   },
                                   "includeRequestBody": {
                                     "description": "Options for including the request body in the authorization request",
@@ -2691,6 +2745,7 @@
                                     ]
                                   },
                                   {
+                                    "description": "Service reference. Service must be defined in the top level services list.",
                                     "type": "object",
                                     "properties": {
                                       "service": {
@@ -2730,14 +2785,28 @@
                                     ]
                                   },
                                   {
+                                    "description": "Hostname or IP address",
                                     "type": "object",
                                     "properties": {
                                       "host": {
+                                        "description": "Hostname or IP address",
                                         "type": "string"
                                       }
                                     },
                                     "required": [
                                       "host"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "backend": {
+                                        "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "backend"
                                     ]
                                   }
                                 ]
@@ -2745,7 +2814,8 @@
                               {
                                 "type": "null"
                               }
-                            ]
+                            ],
+                            "default": null
                           },
                           "extProc": {
                             "description": "Extend agentgateway with an external processor",
@@ -2771,6 +2841,7 @@
                                     ]
                                   },
                                   {
+                                    "description": "Service reference. Service must be defined in the top level services list.",
                                     "type": "object",
                                     "properties": {
                                       "service": {
@@ -2810,14 +2881,28 @@
                                     ]
                                   },
                                   {
+                                    "description": "Hostname or IP address",
                                     "type": "object",
                                     "properties": {
                                       "host": {
+                                        "description": "Hostname or IP address",
                                         "type": "string"
                                       }
                                     },
                                     "required": [
                                       "host"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "backend": {
+                                        "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "backend"
                                     ]
                                   }
                                 ]
@@ -2825,7 +2910,8 @@
                               {
                                 "type": "null"
                               }
-                            ]
+                            ],
+                            "default": null
                           },
                           "transformations": {
                             "description": "Modify requests and responses",
@@ -7408,6 +7494,7 @@
                               ]
                             },
                             {
+                              "description": "Service reference. Service must be defined in the top level services list.",
                               "type": "object",
                               "properties": {
                                 "service": {
@@ -7447,14 +7534,28 @@
                               ]
                             },
                             {
+                              "description": "Hostname or IP address",
                               "type": "object",
                               "properties": {
                                 "host": {
+                                  "description": "Hostname or IP address",
                                   "type": "string"
                                 }
                               },
                               "required": [
                                 "host"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "backend": {
+                                  "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "backend"
                               ]
                             }
                           ]
@@ -7643,6 +7744,7 @@
                           "type": "object",
                           "properties": {
                             "context": {
+                              "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
                               "type": [
                                 "object",
                                 "null"
@@ -7652,6 +7754,7 @@
                               }
                             },
                             "metadata": {
+                              "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
                               "type": [
                                 "object",
                                 "null"
@@ -7660,21 +7763,40 @@
                                 "type": "string"
                               }
                             },
-                            "failOpen": {
-                              "type": [
-                                "boolean",
-                                "null"
+                            "failureMode": {
+                              "description": "Behavior when the authorization service is unavailable or returns an error",
+                              "oneOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "allow",
+                                    "deny"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "denyWithStatus": {
+                                      "type": "integer",
+                                      "format": "uint16",
+                                      "minimum": 0,
+                                      "maximum": 65535
+                                    }
+                                  },
+                                  "required": [
+                                    "denyWithStatus"
+                                  ],
+                                  "additionalProperties": false
+                                }
                               ],
-                              "default": null
+                              "default": "deny"
                             },
-                            "statusOnError": {
-                              "type": [
-                                "integer",
-                                "null"
-                              ],
-                              "format": "uint16",
-                              "minimum": 0,
-                              "maximum": 65535
+                            "includeRequestHeaders": {
+                              "description": "Specific headers to include in the authorization request (empty = all headers)",
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
                             },
                             "includeRequestBody": {
                               "description": "Options for including the request body in the authorization request",
@@ -7720,6 +7842,7 @@
                               ]
                             },
                             {
+                              "description": "Service reference. Service must be defined in the top level services list.",
                               "type": "object",
                               "properties": {
                                 "service": {
@@ -7759,14 +7882,28 @@
                               ]
                             },
                             {
+                              "description": "Hostname or IP address",
                               "type": "object",
                               "properties": {
                                 "host": {
+                                  "description": "Hostname or IP address",
                                   "type": "string"
                                 }
                               },
                               "required": [
                                 "host"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "backend": {
+                                  "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "backend"
                               ]
                             }
                           ]
@@ -7774,7 +7911,8 @@
                         {
                           "type": "null"
                         }
-                      ]
+                      ],
+                      "default": null
                     },
                     "extProc": {
                       "description": "Extend agentgateway with an external processor",
@@ -7800,6 +7938,7 @@
                               ]
                             },
                             {
+                              "description": "Service reference. Service must be defined in the top level services list.",
                               "type": "object",
                               "properties": {
                                 "service": {
@@ -7839,14 +7978,28 @@
                               ]
                             },
                             {
+                              "description": "Hostname or IP address",
                               "type": "object",
                               "properties": {
                                 "host": {
+                                  "description": "Hostname or IP address",
                                   "type": "string"
                                 }
                               },
                               "required": [
                                 "host"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "backend": {
+                                  "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "backend"
                               ]
                             }
                           ]
@@ -7854,7 +8007,8 @@
                         {
                           "type": "null"
                         }
-                      ]
+                      ],
+                      "default": null
                     },
                     "transformations": {
                       "description": "Modify requests and responses",
@@ -8627,6 +8781,7 @@
                         ]
                       },
                       {
+                        "description": "Service reference. Service must be defined in the top level services list.",
                         "type": "object",
                         "properties": {
                           "service": {
@@ -8667,14 +8822,29 @@
                         "additionalProperties": false
                       },
                       {
+                        "description": "Hostname or IP address",
                         "type": "object",
                         "properties": {
                           "host": {
+                            "description": "Hostname or IP address",
                             "type": "string"
                           }
                         },
                         "required": [
                           "host"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "backend": {
+                            "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "backend"
                         ],
                         "additionalProperties": false
                       }
@@ -8689,7 +8859,8 @@
                 "required": [
                   "backend",
                   "percentage"
-                ]
+                ],
+                "default": null
               },
               "directResponse": {
                 "description": "Directly respond to the request with a static response.",
@@ -9946,6 +10117,7 @@
                         ]
                       },
                       {
+                        "description": "Service reference. Service must be defined in the top level services list.",
                         "type": "object",
                         "properties": {
                           "service": {
@@ -9985,14 +10157,28 @@
                         ]
                       },
                       {
+                        "description": "Hostname or IP address",
                         "type": "object",
                         "properties": {
                           "host": {
+                            "description": "Hostname or IP address",
                             "type": "string"
                           }
                         },
                         "required": [
                           "host"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "backend": {
+                            "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "backend"
                         ]
                       }
                     ]
@@ -10000,7 +10186,8 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "default": null
               },
               "jwtAuth": {
                 "description": "Authenticate incoming JWT requests.",
@@ -10277,6 +10464,7 @@
                     "type": "object",
                     "properties": {
                       "context": {
+                        "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
                         "type": [
                           "object",
                           "null"
@@ -10286,6 +10474,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
                         "type": [
                           "object",
                           "null"
@@ -10294,21 +10483,40 @@
                           "type": "string"
                         }
                       },
-                      "failOpen": {
-                        "type": [
-                          "boolean",
-                          "null"
+                      "failureMode": {
+                        "description": "Behavior when the authorization service is unavailable or returns an error",
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "allow",
+                              "deny"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "denyWithStatus": {
+                                "type": "integer",
+                                "format": "uint16",
+                                "minimum": 0,
+                                "maximum": 65535
+                              }
+                            },
+                            "required": [
+                              "denyWithStatus"
+                            ],
+                            "additionalProperties": false
+                          }
                         ],
-                        "default": null
+                        "default": "deny"
                       },
-                      "statusOnError": {
-                        "type": [
-                          "integer",
-                          "null"
-                        ],
-                        "format": "uint16",
-                        "minimum": 0,
-                        "maximum": 65535
+                      "includeRequestHeaders": {
+                        "description": "Specific headers to include in the authorization request (empty = all headers)",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       },
                       "includeRequestBody": {
                         "description": "Options for including the request body in the authorization request",
@@ -10354,6 +10562,7 @@
                         ]
                       },
                       {
+                        "description": "Service reference. Service must be defined in the top level services list.",
                         "type": "object",
                         "properties": {
                           "service": {
@@ -10393,14 +10602,28 @@
                         ]
                       },
                       {
+                        "description": "Hostname or IP address",
                         "type": "object",
                         "properties": {
                           "host": {
+                            "description": "Hostname or IP address",
                             "type": "string"
                           }
                         },
                         "required": [
                           "host"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "backend": {
+                            "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "backend"
                         ]
                       }
                     ]
@@ -10408,7 +10631,8 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "default": null
               },
               "extProc": {
                 "description": "Extend agentgateway with an external processor",
@@ -10434,6 +10658,7 @@
                         ]
                       },
                       {
+                        "description": "Service reference. Service must be defined in the top level services list.",
                         "type": "object",
                         "properties": {
                           "service": {
@@ -10473,14 +10698,28 @@
                         ]
                       },
                       {
+                        "description": "Hostname or IP address",
                         "type": "object",
                         "properties": {
                           "host": {
+                            "description": "Hostname or IP address",
                             "type": "string"
                           }
                         },
                         "required": [
                           "host"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "backend": {
+                            "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "backend"
                         ]
                       }
                     ]
@@ -10488,7 +10727,8 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "default": null
               },
               "transformations": {
                 "description": "Modify requests and responses",

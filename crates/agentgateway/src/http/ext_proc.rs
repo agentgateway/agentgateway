@@ -118,8 +118,9 @@ impl InferencePoolRouter {
 	}
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
 pub struct ExtProc {
+	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
 	#[serde(default)]
 	pub failure_mode: FailureMode,

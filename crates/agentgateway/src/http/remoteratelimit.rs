@@ -18,10 +18,10 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.ratelimit.v3");
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
 pub struct RemoteRateLimit {
 	pub domain: String,
+	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
 	pub descriptors: Arc<DescriptorSet>,
 }

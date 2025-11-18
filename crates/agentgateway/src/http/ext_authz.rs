@@ -38,7 +38,7 @@ pub struct ExtAuthzDynamicMetadata {
 	pub metadata: HashMap<String, JsonValue>,
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
 pub struct BodyOptions {
 	/// Maximum size of request body to buffer (default: 8192)
 	#[serde(default)]
@@ -61,7 +61,7 @@ impl Default for BodyOptions {
 	}
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
 #[derive(Default)]
 pub enum FailureMode {
 	Allow,
@@ -70,9 +70,10 @@ pub enum FailureMode {
 	DenyWithStatus(u16),
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
 pub struct ExtAuthz {
 	/// Reference to the external authorization service backend
+	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
 	/// Additional context to send to the authorization service.
 	/// This maps to the `context_extensions` field of the request, and only allows static values.

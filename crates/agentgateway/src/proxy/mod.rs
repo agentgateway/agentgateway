@@ -323,6 +323,10 @@ pub fn resolve_simple_backend_with_policies(
 				be.inline_policies.clone(),
 			)
 		},
+		SimpleBackendReference::InlineBackend(t) => (
+			SimpleBackend::Opaque(t.to_string().into(), t.clone()),
+			Vec::default(),
+		),
 		SimpleBackendReference::Invalid => (SimpleBackend::Invalid, Vec::default()),
 	};
 	Ok(backend)

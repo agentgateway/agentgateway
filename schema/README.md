@@ -123,7 +123,8 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.requestMirror.backend.(1)service.name.namespace`||
 |`binds[].listeners[].routes[].policies.requestMirror.backend.(1)service.name.hostname`||
 |`binds[].listeners[].routes[].policies.requestMirror.backend.(1)service.port`||
-|`binds[].listeners[].routes[].policies.requestMirror.backend.(1)host`||
+|`binds[].listeners[].routes[].policies.requestMirror.backend.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.requestMirror.backend.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.requestMirror.percentage`||
 |`binds[].listeners[].routes[].policies.directResponse`|Directly respond to the request with a static response.|
 |`binds[].listeners[].routes[].policies.directResponse.body`||
@@ -264,7 +265,8 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)service.name.namespace`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)service.name.hostname`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)service.port`||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)domain`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries`||
@@ -301,11 +303,13 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.name.namespace`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.name.hostname`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.port`||
-|`binds[].listeners[].routes[].policies.extAuthz.(any)(1)host`||
-|`binds[].listeners[].routes[].policies.extAuthz.(any)context`||
-|`binds[].listeners[].routes[].policies.extAuthz.(any)metadata`||
-|`binds[].listeners[].routes[].policies.extAuthz.(any)failOpen`||
-|`binds[].listeners[].routes[].policies.extAuthz.(any)statusOnError`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
@@ -317,7 +321,8 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name.namespace`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name.hostname`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.port`||
-|`binds[].listeners[].routes[].policies.extProc.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.extProc.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.extProc.(any)failureMode`||
 |`binds[].listeners[].routes[].policies.transformations`|Modify requests and responses|
 |`binds[].listeners[].routes[].policies.transformations.request`||
@@ -823,7 +828,8 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].tcpRoutes[].backends[].(1)service.name.namespace`||
 |`binds[].listeners[].tcpRoutes[].backends[].(1)service.name.hostname`||
 |`binds[].listeners[].tcpRoutes[].backends[].(1)service.port`||
-|`binds[].listeners[].tcpRoutes[].backends[].(1)host`||
+|`binds[].listeners[].tcpRoutes[].backends[].(1)host`|Hostname or IP address|
+|`binds[].listeners[].tcpRoutes[].backends[].(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].tcpRoutes[].backends[].weight`||
 |`binds[].listeners[].tcpRoutes[].backends[].policies`||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS`|Send TLS to the backend.|
@@ -855,11 +861,13 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.name.namespace`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.name.hostname`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.port`||
-|`binds[].listeners[].policies.extAuthz.(any)(1)host`||
-|`binds[].listeners[].policies.extAuthz.(any)context`||
-|`binds[].listeners[].policies.extAuthz.(any)metadata`||
-|`binds[].listeners[].policies.extAuthz.(any)failOpen`||
-|`binds[].listeners[].policies.extAuthz.(any)statusOnError`||
+|`binds[].listeners[].policies.extAuthz.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].policies.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.(any)context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].policies.extAuthz.(any)metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
+|`binds[].listeners[].policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
@@ -871,7 +879,8 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].policies.extProc.(any)(1)service.name.namespace`||
 |`binds[].listeners[].policies.extProc.(any)(1)service.name.hostname`||
 |`binds[].listeners[].policies.extProc.(any)(1)service.port`||
-|`binds[].listeners[].policies.extProc.(any)(1)host`||
+|`binds[].listeners[].policies.extProc.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].policies.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies.extProc.(any)failureMode`||
 |`binds[].listeners[].policies.transformations`|Modify requests and responses|
 |`binds[].listeners[].policies.transformations.request`||
@@ -962,7 +971,8 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.requestMirror.backend.(1)service.name.namespace`||
 |`policies[].policy.requestMirror.backend.(1)service.name.hostname`||
 |`policies[].policy.requestMirror.backend.(1)service.port`||
-|`policies[].policy.requestMirror.backend.(1)host`||
+|`policies[].policy.requestMirror.backend.(1)host`|Hostname or IP address|
+|`policies[].policy.requestMirror.backend.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.requestMirror.percentage`||
 |`policies[].policy.directResponse`|Directly respond to the request with a static response.|
 |`policies[].policy.directResponse.body`||
@@ -1103,7 +1113,8 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.remoteRateLimit.(any)(1)service.name.namespace`||
 |`policies[].policy.remoteRateLimit.(any)(1)service.name.hostname`||
 |`policies[].policy.remoteRateLimit.(any)(1)service.port`||
-|`policies[].policy.remoteRateLimit.(any)(1)host`||
+|`policies[].policy.remoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`policies[].policy.remoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.remoteRateLimit.(any)domain`||
 |`policies[].policy.remoteRateLimit.(any)descriptors`||
 |`policies[].policy.remoteRateLimit.(any)descriptors[].entries`||
@@ -1140,11 +1151,13 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)(1)service.name.namespace`||
 |`policies[].policy.extAuthz.(any)(1)service.name.hostname`||
 |`policies[].policy.extAuthz.(any)(1)service.port`||
-|`policies[].policy.extAuthz.(any)(1)host`||
-|`policies[].policy.extAuthz.(any)context`||
-|`policies[].policy.extAuthz.(any)metadata`||
-|`policies[].policy.extAuthz.(any)failOpen`||
-|`policies[].policy.extAuthz.(any)statusOnError`||
+|`policies[].policy.extAuthz.(any)(1)host`|Hostname or IP address|
+|`policies[].policy.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.(any)context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`policies[].policy.extAuthz.(any)metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`policies[].policy.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
+|`policies[].policy.extAuthz.(any)failureMode.(1)denyWithStatus`||
+|`policies[].policy.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|
 |`policies[].policy.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
 |`policies[].policy.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`policies[].policy.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
@@ -1156,7 +1169,8 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extProc.(any)(1)service.name.namespace`||
 |`policies[].policy.extProc.(any)(1)service.name.hostname`||
 |`policies[].policy.extProc.(any)(1)service.port`||
-|`policies[].policy.extProc.(any)(1)host`||
+|`policies[].policy.extProc.(any)(1)host`|Hostname or IP address|
+|`policies[].policy.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.extProc.(any)failureMode`||
 |`policies[].policy.transformations`|Modify requests and responses|
 |`policies[].policy.transformations.request`||

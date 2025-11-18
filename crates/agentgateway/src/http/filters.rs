@@ -154,8 +154,7 @@ impl DirectResponse {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[apply(schema!)]
 pub struct RequestMirror {
 	pub backend: SimpleBackendReference,
 	// 0.0-1.0
