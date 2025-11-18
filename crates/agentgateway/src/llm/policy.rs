@@ -32,6 +32,8 @@ pub struct Policy {
 	pub model_aliases: HashMap<Strng, Strng>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_caching: Option<PromptCachingConfig>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub anthropic_beta_allowlist: Vec<Strng>,
 }
 
 #[apply(schema!)]

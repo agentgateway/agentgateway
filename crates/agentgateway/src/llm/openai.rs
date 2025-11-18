@@ -244,17 +244,13 @@ pub mod responses {
 				&self,
 				provider: &crate::llm::bedrock::Provider,
 				headers: Option<&::http::HeaderMap>,
-				prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
+				policies: Option<&crate::llm::policy::Policy>,
 			) -> Result<Vec<u8>, AIError> {
 				// Convert passthrough Request to typed CreateResponse (same pattern as Anthropic Messages)
 				let typed =
 					crate::json::convert::<_, CreateResponse>(self).map_err(AIError::RequestMarshal)?;
-				let bedrock_request = crate::llm::bedrock::translate_request_responses(
-					&typed,
-					provider,
-					headers,
-					prompt_caching,
-				)?;
+				let bedrock_request =
+					crate::llm::bedrock::translate_request_responses(&typed, provider, headers, policies)?;
 				serde_json::to_vec(&bedrock_request).map_err(AIError::RequestMarshal)
 			}
 		}

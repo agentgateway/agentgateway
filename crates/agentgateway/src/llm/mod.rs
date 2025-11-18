@@ -121,6 +121,44 @@ pub enum RouteType {
 	AnthropicTokenCount,
 }
 
+/// Filter anthropic-beta headers based on policy allowlist.
+/// If allowlist is empty, all headers pass through (permissive default).
+fn filter_anthropic_beta_headers(headers: &mut ::http::HeaderMap, allowlist: &[Strng]) {
+	if allowlist.is_empty() {
+		// Empty allowlist = allow all (permissive)
+		return;
+	}
+
+	// Convert allowlist to HashSet for O(1) lookup
+	let allowed_set: std::collections::HashSet<&str> = allowlist.iter().map(|s| s.as_str()).collect();
+
+	// Get all anthropic-beta header values
+	let mut filtered_values = Vec::new();
+
+	for value in headers.get_all("anthropic-beta") {
+		if let Ok(header_str) = value.to_str() {
+			// Handle comma-separated values within a single header
+			for feature in header_str.split(',') {
+				let trimmed = feature.trim();
+				if !trimmed.is_empty() && allowed_set.contains(trimmed) {
+					filtered_values.push(trimmed.to_string());
+				}
+			}
+		}
+	}
+
+	// Remove all anthropic-beta headers
+	headers.remove("anthropic-beta");
+
+	// Re-add only the allowed ones
+	if !filtered_values.is_empty() {
+		let combined = filtered_values.join(", ");
+		if let Ok(header_value) = HeaderValue::from_str(&combined) {
+			headers.insert("anthropic-beta", header_value);
+		}
+	}
+}
+
 #[apply(schema!)]
 pub enum AIProvider {
 	OpenAI(openai::Provider),
@@ -263,11 +301,12 @@ impl AIProvider {
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
 		apply_host_path_defaults: bool,
+		policy: Option<&Policy>,
 	) -> anyhow::Result<()> {
 		if apply_host_path_defaults {
 			self.set_host_path_defaults(req, route_type, llm_request)?;
 		}
-		self.set_required_fields(req)?;
+		self.set_required_fields(req, policy)?;
 		Ok(())
 	}
 
@@ -354,7 +393,11 @@ impl AIProvider {
 		}
 	}
 
-	pub fn set_required_fields(&self, req: &mut Request) -> anyhow::Result<()> {
+	pub fn set_required_fields(
+		&self,
+		req: &mut Request,
+		policy: Option<&Policy>,
+	) -> anyhow::Result<()> {
 		match self {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
@@ -369,6 +412,21 @@ impl AIProvider {
 							.headers
 							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
 					};
+
+					// Filter anthropic-beta headers based on policy
+					if let Some(p) = policy {
+						filter_anthropic_beta_headers(&mut req.headers, &p.anthropic_beta_allowlist);
+					}
+
+					Ok(())
+				})
+			},
+			AIProvider::Bedrock(_) => {
+				// Bedrock also uses anthropic-beta headers when proxying to Anthropic models
+				http::modify_req(req, |req| {
+					if let Some(p) = policy {
+						filter_anthropic_beta_headers(&mut req.headers, &p.anthropic_beta_allowlist);
+					}
 					Ok(())
 				})
 			},
@@ -642,11 +700,7 @@ impl AIProvider {
 			| AIProvider::Vertex(_)
 			| AIProvider::AzureOpenAI(_) => req.to_openai()?,
 			AIProvider::Anthropic(_) => req.to_anthropic()?,
-			AIProvider::Bedrock(p) => req.to_bedrock(
-				p,
-				Some(&parts.headers),
-				policies.and_then(|p| p.prompt_caching.as_ref()),
-			)?,
+			AIProvider::Bedrock(p) => req.to_bedrock(p, Some(&parts.headers), policies)?,
 		};
 		let resp = Body::from(new_request);
 		parts.headers.remove(header::CONTENT_LENGTH);

@@ -219,6 +219,7 @@ fn convert_backend_ai_policy(
 			.map(|(k, v)| (strng::new(k), strng::new(v)))
 			.collect(),
 		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
+		anthropic_beta_allowlist: ai.anthropic_beta_allowlist.iter().map(strng::new).collect(),
 	})
 }
 
@@ -1702,6 +1703,7 @@ mod tests {
 				prompts: None,
 				model_aliases: Default::default(),
 				prompt_caching: None,
+				anthropic_beta_allowlist: vec![],
 			})),
 		};
 

@@ -6749,8 +6749,10 @@ type BackendPolicySpec_Ai struct {
 	// Model aliases - map from alias name to actual model name
 	ModelAliases  map[string]string                   `protobuf:"bytes,5,rep,name=model_aliases,json=modelAliases,proto3" json:"model_aliases,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	PromptCaching *BackendPolicySpec_Ai_PromptCaching `protobuf:"bytes,6,opt,name=prompt_caching,json=promptCaching,proto3" json:"prompt_caching,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// List of allowed Anthropic beta feature headers (e.g., "prompt-caching-2024-07-31")
+	AnthropicBetaAllowlist []string `protobuf:"bytes,7,rep,name=anthropic_beta_allowlist,json=anthropicBetaAllowlist,proto3" json:"anthropic_beta_allowlist,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_Ai) Reset() {
@@ -6821,6 +6823,13 @@ func (x *BackendPolicySpec_Ai) GetModelAliases() map[string]string {
 func (x *BackendPolicySpec_Ai) GetPromptCaching() *BackendPolicySpec_Ai_PromptCaching {
 	if x != nil {
 		return x.PromptCaching
+	}
+	return nil
+}
+
+func (x *BackendPolicySpec_Ai) GetAnthropicBetaAllowlist() []string {
+	if x != nil {
+		return x.AnthropicBetaAllowlist
 	}
 	return nil
 }
@@ -8246,13 +8255,14 @@ func (x *AIBackend_Anthropic) GetModel() *wrapperspb.StringValue {
 }
 
 type AIBackend_Bedrock struct {
-	state               protoimpl.MessageState  `protogen:"open.v1"`
-	Model               *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
-	Region              string                  `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
-	GuardrailIdentifier *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3" json:"guardrail_identifier,omitempty"`
-	GuardrailVersion    *wrapperspb.StringValue `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3" json:"guardrail_version,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                protoimpl.MessageState  `protogen:"open.v1"`
+	Model                *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Region               string                  `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	GuardrailIdentifier  *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3" json:"guardrail_identifier,omitempty"`
+	GuardrailVersion     *wrapperspb.StringValue `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3" json:"guardrail_version,omitempty"`
+	AnthropicBetaHeaders []string                `protobuf:"bytes,5,rep,name=anthropic_beta_headers,json=anthropicBetaHeaders,proto3" json:"anthropic_beta_headers,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *AIBackend_Bedrock) Reset() {
@@ -8309,6 +8319,13 @@ func (x *AIBackend_Bedrock) GetGuardrailIdentifier() *wrapperspb.StringValue {
 func (x *AIBackend_Bedrock) GetGuardrailVersion() *wrapperspb.StringValue {
 	if x != nil {
 		return x.GuardrailVersion
+	}
+	return nil
+}
+
+func (x *AIBackend_Bedrock) GetAnthropicBetaHeaders() []string {
+	if x != nil {
+		return x.AnthropicBetaHeaders
 	}
 	return nil
 }
@@ -8966,7 +8983,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xa5.\n" +
+	"\x04kind\"\xdf.\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -8983,14 +9000,15 @@ const file_resource_proto_rawDesc = "" +
 	"\x0erequest_mirror\x18\v \x01(\v2).agentgateway.dev.resource.RequestMirrorsH\x00R\rrequestMirror\x12]\n" +
 	"\fbackend_http\x18\f \x01(\v28.agentgateway.dev.resource.BackendPolicySpec.BackendHTTPH\x00R\vbackendHttp\x12Z\n" +
 	"\vbackend_tcp\x18\r \x01(\v27.agentgateway.dev.resource.BackendPolicySpec.BackendTCPH\x00R\n" +
-	"backendTcp\x1a\x83\x17\n" +
+	"backendTcp\x1a\xbd\x17\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
 	"\toverrides\x18\x03 \x03(\v2>.agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntryR\toverrides\x12Z\n" +
 	"\aprompts\x18\x04 \x01(\v2@.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichmentR\aprompts\x12f\n" +
 	"\rmodel_aliases\x18\x05 \x03(\v2A.agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntryR\fmodelAliases\x12d\n" +
-	"\x0eprompt_caching\x18\x06 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCachingR\rpromptCaching\x1a7\n" +
+	"\x0eprompt_caching\x18\x06 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCachingR\rpromptCaching\x128\n" +
+	"\x18anthropic_beta_allowlist\x18\a \x03(\tR\x16anthropicBetaAllowlist\x1a7\n" +
 	"\aMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x1a\xb6\x01\n" +
@@ -9127,7 +9145,7 @@ const file_resource_proto_rawDesc = "" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\x05R\x04port\"\x15\n" +
-	"\x13DynamicForwardProxy\"\xe2\x0f\n" +
+	"\x13DynamicForwardProxy\"\x98\x10\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -9143,12 +9161,13 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x03 \x01(\tR\tprojectId\x1a?\n" +
 	"\tAnthropic\x122\n" +
-	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x1a\xf1\x01\n" +
+	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x1a\xa7\x02\n" +
 	"\aBedrock\x122\n" +
 	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x16\n" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x12O\n" +
 	"\x14guardrail_identifier\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\x13guardrailIdentifier\x12I\n" +
-	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersion\x1a\x94\x01\n" +
+	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersion\x124\n" +
+	"\x16anthropic_beta_headers\x18\x05 \x03(\tR\x14anthropicBetaHeaders\x1a\x94\x01\n" +
 	"\vAzureOpenAI\x122\n" +
 	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12=\n" +

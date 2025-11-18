@@ -243,6 +243,11 @@ impl LLMRequestPolicies {
 				.prompt_caching
 				.clone()
 				.or_else(|| re.prompt_caching.clone()),
+			anthropic_beta_allowlist: if be.anthropic_beta_allowlist.is_empty() {
+				re.anthropic_beta_allowlist.clone()
+			} else {
+				be.anthropic_beta_allowlist.clone()
+			},
 		}));
 		Arc::new(route_policies)
 	}

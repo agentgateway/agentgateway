@@ -283,7 +283,7 @@ pub(super) fn translate_request_completions(
 	req: universal::Request,
 	provider: &Provider,
 	headers: Option<&http::HeaderMap>,
-	prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
+	policies: Option<&crate::llm::policy::Policy>,
 ) -> ConverseRequest {
 	// Extract and join system prompts from universal format
 	let system_text = req
@@ -427,11 +427,15 @@ pub(super) fn translate_request_completions(
 		let mut system_blocks = vec![types::SystemContentBlock::Text { text: system_text }];
 		tracing::debug!(
 			"Prompt caching policy: {:?}, model: {}, supports caching: {}",
-			prompt_caching.map(|c| (c.cache_system, c.cache_messages, c.cache_tools)),
+			policies.and_then(|p| p.prompt_caching.as_ref()).map(|c| (
+				c.cache_system,
+				c.cache_messages,
+				c.cache_tools
+			)),
 			model_id,
 			supports_caching
 		);
-		if let Some(caching) = prompt_caching
+		if let Some(caching) = policies.and_then(|p| p.prompt_caching.as_ref())
 			&& caching.cache_system
 			&& supports_caching
 		{
@@ -463,7 +467,7 @@ pub(super) fn translate_request_completions(
 		performance_config: None,
 	};
 
-	if let Some(caching) = prompt_caching {
+	if let Some(caching) = policies.and_then(|p| p.prompt_caching.as_ref()) {
 		if caching.cache_messages && supports_caching {
 			insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
 		}
@@ -925,6 +929,7 @@ pub(super) fn translate_request_messages(
 	});
 
 	// Extract beta headers from HTTP headers if provided
+	// Headers are already filtered by policy layer - just extract
 	let beta_headers = headers.and_then(|h| extract_beta_headers(h).ok().flatten());
 
 	if let Some(beta_array) = beta_headers {
@@ -997,7 +1002,7 @@ pub(super) fn translate_request_responses(
 	req: &responses::CreateResponse,
 	provider: &Provider,
 	headers: Option<&http::HeaderMap>,
-	prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
+	policies: Option<&crate::llm::policy::Policy>,
 ) -> Result<ConverseRequest, AIError> {
 	use responses::{
 		ContentType, Input, InputContent, InputItem, InputMessage, Role as ResponsesRole,
@@ -1178,7 +1183,7 @@ pub(super) fn translate_request_responses(
 	}
 
 	// Apply system prompt caching if configured
-	if let Some(caching) = prompt_caching
+	if let Some(caching) = policies.and_then(|p| p.prompt_caching.as_ref())
 		&& caching.cache_system
 		&& supports_caching
 		&& let Some(ref mut system) = system_content
@@ -1273,6 +1278,20 @@ pub(super) fn translate_request_responses(
 		Some(metadata)
 	};
 
+	// Extract beta headers (already filtered by policy layer)
+	let beta_headers = headers.and_then(|h| extract_beta_headers(h).ok().flatten());
+
+	let additional_fields = if let Some(beta_array) = beta_headers {
+		let mut fields = serde_json::Map::new();
+		fields.insert(
+			"anthropic_beta".to_string(),
+			serde_json::Value::Array(beta_array),
+		);
+		Some(serde_json::Value::Object(fields))
+	} else {
+		None
+	};
+
 	let mut bedrock_request = ConverseRequest {
 		model_id: req.model.clone(),
 		messages,
@@ -1280,7 +1299,7 @@ pub(super) fn translate_request_responses(
 		inference_config: Some(inference_config),
 		tool_config,
 		guardrail_config,
-		additional_model_request_fields: None,
+		additional_model_request_fields: additional_fields,
 		prompt_variables: None,
 		additional_model_response_field_paths: None,
 		request_metadata: metadata,
@@ -1288,7 +1307,7 @@ pub(super) fn translate_request_responses(
 	};
 
 	// Apply user message and tool caching
-	if let Some(caching) = prompt_caching {
+	if let Some(caching) = policies.and_then(|p| p.prompt_caching.as_ref()) {
 		if caching.cache_messages && supports_caching {
 			insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
 		}
@@ -2162,6 +2181,7 @@ pub(super) fn extract_beta_headers(
 	let mut beta_features = Vec::new();
 
 	// Collect all anthropic-beta header values
+	// Note: Headers are already filtered by policy layer in set_required_fields()
 	for value in headers.get_all("anthropic-beta") {
 		let header_str = value
 			.to_str()

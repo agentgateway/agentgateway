@@ -663,6 +663,8 @@ message BackendPolicySpec {
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;
     PromptCaching prompt_caching = 6;
+    // List of allowed Anthropic beta feature headers (e.g., "prompt-caching-2024-07-31")
+    repeated string anthropic_beta_allowlist = 7;
   }
   message A2a {
   }
@@ -804,6 +806,7 @@ message AIBackend {
     string region = 2;
     google.protobuf.StringValue guardrail_identifier = 3;
     google.protobuf.StringValue guardrail_version = 4;
+    repeated string anthropic_beta_headers = 5;
   }
   message AzureOpenAI {
     google.protobuf.StringValue model = 1;

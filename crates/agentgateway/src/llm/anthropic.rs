@@ -1407,7 +1407,7 @@ pub mod passthrough {
 			&self,
 			provider: &crate::llm::bedrock::Provider,
 			headers: Option<&::http::HeaderMap>,
-			_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
+			_policies: Option<&crate::llm::policy::Policy>,
 		) -> Result<Vec<u8>, AIError> {
 			let typed = json::convert::<_, anthropic::types::MessagesRequest>(self)
 				.map_err(AIError::RequestMarshal)?;

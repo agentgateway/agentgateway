@@ -1172,6 +1172,7 @@ async fn make_backend_call(
 							route_type,
 							Some(&llm_request),
 							llm.use_default_policies(),
+							llm_request_policies.llm.as_deref(),
 						)
 						.map_err(ProxyError::Processing)?;
 
@@ -1206,7 +1207,7 @@ async fn make_backend_call(
 					// We do not need LLM policies nor token-based rate limits, etc.
 					llm
 						.provider
-						.setup_request(&mut req, route_type, None, true)
+						.setup_request(&mut req, route_type, None, true, None)
 						.map_err(ProxyError::Processing)?;
 					(req, LLMResponsePolicies::default(), None)
 				},
@@ -1224,6 +1225,7 @@ async fn make_backend_call(
 							route_type,
 							Some(&llm_request),
 							llm.use_default_policies(),
+							llm_request_policies.llm.as_deref(),
 						)
 						.map_err(ProxyError::Processing)?;
 

@@ -67,7 +67,7 @@ pub trait RequestType: Send + Sync {
 		&self,
 		_provider: &Provider,
 		_headers: Option<&::http::HeaderMap>,
-		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
+		_policies: Option<&crate::llm::policy::Policy>,
 	) -> Result<Vec<u8>, AIError> {
 		Err(AIError::UnsupportedConversion(strng::literal!("bedrock")))
 	}
@@ -260,11 +260,10 @@ pub mod passthrough {
 			&self,
 			provider: &Provider,
 			headers: Option<&::http::HeaderMap>,
-			prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
+			policies: Option<&crate::llm::policy::Policy>,
 		) -> Result<Vec<u8>, AIError> {
 			let typed = json::convert::<_, universal::Request>(self).map_err(AIError::RequestMarshal)?;
-			let xlated =
-				llm::bedrock::translate_request_completions(typed, provider, headers, prompt_caching);
+			let xlated = llm::bedrock::translate_request_completions(typed, provider, headers, policies);
 			serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 		}
 

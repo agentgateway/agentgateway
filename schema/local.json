@@ -1927,6 +1927,12 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              },
+                              "anthropicBetaAllowlist": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             },
                             "additionalProperties": false,
@@ -4031,6 +4037,12 @@
                                         }
                                       },
                                       "additionalProperties": false
+                                    },
+                                    "anthropicBetaAllowlist": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
                                     }
                                   },
                                   "additionalProperties": false,
@@ -5717,6 +5729,12 @@
                                                     }
                                                   },
                                                   "additionalProperties": false
+                                                },
+                                                "anthropicBetaAllowlist": {
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "string"
+                                                  }
                                                 }
                                               },
                                               "additionalProperties": false,
@@ -7153,6 +7171,12 @@
                                                                 }
                                                               },
                                                               "additionalProperties": false
+                                                            },
+                                                            "anthropicBetaAllowlist": {
+                                                              "type": "array",
+                                                              "items": {
+                                                                "type": "string"
+                                                              }
                                                             }
                                                           },
                                                           "additionalProperties": false,
@@ -9968,6 +9992,12 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "anthropicBetaAllowlist": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "additionalProperties": false,
