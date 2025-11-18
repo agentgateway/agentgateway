@@ -12,43 +12,38 @@ binds:
         ai:
           promptGuard:
             request:
-              regex:
-                action:
-                  reject:
-                    response:
-                      status: 400
-                      headers:
-                        set:
-                          content-type: "application/json"
-                      body: |
-                        {
-                          "error": {
-                            "message": "Request rejected: Content contains sensitive information",
-                            "type": "invalid_request_error",
-                            "code": "content_policy_violation"
-                          }
-                        }
+            - regex:
+                action: reject
                 rules:
                 - pattern: SSN
-                  name: SSN
                 - pattern: Social Security
-                  name: Social Security
-            response:
-              regex:
-                action:
-                  reject:
-                    response:
-                      status: 400
-                      headers:
-                        set:
-                          content-type: "application/json"
-                      body: |
-                        {
-                          "error": {
-                            "message": "Response blocked: Contains sensitive information",
-                            "type": "invalid_request_error",
-                            "code": "pii_detected"
-                          }
-                        }
+              rejection:
+                status: 400
+                headers:
+                  set:
+                    content-type: "application/json"
+                body: |
+                  {
+                    "error": {
+                      "message": "Request rejected: Content contains sensitive information",
+                      "type": "invalid_request_error",
+                      "code": "content_policy_violation"
+                    }
+                  }
+            - regex:
+                action: reject
                 rules:
                 - builtin: email
+              rejection:
+                status: 400
+                headers:
+                  set:
+                    content-type: "application/json"
+                body: |
+                  {
+                    "error": {
+                      "message": "Response blocked: Contains email",
+                      "type": "invalid_request_error",
+                      "code": "pii_detected"
+                    }
+                  }

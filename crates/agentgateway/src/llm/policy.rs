@@ -1,12 +1,14 @@
-use crate::http::auth::{BackendAuth, SimpleBackendAuth};
 use crate::http::filters::HeaderModifier;
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
 use crate::llm::universal::{RequestType, ResponseType};
 use crate::llm::{AIError, pii};
-use crate::types::agent::{HeaderMatch, HeaderValueMatch, Target};
-use crate::{client, *};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::types::agent::{
+	BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackend, SimpleBackendReference, Target,
+};
+use crate::*;
 use ::http::HeaderMap;
 use bytes::Bytes;
 use itertools::Itertools;
@@ -69,10 +71,13 @@ pub struct PromptEnrichment {
 #[apply(schema!)]
 pub struct PromptGuard {
 	// Guards applied to client requests before they reach the LLM
-	pub request: Option<RequestGuard>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub request: Vec<RequestGuard>,
 	// Guards applied to LLM responses before they reach the client
-	pub response: Option<ResponseGuard>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub response: Vec<ResponseGuard>,
 }
+
 impl Policy {
 	pub fn apply_prompt_enrichment(&self, chat: &mut dyn RequestType) {
 		if let Some(prompts) = &self.prompts {
@@ -106,99 +111,217 @@ impl Policy {
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
 	) -> anyhow::Result<Option<Response>> {
-		let Some(g) = self.prompt_guard.as_ref().and_then(|g| g.request.as_ref()) else {
-			return Ok(None);
+		let client = PolicyClient {
+			inputs: backend_info.inputs.clone(),
 		};
-		let client = &backend_info.inputs.upstream;
-		if let Some(moderation) = &g.openai_moderation {
-			let model = moderation
-				.model
-				.clone()
-				.unwrap_or(strng::literal!("omni-moderation-latest"));
-			let auth = BackendAuth::from(moderation.auth.clone());
-			let content = req
-				.get_messages()
-				.into_iter()
-				.map(|t| t.content)
-				.collect_vec();
-			let mut rb = ::http::Request::builder()
-				.uri("https://api.openai.com/v1/moderations")
-				.method(::http::Method::POST)
-				.header(::http::header::CONTENT_TYPE, "application/json");
-			if let Some(claims) = claims {
-				rb = rb.extension(claims);
-			}
-			let mut req = rb.body(http::Body::from(serde_json::to_vec(&serde_json::json!({
-				"input": content,
-				"model": model,
-			}))?))?;
-			auth::apply_backend_auth(backend_info, &auth, &mut req).await?;
-			let resp = client.simple_call(req).await?;
-			let resp: async_openai::types::CreateModerationResponse =
-				json::from_response_body(resp).await?;
-			if resp.results.iter().any(|r| r.flagged) {
-				return Ok(Some(g.rejection.as_response()));
-			}
-		}
-		if let Some(webhook) = &g.webhook {
-			let messsages = req.get_messages();
-			let headers =
-				Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-			let whr = webhook::send_request(client, &webhook.target, &headers, messsages).await?;
-			match whr.action {
-				RequestAction::Mask(mask) => {
-					debug!(
-						"webhook masked request: {}",
-						mask
-							.reason
-							.unwrap_or_else(|| "no reason specified".to_string())
-					);
-					let MaskActionBody::PromptMessages(body) = mask.body else {
-						anyhow::bail!("invalid webhook response");
-					};
-					let msgs = body.messages;
-					req.set_messages(msgs);
+		for g in self
+			.prompt_guard
+			.as_ref()
+			.iter()
+			.flat_map(|g| g.request.iter())
+		{
+			match &g.kind {
+				RequestGuardKind::Regex(rg) => {
+					if let Some(res) = Self::apply_regex(req, rg, &g.rejection)? {
+						return Ok(Some(res));
+					}
 				},
-				RequestAction::Reject(rej) => {
-					debug!(
-						"webhook rejected request: {}",
-						rej
-							.reason
-							.unwrap_or_else(|| "no reason specified".to_string())
-					);
-					return Ok(Some(
-						::http::response::Builder::new()
-							.status(rej.status_code)
-							.body(http::Body::from(rej.body))?,
-					));
+				RequestGuardKind::Webhook(wh) => {
+					if let Some(res) = Self::apply_webhook(req, http_headers, &client, wh).await? {
+						return Ok(Some(res));
+					}
 				},
-				RequestAction::Pass(pass) => {
-					debug!(
-						"webhook passed request: {}",
-						pass
-							.reason
-							.unwrap_or_else(|| "no reason specified".to_string())
-					);
-					// No action needed
+				RequestGuardKind::OpenAIModeration(m) => {
+					if let Some(res) =
+						Self::apply_moderation(req, claims.clone(), &client, &g.rejection, m).await?
+					{
+						return Ok(Some(res));
+					}
 				},
 			}
 		}
-		if let Some(rgx) = g.regex.as_ref() {
-			let mut msgs = req.get_messages();
-			let mut any_changed = false;
-			for msg in &mut msgs {
-				let (res, modified_content) = Self::apply_prompt_guard_regex(&msg.content, rgx);
-				if let Some(content) = modified_content {
+		Ok(None)
+	}
+
+	async fn apply_moderation(
+		req: &mut dyn RequestType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		moderation: &Moderation,
+	) -> anyhow::Result<Option<Response>> {
+		let model = moderation
+			.model
+			.clone()
+			.unwrap_or(strng::literal!("omni-moderation-latest"));
+		let mut pols = vec![BackendPolicy::BackendTLS(
+			http::backendtls::SYSTEM_TRUST.clone(),
+		)];
+		pols.extend(moderation.policies.iter().cloned());
+		// let auth = BackendAuth::from(moderation.auth.clone());
+		let content = req
+			.get_messages()
+			.into_iter()
+			.map(|t| t.content)
+			.collect_vec();
+		let mut rb = ::http::Request::builder()
+			.uri("https://api.openai.com/v1/moderations")
+			.method(::http::Method::POST)
+			.header(::http::header::CONTENT_TYPE, "application/json");
+		if let Some(claims) = claims {
+			rb = rb.extension(claims);
+		}
+		let req = rb.body(http::Body::from(serde_json::to_vec(&serde_json::json!({
+			"input": content,
+			"model": model,
+		}))?))?;
+		let mock_be = SimpleBackend::Opaque(
+			strng::literal!("_openai-moderation"),
+			Target::Hostname(strng::literal!("api.openai.com"), 443),
+		);
+		let resp = client
+			.call_with_explicit_policies(req, mock_be, pols)
+			.await?;
+		let resp: async_openai::types::CreateModerationResponse =
+			json::from_response_body(resp).await?;
+		if resp.results.iter().any(|r| r.flagged) {
+			Ok(Some(rej.as_response()))
+		} else {
+			Ok(None)
+		}
+	}
+
+	fn apply_regex(
+		req: &mut dyn RequestType,
+		rgx: &RegexRules,
+		rej: &RequestRejection,
+	) -> anyhow::Result<Option<Response>> {
+		let mut msgs = req.get_messages();
+		let mut any_changed = false;
+		for msg in &mut msgs {
+			match Self::apply_prompt_guard_regex(&msg.content, rgx) {
+				Some(RegexResult::Reject) => {
+					return Ok(Some(rej.as_response()));
+				},
+				Some(RegexResult::Mask(content)) => {
 					any_changed = true;
 					msg.content = content.into();
-				}
-				if res.is_some() {
-					return Ok(res);
-				}
+				},
+				None => {},
 			}
-			if any_changed {
+		}
+		if any_changed {
+			req.set_messages(msgs);
+		}
+		Ok(None)
+	}
+
+	fn apply_regex_response(
+		resp: &mut dyn ResponseType,
+		rgx: &RegexRules,
+		rej: &RequestRejection,
+	) -> anyhow::Result<Option<Response>> {
+		let mut msgs = resp.to_webhook_choices();
+		let mut any_changed = false;
+		for msg in &mut msgs {
+			match Self::apply_prompt_guard_regex(&msg.message.content, rgx) {
+				Some(RegexResult::Reject) => {
+					return Ok(Some(rej.as_response()));
+				},
+				Some(RegexResult::Mask(content)) => {
+					any_changed = true;
+					msg.message.content = content.into();
+				},
+				None => {},
+			}
+		}
+		if any_changed {
+			resp.set_webhook_choices(msgs)?;
+		}
+		Ok(None)
+	}
+
+	async fn apply_webhook(
+		req: &mut dyn RequestType,
+		http_headers: &HeaderMap,
+		client: &PolicyClient,
+		webhook: &Webhook,
+	) -> anyhow::Result<Option<Response>> {
+		let messsages = req.get_messages();
+		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
+		let whr = webhook::send_request(client, &webhook.target, &headers, messsages).await?;
+		match whr.action {
+			RequestAction::Mask(mask) => {
+				debug!(
+					"webhook masked request: {}",
+					mask
+						.reason
+						.unwrap_or_else(|| "no reason specified".to_string())
+				);
+				let MaskActionBody::PromptMessages(body) = mask.body else {
+					anyhow::bail!("invalid webhook response");
+				};
+				let msgs = body.messages;
 				req.set_messages(msgs);
-			}
+			},
+			RequestAction::Reject(rej) => {
+				debug!(
+					"webhook rejected request: {}",
+					rej
+						.reason
+						.unwrap_or_else(|| "no reason specified".to_string())
+				);
+				return Ok(Some(
+					::http::response::Builder::new()
+						.status(rej.status_code)
+						.body(http::Body::from(rej.body))?,
+				));
+			},
+			RequestAction::Pass(pass) => {
+				debug!(
+					"webhook passed request: {}",
+					pass
+						.reason
+						.unwrap_or_else(|| "no reason specified".to_string())
+				);
+				// No action needed
+			},
+		}
+		Ok(None)
+	}
+
+	async fn apply_webhook_response(
+		resp: &mut dyn ResponseType,
+		http_headers: &HeaderMap,
+		client: &PolicyClient,
+		webhook: &Webhook,
+	) -> anyhow::Result<Option<Response>> {
+		let messsages = resp.to_webhook_choices();
+		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
+		let whr = webhook::send_response(client, &webhook.target, &headers, messsages).await?;
+		match whr.action {
+			ResponseAction::Mask(mask) => {
+				debug!(
+					"webhook masked response: {}",
+					mask
+						.reason
+						.unwrap_or_else(|| "no reason specified".to_string())
+				);
+				let MaskActionBody::ResponseChoices(body) = mask.body else {
+					anyhow::bail!("invalid webhook response");
+				};
+				let msgs = body.choices;
+				resp.set_webhook_choices(msgs)?;
+			},
+			ResponseAction::Pass(pass) => {
+				debug!(
+					"webhook passed response: {}",
+					pass
+						.reason
+						.unwrap_or_else(|| "no reason specified".to_string())
+				);
+				// No action needed
+			},
 		}
 		Ok(None)
 	}
@@ -261,10 +384,7 @@ impl Policy {
 	// 	}
 	// }
 
-	fn apply_prompt_guard_regex(
-		original_content: &str,
-		rgx: &RegexRules,
-	) -> (Option<Response>, Option<String>) {
+	fn apply_prompt_guard_regex(original_content: &str, rgx: &RegexRules) -> Option<RegexResult> {
 		let mut current_content = original_content.to_string();
 		let mut content_modified = false;
 
@@ -282,8 +402,8 @@ impl Policy {
 
 					if !results.is_empty() {
 						match &rgx.action {
-							Action::Reject { response } => {
-								return (Some(response.as_response()), None);
+							Action::Reject => {
+								return Some(RegexResult::Reject);
 							},
 							Action::Mask => {
 								// Sort in reverse to avoid index shifting during replacement
@@ -301,7 +421,7 @@ impl Policy {
 						}
 					}
 				},
-				RegexRule::Regex { pattern, name } => {
+				RegexRule::Regex { pattern } => {
 					let ranges: Vec<std::ops::Range<usize>> = pattern
 						.find_iter(&current_content)
 						.map(|m| m.range())
@@ -309,13 +429,13 @@ impl Policy {
 
 					if !ranges.is_empty() {
 						match &rgx.action {
-							Action::Reject { response } => {
-								return (Some(response.as_response()), None);
+							Action::Reject => {
+								return Some(RegexResult::Reject);
 							},
 							Action::Mask => {
 								// Process matches in reverse order to avoid index shifting
 								for range in ranges.into_iter().rev() {
-									current_content.replace_range(range, &format!("<{name}>"));
+									current_content.replace_range(range, "<masked>");
 								}
 								content_modified = true;
 							},
@@ -326,83 +446,53 @@ impl Policy {
 		}
 		// Only update the message if content was actually modified
 		if content_modified {
-			return (None, Some(current_content));
+			return Some(RegexResult::Mask(current_content));
 		}
-		(None, None)
+		None
 	}
 
 	pub async fn apply_response_prompt_guard(
-		client: &client::Client,
+		client: &PolicyClient,
 		resp: &mut dyn ResponseType,
 		http_headers: &HeaderMap,
-		g: &Option<ResponseGuard>,
+		guards: &Vec<ResponseGuard>,
 	) -> anyhow::Result<Option<Response>> {
-		let Some(guard) = g else {
-			return Ok(None);
-		};
-
-		if let Some(webhook) = &guard.webhook {
-			let headers =
-				Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-			let webhook_choices = resp.to_webhook_choices();
-			let whr = webhook::send_response(client, &webhook.target, &headers, webhook_choices).await?;
-			match whr.action {
-				ResponseAction::Mask(mask) => {
-					debug!(
-						"webhook masked response: {}",
-						mask
-							.reason
-							.unwrap_or_else(|| "no reason specified".to_string())
-					);
-					let MaskActionBody::ResponseChoices(body) = mask.body else {
-						anyhow::bail!("invalid webhook response");
-					};
-					let msgs = body.choices;
-					resp.set_webhook_choices(msgs)?;
+		for g in guards {
+			match &g.kind {
+				ResponseGuardKind::Regex(rg) => {
+					if let Some(res) = Self::apply_regex_response(resp, rg, &g.rejection)? {
+						return Ok(Some(res));
+					}
 				},
-				ResponseAction::Pass(pass) => {
-					debug!(
-						"webhook passed response: {}",
-						pass
-							.reason
-							.unwrap_or_else(|| "no reason specified".to_string())
-					);
-					// No action needed
+				ResponseGuardKind::Webhook(wh) => {
+					if let Some(res) = Self::apply_webhook_response(resp, http_headers, client, wh).await? {
+						return Ok(Some(res));
+					}
 				},
-			}
-		}
-
-		if let Some(rgx) = &guard.regex {
-			let mut webhook_choices = resp.to_webhook_choices();
-			let mut any_changed = false;
-			for msg in &mut webhook_choices {
-				let (res, modified_content) = Self::apply_prompt_guard_regex(&msg.message.content, rgx);
-				if let Some(content) = modified_content {
-					any_changed = true;
-					msg.message.content = content.into();
-				}
-				if res.is_some() {
-					return Ok(res);
-				}
-			}
-			if any_changed {
-				resp.set_webhook_choices(webhook_choices)?;
 			}
 		}
 		Ok(None)
 	}
 }
 
+enum RegexResult {
+	Mask(String),
+	Reject,
+}
+
 #[apply(schema!)]
 pub struct RequestGuard {
 	#[serde(default)]
 	pub rejection: RequestRejection,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub regex: Option<RegexRules>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub webhook: Option<Webhook>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub openai_moderation: Option<Moderation>,
+	#[serde(flatten)]
+	pub kind: RequestGuardKind,
+}
+
+#[apply(schema!)]
+pub enum RequestGuardKind {
+	Regex(RegexRules),
+	Webhook(Webhook),
+	OpenAIModeration(Moderation),
 }
 
 #[apply(schema!)]
@@ -422,7 +512,6 @@ pub enum RegexRule {
 		#[serde(with = "serde_regex")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		pattern: regex::Regex,
-		name: String,
 	},
 }
 
@@ -469,7 +558,7 @@ pub struct NamedRegex {
 
 #[apply(schema!)]
 pub struct Webhook {
-	pub target: Target,
+	pub target: SimpleBackendReference,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub forward_header_matches: Vec<HeaderMatch>,
 }
@@ -479,8 +568,9 @@ pub struct Moderation {
 	/// Model to use. Defaults to `omni-moderation-latest`
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
-	#[serde(serialize_with = "ser_redact")]
-	pub auth: SimpleBackendAuth,
+	#[serde(skip_deserializing)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub policies: Vec<BackendPolicy>,
 }
 
 #[apply(schema!)]
@@ -488,10 +578,7 @@ pub struct Moderation {
 pub enum Action {
 	#[default]
 	Mask,
-	Reject {
-		#[serde(default)]
-		response: RequestRejection,
-	},
+	Reject,
 }
 
 #[apply(schema!)]
@@ -518,10 +605,15 @@ impl Default for RequestRejection {
 
 #[apply(schema!)]
 pub struct ResponseGuard {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub regex: Option<RegexRules>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub webhook: Option<Webhook>,
+	#[serde(default)]
+	pub rejection: RequestRejection,
+	pub kind: ResponseGuardKind,
+}
+
+#[apply(schema!)]
+pub enum ResponseGuardKind {
+	Regex(RegexRules),
+	Webhook(Webhook),
 }
 
 #[apply(schema!)]
@@ -539,9 +631,8 @@ pub mod webhook {
 	use ::http::{HeaderMap, HeaderValue, header};
 	use serde::{Deserialize, Serialize};
 
-	use crate::client::Client;
-
-	use crate::types::agent::Target;
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::types::agent::SimpleBackendReference;
 	use crate::*;
 
 	const REQUEST_PATH: &str = "request";
@@ -664,36 +755,33 @@ pub mod webhook {
 	}
 
 	fn build_request_for_request(
-		target: &Target,
 		http_headers: &HeaderMap,
 		messages: Vec<Message>,
 	) -> anyhow::Result<crate::http::Request> {
 		let body = GuardrailsPromptRequest {
 			body: PromptMessages { messages },
 		};
-		build_request(&body, target, REQUEST_PATH, http_headers)
+		build_request(&body, REQUEST_PATH, http_headers)
 	}
 
 	fn build_request_for_response(
-		target: &Target,
 		http_headers: &HeaderMap,
 		choices: Vec<ResponseChoice>,
 	) -> anyhow::Result<crate::http::Request> {
 		let body = GuardrailsResponseRequest {
 			body: ResponseChoices { choices },
 		};
-		build_request(&body, target, RESPONSE_PATH, http_headers)
+		build_request(&body, RESPONSE_PATH, http_headers)
 	}
 
 	fn build_request<T: serde::Serialize>(
 		body: &T,
-		target: &Target,
 		path: &str,
 		http_headers: &HeaderMap,
 	) -> anyhow::Result<crate::http::Request> {
 		let body_bytes = serde_json::to_vec(body)?;
 		let mut rb = ::http::Request::builder()
-			.uri(format!("http://{target}/{path}"))
+			.uri(format!("http:///{path}"))
 			.method(http::Method::POST);
 		for (k, v) in http_headers {
 			// TODO: this is configurable by users
@@ -710,37 +798,25 @@ pub mod webhook {
 	}
 
 	pub async fn send_request(
-		client: &Client,
-		target: &Target,
+		client: &PolicyClient,
+		target: &SimpleBackendReference,
 		http_headers: &HeaderMap,
 		messages: Vec<Message>,
 	) -> anyhow::Result<GuardrailsPromptResponse> {
-		let whr = build_request_for_request(target, http_headers, messages)?;
-		let res = client
-			.call(client::Call {
-				req: whr,
-				target: target.clone(),
-				transport: Default::default(), // TODO: use policies
-			})
-			.await?;
+		let whr = build_request_for_request(http_headers, messages)?;
+		let res = Box::pin(client.call_reference(whr, target)).await?;
 		let parsed = json::from_response_body(res).await?;
 		Ok(parsed)
 	}
 
 	pub async fn send_response(
-		client: &Client,
-		target: &Target,
+		client: &PolicyClient,
+		target: &SimpleBackendReference,
 		http_headers: &HeaderMap,
 		choices: Vec<ResponseChoice>,
 	) -> anyhow::Result<GuardrailsResponseResponse> {
-		let whr = build_request_for_response(target, http_headers, choices)?;
-		let res = client
-			.call(client::Call {
-				req: whr,
-				target: target.clone(),
-				transport: Default::default(), // TODO: use policies
-			})
-			.await?;
+		let whr = build_request_for_response(http_headers, choices)?;
+		let res = client.call_reference(whr, target).await?;
 		let parsed = json::from_response_body(res).await?;
 		Ok(parsed)
 	}

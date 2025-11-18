@@ -577,15 +577,10 @@ message BackendPolicySpec {
       EMAIL = 4;
     }
 
-    message NamedRegex {
-      string pattern = 1;
-      string name = 2;
-    }
-
     message RegexRule {
       oneof kind {
         BuiltinRegexRule builtin = 1;
-        NamedRegex regex = 2;
+        string regex = 2;
       }
     }
 
@@ -595,27 +590,20 @@ message BackendPolicySpec {
       REJECT = 2;
     }
 
-    message Action {
-      ActionKind kind = 1;
-      // Only used when kind == REJECT
-      RequestRejection reject_response = 2;
-    }
-
     message RegexRules {
-      Action action = 1;
+      ActionKind action = 1;
       repeated RegexRule rules = 2;
     }
 
     message Webhook {
-      string host = 1;
-      uint32 port = 2;
+      BackendReference backend = 1;
       repeated HeaderMatch forward_header_matches = 3;
     }
 
     message Moderation {
       // Model to use. Defaults to `omni-moderation-latest`
       google.protobuf.StringValue model = 1;
-      BackendAuthPolicy auth = 2;
+      repeated BackendPolicySpec inline_policies = 2;
     }
 
     // Response sent when rejecting a request
@@ -626,24 +614,30 @@ message BackendPolicySpec {
 
     // Configuration for guarding/processing LLM responses
     message ResponseGuard {
-      RegexRules regex = 1;
-      Webhook webhook = 2;
+      // Response to send when response is rejected
+      RequestRejection rejection = 1;
+      oneof kind {
+        RegexRules regex = 2;
+        Webhook webhook = 3;
+      }
     }
 
     // Configuration for guarding/processing prompts
     message RequestGuard {
       // Response to send when request is rejected
       RequestRejection rejection = 1;
-      RegexRules regex = 2;
-      Webhook webhook = 3;
-      Moderation openai_moderation = 4;
+      oneof kind {
+        RegexRules regex = 2;
+        Webhook webhook = 3;
+        Moderation openai_moderation = 4;
+      }
     }
 
     message PromptGuard {
       // Guards applied to client requests before they reach the LLM
-      RequestGuard request = 1;
+      repeated RequestGuard request = 1;
       // Guards applied to LLM responses before they reach the client
-      ResponseGuard response = 2;
+      repeated ResponseGuard response = 2;
     }
 
     PromptGuard prompt_guard = 1;
@@ -741,6 +735,7 @@ message Backend {
     StaticBackend static = 2;
     AIBackend ai = 3;
     MCPBackend mcp = 4;
+    DynamicForwardProxy dynamic = 6;
   }
   repeated BackendPolicySpec inline_policies = 5;
 }
@@ -748,6 +743,9 @@ message Backend {
 message StaticBackend {
   string host = 1;
   int32 port = 2;
+}
+
+message DynamicForwardProxy {
 }
 
 message AIBackend {

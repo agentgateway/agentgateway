@@ -252,7 +252,7 @@ impl LLMRequestPolicies {
 pub struct LLMResponsePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
-	pub prompt_guard: Option<ResponseGuard>,
+	pub prompt_guard: Vec<ResponseGuard>,
 }
 
 impl Default for Store {
@@ -447,6 +447,7 @@ impl Store {
 
 		pol
 	}
+
 	// sub_backend_policies looks up the sub-backends policies. Generally, these will be queried separately
 	// from the primary backend policies and then merged, just due to the lifecycle of when the sub-backend
 	// is selected.
@@ -470,6 +471,21 @@ impl Store {
 			None,
 		)
 	}
+
+	// inline_backend_policies flattens out a list of inline policies,
+	pub fn inline_backend_policies(&self, inline_policies: &[BackendPolicy]) -> BackendPolicies {
+		self.internal_backend_policies(
+			None,
+			None,
+			None,
+			std::slice::from_ref(&inline_policies),
+			None,
+			None,
+			None,
+			None,
+		)
+	}
+
 	pub fn backend_policies(
 		&self,
 		backend: BackendName,

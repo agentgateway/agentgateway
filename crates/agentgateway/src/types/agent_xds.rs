@@ -5,21 +5,24 @@ use std::sync::Arc;
 use crate::http::Scheme;
 use ::http::StatusCode;
 use frozen_collections::FzHashSet;
+use itertools::Itertools;
 use rustls::ServerConfig;
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth, SimpleBackendAuth};
+use crate::http::auth::{AwsAuth, BackendAuth};
 use crate::http::authorization;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
-use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::ProtoError;
+use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
+use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::traffic_policy_spec::host_rewrite::Mode;
 use crate::types::{agent, proto};
 use crate::*;
+use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 impl TryFrom<&proto::agent::TlsConfig> for TLSConfig {
 	type Error = anyhow::Error;
@@ -116,72 +119,81 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 ) -> Result<llm::Policy, ProtoError> {
-	let prompt_guard = ai.prompt_guard.as_ref().and_then(|pg| {
-		if pg.request.is_none() && pg.response.is_none() {
-			return None;
-		}
-		let request_guard = pg.request.as_ref().map(|reqp| {
+	let prompt_guard: Option<Result<_, ProtoError>> = ai.prompt_guard.as_ref().map(|pg| {
+		let request_guard = pg.request.iter().map(|reqp| {
 			let rejection = if let Some(resp) = &reqp.rejection {
 				let status = u16::try_from(resp.status)
 					.ok()
 					.and_then(|c| StatusCode::from_u16(c).ok())
 					.unwrap_or(StatusCode::FORBIDDEN);
-				crate::llm::policy::RequestRejection {
+				llm::policy::RequestRejection {
 					body: Bytes::from(resp.body.clone()),
 					status,
 					headers: None, // TODO: map from proto if headers are added there
 				}
 			} else {
 				//  use default response, since the response field is not optional on RequestGuard
-				crate::llm::policy::RequestRejection::default()
+				llm::policy::RequestRejection::default()
 			};
 
-			let regex = reqp
-				.regex
+			let kind = match reqp
+				.kind
 				.as_ref()
-				.map(|rr| convert_regex_rules(rr, Some(rejection.clone())));
-
-			let webhook = reqp.webhook.as_ref().and_then(convert_webhook);
-
-			let openai_moderation =
-				reqp
-					.openai_moderation
-					.as_ref()
-					.map(|m| crate::llm::policy::Moderation {
+				.ok_or_else(|| ProtoError::EnumParse("unknown kind".to_string()))?
+			{
+				Kind::Regex(rr) => llm::policy::RequestGuardKind::Regex(convert_regex_rules(rr)),
+				Kind::Webhook(wh) => llm::policy::RequestGuardKind::Webhook(convert_webhook(wh)?),
+				Kind::OpenaiModeration(m) => {
+					let pols = m
+						.inline_policies
+						.iter()
+						.map(BackendPolicy::try_from)
+						.collect::<Result<Vec<_>, _>>()?;
+					let md = llm::policy::Moderation {
 						model: m.model.as_deref().map(strng::new),
-						auth: match m.auth.as_ref().and_then(|a| a.kind.clone()) {
-							Some(crate::types::proto::agent::backend_auth_policy::Kind::Passthrough(_)) => {
-								SimpleBackendAuth::Passthrough {}
-							},
-							Some(crate::types::proto::agent::backend_auth_policy::Kind::Key(k)) => {
-								SimpleBackendAuth::Key(k.secret.into())
-							},
-							_ => SimpleBackendAuth::Passthrough {},
-						},
-					});
-
-			crate::llm::policy::RequestGuard {
-				rejection,
-				regex,
-				webhook,
-				openai_moderation,
-			}
+						policies: pols,
+					};
+					llm::policy::RequestGuardKind::OpenAIModeration(md)
+				},
+			};
+			Ok(llm::policy::RequestGuard { rejection, kind })
 		});
 
-		Some(crate::llm::policy::PromptGuard {
-			request: request_guard,
-			response: pg
-				.response
-				.as_ref()
-				.map(|resp| crate::llm::policy::ResponseGuard {
-					regex: resp.regex.as_ref().map(|rr| convert_regex_rules(rr, None)),
-					webhook: resp.webhook.as_ref().and_then(convert_webhook),
-				}),
+		let response_guard = pg.response.iter().flat_map(|reqp| {
+			let rejection = if let Some(resp) = &reqp.rejection {
+				let status = u16::try_from(resp.status)
+					.ok()
+					.and_then(|c| StatusCode::from_u16(c).ok())
+					.unwrap_or(StatusCode::FORBIDDEN);
+				llm::policy::RequestRejection {
+					body: Bytes::from(resp.body.clone()),
+					status,
+					headers: None, // TODO: map from proto if headers are added there
+				}
+			} else {
+				//  use default response, since the response field is not optional on RequestGuard
+				llm::policy::RequestRejection::default()
+			};
+
+			let kind = match reqp.kind.as_ref()? {
+				response_guard::Kind::Regex(rr) => {
+					llm::policy::ResponseGuardKind::Regex(convert_regex_rules(rr))
+				},
+				response_guard::Kind::Webhook(wh) => {
+					llm::policy::ResponseGuardKind::Webhook(convert_webhook(wh).ok()?)
+				},
+			};
+			Some(llm::policy::ResponseGuard { rejection, kind })
+		});
+
+		Ok(llm::policy::PromptGuard {
+			request: request_guard.collect::<Result<Vec<_>, ProtoError>>()?,
+			response: response_guard.collect_vec(),
 		})
 	});
 
 	Ok(llm::Policy {
-		prompt_guard,
+		prompt_guard: prompt_guard.transpose()?,
 		defaults: Some(
 			ai.defaults
 				.iter()
@@ -1398,7 +1410,7 @@ fn resolve_simple_reference(
 
 fn convert_message(
 	m: &proto::agent::backend_policy_spec::ai::Message,
-) -> crate::llm::SimpleChatCompletionMessage {
+) -> llm::SimpleChatCompletionMessage {
 	llm::SimpleChatCompletionMessage {
 		role: strng::new(&m.role),
 		content: strng::new(&m.content),
@@ -1407,8 +1419,8 @@ fn convert_message(
 
 fn convert_prompt_enrichment(
 	prompts: &proto::agent::backend_policy_spec::ai::PromptEnrichment,
-) -> crate::llm::policy::PromptEnrichment {
-	crate::llm::policy::PromptEnrichment {
+) -> llm::policy::PromptEnrichment {
+	llm::policy::PromptEnrichment {
 		append: prompts.append.iter().map(convert_message).collect(),
 		prepend: prompts.prepend.iter().map(convert_message).collect(),
 	}
@@ -1416,8 +1428,8 @@ fn convert_prompt_enrichment(
 
 fn convert_prompt_caching(
 	pc: &proto::agent::backend_policy_spec::ai::PromptCaching,
-) -> crate::llm::policy::PromptCachingConfig {
-	crate::llm::policy::PromptCachingConfig {
+) -> llm::policy::PromptCachingConfig {
+	llm::policy::PromptCachingConfig {
 		cache_system: pc.cache_system,
 		cache_messages: pc.cache_messages,
 		cache_tools: pc.cache_tools,
@@ -1427,44 +1439,26 @@ fn convert_prompt_caching(
 
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
-) -> Option<crate::llm::policy::Webhook> {
-	let port = match u16::try_from(w.port) {
-		Ok(port) => port,
-		Err(_) => {
-			warn!(port = w.port, host = %w.host, "Webhook port out of range, ignoring webhook");
-			return None;
-		},
-	};
+) -> Result<llm::policy::Webhook, ProtoError> {
+	let target = resolve_simple_reference(w.backend.as_ref())?;
 
-	let forward_header_matches = match convert_header_match(&w.forward_header_matches) {
-		Ok(h) => h,
-		Err(e) => {
-			warn!(error = %e, "Invalid webhook header matchers, ignoring webhook");
-			return None;
-		},
-	};
+	let forward_header_matches = convert_header_match(&w.forward_header_matches)?;
 
-	Some(crate::llm::policy::Webhook {
-		target: Target::Hostname(w.host.clone().into(), port),
+	Ok(llm::policy::Webhook {
+		target,
 		forward_header_matches,
 	})
 }
 
 fn convert_regex_rules(
 	rr: &proto::agent::backend_policy_spec::ai::RegexRules,
-	rejection: Option<crate::llm::policy::RequestRejection>,
-) -> crate::llm::policy::RegexRules {
-	let action = match rr
-		.action
-		.as_ref()
-		.and_then(|a| proto::agent::backend_policy_spec::ai::ActionKind::try_from(a.kind).ok())
-	{
-		Some(proto::agent::backend_policy_spec::ai::ActionKind::Reject) => {
-			crate::llm::policy::Action::Reject {
-				response: rejection.unwrap_or_default(),
-			}
+) -> llm::policy::RegexRules {
+	let action_kind = proto::agent::backend_policy_spec::ai::ActionKind::try_from(rr.action).ok();
+	let action = match action_kind {
+		Some(ActionKind::ActionUnspecified) | Some(ActionKind::Mask) | None => {
+			llm::policy::Action::Mask
 		},
-		_ => crate::llm::policy::Action::Mask,
+		Some(ActionKind::Reject) => llm::policy::Action::Reject,
 	};
 	let rules = rr
 		.rules
@@ -1475,23 +1469,23 @@ fn convert_regex_rules(
 					Ok(builtin) => {
 						let builtin = match builtin {
 							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::Ssn => {
-								crate::llm::policy::Builtin::Ssn
+								llm::policy::Builtin::Ssn
 							},
 							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::CreditCard => {
-								crate::llm::policy::Builtin::CreditCard
+								llm::policy::Builtin::CreditCard
 							},
 							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::PhoneNumber => {
-								crate::llm::policy::Builtin::PhoneNumber
+								llm::policy::Builtin::PhoneNumber
 							},
 							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::Email => {
-								crate::llm::policy::Builtin::Email
+								llm::policy::Builtin::Email
 							},
 							_ => {
 								warn!(value = *b, "Unknown builtin regex rule, skipping");
 								return None;
 							},
 						};
-						Some(crate::llm::policy::RegexRule::Builtin { builtin })
+						Some(llm::policy::RegexRule::Builtin { builtin })
 					},
 					Err(_) => {
 						warn!(value = *b, "Invalid builtin regex rule value, skipping");
@@ -1500,13 +1494,10 @@ fn convert_regex_rules(
 				}
 			},
 			Some(proto::agent::backend_policy_spec::ai::regex_rule::Kind::Regex(n)) => {
-				match regex::Regex::new(&n.pattern) {
-					Ok(pattern) => Some(crate::llm::policy::RegexRule::Regex {
-						pattern,
-						name: n.name.clone(),
-					}),
+				match regex::Regex::new(n) {
+					Ok(pattern) => Some(llm::policy::RegexRule::Regex { pattern }),
 					Err(err) => {
-						warn!(error = %err, name = %n.name, pattern = %n.pattern, "Invalid regex pattern");
+						warn!(error = %err, pattern = %n, "Invalid regex pattern");
 						None
 					},
 				}
@@ -1514,7 +1505,7 @@ fn convert_regex_rules(
 			None => None,
 		})
 		.collect();
-	crate::llm::policy::RegexRules { action, rules }
+	llm::policy::RegexRules { action, rules }
 }
 
 fn resolve_reference(

@@ -18,11 +18,12 @@ use crate::http::{Body, Request, Response};
 use crate::llm::universal::{
 	ChatCompletionError, ChatCompletionErrorResponse, RequestType, ResponseType,
 };
+use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::{BackendPolicy, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
-use crate::{client, *};
+use crate::*;
 
 pub mod anthropic;
 pub mod azureopenai;
@@ -655,7 +656,7 @@ impl AIProvider {
 
 	pub async fn process_response(
 		&self,
-		client: &client::Client,
+		client: PolicyClient,
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
 		log: AsyncLog<llm::LLMInfo>,
@@ -685,7 +686,7 @@ impl AIProvider {
 		if let Ok(resp) = &mut resp {
 			// Apply response prompt guard
 			if let Some(dr) = Policy::apply_response_prompt_guard(
-				client,
+				&client,
 				resp.as_mut(),
 				&parts.headers,
 				&rate_limit.prompt_guard,

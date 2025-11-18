@@ -324,7 +324,8 @@ async fn apply_llm_request_policies(
 			.llm
 			.as_deref()
 			.and_then(|llm| llm.prompt_guard.as_ref())
-			.and_then(|g| g.response.clone()),
+			.map(|g| g.response.clone())
+			.unwrap_or_default(),
 	})
 }
 
@@ -956,7 +957,6 @@ async fn make_backend_call(
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send>>, ProxyResponse> {
-	let client = inputs.upstream.clone();
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
 	};
@@ -1178,7 +1178,7 @@ async fn make_backend_call(
 					// Apply all policies (rate limits)
 					let response_policies = apply_llm_request_policies(
 						&llm_request_policies,
-						policy_client,
+						policy_client.clone(),
 						&mut log,
 						&mut req,
 						&llm_request,
@@ -1291,7 +1291,7 @@ async fn make_backend_call(
 			llm
 				.provider
 				.process_response(
-					&client,
+					policy_client.clone(),
 					llm_request,
 					llm_response_policies,
 					llm_response_log.expect("must be set"),
@@ -1658,23 +1658,20 @@ impl PolicyClient {
 			Ok(())
 		})
 		.map_err(ProxyError::Processing)?;
-		self.call(req, backend).await
+
+		let backend = Backend::from(backend).into();
+		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
+		self
+			.internal_call_with_policies(req, backend.backend, pols)
+			.await
 	}
+
 	pub async fn call(&self, req: Request, backend: SimpleBackend) -> Result<Response, ProxyError> {
 		let backend = Backend::from(backend).into();
 		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
-		make_backend_call(
-			self.inputs.clone(),
-			Arc::new(LLMRequestPolicies::default()),
-			&backend.backend,
-			pols,
-			req,
-			None,
-			&mut Default::default(),
-		)
-		.await
-		.map_err(ProxyResponse::downcast)?
-		.await
+		self
+			.internal_call_with_policies(req, backend.backend, pols)
+			.await
 	}
 
 	pub async fn call_with_default_policies(
@@ -1683,24 +1680,39 @@ impl PolicyClient {
 		backend: &SimpleBackend,
 		defaults: BackendPolicies,
 	) -> Result<Response, ProxyError> {
+		let backend = Backend::from(backend.clone()).into();
+		let pols = defaults.merge(get_backend_policies(&self.inputs, &backend, &[], None));
 		self
-			.internal_call_with_default_policies(req, backend, defaults)
+			.internal_call_with_policies(req, backend.backend, pols)
 			.await
 	}
 
-	pub fn internal_call_with_default_policies<'a>(
+	pub async fn call_with_explicit_policies(
+		&self,
+		req: Request,
+		backend: SimpleBackend,
+		policies: Vec<BackendPolicy>,
+	) -> Result<Response, ProxyError> {
+		let backend = Backend::from(backend);
+		let pols = self
+			.inputs
+			.stores
+			.read_binds()
+			.inline_backend_policies(&policies);
+		self.internal_call_with_policies(req, backend, pols).await
+	}
+
+	pub fn internal_call_with_policies<'a>(
 		&'a self,
 		req: Request,
-		backend: &'a SimpleBackend,
-		defaults: BackendPolicies,
+		backend: Backend,
+		pols: BackendPolicies,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
-		let backend = Backend::from(backend.clone()).into();
-		let pols = defaults.merge(get_backend_policies(&self.inputs, &backend, &[], None));
 		Box::pin(async move {
 			make_backend_call(
 				self.inputs.clone(),
 				Arc::new(LLMRequestPolicies::default()),
-				&backend.backend,
+				&backend,
 				pols,
 				req,
 				None,
