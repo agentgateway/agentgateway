@@ -98,6 +98,7 @@ impl std::hash::Hash for VersionedBackendTLS {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		// Hash the pointer address
 		Arc::as_ptr(&self.config).hash(state);
+		self.hostname_override.hash(state);
 	}
 }
 
