@@ -460,6 +460,7 @@ impl TestBind {
 			insecure: false,
 			insecure_host: true,
 			alpn: None,
+			subject_alt_names: None,
 		}
 		.try_into()
 		.unwrap();

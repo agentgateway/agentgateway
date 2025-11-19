@@ -58,5 +58,25 @@ fn is_grpc(req: &http::Request) -> bool {
 }
 
 #[apply(schema!)]
-#[derive(Default)]
-pub struct TCP {}
+pub struct TCP {
+	pub keepalives: super::agent::KeepaliveConfig,
+	pub connect_timeout: Duration,
+}
+
+impl Default for TCP {
+	fn default() -> Self {
+		Self {
+			keepalives: Default::default(),
+			connect_timeout: defaults::connect_timeout(),
+		}
+	}
+}
+pub mod defaults {
+	use std::time::Duration;
+
+	pub fn connect_timeout() -> Duration {
+		// We would pick 10, but everyone picks 10! If we pick 11, and we see timeouts at exactly
+		// 11s, we can have more confidence this is caused by this default, and not someone else's 10s timer
+		Duration::from_secs(11)
+	}
+}

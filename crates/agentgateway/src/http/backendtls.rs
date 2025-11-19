@@ -22,6 +22,7 @@ pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
 		insecure: true,
 		insecure_host: false,
 		alpn: None,
+		subject_alt_names: None,
 	}
 	.try_into()
 	.unwrap()
@@ -137,6 +138,8 @@ pub struct LocalBackendTLS {
 	insecure_host: bool,
 	#[serde(default)]
 	alpn: Option<Vec<String>>,
+	#[serde(default)]
+	pub subject_alt_names: Option<Vec<String>>,
 }
 
 #[derive(Default)]
@@ -149,6 +152,7 @@ pub struct ResolvedBackendTLS {
 	pub insecure: bool,
 	pub insecure_host: bool,
 	pub alpn: Option<Vec<String>>,
+	pub subject_alt_names: Option<Vec<String>>,
 }
 
 impl ResolvedBackendTLS {
@@ -190,6 +194,15 @@ impl ResolvedBackendTLS {
 		} else if self.insecure {
 			cc.dangerous()
 				.set_certificate_verifier(Arc::new(tls::insecure::NoVerifier));
+		} else if let Some(alt_sans) = self.subject_alt_names {
+			let sans = alt_sans
+				.into_iter()
+				.map(|s| ServerName::try_from(s))
+				.collect::<Result<Box<_>, _>>()?;
+			cc.dangerous()
+				.set_certificate_verifier(Arc::new(tls::insecure::AltHostnameVerifier::new(
+					roots, sans,
+				)));
 		}
 		let allow_custom_alpn = self.alpn.is_none();
 		if let Some(a) = self.alpn {
@@ -214,6 +227,7 @@ impl LocalBackendTLS {
 			insecure: self.insecure,
 			insecure_host: self.insecure_host,
 			alpn: self.alpn,
+			subject_alt_names: self.subject_alt_names,
 		}
 		.try_into()
 	}

@@ -669,15 +669,38 @@ message BackendPolicySpec {
     FailureMode failure_mode = 2;
   }
   message BackendTLS {
+    enum VerificationMode {
+      STRICT = 0;
+      INSECURE_HOST = 1;
+      INSECURE_ALL = 2;
+    }
     google.protobuf.BytesValue cert = 1;
     google.protobuf.BytesValue key = 2;
     // Root to verify. If not set, system certs will be used.
     // If no verification is desired, use 'insecure'
     google.protobuf.BytesValue root = 3;
-    // Disable all verification
-    google.protobuf.BoolValue insecure = 4;
+    VerificationMode verification = 4;
     // If set, override the SNI explicitly. Otherwise, it is auto-derived.
     google.protobuf.StringValue hostname = 5;
+    // If set, the request must come from one of these hostnames. Otherwise, the destination
+    // is used.
+    repeated string verify_subject_alt_names = 6;
+    // Unset: use defaults (h2,http/1.1)
+    // Set but empty: send none
+    // Set with values: send those values
+    Alpn alpn = 7;
+  }
+  message BackendHTTP {
+    enum HttpVersion {
+      UNSPECIFIED = 0;
+      HTTP1 = 1;
+      HTTP2 = 2;
+    }
+    HttpVersion version = 1;
+  }
+  message BackendTCP {
+    KeepaliveConfig keepalive = 1;
+    google.protobuf.Duration connect_timeout = 2;
   }
   message McpAuthorization {
     repeated string allow = 1;
@@ -713,6 +736,8 @@ message BackendPolicySpec {
     HeaderModifier response_header_modifier = 9;
     RequestRedirect request_redirect = 10;
     RequestMirrors request_mirror = 11;
+    BackendHTTP backend_http = 12;
+    BackendTCP backend_tcp = 13;
   }
 }
 
@@ -866,4 +891,8 @@ message BackendReference {
   }
   // Port, used only with 'service' type
   uint32 port = 3;
+}
+
+message Alpn {
+  repeated string protocols = 1;
 }

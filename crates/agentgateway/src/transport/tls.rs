@@ -2,8 +2,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use futures_util::TryFutureExt;
-use rustls::ServerConfig;
 use rustls::crypto::CryptoProvider;
+use rustls::ServerConfig;
 use tracing::warn;
 use x509_parser::certificate::X509Certificate;
 
@@ -62,8 +62,9 @@ pub async fn accept(conn: Socket, cfg: Arc<ServerConfig>) -> Result<Socket, Erro
 pub mod insecure {
 	use std::sync::Arc;
 
-	use rustls::client::WebPkiServerVerifier;
+	use crate::transport::tls::provider;
 	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+	use rustls::client::WebPkiServerVerifier;
 	use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 	use rustls::{DigitallySignedStruct, SignatureScheme};
 
@@ -181,10 +182,104 @@ pub mod insecure {
 			]
 		}
 	}
+
+	#[derive(Debug)]
+	pub struct AltHostnameVerifier {
+		roots: Arc<rustls::RootCertStore>,
+		alt_server_names: Box<[ServerName<'static>]>,
+	}
+
+	impl AltHostnameVerifier {
+		pub fn new(roots: Arc<rustls::RootCertStore>, alt_server_names: Box<[ServerName<'static>]>) -> Self {
+			Self {
+				roots,
+				alt_server_names,
+			}
+		}
+	}
+
+	// A custom verifier that allows alternative server names to be accepted.
+	// Build our own verifier, inspired by https://github.com/rustls/rustls/blob/ccb79947a4811412ee7dcddcd0f51ea56bccf101/rustls/src/webpki/server_verifier.rs#L239.
+	impl ServerCertVerifier for AltHostnameVerifier {
+		/// Will verify the certificate is valid in the following ways:
+		/// - Signed by a  trusted `RootCertStore` CA
+		/// - Not Expired
+		fn verify_server_cert(
+			&self,
+			end_entity: &CertificateDer<'_>,
+			intermediates: &[CertificateDer<'_>],
+			_sn: &ServerName,
+			ocsp_response: &[u8],
+			now: UnixTime,
+		) -> Result<ServerCertVerified, rustls::Error> {
+			let cert = rustls::server::ParsedCertificate::try_from(end_entity)?;
+
+			let algs = provider().signature_verification_algorithms;
+			rustls::client::verify_server_cert_signed_by_trust_anchor(
+				&cert,
+				&self.roots,
+				intermediates,
+				now,
+				algs.all,
+			)?;
+
+			if !ocsp_response.is_empty() {
+				tracing::trace!("Unvalidated OCSP response: {ocsp_response:?}");
+			}
+
+			// First attempt to verify the original server name...
+			let mut last_error = None;
+			for option in &self.alt_server_names {
+				match rustls::client::verify_server_name(&cert, option) {
+					Ok(_) => return Ok(ServerCertVerified::assertion()),
+					Err(e) => {
+						tracing::debug!("failed to verify alt hostname {option:?} ({e})",);
+						last_error = Some(e)
+					},
+				}
+			}
+			Err(last_error.unwrap_or_else(|| rustls::Error::General("unexpected error".to_string())))
+		}
+
+		// Rest use the default implementations
+
+		fn verify_tls12_signature(
+			&self,
+			message: &[u8],
+			cert: &CertificateDer<'_>,
+			dss: &DigitallySignedStruct,
+		) -> Result<HandshakeSignatureValid, rustls::Error> {
+			rustls::crypto::verify_tls12_signature(
+				message,
+				cert,
+				dss,
+				&provider().signature_verification_algorithms,
+			)
+		}
+
+		fn verify_tls13_signature(
+			&self,
+			message: &[u8],
+			cert: &CertificateDer<'_>,
+			dss: &DigitallySignedStruct,
+		) -> Result<HandshakeSignatureValid, rustls::Error> {
+			rustls::crypto::verify_tls13_signature(
+				message,
+				cert,
+				dss,
+				&provider().signature_verification_algorithms,
+			)
+		}
+
+		fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+			provider()
+				.signature_verification_algorithms
+				.supported_schemes()
+		}
+	}
 }
 
 pub mod trustdomain {
-
 	use std::fmt::Debug;
 	use std::sync::Arc;
 
@@ -285,7 +380,6 @@ pub mod trustdomain {
 }
 
 pub mod identity {
-
 	use std::fmt::Debug;
 	use std::sync::Arc;
 

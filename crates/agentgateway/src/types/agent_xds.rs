@@ -18,9 +18,10 @@ use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::ProtoError;
 use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
 use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
+use crate::types::proto::agent::backend_policy_spec::backend_http::HttpVersion;
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::traffic_policy_spec::host_rewrite::Mode;
-use crate::types::{agent, proto};
+use crate::types::{agent, backend, proto};
 use crate::*;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
@@ -760,15 +761,43 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 					failure_mode,
 				})
 			},
+			Some(bps::Kind::BackendHttp(bhttp)) => {
+				let ver = bps::backend_http::HttpVersion::try_from(bhttp.version)?;
+				BackendPolicy::HTTP(backend::HTTP {
+					version: match ver {
+						HttpVersion::Unspecified => None,
+						HttpVersion::Http1 => Some(::http::Version::HTTP_11),
+						HttpVersion::Http2 => Some(::http::Version::HTTP_2),
+					},
+				})
+			},
+			Some(bps::Kind::BackendTcp(btcp)) => BackendPolicy::TCP(backend::TCP {
+				connect_timeout: btcp
+					.connect_timeout
+					.map(convert_duration)
+					.unwrap_or(backend::defaults::connect_timeout()),
+				keepalives: btcp
+					.keepalive
+					.as_ref()
+					.map(types::agent::KeepaliveConfig::try_from)
+					.transpose()?
+					.unwrap_or_default(),
+			}),
 			Some(bps::Kind::BackendTls(btls)) => {
+				let mode = bps::backend_tls::VerificationMode::try_from(btls.verification)?;
 				let tls = http::backendtls::ResolvedBackendTLS {
 					cert: btls.cert.clone(),
 					key: btls.key.clone(),
 					root: btls.root.clone(),
-					insecure: btls.insecure.unwrap_or_default(),
-					insecure_host: false,
+					insecure: mode == bps::backend_tls::VerificationMode::InsecureAll,
+					insecure_host: mode == bps::backend_tls::VerificationMode::InsecureHost,
 					hostname: btls.hostname.clone(),
-					alpn: None,
+					alpn: btls.alpn.as_ref().map(|a| a.protocols.clone()),
+					subject_alt_names: if btls.verify_subject_alt_names.is_empty() {
+						None
+					} else {
+						Some(btls.verify_subject_alt_names.clone())
+					},
 				}
 				.try_into()
 				.map_err(|e| ProtoError::Generic(e.to_string()))?;
