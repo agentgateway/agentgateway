@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_TYPE};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
@@ -756,7 +757,17 @@ impl Handler {
 		let status = response.status();
 		// Check if the request was successful
 		if status.is_success() {
-			let body = json::from_response_body::<serde_json::Value>(response).await?;
+			let lim = crate::http::response_buffer_limit(&response);
+			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
+			let body_bytes = crate::http::compression::to_bytes_with_decompression(
+				response.into_body(),
+				content_encoding,
+				lim,
+			)
+			.await?
+			.1;
+
+			let body = serde_json::from_slice::<serde_json::Value>(&body_bytes)?;
 			Ok(body)
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);

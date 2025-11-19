@@ -460,6 +460,42 @@ async fn test_call_tool_invalid_path_param_value() {
 }
 
 #[tokio::test]
+async fn test_call_tool_with_compressed_response() {
+	let (server, handler) = setup().await;
+
+	let user_id = "compressed-user";
+	let expected_response = json!({ "id": user_id, "name": "Compressed User", "data": "This is a longer response that benefits from compression" });
+
+	// Encode the response body with gzip
+	let response_json = serde_json::to_vec(&expected_response).unwrap();
+	let compressed_body = crate::http::compression::encode_body(&response_json, "gzip")
+		.await
+		.unwrap();
+
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.respond_with(
+			ResponseTemplate::new(200)
+				.insert_header("Content-Encoding", "gzip")
+				.set_body_bytes(compressed_body),
+		)
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": user_id } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(result.is_ok());
+	assert_eq!(result.unwrap(), expected_response);
+}
+
+#[tokio::test]
 async fn test_normalize_url_path_empty_prefix() {
 	// Test the fix for double slash issue when prefix is empty (host/port config)
 	let result = super::normalize_url_path("", "/mqtt/healthcheck");
