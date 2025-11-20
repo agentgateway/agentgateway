@@ -1980,6 +1980,16 @@
                                   "type": "string"
                                 },
                                 "default": null
+                              },
+                              "subjectAltNames": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {
+                                  "type": "string"
+                                },
+                                "default": null
                               }
                             },
                             "additionalProperties": false
@@ -4074,6 +4084,16 @@
                                         "type": "string"
                                       },
                                       "default": null
+                                    },
+                                    "subjectAltNames": {
+                                      "type": [
+                                        "array",
+                                        "null"
+                                      ],
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": false
@@ -5750,6 +5770,16 @@
                                                     "type": "string"
                                                   },
                                                   "default": null
+                                                },
+                                                "subjectAltNames": {
+                                                  "type": [
+                                                    "array",
+                                                    "null"
+                                                  ],
+                                                  "items": {
+                                                    "type": "string"
+                                                  },
+                                                  "default": null
                                                 }
                                               },
                                               "additionalProperties": false
@@ -7176,6 +7206,16 @@
                                                                 "type": "string"
                                                               },
                                                               "default": null
+                                                            },
+                                                            "subjectAltNames": {
+                                                              "type": [
+                                                                "array",
+                                                                "null"
+                                                              ],
+                                                              "items": {
+                                                                "type": "string"
+                                                              },
+                                                              "default": null
                                                             }
                                                           },
                                                           "additionalProperties": false
@@ -7553,6 +7593,16 @@
                                   "type": "string"
                                 },
                                 "default": null
+                              },
+                              "subjectAltNames": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {
+                                  "type": "string"
+                                },
+                                "default": null
                               }
                             },
                             "additionalProperties": false
@@ -7617,6 +7667,16 @@
                                       "default": false
                                     },
                                     "alpn": {
+                                      "type": [
+                                        "array",
+                                        "null"
+                                      ],
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "default": null
+                                    },
+                                    "subjectAltNames": {
                                       "type": [
                                         "array",
                                         "null"
@@ -8445,6 +8505,22 @@
             "tlsHandshakeTimeout": {
               "type": "string",
               "default": "15s"
+            },
+            "alpn": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              },
+              "default": null
             }
           },
           "additionalProperties": false,
@@ -9937,6 +10013,16 @@
                     "default": false
                   },
                   "alpn": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": null
+                  },
+                  "subjectAltNames": {
                     "type": [
                       "array",
                       "null"

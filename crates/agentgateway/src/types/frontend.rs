@@ -58,12 +58,15 @@ pub struct TLS {
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::tls_handshake_timeout")]
 	pub tls_handshake_timeout: Duration,
+	#[serde(default)]
+	pub alpn: Option<Vec<Vec<u8>>>,
 }
 
 impl Default for TLS {
 	fn default() -> Self {
 		Self {
 			tls_handshake_timeout: defaults::tls_handshake_timeout(),
+			alpn: None,
 		}
 	}
 }

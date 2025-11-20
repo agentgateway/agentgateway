@@ -23,9 +23,9 @@ use crate::types::agent::{
 	BackendWithPolicies, Bind, BindName, FrontendPolicy, GatewayName, Listener, ListenerKey,
 	ListenerProtocol, ListenerSet, McpAuthentication, McpBackend, McpTarget, McpTargetName,
 	McpTargetSpec, OpenAPITarget, PathMatch, PolicyName, PolicyPhase, PolicyTarget, PolicyType,
-	Route, RouteBackendReference, RouteMatch, RouteName, RouteRuleName, RouteSet,
+	Route, RouteBackendReference, RouteMatch, RouteName, RouteRuleName, RouteSet, ServerTLSConfig,
 	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, TLSConfig, Target, TargetedPolicy, TrafficPolicy,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::frontend;
@@ -1332,10 +1332,10 @@ fn to_simple_backend_and_ref(
 	(bref, backend)
 }
 
-impl TryInto<TLSConfig> for LocalTLSServerConfig {
+impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 	type Error = anyhow::Error;
 
-	fn try_into(self) -> Result<TLSConfig, Self::Error> {
+	fn try_into(self) -> Result<ServerTLSConfig, Self::Error> {
 		let cert = fs_err::read(self.cert)?;
 		let cert_chain = crate::types::agent::parse_cert(&cert)?;
 		let key = fs_err::read(self.key)?;
@@ -1347,8 +1347,6 @@ impl TryInto<TLSConfig> for LocalTLSServerConfig {
 			.with_no_client_auth()
 			.with_single_cert(cert_chain, private_key)?;
 		ccb.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-		Ok(TLSConfig {
-			config: Arc::new(ccb),
-		})
+		Ok(ServerTLSConfig::new(Arc::new(ccb)))
 	}
 }

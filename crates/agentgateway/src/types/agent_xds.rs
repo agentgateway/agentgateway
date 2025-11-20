@@ -25,7 +25,7 @@ use crate::types::{agent, backend, proto};
 use crate::*;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
-impl TryFrom<&proto::agent::TlsConfig> for TLSConfig {
+impl TryFrom<&proto::agent::TlsConfig> for ServerTLSConfig {
 	type Error = anyhow::Error;
 
 	fn try_from(value: &proto::agent::TlsConfig) -> Result<Self, Self::Error> {
@@ -36,11 +36,10 @@ impl TryFrom<&proto::agent::TlsConfig> for TLSConfig {
 			.expect("server config must be valid")
 			.with_no_client_auth()
 			.with_single_cert(cert_chain, private_key)?;
-		// TODO: support h2
-		sc.alpn_protocols = vec![b"http/1.1".into()];
-		Ok(TLSConfig {
-			config: Arc::new(sc),
-		})
+		// Defaults set here. These can be overriden by Frontend policy
+		// TODO: this default only makes sense for HTTPS, distinguish from TLS
+		sc.alpn_protocols = vec![b"h2".into(), b"http/1.1".into()];
+		Ok(ServerTLSConfig::new(Arc::new(sc)))
 	}
 }
 
@@ -1293,6 +1292,10 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					.tls_handshake_timeout
 					.map(convert_duration)
 					.unwrap_or_else(crate::defaults::tls_handshake_timeout),
+				alpn: t
+					.alpn
+					.as_ref()
+					.map(|t| t.protocols.iter().map(|s| s.as_bytes().to_vec()).collect()),
 			}),
 			Some(fps::Kind::Tcp(t)) => FrontendPolicy::TCP(frontend::TCP {
 				keepalives: t

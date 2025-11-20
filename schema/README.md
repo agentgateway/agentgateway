@@ -231,6 +231,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.backendTLS.insecure`||
 |`binds[].listeners[].routes[].policies.backendTLS.insecureHost`||
 |`binds[].listeners[].routes[].policies.backendTLS.alpn`||
+|`binds[].listeners[].routes[].policies.backendTLS.subjectAltNames`||
 |`binds[].listeners[].routes[].policies.backendAuth`|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)passthrough`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)key`||
@@ -504,6 +505,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.insecure`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.insecureHost`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.alpn`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.subjectAltNames`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth`|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)passthrough`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)key`||
@@ -658,6 +660,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.insecure`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.insecureHost`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.alpn`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.subjectAltNames`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth`|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)passthrough`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)key`||
@@ -786,6 +789,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.insecure`||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.insecureHost`||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.alpn`||
+|`binds[].listeners[].routes[].backends[].policies.backendTLS.subjectAltNames`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth`|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)passthrough`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)key`||
@@ -822,6 +826,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.insecure`||
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.insecureHost`||
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.alpn`||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.subjectAltNames`||
 |`binds[].listeners[].tcpRoutes[].backends`||
 |`binds[].listeners[].tcpRoutes[].backends[].(1)service`||
 |`binds[].listeners[].tcpRoutes[].backends[].(1)service.name`||
@@ -840,6 +845,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.insecure`||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.insecureHost`||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.alpn`||
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.subjectAltNames`||
 |`binds[].listeners[].policies`||
 |`binds[].listeners[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
@@ -915,6 +921,7 @@ This folder contains JSON schemas for various parts of the project
 |`frontendPolicies.http.http2KeepaliveTimeout`||
 |`frontendPolicies.tls`|Settings for handling incoming TLS connections.|
 |`frontendPolicies.tls.tlsHandshakeTimeout`||
+|`frontendPolicies.tls.alpn`||
 |`frontendPolicies.tcp`|Settings for handling incoming TCP connections.|
 |`frontendPolicies.tcp.keepalives`||
 |`frontendPolicies.tcp.keepalives.enabled`||
@@ -1079,6 +1086,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.backendTLS.insecure`||
 |`policies[].policy.backendTLS.insecureHost`||
 |`policies[].policy.backendTLS.alpn`||
+|`policies[].policy.backendTLS.subjectAltNames`||
 |`policies[].policy.backendAuth`|Authenticate to the backend.|
 |`policies[].policy.backendAuth.(any)(1)passthrough`||
 |`policies[].policy.backendAuth.(any)(1)key`||

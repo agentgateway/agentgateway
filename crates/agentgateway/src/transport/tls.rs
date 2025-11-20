@@ -2,8 +2,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use futures_util::TryFutureExt;
-use rustls::crypto::CryptoProvider;
 use rustls::ServerConfig;
+use rustls::crypto::CryptoProvider;
 use tracing::warn;
 use x509_parser::certificate::X509Certificate;
 
@@ -63,8 +63,8 @@ pub mod insecure {
 	use std::sync::Arc;
 
 	use crate::transport::tls::provider;
-	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 	use rustls::client::WebPkiServerVerifier;
+	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 	use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 	use rustls::{DigitallySignedStruct, SignatureScheme};
 
@@ -190,7 +190,10 @@ pub mod insecure {
 	}
 
 	impl AltHostnameVerifier {
-		pub fn new(roots: Arc<rustls::RootCertStore>, alt_server_names: Box<[ServerName<'static>]>) -> Self {
+		pub fn new(
+			roots: Arc<rustls::RootCertStore>,
+			alt_server_names: Box<[ServerName<'static>]>,
+		) -> Self {
 			Self {
 				roots,
 				alt_server_names,

@@ -197,7 +197,7 @@ impl ResolvedBackendTLS {
 		} else if let Some(alt_sans) = self.subject_alt_names {
 			let sans = alt_sans
 				.into_iter()
-				.map(|s| ServerName::try_from(s))
+				.map(ServerName::try_from)
 				.collect::<Result<Box<_>, _>>()?;
 			cc.dangerous()
 				.set_certificate_verifier(Arc::new(tls::insecure::AltHostnameVerifier::new(

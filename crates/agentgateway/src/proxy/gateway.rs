@@ -461,6 +461,7 @@ impl Gateway {
 	) -> anyhow::Result<(Arc<Listener>, Socket)> {
 		let def = frontend::TLS::default();
 		let to = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
+		let alpn = policies.tls.as_ref().and_then(|t| t.alpn.as_deref());
 		let handshake = async move {
 			let listeners = inp.stores.read_binds().listeners(bind.clone()).unwrap();
 			let (mut ext, counter, inner) = raw_stream.into_parts();
@@ -474,7 +475,7 @@ impl Gateway {
 			let best = listeners
 				.best_match(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
-			match best.protocol.tls() {
+			match best.protocol.tls(alpn) {
 				Some(cfg) => {
 					let tokio_rustls::StartHandshake { accepted, io, .. } = start;
 					let start = tokio_rustls::StartHandshake::from_parts(accepted, Box::new(io.discard()));

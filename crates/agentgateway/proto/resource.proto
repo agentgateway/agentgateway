@@ -323,6 +323,13 @@ message FrontendPolicySpec {
   message TLS {
     // TLS handshake timeout
     google.protobuf.Duration tls_handshake_timeout = 1;
+
+    // Unset: use defaults (h2,http/1.1)
+    // Set but empty: send none
+    // Set with values: send those values
+    Alpn alpn = 2;
+
+    // TODO: allow setting mTLS things as well
   }
 
   message TCP {

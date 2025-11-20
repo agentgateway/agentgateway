@@ -58,13 +58,45 @@ pub struct Listener {
 }
 
 pub type GatewayName = Strng;
+type Alpns = Vec<Vec<u8>>;
 
 #[derive(Debug, Clone)]
-pub struct TLSConfig {
-	pub config: Arc<ServerConfig>,
+pub struct ServerTLSConfig {
+	config: Arc<ServerConfig>,
+	per_alpn_config: Arc<RwLock<HashMap<Alpns, Arc<ServerConfig>>>>,
 }
 
-impl serde::Serialize for TLSConfig {
+impl ServerTLSConfig {
+	pub fn new(config: Arc<ServerConfig>) -> Self {
+		Self {
+			config,
+			per_alpn_config: Arc::new(Default::default()),
+		}
+	}
+	pub fn config_for(&self, alpns: Option<&[Vec<u8>]>) -> Arc<ServerConfig> {
+		let Some(alpn) = alpns else {
+			return self.config.clone();
+		};
+		{
+			let reader = self.per_alpn_config.read().unwrap();
+			if let Some(cached_config) = reader.get(alpn) {
+				return Arc::clone(cached_config);
+			};
+		}
+		let mut writer = self.per_alpn_config.write().unwrap();
+		if let Some(cached_config) = writer.get(alpn) {
+			return Arc::clone(cached_config);
+		}
+		let mut new_config = self.config.as_ref().clone();
+		new_config.alpn_protocols = alpn.to_vec();
+		let arc_config = Arc::new(new_config);
+
+		writer.insert(alpn.to_vec(), Arc::clone(&arc_config));
+		arc_config
+	}
+}
+
+impl serde::Serialize for ServerTLSConfig {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
@@ -104,19 +136,19 @@ pub enum ListenerProtocol {
 	/// HTTP
 	HTTP,
 	/// HTTPS, terminating TLS then treating as HTTP
-	HTTPS(TLSConfig),
+	HTTPS(ServerTLSConfig),
 	/// TLS (passthrough or termination)
-	TLS(Option<TLSConfig>),
+	TLS(Option<ServerTLSConfig>),
 	/// Opaque TCP
 	TCP,
 	HBONE,
 }
 
 impl ListenerProtocol {
-	pub fn tls(&self) -> Option<Arc<rustls::ServerConfig>> {
+	pub fn tls(&self, alpns: Option<&[Vec<u8>]>) -> Option<Arc<rustls::ServerConfig>> {
 		match self {
-			ListenerProtocol::HTTPS(t) => Some(t.config.clone()),
-			ListenerProtocol::TLS(t) => t.as_ref().map(|t| t.config.clone()),
+			ListenerProtocol::HTTPS(t) => Some(t.config_for(alpns)),
+			ListenerProtocol::TLS(t) => t.as_ref().map(|t| t.config_for(alpns)),
 			_ => None,
 		}
 	}
