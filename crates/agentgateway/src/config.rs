@@ -272,7 +272,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 							fields
 								.add
 								.iter()
-								.map(|(k, v)| cel::Expression::new(v).map(|v| (k.clone(), Arc::new(v))))
+								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
 						),
 					})
@@ -283,14 +283,14 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.tracing
 				.as_ref()
 				.and_then(|t| t.random_sampling.as_ref().map(|c| c.0.as_str()))
-				.map(cel::Expression::new)
+				.map(cel::Expression::new_strict)
 				.transpose()?
 				.map(Arc::new),
 			client_sampling: raw
 				.tracing
 				.as_ref()
 				.and_then(|t| t.client_sampling.as_ref().map(|c| c.0.as_str()))
-				.map(cel::Expression::new)
+				.map(cel::Expression::new_strict)
 				.transpose()?
 				.map(Arc::new),
 		},
@@ -299,7 +299,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.logging
 				.as_ref()
 				.and_then(|l| l.filter.as_ref())
-				.map(cel::Expression::new)
+				.map(cel::Expression::new_strict)
 				.transpose()?
 				.map(Arc::new),
 			level: match raw.logging.as_ref().and_then(|l| l.level.as_ref()) {
@@ -322,7 +322,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 							fields
 								.add
 								.iter()
-								.map(|(k, v)| cel::Expression::new(v).map(|v| (k.clone(), Arc::new(v))))
+								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
 						),
 					})
@@ -348,7 +348,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 							add: fields
 								.add
 								.iter()
-								.map(|(k, v)| cel::Expression::new(v).map(|v| (k.clone(), Arc::new(v))))
+								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
 						})
 					})

@@ -31,6 +31,7 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	ctx.add_function("random", || random_range(0.0..=1.0));
 	ctx.add_function("default", default);
 	ctx.add_function("regexReplace", regex_replace);
+	ctx.add_function("fail", fail);
 
 	// Using the go name, base64.encode is blocked by https://github.com/cel-rust/cel-rust/issues/103 (namespacing)
 	ctx.add_function("base64Encode", base64_encode);
@@ -176,6 +177,10 @@ fn must_map(v: Value) -> Result<Map, cel::ExecutionError> {
 		Value::Map(map) => Ok(map),
 		_ => Err(v.error_expected_type(ValueType::Map)),
 	}
+}
+
+fn fail(ftx: &FunctionContext, v: Arc<String>) -> ResolveResult {
+	Err(ftx.error(format!("fail() called: {v}")))
 }
 
 fn json_parse(ftx: &FunctionContext, v: Value) -> ResolveResult {

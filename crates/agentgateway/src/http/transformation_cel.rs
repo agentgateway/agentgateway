@@ -31,16 +31,21 @@ pub struct LocalTransform {
 	pub body: Option<Strng>,
 }
 
-impl TryFrom<LocalTransform> for TransformerConfig {
-	type Error = anyhow::Error;
-
-	fn try_from(req: LocalTransform) -> Result<Self, Self::Error> {
+impl TransformerConfig {
+	fn try_from_local_config(req: LocalTransform, strict: bool) -> anyhow::Result<Self> {
+		let compile = |s: &str| {
+			if strict {
+				cel::Expression::new_strict(s)
+			} else {
+				Ok(cel::Expression::new_permissive(s))
+			}
+		};
 		let set = req
 			.set
 			.into_iter()
 			.map(|(k, v)| {
 				let tk = HeaderOrPseudo::try_from(k.as_str())?;
-				let tv = cel::Expression::new(v.as_str())?;
+				let tv = compile(v.as_str())?;
 				Ok::<_, anyhow::Error>((tk, tv))
 			})
 			.collect::<Result<_, _>>()?;
@@ -49,7 +54,7 @@ impl TryFrom<LocalTransform> for TransformerConfig {
 			.into_iter()
 			.map(|(k, v)| {
 				let tk = HeaderOrPseudo::try_from(k.as_str())?;
-				let tv = cel::Expression::new(v.as_str())?;
+				let tv = compile(v.as_str())?;
 				Ok::<_, anyhow::Error>((tk, tv))
 			})
 			.collect::<Result<_, _>>()?;
@@ -58,10 +63,7 @@ impl TryFrom<LocalTransform> for TransformerConfig {
 			.into_iter()
 			.map(|k| HeaderName::try_from(k.as_str()))
 			.collect::<Result<_, _>>()?;
-		let body = req
-			.body
-			.map(|b| cel::Expression::new(b.as_str()))
-			.transpose()?;
+		let body = req.body.map(|b| compile(b.as_str())).transpose()?;
 		Ok(TransformerConfig {
 			set,
 			add,
@@ -70,18 +72,20 @@ impl TryFrom<LocalTransform> for TransformerConfig {
 		})
 	}
 }
-impl TryFrom<LocalTransformationConfig> for Transformation {
-	type Error = anyhow::Error;
 
-	fn try_from(value: LocalTransformationConfig) -> Result<Self, Self::Error> {
+impl Transformation {
+	pub fn try_from_local_config(
+		value: LocalTransformationConfig,
+		strict: bool,
+	) -> anyhow::Result<Self> {
 		let LocalTransformationConfig { request, response } = value;
 		let request = if let Some(req) = request {
-			req.try_into()?
+			TransformerConfig::try_from_local_config(req, strict)?
 		} else {
 			Default::default()
 		};
 		let response = if let Some(resp) = response {
-			resp.try_into()?
+			TransformerConfig::try_from_local_config(resp, strict)?
 		} else {
 			Default::default()
 		};

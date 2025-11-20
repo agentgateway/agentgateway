@@ -9,11 +9,11 @@ use itertools::Itertools;
 use macro_rules_attribute::apply;
 use openapiv3::OpenAPI;
 use rustls::ServerConfig;
-use serde_with::{TryFromInto, serde_as};
 
 use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
+use crate::http::transformation_cel::LocalTransformationConfig;
 use crate::http::{filters, retry, timeout};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, RouteType};
 use crate::mcp::McpAuthorization;
@@ -553,6 +553,18 @@ struct LocalPolicy {
 	pub policy: FilterOrPolicy,
 }
 
+pub fn de_transform<'de, D>(
+	deserializer: D,
+) -> Result<Option<crate::http::transformation_cel::Transformation>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	<Option<LocalTransformationConfig>>::deserialize(deserializer)?
+		.map(|c| http::transformation_cel::Transformation::try_from_local_config(c, true))
+		.transpose()
+		.map_err(serde::de::Error::custom)
+}
+
 #[apply(schema_de!)]
 #[derive(Default)]
 struct LocalGatewayPolicy {
@@ -567,15 +579,10 @@ struct LocalGatewayPolicy {
 	ext_proc: Option<crate::http::ext_proc::ExtProc>,
 	/// Modify requests and responses
 	#[serde(default)]
-	#[serde_as(
-		deserialize_as = "Option<TryFromInto<http::transformation_cel::LocalTransformationConfig>>"
-	)]
-	// serde_as is supposed to generate this automatically; not sure why its failing...
+	#[serde(deserialize_with = "de_transform")]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(
-			with = "serde_with::Schema::<Option<crate::http::transformation_cel::Transformation>, Option<TryFromInto<http::transformation_cel::LocalTransformationConfig>>>"
-		)
+		schemars(with = "Option<http::transformation_cel::LocalTransformationConfig>")
 	)]
 	transformations: Option<crate::http::transformation_cel::Transformation>,
 	/// Authenticate incoming requests using Basic Authentication with htpasswd.
@@ -797,15 +804,10 @@ struct FilterOrPolicy {
 	ext_proc: Option<crate::http::ext_proc::ExtProc>,
 	/// Modify requests and responses
 	#[serde(default)]
-	#[serde_as(
-		deserialize_as = "Option<TryFromInto<http::transformation_cel::LocalTransformationConfig>>"
-	)]
-	// serde_as is supposed to generate this automatically; not sure why its failing...
+	#[serde(deserialize_with = "de_transform")]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(
-			with = "serde_with::Schema::<Option<crate::http::transformation_cel::Transformation>, Option<TryFromInto<http::transformation_cel::LocalTransformationConfig>>>"
-		)
+		schemars(with = "Option<http::transformation_cel::LocalTransformationConfig>")
 	)]
 	transformations: Option<crate::http::transformation_cel::Transformation>,
 

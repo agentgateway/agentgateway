@@ -22,6 +22,7 @@ pub use functions::{FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_M
 use once_cell::sync::Lazy;
 use prometheus_client::encoding::EncodeLabelValue;
 use serde::{Deserialize, Serialize, Serializer};
+use tracing::log::debug;
 
 mod functions;
 mod strings;
@@ -98,7 +99,8 @@ impl<'de> Deserialize<'de> for Expression {
 		D: serde::Deserializer<'de>,
 	{
 		let e = String::deserialize(deserializer)?;
-		crate::cel::Expression::new(&e).map_err(|e| serde::de::Error::custom(e.to_string()))
+		// For local configs, we treat CEL as strict parsing
+		crate::cel::Expression::new_strict(&e).map_err(|e| serde::de::Error::custom(e.to_string()))
 	}
 }
 
@@ -427,7 +429,26 @@ pub struct Executor<'a> {
 	ctx: Context<'a>,
 }
 impl Expression {
-	pub fn new(original_expression: impl Into<String>) -> Result<Self, Error> {
+	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
+	/// with an expression that always fails to evaluate
+	pub fn new_permissive(original_expression: impl Into<String>) -> Self {
+		let expr = original_expression.into();
+		match Self::new_strict(&expr) {
+			Ok(ok) => ok,
+			Err(err) => {
+				debug!("ignoring failed expression: {}", err);
+				Self {
+					attributes: Default::default(),
+					expression: Self::new_strict("fail('the expression could not be compiled')")
+						.expect("must be valid")
+						.expression,
+					original_expression: expr,
+				}
+			},
+		}
+	}
+	/// new_strict compiles the expression, and returns an error if its invalid.
+	pub fn new_strict(original_expression: impl Into<String>) -> Result<Self, Error> {
 		let original_expression = original_expression.into();
 		let expression = Program::compile(&original_expression)?;
 

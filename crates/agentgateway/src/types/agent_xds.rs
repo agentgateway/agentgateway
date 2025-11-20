@@ -68,16 +68,15 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthorization> for McpAuthor
 		rbac: &proto::agent::backend_policy_spec::McpAuthorization,
 	) -> Result<Self, Self::Error> {
 		let mut allow_exprs = Vec::new();
+		// We do NOT want to NACK invalid CEL expressions. Instead, we ensure they always evaluate to errors.
 		for allow_rule in &rbac.allow {
-			let expr = cel::Expression::new(allow_rule)
-				.map_err(|e| ProtoError::Generic(format!("invalid CEL expression in allow rule: {e}")))?;
+			let expr = cel::Expression::new_permissive(allow_rule);
 			allow_exprs.push(Arc::new(expr));
 		}
 
 		let mut deny_exprs = Vec::new();
 		for deny_rule in &rbac.deny {
-			let expr = cel::Expression::new(deny_rule)
-				.map_err(|e| ProtoError::Generic(format!("invalid CEL expression in deny rule: {e}")))?;
+			let expr = cel::Expression::new_permissive(deny_rule);
 			deny_exprs.push(Arc::new(expr));
 		}
 
@@ -680,15 +679,13 @@ impl TryFrom<&proto::agent::traffic_policy_spec::Rbac> for Authorization {
 		// Convert allow rules
 		let mut allow_exprs = Vec::new();
 		for allow_rule in &rbac.allow {
-			let expr = cel::Expression::new(allow_rule)
-				.map_err(|e| ProtoError::Generic(format!("invalid CEL expression in allow rule: {e}")))?;
+			let expr = cel::Expression::new_permissive(allow_rule);
 			allow_exprs.push(Arc::new(expr));
 		}
 		// Convert deny rules
 		let mut deny_exprs = Vec::new();
 		for deny_rule in &rbac.deny {
-			let expr = cel::Expression::new(deny_rule)
-				.map_err(|e| ProtoError::Generic(format!("invalid CEL expression in deny rule: {e}")))?;
+			let expr = cel::Expression::new_permissive(deny_rule);
 			deny_exprs.push(Arc::new(expr));
 		}
 
@@ -738,7 +735,8 @@ impl TryFrom<&proto::agent::traffic_policy_spec::TransformationPolicy> for Trans
 		let request = Some(convert_transform(&spec.request)?);
 		let response = Some(convert_transform(&spec.response)?);
 		let config = LocalTransformationConfig { request, response };
-		Transformation::try_from(config).map_err(|e| ProtoError::Generic(e.to_string()))
+		Transformation::try_from_local_config(config, false)
+			.map_err(|e| ProtoError::Generic(e.to_string()))
 	}
 }
 
@@ -981,8 +979,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					.metadata
 					.iter()
 					.map(|(k, v)| {
-						let ve = cel::Expression::new(v)
-							.map_err(|e| ProtoError::Generic(format!("invalid metadata expression: {e}")))?;
+						let ve = cel::Expression::new_permissive(v);
 						Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
 					})
 					.collect::<Result<_, _>>()?;
@@ -1058,17 +1055,18 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					.iter()
 					.map(
 						|d| -> Result<http::remoteratelimit::DescriptorEntry, ProtoError> {
-							let entries: Result<Vec<_>, ProtoError> = d
+							let entries: Vec<_> = d
 								.entries
 								.iter()
 								.map(|e| {
-									cel::Expression::new(e.value.clone())
-										.map_err(|e| ProtoError::Generic(format!("invalid descriptor value: {e}")))
-										.map(|expr| http::remoteratelimit::Descriptor(e.key.clone(), expr))
+									http::remoteratelimit::Descriptor(
+										e.key.clone(),
+										cel::Expression::new_permissive(e.value.clone()),
+									)
 								})
 								.collect();
 							Ok(http::remoteratelimit::DescriptorEntry {
-								entries: Arc::new(entries?),
+								entries: Arc::new(entries),
 								limit_type: match tps::remote_rate_limit::Type::try_from(d.r#type)
 									.unwrap_or(tps::remote_rate_limit::Type::Requests)
 								{
@@ -1314,9 +1312,7 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 							.add
 							.iter()
 							.map(|f| {
-								let expr = cel::Expression::new(&f.expression).map_err(|e| {
-									ProtoError::Generic(format!("invalid CEL expression in add field: {e}"))
-								})?;
+								let expr = cel::Expression::new_permissive(&f.expression);
 								Ok::<_, ProtoError>((f.name.clone(), Arc::new(expr)))
 							})
 							.collect::<Result<Vec<_>, _>>()?;
@@ -1329,11 +1325,7 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					filter: p
 						.filter
 						.as_ref()
-						.map(cel::Expression::new)
-						.transpose()
-						.map_err(|e| {
-							ProtoError::Generic(format!("invalid CEL expression in filter field: {e}"))
-						})?
+						.map(cel::Expression::new_permissive)
 						.map(Arc::new),
 					add: Arc::new(add),
 					remove: Arc::new(FzHashSet::new(rm)),

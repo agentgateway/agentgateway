@@ -57,7 +57,7 @@ where
 	let raw = Vec::<KV>::deserialize(deserializer)?;
 	let parsed: Vec<_> = raw
 		.into_iter()
-		.map(|i| cel::Expression::new(i.value).map(|v| Descriptor(i.key, v)))
+		.map(|i| cel::Expression::new_strict(i.value).map(|v| Descriptor(i.key, v)))
 		.collect::<Result<_, _>>()
 		.map_err(|e| serde::de::Error::custom(e.to_string()))?;
 	Ok(Arc::new(parsed))

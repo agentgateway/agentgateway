@@ -187,7 +187,7 @@ async fn direct_response() {
 		}),
 		request: None,
 	};
-	let xfm = Transformation::try_from(xfm).unwrap();
+	let xfm = Transformation::try_from_local_config(xfm, true).unwrap();
 	let bind = base_gateway(&mock).with_route(Route {
 		key: "route2".into(),
 		route_name: "route2".into(),

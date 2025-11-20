@@ -10,7 +10,7 @@ use crate::http::Body;
 
 fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 	let mut cb = ContextBuilder::new();
-	let exp = Expression::new(expr)?;
+	let exp = Expression::new_strict(expr)?;
 	cb.register_expression(&exp);
 	cb.with_request(&req, "".to_string());
 	let exec = cb.build()?;
@@ -19,7 +19,7 @@ fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 
 #[test]
 fn test_eval() {
-	let expr = Arc::new(Expression::new(r#"request.method"#).unwrap());
+	let expr = Arc::new(Expression::new_strict(r#"request.method"#).unwrap());
 	let req = ::http::Request::builder()
 		.method(Method::GET)
 		.header("x-example", "value")
@@ -109,7 +109,7 @@ fn with_profiling(name: &str, f: impl FnOnce()) {
 #[divan::bench]
 #[cfg(target_family = "unix")]
 fn bench_lookup(b: Bencher) {
-	let expr = Arc::new(Expression::new(r#"request.method"#).unwrap());
+	let expr = Arc::new(Expression::new_strict(r#"request.method"#).unwrap());
 	let req = ::http::Request::builder()
 		.method(Method::GET)
 		.header("x-example", "value")
@@ -130,7 +130,7 @@ fn bench_lookup(b: Bencher) {
 #[divan::bench]
 fn bench_with_response(b: Bencher) {
 	let expr = Arc::new(
-		Expression::new(r#"response.status == 200 && response.headers["x-example"] == "value""#)
+		Expression::new_strict(r#"response.status == 200 && response.headers["x-example"] == "value""#)
 			.unwrap(),
 	);
 	b.with_inputs(|| {
@@ -152,7 +152,7 @@ fn bench_with_response(b: Bencher) {
 #[divan::bench]
 #[cfg(target_family = "unix")]
 fn benchmark_register_build(b: Bencher) {
-	let expr = Arc::new(Expression::new(r#"1 + 2 == 3"#).unwrap());
+	let expr = Arc::new(Expression::new_strict(r#"1 + 2 == 3"#).unwrap());
 	with_profiling("full", || {
 		b.with_inputs(|| {
 			::http::Response::builder()

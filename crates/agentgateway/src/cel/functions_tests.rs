@@ -5,7 +5,7 @@ use crate::cel::{ContextBuilder, Error, Expression};
 
 fn eval(expr: &str) -> Result<Value, Error> {
 	let mut cb = ContextBuilder::new();
-	let exp = Expression::new(expr)?;
+	let exp = Expression::new_strict(expr)?;
 	cb.register_expression(&exp);
 	let exec = cb.build()?;
 	exec.eval(&exp)

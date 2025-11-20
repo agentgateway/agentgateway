@@ -15,7 +15,7 @@ fn build<const N: usize>(items: [(&str, &str); N]) -> Transformation {
 		}),
 		response: None,
 	};
-	Transformation::try_from(c).unwrap()
+	Transformation::try_from_local_config(c, true).unwrap()
 }
 
 #[test]
@@ -50,7 +50,7 @@ async fn test_transformation_body() {
 			..Default::default()
 		}),
 	};
-	let xfm = Transformation::try_from(c).unwrap();
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
 	let mut ctx = ContextBuilder::new();
 	for e in xfm.expressions() {
 		ctx.register_expression(e)

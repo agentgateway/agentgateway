@@ -78,11 +78,6 @@ impl PolicySet {
 	pub fn new(allow: Vec<Arc<cel::Expression>>, deny: Vec<Arc<cel::Expression>>) -> Self {
 		Self { allow, deny }
 	}
-
-	pub fn add(&mut self, p: impl Into<String>) -> Result<(), cel::Error> {
-		self.allow.push(Arc::new(cel::Expression::new(p)?));
-		Ok(())
-	}
 }
 
 pub fn se_policies<S: Serializer>(t: &PolicySet, serializer: S) -> Result<S::Ok, S::Error> {
@@ -107,14 +102,14 @@ where
 				rule: RuleTypeSerde::Allow(allow),
 			}
 			| RuleSerde::PlainString(allow) => res.allow.push(
-				cel::Expression::new(&allow)
+				cel::Expression::new_strict(&allow)
 					.map(Arc::new)
 					.map_err(|e| serde::de::Error::custom(e.to_string()))?,
 			),
 			RuleSerde::Object {
 				rule: RuleTypeSerde::Deny(deny),
 			} => res.deny.push(
-				cel::Expression::new(deny)
+				cel::Expression::new_strict(deny)
 					.map(Arc::new)
 					.map_err(|e| serde::de::Error::custom(e.to_string()))?,
 			),
