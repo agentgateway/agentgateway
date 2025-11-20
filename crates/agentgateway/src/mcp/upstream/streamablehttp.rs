@@ -15,33 +15,21 @@ use sse_stream::SseStream;
 use crate::http::Request;
 use crate::mcp::ClientError;
 use crate::mcp::upstream::IncomingRequestContext;
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
 use crate::{json, *};
 
 #[derive(Clone, Debug)]
 pub struct Client {
-	backend: Arc<SimpleBackend>,
+	http_client: super::McpHttpClient,
 	uri: Uri,
-	client: PolicyClient,
-	policies: BackendPolicies,
 	session_id: AtomicOption<String>,
 }
 
 impl Client {
-	pub fn new(
-		backend: SimpleBackend,
-		path: Strng,
-		client: PolicyClient,
-		policies: BackendPolicies,
-	) -> anyhow::Result<Self> {
-		let hp = backend.hostport();
+	pub fn new(http_client: super::McpHttpClient, path: Strng) -> anyhow::Result<Self> {
+		let hp = http_client.backend().hostport();
 		Ok(Self {
-			backend: Arc::new(backend),
+			http_client,
 			uri: ("http://".to_string() + &hp + path.as_str()).parse()?,
-			client,
-			policies,
 			session_id: Default::default(),
 		})
 	}
@@ -73,8 +61,6 @@ impl Client {
 
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
 		let body = serde_json::to_vec(&message).map_err(ClientError::new)?;
 
 		let mut req = ::http::Request::builder()
@@ -89,10 +75,7 @@ impl Client {
 
 		ctx.apply(&mut req);
 
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
 		if resp.status() == http::StatusCode::ACCEPTED {
 			return Ok(StreamableHttpPostResponse::Accepted);
@@ -131,8 +114,6 @@ impl Client {
 
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
 		let mut req = ::http::Request::builder()
 			.uri(&self.uri)
 			.method(http::Method::DELETE)
@@ -143,10 +124,7 @@ impl Client {
 
 		ctx.apply(&mut req);
 
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));
@@ -157,8 +135,6 @@ impl Client {
 		&self,
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
 		let mut req = ::http::Request::builder()
 			.uri(&self.uri)
 			.method(http::Method::GET)
@@ -170,10 +146,7 @@ impl Client {
 
 		ctx.apply(&mut req);
 
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));

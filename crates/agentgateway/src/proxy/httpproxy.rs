@@ -202,6 +202,8 @@ async fn apply_backend_policies(
 		request_redirect,
 		// Applied elsewhere
 		request_mirror: _,
+		// Applied elsewhere
+		override_dest: _,
 	} = &backend_call.backend_policies;
 	response_policies.backend_response_header = response_header_modifier.clone();
 
@@ -996,9 +998,13 @@ async fn make_backend_call(
 	});
 
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
-	let (override_dest, ext_proc_resp) = maybe_inference.mutate_request(&mut req).await?;
+	let (inference_override, ext_proc_resp) = maybe_inference.mutate_request(&mut req).await?;
 	ext_proc_resp.apply(response_policies.headers())?;
-	log.add(|l| l.inference_pool = override_dest);
+	log.add(|l| l.inference_pool = inference_override);
+
+	// Use inference override if present, otherwise check for stateful MCP pinning.
+	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
+	let override_dest = inference_override.or(policies.override_dest);
 
 	let backend_call = match backend {
 		Backend::AI(n, ai) => {

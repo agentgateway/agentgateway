@@ -14,9 +14,6 @@ use crate::json;
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -503,13 +500,23 @@ fn normalize_url_path(prefix: &str, path: &str) -> String {
 #[derive(Debug)]
 pub struct Handler {
 	pub prefix: String,
-	pub client: PolicyClient,
+	pub http_client: super::McpHttpClient,
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
-	pub default_policies: BackendPolicies,
-	pub backend: SimpleBackend,
 }
 
 impl Handler {
+	pub fn new(
+		http_client: super::McpHttpClient,
+		tools: Vec<(Tool, UpstreamOpenAPICall)>,
+		prefix: String,
+	) -> Self {
+		Self {
+			prefix,
+			http_client,
+			tools,
+		}
+	}
+
 	pub async fn send_message(
 		&self,
 		request: JsonRpcRequest<ClientRequest>,
@@ -659,7 +666,7 @@ impl Handler {
 		let base_url = format!(
 			"{}://{}{}",
 			"http",
-			self.backend.hostport(),
+			self.http_client.backend().hostport(),
 			normalized_path
 		);
 
@@ -746,11 +753,7 @@ impl Handler {
 
 		ctx.apply(&mut request);
 
-		// Make the request
-		let response = self
-			.client
-			.call_with_default_policies(request, &self.backend, self.default_policies.clone())
-			.await?;
+		let response = self.http_client.call(request).await?;
 
 		// Read response body
 		let status = response.status();

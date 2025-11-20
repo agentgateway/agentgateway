@@ -93,6 +93,11 @@ pub struct BackendPolicies {
 	pub response_header_modifier: Option<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub request_mirror: Vec<filters::RequestMirror>,
+
+	/// Internal-only override for destination endpoint selection.
+	/// Used for stateful MCP routing (session affinity).
+	/// Not exposed through config - set programmatically only.
+	pub override_dest: Option<std::net::SocketAddr>,
 }
 
 impl BackendPolicies {
@@ -119,6 +124,7 @@ impl BackendPolicies {
 			} else {
 				other.request_mirror
 			},
+			override_dest: other.override_dest.or(self.override_dest),
 		}
 	}
 	/// build the inference routing configuration. This may be a NO-OP config.
