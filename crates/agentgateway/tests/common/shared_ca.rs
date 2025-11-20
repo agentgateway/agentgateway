@@ -1,5 +1,9 @@
 // Shared CA for test certificate generation
 // Uses static pre-generated CA keys for consistent test certificate generation
+//
+// To regenerate these test certificates, run:
+//   cd crates/agentgateway/tests/common/testdata
+//   ./gen_certs.sh
 
 use rcgen::KeyPair;
 use std::sync::{Arc, OnceLock};

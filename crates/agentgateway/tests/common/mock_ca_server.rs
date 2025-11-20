@@ -123,23 +123,6 @@ pub async fn start_mock_ca_server() -> anyhow::Result<SocketAddr> {
 			.expect("CA server failed");
 	});
 
-	// Wait for server to be ready by attempting to connect
-	wait_for_tcp_server(addr).await?;
-
+	// The listener is already bound and listening, so the server is ready
 	Ok(addr)
-}
-
-async fn wait_for_tcp_server(addr: SocketAddr) -> anyhow::Result<()> {
-	use std::time::Duration;
-	let timeout = Duration::from_secs(5);
-	let start = std::time::Instant::now();
-
-	while start.elapsed() < timeout {
-		if tokio::net::TcpStream::connect(addr).await.is_ok() {
-			return Ok(());
-		}
-		tokio::time::sleep(Duration::from_millis(10)).await;
-	}
-
-	Err(anyhow::anyhow!("Timeout waiting for server at {}", addr))
 }
