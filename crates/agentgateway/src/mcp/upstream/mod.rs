@@ -250,7 +250,10 @@ impl UpstreamGroup {
 
 				let http_client = McpHttpClient::new(
 					self.client.clone(),
-					target.backend.clone().expect("there must be a backend for MCP"),
+					target
+						.backend
+						.clone()
+						.expect("there must be a backend for MCP"),
 					target.backend_policies.clone(),
 					self.backend.stateful,
 				);
