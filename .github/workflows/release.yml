@@ -19,7 +19,7 @@ env:
 
 jobs:
   build-image:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -28,9 +28,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            os: ubuntu-latest
           - platform: linux/arm64
-            os: ubuntu-22.04-arm
     steps:
     - name: Prepare
       run: |
@@ -135,7 +133,7 @@ jobs:
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
 
   musl-build-image:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -144,9 +142,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            os: ubuntu-latest
           - platform: linux/arm64
-            os: ubuntu-22.04-arm
     steps:
     - name: Prepare
       run: |
