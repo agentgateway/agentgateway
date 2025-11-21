@@ -299,7 +299,17 @@ impl Gateway {
 						Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
 					},
 					Err(e) => {
-						warn!("failed to terminate TLS: {e}");
+						event!(
+							target: "downstream connection",
+							parent: None,
+							tracing::Level::WARN,
+
+							src.addr = %peer_addr,
+							protocol = ?bind_protocol,
+							error = ?e,
+
+							"failed to terminate TLS",
+						);
 					},
 				}
 			},
@@ -319,7 +329,17 @@ impl Gateway {
 						.await;
 					},
 					Err(e) => {
-						warn!("failed to terminate TLS: {e}");
+						event!(
+							target: "downstream connection",
+							parent: None,
+							tracing::Level::WARN,
+
+							src.addr = %peer_addr,
+							protocol = ?bind_protocol,
+							error = ?e,
+
+							"failed to terminate TLS",
+						);
 					},
 				}
 			},
@@ -476,7 +496,11 @@ impl Gateway {
 				.best_match(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
 			match best.protocol.tls(alpn) {
-				Some(cfg) => {
+				Some(Err(e)) => {
+					// There is a TLS config for this listener, but its invalid. Reject the connection
+					return Err(e);
+				},
+				Some(Ok(cfg)) => {
 					let tokio_rustls::StartHandshake { accepted, io, .. } = start;
 					let start = tokio_rustls::StartHandshake::from_parts(accepted, Box::new(io.discard()));
 					let tls = start.into_stream(cfg).await?;

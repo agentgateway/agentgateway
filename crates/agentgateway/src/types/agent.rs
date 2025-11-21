@@ -62,37 +62,47 @@ type Alpns = Vec<Vec<u8>>;
 
 #[derive(Debug, Clone)]
 pub struct ServerTLSConfig {
-	config: Arc<ServerConfig>,
+	config: Option<Arc<ServerConfig>>,
 	per_alpn_config: Arc<RwLock<HashMap<Alpns, Arc<ServerConfig>>>>,
 }
 
 impl ServerTLSConfig {
 	pub fn new(config: Arc<ServerConfig>) -> Self {
 		Self {
-			config,
+			config: Some(config),
 			per_alpn_config: Arc::new(Default::default()),
 		}
 	}
-	pub fn config_for(&self, alpns: Option<&[Vec<u8>]>) -> Arc<ServerConfig> {
+	/// new_invalid returns a ServerTLSConfig that always rejects connections
+	pub fn new_invalid() -> Self {
+		Self {
+			config: None,
+			per_alpn_config: Arc::new(Default::default()),
+		}
+	}
+	/// config_for returns the appropriate config for the requested ALPN
+	/// If none is return, it means the certificates were invalid.
+	pub fn config_for(&self, alpns: Option<&[Vec<u8>]>) -> Option<Arc<ServerConfig>> {
+		let config = self.config.clone()?;
 		let Some(alpn) = alpns else {
-			return self.config.clone();
+			return Some(config);
 		};
 		{
 			let reader = self.per_alpn_config.read().unwrap();
 			if let Some(cached_config) = reader.get(alpn) {
-				return Arc::clone(cached_config);
+				return Some(Arc::clone(cached_config));
 			};
 		}
 		let mut writer = self.per_alpn_config.write().unwrap();
 		if let Some(cached_config) = writer.get(alpn) {
-			return Arc::clone(cached_config);
+			return Some(Arc::clone(cached_config));
 		}
-		let mut new_config = self.config.as_ref().clone();
+		let mut new_config = Arc::unwrap_or_clone(config);
 		new_config.alpn_protocols = alpn.to_vec();
 		let arc_config = Arc::new(new_config);
 
 		writer.insert(alpn.to_vec(), Arc::clone(&arc_config));
-		arc_config
+		Some(arc_config)
 	}
 }
 
@@ -145,10 +155,19 @@ pub enum ListenerProtocol {
 }
 
 impl ListenerProtocol {
-	pub fn tls(&self, alpns: Option<&[Vec<u8>]>) -> Option<Arc<rustls::ServerConfig>> {
+	pub fn tls(
+		&self,
+		alpns: Option<&[Vec<u8>]>,
+	) -> Option<anyhow::Result<Arc<rustls::ServerConfig>>> {
 		match self {
-			ListenerProtocol::HTTPS(t) => Some(t.config_for(alpns)),
-			ListenerProtocol::TLS(t) => t.as_ref().map(|t| t.config_for(alpns)),
+			ListenerProtocol::HTTPS(t) => Some(
+				t.config_for(alpns)
+					.ok_or_else(|| anyhow!("TLS certificate invalid")),
+			),
+			ListenerProtocol::TLS(t) => t.as_ref().map(|t| {
+				t.config_for(alpns)
+					.ok_or_else(|| anyhow!("TLS certificate invalid"))
+			}),
 			_ => None,
 		}
 	}
