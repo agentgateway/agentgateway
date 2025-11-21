@@ -1106,9 +1106,9 @@ pub struct TargetedPolicy {
 /// Configuration for dynamic tracing policy
 #[apply(schema_ser!)]
 pub struct TracingConfig {
-	pub service_name: String,
 	pub provider_backend: SimpleBackendReference,
 	pub attributes: Vec<TracingAttribute>,
+	pub resources: Vec<TracingAttribute>,
 }
 
 /// A single tracing attribute with a CEL expression

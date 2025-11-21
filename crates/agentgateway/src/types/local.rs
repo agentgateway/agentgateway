@@ -704,12 +704,12 @@ impl LocalTCPBackendPolicies {
 
 #[apply(schema_de!)]
 pub struct LocalTracingConfig {
-	#[serde(rename = "serviceName")]
-	pub service_name: String,
 	#[serde(rename = "providerBackend")]
 	pub provider_backend: SimpleLocalBackend,
 	#[serde(default)]
 	pub attributes: Vec<LocalTracingAttribute>,
+	#[serde(default)]
+	pub resources: Vec<LocalTracingAttribute>,
 }
 
 #[apply(schema_de!)]
@@ -1135,7 +1135,7 @@ async fn split_frontend_policies(
 			.attributes
 			.iter()
 			.map(|a| {
-				let expr = cel::Expression::new(&a.value)
+				let expr = cel::Expression::new_strict(&a.value)
 					.map_err(|e| anyhow::anyhow!("invalid CEL in tracing attribute: {}", e))?;
 				Ok(types::agent::TracingAttribute {
 					name: a.name.clone(),
@@ -1144,43 +1144,46 @@ async fn split_frontend_policies(
 			})
 			.collect::<anyhow::Result<Vec<_>>>()?;
 
-		// Extract endpoint directly from the local backend config
-		let endpoint = match &local_config.provider_backend {
-			SimpleLocalBackend::Service { name, port } => {
-				format!("http://{}:{}", name.hostname, port)
+		// Parse CEL resources
+		let resources = local_config
+			.resources
+			.iter()
+			.map(|a| {
+				let expr = cel::Expression::new_strict(&a.value)
+					.map_err(|e| anyhow::anyhow!("invalid CEL in tracing resource: {}", e))?;
+				Ok(types::agent::TracingAttribute {
+					name: a.name.clone(),
+					value: Arc::new(expr),
+				})
+			})
+			.collect::<anyhow::Result<Vec<_>>>()?;
+
+		// Directly create a simple backend reference from the local backend config
+		let bref = match &local_config.provider_backend {
+			SimpleLocalBackend::Service { name, port } => SimpleBackendReference::Service {
+				name: NamespacedHostname {
+					namespace: strng::new("default"),
+					hostname: name.hostname.clone(),
+				},
+				port: *port,
 			},
-			SimpleLocalBackend::Opaque(target) => {
-				// Target is already in "host:port" format
-				format!("http://{}", target)
+			SimpleLocalBackend::Backend(backend_name) => {
+				SimpleBackendReference::Backend(backend_name.clone())
 			},
+			SimpleLocalBackend::Opaque(target) => SimpleBackendReference::InlineBackend(target.clone()),
 			SimpleLocalBackend::Invalid => {
 				anyhow::bail!("Invalid backend for tracing provider")
 			},
 		};
 
-		// Create a simple backend reference pointing to the endpoint
-		let (host, port_str) = endpoint
-			.strip_prefix("http://")
-			.unwrap_or(&endpoint)
-			.split_once(":")
-			.ok_or_else(|| anyhow::anyhow!("Invalid endpoint format: {}", endpoint))?;
-		let port: u16 = port_str.parse()?;
-
-		let bref = SimpleBackendReference::Service {
-			name: NamespacedHostname {
-				namespace: strng::new("default"),
-				hostname: strng::new(host),
-			},
-			port,
-		};
-
 		let config = types::agent::TracingConfig {
-			service_name: local_config.service_name,
 			provider_backend: bref,
 			attributes: attributes.clone(),
+			resources: resources.clone(),
 		};
 
 		// Create LoggingFields with the CEL attributes from TracingConfig
+		// Note: If duplicate attribute names exist, the last one wins (from_iter behavior)
 		let logging_fields = {
 			let add_map = crate::telemetry::log::OrderedStringMap::from_iter(
 				attributes

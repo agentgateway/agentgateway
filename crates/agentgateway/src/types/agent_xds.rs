@@ -1430,7 +1430,7 @@ impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::Tra
 			.attributes
 			.iter()
 			.map(|a| {
-				let expr = cel::Expression::new(&a.value)
+				let expr = cel::Expression::new_strict(&a.value)
 					.map_err(|e| ProtoError::Generic(format!("invalid CEL in attribute: {e}")))?;
 				Ok::<_, ProtoError>(types::agent::TracingAttribute {
 					name: a.name.clone(),
@@ -1439,10 +1439,23 @@ impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::Tra
 			})
 			.collect::<Result<Vec<_>, ProtoError>>()?;
 
+		let resources = t
+			.resources
+			.iter()
+			.map(|a| {
+				let expr = cel::Expression::new_strict(&a.value)
+					.map_err(|e| ProtoError::Generic(format!("invalid CEL in resource: {e}")))?;
+				Ok::<_, ProtoError>(types::agent::TracingAttribute {
+					name: a.name.clone(),
+					value: Arc::new(expr),
+				})
+			})
+			.collect::<Result<Vec<_>, ProtoError>>()?;
+
 		Ok(types::agent::TracingConfig {
-			service_name: t.service_name.clone(),
 			provider_backend,
 			attributes,
+			resources,
 		})
 	}
 }

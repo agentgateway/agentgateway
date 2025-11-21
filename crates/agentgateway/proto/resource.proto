@@ -361,9 +361,9 @@ message FrontendPolicySpec {
   }
 
   message Tracing {
-    string service_name = 1;
-    BackendReference provider_backend = 2;
-    repeated TracingAttribute attributes = 3;
+    BackendReference provider_backend = 1;
+    repeated TracingAttribute attributes = 2;
+    repeated TracingAttribute resources = 3;
   }
 
   message TracingAttribute {
@@ -860,6 +860,7 @@ message AIBackend {
       AzureOpenAI azureopenai = 11;
     }
     repeated BackendPolicySpec inline_policies = 10;
+
   }
   message ProviderGroup {
     repeated Provider providers = 1;
