@@ -1112,24 +1112,12 @@ pub struct TracingConfig {
 }
 
 /// A single tracing attribute with a CEL expression
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct TracingAttribute {
 	pub name: String,
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub value: Arc<cel::Expression>,
-}
-
-impl serde::Serialize for TracingAttribute {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		use serde::ser::SerializeStruct;
-		let mut state = serializer.serialize_struct("TracingAttribute", 1)?;
-		state.serialize_field("name", &self.name)?;
-		state.end()
-	}
 }
 
 /// TracingPolicy holds both the configuration and the compiled OpenTelemetry tracer
