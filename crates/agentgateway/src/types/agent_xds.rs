@@ -303,17 +303,9 @@ impl TryFrom<(proto::agent::Protocol, Option<&proto::agent::TlsConfig>)> for Lis
 		match (value.0, value.1) {
 			(Protocol::Unknown, _) => Err(ProtoError::EnumParse("unknown protocol".into())),
 			(Protocol::Http, None) => Ok(ListenerProtocol::HTTP),
-			(Protocol::Https, Some(tls)) => Ok(ListenerProtocol::HTTPS(
-				tls
-					.try_into()
-					.map_err(|e| ProtoError::Generic(format!("{e}")))?,
-			)),
+			(Protocol::Https, Some(tls)) => Ok(ListenerProtocol::HTTPS(tls.into())),
 			// TLS termination
-			(Protocol::Tls, Some(tls)) => Ok(ListenerProtocol::TLS(Some(
-				tls
-					.try_into()
-					.map_err(|e| ProtoError::Generic(format!("{e}")))?,
-			))),
+			(Protocol::Tls, Some(tls)) => Ok(ListenerProtocol::TLS(Some(tls.into()))),
 			// TLS passthrough
 			(Protocol::Tls, None) => Ok(ListenerProtocol::TLS(None)),
 			(Protocol::Tcp, None) => Ok(ListenerProtocol::TCP),

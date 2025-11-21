@@ -24,6 +24,14 @@ impl RewindSocket {
 		}
 	}
 
+	pub fn buffered(&self) -> Option<Bytes> {
+		if let State::Filling(b) = &self.state {
+			Some(b.clone().freeze())
+		} else {
+			None
+		}
+	}
+
 	pub fn rewind(&mut self) {
 		match std::mem::replace(&mut self.state, State::Draining(None)) {
 			State::Filling(b) => {
