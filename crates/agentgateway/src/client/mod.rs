@@ -738,8 +738,16 @@ impl Client {
 
 			duration = dur,
 		);
-
 		let mut resp = resp?.map(http::Body::new);
+
+		event!(
+			target: "upstream response",
+			parent: None,
+			tracing::Level::TRACE,
+
+			response =?resp
+		);
+
 		resp
 			.extensions_mut()
 			.insert(transport::BufferLimit::new(buffer_limit));

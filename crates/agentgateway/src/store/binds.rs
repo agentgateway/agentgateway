@@ -192,6 +192,16 @@ impl RoutePolicies {
 		if let Some(rrl) = &self.authorization {
 			rrl.register(ctx)
 		};
+		if let Some(extauthz) = &self.ext_authz {
+			if let Some(m) = &extauthz.metadata {
+				for v in m.values() {
+					ctx.register_expression(v);
+				}
+			}
+			if let Some(e) = &extauthz.redirect {
+				ctx.register_expression(&e);
+			}
+		}
 	}
 }
 
