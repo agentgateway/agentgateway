@@ -3,6 +3,7 @@ pub mod timeout;
 
 mod buflist;
 pub mod cors;
+pub mod ipallowlist;
 pub mod jwt;
 pub mod localratelimit;
 pub mod retry;

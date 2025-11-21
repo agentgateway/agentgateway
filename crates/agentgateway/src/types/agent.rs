@@ -1211,6 +1211,7 @@ pub enum TrafficPolicy {
 	DirectResponse(filters::DirectResponse),
 	#[serde(rename = "cors")]
 	CORS(http::cors::Cors),
+	IpAllowlist(http::ipallowlist::IpAllowlist),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

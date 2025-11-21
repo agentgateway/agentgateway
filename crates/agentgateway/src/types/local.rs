@@ -759,6 +759,10 @@ struct FilterOrPolicy {
 	#[serde(default)]
 	cors: Option<http::cors::Cors>,
 
+	/// Allow or deny requests based on source IP address.
+	#[serde(default)]
+	ip_allowlist: Option<http::ipallowlist::IpAllowlist>,
+
 	// Policy
 	/// Authorization policies for MCP access.
 	#[serde(default)]
@@ -1123,6 +1127,7 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 		request_mirror,
 		direct_response,
 		cors,
+		ip_allowlist,
 		mcp_authorization,
 		mcp_authentication,
 		a2a,
@@ -1164,6 +1169,9 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 	}
 	if let Some(p) = cors {
 		route_policies.push(TrafficPolicy::CORS(p));
+	}
+	if let Some(p) = ip_allowlist {
+		route_policies.push(TrafficPolicy::IpAllowlist(p));
 	}
 
 	// Backend policies
