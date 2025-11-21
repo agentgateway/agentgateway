@@ -358,7 +358,16 @@ message FrontendPolicySpec {
     Fields fields = 2;
   }
 
-  message Tracing {}
+  message Tracing {
+    BackendReference provider_backend = 1;
+    repeated TracingAttribute attributes = 2;
+    repeated TracingAttribute resources = 3;
+  }
+
+  message TracingAttribute {
+    string name = 1;
+    string value = 2;  // CEL expression
+  }
 
   oneof kind {
     TCP tcp = 1;
@@ -847,6 +856,7 @@ message AIBackend {
     // If not specified, all traffic is treated as ROUTE_TYPE_COMPLETIONS.
     map<string, RouteType> routes = 9;
     repeated BackendPolicySpec inline_policies = 10;
+
   }
   message ProviderGroup {
     repeated Provider providers = 1;
