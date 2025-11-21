@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=../../schema/local.json
+config: {}
+
+frontendPolicies:
+  accessLog:
+    add:
+      tailscale.node: extauthz.tailscaleNode
+      tailscale.email: extauthz.tailscaleEmail
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: application
+      backends:
+      - host: localhost:8080
+      policies:
+        extAuthz:
+          # Connect to the Tailscale local API socket
+          host: unix:/run/tailscale/tailscaled.sock
+          protocol:
+            http:
+              path: |
+                "/localapi/v0/whois?addr=" + source.address
+              addRequestHeaders:
+                # Explicitly override the Hostname we send. Tailscale expects this specific hostname
+                :authority: '"local-tailscaled.sock"'
+              # Extract attributes from the Tailscale response, to be used later in logging
+              metadata:
+                tailscaleNode: json(response.body).Node.Name
+                tailscaleEmail: json(response.body).UserProfile.LoginName

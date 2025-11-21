@@ -898,7 +898,7 @@ pub mod webhook {
 	) -> anyhow::Result<crate::http::Request> {
 		let body_bytes = serde_json::to_vec(body)?;
 		let mut rb = ::http::Request::builder()
-			.uri(format!("http:///{path}"))
+			.uri(format!("/{path}"))
 			.method(http::Method::POST);
 		for (k, v) in http_headers {
 			// TODO: this is configurable by users

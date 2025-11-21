@@ -256,6 +256,56 @@ impl Connector {
 	) -> Result<Socket, http::Error> {
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
+
+		// Handle Unix socket targets specially - they don't use the ep parameter
+		#[cfg(unix)]
+		if let Target::UnixSocket(path) = &target {
+			let socket = match transport {
+				Transport::Plaintext => Socket::dial_unix(path, self.backend_config.clone())
+					.await
+					.map_err(crate::http::Error::new)?,
+				Transport::Tls(_) => {
+					return Err(crate::http::Error::new(anyhow::anyhow!(
+						"TLS is not supported for Unix domain sockets"
+					)));
+				},
+				Transport::Hbone(_, _) => {
+					return Err(crate::http::Error::new(anyhow::anyhow!(
+						"HBONE is not supported for Unix domain sockets"
+					)));
+				},
+				Transport::DoubleHbone { .. } => {
+					return Err(crate::http::Error::new(anyhow::anyhow!(
+						"Double HBONE is not supported for Unix domain sockets"
+					)));
+				},
+			};
+			let connect_ms = connect_start.elapsed().as_millis();
+			if let Some(m) = &self.metrics {
+				let labels = crate::telemetry::metrics::ConnectLabels {
+					transport: agent_core::strng::RichStrng::from(transport_name).into(),
+				};
+				m.upstream_connect_duration
+					.get_or_create(&labels)
+					.observe((connect_ms as f64) / 1000.0);
+			}
+			event!(
+				target: "upstream tcp",
+				parent: None,
+				tracing::Level::DEBUG,
+
+				endpoint = %path.display(),
+				transport = %transport_name,
+
+				connect_ms = connect_ms,
+
+				"connected"
+			);
+			let mut socket = socket;
+			socket.with_logging(LoggingMode::Upstream);
+			return Ok(socket);
+		}
+
 		let mut socket = match transport {
 			Transport::Plaintext => Socket::dial(ep, self.backend_config.clone())
 				.await
@@ -269,6 +319,11 @@ impl Connector {
 						Target::Hostname(host, _) => ServerName::DnsName(
 							DnsName::try_from(host.to_string()).expect("TODO: hostname conversion failed"),
 						),
+						#[cfg(unix)]
+						Target::UnixSocket(_) => {
+							// This should be unreachable - Unix sockets are handled above
+							unreachable!("Unix sockets should not reach TLS connection path")
+						},
 					}
 				};
 
@@ -350,6 +405,11 @@ impl Connector {
 					.authority(match &target {
 						Target::Hostname(host, port) => format!("{}:{}", host, port),
 						Target::Address(addr) => addr.to_string(),
+						#[cfg(unix)]
+						Target::UnixSocket(_) => {
+							// This should be unreachable - Unix sockets are handled above
+							unreachable!("Unix sockets should not reach DoubleHbone connection path")
+						},
 					})
 					.path_and_query("/")
 					.build()
@@ -419,6 +479,11 @@ impl Connector {
 				let inner_authority = match &target {
 					Target::Hostname(host, port) => format!("{}:{}", host, port),
 					Target::Address(addr) => addr.to_string(),
+					#[cfg(unix)]
+					Target::UnixSocket(_) => {
+						// This should be unreachable - Unix sockets are handled above
+						unreachable!("Unix sockets should not reach DoubleHbone connection path")
+					},
 				};
 				let inner_uri = Uri::builder()
 					.scheme(Scheme::HTTPS)
@@ -574,6 +639,7 @@ impl Client {
 		} = call;
 		// For double HBONE, we don't need to resolve the hostname locally
 		// The gateway will resolve it. Use a placeholder dest (won't be used).
+		// For Unix sockets, we use a placeholder since the actual connection uses the path directly.
 		let dest = match (&target, &transport) {
 			(Target::Address(addr), _) => *addr,
 			(
@@ -597,6 +663,12 @@ impl Client {
 					.await
 					.map_err(|_| ProxyError::DnsResolution)?;
 				SocketAddr::from((ip, *port))
+			},
+			#[cfg(unix)]
+			(Target::UnixSocket(_), _) => {
+				// Placeholder address for Unix sockets - the actual connection
+				// uses the path from the Target, not this address
+				SocketAddr::from(([0, 0, 0, 0], 0))
 			},
 		};
 
@@ -651,6 +723,7 @@ impl Client {
 		} = call;
 		// For double HBONE, we don't need to resolve the hostname locally
 		// The gateway will resolve it. Use a placeholder dest (won't be used).
+		// For Unix sockets, we use a placeholder since the actual connection uses the path directly.
 		let dest = match (&target, &transport) {
 			(Target::Address(addr), _) => *addr,
 			(
@@ -674,6 +747,12 @@ impl Client {
 					.await
 					.map_err(|_| ProxyError::DnsResolution)?;
 				SocketAddr::from((ip, *port))
+			},
+			#[cfg(unix)]
+			(Target::UnixSocket(_), _) => {
+				// Placeholder address for Unix sockets - the actual connection
+				// uses the path from the Target, not this address
+				SocketAddr::from(([0, 0, 0, 0], 0))
 			},
 		};
 		let auto_host = req.extensions().get::<filters::AutoHostname>().is_some();
@@ -741,8 +820,16 @@ impl Client {
 
 			duration = dur,
 		);
-
 		let mut resp = resp?.map(http::Body::new);
+
+		event!(
+			target: "upstream response",
+			parent: None,
+			tracing::Level::TRACE,
+
+			response =?resp
+		);
+
 		resp
 			.extensions_mut()
 			.insert(transport::BufferLimit::new(buffer_limit));

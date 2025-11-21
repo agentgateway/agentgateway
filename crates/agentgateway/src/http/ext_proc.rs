@@ -639,7 +639,7 @@ fn apply_header_mutations_request(
 				},
 				Ok(pseudo) => {
 					let mut rr = crate::http::RequestOrResponse::Request(req);
-					let _ = crate::http::apply_pseudo(&mut rr, &pseudo, &h.raw_value);
+					let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, &h.raw_value);
 				},
 				Err(_) => {},
 			}
@@ -670,7 +670,7 @@ fn apply_header_mutations_response(
 				},
 				Ok(pseudo) => {
 					let mut rr = crate::http::RequestOrResponse::Response(resp);
-					let _ = crate::http::apply_pseudo(&mut rr, &pseudo, &h.raw_value);
+					let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, &h.raw_value);
 				},
 				Err(_) => {},
 			}

@@ -12,11 +12,13 @@ impl Default for ExtAuthz {
 	fn default() -> Self {
 		Self {
 			target: Arc::new(SimpleBackendReference::Invalid),
-			context: None,
-			metadata: None,
 			failure_mode: FailureMode::default(),
 			include_request_headers: Vec::new(),
 			include_request_body: None,
+			protocol: http::ext_authz::Protocol::Grpc {
+				context: None,
+				metadata: None,
+			},
 			timeout: None,
 		}
 	}

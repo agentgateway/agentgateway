@@ -312,8 +312,16 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)host`|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.extAuthz.(any)context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
-|`binds[].listeners[].routes[].policies.extAuthz.(any)metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)grpc`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)grpc.metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)http`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)http.path`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)http.redirect`|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)http.includeResponseHeaders`|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)http.addRequestHeaders`|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|
@@ -877,8 +885,16 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.port`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)host`|Hostname or IP address|
 |`binds[].listeners[].policies.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].policies.extAuthz.(any)context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
-|`binds[].listeners[].policies.extAuthz.(any)metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)grpc`||
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)grpc.metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)http`||
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)http.path`||
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)http.redirect`|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)http.includeResponseHeaders`|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)http.addRequestHeaders`|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].policies.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
 |`binds[].listeners[].policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
 |`binds[].listeners[].policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|
@@ -1184,8 +1200,16 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)(1)service.port`||
 |`policies[].policy.extAuthz.(any)(1)host`|Hostname or IP address|
 |`policies[].policy.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.extAuthz.(any)context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
-|`policies[].policy.extAuthz.(any)metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`policies[].policy.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
+|`policies[].policy.extAuthz.(any)protocol.(1)grpc`||
+|`policies[].policy.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`policies[].policy.extAuthz.(any)protocol.(1)grpc.metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`policies[].policy.extAuthz.(any)protocol.(1)http`||
+|`policies[].policy.extAuthz.(any)protocol.(1)http.path`||
+|`policies[].policy.extAuthz.(any)protocol.(1)http.redirect`|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`policies[].policy.extAuthz.(any)protocol.(1)http.includeResponseHeaders`|Specific headers from the authorization response will be copied into the request to the backend.|
+|`policies[].policy.extAuthz.(any)protocol.(1)http.addRequestHeaders`|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`policies[].policy.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
 |`policies[].policy.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
 |`policies[].policy.extAuthz.(any)failureMode.(1)denyWithStatus`||
 |`policies[].policy.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|

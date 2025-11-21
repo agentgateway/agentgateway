@@ -1051,13 +1051,16 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					})
 					.collect::<Result<_, _>>()?;
 				TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
-					target: Arc::new(target),
-					context: Some(ea.context.clone()),
-					metadata: if metadata.is_empty() {
-						None
-					} else {
-						Some(metadata)
+					// TODO: support HTTP
+					protocol: http::ext_authz::Protocol::Grpc {
+						context: Some(ea.context.clone()),
+						metadata: if metadata.is_empty() {
+							None
+						} else {
+							Some(metadata)
+						},
 					},
+					target: Arc::new(target),
 					failure_mode,
 					include_request_headers: ea
 						.include_request_headers

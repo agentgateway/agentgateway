@@ -676,7 +676,7 @@ impl SimpleBackend {
 			SimpleBackend::Service(svc, port) => {
 				format!("{}:{port}", svc.hostname)
 			},
-			SimpleBackend::Opaque(_, tgt) => tgt.to_string(),
+			SimpleBackend::Opaque(_, tgt) => tgt.hostport(),
 			SimpleBackend::Invalid => "invalid".to_string(),
 		}
 	}
@@ -1565,6 +1565,8 @@ pub enum McpIDP {
 pub enum Target {
 	Address(SocketAddr),
 	Hostname(Strng, u16),
+	/// Unix domain socket path (e.g., "unix:/path/to/socket")
+	UnixSocket(PathBuf),
 }
 
 impl<'de> serde::Deserialize<'de> for Target {
@@ -1600,6 +1602,10 @@ impl TryFrom<&str> for Target {
 	type Error = anyhow::Error;
 
 	fn try_from(hostport: &str) -> Result<Self, Self::Error> {
+		// Check for unix socket prefix
+		if let Some(path) = hostport.strip_prefix("unix:") {
+			return Ok(Target::UnixSocket(PathBuf::from(path)));
+		}
 		let Some((host, port)) = hostport.split_once(":") else {
 			anyhow::bail!("invalid host:port: {hostport}");
 		};
@@ -1613,8 +1619,23 @@ impl Display for Target {
 		let str = match self {
 			Target::Address(addr) => addr.to_string(),
 			Target::Hostname(hostname, port) => format!("{hostname}:{port}"),
+			Target::UnixSocket(path) => format!("unix:{}", path.display()),
 		};
 		write!(f, "{str}")
+	}
+}
+
+impl Target {
+	pub fn hostport(&self) -> String {
+		match self {
+			Target::Address(addr) => addr.to_string(),
+			Target::Hostname(hostname, port) => format!("{hostname}:{port}"),
+			Target::UnixSocket(path) => path
+				.file_name()
+				.and_then(|os| os.to_str())
+				.unwrap_or_default()
+				.to_string(),
+		}
 	}
 }
 
@@ -1767,5 +1788,43 @@ InvalidKeyData
 		let empty_key = b"";
 		let result = parse_key(empty_key);
 		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_target_unix_socket_parse() {
+		// Test parsing a Unix socket path
+		let target = Target::try_from("unix:/var/run/test.sock").unwrap();
+		assert!(
+			matches!(target, Target::UnixSocket(path) if path == PathBuf::from("/var/run/test.sock"))
+		);
+	}
+
+	#[test]
+	fn test_target_unix_socket_display() {
+		// Test Display implementation for UnixSocket
+		let target = Target::UnixSocket(PathBuf::from("/var/run/test.sock"));
+		assert_eq!(target.to_string(), "unix:/var/run/test.sock");
+	}
+
+	#[test]
+	fn test_target_unix_socket_roundtrip() {
+		// Test that parsing and display are consistent
+		let original = "unix:/tmp/my-socket.sock";
+		let target = Target::try_from(original).unwrap();
+		assert_eq!(target.to_string(), original);
+	}
+
+	#[test]
+	fn test_target_address_still_works() {
+		// Ensure regular host:port still works
+		let target = Target::try_from("127.0.0.1:8080").unwrap();
+		assert!(matches!(target, Target::Address(_)));
+	}
+
+	#[test]
+	fn test_target_hostname_still_works() {
+		// Ensure hostname:port still works
+		let target = Target::try_from("example.com:443").unwrap();
+		assert!(matches!(target, Target::Hostname(h, 443) if h.as_str() == "example.com"));
 	}
 }

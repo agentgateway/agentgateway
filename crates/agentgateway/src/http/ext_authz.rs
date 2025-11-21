@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use ::http::{HeaderMap, StatusCode, Version};
+use ::http::{HeaderMap, StatusCode, Version, header};
 use prost_types::Timestamp;
 use serde_json::Value as JsonValue;
 
-use crate::cel::{Executor, Expression};
+use crate::cel::{ContextBuilder, Executor, Expression, Value};
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
 use crate::http::ext_authz::proto::check_response::HttpResponse;
@@ -14,6 +14,7 @@ use crate::http::ext_authz::proto::{
 	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, Metadata, OkHttpResponse,
 };
 use crate::http::ext_proc::GrpcReferenceChannel;
+use crate::http::transformation_cel::SerAsStr;
 use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse, Request, jwt};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
@@ -70,23 +71,61 @@ pub enum FailureMode {
 }
 
 #[apply(schema!)]
+pub enum Protocol {
+	#[serde(rename_all = "camelCase")]
+	Grpc {
+		/// Additional context to send to the authorization service.
+		/// This maps to the `context_extensions` field of the request, and only allows static values.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		context: Option<HashMap<String, String>>,
+		/// Additional metadata to send to the authorization service.
+		/// This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
+		/// If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		metadata: Option<HashMap<String, Arc<cel::Expression>>>,
+	},
+	#[serde(rename_all = "camelCase")]
+	Http {
+		path: Option<Arc<cel::Expression>>,
+		/// When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by
+		/// the provided expression rather than directly returning the error.
+		redirect: Option<Arc<cel::Expression>>,
+		/// Specific headers from the authorization response will be copied into the request to the backend.
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		#[serde_as(as = "Vec<SerAsStr>")]
+		#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
+		include_response_headers: Vec<HeaderName>,
+		/// Specific headers to add in the authorization request (empty = all headers), based on the expression
+		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
+		add_request_headers: HashMap<HeaderOrPseudo, Arc<cel::Expression>>,
+		/// Metadata to include under the `extauthz` variable, based on the authorization response.
+		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
+		metadata: HashMap<String, Arc<cel::Expression>>,
+	},
+}
+
+impl Default for Protocol {
+	fn default() -> Self {
+		Protocol::Grpc {
+			context: None,
+			metadata: None,
+		}
+	}
+}
+
+#[apply(schema!)]
 pub struct ExtAuthz {
 	/// Reference to the external authorization service backend
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
-	/// Additional context to send to the authorization service.
-	/// This maps to the `context_extensions` field of the request, and only allows static values.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub context: Option<HashMap<String, String>>,
-	/// Additional metadata to send to the authorization service.
-	/// This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
-	/// If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub metadata: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.
+	#[serde(default)]
+	pub protocol: Protocol,
 	/// Behavior when the authorization service is unavailable or returns an error
 	#[serde(default)]
 	pub failure_mode: FailureMode,
-	/// Specific headers to include in the authorization request (empty = all headers)
+	/// Specific headers to include in the authorization request.
+	/// If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub include_request_headers: Vec<HeaderOrPseudo>,
 	/// Options for including the request body in the authorization request
@@ -102,6 +141,32 @@ pub struct ExtAuthz {
 	pub timeout: Option<Duration>,
 }
 
+impl ExtAuthz {
+	pub fn expressions(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
+		match &self.protocol {
+			Protocol::Grpc {
+				metadata: Some(m), ..
+			} => Box::new(m.values().map(|v| v.as_ref())),
+			Protocol::Http {
+				redirect,
+				path,
+				add_request_headers,
+				// TODO: this runs on the response. We would ideally have a way to NOT consider the response
+				// attributes from this.
+				metadata: m,
+				..
+			} => Box::new(
+				add_request_headers
+					.values()
+					.map(|v| v.as_ref())
+					.chain(m.values().map(|v| v.as_ref()))
+					.chain(redirect.as_deref())
+					.chain(path.as_deref()),
+			),
+			_ => Box::new(std::iter::empty()),
+		}
+	}
+}
 impl ExtAuthz {
 	/// Handle authorization failure with FailureMode configuration
 	fn handle_auth_failure(&self, error_msg: &str) -> Result<PolicyResponse, ProxyError> {
@@ -154,8 +219,17 @@ impl ExtAuthz {
 		exec: &Executor<'_>,
 		client: PolicyClient,
 		req: &mut Request,
+		ctx_builder: &ContextBuilder,
 	) -> Result<PolicyResponse, ProxyError> {
-		trace!("connecting to {:?}", self.target);
+		if matches!(self.protocol, Protocol::Http { .. }) {
+			trace!(protocol = "http", "connecting to {:?}", self.target);
+			return self.check_http(exec, client, req, ctx_builder).await;
+		}
+		trace!(protocol = "grpc", "connecting to {:?}", self.target);
+
+		let Protocol::Grpc { context, metadata } = &self.protocol else {
+			unreachable!();
+		};
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			client,
@@ -329,8 +403,8 @@ impl ExtAuthz {
 				source,
 				destination,
 				request: Some(request),
-				metadata_context: self.build_metadata(exec, req)?,
-				context_extensions: self.context.clone().unwrap_or_default(),
+				metadata_context: self.build_metadata(metadata, exec, req)?,
+				context_extensions: context.clone().unwrap_or_default(),
 				tls_session,
 			}),
 		};
@@ -458,16 +532,212 @@ impl ExtAuthz {
 		Ok(res)
 	}
 
+	pub async fn check_http(
+		&self,
+		exec: &Executor<'_>,
+		client: PolicyClient,
+		req: &mut Request,
+		ctx_builder: &ContextBuilder,
+	) -> Result<PolicyResponse, ProxyError> {
+		let Protocol::Http {
+			redirect,
+			include_response_headers,
+			add_request_headers,
+			path,
+			metadata,
+		} = &self.protocol
+		else {
+			unreachable!();
+		};
+
+		let include = if self.include_request_headers.is_empty() {
+			&[HeaderOrPseudo::Header(http::header::AUTHORIZATION)]
+		} else {
+			self.include_request_headers.as_slice()
+		};
+		let mut headers = HeaderMap::with_capacity(include.len());
+		for h in include {
+			match h {
+				HeaderOrPseudo::Header(k) => {
+					req.headers().get_all(k).iter().for_each(|h| {
+						headers.append(k.clone(), h.clone());
+					});
+				},
+				_pseudo => {
+					// Ignored for HTTP.
+					// TODO: reject at config time.
+				},
+			}
+		}
+
+		let body = if let Some(body_opts) = &self.include_request_body {
+			let max_size = body_opts.max_request_bytes as usize;
+			match crate::http::inspect_body_with_limit(req.body_mut(), max_size).await {
+				Ok(body_bytes) => body_bytes,
+				Err(e) => {
+					debug!("Failed to read request body for ext_authz: {:?}", e);
+					Bytes::new()
+				},
+			}
+		} else {
+			Bytes::new()
+		};
+
+		let path = match path {
+			Some(path_expr) => {
+				let res = exec
+					.eval(path_expr)
+					.map_err(|e| anyhow::anyhow!("{e}"))
+					.and_then(|v| {
+						if let Value::String(s) = v {
+							Ok(s)
+						} else {
+							Err(anyhow::anyhow!("redirect resolved to a non-string value"))
+						}
+					});
+				match res {
+					Ok(s) => Some(s),
+					Err(e) => {
+						tracing::warn!("fail to evaluate path: {e}");
+						return Err(ProxyError::ExternalAuthorizationFailed(None));
+					},
+				}
+			},
+			None => None,
+		};
+
+		// If the user defined their own path expression, use that.
+		// Else, use the original URL path.
+		let rb = ::http::Request::builder().method(req.method()).uri(
+			path
+				.as_ref()
+				.map(|s| s.as_str())
+				.unwrap_or_else(|| req.uri().path()),
+		);
+		let mut check_req = rb
+			.body(http::Body::from(body))
+			.map_err(|e| ProxyError::Processing(e.into()))?;
+		*check_req.headers_mut() = headers;
+
+		// Insert any headers derived from CEL expresions.
+		for (hn, hv) in add_request_headers {
+			let Some(hv) = exec
+				.eval(hv)
+				.ok()
+				.as_ref()
+				.and_then(cel::value_as_header_value)
+			else {
+				// Wipe it out incase it was also included
+				if let HeaderOrPseudo::Header(hn) = hn {
+					check_req.headers_mut().remove(hn);
+				}
+				continue;
+			};
+			let _ = http::apply_header_or_pseudo(
+				&mut http::RequestOrResponse::Request(&mut check_req),
+				hn,
+				hv.as_bytes(),
+			);
+		}
+
+		let check = client.call_reference(check_req, &self.target);
+		let timeout_duration = self.timeout.unwrap_or(Duration::from_millis(200));
+		let resp = match tokio::time::timeout(timeout_duration, check).await {
+			Ok(result) => result,
+			Err(_) => {
+				warn!("ext_authz request timed out after {:?}", timeout_duration);
+				return self.handle_auth_failure("Authorization service timeout");
+			},
+		};
+		let mut resp = match resp {
+			Ok(r) => r,
+			Err(e) => {
+				trace!("ext_authz failed {e}");
+				return self.handle_auth_failure(&e.to_string());
+			},
+		};
+		if resp.status().is_success() {
+			for k in include_response_headers {
+				resp.headers().get_all(k).iter().for_each(|h| {
+					// TODO: append or insert?
+					req.headers_mut().append(k.clone(), h.clone());
+				});
+			}
+			if !metadata.is_empty() {
+				let mut ctx = ctx_builder.expensive_clone();
+				let include_body = ctx.with_response(&resp);
+				if include_body && let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
+					ctx.with_response_body(body);
+				}
+				if let Ok(exec) = ctx.build() {
+					let m = metadata
+						.iter()
+						.filter_map(|(k, v)| match Self::eval_to_json(&exec, v) {
+							Ok(r) => Some((k.to_string(), r)),
+							Err(e) => {
+								trace!("failed to evaluate: {e}");
+								error!("failed to evaluate: {e}");
+								None
+							},
+						})
+						.collect::<HashMap<_, _>>();
+					req
+						.extensions_mut()
+						.insert(Arc::new(ExtAuthzDynamicMetadata { metadata: m }));
+				}
+			}
+			return Ok(PolicyResponse::default());
+		}
+		if (resp.status() == StatusCode::FORBIDDEN || resp.status() == StatusCode::UNAUTHORIZED)
+			&& let Some(redir) = &redirect
+		{
+			let s = exec
+				.eval(redir)
+				.map_err(|e| anyhow::anyhow!("{e}"))
+				.and_then(|v| {
+					if let Value::String(s) = v {
+						Ok(s)
+					} else {
+						Err(anyhow::anyhow!("redirect resolved to a non-string value"))
+					}
+				});
+			return match s {
+				Err(e) => {
+					tracing::warn!("fail to evaluate redirect: {e}");
+					Err(ProxyError::ExternalAuthorizationFailed(None))
+				},
+				Ok(redir) => {
+					let status = StatusCode::FOUND;
+					let resp = ::http::Response::builder()
+						.status(status)
+						.header(header::LOCATION, redir.as_str())
+						.body(http::Body::empty())
+						.map_err(|e| ProxyError::Processing(e.into()))?;
+					Ok(PolicyResponse {
+						direct_response: Some(resp),
+						response_headers: None,
+					})
+				},
+			};
+		}
+		trace!("ext_authz failed with code {}", resp.status());
+		Ok(PolicyResponse {
+			direct_response: Some(resp),
+			response_headers: None,
+		})
+	}
+
 	fn build_metadata(
 		&self,
+		metadata: &Option<HashMap<String, Arc<cel::Expression>>>,
 		exec: &Executor,
 		req: &mut Request,
 	) -> Result<Option<Metadata>, ProxyError> {
-		Ok(match &self.metadata {
+		Ok(match &metadata {
 			Some(meta) => {
 				let m = meta
 					.iter()
-					.filter_map(|(k, v)| match Self::eval(exec, v) {
+					.filter_map(|(k, v)| match Self::eval_to_pb(exec, v) {
 						Ok(r) => Some((k.to_string(), r)),
 						Err(e) => {
 							trace!("failed to evaluate: {e}");
@@ -492,11 +762,17 @@ impl ExtAuthz {
 		})
 	}
 
-	fn eval(exec: &Executor, v: &Expression) -> anyhow::Result<prost_wkt_types::Struct> {
+	fn eval_to_pb(exec: &Executor, v: &Expression) -> anyhow::Result<prost_wkt_types::Struct> {
 		let res = exec.eval(v)?;
 		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
 		let pb = json_to_struct(js)?;
 		Ok(pb)
+	}
+
+	fn eval_to_json(exec: &Executor, v: &Expression) -> anyhow::Result<serde_json::Value> {
+		let res = exec.eval(v)?;
+		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
+		Ok(js)
 	}
 }
 
@@ -525,7 +801,7 @@ fn apply_pseudo_headers_to_request(req: &mut Request, headers: &[HeaderValueOpti
 				h.value.as_bytes()
 			};
 			let mut rr = crate::http::RequestOrResponse::Request(req);
-			let _ = crate::http::apply_pseudo(&mut rr, &pseudo, raw);
+			let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, raw);
 		}
 	}
 }

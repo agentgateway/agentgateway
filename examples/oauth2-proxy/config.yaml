@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../../schema/local.json
+frontendPolicies:
+  accessLog:
+    add:
+      # Log the user and email from the Github Oauth2.
+      # "github.user" defines the key that shows up in the log.
+      # "githubUser" is set in the `metadata` section of the external authorization rule.
+      github.user: 'extauthz.githubUser'
+      github.email: 'extauthz.githubEmail'
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    # For traffic to the OAuth2 Proxy, send to the proxy. This is used for signing in, etc.
+    - name: oauth2-proxy
+      matches:
+      - path:
+          pathPrefix: /oauth2
+      policies:
+        urlRewrite:
+          authority: none
+      backends:
+      # In this example, we run oauth2-proxy over localhost. Adjust accordingly.
+      - host: localhost:4180
+
+    # All other traffic goes to our application
+    - name: application
+      backends:
+      - host: localhost:8080
+      policies:
+        extAuthz:
+          host: localhost:4180
+          includeRequestHeaders:
+            # By default, only the Authorization header is included.
+            # Oauth2 proxy uses the 'cookie' header for tokens, so include that
+            - cookie
+          protocol:
+            http:
+              # For all requests, we send to /oauth2/auth.
+              # Note that this is a CEL expression, so this could be dynamic.
+              path: '"/oauth2/auth"'
+              # If we get an error from the OAuth2 Proxy, redirect to the OAuth2 Proxy signing page.
+              # The 'rd' parameter is an OAuth2 Proxy parameter that allows redirecting back to a page after signing in.
+              # In this case, we redirect back to the original request.
+              redirect: '"/oauth2/start?rd=" + request.path'
+              metadata:
+                # When we get a successful response back from the OAuth2 Proxy, add metadata based on the response.
+                # OAuth2 Proxy sets some headers based on the authentication results. The 'accessLog'
+                # example above makes uses of these.
+                githubUser: response.headers["x-auth-request-user"]
+                githubEmail: response.headers["x-auth-request-email"]
+              addRequestHeaders:
+                x-forwarded-host: request.host
+              includeResponseHeaders:
+              # Pass the user request to the upstream service.
+              # This is not required, and is just an example
+              - x-auth-request-user

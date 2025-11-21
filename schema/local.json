@@ -2751,24 +2751,96 @@
                               {
                                 "type": "object",
                                 "properties": {
-                                  "context": {
-                                    "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
-                                    "type": [
-                                      "object",
-                                      "null"
+                                  "protocol": {
+                                    "description": "The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.",
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "grpc": {
+                                            "type": "object",
+                                            "properties": {
+                                              "context": {
+                                                "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
+                                                "type": [
+                                                  "object",
+                                                  "null"
+                                                ],
+                                                "additionalProperties": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "metadata": {
+                                                "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
+                                                "type": [
+                                                  "object",
+                                                  "null"
+                                                ],
+                                                "additionalProperties": {
+                                                  "type": "string"
+                                                }
+                                              }
+                                            },
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "required": [
+                                          "grpc"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "http": {
+                                            "type": "object",
+                                            "properties": {
+                                              "path": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "redirect": {
+                                                "description": "When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by\nthe provided expression rather than directly returning the error.",
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "includeResponseHeaders": {
+                                                "description": "Specific headers from the authorization response will be copied into the request to the backend.",
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "addRequestHeaders": {
+                                                "description": "Specific headers to add in the authorization request (empty = all headers), based on the expression",
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "metadata": {
+                                                "description": "Metadata to include under the `extauthz` variable, based on the authorization response.",
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                  "type": "string"
+                                                }
+                                              }
+                                            },
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "required": [
+                                          "http"
+                                        ],
+                                        "additionalProperties": false
+                                      }
                                     ],
-                                    "additionalProperties": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "metadata": {
-                                    "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
-                                    "type": [
-                                      "object",
-                                      "null"
-                                    ],
-                                    "additionalProperties": {
-                                      "type": "string"
+                                    "default": {
+                                      "grpc": {}
                                     }
                                   },
                                   "failureMode": {
@@ -8020,24 +8092,96 @@
                         {
                           "type": "object",
                           "properties": {
-                            "context": {
-                              "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
-                              "type": [
-                                "object",
-                                "null"
+                            "protocol": {
+                              "description": "The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.",
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "grpc": {
+                                      "type": "object",
+                                      "properties": {
+                                        "context": {
+                                          "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ],
+                                          "additionalProperties": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "metadata": {
+                                          "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ],
+                                          "additionalProperties": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "grpc"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "http": {
+                                      "type": "object",
+                                      "properties": {
+                                        "path": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "redirect": {
+                                          "description": "When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by\nthe provided expression rather than directly returning the error.",
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "includeResponseHeaders": {
+                                          "description": "Specific headers from the authorization response will be copied into the request to the backend.",
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "addRequestHeaders": {
+                                          "description": "Specific headers to add in the authorization request (empty = all headers), based on the expression",
+                                          "type": "object",
+                                          "additionalProperties": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "metadata": {
+                                          "description": "Metadata to include under the `extauthz` variable, based on the authorization response.",
+                                          "type": "object",
+                                          "additionalProperties": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "http"
+                                  ],
+                                  "additionalProperties": false
+                                }
                               ],
-                              "additionalProperties": {
-                                "type": "string"
-                              }
-                            },
-                            "metadata": {
-                              "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
-                              "type": [
-                                "object",
-                                "null"
-                              ],
-                              "additionalProperties": {
-                                "type": "string"
+                              "default": {
+                                "grpc": {}
                               }
                             },
                             "failureMode": {
@@ -10912,24 +11056,96 @@
                   {
                     "type": "object",
                     "properties": {
-                      "context": {
-                        "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
-                        "type": [
-                          "object",
-                          "null"
+                      "protocol": {
+                        "description": "The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.",
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "grpc": {
+                                "type": "object",
+                                "properties": {
+                                  "context": {
+                                    "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "metadata": {
+                                    "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "grpc"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "http": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "redirect": {
+                                    "description": "When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by\nthe provided expression rather than directly returning the error.",
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "includeResponseHeaders": {
+                                    "description": "Specific headers from the authorization response will be copied into the request to the backend.",
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "addRequestHeaders": {
+                                    "description": "Specific headers to add in the authorization request (empty = all headers), based on the expression",
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "metadata": {
+                                    "description": "Metadata to include under the `extauthz` variable, based on the authorization response.",
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "http"
+                            ],
+                            "additionalProperties": false
+                          }
                         ],
-                        "additionalProperties": {
-                          "type": "string"
-                        }
-                      },
-                      "metadata": {
-                        "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
-                        "type": [
-                          "object",
-                          "null"
-                        ],
-                        "additionalProperties": {
-                          "type": "string"
+                        "default": {
+                          "grpc": {}
                         }
                       },
                       "failureMode": {

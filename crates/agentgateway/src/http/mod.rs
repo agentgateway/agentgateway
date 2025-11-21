@@ -55,7 +55,7 @@ use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::BufferLimit;
 
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HeaderOrPseudo {
 	Header(HeaderName),
 	Method,
@@ -192,7 +192,11 @@ pub fn get_request_pseudo_headers(req: &Request) -> Vec<(HeaderOrPseudo, String)
 }
 
 /// Apply a pseudo header mutation to either a request or a response. Returns true if applied.
-pub fn apply_pseudo(rr: &mut RequestOrResponse, pseudo: &HeaderOrPseudo, raw: &[u8]) -> bool {
+pub fn apply_header_or_pseudo(
+	rr: &mut RequestOrResponse,
+	pseudo: &HeaderOrPseudo,
+	raw: &[u8],
+) -> bool {
 	match (rr, pseudo) {
 		(RequestOrResponse::Request(req), HeaderOrPseudo::Method) => {
 			if let Ok(m) = ::http::Method::from_bytes(raw) {
@@ -213,6 +217,11 @@ pub fn apply_pseudo(rr: &mut RequestOrResponse, pseudo: &HeaderOrPseudo, raw: &[
 			if let Ok(a) = ::http::uri::Authority::try_from(raw) {
 				let _ = modify_req_uri(req, |uri| {
 					uri.authority = Some(a);
+					if uri.scheme.is_none() {
+						// When authority is set, scheme must also be set
+						// TODO: do the same for HeaderOrPseudo::Scheme
+						uri.scheme = Some(Scheme::HTTP);
+					}
 					Ok(())
 				});
 				return true;
@@ -237,7 +246,21 @@ pub fn apply_pseudo(rr: &mut RequestOrResponse, pseudo: &HeaderOrPseudo, raw: &[
 				return true;
 			}
 		},
-		// Non-applicable combinations or regular headers
+		(RequestOrResponse::Response(resp), HeaderOrPseudo::Header(hn)) => {
+			let Ok(hv) = HeaderValue::try_from(raw) else {
+				return false;
+			};
+			resp.headers_mut().insert(hn, hv);
+			return true;
+		},
+		(RequestOrResponse::Request(req), HeaderOrPseudo::Header(hn)) => {
+			let Ok(hv) = HeaderValue::try_from(raw) else {
+				return false;
+			};
+			req.headers_mut().insert(hn, hv);
+			return true;
+		},
+		// Not applicable combination
 		_ => {},
 	}
 	false

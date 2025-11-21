@@ -130,7 +130,6 @@ static ROOT_CONTEXT: Lazy<Arc<Context<'static>>> = Lazy::new(root_context);
 pub struct ContextBuilder {
 	pub attributes: HashSet<String>,
 	pub context: ExpressionContext,
-	pub log_format: Option<crate::LoggingFormat>,
 }
 
 impl Default for ContextBuilder {
@@ -140,11 +139,17 @@ impl Default for ContextBuilder {
 }
 
 impl ContextBuilder {
+	/// expensive_clone is just a normal clone but more clear that its NOT a cheap ref count
+	pub fn expensive_clone(&self) -> Self {
+		Self {
+			attributes: self.attributes.clone(),
+			context: self.context.clone(),
+		}
+	}
 	pub fn new() -> Self {
 		Self {
 			attributes: Default::default(),
 			context: Default::default(),
-			log_format: None,
 		}
 	}
 	/// register_expression registers the given expressions attributes as required attributes.
@@ -194,6 +199,7 @@ impl ContextBuilder {
 		}
 		self.context.response = Some(ResponseContext {
 			code: resp.status(),
+			headers: resp.headers().clone(),
 			body: None,
 		});
 		self.attributes.contains(RESPONSE_BODY_ATTRIBUTE)
@@ -414,6 +420,21 @@ pub fn value_as_string(v: &Value) -> Option<String> {
 	}
 }
 
+pub fn value_as_header_value(v: &Value) -> Option<http::HeaderValue> {
+	match v {
+		Value::String(v) => Some(http::HeaderValue::from_str(v.as_str()).ok()?),
+		Value::Bool(v) => Some(http::HeaderValue::from_str(&v.to_string()).ok()?),
+		Value::Int(v) => Some(http::HeaderValue::from_str(&v.to_string()).ok()?),
+		Value::UInt(v) => Some(http::HeaderValue::from_str(&v.to_string()).ok()?),
+		Value::Bytes(v) => {
+			use base64::Engine;
+			let b = base64::prelude::BASE64_STANDARD.encode(v.as_ref());
+			Some(http::HeaderValue::from_str(&b).ok()?)
+		},
+		_ => None,
+	}
+}
+
 pub struct Executor<'a> {
 	ctx: Context<'a>,
 }
@@ -558,6 +579,14 @@ pub struct ResponseContext {
 	#[cfg_attr(feature = "schema", schemars(with = "u16"))]
 	/// The HTTP status code of the response.
 	pub code: ::http::StatusCode,
+
+	#[serde(with = "http_serde::header_map")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	/// The headers of the request.
+	pub headers: ::http::HeaderMap,
 
 	/// The body of the response. Warning: accessing the body will cause the body to be buffered.
 	pub body: Option<Bytes>,

@@ -193,7 +193,13 @@ impl GatewayPolicies {
 			for expr in xfm.expressions() {
 				ctx.register_expression(expr)
 			}
-		};
+		}
+
+		if let Some(extauthz) = &self.ext_authz {
+			for expr in extauthz.expressions() {
+				ctx.register_expression(expr)
+			}
+		}
 	}
 }
 
@@ -212,6 +218,11 @@ impl RoutePolicies {
 		if let Some(rrl) = &self.authorization {
 			rrl.register(ctx)
 		};
+		if let Some(extauthz) = &self.ext_authz {
+			for expr in extauthz.expressions() {
+				ctx.register_expression(expr)
+			}
+		}
 	}
 }
 

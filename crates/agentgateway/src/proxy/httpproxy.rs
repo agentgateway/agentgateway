@@ -98,7 +98,13 @@ async fn apply_request_policies(
 	let mut exec = once_cell::sync::OnceCell::new();
 
 	if let Some(x) = &policies.ext_authz {
-		x.check(build_ctx(&exec, log)?, client.clone(), req).await?
+		x.check(
+			build_ctx(&exec, log)?,
+			client.clone(),
+			req,
+			log.cel.ctx_borrow(),
+		)
+		.await?
 	} else {
 		http::PolicyResponse::default()
 	}
@@ -276,7 +282,13 @@ async fn apply_gateway_policies(
 
 	let mut exec = once_cell::sync::OnceCell::new();
 	if let Some(x) = &policies.ext_authz {
-		x.check(build_ctx(&exec, log)?, client.clone(), req).await?
+		x.check(
+			build_ctx(&exec, log)?,
+			client.clone(),
+			req,
+			log.cel.ctx_borrow(),
+		)
+		.await?
 	} else {
 		http::PolicyResponse::default()
 	}
