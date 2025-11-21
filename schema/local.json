@@ -8600,9 +8600,6 @@
             "null"
           ],
           "properties": {
-            "serviceName": {
-              "type": "string"
-            },
             "providerBackend": {
               "oneOf": [
                 {
@@ -8612,6 +8609,7 @@
                   ]
                 },
                 {
+                  "description": "Service reference. Service must be defined in the top level services list.",
                   "type": "object",
                   "properties": {
                     "service": {
@@ -8652,14 +8650,29 @@
                   "additionalProperties": false
                 },
                 {
+                  "description": "Hostname or IP address",
                   "type": "object",
                   "properties": {
                     "host": {
+                      "description": "Hostname or IP address",
                       "type": "string"
                     }
                   },
                   "required": [
                     "host"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "backend"
                   ],
                   "additionalProperties": false
                 }
@@ -8683,11 +8696,29 @@
                   "value"
                 ]
               }
+            },
+            "resources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "value"
+                ]
+              }
             }
           },
           "additionalProperties": false,
           "required": [
-            "serviceName",
             "providerBackend"
           ]
         }

@@ -109,7 +109,13 @@ impl Tracer {
 		let endpoint = match &config.provider_backend {
 			SimpleBackendReference::Service { name, port } => {
 				// Construct endpoint from service reference
+				// TODO: Support TLS endpoints - currently hardcoded to http://
+				// Consider adding insecure/secure field or accepting full URI
 				format!("http://{}:{}", name.hostname, port)
+			},
+			SimpleBackendReference::InlineBackend(target) => {
+				// TODO: Support TLS endpoints
+				format!("http://{}", target)
 			},
 			SimpleBackendReference::Backend(backend_name) => {
 				// For backend names, we'll need to resolve them
@@ -120,17 +126,39 @@ impl Tracer {
 			},
 		};
 
-		// Build the tracer provider with the service name from config
+		// Build the tracer provider with resources from config
+		// Evaluate resource CEL expressions (note: resources should typically be static)
+		let mut resource_builder = Resource::builder();
+
+		// Add default service version
+		resource_builder = resource_builder.with_attribute(KeyValue::new(
+			"service.version",
+			agent_core::version::BuildInfo::new().version,
+		));
+
+		// Add resources from config
+		// Note: Resources in OpenTelemetry are static service descriptors
+		// Evaluate CEL expressions with empty context for static resource values
+		let executor = cel::Executor::empty();
+		for resource_attr in &config.resources {
+			// Evaluate the CEL expression to get the static resource value
+			if let Ok(value) = executor.eval(&resource_attr.value) {
+				use opentelemetry::Value;
+				let otel_value = match value {
+					cel::Value::String(s) => Value::String(s.to_string().into()),
+					cel::Value::Int(i) => Value::I64(i),
+					cel::Value::UInt(u) => Value::I64(u as i64),
+					cel::Value::Float(f) => Value::F64(f),
+					cel::Value::Bool(b) => Value::Bool(b),
+					_ => Value::String(format!("{:?}", value).into()),
+				};
+				resource_builder =
+					resource_builder.with_attribute(KeyValue::new(resource_attr.name.clone(), otel_value));
+			}
+		}
+
 		let result = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-			.with_resource(
-				Resource::builder()
-					.with_service_name(config.service_name.clone())
-					.with_attribute(KeyValue::new(
-						"service.version",
-						agent_core::version::BuildInfo::new().version,
-					))
-					.build(),
-			)
+			.with_resource(resource_builder.build())
 			.with_batch_exporter({
 				// Default to gRPC for now
 				opentelemetry_otlp::SpanExporter::builder()
@@ -194,18 +222,21 @@ impl Tracer {
 			if k == "span.name"
 				&& let Some(serde_json::Value::String(s)) = v.as_ref()
 			{
-				span_name = Some(s);
+				span_name = Some(s.clone());
 			} else if let Some(eval) = v.as_ref().map(ValueBag::capture_serde1) {
 				attributes.push(KeyValue::new(Key::new(k.to_string()), to_otel(&eval)));
 			}
 		}
 
-		let span_name = span_name.unwrap_or_else(|| match (&request.method, &request.path_match) {
-			(Some(method), Some(path_match)) => {
-				format!("{method} {path_match}")
+		let span_name = match span_name {
+			Some(name) => name,
+			None => match (&request.method, &request.path_match) {
+				(Some(method), Some(path_match)) => {
+					format!("{method} {path_match}")
+				},
+				_ => "unknown".to_string(),
 			},
-			_ => "unknown".to_string(),
-		});
+		};
 
 		let out_span = request.outgoing_span.as_ref().unwrap();
 		let mut sb = self
