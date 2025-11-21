@@ -10,13 +10,13 @@ RUN --mount=type=cache,target=/app/npm/cache npm install
 
 RUN --mount=type=cache,target=/app/npm/cache npm run build
 
-FROM --platform=arm64 docker.io/library/rust:1.91.1-trixie AS arm64-sysroot
-FROM --platform=arm64 docker.io/library/rust:1.91.1-slim-bookworm AS arm64-musl-sysroot
+FROM --platform=linux/arm64 docker.io/library/rust:1.91.1-trixie AS arm64-sysroot
+FROM --platform=linux/arm64 docker.io/library/rust:1.91.1-slim-bookworm AS arm64-musl-sysroot
 FROM docker.io/library/rust:1.91.1-slim-bookworm AS amd64-musl-sysroot
 
 FROM --platform=$BUILDPLATFORM docker.io/library/rust:1.91.1-trixie AS base-builder
 
-RUN apt-get update && apt-get -y install mold clang-17 clang++-17 lld-17
+RUN apt-get update && apt-get -y install clang-17 clang++-17 lld-17
 
 RUN rustup target add aarch64-unknown-linux-musl \
     x86_64-unknown-linux-musl \
@@ -31,15 +31,15 @@ ARG VERSION
 ARG GIT_REVISION
 
 COPY --from=arm64-sysroot /lib /sysroots/arm64/lib/
-COPY --from=arm64-sysroot /usr/include /sysroots/arm64/usr/include
+COPY --from=arm64-sysroot /usr/include /sysroots/arm64/usr/include/
 COPY --from=arm64-sysroot /usr/lib /sysroots/arm64/usr/lib/
 
 COPY --from=arm64-musl-sysroot /lib /sysroots/arm64-musl/lib/
-COPY --from=arm64-musl-sysroot /usr/include /sysroots/arm64-musl/usr/include
+COPY --from=arm64-musl-sysroot /usr/include /sysroots/arm64-musl/usr/include/
 COPY --from=arm64-musl-sysroot /usr/lib /sysroots/arm64-musl/usr/lib/
 
 COPY --from=amd64-musl-sysroot /lib /sysroots/amd64-musl/lib/
-COPY --from=amd64-musl-sysroot /usr/include /sysroots/amd64-musl/usr/include
+COPY --from=amd64-musl-sysroot /usr/include /sysroots/amd64-musl/usr/include/
 COPY --from=amd64-musl-sysroot /usr/lib /sysroots/amd64-musl/usr/lib/
 
 RUN <<EOF
@@ -68,8 +68,8 @@ WORKDIR /app
 
 COPY Makefile Cargo.toml Cargo.lock ./
 COPY .cargo ./.cargo
-COPY cargo-mold.config.toml ./
-RUN cat cargo-mold.config.toml >> .cargo/config.toml
+COPY cargo-docker.config.toml ./
+RUN cat cargo-docker.config.toml >> .cargo/config.toml
 
 COPY crates ./crates
 COPY common ./common
@@ -110,8 +110,6 @@ fi
 EOF
 
 FROM gcr.io/distroless/cc-debian13 AS runner
-
-ARG TARGETARCH
 
 WORKDIR /
 
