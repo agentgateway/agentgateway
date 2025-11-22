@@ -30,8 +30,51 @@ pub struct Policy {
 		skip_serializing_if = "HashMap::is_empty"
 	)]
 	pub model_aliases: HashMap<Strng, Strng>,
+	/// Compiled wildcard patterns, sorted by specificity (longer patterns first).
+	/// Not serialized - computed from model_aliases during policy creation.
+	/// Wrapped in Arc to avoid cloning compiled regex during policy merging.
+	#[serde(skip)]
+	pub wildcard_patterns: Arc<Vec<(ModelAliasPattern, Strng)>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_caching: Option<PromptCachingConfig>,
+}
+
+/// Wildcard pattern converted to regex for model name matching.
+/// Stores the compiled regex and original pattern length for specificity sorting.
+#[apply(schema!)]
+pub struct ModelAliasPattern {
+	#[serde(with = "serde_regex")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	regex: regex::Regex,
+	pattern_len: usize,
+}
+
+impl ModelAliasPattern {
+	pub fn from_wildcard(pattern: &str) -> Result<Self, String> {
+		if !pattern.contains('*') {
+			return Err(format!("Pattern '{}' contains no wildcards", pattern));
+		}
+
+		// Convert wildcard to regex: escape all chars, then replace \* with (.*)
+		let escaped = regex::escape(pattern);
+		let regex_pattern = escaped.replace(r"\*", "(.*)");
+
+		let regex = regex::Regex::new(&format!("^{}$", regex_pattern))
+			.map_err(|e| format!("Invalid wildcard pattern '{}': {}", pattern, e))?;
+
+		Ok(ModelAliasPattern {
+			regex,
+			pattern_len: pattern.len(),
+		})
+	}
+
+	pub fn matches(&self, model: &str) -> bool {
+		self.regex.is_match(model)
+	}
+
+	pub fn specificity(&self) -> usize {
+		self.pattern_len
+	}
 }
 
 #[apply(schema!)]
@@ -79,6 +122,61 @@ pub struct PromptGuard {
 }
 
 impl Policy {
+	pub fn compile_model_alias_patterns(&mut self) {
+		let mut patterns = Vec::new();
+
+		for (key, value) in &self.model_aliases {
+			if key.contains('*') {
+				match ModelAliasPattern::from_wildcard(key.as_str()) {
+					Ok(pattern) => {
+						patterns.push((pattern, value.clone()));
+					},
+					Err(e) => {
+						// Log warning but continue - don't fail entire policy
+						tracing::warn!(
+							pattern = %key,
+							error = %e,
+							"Invalid model alias wildcard pattern, skipping"
+						);
+					},
+				}
+			}
+		}
+
+		// Sort by specificity: longer patterns first (more specific matches)
+		patterns.sort_by_key(|(pattern, _)| std::cmp::Reverse(pattern.specificity()));
+
+		self.wildcard_patterns = Arc::new(patterns);
+
+		tracing::debug!(
+			exact_aliases = self.model_aliases.len(),
+			wildcard_patterns = self.wildcard_patterns.len(),
+			"Compiled model alias patterns"
+		);
+	}
+
+	pub fn resolve_model_alias(&self, model: &str) -> Option<&Strng> {
+		// Fast path: exact match in HashMap (O(1))
+		if let Some(target) = self.model_aliases.get(model) {
+			return Some(target);
+		}
+
+		// Slow path: pattern matching (sorted by specificity, checks longer patterns first)
+		for (pattern, target) in self.wildcard_patterns.iter() {
+			if pattern.matches(model) {
+				tracing::debug!(
+					model = %model,
+					target = %target,
+					pattern_specificity = pattern.specificity(),
+					"Model alias pattern match"
+				);
+				return Some(target);
+			}
+		}
+
+		None
+	}
+
 	pub fn apply_prompt_enrichment(&self, chat: &mut dyn RequestType) {
 		if let Some(prompts) = &self.prompts {
 			chat.prepend_prompts(prompts.prepend.clone());
@@ -1038,4 +1136,61 @@ fn test_prompt_caching_explicit_disable() {
 
 	// Should be None when explicitly set to null
 	assert!(policy.prompt_caching.is_none());
+}
+
+#[test]
+fn test_model_alias_wildcard_resolution() {
+	let mut policy = Policy {
+		model_aliases: HashMap::from([
+			(strng::new("gpt-4"), strng::new("exact-target")),
+			(
+				strng::new("claude-haiku-3.5-*"),
+				strng::new("haiku-3.5-target"),
+			),
+			(strng::new("claude-haiku-*"), strng::new("haiku-target")),
+			(strng::new("*-sonnet-*"), strng::new("sonnet-target")),
+		]),
+		wildcard_patterns: Arc::new(Vec::new()),
+		prompt_guard: None,
+		defaults: None,
+		overrides: None,
+		prompts: None,
+		prompt_caching: None,
+	};
+
+	policy.compile_model_alias_patterns();
+
+	// Exact match takes precedence over wildcards
+	assert_eq!(
+		policy.resolve_model_alias("gpt-4"),
+		Some(&strng::new("exact-target"))
+	);
+
+	// Longer patterns are more specific (checked first)
+	assert_eq!(
+		policy.resolve_model_alias("claude-haiku-3.5-v1"),
+		Some(&strng::new("haiku-3.5-target")) // Matches "claude-haiku-3.5-*" not "claude-haiku-*"
+	);
+	assert_eq!(
+		policy.resolve_model_alias("claude-haiku-v1"),
+		Some(&strng::new("haiku-target")) // Only matches "claude-haiku-*"
+	);
+	assert_eq!(
+		policy.resolve_model_alias("other-sonnet-model"),
+		Some(&strng::new("sonnet-target")) // Matches "*-sonnet-*"
+	);
+
+	// No match returns None
+	assert_eq!(policy.resolve_model_alias("unmatched-model"), None);
+}
+
+#[test]
+fn test_model_alias_pattern_validation() {
+	// Pattern must contain wildcard
+	assert!(ModelAliasPattern::from_wildcard("no-wildcards").is_err());
+
+	// Special characters are escaped (dot is literal, not regex wildcard)
+	let pattern = ModelAliasPattern::from_wildcard("test.*").unwrap();
+	assert!(pattern.matches("test.v1"));
+	assert!(!pattern.matches("testXv1")); // X doesn't match literal dot
 }

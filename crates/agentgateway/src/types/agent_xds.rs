@@ -198,7 +198,7 @@ fn convert_backend_ai_policy(
 		})
 	});
 
-	Ok(llm::Policy {
+	let mut policy = llm::Policy {
 		prompt_guard: prompt_guard.transpose()?,
 		defaults: Some(
 			ai.defaults
@@ -218,8 +218,14 @@ fn convert_backend_ai_policy(
 			.iter()
 			.map(|(k, v)| (strng::new(k), strng::new(v)))
 			.collect(),
+		wildcard_patterns: Arc::new(Vec::new()), // Will be populated by compile_model_alias_patterns()
 		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
-	})
+	};
+
+	// Compile wildcard patterns from model_aliases
+	policy.compile_model_alias_patterns();
+
+	Ok(policy)
 }
 
 impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
