@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -121,6 +122,7 @@ enum LocalListenerProtocol {
 pub struct LocalTLSServerConfig {
 	pub cert: PathBuf,
 	pub key: PathBuf,
+	pub root: Option<PathBuf>,
 }
 
 #[apply(schema_de!)]
@@ -1337,11 +1339,26 @@ impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 		let key = fs_err::read(self.key)?;
 		let private_key = crate::types::agent::parse_key(&key)?;
 
-		let mut ccb = ServerConfig::builder_with_provider(transport::tls::provider())
+		let ccb = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-			.expect("server config must be valid")
-			.with_no_client_auth()
-			.with_single_cert(cert_chain, private_key)?;
+			.expect("server config must be valid");
+
+		let ccb = if let Some(root) = self.root {
+			let root = fs_err::read(root)?;
+			let mut roots_store = rustls::RootCertStore::empty();
+			let mut reader = std::io::BufReader::new(Cursor::new(root));
+			let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+			roots_store.add_parsable_certificates(certs);
+			let verify = rustls::server::WebPkiClientVerifier::builder_with_provider(
+				Arc::new(roots_store),
+				transport::tls::provider(),
+			)
+			.build()?;
+			ccb.with_client_cert_verifier(verify)
+		} else {
+			ccb.with_no_client_auth()
+		};
+		let mut ccb = ccb.with_single_cert(cert_chain, private_key)?;
 		ccb.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 		Ok(ServerTLSConfig::new(Arc::new(ccb)))
 	}

@@ -12,7 +12,6 @@ use crate::llm::{LLMInfo, LLMRequest};
 use crate::serdes::*;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::BackendInfo;
-use crate::types::discovery::Identity;
 
 use agent_core::strng::Strng;
 use bytes::Bytes;
@@ -258,17 +257,7 @@ impl ContextBuilder {
 		self.context.source = Some(SourceContext {
 			address: tcp.peer_addr.ip(),
 			port: tcp.peer_addr.port(),
-			identity: tls.and_then(|t| t.src_identity.as_ref()).map(|m| match m {
-				Identity::Spiffe {
-					trust_domain,
-					namespace,
-					service_account,
-				} => IdentityContext {
-					trust_domain: trust_domain.clone(),
-					namespace: namespace.clone(),
-					service_account: service_account.clone(),
-				},
-			}),
+			tls: tls.and_then(|t| t.src_identity.clone()),
 		})
 	}
 
@@ -581,7 +570,8 @@ pub struct SourceContext {
 	/// The port of the downstream connection.
 	port: u16,
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
-	identity: Option<IdentityContext>,
+	#[serde(flatten)]
+	tls: Option<crate::transport::tls::TlsInfo>,
 }
 
 #[apply(schema_ser!)]

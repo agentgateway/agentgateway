@@ -1,14 +1,19 @@
+use std::fmt;
+use std::fmt::Formatter;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::apply;
+use crate::serdes::schema_ser;
+use crate::transport::stream::Socket;
+use crate::types::discovery::Identity;
+use agent_core::strng;
+use agent_core::strng::Strng;
 use futures_util::TryFutureExt;
 use rustls::ServerConfig;
 use rustls::crypto::CryptoProvider;
 use tracing::warn;
 use x509_parser::certificate::X509Certificate;
-
-use crate::transport::stream::Socket;
-use crate::types::discovery::Identity;
 
 pub static ALL_TLS_VERSIONS: &[&rustls::SupportedProtocolVersion] =
 	&[&rustls::version::TLS12, &rustls::version::TLS13];
@@ -313,7 +318,7 @@ pub mod trustdomain {
 			};
 			let (_, c) = X509Certificate::from_der(client_cert)
 				.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
-			let ids = super::identities(c).map_err(|_e| {
+			let (ids, _) = super::sans(c).map_err(|_e| {
 				rustls::Error::InvalidCertificate(rustls::CertificateError::ApplicationVerificationFailure)
 			})?;
 			trace!(
@@ -407,7 +412,7 @@ pub mod identity {
 			use x509_parser::prelude::*;
 			let (_, c) = X509Certificate::from_der(server_cert)
 				.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
-			let id = super::identities(c).map_err(|_e| {
+			let (id, _) = super::sans(c).map_err(|_e| {
 				rustls::Error::InvalidCertificate(rustls::CertificateError::ApplicationVerificationFailure)
 			})?;
 			trace!(
@@ -504,9 +509,43 @@ pub mod identity {
 	}
 }
 
-pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<Identity> {
+#[apply(schema_ser!)]
+pub struct TlsInfo {
+	/// The (Istio SPIFFE) identity of the downstream connection, if available.
+	pub identity: Option<IstioIdentity>,
+	/// The subject alt names from the downstream certificate, if available.
+	pub subject_alt_names: Vec<Strng>,
+	/// The issuer from the downstream certificate, if available.
+	pub issuer: Strng,
+	/// The subject from the downstream certificate, if available.
+	pub subject: Strng,
+	/// The CN of the subject from the downstream certificate, if available.
+	pub subject_cn: Option<Strng>,
+}
+
+#[apply(schema_ser!)]
+pub struct IstioIdentity {
+	/// The trust domain of the identity.
+	trust_domain: Strng,
+	/// The namespace of the identity.
+	namespace: Strng,
+	/// The service account of the identity.
+	service_account: Strng,
+}
+
+impl fmt::Display for IstioIdentity {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(
+			f,
+			"spiffe://{}/ns/{}/sa/{}",
+			self.trust_domain, self.namespace, self.service_account
+		)
+	}
+}
+
+pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<TlsInfo> {
 	use x509_parser::prelude::*;
-	conn
+	let cert = conn
 		.peer_certificates()
 		.and_then(|certs| certs.first())
 		.and_then(|cert| match X509Certificate::from_der(cert) {
@@ -515,44 +554,75 @@ pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<Identity> 
 				warn!("invalid certificate: {e}");
 				None
 			},
-		})
-		.and_then(|cert| match identities(cert) {
-			Ok(ids) => ids.into_iter().next(),
-			Err(e) => {
-				warn!("failed to extract identity: {}", e);
-				None
-			},
-		})
-}
+		})?;
 
-fn identities(cert: X509Certificate) -> anyhow::Result<Vec<Identity>> {
+	let (issuer, subject, subject_cn) = names(&cert);
+	let (istio, sans) = sans(cert).ok()?;
+	Some(TlsInfo {
+		identity: istio.into_iter().next().map(|i| {
+			let Identity::Spiffe {
+				trust_domain,
+				namespace,
+				service_account,
+			} = i;
+			IstioIdentity {
+				trust_domain,
+				namespace,
+				service_account,
+			}
+		}),
+		subject_alt_names: sans,
+		issuer,
+		subject,
+		subject_cn,
+	})
+}
+fn names(cert: &X509Certificate) -> (Strng, Strng, Option<Strng>) {
+	let issuer = cert.issuer().to_string().into();
+	let subject = cert.subject().to_string().into();
+	let subject_cn = cert
+		.subject
+		.iter_common_name()
+		.find_map(|x| x.as_str().ok())
+		.map(strng::new);
+	(issuer, subject, subject_cn)
+}
+fn sans(cert: X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
 	use x509_parser::prelude::*;
 	let names = cert
 		.subject_alternative_name()?
 		.map(|x| &x.value.general_names);
 
 	if let Some(names) = names {
-		return Ok(
-			names
-				.iter()
-				.filter_map(|n| {
-					let id = match n {
-						GeneralName::URI(uri) => Identity::from_str(uri),
-						_ => return None,
-					};
+		let istio = names
+			.iter()
+			.filter_map(|n| {
+				let id = match n {
+					GeneralName::URI(uri) => Identity::from_str(uri),
+					_ => return None,
+				};
 
-					match id {
-						Ok(id) => Some(id),
-						Err(err) => {
-							warn!("SAN {n} could not be parsed: {err}");
-							None
-						},
-					}
-				})
-				.collect(),
-		);
+				match id {
+					Ok(id) => Some(id),
+					Err(err) => {
+						warn!("SAN {n} could not be parsed: {err}");
+						None
+					},
+				}
+			})
+			.collect();
+		let generic = names
+			.iter()
+			.filter_map(|n| match n {
+				GeneralName::URI(uri) => Some(strng::new(uri)),
+				GeneralName::DNSName(n) => Some(strng::new(n)),
+				GeneralName::IPAddress(ip) => String::from_utf8(ip.to_vec()).ok().map(strng::new),
+				_ => None,
+			})
+			.collect();
+		return Ok((istio, generic));
 	}
-	Ok(Vec::default())
+	Ok((Vec::default(), Vec::default()))
 }
 
 #[derive(thiserror::Error, Debug)]

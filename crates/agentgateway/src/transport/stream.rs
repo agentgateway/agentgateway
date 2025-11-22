@@ -11,7 +11,6 @@ use std::time::Instant;
 use crate::telemetry::metrics::{Metrics as TelemetryMetrics, TCPLabels};
 use crate::transport::rewind;
 use crate::transport::rewind::RewindSocket;
-use crate::types::discovery::Identity;
 use crate::types::frontend::TCP;
 use agent_hbone::RWStream;
 use hyper_util::client::legacy::connect::{Connected, Connection};
@@ -49,7 +48,7 @@ impl From<&[u8]> for Alpn {
 
 #[derive(Default, Debug, Clone)]
 pub struct TLSConnectionInfo {
-	pub src_identity: Option<Identity>,
+	pub src_identity: Option<super::tls::TlsInfo>,
 	pub server_name: Option<String>,
 	pub negotiated_alpn: Option<Alpn>,
 }

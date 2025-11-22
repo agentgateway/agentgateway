@@ -69,6 +69,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].tls`||
 |`binds[].listeners[].tls.cert`||
 |`binds[].listeners[].tls.key`||
+|`binds[].listeners[].tls.root`||
 |`binds[].listeners[].routes`||
 |`binds[].listeners[].routes[].name`||
 |`binds[].listeners[].routes[].ruleName`||
@@ -1257,6 +1258,10 @@ This folder contains JSON schemas for various parts of the project
 |`source.identity.trustDomain`|The trust domain of the identity.|
 |`source.identity.namespace`|The namespace of the identity.|
 |`source.identity.serviceAccount`|The service account of the identity.|
+|`source.subjectAltNames`|The subject alt names from the downstream certificate, if available.|
+|`source.issuer`|The issuer from the downstream certificate, if available.|
+|`source.subject`|The subject from the downstream certificate, if available.|
+|`source.subjectCn`|The CN of the subject from the downstream certificate, if available.|
 |`mcp`|`mcp` contains attributes about the MCP request.|
 |`mcp.(any)(1)tool`||
 |`mcp.(any)(1)tool.target`|The target of the resource|

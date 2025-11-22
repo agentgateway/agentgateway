@@ -290,7 +290,12 @@ impl ExtAuthz {
 			labels: HashMap::new(),
 			principal: tls_info
 				.as_ref()
-				.and_then(|tls| tls.src_identity.as_ref().map(|id| id.to_string()))
+				.and_then(|tls| {
+					tls
+						.src_identity
+						.as_ref()
+						.and_then(|id| id.identity.as_ref().map(|s| s.to_string()))
+				})
 				.unwrap_or_default(),
 			certificate: String::new(),
 		});
