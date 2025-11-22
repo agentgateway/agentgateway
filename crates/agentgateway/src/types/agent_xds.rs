@@ -470,6 +470,17 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 									region: strng::new(&bedrock.region),
 									guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 									guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+									anthropic_beta_headers: if bedrock.anthropic_beta_headers.is_empty() {
+										None
+									} else {
+										Some(
+											bedrock
+												.anthropic_beta_headers
+												.iter()
+												.map(strng::new)
+												.collect(),
+										)
+									},
 								})
 							},
 							Some(proto::agent::ai_backend::provider::Provider::Azureopenai(azureopenai)) => {

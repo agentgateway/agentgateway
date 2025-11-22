@@ -4751,6 +4751,15 @@
                                                         "string",
                                                         "null"
                                                       ]
+                                                    },
+                                                    "anthropicBetaHeaders": {
+                                                      "type": [
+                                                        "array",
+                                                        "null"
+                                                      ],
+                                                      "items": {
+                                                        "type": "string"
+                                                      }
                                                     }
                                                   },
                                                   "required": [
@@ -6187,6 +6196,15 @@
                                                                     "string",
                                                                     "null"
                                                                   ]
+                                                                },
+                                                                "anthropicBetaHeaders": {
+                                                                  "type": [
+                                                                    "array",
+                                                                    "null"
+                                                                  ],
+                                                                  "items": {
+                                                                    "type": "string"
+                                                                  }
                                                                 }
                                                               },
                                                               "required": [

@@ -35,6 +35,8 @@ pub struct Provider {
 	pub guardrail_identifier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub guardrail_version: Option<Strng>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub anthropic_beta_headers: Option<Vec<Strng>>, // Optional: allowlist of allowed anthropic-beta headers. When None, all headers are allowed.
 }
 
 impl super::Provider for Provider {
@@ -925,7 +927,8 @@ pub(super) fn translate_request_messages(
 	});
 
 	// Extract beta headers from HTTP headers if provided
-	let beta_headers = headers.and_then(|h| extract_beta_headers(h).ok().flatten());
+	let beta_headers =
+		headers.and_then(|h| extract_beta_headers(h, provider.anthropic_beta_headers.as_deref()));
 
 	if let Some(beta_array) = beta_headers {
 		// Add beta headers to additionalModelRequestFields
@@ -2158,19 +2161,27 @@ fn insert_cache_point_in_last_user_message(messages: &mut [types::Message]) {
 
 pub(super) fn extract_beta_headers(
 	headers: &http::HeaderMap,
-) -> Result<Option<Vec<serde_json::Value>>, AIError> {
+	allowed_features: Option<&[Strng]>,
+) -> Option<Vec<serde_json::Value>> {
 	let mut beta_features = Vec::new();
 
 	// Collect all anthropic-beta header values
 	for value in headers.get_all("anthropic-beta") {
-		let header_str = value
-			.to_str()
-			.map_err(|_| AIError::MissingField("Invalid anthropic-beta header value".into()))?;
+		// Skip malformed headers (matches extract_metadata_from_headers pattern)
+		let header_str = value.to_str().ok()?;
 
 		// Handle comma-separated values within a single header
 		for feature in header_str.split(',') {
 			let trimmed = feature.trim();
 			if !trimmed.is_empty() {
+				// Check against allowlist if configured
+				if let Some(allowed) = allowed_features
+					&& !allowed.iter().any(|a| a.as_str() == trimmed)
+				{
+					tracing::debug!(feature = trimmed, "Skipping beta feature not in allowlist");
+					continue;
+				}
+
 				// Add each beta feature as a string value in the array
 				beta_features.push(serde_json::Value::String(trimmed.to_string()));
 			}
@@ -2178,9 +2189,9 @@ pub(super) fn extract_beta_headers(
 	}
 
 	if beta_features.is_empty() {
-		Ok(None)
+		None
 	} else {
-		Ok(Some(beta_features))
+		Some(beta_features)
 	}
 }
 
@@ -2355,6 +2366,7 @@ mod tests {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			anthropic_beta_headers: None,
 		};
 
 		// Simulate transformation CEL setting x-bedrock-metadata header
@@ -2403,6 +2415,7 @@ mod tests {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			anthropic_beta_headers: None,
 		};
 
 		let req = anthropic::MessagesRequest {
@@ -2436,7 +2449,7 @@ mod tests {
 	#[test]
 	fn test_extract_beta_headers_variants() {
 		let headers = HeaderMap::new();
-		assert!(extract_beta_headers(&headers).unwrap().is_none());
+		assert!(extract_beta_headers(&headers, None).is_none());
 
 		let mut headers = HeaderMap::new();
 		headers.insert(
@@ -2444,7 +2457,7 @@ mod tests {
 			"prompt-caching-2024-07-31".parse().unwrap(),
 		);
 		assert_eq!(
-			extract_beta_headers(&headers).unwrap().unwrap(),
+			extract_beta_headers(&headers, None).unwrap(),
 			vec![json!("prompt-caching-2024-07-31")]
 		);
 
@@ -2456,7 +2469,7 @@ mod tests {
 				.unwrap(),
 		);
 		assert_eq!(
-			extract_beta_headers(&headers).unwrap().unwrap(),
+			extract_beta_headers(&headers, None).unwrap(),
 			vec![
 				json!("cache-control-2024-08-15"),
 				json!("computer-use-2024-10-22"),
@@ -2471,7 +2484,7 @@ mod tests {
 				.unwrap(),
 		);
 		assert_eq!(
-			extract_beta_headers(&headers).unwrap().unwrap(),
+			extract_beta_headers(&headers, None).unwrap(),
 			vec![
 				json!("cache-control-2024-08-15"),
 				json!("computer-use-2024-10-22"),
@@ -2484,8 +2497,7 @@ mod tests {
 			"cache-control-2024-08-15".parse().unwrap(),
 		);
 		headers.append("anthropic-beta", "computer-use-2024-10-22".parse().unwrap());
-		let mut beta_features = extract_beta_headers(&headers)
-			.unwrap()
+		let mut beta_features = extract_beta_headers(&headers, None)
 			.unwrap()
 			.into_iter()
 			.map(|v| v.as_str().unwrap().to_string())
@@ -2496,6 +2508,26 @@ mod tests {
 			vec![
 				"cache-control-2024-08-15".to_string(),
 				"computer-use-2024-10-22".to_string(),
+			]
+		);
+
+		// Test allowlist filtering - unknown-feature should be filtered out
+		let mut headers = HeaderMap::new();
+		headers.insert(
+			"anthropic-beta",
+			"prompt-caching-2024-07-31,computer-use-2024-10-22,unknown-feature"
+				.parse()
+				.unwrap(),
+		);
+		let allowed = vec![
+			strng::literal!("prompt-caching-2024-07-31"),
+			strng::literal!("computer-use-2024-10-22"),
+		];
+		assert_eq!(
+			extract_beta_headers(&headers, Some(&allowed)).unwrap(),
+			vec![
+				json!("prompt-caching-2024-07-31"),
+				json!("computer-use-2024-10-22"),
 			]
 		);
 	}

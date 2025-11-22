@@ -804,6 +804,7 @@ message AIBackend {
     string region = 2;
     google.protobuf.StringValue guardrail_identifier = 3;
     google.protobuf.StringValue guardrail_version = 4;
+    repeated string anthropic_beta_headers = 5;
   }
   message AzureOpenAI {
     google.protobuf.StringValue model = 1;

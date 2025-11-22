@@ -393,6 +393,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.region`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailIdentifier`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)bedrock.anthropicBetaHeaders`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)azureOpenAI`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)azureOpenAI.model`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider.(1)azureOpenAI.host`||
@@ -548,6 +549,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.region`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailIdentifier`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.guardrailVersion`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)bedrock.anthropicBetaHeaders`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)azureOpenAI`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)azureOpenAI.model`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].provider.(1)azureOpenAI.host`||

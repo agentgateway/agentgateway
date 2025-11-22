@@ -125,6 +125,7 @@ async fn test_bedrock() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		anthropic_beta_headers: None,
 	};
 	let test_dir = Path::new("src/llm/tests");
 

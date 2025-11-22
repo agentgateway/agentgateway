@@ -8246,13 +8246,14 @@ func (x *AIBackend_Anthropic) GetModel() *wrapperspb.StringValue {
 }
 
 type AIBackend_Bedrock struct {
-	state               protoimpl.MessageState  `protogen:"open.v1"`
-	Model               *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
-	Region              string                  `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
-	GuardrailIdentifier *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3" json:"guardrail_identifier,omitempty"`
-	GuardrailVersion    *wrapperspb.StringValue `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3" json:"guardrail_version,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                protoimpl.MessageState  `protogen:"open.v1"`
+	Model                *wrapperspb.StringValue `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Region               string                  `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	GuardrailIdentifier  *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3" json:"guardrail_identifier,omitempty"`
+	GuardrailVersion     *wrapperspb.StringValue `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3" json:"guardrail_version,omitempty"`
+	AnthropicBetaHeaders []string                `protobuf:"bytes,5,rep,name=anthropic_beta_headers,json=anthropicBetaHeaders,proto3" json:"anthropic_beta_headers,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *AIBackend_Bedrock) Reset() {
@@ -8309,6 +8310,13 @@ func (x *AIBackend_Bedrock) GetGuardrailIdentifier() *wrapperspb.StringValue {
 func (x *AIBackend_Bedrock) GetGuardrailVersion() *wrapperspb.StringValue {
 	if x != nil {
 		return x.GuardrailVersion
+	}
+	return nil
+}
+
+func (x *AIBackend_Bedrock) GetAnthropicBetaHeaders() []string {
+	if x != nil {
+		return x.AnthropicBetaHeaders
 	}
 	return nil
 }
@@ -9127,7 +9135,7 @@ const file_resource_proto_rawDesc = "" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\x05R\x04port\"\x15\n" +
-	"\x13DynamicForwardProxy\"\xe2\x0f\n" +
+	"\x13DynamicForwardProxy\"\x98\x10\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -9143,12 +9151,13 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x03 \x01(\tR\tprojectId\x1a?\n" +
 	"\tAnthropic\x122\n" +
-	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x1a\xf1\x01\n" +
+	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x1a\xa7\x02\n" +
 	"\aBedrock\x122\n" +
 	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x16\n" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x12O\n" +
 	"\x14guardrail_identifier\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\x13guardrailIdentifier\x12I\n" +
-	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersion\x1a\x94\x01\n" +
+	"\x11guardrail_version\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x10guardrailVersion\x124\n" +
+	"\x16anthropic_beta_headers\x18\x05 \x03(\tR\x14anthropicBetaHeaders\x1a\x94\x01\n" +
 	"\vAzureOpenAI\x122\n" +
 	"\x05model\x18\x01 \x01(\v2\x1c.google.protobuf.StringValueR\x05model\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12=\n" +
