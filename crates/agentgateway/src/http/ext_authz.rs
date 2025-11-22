@@ -563,13 +563,13 @@ fn process_headers(
 
 		// Determine the action to take
 		// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
+		#[allow(deprecated)]
 		let action = if header.append_action != 0 || header.append.is_none() {
 			// Use append_action if it's explicitly set (non-zero) or if append is not set
 			HeaderAppendAction::try_from(header.append_action)
 				.unwrap_or(HeaderAppendAction::AppendIfExistsOrAdd)
 		} else {
 			// Fall back to deprecated append field for backwards compatibility
-			#[allow(deprecated)]
 			if header.append.unwrap_or(false) {
 				HeaderAppendAction::AppendIfExistsOrAdd
 			} else {
@@ -581,23 +581,23 @@ fn process_headers(
 			HeaderAppendAction::AppendIfExistsOrAdd => {
 				// Append to existing or add new
 				hm.append(hn, hv);
-			}
+			},
 			HeaderAppendAction::AddIfAbsent => {
 				// Only add if header doesn't exist
 				if !hm.contains_key(&hn) {
 					hm.insert(hn, hv);
 				}
-			}
+			},
 			HeaderAppendAction::OverwriteIfExistsOrAdd => {
 				// Replace existing or add new
 				hm.insert(hn, hv);
-			}
+			},
 			HeaderAppendAction::OverwriteIfExists => {
 				// Replace existing, no-op if doesn't exist
 				if hm.contains_key(&hn) {
 					hm.insert(hn, hv);
 				}
-			}
+			},
 		}
 	}
 }

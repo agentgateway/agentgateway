@@ -23,6 +23,7 @@ impl Default for ExtAuthz {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_process_headers_with_allowlist() {
 	let mut headers = HeaderMap::new();
 
@@ -56,6 +57,7 @@ fn test_process_headers_with_allowlist() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_process_headers() {
 	let mut headers = HeaderMap::new();
 
@@ -356,6 +358,7 @@ fn test_include_request_headers_empty_includes_all() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_host_header_protection() {
 	// Test that host header cannot be added through upstream headers
 	let header_options = vec![
@@ -409,6 +412,7 @@ fn test_dynamic_metadata_extraction() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_append_action_append_if_exists_or_add() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
@@ -451,6 +455,7 @@ fn test_append_action_append_if_exists_or_add() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_append_action_add_if_absent() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
@@ -492,6 +497,7 @@ fn test_append_action_add_if_absent() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_append_action_overwrite_if_exists_or_add() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
@@ -534,6 +540,7 @@ fn test_append_action_overwrite_if_exists_or_add() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_append_action_overwrite_if_exists() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
@@ -573,6 +580,7 @@ fn test_append_action_overwrite_if_exists() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_append_action_backward_compatibility_with_deprecated_append() {
 	let mut headers = HeaderMap::new();
 	headers.insert("x-test", "existing".parse().unwrap());
@@ -617,6 +625,7 @@ fn test_append_action_backward_compatibility_with_deprecated_append() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_append_action_multiple_set_cookie_headers() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
