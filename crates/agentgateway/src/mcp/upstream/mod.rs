@@ -1,9 +1,12 @@
+mod client;
 mod openapi;
 mod sse;
 mod stdio;
 mod streamablehttp;
 
 use std::io;
+
+pub(crate) use client::McpHttpClient;
 
 use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
@@ -221,15 +224,17 @@ impl UpstreamGroup {
 					"" => "/sse",
 					_ => sse.path.as_str(),
 				};
-				let client = sse::Client::new(
+
+				let upstream_client = McpHttpClient::new(
+					self.client.clone(),
 					target
 						.backend
 						.clone()
 						.expect("there must be a backend for SSE"),
-					path.into(),
-					self.client.clone(),
 					target.backend_policies.clone(),
-				)?;
+					self.backend.stateful,
+				);
+				let client = sse::Client::new(upstream_client, path.into())?;
 
 				upstream::Upstream::McpSSE(client)
 			},
@@ -242,15 +247,17 @@ impl UpstreamGroup {
 					"" => "/mcp",
 					_ => mcp.path.as_str(),
 				};
-				let client = streamablehttp::Client::new(
+
+				let http_client = McpHttpClient::new(
+					self.client.clone(),
 					target
 						.backend
 						.clone()
 						.expect("there must be a backend for MCP"),
-					path.into(),
-					self.client.clone(),
 					target.backend_policies.clone(),
-				)?;
+					self.backend.stateful,
+				);
+				let client = streamablehttp::Client::new(http_client, path.into())?;
 
 				upstream::Upstream::McpStreamable(client)
 			},
@@ -293,16 +300,21 @@ impl UpstreamGroup {
 						e
 					)
 				})?;
-				upstream::Upstream::OpenAPI(Box::new(openapi::Handler {
-					backend: target
+
+				let http_client = McpHttpClient::new(
+					self.client.clone(),
+					target
 						.backend
 						.clone()
 						.expect("there must be a backend for OpenAPI"),
-					client: self.client.clone(),
-					default_policies: target.backend_policies.clone(),
+					target.backend_policies.clone(),
+					self.backend.stateful,
+				);
+				upstream::Upstream::OpenAPI(Box::new(openapi::Handler::new(
+					http_client,
 					tools,  // From parse_openapi_schema
 					prefix, // From get_server_prefix
-				}))
+				)))
 			},
 		};
 

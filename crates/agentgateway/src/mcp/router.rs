@@ -104,7 +104,10 @@ impl App {
 					.unwrap();
 			};
 			(
-				McpBackendGroup { targets: nt },
+				McpBackendGroup {
+					targets: nt,
+					stateful: backend.stateful,
+				},
 				authorization_policies,
 				authn,
 			)
@@ -219,6 +222,7 @@ impl App {
 #[derive(Debug, Clone)]
 pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
+	pub stateful: bool,
 }
 
 #[derive(Debug)]

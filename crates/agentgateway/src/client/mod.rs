@@ -211,6 +211,9 @@ impl From<Option<VersionedBackendTLS>> for Transport {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct PoolKey(Target, SocketAddr, Transport, ::http::Version);
 
+#[derive(Debug, Clone, Copy)]
+pub struct ResolvedDestination(pub SocketAddr);
+
 impl Transport {
 	pub fn scheme(&self) -> Scheme {
 		match self {
@@ -743,6 +746,7 @@ impl Client {
 		resp
 			.extensions_mut()
 			.insert(transport::BufferLimit::new(buffer_limit));
+		resp.extensions_mut().insert(ResolvedDestination(dest));
 		Ok(resp)
 	}
 }

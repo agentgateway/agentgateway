@@ -11,8 +11,9 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 use crate::client::Client;
-use crate::store::Stores;
-use crate::types::agent::Target;
+use crate::proxy::httpproxy::PolicyClient;
+use crate::store::{BackendPolicies, Stores};
+use crate::types::agent::{SimpleBackend, Target};
 use crate::{BackendConfig, ProxyInputs, client, mcp};
 
 // Helper to create a handler and mock server for tests
@@ -45,7 +46,7 @@ async fn setup() -> (MockServer, Handler) {
 		mcp_state: mcp::router::App::new(stores.clone()),
 	});
 
-	let client = PolicyClient { inputs: pi };
+	let client = PolicyClient { inputs: pi.clone() };
 	// Define a sample tool for testing
 	let test_tool_get = Tool {
 		name: Cow::Borrowed("get_user"),
@@ -134,22 +135,23 @@ async fn setup() -> (MockServer, Handler) {
 		path: "/users".to_string(),
 	};
 
-	let handler = Handler {
-		prefix: "".to_string(),
-		client,
-		tools: vec![
+	let backend = SimpleBackend::Opaque(
+		strng::literal!("dummy"),
+		Target::Hostname(
+			parsed.host().unwrap().to_string().into(),
+			parsed.port().unwrap_or(8080),
+		),
+	);
+	let upstream_client =
+		super::super::McpHttpClient::new(client, backend, BackendPolicies::default(), false);
+	let handler = Handler::new(
+		upstream_client,
+		vec![
 			(test_tool_get, upstream_call_get),
 			(test_tool_post, upstream_call_post),
 		],
-		default_policies: BackendPolicies::default(),
-		backend: SimpleBackend::Opaque(
-			strng::literal!("dummy"),
-			Target::Hostname(
-				parsed.host().unwrap().to_string().into(),
-				parsed.port().unwrap_or(8080),
-			),
-		),
-	};
+		"".to_string(),
+	);
 
 	(server, handler)
 }
