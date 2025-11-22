@@ -1,11 +1,4 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::SystemTime;
-
-use ::http::{HeaderMap, StatusCode, Version};
-use prost_types::Timestamp;
-use serde_json::Value as JsonValue;
-
+use crate::cel::Value;
 use crate::cel::{Executor, Expression};
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
@@ -14,13 +7,21 @@ use crate::http::ext_authz::proto::{
 	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, Metadata, OkHttpResponse,
 };
 use crate::http::ext_proc::GrpcReferenceChannel;
-use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
+use crate::http::transformation_cel::SerAsStr;
+use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request, Response};
 use crate::http::{HeaderOrPseudo, jwt};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReference;
 use crate::{serde_dur_option, *};
+use ::http::header;
+use ::http::{HeaderMap, StatusCode, Version};
+use prost_types::Timestamp;
+use serde_json::Value as JsonValue;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::SystemTime;
 
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
@@ -71,10 +72,24 @@ pub enum FailureMode {
 }
 
 #[apply(schema!)]
+#[derive(Default, Eq, Copy, PartialEq)]
+pub enum Protocol {
+	#[default]
+	Grpc,
+	Http,
+}
+
+#[apply(schema!)]
 pub struct ExtAuthz {
 	/// Reference to the external authorization service backend
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
+	/// The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.
+	#[serde(default)]
+	pub protocol: Protocol,
+	/// When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by
+	/// the provided expression rather than directly returning the error.
+	pub redirect: Option<Arc<cel::Expression>>,
 	/// Additional context to send to the authorization service.
 	/// This maps to the `context_extensions` field of the request, and only allows static values.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -90,6 +105,10 @@ pub struct ExtAuthz {
 	/// Specific headers to include in the authorization request (empty = all headers)
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub include_request_headers: Vec<HeaderOrPseudo>,
+	/// Specific headers from the authorization response will be copied into the request to the backend.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde_as(as = "Vec<SerAsStr>")]
+	pub include_response_headers: Vec<HeaderName>,
 	/// Options for including the request body in the authorization request
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub include_request_body: Option<BodyOptions>,
@@ -156,7 +175,10 @@ impl ExtAuthz {
 		client: PolicyClient,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
-		trace!("connecting to {:?}", self.target);
+		trace!(protocol=?self.protocol, "connecting to {:?}", self.target);
+		if self.protocol == Protocol::Http {
+			return self.check_http(exec, client, req).await;
+		}
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			client,
@@ -452,6 +474,112 @@ impl ExtAuthz {
 			},
 		}
 		Ok(res)
+	}
+
+	pub async fn check_http(
+		&self,
+		exec: &Executor<'_>,
+		client: PolicyClient,
+		req: &mut Request,
+	) -> Result<PolicyResponse, ProxyError> {
+		let headers = if self.include_request_headers.is_empty() {
+			req.headers().clone()
+		} else {
+			let mut headers = HeaderMap::with_capacity(self.include_request_headers.len());
+			for h in &self.include_request_headers {
+				match h {
+					HeaderOrPseudo::Header(k) => {
+						req.headers().get_all(k).iter().for_each(|h| {
+							headers.append(k.clone(), h.clone());
+						});
+					},
+					_pseudo => {
+						// Ignored for HTTP.
+						// TODO: reject at config time.
+					},
+				}
+			}
+			headers
+		};
+
+		let body = if let Some(body_opts) = &self.include_request_body {
+			let max_size = body_opts.max_request_bytes as usize;
+			match crate::http::inspect_body_with_limit(req.body_mut(), max_size).await {
+				Ok(body_bytes) => body_bytes,
+				Err(e) => {
+					debug!("Failed to read request body for ext_authz: {:?}", e);
+					Bytes::new()
+				},
+			}
+		} else {
+			Bytes::new()
+		};
+
+		let mut rb = ::http::Request::builder().uri("http://dummy/oauth2/auth");
+		let mut check_req = rb
+			.body(http::Body::from(body))
+			.map_err(|e| ProxyError::Processing(e.into()))?;
+		*check_req.headers_mut() = headers;
+		let check = client.call_reference(check_req, &self.target);
+		let timeout_duration = self.timeout.unwrap_or(Duration::from_millis(200));
+		let resp = match tokio::time::timeout(timeout_duration, check).await {
+			Ok(result) => result,
+			Err(_) => {
+				warn!("ext_authz request timed out after {:?}", timeout_duration);
+				return self.handle_auth_failure("Authorization service timeout");
+			},
+		};
+		let resp = match resp {
+			Ok(r) => r,
+			Err(e) => {
+				return self.handle_auth_failure(&e.to_string());
+			},
+		};
+		if resp.status().is_success() {
+			for k in &self.include_response_headers {
+				resp.headers().get_all(k).iter().for_each(|h| {
+					// TODO: append or insert?
+					req.headers_mut().append(k.clone(), h.clone());
+				});
+			}
+			return Ok(PolicyResponse::default());
+		}
+		if resp.status() == StatusCode::FORBIDDEN || resp.status() == StatusCode::UNAUTHORIZED {
+			if let Some(redir) = &self.redirect {
+				let s = exec
+					.eval(&redir)
+					.map_err(|e| anyhow::anyhow!("{e}"))
+					.and_then(|v| {
+						if let Value::String(s) = v {
+							Ok(s)
+						} else {
+							Err(anyhow::anyhow!("redirect resolved to a non-string value"))
+						}
+					});
+				return match s {
+					Err(e) => {
+						tracing::warn!("fail to evaluate redirect: {e}");
+						Err(ProxyError::ExternalAuthorizationFailed(None))
+					},
+					Ok(redir) => {
+						let status = StatusCode::FOUND;
+						let resp = ::http::Response::builder()
+							.status(status)
+							.header(header::LOCATION, redir.as_str())
+							.body(http::Body::empty())
+							.map_err(|e| ProxyError::Processing(e.into()))?;
+						Ok(PolicyResponse {
+							direct_response: Some(resp),
+							response_headers: None,
+						})
+					},
+				};
+			}
+		}
+		Ok(PolicyResponse {
+			direct_response: Some(resp),
+			response_headers: None,
+		})
 	}
 
 	fn build_metadata(
