@@ -142,12 +142,14 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.authorization.rules`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication`|Authentication for MCP clients.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.issuer`||
-|`binds[].listeners[].routes[].policies.mcpAuthentication.audience`||
-|`binds[].listeners[].routes[].policies.mcpAuthentication.jwksUrl`||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.audiences`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.(any)(1)auth0`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.(any)(1)keycloak`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.(any)file`||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.(any)url`||
 |`binds[].listeners[].routes[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`||
@@ -997,12 +999,14 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.authorization.rules`||
 |`policies[].policy.mcpAuthentication`|Authentication for MCP clients.|
 |`policies[].policy.mcpAuthentication.issuer`||
-|`policies[].policy.mcpAuthentication.audience`||
-|`policies[].policy.mcpAuthentication.jwksUrl`||
+|`policies[].policy.mcpAuthentication.audiences`||
 |`policies[].policy.mcpAuthentication.provider`||
 |`policies[].policy.mcpAuthentication.provider.(any)(1)auth0`||
 |`policies[].policy.mcpAuthentication.provider.(any)(1)keycloak`||
 |`policies[].policy.mcpAuthentication.resourceMetadata`||
+|`policies[].policy.mcpAuthentication.jwks`||
+|`policies[].policy.mcpAuthentication.jwks.(any)file`||
+|`policies[].policy.mcpAuthentication.jwks.(any)url`||
 |`policies[].policy.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`||

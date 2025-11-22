@@ -716,7 +716,7 @@ message BackendPolicySpec {
 
   message McpAuthentication {
     message ResourceMetadata {
-      map<string, google.protobuf.Value> extra = 1;
+      map<string, string> extra = 1;
     }
 
     enum McpIDP {
@@ -725,8 +725,8 @@ message BackendPolicySpec {
     }
 
     string issuer = 1;
-    string audience = 2;
-    string jwks_url = 3;
+    repeated string audiences = 2;
+    string jwks_inline = 3;
     McpIDP provider = 4;
     ResourceMetadata resource_metadata = 5;
   }

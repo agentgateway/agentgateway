@@ -7164,8 +7164,8 @@ func (x *BackendPolicySpec_McpAuthorization) GetDeny() []string {
 type BackendPolicySpec_McpAuthentication struct {
 	state            protoimpl.MessageState                                `protogen:"open.v1"`
 	Issuer           string                                                `protobuf:"bytes,1,opt,name=issuer,proto3" json:"issuer,omitempty"`
-	Audience         string                                                `protobuf:"bytes,2,opt,name=audience,proto3" json:"audience,omitempty"`
-	JwksUrl          string                                                `protobuf:"bytes,3,opt,name=jwks_url,json=jwksUrl,proto3" json:"jwks_url,omitempty"`
+	Audiences        []string                                              `protobuf:"bytes,2,rep,name=audiences,proto3" json:"audiences,omitempty"`
+	JwksInline       string                                                `protobuf:"bytes,3,opt,name=jwks_inline,json=jwksInline,proto3" json:"jwks_inline,omitempty"`
 	Provider         BackendPolicySpec_McpAuthentication_McpIDP            `protobuf:"varint,4,opt,name=provider,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_McpAuthentication_McpIDP" json:"provider,omitempty"`
 	ResourceMetadata *BackendPolicySpec_McpAuthentication_ResourceMetadata `protobuf:"bytes,5,opt,name=resource_metadata,json=resourceMetadata,proto3" json:"resource_metadata,omitempty"`
 	unknownFields    protoimpl.UnknownFields
@@ -7209,16 +7209,16 @@ func (x *BackendPolicySpec_McpAuthentication) GetIssuer() string {
 	return ""
 }
 
-func (x *BackendPolicySpec_McpAuthentication) GetAudience() string {
+func (x *BackendPolicySpec_McpAuthentication) GetAudiences() []string {
 	if x != nil {
-		return x.Audience
+		return x.Audiences
 	}
-	return ""
+	return nil
 }
 
-func (x *BackendPolicySpec_McpAuthentication) GetJwksUrl() string {
+func (x *BackendPolicySpec_McpAuthentication) GetJwksInline() string {
 	if x != nil {
-		return x.JwksUrl
+		return x.JwksInline
 	}
 	return ""
 }
@@ -7958,8 +7958,8 @@ func (x *BackendPolicySpec_Ai_PromptCaching) GetMinTokens() uint32 {
 }
 
 type BackendPolicySpec_McpAuthentication_ResourceMetadata struct {
-	state         protoimpl.MessageState     `protogen:"open.v1"`
-	Extra         map[string]*structpb.Value `protobuf:"bytes,1,rep,name=extra,proto3" json:"extra,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Extra         map[string]string      `protobuf:"bytes,1,rep,name=extra,proto3" json:"extra,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7994,7 +7994,7 @@ func (*BackendPolicySpec_McpAuthentication_ResourceMetadata) Descriptor() ([]byt
 	return file_resource_proto_rawDescGZIP(), []int{38, 7, 0}
 }
 
-func (x *BackendPolicySpec_McpAuthentication_ResourceMetadata) GetExtra() map[string]*structpb.Value {
+func (x *BackendPolicySpec_McpAuthentication_ResourceMetadata) GetExtra() map[string]string {
 	if x != nil {
 		return x.Extra
 	}
@@ -8966,7 +8966,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xa5.\n" +
+	"\x04kind\"\x95.\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -9092,19 +9092,20 @@ const file_resource_proto_rawDesc = "" +
 	"\x0fconnect_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0econnectTimeout\x1a<\n" +
 	"\x10McpAuthorization\x12\x14\n" +
 	"\x05allow\x18\x01 \x03(\tR\x05allow\x12\x12\n" +
-	"\x04deny\x18\x02 \x03(\tR\x04deny\x1a\xbf\x04\n" +
+	"\x04deny\x18\x02 \x03(\tR\x04deny\x1a\xaf\x04\n" +
 	"\x11McpAuthentication\x12\x16\n" +
-	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1a\n" +
-	"\baudience\x18\x02 \x01(\tR\baudience\x12\x19\n" +
-	"\bjwks_url\x18\x03 \x01(\tR\ajwksUrl\x12a\n" +
+	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1c\n" +
+	"\taudiences\x18\x02 \x03(\tR\taudiences\x12\x1f\n" +
+	"\vjwks_inline\x18\x03 \x01(\tR\n" +
+	"jwksInline\x12a\n" +
 	"\bprovider\x18\x04 \x01(\x0e2E.agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDPR\bprovider\x12|\n" +
-	"\x11resource_metadata\x18\x05 \x01(\v2O.agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadataR\x10resourceMetadata\x1a\xd6\x01\n" +
+	"\x11resource_metadata\x18\x05 \x01(\v2O.agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadataR\x10resourceMetadata\x1a\xbe\x01\n" +
 	"\x10ResourceMetadata\x12p\n" +
-	"\x05extra\x18\x01 \x03(\v2Z.agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntryR\x05extra\x1aP\n" +
+	"\x05extra\x18\x01 \x03(\v2Z.agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntryR\x05extra\x1a8\n" +
 	"\n" +
 	"ExtraEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12,\n" +
-	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value:\x028\x01\"!\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"!\n" +
 	"\x06McpIDP\x12\t\n" +
 	"\x05AUTH0\x10\x00\x12\f\n" +
 	"\bKEYCLOAK\x10\x01B\x06\n" +
@@ -9373,7 +9374,6 @@ var file_resource_proto_goTypes = []any{
 	(*wrapperspb.StringValue)(nil),  // 134: google.protobuf.StringValue
 	(*structpb.Struct)(nil),         // 135: google.protobuf.Struct
 	(*wrapperspb.BytesValue)(nil),   // 136: google.protobuf.BytesValue
-	(*structpb.Value)(nil),          // 137: google.protobuf.Value
 }
 var file_resource_proto_depIdxs = []int32{
 	21,  // 0: agentgateway.dev.resource.Resource.bind:type_name -> agentgateway.dev.resource.Bind
@@ -9552,33 +9552,32 @@ var file_resource_proto_depIdxs = []int32{
 	114, // 173: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.request:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
 	113, // 174: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.response:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
 	121, // 175: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	137, // 176: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
-	134, // 177: agentgateway.dev.resource.AIBackend.OpenAI.model:type_name -> google.protobuf.StringValue
-	134, // 178: agentgateway.dev.resource.AIBackend.Gemini.model:type_name -> google.protobuf.StringValue
-	134, // 179: agentgateway.dev.resource.AIBackend.Vertex.model:type_name -> google.protobuf.StringValue
-	134, // 180: agentgateway.dev.resource.AIBackend.Anthropic.model:type_name -> google.protobuf.StringValue
-	134, // 181: agentgateway.dev.resource.AIBackend.Bedrock.model:type_name -> google.protobuf.StringValue
-	134, // 182: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_identifier:type_name -> google.protobuf.StringValue
-	134, // 183: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_version:type_name -> google.protobuf.StringValue
-	134, // 184: agentgateway.dev.resource.AIBackend.AzureOpenAI.model:type_name -> google.protobuf.StringValue
-	134, // 185: agentgateway.dev.resource.AIBackend.AzureOpenAI.api_version:type_name -> google.protobuf.StringValue
-	122, // 186: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
-	134, // 187: agentgateway.dev.resource.AIBackend.Provider.path_override:type_name -> google.protobuf.StringValue
-	123, // 188: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
-	124, // 189: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
-	125, // 190: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
-	126, // 191: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
-	127, // 192: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
-	128, // 193: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
-	131, // 194: agentgateway.dev.resource.AIBackend.Provider.routes:type_name -> agentgateway.dev.resource.AIBackend.Provider.RoutesEntry
-	58,  // 195: agentgateway.dev.resource.AIBackend.Provider.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	129, // 196: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
-	16,  // 197: agentgateway.dev.resource.AIBackend.Provider.RoutesEntry.value:type_name -> agentgateway.dev.resource.AIBackend.RouteType
-	198, // [198:198] is the sub-list for method output_type
-	198, // [198:198] is the sub-list for method input_type
-	198, // [198:198] is the sub-list for extension type_name
-	198, // [198:198] is the sub-list for extension extendee
-	0,   // [0:198] is the sub-list for field type_name
+	134, // 176: agentgateway.dev.resource.AIBackend.OpenAI.model:type_name -> google.protobuf.StringValue
+	134, // 177: agentgateway.dev.resource.AIBackend.Gemini.model:type_name -> google.protobuf.StringValue
+	134, // 178: agentgateway.dev.resource.AIBackend.Vertex.model:type_name -> google.protobuf.StringValue
+	134, // 179: agentgateway.dev.resource.AIBackend.Anthropic.model:type_name -> google.protobuf.StringValue
+	134, // 180: agentgateway.dev.resource.AIBackend.Bedrock.model:type_name -> google.protobuf.StringValue
+	134, // 181: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_identifier:type_name -> google.protobuf.StringValue
+	134, // 182: agentgateway.dev.resource.AIBackend.Bedrock.guardrail_version:type_name -> google.protobuf.StringValue
+	134, // 183: agentgateway.dev.resource.AIBackend.AzureOpenAI.model:type_name -> google.protobuf.StringValue
+	134, // 184: agentgateway.dev.resource.AIBackend.AzureOpenAI.api_version:type_name -> google.protobuf.StringValue
+	122, // 185: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
+	134, // 186: agentgateway.dev.resource.AIBackend.Provider.path_override:type_name -> google.protobuf.StringValue
+	123, // 187: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
+	124, // 188: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
+	125, // 189: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
+	126, // 190: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
+	127, // 191: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
+	128, // 192: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
+	131, // 193: agentgateway.dev.resource.AIBackend.Provider.routes:type_name -> agentgateway.dev.resource.AIBackend.Provider.RoutesEntry
+	58,  // 194: agentgateway.dev.resource.AIBackend.Provider.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	129, // 195: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
+	16,  // 196: agentgateway.dev.resource.AIBackend.Provider.RoutesEntry.value:type_name -> agentgateway.dev.resource.AIBackend.RouteType
+	197, // [197:197] is the sub-list for method output_type
+	197, // [197:197] is the sub-list for method input_type
+	197, // [197:197] is the sub-list for extension type_name
+	197, // [197:197] is the sub-list for extension extendee
+	0,   // [0:197] is the sub-list for field type_name
 }
 
 func init() { file_resource_proto_init() }
