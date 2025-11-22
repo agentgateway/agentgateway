@@ -339,6 +339,28 @@
             "namespace",
             "serviceAccount"
           ]
+        },
+        "subjectAltNames": {
+          "description": "The subject alt names from the downstream certificate, if available.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "issuer": {
+          "description": "The issuer from the downstream certificate, if available.",
+          "type": "string"
+        },
+        "subject": {
+          "description": "The subject from the downstream certificate, if available.",
+          "type": "string"
+        },
+        "subjectCn": {
+          "description": "The CN of the subject from the downstream certificate, if available.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,

@@ -466,6 +466,12 @@
                     },
                     "key": {
                       "type": "string"
+                    },
+                    "root": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "additionalProperties": false,
