@@ -131,7 +131,13 @@ async fn apply_request_policies(
 	.apply(response_policies.headers())?;
 
 	if let Some(j) = &policies.transformation {
-		j.apply_request(req, build_ctx(&exec, log)?);
+		// Build fresh executor to include extAuthz data
+		let transform_exec = log
+			.cel
+			.ctx()
+			.build()
+			.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))?;
+		j.apply_request(req, &transform_exec);
 	}
 
 	if let Some(csrf) = &policies.csrf {
@@ -282,7 +288,13 @@ async fn apply_gateway_policies(
 	.apply(response_headers)?;
 
 	if let Some(j) = &policies.transformation {
-		j.apply_request(req, build_ctx(&exec, log)?);
+		// Build fresh executor to include extAuthz data
+		let transform_exec = log
+			.cel
+			.ctx()
+			.build()
+			.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))?;
+		j.apply_request(req, &transform_exec);
 	}
 
 	Ok(())
