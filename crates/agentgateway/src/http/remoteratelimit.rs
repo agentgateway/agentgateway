@@ -331,10 +331,12 @@ fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 		let Ok(hn) = HeaderName::from_bytes(h.key.as_bytes()) else {
 			continue;
 		};
-		let hv = if h.raw_value.is_empty() {
-			HeaderValue::from_bytes(h.key.as_bytes())
-		} else {
+		let hv = if !h.value.is_empty() {
+			HeaderValue::from_bytes(h.value.as_bytes())
+		} else if !h.raw_value.is_empty() {
 			HeaderValue::from_bytes(&h.raw_value)
+		} else {
+			continue;
 		};
 		let Ok(hv) = hv else {
 			continue;
