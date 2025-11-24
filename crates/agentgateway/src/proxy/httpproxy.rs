@@ -1122,7 +1122,11 @@ async fn make_backend_call(
 
 	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
-			let route_type = llm.resolve_route(req.uri().path());
+			let route_type = llm_request_policies
+				.llm
+				.as_ref()
+				.map(|policy| policy.resolve_route(req.uri().path()))
+				.unwrap_or(llm::RouteType::Completions);
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
 			// First, we process the incoming request. This entails translating to the relevant provider,
 			// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like

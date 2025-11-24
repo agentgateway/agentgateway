@@ -663,6 +663,31 @@ message BackendPolicySpec {
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;
     PromptCaching prompt_caching = 6;
+
+    // RouteType specifies how incoming requests should be processed
+    // based on the URL path.
+    enum RouteType {
+      // Unspecified defaults to COMPLETIONS
+      UNSPECIFIED = 0;
+      // Processes OpenAI /v1/chat/completions format requests
+      COMPLETIONS = 1;
+      // Processes Anthropic /v1/messages format requests
+      MESSAGES = 2;
+      // Handles /v1/models endpoint (returns available models)
+      MODELS = 3;
+      // Sends requests to upstream as-is without LLM processing
+      PASSTHROUGH = 4;
+      // Processes OpenAI /responses format requests
+      RESPONSES = 5;
+      // Processes Anthropic /v1/messages/count_tokens format requests
+      ANTHROPIC_TOKEN_COUNT = 6;
+    }
+
+    // Routes defines how to identify the type of LLM request to handle.
+    // The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").
+    // The special "*" wildcard matches any path.
+    // If empty or no route matches, the implementation defaults to COMPLETIONS behavior.
+    map<string, RouteType> routes = 7;
   }
   message A2a {
   }
@@ -811,24 +836,6 @@ message AIBackend {
     google.protobuf.StringValue api_version = 3;
   }
 
-  // RouteType specifies how incoming requests should be processed
-  // based on the URL path.
-  enum RouteType {
-    // Unspecified defaults to COMPLETIONS
-    UNSPECIFIED = 0;
-    // Processes OpenAI /v1/chat/completions format requests
-    COMPLETIONS = 1;
-    // Processes Anthropic /v1/messages format requests
-    MESSAGES = 2;
-    // Handles /v1/models endpoint (returns available models)
-    MODELS = 3;
-    // Sends requests to upstream as-is without LLM processing
-    PASSTHROUGH = 4;
-    // Processes OpenAI /responses format requests
-    RESPONSES = 5;
-    // Processes Anthropic /v1/messages/count_tokens format requests
-    ANTHROPIC_TOKEN_COUNT = 6;
-  }
   message Provider {
     string name = 1;
     HostOverride host_override = 2;
@@ -841,11 +848,6 @@ message AIBackend {
       Bedrock bedrock = 8;
       AzureOpenAI azureopenai = 11;
     }
-    // Routes defines how to identify the type of traffic to handle.
-    // The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").
-    // The special "*" wildcard matches any path.
-    // If not specified, all traffic is treated as ROUTE_TYPE_COMPLETIONS.
-    map<string, RouteType> routes = 9;
     repeated BackendPolicySpec inline_policies = 10;
   }
   message ProviderGroup {

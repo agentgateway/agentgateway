@@ -140,7 +140,6 @@ pub fn setup_llm_mock(
 		path_override: None,
 		tokenize,
 		policies: None,
-		routes: Default::default(),
 	})
 	.translate()
 	.unwrap();

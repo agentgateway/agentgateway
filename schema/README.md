@@ -225,6 +225,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessages`||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheTools`||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.minTokens`||
+|`binds[].listeners[].routes[].policies.ai.routes`||
 |`binds[].listeners[].routes[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.backendTLS.key`||
@@ -402,7 +403,6 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)pathOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)routes`|Routes defines how to identify the type of traffic we should handle<br>The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.requestHeaderModifier`|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.requestHeaderModifier.add`||
@@ -499,6 +499,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptCaching.cacheMessages`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptCaching.cacheTools`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptCaching.minTokens`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.routes`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.key`||
@@ -557,7 +558,6 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].hostOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].pathOverride`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].tokenize`|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].routes`|Routes defines how to identify the type of traffic we should handle<br>The keys are URL suffix matches, like `/v1/models`. The special `*` can be used to match anything.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.requestHeaderModifier`|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.requestHeaderModifier.add`||
@@ -654,6 +654,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.cacheMessages`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.cacheTools`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.minTokens`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.routes`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.key`||
@@ -783,6 +784,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessages`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheTools`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`||
+|`binds[].listeners[].routes[].backends[].policies.ai.routes`||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.key`||
@@ -1082,6 +1084,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.ai.promptCaching.cacheMessages`||
 |`policies[].policy.ai.promptCaching.cacheTools`||
 |`policies[].policy.ai.promptCaching.minTokens`||
+|`policies[].policy.ai.routes`||
 |`policies[].policy.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.backendTLS.cert`||
 |`policies[].policy.backendTLS.key`||

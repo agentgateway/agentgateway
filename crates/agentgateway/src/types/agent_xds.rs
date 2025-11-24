@@ -160,6 +160,26 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 	}
 }
 
+fn convert_route_type(proto_rt: i32) -> llm::RouteType {
+	use proto::agent::backend_policy_spec::ai::RouteType as ProtoRT;
+
+	match ProtoRT::try_from(proto_rt) {
+		Ok(ProtoRT::Completions) | Ok(ProtoRT::Unspecified) => llm::RouteType::Completions,
+		Ok(ProtoRT::Messages) => llm::RouteType::Messages,
+		Ok(ProtoRT::Models) => llm::RouteType::Models,
+		Ok(ProtoRT::Passthrough) => llm::RouteType::Passthrough,
+		Ok(ProtoRT::Responses) => llm::RouteType::Responses,
+		Ok(ProtoRT::AnthropicTokenCount) => llm::RouteType::AnthropicTokenCount,
+		Err(_) => {
+			warn!(
+				"Unknown proto RouteType value {}, defaulting to Completions",
+				proto_rt
+			);
+			llm::RouteType::Completions
+		},
+	}
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 ) -> Result<llm::Policy, ProtoError> {
@@ -258,6 +278,11 @@ fn convert_backend_ai_policy(
 			.collect(),
 		wildcard_patterns: Arc::new(Vec::new()), // Will be populated by compile_model_alias_patterns()
 		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
+		routes: ai
+			.routes
+			.iter()
+			.map(|(k, v)| (strng::new(k), convert_route_type(*v)))
+			.collect(),
 	};
 
 	// Compile wildcard patterns from model_aliases
@@ -550,31 +575,6 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 								})
 								.transpose()?,
 							inline_policies: pols,
-							routes: provider_config
-								.routes
-								.iter()
-								.map(|(path, proto_route_type)| {
-									use proto::agent::ai_backend::RouteType as ProtoRT;
-									let route_type = match ProtoRT::try_from(*proto_route_type) {
-										Ok(ProtoRT::Completions) | Ok(ProtoRT::Unspecified) => {
-											llm::RouteType::Completions
-										},
-										Ok(ProtoRT::Messages) => llm::RouteType::Messages,
-										Ok(ProtoRT::Models) => llm::RouteType::Models,
-										Ok(ProtoRT::Passthrough) => llm::RouteType::Passthrough,
-										Ok(ProtoRT::Responses) => llm::RouteType::Responses,
-										Ok(ProtoRT::AnthropicTokenCount) => llm::RouteType::AnthropicTokenCount,
-										Err(_) => {
-											warn!(
-												value = proto_route_type,
-												"Unknown proto RouteType value, defaulting to Completions"
-											);
-											llm::RouteType::Completions
-										},
-									};
-									(strng::new(path), route_type)
-								})
-								.collect(),
 						};
 						local_provider_group.push((provider_name, np));
 					}
@@ -1662,67 +1662,10 @@ mod tests {
 		}
 	}
 
-	#[tokio::test]
-	async fn test_ai_backend_routes_conversion() -> Result<(), ProtoError> {
-		use proto::agent::ai_backend;
-
-		// Test proto routes field converts to Rust RouteType
-		let mut routes_map = std::collections::HashMap::new();
-		routes_map.insert(
-			"/v1/chat/completions".to_string(),
-			ai_backend::RouteType::Completions as i32,
-		);
-		routes_map.insert(
-			"/v1/messages".to_string(),
-			ai_backend::RouteType::Messages as i32,
-		);
-
-		let proto_backend = proto::agent::Backend {
-			name: "test/backend".to_string(),
-			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
-				provider_groups: vec![ai_backend::ProviderGroup {
-					providers: vec![ai_backend::Provider {
-						name: "test-provider".to_string(),
-						host_override: None,
-						path_override: None,
-						routes: routes_map,
-						provider: Some(ai_backend::provider::Provider::Openai(ai_backend::OpenAi {
-							model: None,
-						})),
-						inline_policies: vec![],
-					}],
-				}],
-			})),
-			inline_policies: vec![],
-		};
-
-		let backend = BackendWithPolicies::try_from(&proto_backend)?.backend;
-		if let Backend::AI(name, ai_backend) = backend {
-			assert_eq!(name.as_str(), "test/backend");
-			let (provider, _handle) = ai_backend.select_provider().expect("should have provider");
-			assert_eq!(provider.routes.len(), 2);
-			// Suffix matching: paths ending with these suffixes should match
-			assert_eq!(
-				provider.resolve_route("/v1/chat/completions"),
-				llm::RouteType::Completions
-			);
-			assert_eq!(
-				provider.resolve_route("/v1/messages"),
-				llm::RouteType::Messages
-			);
-			// No match -> default to Completions
-			assert_eq!(
-				provider.resolve_route("/unknown"),
-				llm::RouteType::Completions
-			);
-			Ok(())
-		} else {
-			panic!("Expected AI backend")
-		}
-	}
-
 	#[test]
 	fn test_backend_policy_spec_to_ai_policy() -> Result<(), ProtoError> {
+		use proto::agent::backend_policy_spec::ai::RouteType;
+
 		let spec = proto::agent::BackendPolicySpec {
 			kind: Some(proto::agent::backend_policy_spec::Kind::Ai(Ai {
 				defaults: vec![
@@ -1746,6 +1689,15 @@ mod tests {
 				prompts: None,
 				model_aliases: Default::default(),
 				prompt_caching: None,
+				routes: vec![
+					(
+						"/v1/chat/completions".to_string(),
+						RouteType::Completions as i32,
+					),
+					("/v1/messages".to_string(), RouteType::Messages as i32),
+				]
+				.into_iter()
+				.collect(),
 			})),
 		};
 
@@ -1783,6 +1735,17 @@ mod tests {
 			let array_val = overrides.get("array_value").unwrap();
 			assert!(array_val.is_array(), "array_value should be an array");
 			assert_eq!(array_val, &json!([1, 2, 3]));
+
+			// Verify routes conversion
+			assert_eq!(ai_policy.routes.len(), 2);
+			assert_eq!(
+				ai_policy.routes.get("/v1/chat/completions"),
+				Some(&llm::RouteType::Completions)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1/messages"),
+				Some(&llm::RouteType::Messages)
+			);
 		} else {
 			panic!("Expected AI policy variant");
 		}

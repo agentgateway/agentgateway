@@ -80,27 +80,13 @@ pub struct NamedAIProvider {
 	/// This comes with the cost of an expensive operation.
 	#[serde(default)]
 	pub tokenize: bool,
-	pub routes: IndexMap<Strng, RouteType>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<BackendPolicy>,
 }
 
-const DEFAULT_ROUTE: &str = "*";
 impl NamedAIProvider {
 	pub fn use_default_policies(&self) -> bool {
 		self.host_override.is_none()
-	}
-	pub fn resolve_route(&self, path: &str) -> RouteType {
-		for (path_suffix, rt) in &self.routes {
-			if path_suffix == DEFAULT_ROUTE {
-				return *rt;
-			}
-			if path.ends_with(path_suffix.as_str()) {
-				return *rt;
-			}
-		}
-		// If there is no match, there is an implicit default to Completions
-		RouteType::Completions
 	}
 }
 

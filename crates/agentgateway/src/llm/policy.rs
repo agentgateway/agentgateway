@@ -15,6 +15,7 @@ use itertools::Itertools;
 use serde::de::DeserializeOwned;
 
 #[apply(schema!)]
+#[derive(Default)]
 pub struct Policy {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_guard: Option<PromptGuard>,
@@ -37,6 +38,12 @@ pub struct Policy {
 	pub wildcard_patterns: Arc<Vec<(ModelAliasPattern, Strng)>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_caching: Option<PromptCachingConfig>,
+	#[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	pub routes: IndexMap<Strng, crate::llm::RouteType>,
 }
 
 /// Wildcard pattern converted to regex for model name matching.
@@ -182,6 +189,16 @@ impl Policy {
 			chat.prepend_prompts(prompts.prepend.clone());
 		}
 	}
+
+	pub fn resolve_route(&self, path: &str) -> crate::llm::RouteType {
+		for (path_suffix, rt) in &self.routes {
+			if path_suffix == "*" || path.ends_with(path_suffix.as_str()) {
+				return *rt;
+			}
+		}
+		crate::llm::RouteType::Completions
+	}
+
 	pub fn unmarshal_request<T: DeserializeOwned>(&self, bytes: &Bytes) -> Result<T, AIError> {
 		if self.defaults.is_none() && self.overrides.is_none() {
 			// Fast path: directly bytes to typed
@@ -1139,6 +1156,50 @@ fn test_prompt_caching_explicit_disable() {
 }
 
 #[test]
+fn test_resolve_route() {
+	let mut routes = IndexMap::new();
+	routes.insert(
+		strng::literal!("/completions"),
+		crate::llm::RouteType::Completions,
+	);
+	routes.insert(
+		strng::literal!("/v1/messages"),
+		crate::llm::RouteType::Messages,
+	);
+	routes.insert(strng::literal!("*"), crate::llm::RouteType::Passthrough);
+
+	let policy = Policy {
+		routes,
+		..Default::default()
+	};
+
+	// Suffix matching
+	assert_eq!(
+		policy.resolve_route("/v1/chat/completions"),
+		crate::llm::RouteType::Completions
+	);
+	assert_eq!(
+		policy.resolve_route("/api/completions"),
+		crate::llm::RouteType::Completions
+	);
+	// Exact suffix match
+	assert_eq!(
+		policy.resolve_route("/v1/messages"),
+		crate::llm::RouteType::Messages
+	);
+	// Wildcard fallback
+	assert_eq!(
+		policy.resolve_route("/v1/models"),
+		crate::llm::RouteType::Passthrough
+	);
+	// Empty routes defaults to Completions
+	assert_eq!(
+		Policy::default().resolve_route("/any/path"),
+		crate::llm::RouteType::Completions
+	);
+}
+
+#[test]
 fn test_model_alias_wildcard_resolution() {
 	let mut policy = Policy {
 		model_aliases: HashMap::from([
@@ -1150,12 +1211,7 @@ fn test_model_alias_wildcard_resolution() {
 			(strng::new("claude-haiku-*"), strng::new("haiku-target")),
 			(strng::new("*-sonnet-*"), strng::new("sonnet-target")),
 		]),
-		wildcard_patterns: Arc::new(Vec::new()),
-		prompt_guard: None,
-		defaults: None,
-		overrides: None,
-		prompts: None,
-		prompt_caching: None,
+		..Default::default()
 	};
 
 	policy.compile_model_alias_patterns();

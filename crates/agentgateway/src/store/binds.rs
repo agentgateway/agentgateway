@@ -253,6 +253,11 @@ impl LLMRequestPolicies {
 				.prompt_caching
 				.clone()
 				.or_else(|| re.prompt_caching.clone()),
+			routes: if be.routes.is_empty() {
+				re.routes.clone()
+			} else {
+				be.routes.clone()
+			},
 		}));
 		Arc::new(route_policies)
 	}
