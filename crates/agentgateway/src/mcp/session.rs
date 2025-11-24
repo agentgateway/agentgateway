@@ -228,40 +228,24 @@ impl Session {
 							.send_fanout(r, ctx, self.relay.merge_prompts(cel.clone()))
 							.await
 					},
-					ClientRequest::ListResourcesRequest(_) => {
-						if !self.relay.is_multiplexing() {
-							log.non_atomic_mutate(|l| {
-								l.resource = Some(MCPOperation::Resource);
-							});
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resources(cel.clone()))
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
-					},
-					ClientRequest::ListResourceTemplatesRequest(_) => {
-						if !self.relay.is_multiplexing() {
-							log.non_atomic_mutate(|l| {
-								l.resource = Some(MCPOperation::ResourceTemplates);
-							});
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel.clone()))
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
-					},
+				ClientRequest::ListResourcesRequest(_) => {
+					log.non_atomic_mutate(|l| {
+						l.resource = Some(MCPOperation::Resource);
+					});
+					self
+						.relay
+						.send_fanout(r, ctx, self.relay.merge_resources(cel.clone()))
+						.await
+				},
+				ClientRequest::ListResourceTemplatesRequest(_) => {
+					log.non_atomic_mutate(|l| {
+						l.resource = Some(MCPOperation::ResourceTemplates);
+					});
+					self
+						.relay
+						.send_fanout(r, ctx, self.relay.merge_resource_templates(cel.clone()))
+						.await
+				},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
 						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
