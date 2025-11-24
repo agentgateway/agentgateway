@@ -49,6 +49,11 @@ EOF
 FROM ${BUILDER}-builder AS builder
 ARG TARGETARCH
 ARG PROFILE=release
+ARG AGENTGATEWAY_BUILD_buildVersion=dev
+ARG AGENTGATEWAY_BUILD_buildGitRevision=unknown
+
+ENV AGENTGATEWAY_BUILD_buildVersion=${AGENTGATEWAY_BUILD_buildVersion}
+ENV AGENTGATEWAY_BUILD_buildGitRevision=${AGENTGATEWAY_BUILD_buildGitRevision}
 
 WORKDIR /app
 

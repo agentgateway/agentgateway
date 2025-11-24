@@ -158,6 +158,14 @@ impl Stream for MergeStream {
 							self.terminal_messages[i] = Some((k, r.result));
 							// This stream is done, never look at it again
 						},
+						Ok(ServerJsonRpcMessage::Error(e)) => {
+							// Ignorar errores de backends individuales durante merge
+							// Solo logear, no propagar al cliente
+							tracing::debug!("Backend {} error during fanout (ignored): {:?}", k, e);
+							drop = true;
+							// Marcar como completado con resultado vacío
+							self.terminal_messages[i] = Some((k, ServerResult::empty(())));
+						},
 						Err(e) => {
 							self.complete = true;
 							return Poll::Ready(Some(Err(e)));
