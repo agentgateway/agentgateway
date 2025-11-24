@@ -70,7 +70,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		.map(|ca| agent_hbone::pool::WorkloadHBONEPool::new(config.hbone.clone(), ca));
 	// Build metrics and then the upstream client with metrics wired in
 	let sub_registry = metrics::sub_registry(&mut registry);
-	let tracer = trc::Tracer::new(&config.tracing)?.map(std::sync::Arc::new);
+	let tracer = trc::Tracer::new(&config.tracing)?.map(Arc::new);
 	let metrics_handle = Arc::new(crate::metrics::Metrics::new(
 		sub_registry,
 		config.logging.excluded_metrics.clone(),
@@ -159,7 +159,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 pub struct Bound {
 	pub shutdown: signal::Shutdown,
 	drain_tx: drain::DrainTrigger,
-	tracer: Option<std::sync::Arc<Tracer>>,
+	tracer: Option<Arc<Tracer>>,
 }
 
 impl Bound {

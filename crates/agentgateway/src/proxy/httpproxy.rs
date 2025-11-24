@@ -484,36 +484,22 @@ impl HTTPProxy {
 		let trace_parent = trc::TraceParent::from_request(&req);
 		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
 
-		// Try to select a listener, but don't fail yet - we want to set up tracing first
-		let selected_listener_opt = selected_listener.or_else(|| listeners.best_match(&host));
-
-		// Set listener info if we found one
-		if let Some(ref listener) = selected_listener_opt {
-			log.bind_name = Some(bind_name.clone());
-			log.gateway_name = Some(listener.gateway_name.clone());
-			log.listener_name = Some(listener.name.clone());
-			debug!(bind=%bind_name, listener=%listener.key, "selected listener");
-		}
-
 		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
 		if trace_sampled {
-			log.tracer = selected_listener_opt
+			let frontend_policies = inputs
+				.stores
+				.read_binds()
+				.frontend_policies(self.inputs.cfg.gateway());
+			log.tracer = frontend_policies
+				.tracing
 				.as_ref()
-				.and_then(|listener| {
-					// Get frontend policies for dynamic tracing
-					let frontend_policies = inputs
-						.stores
-						.read_binds()
-						.frontend_policies(listener.gateway_name.clone());
-
-					frontend_policies.tracing.as_ref().map(|tp| {
-						debug!(
-							resources_count=%tp.config.resources.len(),
-							attrs_count=%tp.config.attributes.len(),
-							"Using dynamic tracer from frontend policy"
-						);
-						tp.tracer.clone()
-					})
+				.map(|tp| {
+					debug!(
+						resources_count=%tp.config.resources.len(),
+						attrs_count=%tp.config.attributes.len(),
+						"Using dynamic tracer from frontend policy"
+					);
+					tp.tracer.clone()
 				})
 				.or_else(|| {
 					debug!("No frontend tracing policy found, using static tracer");
@@ -546,7 +532,13 @@ impl HTTPProxy {
 		}
 
 		// Now check if we actually have a listener - fail after tracing is set up
-		let selected_listener = selected_listener_opt.ok_or(ProxyError::ListenerNotFound)?;
+		let selected_listener = selected_listener
+			.or_else(|| listeners.best_match(&host))
+			.ok_or(ProxyError::ListenerNotFound)?;
+		log.bind_name = Some(bind_name.clone());
+		log.gateway_name = Some(selected_listener.gateway_name.clone());
+		log.listener_name = Some(selected_listener.name.clone());
+		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
 
 		let mut gateway_policies = inputs.stores.read_binds().gateway_policies(
 			selected_listener.key.clone(),
