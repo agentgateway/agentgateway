@@ -531,6 +531,8 @@ fn process_headers(
 	headers: Vec<HeaderValueOption>,
 	allowlist: Option<&[String]>,
 ) {
+	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
+
 	for header in headers {
 		let Some(h) = header.header else { continue };
 
@@ -545,7 +547,6 @@ fn process_headers(
 			}
 		}
 
-		let append = header.append.unwrap_or_default();
 		let Ok(hn) = HeaderName::from_bytes(h.key.as_bytes()) else {
 			warn!("Invalid header name: {}", h.key);
 			continue;
@@ -559,10 +560,43 @@ fn process_headers(
 			warn!("Invalid header value for key: {}", h.key);
 			continue;
 		};
-		if append {
-			hm.append(hn, hv);
+
+		// Determine the action to take
+		// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
+		let action = if header.append_action != 0 || header.append.is_none() {
+			// Use append_action if it's explicitly set (non-zero) or if append is not set
+			HeaderAppendAction::try_from(header.append_action)
+				.unwrap_or(HeaderAppendAction::AppendIfExistsOrAdd)
 		} else {
-			hm.insert(hn, hv);
+			// Fall back to deprecated append field for backwards compatibility
+			if header.append.unwrap_or(false) {
+				HeaderAppendAction::AppendIfExistsOrAdd
+			} else {
+				HeaderAppendAction::OverwriteIfExistsOrAdd
+			}
+		};
+
+		match action {
+			HeaderAppendAction::AppendIfExistsOrAdd => {
+				// Append to existing or add new
+				hm.append(hn, hv);
+			},
+			HeaderAppendAction::AddIfAbsent => {
+				// Only add if header doesn't exist
+				if !hm.contains_key(&hn) {
+					hm.insert(hn, hv);
+				}
+			},
+			HeaderAppendAction::OverwriteIfExistsOrAdd => {
+				// Replace existing or add new
+				hm.insert(hn, hv);
+			},
+			HeaderAppendAction::OverwriteIfExists => {
+				// Replace existing, no-op if doesn't exist
+				if hm.contains_key(&hn) {
+					hm.insert(hn, hv);
+				}
+			},
 		}
 	}
 }

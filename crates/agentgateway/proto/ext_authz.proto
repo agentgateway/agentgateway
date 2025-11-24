@@ -484,12 +484,42 @@ enum StatusCode {
 }
 // Header name/value pair plus option to control append behavior.
 message HeaderValueOption {
+  // Describes the supported actions types for header append action.
+  enum HeaderAppendAction {
+    // If the header already exists, this action will result in:
+    //
+    // - Comma-concatenated for predefined inline headers.
+    // - Duplicate header added in the ``HeaderMap`` for other headers.
+    //
+    // If the header doesn't exist then this will add new header with specified key and value.
+    APPEND_IF_EXISTS_OR_ADD = 0;
+
+    // This action will add the header if it doesn't already exist. If the header
+    // already exists then this will be a no-op.
+    ADD_IF_ABSENT = 1;
+
+    // This action will overwrite the specified value by discarding any existing values if
+    // the header already exists. If the header doesn't exist then this will add the header
+    // with specified key and value.
+    OVERWRITE_IF_EXISTS_OR_ADD = 2;
+
+    // This action will overwrite the specified value by discarding any existing values if
+    // the header already exists. If the header doesn't exist then this will be no-op.
+    OVERWRITE_IF_EXISTS = 3;
+  }
+
   // Header name/value pair that this option applies to.
   HeaderValue header = 1;
 
   // Should the value be appended? If true (default), the value is appended to
   // existing values.
+  // This field is deprecated and please use append_action as replacement.
   google.protobuf.BoolValue append = 2;
+
+  // Describes the action taken to append/overwrite the given value for an existing header
+  // or to only add this header if it's absent.
+  // Value defaults to APPEND_IF_EXISTS_OR_ADD.
+  HeaderAppendAction append_action = 3;
 }
 
 // Header name/value pair.

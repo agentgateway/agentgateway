@@ -34,6 +34,7 @@ fn test_process_headers_with_allowlist() {
 				raw_value: vec![],
 			}),
 			append: Some(false),
+			append_action: 0,
 		},
 		HeaderValueOption {
 			header: Some(ProtoHeaderValue {
@@ -42,6 +43,7 @@ fn test_process_headers_with_allowlist() {
 				raw_value: vec![],
 			}),
 			append: Some(false),
+			append_action: 0,
 		},
 	];
 
@@ -65,6 +67,7 @@ fn test_process_headers() {
 				raw_value: vec![],
 			}),
 			append: Some(false),
+			append_action: 0,
 		},
 		HeaderValueOption {
 			header: Some(ProtoHeaderValue {
@@ -73,6 +76,7 @@ fn test_process_headers() {
 				raw_value: vec![],
 			}),
 			append: Some(false),
+			append_action: 0,
 		},
 		HeaderValueOption {
 			header: Some(ProtoHeaderValue {
@@ -81,6 +85,7 @@ fn test_process_headers() {
 				raw_value: vec![],
 			}),
 			append: Some(true),
+			append_action: 0,
 		},
 		HeaderValueOption {
 			header: Some(ProtoHeaderValue {
@@ -89,6 +94,7 @@ fn test_process_headers() {
 				raw_value: b"raw-value".to_vec(),
 			}),
 			append: Some(false),
+			append_action: 0,
 		},
 	];
 
@@ -360,6 +366,7 @@ fn test_host_header_protection() {
 				raw_value: vec![],
 			}),
 			append: Some(false),
+			append_action: 0,
 		},
 		HeaderValueOption {
 			header: Some(ProtoHeaderValue {
@@ -368,6 +375,7 @@ fn test_host_header_protection() {
 				raw_value: vec![],
 			}),
 			append: Some(false),
+			append_action: 0,
 		},
 	];
 
@@ -398,4 +406,259 @@ fn test_dynamic_metadata_extraction() {
 		.insert("role".to_string(), serde_json::json!("admin"));
 	assert_eq!(metadata.metadata.get("user_id").unwrap(), "12345");
 	assert_eq!(metadata.metadata.get("role").unwrap(), "admin");
+}
+
+#[test]
+fn test_append_action_append_if_exists_or_add() {
+	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
+
+	let mut headers = HeaderMap::new();
+
+	// Pre-existing header
+	headers.insert("x-test", "existing".parse().unwrap());
+
+	let header_options = vec![
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-test".to_string(),
+				value: "new-value".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-new".to_string(),
+				value: "added".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+		},
+	];
+
+	super::process_headers(&mut headers, header_options, None);
+
+	// Should append to existing header
+	let values: Vec<_> = headers.get_all("x-test").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "existing");
+	assert_eq!(values[1], "new-value");
+
+	// Should add new header
+	assert_eq!(headers.get("x-new").unwrap(), "added");
+}
+
+#[test]
+fn test_append_action_add_if_absent() {
+	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
+
+	let mut headers = HeaderMap::new();
+
+	// Pre-existing header
+	headers.insert("x-existing", "value1".parse().unwrap());
+
+	let header_options = vec![
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-existing".to_string(),
+				value: "should-not-add".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::AddIfAbsent as i32,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-new".to_string(),
+				value: "should-add".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::AddIfAbsent as i32,
+		},
+	];
+
+	super::process_headers(&mut headers, header_options, None);
+
+	// Should not modify existing header (no-op)
+	let values: Vec<_> = headers.get_all("x-existing").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "value1");
+
+	// Should add new header
+	assert_eq!(headers.get("x-new").unwrap(), "should-add");
+}
+
+#[test]
+fn test_append_action_overwrite_if_exists_or_add() {
+	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
+
+	let mut headers = HeaderMap::new();
+
+	// Pre-existing header with multiple values
+	headers.append("x-existing", "value1".parse().unwrap());
+	headers.append("x-existing", "value2".parse().unwrap());
+
+	let header_options = vec![
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-existing".to_string(),
+				value: "overwritten".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-new".to_string(),
+				value: "added".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+		},
+	];
+
+	super::process_headers(&mut headers, header_options, None);
+
+	// Should replace all existing values with single new value
+	let values: Vec<_> = headers.get_all("x-existing").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "overwritten");
+
+	// Should add new header
+	assert_eq!(headers.get("x-new").unwrap(), "added");
+}
+
+#[test]
+fn test_append_action_overwrite_if_exists() {
+	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
+
+	let mut headers = HeaderMap::new();
+
+	// Pre-existing header
+	headers.insert("x-existing", "old-value".parse().unwrap());
+
+	let header_options = vec![
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-existing".to_string(),
+				value: "new-value".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::OverwriteIfExists as i32,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-new".to_string(),
+				value: "should-not-add".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::OverwriteIfExists as i32,
+		},
+	];
+
+	super::process_headers(&mut headers, header_options, None);
+
+	// Should overwrite existing header
+	assert_eq!(headers.get("x-existing").unwrap(), "new-value");
+
+	// Should NOT add new header (no-op)
+	assert!(headers.get("x-new").is_none());
+}
+
+#[test]
+fn test_append_action_backward_compatibility_with_deprecated_append() {
+	let mut headers = HeaderMap::new();
+	headers.insert("x-test", "existing".parse().unwrap());
+
+	// Test that old append=true still works (should append)
+	let header_options_append_true = vec![HeaderValueOption {
+		header: Some(ProtoHeaderValue {
+			key: "x-test".to_string(),
+			value: "appended".to_string(),
+			raw_value: vec![],
+		}),
+		append: Some(true),
+		append_action: 0, // Default value
+	}];
+
+	super::process_headers(&mut headers, header_options_append_true, None);
+
+	let values: Vec<_> = headers.get_all("x-test").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "existing");
+	assert_eq!(values[1], "appended");
+
+	// Test that old append=false still works (should overwrite)
+	let mut headers2 = HeaderMap::new();
+	headers2.insert("x-test2", "existing".parse().unwrap());
+
+	let header_options_append_false = vec![HeaderValueOption {
+		header: Some(ProtoHeaderValue {
+			key: "x-test2".to_string(),
+			value: "replaced".to_string(),
+			raw_value: vec![],
+		}),
+		append: Some(false),
+		append_action: 0, // Default value
+	}];
+
+	super::process_headers(&mut headers2, header_options_append_false, None);
+
+	let values2: Vec<_> = headers2.get_all("x-test2").iter().collect();
+	assert_eq!(values2.len(), 1);
+	assert_eq!(values2[0], "replaced");
+}
+
+#[test]
+fn test_append_action_multiple_set_cookie_headers() {
+	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
+
+	let mut headers = HeaderMap::new();
+
+	// Simulate multiple set-cookie headers being added (common in OIDC flows)
+	let header_options = vec![
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "set-cookie".to_string(),
+				value: "access_token=abc123; Path=/; HttpOnly".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "set-cookie".to_string(),
+				value: "id_token=xyz789; Path=/; HttpOnly".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "set-cookie".to_string(),
+				value: "session=def456; Path=/; Secure".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+		},
+	];
+
+	super::process_headers(&mut headers, header_options, None);
+
+	// Should have all three set-cookie headers
+	let values: Vec<_> = headers.get_all("set-cookie").iter().collect();
+	assert_eq!(values.len(), 3);
+	assert_eq!(values[0], "access_token=abc123; Path=/; HttpOnly");
+	assert_eq!(values[1], "id_token=xyz789; Path=/; HttpOnly");
+	assert_eq!(values[2], "session=def456; Path=/; Secure");
 }
