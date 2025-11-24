@@ -13,19 +13,17 @@ use crate::serdes::*;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::BackendInfo;
 use crate::types::discovery::Identity;
+pub use agent_celx::general::{
+	FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_MAP_RECURSIVE,
+};
 use agent_core::strng::Strng;
 use bytes::Bytes;
 pub use cel::Value;
-use cel::objects::Key;
 use cel::{Context, ExecutionError, ParseError, ParseErrors, Program};
-pub use functions::{FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_MAP_RECURSIVE};
 use once_cell::sync::Lazy;
 use prometheus_client::encoding::EncodeLabelValue;
 use serde::{Deserialize, Serialize, Serializer};
 use tracing::log::debug;
-
-mod functions;
-mod strings;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -125,7 +123,7 @@ impl Debug for Expression {
 
 fn root_context() -> Arc<Context<'static>> {
 	let mut ctx = Context::default();
-	functions::insert_all(&mut ctx);
+	agent_celx::insert_all(&mut ctx);
 	Arc::new(ctx)
 }
 
@@ -720,6 +718,7 @@ fn properties<'e>(
 			}
 		},
 		Literal(_) => {},
+		// Inline(_) => {},
 		Ident(v) => {
 			if !v.starts_with("@") {
 				path.insert(0, v.as_str());

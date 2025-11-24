@@ -27,6 +27,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "agent-celx"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "cel",
+ "ipnet",
+ "once_cell",
+ "rand 0.9.2",
+ "regex",
+ "serde_json",
+]
+
+[[package]]
 name = "agent-core"
 version = "0.7.0"
 dependencies = [
@@ -113,6 +127,7 @@ name = "agentgateway"
 version = "0.7.0"
 dependencies = [
  "a2a-sdk",
+ "agent-celx",
  "agent-core",
  "agent-hbone",
  "agent-xds",
@@ -1426,8 +1441,7 @@ dependencies = [
 [[package]]
 name = "cel"
 version = "0.11.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8edeb3d082fb4f559d994ed50338e924b0b0bc74f855d7fcf49c980cb4c2d95f"
+source = "git+https://github.com/cel-rust/cel-rust?rev=5d2e19934db441ad7dd2eeca62da1b5b238f41f8#5d2e19934db441ad7dd2eeca62da1b5b238f41f8"
 dependencies = [
  "antlr4rust",
  "base64 0.22.1",

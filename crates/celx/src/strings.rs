@@ -6,6 +6,20 @@ use std::sync::Arc;
 
 use ::cel::extractors::{Arguments, This};
 use ::cel::{ExecutionError, ResolveResult, Value};
+use cel::Context;
+
+pub fn insert_all(ctx: &mut Context<'_>) {
+	ctx.add_function("charAt", char_at);
+	ctx.add_function("indexOf", index_of);
+	ctx.add_function("join", join);
+	ctx.add_function("lastIndexOf", last_index_of);
+	ctx.add_function("lowerAscii", lower_ascii);
+	ctx.add_function("upperAscii", upper_ascii);
+	ctx.add_function("trim", trim);
+	ctx.add_function("replace", replace);
+	ctx.add_function("split", split);
+	ctx.add_function("substring", substring);
+}
 
 pub fn char_at(This(this): This<Arc<String>>, arg: i64) -> ResolveResult {
 	match this.chars().nth(arg as usize) {

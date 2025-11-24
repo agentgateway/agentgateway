@@ -74,3 +74,16 @@ binds:
         directResponse:
           body: "hello!"
           status: 200
+
+    - name: ip-rules
+      matches:
+      - path:
+          pathPrefix: /ips
+      policies:
+        authorization:
+          rules:
+            - |
+              cidr("127.0.0.1/8").containsIP(source.address)
+        directResponse:
+          body: "hello!"
+          status: 200

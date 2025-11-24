@@ -9,12 +9,7 @@ use ::cel::{Context, FunctionContext, ResolveResult, Value};
 use once_cell::sync::Lazy;
 use rand::random_range;
 
-use crate::cel;
-use crate::cel::to_value;
-
 pub fn insert_all(ctx: &mut Context<'_>) {
-	use super::strings;
-
 	// Custom to agentgateway
 	ctx.add_function("json", json_parse);
 	ctx.add_function("to_json", to_json);
@@ -36,20 +31,6 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	// Using the go name, base64.encode is blocked by https://github.com/cel-rust/cel-rust/issues/103 (namespacing)
 	ctx.add_function("base64Encode", base64_encode);
 	ctx.add_function("base64Decode", base64_decode);
-
-	// "Strings" extension
-	// https://pkg.go.dev/github.com/google/cel-go/ext#Strings
-	// TODO: add support for the newer versions
-	ctx.add_function("charAt", strings::char_at);
-	ctx.add_function("indexOf", strings::index_of);
-	ctx.add_function("join", strings::join);
-	ctx.add_function("lastIndexOf", strings::last_index_of);
-	ctx.add_function("lowerAscii", strings::lower_ascii);
-	ctx.add_function("upperAscii", strings::upper_ascii);
-	ctx.add_function("trim", strings::trim);
-	ctx.add_function("replace", strings::replace);
-	ctx.add_function("split", strings::split);
-	ctx.add_function("substring", strings::substring);
 }
 
 pub fn base64_encode(This(this): This<Arc<String>>) -> String {
@@ -116,12 +97,14 @@ fn flatten_recursive(ftx: &FunctionContext, v: Value) -> ResolveResult {
 }
 
 fn variables(ftx: &FunctionContext) -> ResolveResult {
-	fn variables_inner<'context>(ctx: &'context Context<'context>) -> HashMap<cel::Key, Value> {
+	fn variables_inner<'context>(
+		ctx: &'context Context<'context>,
+	) -> HashMap<cel::objects::Key, Value> {
 		match ctx {
 			Context::Root { variables, .. } => variables
 				.clone()
 				.iter()
-				.map(|(k, v)| (cel::Key::from(k.as_str()), v.clone()))
+				.map(|(k, v)| (cel::objects::Key::from(k.as_str()), v.clone()))
 				.collect(),
 			Context::Child {
 				parent, variables, ..
@@ -130,7 +113,7 @@ fn variables(ftx: &FunctionContext) -> ResolveResult {
 				base.extend(
 					variables
 						.iter()
-						.map(|(k, v)| (cel::Key::from(k.as_str()), v.clone())),
+						.map(|(k, v)| (cel::objects::Key::from(k.as_str()), v.clone())),
 				);
 				base
 			},
@@ -190,7 +173,7 @@ fn json_parse(ftx: &FunctionContext, v: Value) -> ResolveResult {
 		_ => return Err(ftx.error("invalid type")),
 	};
 	let sv: serde_json::Value = sv.map_err(|e| ftx.error(e))?;
-	to_value(sv).map_err(|e| ftx.error(e))
+	cel::to_value(sv).map_err(|e| ftx.error(e))
 }
 
 fn to_json(ftx: &FunctionContext, v: Value) -> ResolveResult {
@@ -230,7 +213,3 @@ fn default(ftx: &FunctionContext, exp: Expression, d: Value) -> ResolveResult {
 	}
 	Ok(has(ftx, exp)?.unwrap_or(d))
 }
-
-#[cfg(any(test, feature = "internal_benches"))]
-#[path = "functions_tests.rs"]
-mod tests;

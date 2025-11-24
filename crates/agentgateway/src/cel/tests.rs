@@ -58,6 +58,25 @@ fn bench_native(b: Bencher) {
 }
 
 #[divan::bench]
+fn bench_match(b: Bencher) {
+	let k1 = divan::black_box("request");
+	let k2 = divan::black_box("method");
+	b.bench(|| {
+		divan::black_box(match k1 {
+			"request" => match k2 {
+				"method" => Some(Method::GET),
+				_ => None,
+			},
+			"a" => None,
+			"b" => None,
+			"c" => None,
+			"z" => None,
+			_ => None,
+		})
+	});
+}
+
+#[divan::bench]
 #[cfg(target_family = "unix")]
 fn bench_native_map(b: Bencher) {
 	let map = HashMap::from([(

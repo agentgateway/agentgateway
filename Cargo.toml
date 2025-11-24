@@ -9,6 +9,7 @@ members = [
     "crates/a2a-sdk",
     "crates/agentgateway",
     "crates/agentgateway-app",
+    "crates/celx",
     "crates/core",
     "crates/hbone",
     "crates/mock-server",
@@ -17,6 +18,7 @@ members = [
 ]
 default-members = [
     "crates/a2a-sdk",
+    "crates/celx",
     "crates/core",
     "crates/xds",
     "crates/hbone",
@@ -34,6 +36,7 @@ publish = false
 [workspace.dependencies]
 a2a-sdk = { version = "0.7.0", path = "crates/a2a-sdk" }
 agent-core = { path = "crates/core" }
+agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
 agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }
@@ -194,7 +197,7 @@ url = "2.5"
 wiremock = { version = "0.6.3", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
 which = "8.0.0"
-cel = { version = "0.11.4", features = [
+cel = { git = "https://github.com/cel-rust/cel-rust", rev = "5d2e19934db441ad7dd2eeca62da1b5b238f41f8", features = [
     "json",
     "regex",
     "chrono",

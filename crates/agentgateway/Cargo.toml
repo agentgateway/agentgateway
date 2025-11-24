@@ -20,6 +20,7 @@ testing = []
 [dependencies]
 a2a-sdk.workspace = true
 agent-core.workspace = true
+agent-celx.workspace = true
 agent-hbone.workspace = true
 agent-xds.workspace = true
 anyhow.workspace = true
@@ -133,6 +134,7 @@ url.workspace = true
 value-bag.workspace = true
 x509-parser.workspace = true
 
+wiremock.workspace = true
 # Linux only dependencies
 [target.'cfg(target_family = "unix")'.dependencies]
 pprof.workspace = true
@@ -161,7 +163,6 @@ divan.workspace = true
 insta.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
-wiremock.workspace = true
 which.workspace = true
 agentgateway = { version = "0.7.0", path = ".", default-features = false, features = [
     "testing",
