@@ -96,7 +96,7 @@ async fn apply_request_policies(
 		b.apply(log, req).await?;
 	}
 
-	let exec = once_cell::sync::OnceCell::new();
+	let mut exec = once_cell::sync::OnceCell::new();
 
 	if let Some(x) = &policies.ext_authz {
 		x.check(build_ctx(&exec, log)?, client.clone(), req).await?
@@ -105,7 +105,10 @@ async fn apply_request_policies(
 	}
 	.apply(response_policies.headers())?;
 	// Extract dynamic metadata for CEL context
-	log.cel.ctx().with_extauthz(req);
+	if log.cel.ctx().with_extauthz(req) {
+		// Reset the cached state
+		let _ = exec.take();
+	}
 
 	if let Some(j) = &policies.authorization {
 		j.apply(build_ctx(&exec, log)?)
@@ -131,13 +134,7 @@ async fn apply_request_policies(
 	.apply(response_policies.headers())?;
 
 	if let Some(j) = &policies.transformation {
-		// Build fresh executor to include extAuthz data
-		let transform_exec = log
-			.cel
-			.ctx()
-			.build()
-			.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))?;
-		j.apply_request(req, &transform_exec);
+		j.apply_request(req, build_ctx(&exec, log)?);
 	}
 
 	if let Some(csrf) = &policies.csrf {
@@ -270,7 +267,7 @@ async fn apply_gateway_policies(
 		b.apply(log, req).await?;
 	}
 
-	let exec = once_cell::sync::OnceCell::new();
+	let mut exec = once_cell::sync::OnceCell::new();
 	if let Some(x) = &policies.ext_authz {
 		x.check(build_ctx(&exec, log)?, client.clone(), req).await?
 	} else {
@@ -278,7 +275,10 @@ async fn apply_gateway_policies(
 	}
 	.apply(response_headers)?;
 	// Extract dynamic metadata for CEL context
-	log.cel.ctx().with_extauthz(req);
+	if log.cel.ctx().with_extauthz(req) {
+		// Reset the cached state
+		let _ = exec.take();
+	}
 
 	if let Some(x) = ext_proc {
 		x.mutate_request(req).await?
@@ -288,13 +288,7 @@ async fn apply_gateway_policies(
 	.apply(response_headers)?;
 
 	if let Some(j) = &policies.transformation {
-		// Build fresh executor to include extAuthz data
-		let transform_exec = log
-			.cel
-			.ctx()
-			.build()
-			.map_err(|_| ProxyError::ProcessingString("failed to build cel context".to_string()))?;
-		j.apply_request(req, &transform_exec);
+		j.apply_request(req, build_ctx(&exec, log)?);
 	}
 
 	Ok(())

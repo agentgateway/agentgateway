@@ -225,9 +225,10 @@ impl ContextBuilder {
 		self.context.basic_auth = Some(info.clone())
 	}
 
-	pub fn with_extauthz(&mut self, req: &crate::http::Request) {
+	// returns true if there were any changes made
+	pub fn with_extauthz(&mut self, req: &crate::http::Request) -> bool {
 		if !self.attributes.contains(EXTAUTHZ_ATTRIBUTE) {
-			return;
+			return false;
 		}
 
 		// Extract dynamic metadata from ext_authz if present
@@ -245,6 +246,9 @@ impl ContextBuilder {
 					self.context.extauthz = Some(ext_authz_metadata.metadata.clone());
 				}
 			}
+			true
+		} else {
+			false
 		}
 	}
 
