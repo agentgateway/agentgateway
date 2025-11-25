@@ -267,32 +267,36 @@ impl<'a> CelLoggingExecutor<'a> {
 		celv: &cel::Value,
 		always_flatten: bool,
 	) {
-		if let cel::Value::Map(m) = celv {
-			if let Some(cel::Value::List(li)) = m.map.get(&cel::FLATTEN_LIST) {
+		match agent_celx::FlattenSignal::from_value(celv) {
+			Some(agent_celx::FlattenSignal::List(li)) => {
 				raws.reserve(li.len());
 				for (idx, v) in li.as_ref().iter().enumerate() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{idx}")), v, false);
 				}
 				return;
-			} else if let Some(cel::Value::List(li)) = m.map.get(&cel::FLATTEN_LIST_RECURSIVE) {
+			},
+			Some(agent_celx::FlattenSignal::ListRecursive(li)) => {
 				raws.reserve(li.len());
 				for (idx, v) in li.as_ref().iter().enumerate() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{idx}")), v, true);
 				}
 				return;
-			} else if let Some(cel::Value::Map(m)) = m.map.get(&cel::FLATTEN_MAP) {
+			},
+			Some(agent_celx::FlattenSignal::Map(m)) => {
 				raws.reserve(m.map.len());
 				for (mk, mv) in m.map.as_ref() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{mk}")), mv, false);
 				}
 				return;
-			} else if let Some(cel::Value::Map(m)) = m.map.get(&cel::FLATTEN_MAP_RECURSIVE) {
+			},
+			Some(agent_celx::FlattenSignal::MapRecursive(m)) => {
 				raws.reserve(m.map.len());
 				for (mk, mv) in m.map.as_ref() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{mk}")), mv, true);
 				}
 				return;
-			}
+			},
+			None => {},
 		}
 		if always_flatten {
 			match celv {

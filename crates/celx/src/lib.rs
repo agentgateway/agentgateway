@@ -1,12 +1,13 @@
 use cel::Context;
 
 mod cidr;
-// TODO: make it non-pub once we fix the flatten()
-pub mod general;
+mod general;
 mod strings;
 #[cfg(test)]
 #[path = "function_tests.rs"]
 mod tests;
+
+pub use general::FlattenSignal;
 
 pub fn insert_all(ctx: &mut Context<'_>) {
 	// General agentgateway additional functions
@@ -51,14 +52,14 @@ mod helpers {
 					$name
 				}
 			}
-			impl Opaque for $type {
+			impl cel::objects::Opaque for $type {
 				#[inline]
 				fn runtime_type_name(&self) -> &str {
-					Self::type_name()
+					<Self as $crate::helpers::TypeName>::type_name()
 				}
 
 				fn json(&self) -> Option<serde_json::Value> {
-					serde_json::to_value(&self.0).ok()
+					serde_json::to_value(&self).ok()
 				}
 			}
 		};

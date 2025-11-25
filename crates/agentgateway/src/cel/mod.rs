@@ -13,9 +13,7 @@ use crate::serdes::*;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::BackendInfo;
 use crate::types::discovery::Identity;
-pub use agent_celx::general::{
-	FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_MAP_RECURSIVE,
-};
+
 use agent_core::strng::Strng;
 use bytes::Bytes;
 pub use cel::Value;

@@ -1,6 +1,7 @@
 use super::helpers::*;
 use cel::objects::Opaque;
 use cel::{Context, ExecutionError, FunctionContext, Value};
+use serde::Serialize;
 use std::net;
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -29,7 +30,7 @@ fn is_ip(s: Arc<String>) -> bool {
 	IpAddr::from_str(&s).is_ok()
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 struct Cidr(ipnet::IpNet);
 crate::impl_opaque!(Cidr, "cidr");
 
@@ -74,7 +75,7 @@ impl Cidr {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 struct IP(net::IpAddr);
 crate::impl_opaque!(IP, "ip");
 

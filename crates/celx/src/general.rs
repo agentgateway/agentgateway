@@ -3,11 +3,12 @@ use std::string::ToString;
 use std::sync::Arc;
 
 use ::cel::extractors::{Identifier, This};
-use ::cel::objects::{Key, Map, ValueType};
+use ::cel::objects::{Map, ValueType};
 use ::cel::parser::Expression;
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
-use once_cell::sync::Lazy;
 use rand::random_range;
+use serde::ser::Error;
+use serde::{Serialize, Serializer};
 
 pub fn insert_all(ctx: &mut Context<'_>) {
 	// Custom to agentgateway
@@ -57,23 +58,41 @@ fn with(
 	ptx.resolve(&expr)
 }
 
-pub static FLATTEN_LIST: Lazy<Key> =
-	Lazy::new(|| Key::String(Arc::new("$_meta_flatten_list".to_string())));
-pub static FLATTEN_LIST_RECURSIVE: Lazy<Key> =
-	Lazy::new(|| Key::String(Arc::new("$_meta_flatten_list_recursive".to_string())));
-pub static FLATTEN_MAP: Lazy<Key> =
-	Lazy::new(|| Key::String(Arc::new("$_meta_flatten_map".to_string())));
-pub static FLATTEN_MAP_RECURSIVE: Lazy<Key> =
-	Lazy::new(|| Key::String(Arc::new("$_meta_flatten_map_recursive".to_string())));
+#[derive(Clone, Debug)]
+pub enum FlattenSignal {
+	Map(Map),
+	MapRecursive(Map),
+	List(Arc<Vec<Value>>),
+	ListRecursive(Arc<Vec<Value>>),
+}
+impl Serialize for FlattenSignal {
+	fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		Err(S::Error::custom("cannot serialize FlattenSignal"))
+	}
+}
+impl Eq for FlattenSignal {}
+impl PartialEq for FlattenSignal {
+	fn eq(&self, _: &Self) -> bool {
+		false
+	}
+}
+crate::impl_opaque!(FlattenSignal, "flatten_signal");
+impl FlattenSignal {
+	pub fn from_value(v: &Value) -> Option<FlattenSignal> {
+		let Value::Opaque(s) = v else {
+			return None;
+		};
+		Some(crate::helpers::cast::<Self>(s).ok()?.clone())
+	}
+}
 
 fn flatten(ftx: &FunctionContext, v: Value) -> ResolveResult {
 	let res = match v {
-		l @ Value::List(_) => Value::Map(Map {
-			map: Arc::new(HashMap::from([(FLATTEN_LIST.clone(), l)])),
-		}),
-		m @ Value::Map(_) => Value::Map(Map {
-			map: Arc::new(HashMap::from([(FLATTEN_MAP.clone(), m)])),
-		}),
+		Value::List(l) => Value::Opaque(Arc::new(FlattenSignal::List(l))),
+		Value::Map(m) => Value::Opaque(Arc::new(FlattenSignal::Map(m))),
 		_ => {
 			return ftx.error("flatten only works on Map or List").into();
 		},
@@ -83,12 +102,8 @@ fn flatten(ftx: &FunctionContext, v: Value) -> ResolveResult {
 
 fn flatten_recursive(ftx: &FunctionContext, v: Value) -> ResolveResult {
 	let res = match v {
-		l @ Value::List(_) => Value::Map(Map {
-			map: Arc::new(HashMap::from([(FLATTEN_LIST_RECURSIVE.clone(), l)])),
-		}),
-		m @ Value::Map(_) => Value::Map(Map {
-			map: Arc::new(HashMap::from([(FLATTEN_MAP_RECURSIVE.clone(), m)])),
-		}),
+		Value::List(l) => Value::Opaque(Arc::new(FlattenSignal::ListRecursive(l))),
+		Value::Map(m) => Value::Opaque(Arc::new(FlattenSignal::MapRecursive(m))),
 		_ => {
 			return ftx.error("flatten only works on Map or List").into();
 		},
