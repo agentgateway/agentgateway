@@ -185,7 +185,7 @@ fn json_parse(ftx: &FunctionContext, v: Value) -> ResolveResult {
 	let sv = match v {
 		Value::String(b) => serde_json::from_str(b.as_str()),
 		Value::Bytes(b) => serde_json::from_slice(b.as_ref()),
-		_ => return Err(ftx.error("invalid type")),
+		_ => return Err(ftx.error(format!("invalid type {}", v.type_of()))),
 	};
 	let sv: serde_json::Value = sv.map_err(|e| ftx.error(e))?;
 	cel::to_value(sv).map_err(|e| ftx.error(e))

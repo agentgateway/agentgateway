@@ -134,7 +134,6 @@ url.workspace = true
 value-bag.workspace = true
 x509-parser.workspace = true
 
-wiremock.workspace = true
 # Linux only dependencies
 [target.'cfg(target_family = "unix")'.dependencies]
 pprof.workspace = true
@@ -171,7 +170,7 @@ rmcp = { workspace = true, features = [
     "transport-streamable-http-client-reqwest",
     "transport-sse-client-reqwest",
 ] }
-
+wiremock.workspace = true
 
 [lints.clippy]
 # This rule makes code more confusing

@@ -801,6 +801,10 @@ fn to_value(v: impl Serialize) -> Result<Value, Error> {
 	cel::to_value(v).map_err(|e| Error::Variable(e.to_string()))
 }
 
-#[cfg(any(test, feature = "internal_benches"))]
+#[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(any(test, feature = "internal_benches"))]
+#[path = "benches.rs"]
+mod benches;
