@@ -5,7 +5,8 @@ use ::http::StatusCode;
 use ::http::{HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use cel::Value;
-use serde_with::{SerializeAs, serde_as};
+use serde_with::{DeserializeAs, SerializeAs, serde_as};
+use std::str::FromStr;
 
 #[derive(Default)]
 #[apply(schema_de!)]
@@ -137,6 +138,19 @@ where
 		S: Serializer,
 	{
 		source.as_ref().serialize(serializer)
+	}
+}
+impl<'de, T> DeserializeAs<'de, T> for SerAsStr
+where
+	T: FromStr,
+	<T as FromStr>::Err: std::fmt::Display,
+{
+	fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let s = <&str>::deserialize(deserializer)?;
+		s.parse().map_err(serde::de::Error::custom)
 	}
 }
 

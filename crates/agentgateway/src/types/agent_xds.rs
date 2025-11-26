@@ -1041,6 +1041,8 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					})
 					.collect::<Result<_, _>>()?;
 				TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
+					protocol: Default::default(),
+					redirect: None,
 					target: Arc::new(target),
 					context: Some(ea.context.clone()),
 					metadata: if metadata.is_empty() {
@@ -1049,6 +1051,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						Some(metadata)
 					},
 					failure_mode,
+					include_response_headers: Vec::new(),
 					include_request_headers: ea
 						.include_request_headers
 						.iter()

@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=../../schema/local.json
+config: {}
+
+frontendPolicies:
+  accessLog:
+    add:
+      github.user: 'request.headers["x-auth-request-user"]'
+      github.email: 'request.headers["x-auth-request-email"]'
+binds:
+- port: 80
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    # For traffic to the Oauth2 proxy, send to the proxy. This is used for signing in, etc.
+    - name: oauth2-proxy
+      matches:
+        - path:
+            pathPrefix: /oauth2
+      backends:
+      - host: localhost:4180
+    # All other traffic goes to our application
+    - name: application
+      policies:
+        extAuthz:
+          host: localhost:4180
+          # TODO: path
+          protocol: http
+          redirect: '"/oauth2/start?rd=/"'
+          includeResponseHeaders:
+            - x-auth-request-email
+            - x-auth-request-user
+
+      backends:
+      - host: localhost:8080
