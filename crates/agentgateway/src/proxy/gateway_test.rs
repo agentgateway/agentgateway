@@ -246,6 +246,7 @@ async fn tls_termination() {
 				types::local::LocalTLSServerConfig {
 					cert: "../../examples/tls/certs/cert.pem".into(),
 					key: "../../examples/tls/certs/key.pem".into(),
+					root: None,
 				}
 				.try_into()
 				.unwrap(),

@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::Formatter;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -616,7 +617,17 @@ fn sans(cert: X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
 			.filter_map(|n| match n {
 				GeneralName::URI(uri) => Some(strng::new(uri)),
 				GeneralName::DNSName(n) => Some(strng::new(n)),
-				GeneralName::IPAddress(ip) => String::from_utf8(ip.to_vec()).ok().map(strng::new),
+				GeneralName::IPAddress(ip) => match ip.len() {
+					4 => {
+						let array: [u8; 4] = (*ip).try_into().unwrap();
+						Some(strng::new(IpAddr::V4(Ipv4Addr::from(array)).to_string()))
+					},
+					16 => {
+						let array: [u8; 16] = (*ip).try_into().unwrap();
+						Some(strng::new(IpAddr::V6(Ipv6Addr::from(array)).to_string()))
+					},
+					_ => None,
+				},
 				_ => None,
 			})
 			.collect();

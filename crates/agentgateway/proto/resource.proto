@@ -40,6 +40,8 @@ message Listener {
 message TLSConfig {
   bytes cert = 1;
   bytes private_key = 2;
+  // Root to verify client certificates. If not set, mTLS will not be used
+  google.protobuf.BytesValue root = 3;
 }
 
 enum Protocol {

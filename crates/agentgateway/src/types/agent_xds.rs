@@ -1,3 +1,4 @@
+use std::io::Cursor;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
@@ -30,11 +31,24 @@ impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 		fn build(value: &proto::agent::TlsConfig) -> anyhow::Result<ServerConfig> {
 			let cert_chain = parse_cert(&value.cert)?;
 			let private_key = parse_key(&value.private_key)?;
-			let mut sc = ServerConfig::builder_with_provider(transport::tls::provider())
+			let scb = ServerConfig::builder_with_provider(transport::tls::provider())
 				.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-				.expect("server config must be valid")
-				.with_no_client_auth()
-				.with_single_cert(cert_chain, private_key)?;
+				.expect("server config must be valid");
+			let scb = if let Some(root) = &value.root {
+				let mut roots_store = rustls::RootCertStore::empty();
+				let mut reader = std::io::BufReader::new(Cursor::new(root));
+				let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+				roots_store.add_parsable_certificates(certs);
+				let verify = rustls::server::WebPkiClientVerifier::builder_with_provider(
+					Arc::new(roots_store),
+					transport::tls::provider(),
+				)
+				.build()?;
+				scb.with_client_cert_verifier(verify)
+			} else {
+				scb.with_no_client_auth()
+			};
+			let mut sc = scb.with_single_cert(cert_chain, private_key)?;
 			// Defaults set here. These can be overriden by Frontend policy
 			// TODO: this default only makes sense for HTTPS, distinguish from TLS
 			sc.alpn_protocols = vec![b"h2".into(), b"http/1.1".into()];
