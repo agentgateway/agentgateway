@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -133,10 +132,10 @@ async fn apply_request_policies(
 	}
 	.apply(response_policies.headers())?;
 
-	if let Some(j) = &policies.transformation {
-		if j.has_request() {
-			j.apply_request(req, build_ctx(&exec, log)?);
-		}
+	if let Some(j) = &policies.transformation
+		&& j.has_request()
+	{
+		j.apply_request(req, build_ctx(&exec, log)?);
 	}
 
 	if let Some(csrf) = &policies.csrf {
@@ -291,10 +290,10 @@ async fn apply_gateway_policies(
 	}
 	.apply(response_headers)?;
 
-	if let Some(j) = &policies.transformation {
-		if j.has_request() {
-			j.apply_request(req, build_ctx(&exec, log)?);
-		}
+	if let Some(j) = &policies.transformation
+		&& j.has_request()
+	{
+		j.apply_request(req, build_ctx(&exec, log)?);
 	}
 
 	Ok(())
@@ -1603,15 +1602,15 @@ impl ResponsePolicies {
 			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
 		}
 		let exec = once_cell::sync::OnceCell::new();
-		if let Some(j) = &self.transformation {
-			if j.has_response() {
-				j.apply_response(resp, build_ctx(&exec, log)?);
-			}
+		if let Some(j) = &self.transformation
+			&& j.has_response()
+		{
+			j.apply_response(resp, build_ctx(&exec, log)?);
 		}
-		if let Some(j) = &self.gateway_transformation {
-			if j.has_response() {
-				j.apply_response(resp, build_ctx(&exec, log)?);
-			}
+		if let Some(j) = &self.gateway_transformation
+			&& j.has_response()
+		{
+			j.apply_response(resp, build_ctx(&exec, log)?);
 		}
 
 		// ext_proc is only intended to run on responses from upstream
