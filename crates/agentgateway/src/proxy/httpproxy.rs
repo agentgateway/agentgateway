@@ -134,7 +134,9 @@ async fn apply_request_policies(
 	.apply(response_policies.headers())?;
 
 	if let Some(j) = &policies.transformation {
-		j.apply_request(req, build_ctx(&exec, log)?);
+		if j.has_request() {
+			j.apply_request(req, build_ctx(&exec, log)?);
+		}
 	}
 
 	if let Some(csrf) = &policies.csrf {
@@ -290,7 +292,9 @@ async fn apply_gateway_policies(
 	.apply(response_headers)?;
 
 	if let Some(j) = &policies.transformation {
-		j.apply_request(req, build_ctx(&exec, log)?);
+		if j.has_request() {
+			j.apply_request(req, build_ctx(&exec, log)?);
+		}
 	}
 
 	Ok(())
@@ -1592,20 +1596,22 @@ impl ResponsePolicies {
 		log: &mut RequestLog,
 		is_upstream_response: bool,
 	) -> Result<(), ProxyResponse> {
-		let exec = std::cell::LazyCell::new(|| log.cel.ctx().build());
-		let cel_err = |_| ProxyError::ProcessingString("failed to build cel context".to_string());
-
 		if let Some(rhm) = &self.route_response_header {
 			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
 		}
 		if let Some(rhm) = &self.backend_response_header {
 			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
 		}
+		let exec = once_cell::sync::OnceCell::new();
 		if let Some(j) = &self.transformation {
-			j.apply_response(resp, exec.deref().as_ref().map_err(cel_err)?);
+			if j.has_response() {
+				j.apply_response(resp, build_ctx(&exec, log)?);
+			}
 		}
 		if let Some(j) = &self.gateway_transformation {
-			j.apply_response(resp, exec.deref().as_ref().map_err(cel_err)?);
+			if j.has_response() {
+				j.apply_response(resp, build_ctx(&exec, log)?);
+			}
 		}
 
 		// ext_proc is only intended to run on responses from upstream

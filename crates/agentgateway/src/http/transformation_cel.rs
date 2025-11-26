@@ -227,8 +227,21 @@ impl<'a> RequestOrResponse<'a> {
 }
 
 impl Transformation {
+	pub fn has_request(&self) -> bool {
+		self.request.body.is_some()
+			|| !self.request.add.is_empty()
+			|| !self.request.set.is_empty()
+			|| !self.request.remove.is_empty()
+	}
 	pub fn apply_request(&self, req: &mut crate::http::Request, exec: &cel::Executor<'_>) {
 		Self::apply(req.into(), self.request.as_ref(), exec)
+	}
+
+	pub fn has_response(&self) -> bool {
+		self.response.body.is_some()
+			|| !self.response.add.is_empty()
+			|| !self.response.set.is_empty()
+			|| !self.response.remove.is_empty()
 	}
 
 	pub fn apply_response(&self, resp: &mut crate::http::Response, exec: &cel::Executor<'_>) {
