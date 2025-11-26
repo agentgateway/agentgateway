@@ -17,7 +17,7 @@ struct TestCase {
 }
 
 // keep in sync with test_cases
-const TEST_CASE_NAMES: &[&str] = &["simple_access", "header", "bbr", "cidr"];
+const TEST_CASE_NAMES: &[&str] = &["simple_access", "header", "bbr", "cidr", "regex"];
 
 // Comprehensive test cases to be used across multiple tests
 fn test_cases() -> Vec<TestCase> {
@@ -76,12 +76,23 @@ fn test_cases() -> Vec<TestCase> {
 			},
 			expected: serde_json::json!(true),
 		},
+		TestCase {
+			name: "regex",
+			expression: r#"request.path.matches('^/user/([^/]+)/view$')"#,
+			request_builder: || {
+				::http::Request::builder()
+					.method(Method::POST)
+					.uri("http://example.com/user/1234/view")
+					.body(Body::empty())
+					.unwrap()
+			},
+			expected: serde_json::json!(true),
+		},
 	]
 }
 
 // Helper to lookup a test case by name
 fn get_test_case(name: &str) -> TestCase {
-	let name = name.strip_prefix("case=").unwrap();
 	test_cases()
 		.into_iter()
 		.find(|tc| tc.name == name)
