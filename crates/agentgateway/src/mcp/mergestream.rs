@@ -65,6 +65,7 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 							.and_then(|item| {
 								item
 									.data
+									.filter(|data| !data.is_empty())
 									.map(|data| {
 										serde_json::from_str::<ServerJsonRpcMessage>(&data).map_err(ClientError::new)
 									})

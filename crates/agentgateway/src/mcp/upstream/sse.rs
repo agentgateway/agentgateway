@@ -45,6 +45,9 @@ impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
 			let Some(data) = raw.data else {
 				continue;
 			};
+			if data.is_empty() {
+				continue;
+			}
 			match serde_json::from_str::<ServerJsonRpcMessage>(&data) {
 				Err(e) => {
 					// Not a hard error, for now?
