@@ -17,6 +17,8 @@ use hyper_util::client::legacy::connect::{Connected, Connection};
 use prometheus_client::metrics::counter::Atomic;
 use tokio::io::{AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
 use tokio::net::TcpStream;
+#[cfg(unix)]
+use tokio::net::UnixStream;
 use tokio_rustls::TlsStream;
 use tracing::event;
 
@@ -268,6 +270,29 @@ impl Socket {
 		Socket::from_tcp(res)
 	}
 
+	/// Create a Socket from a Unix domain socket stream
+	#[cfg(unix)]
+	pub fn from_unix(stream: UnixStream) -> io::Result<Self> {
+		let ext = Extension::new();
+		Ok(Socket {
+			ext,
+			inner: SocketType::Unix(stream),
+			metrics: Metrics::with_counter(),
+		})
+	}
+
+	/// Dial a Unix domain socket
+	#[cfg(unix)]
+	pub async fn dial_unix(
+		path: &std::path::Path,
+		cfg: Arc<crate::BackendConfig>,
+	) -> io::Result<Socket> {
+		let res = tokio::time::timeout(cfg.connect_timeout, UnixStream::connect(path))
+			.await
+			.map_err(|to| io::Error::new(io::ErrorKind::TimedOut, to))??;
+		Socket::from_unix(res)
+	}
+
 	pub fn apply_tcp_settings(&mut self, settings: &TCP) {
 		if let SocketType::Tcp(tcp) = &self.inner
 			&& settings.keepalives.enabled
@@ -291,6 +316,8 @@ impl Socket {
 
 pub enum SocketType {
 	Tcp(TcpStream),
+	#[cfg(unix)]
+	Unix(UnixStream),
 	Rewind(Box<rewind::RewindSocket>),
 	Tls(Box<TlsStream<Box<SocketType>>>),
 	Hbone(RWStream),
@@ -306,6 +333,8 @@ impl AsyncRead for SocketType {
 	) -> Poll<std::io::Result<()>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_read(cx, buf),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Tls(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_read(cx, buf),
@@ -322,6 +351,8 @@ impl AsyncWrite for SocketType {
 	) -> Poll<Result<usize, std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_write(cx, buf),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Tls(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_write(cx, buf),
@@ -333,6 +364,8 @@ impl AsyncWrite for SocketType {
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_flush(cx),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Tls(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_flush(cx),
@@ -344,6 +377,8 @@ impl AsyncWrite for SocketType {
 	fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_shutdown(cx),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Tls(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_shutdown(cx),
@@ -359,6 +394,8 @@ impl AsyncWrite for SocketType {
 	) -> Poll<Result<usize, std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Tls(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
@@ -370,6 +407,8 @@ impl AsyncWrite for SocketType {
 	fn is_write_vectored(&self) -> bool {
 		match &self {
 			SocketType::Tcp(inner) => inner.is_write_vectored(),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => inner.is_write_vectored(),
 			SocketType::Rewind(inner) => inner.is_write_vectored(),
 			SocketType::Tls(inner) => inner.is_write_vectored(),
 			SocketType::Hbone(inner) => inner.is_write_vectored(),
