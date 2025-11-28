@@ -161,6 +161,7 @@ pub struct RoutePolicies {
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub direct_response: Option<filters::DirectResponse>,
 	pub cors: Option<http::cors::Cors>,
+	pub ip_allowlist: Option<http::ipallowlist::IpAllowlist>,
 }
 
 #[derive(Debug, Default)]
@@ -410,6 +411,9 @@ impl Store {
 				},
 				TrafficPolicy::CORS(p) => {
 					pol.cors.get_or_insert_with(|| p.clone());
+				},
+				TrafficPolicy::IpAllowlist(p) => {
+					pol.ip_allowlist.get_or_insert_with(|| p.clone());
 				},
 			}
 		}
