@@ -1103,6 +1103,48 @@ pub struct TargetedPolicy {
 	pub policy: PolicyType,
 }
 
+/// Configuration for dynamic tracing policy
+#[apply(schema_ser!)]
+pub struct TracingConfig {
+	pub provider_backend: SimpleBackendReference,
+	pub attributes: Vec<TracingAttribute>,
+	pub resources: Vec<TracingAttribute>,
+}
+
+/// A single tracing attribute with a CEL expression
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct TracingAttribute {
+	pub name: String,
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub value: Arc<cel::Expression>,
+}
+
+/// TracingPolicy holds both the configuration and the compiled OpenTelemetry tracer
+#[derive(Clone)]
+pub struct TracingPolicy {
+	pub config: TracingConfig,
+	pub tracer: Arc<crate::telemetry::trc::Tracer>,
+}
+
+impl std::fmt::Debug for TracingPolicy {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("TracingPolicy")
+			.field("config", &self.config)
+			.field("tracer", &"<tracer>")
+			.finish()
+	}
+}
+
+impl serde::Serialize for TracingPolicy {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.config.serialize(serializer)
+	}
+}
+
 impl From<BackendPolicy> for PolicyType {
 	fn from(value: BackendPolicy) -> Self {
 		Self::Backend(value)
@@ -1200,7 +1242,7 @@ pub enum FrontendPolicy {
 	TLS(frontend::TLS),
 	TCP(frontend::TCP),
 	AccessLog(frontend::LoggingPolicy),
-	Tracing(()),
+	Tracing(TracingPolicy),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

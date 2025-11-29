@@ -367,6 +367,12 @@ impl ContextBuilder {
 }
 
 impl Executor<'_> {
+	pub fn empty() -> Self {
+		Self {
+			ctx: Context::empty(),
+		}
+	}
+
 	pub fn eval(&self, expr: &Expression) -> Result<Value, Error> {
 		match expr.expression.execute(&self.ctx) {
 			Ok(v) => Ok(v),
