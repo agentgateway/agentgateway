@@ -280,9 +280,6 @@ pub(crate) fn parse_openapi_schema(
 											let schema = resolve_nested_schema(schema_ref, open_api)?;
 											let body_schema =
 												serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
-											if body.required {
-												final_schema.required.push(BODY_NAME.clone());
-											}
 											final_schema
 												.properties
 												.insert(BODY_NAME.clone(), body_schema.clone());
