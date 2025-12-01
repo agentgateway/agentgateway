@@ -380,7 +380,7 @@ pub enum Backend {
 	MCP(BackendName, McpBackend),
 	#[serde(rename = "ai", serialize_with = "serialize_backend_tuple")]
 	AI(BackendName, crate::llm::AIBackend),
-	Dynamic {},
+	Dynamic(BackendName),
 	Invalid,
 }
 
@@ -544,8 +544,7 @@ impl Backend {
 			Backend::Opaque(name, _) => name.clone(),
 			Backend::MCP(name, _) => name.clone(),
 			Backend::AI(name, _) => name.clone(),
-			// TODO: give it a name
-			Backend::Dynamic {} => strng::format!("dynamic"),
+			Backend::Dynamic(name) => name.clone(),
 			Backend::Invalid => strng::format!("invalid"),
 		}
 	}

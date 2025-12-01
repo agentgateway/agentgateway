@@ -273,7 +273,7 @@ impl LocalBackend {
 		Ok(match self {
 			LocalBackend::Service { .. } => vec![], // These stay as references
 			LocalBackend::Opaque(tgt) => vec![Backend::Opaque(name, tgt.clone()).into()],
-			LocalBackend::Dynamic { .. } => vec![Backend::Dynamic {}.into()],
+			LocalBackend::Dynamic { .. } => vec![Backend::Dynamic(name).into()],
 			LocalBackend::MCP(tgt) => {
 				let mut targets = vec![];
 				let mut backends = vec![];

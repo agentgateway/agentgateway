@@ -507,6 +507,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 				Target::try_from((s.host.as_str(), s.port as u16))
 					.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
+			Some(proto::agent::backend::Kind::Dynamic(_)) => Backend::Dynamic(name.clone()),
 			Some(proto::agent::backend::Kind::Ai(a)) => {
 				if a.provider_groups.is_empty() {
 					return Err(ProtoError::Generic(
@@ -625,7 +626,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 					},
 				},
 			),
-			_ => {
+			None => {
 				return Err(ProtoError::Generic("unknown backend".to_string()));
 			},
 		};

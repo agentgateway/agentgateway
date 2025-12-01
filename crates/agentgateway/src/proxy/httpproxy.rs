@@ -1069,7 +1069,7 @@ async fn make_backend_call(
 			network_gateway: None,
 			backend_policies: policies,
 		},
-		Backend::Dynamic {} => {
+		Backend::Dynamic(_) => {
 			let port = req
 				.extensions()
 				.get::<TCPConnectionInfo>()
