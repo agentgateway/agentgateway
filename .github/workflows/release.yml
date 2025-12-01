@@ -15,7 +15,7 @@ on:
         type: boolean
 
 env:
-  REGISTRY_IMAGE: ghcr.io/agentgateway/agentgateway
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
   build-image:
@@ -48,7 +48,9 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-
+    - uses: actions/checkout@v4
+    - name: Prep Runner
+      uses: ./.github/actions/prep-runner
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -162,6 +164,10 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+
+    - uses: actions/checkout@v4
+    - name: Prep Runner
+      uses: ./.github/actions/prep-runner
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
