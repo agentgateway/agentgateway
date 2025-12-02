@@ -1,8 +1,9 @@
-use crate::telemetry::log::OrderedStringMap;
-use crate::*;
-use crate::{apply, defaults};
-use frozen_collections::FzHashSet;
 use std::time::Duration;
+
+use frozen_collections::FzHashSet;
+
+use crate::telemetry::log::OrderedStringMap;
+use crate::{apply, defaults, *};
 
 #[apply(schema!)]
 pub struct HTTP {

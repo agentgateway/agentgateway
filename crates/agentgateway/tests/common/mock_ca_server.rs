@@ -4,15 +4,17 @@
 // we generate certificates with a static key and return the private key in the cert chain.
 // This is a test-only approach - real CAs never return private keys.
 
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+
 use rand::RngCore;
 use rcgen::{
 	CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
 	KeyUsagePurpose, SanType, SerialNumber,
 };
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime};
-use tonic::{Request, Response, Status, transport::Server};
+use tonic::transport::Server;
+use tonic::{Request, Response, Status};
 
 pub mod istio {
 	pub mod ca {
@@ -20,10 +22,10 @@ pub mod istio {
 	}
 }
 
-use istio::ca::{
-	IstioCertificateRequest, IstioCertificateResponse,
-	istio_certificate_service_server::{IstioCertificateService, IstioCertificateServiceServer},
+use istio::ca::istio_certificate_service_server::{
+	IstioCertificateService, IstioCertificateServiceServer,
 };
+use istio::ca::{IstioCertificateRequest, IstioCertificateResponse};
 
 #[derive(Debug)]
 pub struct MockCaService {
@@ -95,7 +97,7 @@ impl IstioCertificateService for MockCaService {
 		const TEST_CERT_MARKER: &str = "X-Test-Certificate-Key";
 		let cert_chain = vec![
 			cert_pem,
-			format!("# {}\n{}", TEST_CERT_MARKER, key_pem), // Test-only: include the private key with marker
+			format!("# {}\n{}", TEST_CERT_MARKER, key_pem), /* Test-only: include the private key with marker */
 			self.ca_cert_pem.to_string(),
 		];
 

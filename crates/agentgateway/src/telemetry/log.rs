@@ -6,20 +6,6 @@ use std::sync::Arc;
 use std::task::{Context, Poll, ready};
 use std::time::{Duration, Instant};
 
-use crate::cel::{ContextBuilder, Expression};
-use crate::llm::LLMInfo;
-use crate::proxy::ProxyResponseReason;
-use crate::telemetry::metrics::{
-	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
-};
-use crate::telemetry::trc;
-use crate::telemetry::trc::TraceParent;
-use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::{
-	BackendInfo, BindName, GatewayName, ListenerName, RouteName, RouteRuleName, Target,
-};
-use crate::types::loadbalancer::ActiveHandle;
-use crate::{cel, llm, mcp};
 use agent_core::metrics::CustomField;
 use agent_core::strng;
 use agent_core::strng::{RichStrng, Strng};
@@ -34,6 +20,19 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use tracing::{Level, trace};
+
+use crate::cel::{ContextBuilder, Expression};
+use crate::llm::LLMInfo;
+use crate::proxy::ProxyResponseReason;
+use crate::telemetry::metrics::{
+	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
+};
+use crate::telemetry::trc;
+use crate::telemetry::trc::TraceParent;
+use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
+use crate::types::loadbalancer::ActiveHandle;
+use crate::{cel, llm, mcp};
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -488,9 +487,7 @@ impl RequestLog {
 			tracer: None,
 			endpoint: None,
 			bind_name: None,
-			gateway_name: None,
 			listener_name: None,
-			route_rule_name: None,
 			route_name: None,
 			backend_info: None,
 			backend_protocol: None,
@@ -534,10 +531,8 @@ pub struct RequestLog {
 
 	pub endpoint: Option<Target>,
 
-	pub bind_name: Option<BindName>,
-	pub gateway_name: Option<GatewayName>,
+	pub bind_name: Option<BindKey>,
 	pub listener_name: Option<ListenerName>,
-	pub route_rule_name: Option<RouteRuleName>,
 	pub route_name: Option<RouteName>,
 	pub backend_info: Option<BackendInfo>,
 	pub backend_protocol: Option<cel::BackendProtocol>,
@@ -608,10 +603,18 @@ impl Drop for DropOnLog {
 
 		let route_identifier = RouteIdentifier {
 			bind: (&log.bind_name).into(),
-			gateway: (&log.gateway_name).into(),
-			listener: (&log.listener_name).into(),
-			route: (&log.route_name).into(),
-			route_rule: (&log.route_rule_name).into(),
+			gateway: log
+				.listener_name
+				.as_ref()
+				.map(|l| l.as_gateway_name())
+				.into(),
+			listener: log.listener_name.as_ref().map(|l| &l.listener_name).into(),
+			route: log.route_name.as_ref().map(|l| l.as_route_name()).into(),
+			route_rule: log
+				.route_name
+				.as_ref()
+				.and_then(|l| l.rule_name.as_ref())
+				.into(),
 		};
 
 		let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
@@ -745,10 +748,16 @@ impl Drop for DropOnLog {
 		let fields = cel_exec.fields;
 
 		let mut kv = vec![
-			("gateway", log.gateway_name.display()),
-			("listener", log.listener_name.display()),
-			("route_rule", log.route_rule_name.display()),
-			("route", log.route_name.display()),
+			("gateway", route_identifier.gateway.as_deref().map(display)),
+			(
+				"listener",
+				route_identifier.listener.as_deref().map(display),
+			),
+			(
+				"route_rule",
+				route_identifier.route_rule.as_deref().map(display),
+			),
+			("route", route_identifier.route.as_deref().map(display)),
 			("endpoint", log.endpoint.display()),
 			("src.addr", Some(display(&log.tcp_info.peer_addr))),
 			("http.method", log.method.display()),

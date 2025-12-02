@@ -3,16 +3,16 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
-use crate::http::Scheme;
 use ::http::StatusCode;
 use frozen_collections::FzHashSet;
 use itertools::Itertools;
+use llm::{AIBackend, AIProvider, NamedAIProvider};
 use rustls::ServerConfig;
 
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth};
-use crate::http::authorization;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
+use crate::http::{Scheme, authorization};
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
@@ -24,7 +24,6 @@ use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::traffic_policy_spec::host_rewrite::Mode;
 use crate::types::{agent, backend, proto};
 use crate::*;
-use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 	fn from(value: &proto::agent::TlsConfig) -> Self {
@@ -418,7 +417,7 @@ impl TryFrom<&proto::agent::Bind> for Bind {
 	}
 }
 
-impl TryFrom<&proto::agent::Listener> for (Listener, BindName) {
+impl TryFrom<&proto::agent::Listener> for (Listener, BindKey) {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::Listener) -> Result<Self, Self::Error> {
@@ -427,10 +426,13 @@ impl TryFrom<&proto::agent::Listener> for (Listener, BindName) {
 			.map_err(|e| ProtoError::Generic(format!("{e}")))?;
 		let l = Listener {
 			key: strng::new(&s.key),
-			name: strng::new(&s.name),
+			name: s
+				.name
+				.as_ref()
+				.ok_or(ProtoError::MissingRequiredField)?
+				.into(),
 			hostname: s.hostname.clone().into(),
 			protocol,
-			gateway_name: strng::new(&s.gateway_name),
 			routes: Default::default(),
 			tcp_routes: Default::default(),
 		};
@@ -444,8 +446,11 @@ impl TryFrom<&proto::agent::TcpRoute> for (TCPRoute, ListenerKey) {
 	fn try_from(s: &proto::agent::TcpRoute) -> Result<Self, Self::Error> {
 		let r = TCPRoute {
 			key: strng::new(&s.key),
-			route_name: strng::new(&s.route_name),
-			rule_name: default_as_none(s.rule_name.as_str()).map(strng::new),
+			name: s
+				.name
+				.as_ref()
+				.ok_or(ProtoError::MissingRequiredField)?
+				.into(),
 			hostnames: s.hostnames.iter().map(strng::new).collect(),
 			backends: s
 				.backends
@@ -454,6 +459,7 @@ impl TryFrom<&proto::agent::TcpRoute> for (TCPRoute, ListenerKey) {
 					Ok(TCPRouteBackendReference {
 						weight: b.weight as usize,
 						backend: resolve_simple_reference(b.backend.as_ref())?,
+						inline_policies: Vec::new(),
 					})
 				})
 				.collect::<Result<Vec<_>, _>>()?,
@@ -468,8 +474,11 @@ impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
 	fn try_from(s: &proto::agent::Route) -> Result<Self, Self::Error> {
 		let r = Route {
 			key: strng::new(&s.key),
-			route_name: strng::new(&s.route_name),
-			rule_name: default_as_none(s.rule_name.as_str()).map(strng::new),
+			name: s
+				.name
+				.as_ref()
+				.ok_or(ProtoError::MissingRequiredField)?
+				.into(),
 			hostnames: s.hostnames.iter().map(strng::new).collect(),
 			matches: s
 				.matches
@@ -500,14 +509,14 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 			.iter()
 			.map(BackendPolicy::try_from)
 			.collect::<Result<Vec<_>, _>>()?;
-		let name = BackendName::from(&s.name);
+		let name = s.name.as_ref().ok_or(ProtoError::MissingRequiredField)?;
 		let backend = match &s.kind {
 			Some(proto::agent::backend::Kind::Static(s)) => Backend::Opaque(
-				name.clone(),
+				name.into(),
 				Target::try_from((s.host.as_str(), s.port as u16))
 					.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
-			Some(proto::agent::backend::Kind::Dynamic(_)) => Backend::Dynamic(name.clone()),
+			Some(proto::agent::backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), ()),
 			Some(proto::agent::backend::Kind::Ai(a)) => {
 				if a.provider_groups.is_empty() {
 					return Err(ProtoError::Generic(
@@ -571,7 +580,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 						};
 
 						let provider_name = if provider_config.name.is_empty() {
-							strng::new(format!("{name}_{provider_idx}"))
+							strng::literal!("default")
 						} else {
 							strng::new(&provider_config.name)
 						};
@@ -606,10 +615,10 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 				}
 
 				let es = crate::types::loadbalancer::EndpointSet::new(provider_groups);
-				Backend::AI(name.clone(), AIBackend { providers: es })
+				Backend::AI(name.into(), AIBackend { providers: es })
 			},
 			Some(proto::agent::backend::Kind::Mcp(m)) => Backend::MCP(
-				name.clone(),
+				name.into(),
 				McpBackend {
 					targets: m
 						.targets
@@ -1422,13 +1431,26 @@ impl TryFrom<&proto::agent::PolicyTarget> for PolicyTarget {
 	fn try_from(t: &proto::agent::PolicyTarget) -> Result<Self, Self::Error> {
 		use crate::types::proto::agent::policy_target as tgt;
 		match t.kind.as_ref() {
-			Some(tgt::Kind::Gateway(g)) => Ok(PolicyTarget::Gateway(strng::new(g))),
-			Some(tgt::Kind::Listener(l)) => Ok(PolicyTarget::Listener(strng::new(l))),
-			Some(tgt::Kind::Route(r)) => Ok(PolicyTarget::Route(strng::new(r))),
-			Some(tgt::Kind::RouteRule(r)) => Ok(PolicyTarget::RouteRule(strng::new(r))),
-			Some(tgt::Kind::Backend(b)) => Ok(PolicyTarget::Backend(strng::new(b))),
-			Some(tgt::Kind::Service(s)) => Ok(PolicyTarget::Service(strng::new(s))),
-			Some(tgt::Kind::SubBackend(sb)) => Ok(PolicyTarget::SubBackend(strng::new(sb))),
+			Some(tgt::Kind::Gateway(g)) => Ok(PolicyTarget::Gateway(ListenerTarget {
+				gateway_name: strng::new(&g.name),
+				gateway_namespace: strng::new(&g.namespace),
+				listener_name: g.listener.as_ref().map(Into::into),
+			})),
+			Some(tgt::Kind::Route(r)) => Ok(PolicyTarget::Route(RouteTarget {
+				name: strng::new(&r.name),
+				namespace: strng::new(&r.namespace),
+				rule_name: r.route_rule.as_ref().map(Into::into),
+			})),
+			Some(tgt::Kind::Backend(b)) => Ok(PolicyTarget::Backend(BackendTarget::Backend {
+				name: strng::new(&b.name),
+				namespace: strng::new(&b.namespace),
+				section: b.section.as_ref().map(Into::into),
+			})),
+			Some(tgt::Kind::Service(s)) => Ok(PolicyTarget::Backend(BackendTarget::Service {
+				hostname: strng::new(&s.hostname),
+				namespace: strng::new(&s.namespace),
+				port: s.port.map(|p| p as u16),
+			})),
 			None => Err(ProtoError::MissingRequiredField),
 		}
 	}
@@ -1440,7 +1462,6 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 	fn try_from(p: &proto::agent::Policy) -> Result<Self, Self::Error> {
 		use crate::types::proto::agent::policy as pol;
 
-		let name = strng::new(&p.name);
 		let target = p
 			.target
 			.as_ref()
@@ -1450,16 +1471,56 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 		let policy = match &p.kind {
 			Some(pol::Kind::Traffic(spec)) => PolicyType::Traffic(PhasedTrafficPolicy::try_from(spec)?),
 			Some(pol::Kind::Backend(spec)) => PolicyType::Backend(BackendPolicy::try_from(spec)?),
-			// Frontend policies are not represented by TargetedPolicy; reject here.
 			Some(pol::Kind::Frontend(spec)) => PolicyType::Frontend(FrontendPolicy::try_from(spec)?),
 			None => return Err(ProtoError::MissingRequiredField),
 		};
 
 		Ok(TargetedPolicy {
-			name,
+			key: strng::new(&p.key),
+			name: p.name.as_ref().map(Into::into),
 			target,
 			policy,
 		})
+	}
+}
+
+impl From<&proto::agent::ResourceName> for ResourceName {
+	fn from(value: &proto::agent::ResourceName) -> Self {
+		ResourceName {
+			name: strng::new(&value.name),
+			namespace: strng::new(&value.namespace),
+		}
+	}
+}
+
+impl From<&proto::agent::TypedResourceName> for TypedResourceName {
+	fn from(value: &proto::agent::TypedResourceName) -> Self {
+		TypedResourceName {
+			name: strng::new(&value.name),
+			namespace: strng::new(&value.namespace),
+			kind: strng::new(&value.kind),
+		}
+	}
+}
+
+impl From<&proto::agent::RouteName> for RouteName {
+	fn from(value: &proto::agent::RouteName) -> Self {
+		RouteName {
+			name: strng::new(&value.name),
+			namespace: strng::new(&value.namespace),
+			rule_name: value.rule_name.as_ref().map(Into::into),
+		}
+	}
+}
+
+impl From<&proto::agent::ListenerName> for ListenerName {
+	fn from(value: &proto::agent::ListenerName) -> Self {
+		ListenerName {
+			gateway_name: strng::new(&value.gateway_name),
+			gateway_namespace: strng::new(&value.gateway_namespace),
+			listener_name: strng::new(&value.listener_name),
+			listener_set: value.listener_set.as_ref().map(Into::into),
+		}
 	}
 }
 

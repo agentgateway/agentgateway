@@ -200,6 +200,10 @@ async fn apply_backend_policies(
 		// Applied elsewhere
 		llm: _,
 		// Applied elsewhere
+		mcp_authorization: _,
+		// Applied elsewhere
+		mcp_authentication: _,
+		// Applied elsewhere
 		inference_routing: _,
 		request_header_modifier,
 		response_header_modifier,
@@ -342,7 +346,7 @@ async fn apply_llm_request_policies(
 
 #[derive(Clone)]
 pub struct HTTPProxy {
-	pub(super) bind_name: BindName,
+	pub(super) bind_name: BindKey,
 	pub(super) inputs: Arc<ProxyInputs>,
 	pub(super) selected_listener: Option<Arc<Listener>>,
 	pub(super) target_address: SocketAddr,
@@ -515,14 +519,13 @@ impl HTTPProxy {
 			.or_else(|| listeners.best_match(&host))
 			.ok_or(ProxyError::ListenerNotFound)?;
 		log.bind_name = Some(bind_name.clone());
-		log.gateway_name = Some(selected_listener.gateway_name.clone());
 		log.listener_name = Some(selected_listener.name.clone());
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
-		let mut gateway_policies = inputs.stores.read_binds().gateway_policies(
-			selected_listener.key.clone(),
-			selected_listener.gateway_name.clone(),
-		);
+		let mut gateway_policies = inputs
+			.stores
+			.read_binds()
+			.gateway_policies(selected_listener.name.clone());
 		gateway_policies.register_cel_expressions(log.cel.ctx());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
 		// (for logging, etc) and also after we register the expressions since new fields may be available.
@@ -552,8 +555,7 @@ impl HTTPProxy {
 			&req,
 		)
 		.ok_or(ProxyError::RouteNotFound)?;
-		log.route_rule_name = selected_route.rule_name.clone();
-		log.route_name = Some(selected_route.route_name.clone());
+		log.route_name = Some(selected_route.name.clone());
 		// Record the matched path for tracing/logging span names
 		log.path_match = Some(match &path_match {
 			PathMatch::Exact(p) => p.clone(),
@@ -571,10 +573,8 @@ impl HTTPProxy {
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
 		let route_path = RoutePath {
-			route_rule: selected_route.rule_name.clone(),
-			route: selected_route.route_name.clone(),
-			listener: selected_listener.key.clone(),
-			gateway: selected_listener.gateway_name.clone(),
+			route: selected_route.name.clone(),
+			listener: selected_listener.name.clone(),
 		};
 
 		let mut route_policies = inputs
@@ -937,18 +937,13 @@ pub async fn build_transport(
 
 fn get_backend_policies(
 	inputs: &ProxyInputs,
+	// Backend, and policies specifically inlined on this backend object
 	backend: &BackendWithPolicies,
 	inline_policies: &[BackendPolicy],
 	path: Option<RoutePath>,
 ) -> BackendPolicies {
-	let service = match &backend.backend {
-		Backend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
-		_ => None,
-	};
-
 	inputs.stores.read_binds().backend_policies(
-		backend.backend.name(),
-		service,
+		backend.backend.target(),
 		// Precedence: Selector < Backend inline < backendRef inline
 		// Note this differs from the logical chain of objects (Route -> backendRef -> backend),
 		// because a backendRef is actually more specific: its one *specific usage* of the backend.
@@ -975,23 +970,24 @@ async fn make_backend_call(
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
 	let (backend, policies) = match backend {
-		Backend::MCP(name, mcp_backend) => {
-			if let Some(be) = inputs
-				.clone()
-				.mcp_state
-				.should_passthrough(name.clone(), mcp_backend, &req)
+		Backend::MCP(_, mcp_backend) => {
+			if let Some(be) =
+				inputs
+					.clone()
+					.mcp_state
+					.should_passthrough(&base_policies, mcp_backend, &req)
 			{
-				let (target, inline_policies) =
-					super::resolve_simple_backend_with_policies(&be, inputs.as_ref())?;
-				// The typical MCP flow will apply the top level Backend policies as default_policies
-				// When we passthrough, we should preserve this behavior.
-				let target_name = target.name();
+				let target = super::resolve_simple_backend_with_policies(&be, inputs.as_ref())?;
+				let tgt = target.backend.target();
 				let policies = inputs
 					.stores
 					.read_binds()
-					.sub_backend_policies(target_name, Some(&inline_policies));
+					.sub_backend_policies(tgt, Some(&target.inline_policies));
 
-				(&Backend::from(target), base_policies.merge(policies))
+				(
+					&Backend::from(target.backend),
+					base_policies.merge(policies),
+				)
 			} else {
 				(backend, base_policies)
 			}
@@ -1019,11 +1015,15 @@ async fn make_backend_call(
 		Backend::AI(n, ai) => {
 			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
-			let k = strng::format!("{}/{}", n, provider.name);
+			let sub_backend_name = BackendTarget::Backend {
+				name: n.name.clone(),
+				namespace: n.namespace.clone(),
+				section: Some(provider.name.clone()),
+			};
 			let sub_backend_policies = inputs
 				.stores
 				.read_binds()
-				.sub_backend_policies(k, Some(&provider.inline_policies));
+				.sub_backend_policies(sub_backend_name, Some(&provider.inline_policies));
 
 			let (target, provider_defaults) = match &provider.host_override {
 				Some(target) => (
@@ -1069,7 +1069,7 @@ async fn make_backend_call(
 			network_gateway: None,
 			backend_policies: policies,
 		},
-		Backend::Dynamic(_) => {
+		Backend::Dynamic(_, _) => {
 			let port = req
 				.extensions()
 				.get::<TCPConnectionInfo>()
@@ -1088,15 +1088,15 @@ async fn make_backend_call(
 		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();
 			let backend = backend.clone();
-			let name = name.clone();
 			let time = log.as_ref().unwrap().start_time.clone();
 			set_backend_cel_context(&mut log);
 			let mcp_response_log = log.map(|l| l.mcp_status.clone()).expect("must be set");
+			let name = name.clone();
 			return Ok(Box::pin(async move {
 				inputs
 					.clone()
 					.mcp_state
-					.serve(inputs, name, backend, req, mcp_response_log, time)
+					.serve(inputs, name, backend, policies, req, mcp_response_log, time)
 					.map(Ok)
 					.await
 			}));
@@ -1106,9 +1106,8 @@ async fn make_backend_call(
 
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
-	let backend_name = backend.name();
 	let backend_info = auth::BackendInfo {
-		name: backend_name.clone(),
+		target: backend.target(),
 		inputs: inputs.clone(),
 	};
 	apply_backend_policies(
@@ -1567,7 +1566,7 @@ pub struct BackendCall {
 	pub target: Target,
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Identity)>,
-	pub network_gateway: Option<(GatewayAddress, Identity)>, // For double hbone: (gateway_address, gateway_identity)
+	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
 	pub backend_policies: BackendPolicies,
 }
 
@@ -1651,7 +1650,7 @@ impl PolicyClient {
 		http::modify_req_uri(&mut req, |uri| {
 			if uri.authority.is_none() {
 				// If host is not set, set it to the backend
-				uri.authority = Some(Authority::try_from(backend.hostport())?);
+				uri.authority = Some(Authority::try_from(backend.backend.hostport())?);
 			}
 			if uri.scheme.is_none() {
 				// Default to HTTP, if the policy is TLS it will get set correctly later
@@ -1661,15 +1660,19 @@ impl PolicyClient {
 		})
 		.map_err(ProxyError::Processing)?;
 
-		let backend = Backend::from(backend).into();
+		let backend = BackendWithPolicies::from(backend);
 		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
 		self
 			.internal_call_with_policies(req, backend.backend, pols)
 			.await
 	}
 
-	pub async fn call(&self, req: Request, backend: SimpleBackend) -> Result<Response, ProxyError> {
-		let backend = Backend::from(backend).into();
+	pub async fn call(
+		&self,
+		req: Request,
+		backend: SimpleBackendWithPolicies,
+	) -> Result<Response, ProxyError> {
+		let backend = BackendWithPolicies::from(backend);
 		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
 		self
 			.internal_call_with_policies(req, backend.backend, pols)

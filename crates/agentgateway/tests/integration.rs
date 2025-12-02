@@ -1,5 +1,6 @@
-use http::{Method, StatusCode};
 use std::net::SocketAddr;
+
+use http::{Method, StatusCode};
 use wiremock::{Mock, ResponseTemplate};
 
 mod common;

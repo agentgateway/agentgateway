@@ -14,21 +14,22 @@ use rmcp::transport::StreamableHttpServerConfig;
 use tracing::{debug, warn};
 
 use crate::cel::ContextBuilder;
+use crate::http::authorization::RuleSets;
 use crate::http::jwt::Claims;
 use crate::http::*;
 use crate::json::from_body_with_limit;
-use crate::mcp::MCPInfo;
 use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::StreamableHttpService;
+use crate::mcp::{MCPInfo, McpAuthorizationSet};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
-	BackendName, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, SimpleBackend,
+	BackendTarget, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, ResourceName, SimpleBackend,
 	SimpleBackendReference,
 };
 use crate::{ProxyInputs, json};
@@ -47,7 +48,7 @@ impl App {
 
 	pub fn should_passthrough(
 		&self,
-		name: BackendName,
+		backend_policies: &BackendPolicies,
 		backend: &McpBackend,
 		req: &Request,
 	) -> Option<SimpleBackendReference> {
@@ -55,9 +56,7 @@ impl App {
 			return None;
 		}
 
-		let binds = self.state.read_binds();
-		let (_, authn) = binds.mcp_policies(name.clone());
-		if authn.is_some() {
+		if backend_policies.mcp_authentication.is_some() {
 			return None;
 		}
 		if !req.uri().path().contains("/.well-known/") {
@@ -69,18 +68,20 @@ impl App {
 			_ => None,
 		}
 	}
+
+	#[allow(clippy::too_many_arguments)]
 	pub async fn serve(
 		&self,
 		pi: Arc<ProxyInputs>,
-		name: BackendName,
+		backend_group_name: ResourceName,
 		backend: McpBackend,
+		backend_policies: BackendPolicies,
 		mut req: Request,
 		log: AsyncLog<MCPInfo>,
 		start_time: String,
 	) -> Response {
-		let (backends, authorization_policies, authn) = {
+		let backends = {
 			let binds = self.state.read_binds();
-			let (authorization_policies, authn) = binds.mcp_policies(name.clone());
 			let nt = backend
 				.targets
 				.iter()
@@ -90,12 +91,17 @@ impl App {
 						.backend()
 						.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, &pi))
 						.transpose()?;
-					let inline_pols = be.as_ref().map(|pol| pol.1.as_slice());
-					let backend_policies = binds.sub_backend_policies(t.name.clone(), inline_pols);
+					let inline_pols = be.as_ref().map(|pol| pol.inline_policies.as_slice());
+					let sub_backend_target = BackendTarget::Backend {
+						name: backend_group_name.name.clone(),
+						namespace: backend_group_name.namespace.clone(),
+						section: Some(t.name.clone()),
+					};
+					let backend_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),
-						backend: be.map(|b| b.0),
+						backend: be.map(|b| b.backend),
 						backend_policies,
 						always_use_prefix: backend.always_use_prefix,
 					}))
@@ -107,17 +113,18 @@ impl App {
 					.body(axum::body::Body::from("failed to resolve MCP backend"))
 					.unwrap();
 			};
-			(
-				McpBackendGroup {
-					targets: nt,
-					stateful: backend.stateful,
-				},
-				authorization_policies,
-				authn,
-			)
+
+			McpBackendGroup {
+				targets: nt,
+				stateful: backend.stateful,
+			}
 		};
 		let sm = self.session.clone();
 		let client = PolicyClient { inputs: pi.clone() };
+		let authorization_policies = backend_policies
+			.mcp_authorization
+			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));
+		let authn = backend_policies.mcp_authentication;
 
 		// Store an empty value, we will populate each field async
 		log.store(Some(MCPInfo::default()));

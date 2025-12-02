@@ -3,9 +3,6 @@
 
 use std::collections::HashMap;
 
-use crate::llm;
-use crate::llm::bedrock::Provider;
-use crate::llm::{AIError, LLMRequest, LLMResponse};
 use agent_core::strng;
 use agent_core::strng::Strng;
 #[allow(deprecated)]
@@ -38,6 +35,10 @@ pub use async_openai::types::{
 	ResponseFormat, Role, ServiceTier, Stop, WebSearchOptions,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::llm;
+use crate::llm::bedrock::Provider;
+use crate::llm::{AIError, LLMRequest, LLMResponse};
 
 pub trait ResponseType: Send + Sync {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse;
@@ -74,7 +75,11 @@ pub trait RequestType: Send + Sync {
 }
 
 pub mod passthrough {
-	use crate::{json, llm};
+	use agent_core::strng;
+	use agent_core::strng::Strng;
+	use bytes::Bytes;
+	use itertools::Itertools;
+	use serde::{Deserialize, Serialize};
 
 	use crate::llm::bedrock::Provider;
 	use crate::llm::policy::webhook::{Message, ResponseChoice};
@@ -83,11 +88,7 @@ pub mod passthrough {
 		AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, SimpleChatCompletionMessage,
 		anthropic, universal,
 	};
-	use agent_core::strng;
-	use agent_core::strng::Strng;
-	use bytes::Bytes;
-	use itertools::Itertools;
-	use serde::{Deserialize, Serialize};
+	use crate::{json, llm};
 
 	pub fn process_response(
 		bytes: &Bytes,

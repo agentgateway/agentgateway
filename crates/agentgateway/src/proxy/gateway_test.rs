@@ -1,20 +1,4 @@
-use crate::http::tests_common::*;
-use crate::http::transformation_cel::Transformation;
-use crate::http::{Body, Response, transformation_cel};
-use crate::llm::{AIProvider, openai};
-use crate::proxy::request_builder::RequestBuilder;
-use crate::test_helpers::proxymock::*;
-use crate::types::agent::Backend;
-use crate::types::agent::Target;
-use crate::types::agent::{BackendPolicy, BackendWithPolicies};
-use crate::types::agent::{
-	BackendReference, Bind, Listener, ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, Route,
-	RouteBackendReference, RouteMatch, RouteSet, TargetedPolicy, TrafficPolicy,
-};
-use crate::types::backend;
-use crate::*;
-use ::http::StatusCode;
-use ::http::{Method, Version};
+use ::http::{Method, StatusCode, Version};
 use agent_core::strng;
 use assert_matches::assert_matches;
 use bytes::Bytes;
@@ -24,6 +8,20 @@ use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use x509_parser::nom::AsBytes;
+
+use crate::http::tests_common::*;
+use crate::http::transformation_cel::Transformation;
+use crate::http::{Body, Response, transformation_cel};
+use crate::llm::{AIProvider, openai};
+use crate::proxy::request_builder::RequestBuilder;
+use crate::test_helpers::proxymock::*;
+use crate::types::agent::{
+	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, Listener, ListenerProtocol,
+	ListenerSet, PathMatch, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, Target, TargetedPolicy, TrafficPolicy,
+};
+use crate::types::backend;
+use crate::*;
 
 #[tokio::test]
 async fn basic_handling() {
@@ -65,8 +63,13 @@ async fn basic_http2() {
 async fn local_ratelimit() {
 	let (_mock, bind, io) = basic_setup().await;
 	let _bind = bind.with_policy(TargetedPolicy {
-		name: strng::new("rl"),
-		target: PolicyTarget::Route("route".into()),
+		key: strng::new("rl"),
+		name: None,
+		target: PolicyTarget::Route(RouteName {
+			name: "route".into(),
+			namespace: "".into(),
+			rule_name: None,
+		}),
 		policy: TrafficPolicy::LocalRateLimit(vec![
 			http::localratelimit::RateLimitSpec {
 				max_tokens: 1,
@@ -190,8 +193,11 @@ async fn direct_response() {
 	let xfm = Transformation::try_from_local_config(xfm, true).unwrap();
 	let bind = base_gateway(&mock).with_route(Route {
 		key: "route2".into(),
-		route_name: "route2".into(),
-		rule_name: None,
+		name: RouteName {
+			name: "route2".into(),
+			namespace: Default::default(),
+			rule_name: None,
+		},
 		hostnames: Default::default(),
 		matches: vec![RouteMatch {
 			headers: vec![],
@@ -240,7 +246,6 @@ async fn tls_termination() {
 		listeners: ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
-			gateway_name: Default::default(),
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
@@ -289,7 +294,7 @@ async fn tls_backend_connection() {
 		.unwrap()
 		.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Opaque(
-				strng::format!("{}", mock.address()),
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 				Target::Address(*mock.address()),
 			),
 			inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
@@ -321,7 +326,7 @@ async fn tls_backend_connection_alpn() {
 		.unwrap()
 		.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Opaque(
-				strng::format!("{}", mock.address()),
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 				Target::Address(*mock.address()),
 			),
 			inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
@@ -363,7 +368,7 @@ async fn tls_backend_http2_version() {
 		.unwrap()
 		.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Opaque(
-				strng::format!("{}", mock.address()),
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 				Target::Address(*mock.address()),
 			),
 			inline_policies: vec![
@@ -402,7 +407,7 @@ async fn tls_backend_http1_version() {
 		.unwrap()
 		.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Opaque(
-				strng::format!("{}", mock.address()),
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 				Target::Address(*mock.address()),
 			),
 			inline_policies: vec![
@@ -442,7 +447,7 @@ async fn tls_backend_version_with_alpn() {
 		.unwrap()
 		.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Opaque(
-				strng::format!("{}", mock.address()),
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 				Target::Address(*mock.address()),
 			),
 			inline_policies: vec![
@@ -481,8 +486,11 @@ async fn header_manipulation() {
 	let mock = simple_mock().await;
 	let bind = base_gateway(&mock).with_route(Route {
 		key: "route2".into(),
-		route_name: "route2".into(),
-		rule_name: None,
+		name: RouteName {
+			name: "route2".into(),
+			namespace: Default::default(),
+			rule_name: None,
+		},
 		hostnames: Default::default(),
 		matches: vec![RouteMatch {
 			headers: vec![],
@@ -504,7 +512,7 @@ async fn header_manipulation() {
 		],
 		backends: vec![RouteBackendReference {
 			weight: 1,
-			backend: BackendReference::Backend(mock.address().to_string().into()),
+			backend: BackendReference::Backend(strng::format!("/{}", mock.address())),
 			inline_policies: vec![
 				BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
 					add: vec![("x-backend-req".into(), "backend-req".into())],
@@ -542,8 +550,11 @@ async fn inline_backend_policies() {
 	let bind = base_gateway(&mock)
 		.with_route(Route {
 			key: "route2".into(),
-			route_name: "route2".into(),
-			rule_name: None,
+			name: RouteName {
+				name: "route2".into(),
+				namespace: Default::default(),
+				rule_name: None,
+			},
 			hostnames: Default::default(),
 			matches: vec![RouteMatch {
 				headers: vec![],
@@ -565,7 +576,7 @@ async fn inline_backend_policies() {
 			],
 			backends: vec![RouteBackendReference {
 				weight: 1,
-				backend: BackendReference::Backend(mock.address().to_string().into()),
+				backend: BackendReference::Backend(strng::format!("/{}", mock.address())),
 				inline_policies: vec![
 					BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
 						add: vec![("x-backend-route-req".into(), "backend-route-req".into())],
@@ -582,7 +593,7 @@ async fn inline_backend_policies() {
 		})
 		.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Opaque(
-				strng::format!("{}", mock.address()),
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 				Target::Address(*mock.address()),
 			),
 			inline_policies: vec![
@@ -624,8 +635,13 @@ async fn api_key() {
 	let (_mock, bind, io) = basic_setup().await;
 	let _bind = bind
 		.with_policy(TargetedPolicy {
-			name: strng::new("apikey"),
-			target: PolicyTarget::Route("route".into()),
+			key: strng::new("apikey"),
+			name: Default::default(),
+			target: PolicyTarget::Route(RouteName {
+				name: "route".into(),
+				namespace: "".into(),
+				rule_name: None,
+			}),
 			policy: TrafficPolicy::APIKey(
 				http::apikey::LocalAPIKeys {
 					keys: vec![
@@ -645,8 +661,13 @@ async fn api_key() {
 			.into(),
 		})
 		.with_policy(TargetedPolicy {
-			name: strng::new("auth"),
-			target: PolicyTarget::Route("route".into()),
+			key: strng::new("auth"),
+			name: Default::default(),
+			target: PolicyTarget::Route(RouteName {
+				name: "route".into(),
+				namespace: "".into(),
+				rule_name: None,
+			}),
 			policy: TrafficPolicy::Authorization(deser(json!({
 				"rules": ["apiKey.group == 'eng'"]
 			})))
@@ -689,8 +710,13 @@ async fn basic_auth() {
 	let (_mock, bind, io) = basic_setup().await;
 	let _bind = bind
 		.with_policy(TargetedPolicy {
-			name: strng::new("basic"),
-			target: PolicyTarget::Route("route".into()),
+			key: strng::new("basic"),
+			name: None,
+			target: PolicyTarget::Route(RouteName {
+				name: "route".into(),
+				namespace: "".into(),
+				rule_name: None,
+			}),
 			policy: TrafficPolicy::BasicAuth(
 				http::basicauth::LocalBasicAuth {
 					htpasswd: FileOrInline::Inline(
@@ -709,8 +735,13 @@ crypt_test:bGVh02xkuGli2"
 			.into(),
 		})
 		.with_policy(TargetedPolicy {
-			name: strng::new("auth"),
-			target: PolicyTarget::Route("route".into()),
+			key: strng::new("auth"),
+			name: Default::default(),
+			target: PolicyTarget::Route(RouteName {
+				name: "route".into(),
+				namespace: "".into(),
+				rule_name: None,
+			}),
 			policy: TrafficPolicy::Authorization(deser(json!({
 				"rules": ["basicAuth.username == 'user'"]
 			})))

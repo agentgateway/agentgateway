@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use crate::*;
 use ::http::HeaderMap;
 
 use crate::http::HeaderOrPseudo;
 use crate::http::ext_authz::proto::{HeaderValue as ProtoHeaderValue, HeaderValueOption};
 use crate::http::ext_authz::{BodyOptions, ExtAuthz, ExtAuthzDynamicMetadata, FailureMode};
 use crate::types::agent::SimpleBackendReference;
+use crate::*;
 
 impl Default for ExtAuthz {
 	fn default() -> Self {

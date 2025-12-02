@@ -7,7 +7,7 @@ use tokio::fs;
 
 use crate::client::Client;
 use crate::store::Stores;
-use crate::types::agent::GatewayName;
+use crate::types::agent::ListenerTarget;
 use crate::types::proto::agent::Resource as ADPResource;
 use crate::types::proto::workload::Address as XdsAddress;
 use crate::{ConfigSource, client, control, store};
@@ -64,7 +64,11 @@ impl StateManager {
 				stores: stores.clone(),
 				cfg: cfg.clone(),
 				client,
-				gateway: strng::format!("{}/{}", config.namespace, config.gateway),
+				gateway: ListenerTarget {
+					gateway_name: config.gateway.clone(),
+					gateway_namespace: config.namespace.clone(),
+					listener_name: None,
+				},
 			};
 			local_client.run().await?;
 		}
@@ -89,7 +93,7 @@ pub struct LocalClient {
 	pub cfg: ConfigSource,
 	pub stores: Stores,
 	pub client: Client,
-	pub gateway: GatewayName,
+	pub gateway: ListenerTarget,
 }
 
 impl LocalClient {

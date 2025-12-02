@@ -5,8 +5,9 @@
 //   cd crates/agentgateway/tests/common/testdata
 //   ./gen_certs.sh
 
-use rcgen::KeyPair;
 use std::sync::{Arc, OnceLock};
+
+use rcgen::KeyPair;
 
 // Static test CA files
 pub const TEST_ROOT_KEY: &[u8] = include_bytes!("testdata/ca-key.pem");

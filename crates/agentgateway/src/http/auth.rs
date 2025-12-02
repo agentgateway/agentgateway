@@ -5,7 +5,7 @@ use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::proxy::ProxyError;
 use crate::serdes::deser_key_from_file;
-use crate::types::agent::BackendName;
+use crate::types::agent::BackendTarget;
 use crate::*;
 
 #[apply(schema!)]
@@ -113,7 +113,7 @@ pub enum BackendAuth {
 
 #[derive(Clone)]
 pub struct BackendInfo {
-	pub name: BackendName,
+	pub target: BackendTarget,
 	pub inputs: Arc<ProxyInputs>,
 }
 

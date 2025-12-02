@@ -7,7 +7,6 @@ mod streamablehttp;
 use std::io;
 
 pub(crate) use client::McpHttpClient;
-
 use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;

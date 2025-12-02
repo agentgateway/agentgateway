@@ -58,7 +58,7 @@ async fn stream_to_multiplex() {
 			],
 			true,
 		)
-		.with_bind(simple_bind(basic_named_route(strng::new("mcp"))));
+		.with_bind(simple_bind(basic_named_route(strng::new("/mcp"))));
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let tools = client.list_tools(None).await.unwrap();

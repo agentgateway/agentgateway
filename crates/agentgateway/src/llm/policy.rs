@@ -1,3 +1,8 @@
+use ::http::HeaderMap;
+use bytes::Bytes;
+use itertools::Itertools;
+use serde::de::DeserializeOwned;
+
 use crate::http::filters::HeaderModifier;
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
@@ -6,13 +11,10 @@ use crate::llm::universal::{RequestType, ResponseType};
 use crate::llm::{AIError, pii};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{
-	BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackend, SimpleBackendReference, Target,
+	BackendPolicy, HeaderMatch, HeaderValueMatch, ResourceName, SimpleBackend,
+	SimpleBackendReference, Target,
 };
 use crate::*;
-use ::http::HeaderMap;
-use bytes::Bytes;
-use itertools::Itertools;
-use serde::de::DeserializeOwned;
 
 #[apply(schema!)]
 #[derive(Default)]
@@ -291,7 +293,7 @@ impl Policy {
 			"model": model,
 		}))?))?;
 		let mock_be = SimpleBackend::Opaque(
-			strng::literal!("_openai-moderation"),
+			ResourceName::new(strng::literal!("_openai-moderation"), strng::literal!("")),
 			Target::Hostname(strng::literal!("api.openai.com"), 443),
 		);
 		let resp = client

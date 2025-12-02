@@ -8,10 +8,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 use std::time::Instant;
 
-use crate::telemetry::metrics::{Metrics as TelemetryMetrics, TCPLabels};
-use crate::transport::rewind;
-use crate::transport::rewind::RewindSocket;
-use crate::types::frontend::TCP;
 use agent_hbone::RWStream;
 use hyper_util::client::legacy::connect::{Connected, Connection};
 use prometheus_client::metrics::counter::Atomic;
@@ -19,6 +15,11 @@ use tokio::io::{AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tracing::event;
+
+use crate::telemetry::metrics::{Metrics as TelemetryMetrics, TCPLabels};
+use crate::transport::rewind;
+use crate::transport::rewind::RewindSocket;
+use crate::types::frontend::TCP;
 
 #[derive(Debug, Clone)]
 pub struct TCPConnectionInfo {

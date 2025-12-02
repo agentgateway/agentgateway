@@ -47,13 +47,12 @@ pub use ::http::{
 };
 use bytes::Bytes;
 use http_body::{Frame, SizeHint};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::Url;
 
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::BufferLimit;
-
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,6 +1,5 @@
-use crate::apply;
 use crate::transport::stream::TLSConnectionInfo;
-use crate::*;
+use crate::{apply, *};
 
 #[apply(schema!)]
 #[derive(Default)]

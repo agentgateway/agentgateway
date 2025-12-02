@@ -1,6 +1,7 @@
+use http::Method;
+
 use super::*;
 use crate::http::Body;
-use http::Method;
 
 fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 	let mut cb = ContextBuilder::new();

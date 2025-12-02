@@ -48,7 +48,7 @@ impl McpHttpClient {
 			&& let Some(pinned) = *self.pinned_dest.lock().unwrap()
 		{
 			tracing::trace!(
-				backend = %self.backend.name(),
+				backend = %self.backend,
 				endpoint = %pinned.0,
 				"using pinned backend endpoint"
 			);
@@ -66,7 +66,7 @@ impl McpHttpClient {
 			&& let Some(resolved) = resp.extensions().get::<ResolvedDestination>()
 		{
 			tracing::debug!(
-				backend = %self.backend.name(),
+				backend = %self.backend,
 				endpoint = %resolved.0,
 				"pinned stateful MCP session to backend endpoint"
 			);

@@ -31,21 +31,21 @@ impl Provider {
 }
 
 pub mod responses {
-	use bytes::Bytes;
-
-	use crate::llm::universal::{RequestType, ResponseType};
-	use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
-
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
 		Content, ContentType, CreateResponse, FunctionCall, Input, InputContent, InputItem,
 		InputMessage, OutputContent, OutputMessage, OutputStatus, OutputText, ResponseEvent, Role,
 		ToolChoice, ToolChoiceMode, ToolDefinition,
 	};
+	use bytes::Bytes;
+
+	use crate::llm::universal::{RequestType, ResponseType};
+	use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
 
 	pub mod passthrough {
-		use super::*;
 		use serde::{Deserialize, Serialize};
+
+		use super::*;
 
 		#[derive(Debug, Deserialize, Clone, Serialize)]
 		pub struct Request {

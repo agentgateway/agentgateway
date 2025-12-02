@@ -1,3 +1,6 @@
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
+
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use async_openai::types::{ChatCompletionMessageToolCallChunk, FunctionCallStream};
@@ -5,8 +8,6 @@ use bytes::Bytes;
 use chrono;
 use itertools::Itertools;
 use rand::Rng;
-use std::collections::{HashMap, HashSet};
-use std::time::Instant;
 use tracing::trace;
 
 use crate::http::{Body, Response};
@@ -2352,9 +2353,10 @@ impl ConverseResponseAdapter {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use ::http::HeaderMap;
 	use serde_json::json;
+
+	use super::*;
 
 	#[test]
 	fn test_metadata_from_header() {

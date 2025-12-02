@@ -25,11 +25,11 @@ mod helpers {
 		fn type_name() -> &'static str;
 	}
 
-	use cel::extractors::IntoResolveResult;
-	use cel::extractors::This;
+	use std::sync::Arc;
+
+	use cel::extractors::{IntoResolveResult, This};
 	use cel::objects::{Opaque, ValueType};
 	use cel::{ExecutionError, FunctionContext, ResolveResult, Value};
-	use std::sync::Arc;
 
 	pub type FResult<T> = std::result::Result<T, ExecutionError>;
 	pub type FVResult = std::result::Result<Value, ExecutionError>;

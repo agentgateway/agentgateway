@@ -49,7 +49,7 @@ use telemetry::{metrics, trc};
 
 use crate::control::{AuthSource, RootCert};
 use crate::telemetry::trc::Protocol;
-use crate::types::agent::GatewayName;
+use crate::types::agent::ListenerTarget;
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -362,8 +362,12 @@ pub struct Config {
 }
 
 impl Config {
-	pub fn gateway(&self) -> GatewayName {
-		strng::format!("{}/{}", self.xds.namespace, self.xds.gateway)
+	pub fn gateway(&self) -> ListenerTarget {
+		ListenerTarget {
+			gateway_name: self.xds.gateway.clone(),
+			gateway_namespace: self.xds.namespace.clone(),
+			listener_name: None,
+		}
 	}
 }
 
@@ -383,8 +387,8 @@ pub struct XDSConfig {
 	pub address: Option<String>,
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
-	pub namespace: String,
-	pub gateway: String,
+	pub namespace: Strng,
+	pub gateway: Strng,
 
 	pub local_config: Option<ConfigSource>,
 }

@@ -23,7 +23,7 @@ use crate::store::{Event, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{Extension, LoggingMode, Socket, TLSConnectionInfo};
-use crate::types::agent::{Bind, BindName, BindProtocol, Listener, ListenerProtocol};
+use crate::types::agent::{Bind, BindKey, BindProtocol, Listener, ListenerProtocol};
 use crate::types::frontend;
 use crate::{ProxyInputs, client};
 
@@ -252,7 +252,7 @@ impl Gateway {
 	}
 
 	pub async fn proxy_bind(
-		bind_name: BindName,
+		bind_name: BindKey,
 		mut raw_stream: Socket,
 		inputs: Arc<ProxyInputs>,
 		drain: DrainWatcher,
@@ -363,7 +363,7 @@ impl Gateway {
 	}
 
 	async fn proxy(
-		bind_name: BindName,
+		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
 		stream: Socket,
@@ -378,8 +378,14 @@ impl Gateway {
 			.get_or_create(&TCPLabels {
 				bind: Some(&bind_name).into(),
 				// For HTTP, this will be empty
-				gateway: selected_listener.as_ref().map(|l| &l.gateway_name).into(),
-				listener: selected_listener.as_ref().map(|l| &l.name).into(),
+				gateway: selected_listener
+					.as_ref()
+					.map(|l| l.name.as_gateway_name())
+					.into(),
+				listener: selected_listener
+					.as_ref()
+					.map(|l| l.name.listener_name.clone())
+					.into(),
 				protocol: if stream.ext::<TLSConnectionInfo>().is_some() {
 					BindProtocol::https
 				} else {
@@ -396,8 +402,14 @@ impl Gateway {
 		};
 		let transport_labels = TCPLabels {
 			bind: Some(&bind_name).into(),
-			gateway: selected_listener.as_ref().map(|l| &l.gateway_name).into(),
-			listener: selected_listener.as_ref().map(|l| &l.name).into(),
+			gateway: selected_listener
+				.as_ref()
+				.map(|l| l.name.as_gateway_name())
+				.into(),
+			listener: selected_listener
+				.as_ref()
+				.map(|l| l.name.listener_name.clone())
+				.into(),
 			protocol: transport_protocol,
 		};
 		let transport_metrics = inputs.metrics.clone();
@@ -453,7 +465,7 @@ impl Gateway {
 	}
 
 	async fn proxy_tcp(
-		bind_name: BindName,
+		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
 		stream: Socket,
@@ -490,7 +502,7 @@ impl Gateway {
 		inp: Arc<ProxyInputs>,
 		raw_stream: Socket,
 		policies: &FrontendPolices,
-		bind: BindName,
+		bind: BindKey,
 		is_https: bool,
 	) -> anyhow::Result<(Arc<Listener>, Socket)> {
 		let def = frontend::TLS::default();
@@ -546,8 +558,8 @@ impl Gateway {
 						.tls_handshake_duration
 						.get_or_create(&TCPLabels {
 							bind: Some(&bind).into(),
-							gateway: Some(&best.gateway_name).into(),
-							listener: Some(&best.name).into(),
+							gateway: Some(best.name.as_gateway_name()).into(),
+							listener: best.name.listener_name.clone().into(),
 							protocol,
 						})
 						.observe(tls_dur.as_secs_f64());
@@ -569,7 +581,7 @@ impl Gateway {
 	}
 
 	async fn terminate_hbone(
-		bind_name: BindName,
+		bind_name: BindKey,
 		inp: Arc<ProxyInputs>,
 		raw_stream: Socket,
 		policies: FrontendPolices,
@@ -616,7 +628,7 @@ impl Gateway {
 	/// serve_connect handles a single connection from a client.
 	#[allow(clippy::too_many_arguments)]
 	async fn serve_connect(
-		bind_name: BindName,
+		bind_name: BindKey,
 		pi: Arc<ProxyInputs>,
 		policies: Arc<FrontendPolices>,
 		req: agent_hbone::server::H2Request,
@@ -663,7 +675,7 @@ fn tls_looks_like_http(d: Bytes) -> bool {
 		|| d.starts_with(b"DELETE /")
 }
 
-fn bind_protocol(inp: Arc<ProxyInputs>, bind: BindName) -> BindProtocol {
+fn bind_protocol(inp: Arc<ProxyInputs>, bind: BindKey) -> BindProtocol {
 	let listeners = inp.stores.read_binds().listeners(bind).unwrap();
 	if listeners
 		.iter()

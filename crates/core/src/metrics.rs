@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Error, Write};
 use std::mem;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use prometheus_client::encoding::{
@@ -11,7 +12,6 @@ use tracing::field::{DisplayValue, display};
 use tracing_core::field::Value;
 
 use crate::strng::{RichStrng, Strng};
-
 pub use crate::tokio_metrics::TokioCollector;
 
 pub const PREFIX: &str = "agentgateway";
@@ -107,6 +107,12 @@ impl<T> DefaultedUnknown<T> {
 	}
 	pub fn as_ref(&self) -> Option<&T> {
 		self.0.as_ref()
+	}
+}
+
+impl<T: Deref> DefaultedUnknown<T> {
+	pub fn as_deref(&self) -> Option<&T::Target> {
+		self.0.as_deref()
 	}
 }
 

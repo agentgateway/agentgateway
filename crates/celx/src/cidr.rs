@@ -1,11 +1,13 @@
-use super::helpers::*;
-use cel::objects::Opaque;
-use cel::{Context, ExecutionError, FunctionContext, Value};
-use serde::Serialize;
 use std::net;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use cel::objects::Opaque;
+use cel::{Context, ExecutionError, FunctionContext, Value};
+use serde::Serialize;
+
+use super::helpers::*;
 
 pub fn insert_all(ctx: &mut Context<'_>) {
 	ctx.add_function("cidr", wrapnew(Cidr::parse));

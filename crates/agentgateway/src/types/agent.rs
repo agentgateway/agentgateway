@@ -2,7 +2,7 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::io::Cursor;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
@@ -34,22 +34,21 @@ use crate::*;
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Bind {
-	pub key: BindName,
+	pub key: BindKey,
 	pub address: SocketAddr,
 	pub listeners: ListenerSet,
 }
 
-pub type BindName = Strng;
-pub type ListenerName = Strng;
+pub type BindKey = Strng;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Listener {
 	pub key: ListenerKey,
 	// User facing name
+	#[serde(flatten)]
 	pub name: ListenerName,
-	// User facing name
-	pub gateway_name: GatewayName,
+
 	/// Can be a wildcard
 	pub hostname: Strng,
 	pub protocol: ListenerProtocol,
@@ -57,7 +56,6 @@ pub struct Listener {
 	pub tcp_routes: TCPRouteSet,
 }
 
-pub type GatewayName = Strng;
 type Alpns = Vec<Vec<u8>>;
 
 #[derive(Debug, Clone)]
@@ -191,11 +189,9 @@ pub type ListenerKey = Strng;
 pub struct Route {
 	// Internal name
 	pub key: RouteKey,
+	#[serde(flatten)]
 	// User facing name of the route
-	pub route_name: RouteName,
-	// User facing name of the rule
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub rule_name: Option<RouteRuleName>,
+	pub name: RouteName,
 	/// Can be a wildcard
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub hostnames: Vec<Strng>,
@@ -208,32 +204,175 @@ pub struct Route {
 }
 
 pub type RouteKey = Strng;
-pub type RouteName = Strng;
 pub type RouteRuleName = Strng;
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
+#[cfg_attr(test, derive(Default))]
+pub struct RouteName {
+	pub name: Strng,
+	pub namespace: Strng,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub rule_name: Option<Strng>,
+}
+
+impl RouteName {
+	pub fn as_route_name(&self) -> Strng {
+		strng::format!("{}/{}", self.namespace, self.name)
+	}
+	pub fn strip_route_rule_field(&self) -> RouteName {
+		Self {
+			name: self.name.clone(),
+			namespace: self.namespace.clone(),
+			rule_name: None,
+		}
+	}
+}
+
+#[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
+#[cfg_attr(test, derive(Default))]
+pub struct ListenerName {
+	pub gateway_name: Strng,
+	pub gateway_namespace: Strng,
+	pub listener_name: Strng,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub listener_set: Option<ResourceName>,
+}
+
+impl ListenerName {
+	pub fn as_gateway_name(&self) -> Strng {
+		strng::format!("{}/{}", self.gateway_namespace, self.gateway_name)
+	}
+}
+
+impl From<ListenerName> for ListenerTarget {
+	fn from(l: ListenerName) -> Self {
+		Self {
+			gateway_name: l.gateway_name.clone(),
+			gateway_namespace: l.gateway_namespace.clone(),
+			listener_name: Some(l.listener_name.clone()),
+		}
+	}
+}
+
+#[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
+pub struct ListenerTarget {
+	pub gateway_name: Strng,
+	pub gateway_namespace: Strng,
+	pub listener_name: Option<Strng>,
+}
+
+impl ListenerTarget {
+	pub fn strip_listener_fields(&self) -> ListenerTarget {
+		Self {
+			gateway_name: self.gateway_name.clone(),
+			gateway_namespace: self.gateway_namespace.clone(),
+			listener_name: None,
+		}
+	}
+}
+
+#[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
+pub struct ResourceName {
+	pub name: Strng,
+	pub namespace: Strng,
+}
+
+impl ResourceName {
+	pub fn new(name: Strng, namespace: Strng) -> Self {
+		Self { name, namespace }
+	}
+}
+
+impl fmt::Display for ResourceName {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}/{}", self.namespace, self.name)
+	}
+}
+
+#[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
+pub struct TypedResourceName {
+	pub kind: Strng,
+	pub name: Strng,
+	pub namespace: Strng,
+}
+
+impl fmt::Display for TypedResourceName {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}/{}/{}", self.kind, self.namespace, self.name)
+	}
+}
+
+#[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
+pub enum BackendTarget {
+	Backend {
+		name: Strng,
+		namespace: Strng,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		section: Option<Strng>,
+	},
+	Service {
+		hostname: Strng,
+		namespace: Strng,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		port: Option<u16>,
+	},
+	Invalid,
+}
+
+impl BackendTarget {
+	pub fn strip_section(&self) -> BackendTarget {
+		match self.clone() {
+			BackendTarget::Backend {
+				name, namespace, ..
+			} => BackendTarget::Backend {
+				name,
+				namespace,
+				section: None,
+			},
+			BackendTarget::Service {
+				namespace,
+				hostname,
+				..
+			} => BackendTarget::Service {
+				namespace,
+				hostname,
+				port: None,
+			},
+			BackendTarget::Invalid => BackendTarget::Invalid,
+		}
+	}
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TCPRoute {
 	// Internal name
 	pub key: RouteKey,
 	// User facing name of the route
-	pub route_name: RouteName,
+	#[serde(flatten)]
+	pub name: RouteName,
 	// Can be a wildcard. Not applicable for TCP, only for TLS
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub hostnames: Vec<Strng>,
-	// User facing name of the rule
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub rule_name: Option<RouteRuleName>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub backends: Vec<TCPRouteBackendReference>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct TCPRouteBackendReference {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
 	pub backend: SimpleBackendReference,
+	// Inline policies ("filters") of the route backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub inline_policies: Vec<BackendPolicy>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -241,7 +380,10 @@ pub struct TCPRouteBackendReference {
 pub struct TCPRouteBackend {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
-	pub backend: SimpleBackend,
+	pub backend: SimpleBackendWithPolicies,
+	// Inline policies ("filters") of the route backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub inline_policies: Vec<BackendPolicy>,
 }
 
 #[apply(schema!)]
@@ -342,6 +484,7 @@ pub struct RouteBackendReference {
 	pub weight: usize,
 	#[serde(flatten)]
 	pub backend: BackendReference,
+	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<BackendPolicy>,
 }
@@ -352,6 +495,7 @@ pub struct RouteBackend {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
 	pub backend: BackendWithPolicies,
+	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<BackendPolicy>,
 }
@@ -370,17 +514,27 @@ pub struct BackendWithPolicies {
 	pub inline_policies: Vec<BackendPolicy>,
 }
 
+impl From<SimpleBackendWithPolicies> for BackendWithPolicies {
+	fn from(backend: SimpleBackendWithPolicies) -> Self {
+		Self {
+			backend: Backend::from(backend.backend),
+			inline_policies: backend.inline_policies,
+		}
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Backend {
 	Service(Arc<Service>, u16),
 	#[serde(rename = "host", serialize_with = "serialize_backend_tuple")]
-	Opaque(BackendName, Target), // Hostname or IP
+	Opaque(ResourceName, Target), // Hostname or IP
 	#[serde(rename = "mcp", serialize_with = "serialize_backend_tuple")]
-	MCP(BackendName, McpBackend),
+	MCP(ResourceName, McpBackend),
 	#[serde(rename = "ai", serialize_with = "serialize_backend_tuple")]
-	AI(BackendName, crate::llm::AIBackend),
-	Dynamic(BackendName),
+	AI(ResourceName, crate::llm::AIBackend),
+	#[serde(serialize_with = "serialize_backend_tuple")]
+	Dynamic(ResourceName, ()),
 	Invalid,
 }
 
@@ -394,14 +548,15 @@ impl From<Backend> for BackendWithPolicies {
 }
 
 pub fn serialize_backend_tuple<S: Serializer, T: serde::Serialize>(
-	name: &BackendName,
+	name: &ResourceName,
 	t: T,
 	serializer: S,
 ) -> Result<S::Ok, S::Error> {
 	#[derive(Debug, Clone, serde::Serialize)]
 	#[serde(rename_all = "camelCase")]
 	struct BackendTuple<'a, T: serde::Serialize> {
-		name: &'a BackendName,
+		#[serde(flatten)]
+		name: &'a ResourceName,
 		target: &'a T,
 	}
 	BackendTuple { name, target: &t }.serialize(serializer)
@@ -411,7 +566,7 @@ pub fn serialize_backend_tuple<S: Serializer, T: serde::Serialize>(
 #[serde(rename_all = "camelCase")]
 pub enum BackendReference {
 	Service { name: NamespacedHostname, port: u16 },
-	Backend(BackendName),
+	Backend(BackendKey),
 	Invalid,
 }
 
@@ -430,8 +585,18 @@ impl From<SimpleBackend> for Backend {
 pub enum SimpleBackend {
 	Service(Arc<Service>, u16),
 	#[serde(rename = "host")]
-	Opaque(BackendName, Target), // Hostname or IP
+	Opaque(ResourceName, Target), // Hostname or IP
 	Invalid,
+}
+
+impl fmt::Display for SimpleBackend {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		match self {
+			SimpleBackend::Service(service, port) => write!(f, "{}:{}", service.hostname, port),
+			SimpleBackend::Opaque(name, _) => write!(f, "{}", name),
+			SimpleBackend::Invalid => write!(f, "invalid"),
+		}
+	}
 }
 
 impl TryFrom<Backend> for SimpleBackend {
@@ -447,12 +612,30 @@ impl TryFrom<Backend> for SimpleBackend {
 	}
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SimpleBackendWithPolicies {
+	pub backend: SimpleBackend,
+
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub inline_policies: Vec<BackendPolicy>,
+}
+
+impl From<SimpleBackend> for SimpleBackendWithPolicies {
+	fn from(value: SimpleBackend) -> Self {
+		Self {
+			backend: value,
+			inline_policies: vec![],
+		}
+	}
+}
+
 #[derive(Eq, PartialEq)]
 #[apply(schema_ser!)]
 #[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackend"))]
 pub enum SimpleBackendReference {
 	Service { name: NamespacedHostname, port: u16 },
-	Backend(BackendName), // Hostname or IP
+	Backend(BackendKey),
 	InlineBackend(Target),
 	Invalid,
 }
@@ -475,16 +658,16 @@ impl<'de> serde::Deserialize<'de> for SimpleBackendReference {
 }
 
 impl SimpleBackendReference {
-	pub fn name(&self) -> BackendName {
-		match self {
-			SimpleBackendReference::Service { name, port } => {
-				strng::format!("service/{}/{}:{port}", name.namespace, name.hostname)
-			},
-			SimpleBackendReference::Backend(name) => name.clone(),
-			SimpleBackendReference::InlineBackend(t) => t.to_string().into(),
-			SimpleBackendReference::Invalid => strng::format!("invalid"),
-		}
-	}
+	// pub fn name(&self) -> BackendName {
+	// 	match self {
+	// 		SimpleBackendReference::Service { name, port } => {
+	// 			strng::format!("service/{}/{}:{port}", name.namespace, name.hostname)
+	// 		},
+	// 		SimpleBackendReference::Backend(name) => name.clone(),
+	// 		SimpleBackendReference::InlineBackend(t) => t.to_string().into(),
+	// 		SimpleBackendReference::Invalid => strng::format!("invalid"),
+	// 	}
+	// }
 }
 
 impl SimpleBackend {
@@ -498,13 +681,19 @@ impl SimpleBackend {
 		}
 	}
 
-	pub fn name(&self) -> BackendName {
+	pub fn target(&self) -> BackendTarget {
 		match self {
-			SimpleBackend::Service(svc, port) => {
-				strng::format!("service/{}/{}:{port}", svc.namespace, svc.hostname)
+			SimpleBackend::Service(svc, port) => BackendTarget::Service {
+				hostname: svc.hostname.clone(),
+				namespace: svc.namespace.clone(),
+				port: Some(*port),
 			},
-			SimpleBackend::Opaque(name, _) => name.clone(),
-			SimpleBackend::Invalid => strng::format!("invalid"),
+			SimpleBackend::Opaque(name, _) => BackendTarget::Backend {
+				name: name.name.clone(),
+				namespace: name.namespace.clone(),
+				section: None,
+			},
+			SimpleBackend::Invalid => BackendTarget::Invalid,
 		}
 	}
 
@@ -519,33 +708,39 @@ impl SimpleBackend {
 	pub fn backend_info(&self) -> BackendInfo {
 		BackendInfo {
 			backend_type: self.backend_type(),
-			backend_name: self.name(),
+			backend_name: strng::format!("{}", self),
 		}
 	}
 }
 
-impl BackendReference {
-	pub fn name(&self) -> BackendName {
+impl Backend {
+	pub fn target(&self) -> BackendTarget {
 		match self {
-			BackendReference::Service { name, port } => {
-				strng::format!("service/{}/{}:{port}", name.namespace, name.hostname)
+			Backend::Service(svc, port) => BackendTarget::Service {
+				hostname: svc.hostname.clone(),
+				namespace: svc.namespace.clone(),
+				port: Some(*port),
 			},
-			BackendReference::Backend(name) => name.clone(),
-			BackendReference::Invalid => strng::format!("invalid"),
+			Backend::Opaque(name, _)
+			| Backend::MCP(name, _)
+			| Backend::AI(name, _)
+			| Backend::Dynamic(name, _) => BackendTarget::Backend {
+				name: name.name.clone(),
+				namespace: name.namespace.clone(),
+				section: None,
+			},
+			Backend::Invalid => BackendTarget::Invalid,
 		}
 	}
-}
-impl Backend {
-	pub fn name(&self) -> BackendName {
+
+	pub fn name(&self) -> Strng {
 		match self {
-			Backend::Service(svc, port) => {
-				strng::format!("service/{}/{}:{port}", svc.namespace, svc.hostname)
-			},
-			Backend::Opaque(name, _) => name.clone(),
-			Backend::MCP(name, _) => name.clone(),
-			Backend::AI(name, _) => name.clone(),
-			Backend::Dynamic(name) => name.clone(),
-			Backend::Invalid => strng::format!("invalid"),
+			Backend::Service(svc, port) => strng::format!("{}:{}", svc.hostname.clone(), port),
+			Backend::Opaque(name, _)
+			| Backend::MCP(name, _)
+			| Backend::AI(name, _)
+			| Backend::Dynamic(name, _) => strng::format!("{}", name),
+			Backend::Invalid => strng::literal!("invalid"),
 		}
 	}
 
@@ -579,12 +774,8 @@ impl Backend {
 #[derive(Debug, Clone)]
 pub struct BackendInfo {
 	pub backend_type: cel::BackendType,
-	pub backend_name: BackendName,
+	pub backend_name: Strng,
 }
-
-pub type BackendName = Strng;
-pub type SubBackendName = Strng;
-pub type ServiceName = Strng;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1092,12 +1283,14 @@ pub enum IpFamily {
 	IPv6,
 }
 
-pub type PolicyName = Strng;
+pub type PolicyKey = Strng;
+pub type BackendKey = Strng;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetedPolicy {
-	pub name: PolicyName,
+	pub key: PolicyKey,
+	pub name: Option<TypedResourceName>,
 	pub target: PolicyTarget,
 	pub policy: PolicyType,
 }
@@ -1177,19 +1370,14 @@ impl PolicyType {
 	}
 }
 
+pub type RouteTarget = RouteName;
+
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
 pub enum PolicyTarget {
-	Gateway(GatewayName),
-	Listener(ListenerKey),
-	Route(RouteName),
-	RouteRule(RouteRuleName),
-	// Note: Backend includes Service:port, this is used when we are *only* attaching to service
-	Service(ServiceName),
-	Backend(BackendName),
-	// Some Backend types group multiple backends.
-	// Format: <backend>/<sub-backend>
-	SubBackend(SubBackendName),
+	Gateway(ListenerTarget),
+	Route(RouteTarget),
+	Backend(BackendTarget),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1481,8 +1669,8 @@ mod tests {
 	#[test]
 	fn test_backend_type_categorization() {
 		let opaque_backend = Backend::Opaque(
-			strng::new("test-opaque"),
-			crate::types::agent::Target::Hostname(strng::new("example.com"), 443),
+			ResourceName::new(strng::new("test-opaque"), strng::new("ns")),
+			Target::Hostname(strng::new("example.com"), 443),
 		);
 		assert_eq!(opaque_backend.backend_type(), cel::BackendType::Static);
 		assert_eq!(
@@ -1498,7 +1686,7 @@ mod tests {
 		);
 
 		let info = opaque_backend.backend_info();
-		assert_eq!(info.backend_name, strng::new("test-opaque"));
+		assert_eq!(info.backend_name, strng::new("ns/test-opaque"));
 	}
 
 	#[test]

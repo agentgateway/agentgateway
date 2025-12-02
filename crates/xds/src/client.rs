@@ -246,15 +246,15 @@ pub struct Config {
 }
 
 impl Config {
-	pub fn new(client: GrpcClient, gateway_name: String, namespace: String) -> Self {
+	pub fn new(client: GrpcClient, gateway_name: Strng, namespace: Strng) -> Self {
 		Self {
 			client,
 			handlers: HashMap::new(),
 			initial_requests: Vec::new(),
 			on_demand: false,
 			proxy_metadata: HashMap::from([
-				("GATEWAY_NAME".to_string(), gateway_name),
-				("NAMESPACE".to_string(), namespace),
+				("GATEWAY_NAME".to_string(), gateway_name.to_string()),
+				("NAMESPACE".to_string(), namespace.to_string()),
 			]),
 			instance_ip: std::env::var(INSTANCE_IP).unwrap_or_else(|_| DEFAULT_IP.to_string()),
 			pod_name: std::env::var(POD_NAME).unwrap_or_else(|_| EMPTY_STR.to_string()),

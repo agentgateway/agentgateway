@@ -20,13 +20,14 @@ use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
-	A2aPolicy, Authorization, Backend, BackendName, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindName, FrontendPolicy, GatewayName, Listener, ListenerKey,
-	ListenerProtocol, ListenerSet, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget,
-	McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyName, PolicyPhase, PolicyTarget,
-	PolicyType, Route, RouteBackendReference, RouteMatch, RouteName, RouteRuleName, RouteSet,
-	ServerTLSConfig, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy,
+	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
+	BackendWithPolicies, Bind, BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName,
+	ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication, McpAuthentication,
+	McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase,
+	PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
+	RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies,
+	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
+	TargetedPolicy, TrafficPolicy, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::frontend;
@@ -35,7 +36,7 @@ use crate::*;
 impl NormalizedLocalConfig {
 	pub async fn from(
 		client: client::Client,
-		gateway_name: GatewayName,
+		gateway_name: ListenerTarget,
 		s: &str,
 	) -> anyhow::Result<NormalizedLocalConfig> {
 		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
@@ -87,11 +88,21 @@ struct LocalBind {
 }
 
 #[apply(schema_de!)]
-struct LocalListener {
+pub struct LocalListenerName {
 	// User facing name
-	name: Option<Strng>,
+	#[serde(default)]
+	pub name: Option<Strng>,
+	#[serde(default)]
+	pub namespace: Option<Strng>,
 	// User facing name of the Gateway. Option, one will be set if not.
-	gateway_name: Option<Strng>,
+	#[serde(default)]
+	pub gateway_name: Option<Strng>,
+}
+
+#[apply(schema_de!)]
+struct LocalListener {
+	#[serde(flatten)]
+	name: LocalListenerName,
 	/// Can be a wildcard
 	hostname: Option<Strng>,
 	#[serde(default)]
@@ -126,13 +137,19 @@ pub struct LocalTLSServerConfig {
 }
 
 #[apply(schema_de!)]
+pub struct LocalRouteName {
+	#[serde(default)]
+	pub name: Option<Strng>,
+	#[serde(default)]
+	pub namespace: Option<Strng>,
+	#[serde(default)]
+	pub rule_name: Option<Strng>,
+}
+
+#[apply(schema_de!)]
 struct LocalRoute {
-	#[serde(default, skip_serializing_if = "Option::is_none", rename = "name")]
-	// User facing name of the route
-	route_name: Option<RouteName>,
-	// User facing name of the rule
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	rule_name: Option<RouteRuleName>,
+	#[serde(flatten)]
+	name: LocalRouteName,
 	/// Can be a wildcard
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	hostnames: Vec<Strng>,
@@ -269,11 +286,11 @@ impl LocalAIBackend {
 }
 
 impl LocalBackend {
-	pub fn as_backends(&self, name: BackendName) -> anyhow::Result<Vec<BackendWithPolicies>> {
+	pub fn as_backends(&self, name: ResourceName) -> anyhow::Result<Vec<BackendWithPolicies>> {
 		Ok(match self {
 			LocalBackend::Service { .. } => vec![], // These stay as references
 			LocalBackend::Opaque(tgt) => vec![Backend::Opaque(name, tgt.clone()).into()],
-			LocalBackend::Dynamic { .. } => vec![Backend::Dynamic(name).into()],
+			LocalBackend::Dynamic { .. } => vec![Backend::Dynamic(name, ()).into()],
 			LocalBackend::MCP(tgt) => {
 				let mut targets = vec![];
 				let mut backends = vec![];
@@ -296,7 +313,7 @@ impl LocalBackend {
 					let spec = match t.spec.clone() {
 						LocalMcpTargetSpec::Sse { backend } => {
 							let (backend, path, tls) = backend.process()?;
-							let (bref, be) = to_simple_backend_and_ref(name.clone(), &backend);
+							let (bref, be) = to_simple_backend_and_ref(local_name(name.clone()), &backend);
 							if let Some(b) = be {
 								make_backend(b, tls)?;
 							}
@@ -307,7 +324,7 @@ impl LocalBackend {
 						},
 						LocalMcpTargetSpec::Mcp { backend } => {
 							let (backend, path, tls) = backend.process()?;
-							let (bref, be) = to_simple_backend_and_ref(name.clone(), &backend);
+							let (bref, be) = to_simple_backend_and_ref(local_name(name.clone()), &backend);
 							if let Some(b) = be {
 								make_backend(b, tls)?;
 							}
@@ -319,7 +336,7 @@ impl LocalBackend {
 						LocalMcpTargetSpec::Stdio { cmd, args, env } => McpTargetSpec::Stdio { cmd, args, env },
 						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
 							let (backend, _, tls) = backend.process()?;
-							let (bref, be) = to_simple_backend_and_ref(name.clone(), &backend);
+							let (bref, be) = to_simple_backend_and_ref(local_name(name.clone()), &backend);
 							if let Some(b) = be {
 								make_backend(b, tls)?;
 							}
@@ -356,6 +373,24 @@ impl LocalBackend {
 			},
 			LocalBackend::Invalid => vec![Backend::Invalid.into()],
 		})
+	}
+}
+
+impl SimpleLocalBackend {
+	pub fn as_backends(
+		&self,
+		name: ResourceName,
+		policies: Vec<BackendPolicy>,
+	) -> Option<SimpleBackendWithPolicies> {
+		match self {
+			SimpleLocalBackend::Service { .. } => None, // These stay as references
+			SimpleLocalBackend::Opaque(tgt) => Some(SimpleBackendWithPolicies {
+				backend: SimpleBackend::Opaque(name, tgt.clone()),
+				inline_policies: policies,
+			}),
+			SimpleLocalBackend::Backend(_) => None,
+			SimpleLocalBackend::Invalid => Some(SimpleBackend::Invalid.into()),
+		}
 	}
 }
 
@@ -475,12 +510,8 @@ fn default_matches() -> Vec<RouteMatch> {
 
 #[apply(schema_de!)]
 struct LocalTCPRoute {
-	#[serde(default, skip_serializing_if = "Option::is_none", rename = "name")]
-	// User facing name of the route
-	route_name: Option<RouteName>,
-	// User facing name of the rule
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	rule_name: Option<RouteRuleName>,
+	#[serde(flatten)]
+	name: LocalRouteName,
 	/// Can be a wildcard
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	hostnames: Vec<Strng>,
@@ -515,13 +546,13 @@ pub enum SimpleLocalBackend {
 	),
 	Backend(
 		/// Explicit backend reference. Backend must be defined in the top level backends list
-		BackendName,
+		BackendKey,
 	),
 	Invalid,
 }
 
 impl SimpleLocalBackend {
-	pub fn as_backend(&self, name: BackendName) -> Option<Backend> {
+	pub fn as_backend(&self, name: ResourceName) -> Option<Backend> {
 		match self {
 			SimpleLocalBackend::Service { .. } => None, // These stay as references
 			SimpleLocalBackend::Backend(_) => None,     // These stay as references
@@ -533,7 +564,7 @@ impl SimpleLocalBackend {
 
 #[apply(schema_de!)]
 struct LocalPolicy {
-	pub name: PolicyName,
+	pub name: ResourceName,
 	pub target: PolicyTarget,
 
 	/// phase defines at what level the policy runs at. Gateway policies run pre-routing, while
@@ -827,7 +858,7 @@ struct TCPFilterOrPolicy {
 
 async fn convert(
 	client: client::Client,
-	gateway: GatewayName,
+	gateway: ListenerTarget,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
 	let LocalConfig {
@@ -875,7 +906,12 @@ async fn convert(
 			.map(|r| PolicyType::from((r.clone(), p.phase)))
 			.unwrap_or_else(|| res.backend_policies.first().unwrap().clone().into());
 		let tgt_policy = TargetedPolicy {
-			name: p.name,
+			name: Some(TypedResourceName {
+				kind: strng::literal!("Local"),
+				name: p.name.name.clone(),
+				namespace: p.name.namespace.clone(),
+			}),
+			key: p.name.to_string().into(),
 			target: p.target,
 			policy: tp,
 		};
@@ -896,13 +932,12 @@ async fn convert(
 
 async fn convert_listener(
 	client: client::Client,
-	bind_name: BindName,
+	bind_name: BindKey,
 	idx: usize,
 	l: LocalListener,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalListener {
 		name,
-		gateway_name,
 		policies,
 		hostname,
 		protocol,
@@ -947,9 +982,12 @@ async fn convert_listener(
 		bail!("only 'routes' or 'tcpRoutes' may be set");
 	}
 
-	let name = name.unwrap_or_else(|| strng::format!("listener{}", idx));
-	let gateway_name: GatewayName = gateway_name.unwrap_or(bind_name);
-	let key: ListenerKey = strng::format!("{}/{}", name, gateway_name);
+	let namespace = name.namespace.unwrap_or_else(|| strng::new("default"));
+	let listener_name = name
+		.name
+		.unwrap_or_else(|| strng::format!("listener{}", idx));
+	let gateway_name = name.gateway_name.unwrap_or(bind_name);
+	let key: ListenerKey = strng::format!("{namespace}/{gateway_name}/{listener_name}");
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -970,12 +1008,21 @@ async fn convert_listener(
 		trs.insert(route)
 	}
 
+	let name = ListenerName {
+		gateway_name,
+		gateway_namespace: namespace,
+		listener_name,
+		listener_set: None,
+	};
+
 	if let Some(pol) = policies {
 		let pols = split_policies(client.clone(), pol.into()).await?;
 		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
+			let key = strng::format!("listener/{key}/{idx}");
 			all_policies.push(TargetedPolicy {
-				name: strng::format!("listener/{key}/{idx}"),
-				target: PolicyTarget::Listener(key.clone()),
+				key: key.clone(),
+				name: None,
+				target: PolicyTarget::Gateway(name.clone().into()),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			})
 		}
@@ -984,7 +1031,6 @@ async fn convert_listener(
 	let l = Listener {
 		key,
 		name,
-		gateway_name,
 		hostname: hostname.unwrap_or_default(),
 		protocol,
 		routes: rs,
@@ -1000,37 +1046,37 @@ async fn convert_route(
 	listener_key: ListenerKey,
 ) -> anyhow::Result<(Route, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalRoute {
-		route_name,
-		rule_name,
+		name,
 		hostnames,
 		matches,
 		policies,
 		backends,
 	} = lr;
 
-	let route_name = route_name.unwrap_or_else(|| strng::format!("route{}", idx));
-	let rule_name = rule_name.clone().unwrap_or_else(|| strng::new("default"));
-	let key = strng::format!("{}/{}/{}", listener_key, route_name, rule_name,);
-	let rule_name = strng::format!("{route_name}/{rule_name}");
+	let route_name = name.name.unwrap_or_else(|| strng::format!("route{}", idx));
+	let namespace = name.namespace.unwrap_or_else(|| strng::new("default"));
+	let key = strng::format!("{listener_key}/{namespace}/{route_name}");
 
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
-	for b in backends {
+	for (idx, b) in backends.iter().enumerate() {
+		let backend_key = strng::format!("{key}/backend{idx}");
 		let policies = b
 			.policies
 			.clone()
 			.map(|p| p.translate())
 			.transpose()?
 			.unwrap_or_default();
+		let be_name = local_name(backend_key.clone());
 		let bref = match &b.backend {
 			LocalBackend::Service { name, port } => BackendReference::Service {
 				name: name.clone(),
 				port: *port,
 			},
 			LocalBackend::Invalid => BackendReference::Invalid,
-			_ => BackendReference::Backend(key.clone()),
+			_ => BackendReference::Backend(strng::format!("/{}", backend_key)),
 		};
-		let backends = b.backend.as_backends(bref.name())?;
+		let backends = b.backend.as_backends(be_name.clone())?;
 		let bref = RouteBackendReference {
 			weight: b.weight,
 			backend: bref,
@@ -1050,8 +1096,11 @@ async fn convert_route(
 	}
 	let route = Route {
 		key,
-		route_name,
-		rule_name: Some(rule_name),
+		name: RouteName {
+			name: route_name,
+			namespace,
+			rule_name: None,
+		},
 		hostnames,
 		matches,
 		backends: backend_refs,
@@ -1067,14 +1116,16 @@ struct ResolvedPolicies {
 }
 
 async fn split_frontend_policies(
-	gateway: GatewayName,
+	gateway: ListenerTarget,
 	pol: LocalFrontendPolicies,
 ) -> Result<Vec<TargetedPolicy>, Error> {
 	let mut pols = Vec::new();
 
 	let mut add = |p: FrontendPolicy, name: &str| {
+		let key = strng::format!("frontend/{name}");
 		pols.push(TargetedPolicy {
-			name: strng::format!("frontend/{name}"),
+			key: key.clone(),
+			name: None,
 			target: PolicyTarget::Gateway(gateway.clone()),
 			policy: p.into(),
 		});
@@ -1232,82 +1283,67 @@ async fn convert_tcp_route(
 	listener_key: ListenerKey,
 ) -> anyhow::Result<(TCPRoute, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalTCPRoute {
-		route_name,
-		rule_name,
+		name,
 		hostnames,
 		policies,
 		backends,
 	} = lr;
 
-	let route_name = route_name.unwrap_or_else(|| strng::format!("tcproute{}", idx));
-	let key = strng::format!(
-		"{}/{}/{}",
-		listener_key,
-		route_name,
-		rule_name.clone().unwrap_or_else(|| strng::new("default"))
-	);
-	let mut external_policies = vec![];
+	let route_name = name
+		.name
+		.unwrap_or_else(|| strng::format!("tcproute{}", idx));
+	let namespace = name.namespace.unwrap_or_else(|| strng::new("default"));
+	let key = strng::format!("{listener_key}/{namespace}/{route_name}");
+
+	let external_policies = vec![];
 
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
-	for b in &backends {
-		let (backend_ref, backend) = to_simple_backend_and_ref(key.clone(), &b.backend);
-		if let Some(backend) = backend {
-			let policies = b
-				.policies
-				.clone()
-				.map(|p| p.translate())
-				.transpose()?
-				.unwrap_or_default();
-			external_backends.push(BackendWithPolicies {
-				backend,
-				inline_policies: policies,
-			});
-		}
+	for (idx, b) in backends.iter().enumerate() {
+		let backend_key = strng::format!("{key}/backend{idx}");
+		let be_name = local_name(backend_key.clone());
+		let policies = b
+			.policies
+			.clone()
+			.map(|p| p.translate())
+			.transpose()?
+			.unwrap_or_default();
+		let bref = match &b.backend {
+			SimpleLocalBackend::Service { name, port } => SimpleBackendReference::Service {
+				name: name.clone(),
+				port: *port,
+			},
+			SimpleLocalBackend::Invalid => SimpleBackendReference::Invalid,
+			_ => SimpleBackendReference::Backend(strng::format!("/{}", backend_key)),
+		};
+		let maybe_backend = b.backend.as_backends(be_name.clone(), policies);
 		let bref = TCPRouteBackendReference {
 			weight: b.weight,
-			backend: backend_ref,
-			// filters: b.filters,
+			backend: bref,
+			inline_policies: Vec::new(),
 		};
 		backend_refs.push(bref);
-	}
-
-	let mut be_pol = 0;
-	let backend_tgt = |p: BackendPolicy| {
-		if backends.len() != 1 {
-			anyhow::bail!("backend policies currently only work with exactly 1 backend")
+		if let Some(be) = maybe_backend {
+			external_backends.push(be.into());
 		}
-
-		let (refs, _to_add): (Vec<_>, Vec<Option<Backend>>) = backends
-			.into_iter()
-			.map(|b| {
-				let (bref, backend) = to_simple_backend_and_ref(key.clone(), &b.backend);
-				let bref = TCPRouteBackendReference {
-					weight: b.weight,
-					backend: bref,
-				};
-				(bref, backend)
-			})
-			.unzip();
-		let be = refs.first().unwrap();
-		be_pol += 1;
-		Ok(TargetedPolicy {
-			name: format!("{key}/backend-{be_pol}").into(),
-			target: PolicyTarget::Backend(be.backend.name()),
-			policy: p.into(),
-		})
-	};
+	}
 
 	if let Some(pol) = policies {
 		let TCPFilterOrPolicy { backend_tls } = pol;
 		if let Some(p) = backend_tls {
-			external_policies.push(backend_tgt(BackendPolicy::BackendTLS(p.try_into()?))?)
+			for br in backend_refs.iter_mut() {
+				br.inline_policies
+					.push(BackendPolicy::BackendTLS(p.clone().try_into()?));
+			}
 		}
 	}
 	let route = TCPRoute {
 		key,
-		route_name,
-		rule_name,
+		name: RouteName {
+			name: route_name,
+			namespace,
+			rule_name: None,
+		},
 		hostnames,
 		backends: backend_refs,
 	};
@@ -1315,7 +1351,7 @@ async fn convert_tcp_route(
 }
 
 fn to_simple_backend_and_ref(
-	name: BackendName,
+	name: ResourceName,
 	b: &SimpleLocalBackend,
 ) -> (SimpleBackendReference, Option<Backend>) {
 	let bref = match &b {
@@ -1324,7 +1360,8 @@ fn to_simple_backend_and_ref(
 			port: *port,
 		},
 		SimpleLocalBackend::Invalid => SimpleBackendReference::Invalid,
-		_ => SimpleBackendReference::Backend(name.clone()),
+		SimpleLocalBackend::Opaque(tgt) => SimpleBackendReference::InlineBackend(tgt.clone()),
+		SimpleLocalBackend::Backend(key) => SimpleBackendReference::Backend(key.clone()),
 	};
 	let backend = b.as_backend(name);
 	(bref, backend)
@@ -1362,4 +1399,8 @@ impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 		ccb.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 		Ok(ServerTLSConfig::new(Arc::new(ccb)))
 	}
+}
+
+fn local_name(name: Strng) -> ResourceName {
+	ResourceName::new(name, "".into())
 }

@@ -6,6 +6,7 @@ use async_openai::types::{
 };
 use bytes::Bytes;
 use chrono;
+use itertools::Itertools;
 
 use crate::http::{Body, Response};
 use crate::llm::anthropic::types::{
@@ -16,7 +17,6 @@ use crate::llm::universal::{RequestSystemMessage, RequestVendorExtensions, Respo
 use crate::llm::{AIError, InputFormat, LLMInfo, universal};
 use crate::telemetry::log::AsyncLog;
 use crate::{parse, *};
-use itertools::Itertools;
 
 #[apply(schema!)]
 pub struct Provider {
@@ -551,10 +551,10 @@ pub(super) fn translate_anthropic_request(req: types::MessagesRequest) -> univer
 						},
 						// Image content is not directly supported in universal::Message::User in this form.
 						// This would require a different content format not represented here.
-						types::ContentBlock::Image { .. } => {}, // Image content is not directly supported in universal::Message::User in this form.
+						types::ContentBlock::Image { .. } => {}, /* Image content is not directly supported in universal::Message::User in this form. */
 						// This would require a different content format not represented here.
 						// ToolUse blocks are expected from assistants, not users.
-						types::ContentBlock::ServerToolUse { .. } | types::ContentBlock::ToolUse { .. } => {}, // ToolUse blocks are expected from assistants, not users.
+						types::ContentBlock::ServerToolUse { .. } | types::ContentBlock::ToolUse { .. } => {}, /* ToolUse blocks are expected from assistants, not users. */
 
 						// Other content block types are not expected from the user in a request.
 						_ => {},
@@ -708,9 +708,10 @@ fn translate_stop_reason(resp: &types::StopReason) -> FinishReason {
 	}
 }
 pub(super) mod types {
-	use crate::serdes::is_default;
 	use serde::{Deserialize, Deserializer, Serialize};
 	use serde_json::Value;
+
+	use crate::serdes::is_default;
 
 	#[derive(Copy, Clone, Deserialize, Serialize, Debug, PartialEq, Eq, Default)]
 	#[serde(rename_all = "snake_case")]
@@ -1244,6 +1245,11 @@ pub(super) mod types {
 	}
 }
 pub mod passthrough {
+	use agent_core::prelude::Strng;
+	use agent_core::strng;
+	use itertools::Itertools;
+	use serde::{Deserialize, Serialize};
+
 	use crate::llm::policy::webhook::{Message, ResponseChoice};
 	use crate::llm::universal::{RequestType, ResponseType};
 	use crate::llm::{
@@ -1251,10 +1257,6 @@ pub mod passthrough {
 		anthropic, num_tokens_from_anthropic_messages,
 	};
 	use crate::{json, llm};
-	use agent_core::prelude::Strng;
-	use agent_core::strng;
-	use itertools::Itertools;
-	use serde::{Deserialize, Serialize};
 
 	#[derive(Debug, Deserialize, Clone, Serialize)]
 	pub struct Request {

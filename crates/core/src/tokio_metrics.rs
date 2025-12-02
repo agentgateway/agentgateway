@@ -1,9 +1,9 @@
+use std::fmt::Error;
+
 use prometheus_client::collector::Collector;
-use prometheus_client::encoding::DescriptorEncoder;
-use prometheus_client::encoding::EncodeMetric;
+use prometheus_client::encoding::{DescriptorEncoder, EncodeMetric};
 use prometheus_client::metrics::gauge::ConstGauge;
 use prometheus_client::registry::Registry;
-use std::fmt::Error;
 
 #[derive(Debug)]
 pub struct TokioCollector {

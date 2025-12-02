@@ -3,8 +3,8 @@ syntax = "proto3";
 package agentgateway.dev.resource;
 
 import "google/protobuf/duration.proto";
-import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
+import "workload.proto";
 
 option go_package = "github.com/agentgateway/agentgateway/go/api;api";
 
@@ -16,6 +16,9 @@ message Resource {
     Backend backend = 4;
     Policy policy = 5;
     TCPRoute tcp_route = 6;
+    agentgateway.dev.workload.Workload workload = 7;
+    // Service represents a service - a group of workloads that can be accessed together.
+    agentgateway.dev.workload.Service service = 8;
   }
 }
 
@@ -24,24 +27,103 @@ message Bind {
   uint32 port = 2;
 }
 
-message Listener {
-  // Unique key
-  string key = 1;
-  // User facing name; may not be unique
+message RouteName {
+  string kind = 1;
   string name = 2;
-  string bind_key = 3;
-  // User facing Gateway name
-  string gateway_name = 4;
-  string hostname = 5;
-  Protocol protocol = 6;
-  TLSConfig tls = 7;
+  string namespace = 3;
+  optional string rule_name = 4;
+}
+
+message ListenerName {
+  string gateway_name = 1;
+  string gateway_namespace = 2;
+  string listener_name = 3;
+  // If the listener is derive from a listenerset, the metadata of the listenerset
+  ResourceName listener_set = 4;
+}
+
+message ResourceName {
+  string name = 1;
+  string namespace = 2;
+}
+
+message TypedResourceName {
+  string name = 1;
+  string namespace = 2;
+  string kind = 3;
+}
+
+message Listener {
+  // Unique key for this listener
+  string key = 1;
+  // Key for the bind this is a part of.
+  string bind_key = 2;
+  // User facing name for this resource
+  ListenerName name = 3;
+
+  string hostname = 4;
+  Protocol protocol = 5;
+  TLSConfig tls = 6;
+}
+
+message Route {
+  // Unique key for this route
+  string key = 1;
+  // Key for the listener this is a part of.
+  string listener_key = 2;
+  // User facing name for this resource
+  RouteName name = 3;
+
+  repeated string hostnames = 5;
+  repeated RouteMatch matches = 6;
+  repeated RouteBackend backends = 7;
+  repeated TrafficPolicySpec traffic_policies = 8;
+}
+
+message TCPRoute {
+  // Unique key for this route
+  string key = 1;
+  // Key for the listener this is a part of.
+  string listener_key = 2;
+  // User facing name for this resource
+  RouteName name = 3;
+
+  repeated string hostnames = 5;
+  repeated RouteBackend backends = 6;
+}
+
+message Policy {
+  // Unique key for this policy
+  string key = 1;
+  // User facing name for this resource
+  TypedResourceName name = 2;
+  PolicyTarget target = 3;
+
+  oneof kind {
+    TrafficPolicySpec traffic = 4;
+    BackendPolicySpec backend = 5;
+    FrontendPolicySpec frontend = 6;
+  }
+}
+message Backend {
+  // Unique key for this policy
+  string key = 1;
+  // User facing name for this resource
+  ResourceName name = 2;
+  oneof kind {
+    StaticBackend static = 3;
+    AIBackend ai = 4;
+    MCPBackend mcp = 5;
+    DynamicForwardProxy dynamic = 6;
+  }
+  repeated BackendPolicySpec inline_policies = 7;
 }
 
 message TLSConfig {
   bytes cert = 1;
   bytes private_key = 2;
   // Root to verify client certificates. If not set, mTLS will not be used
-  google.protobuf.BytesValue root = 3;
+  optional bytes root = 3;
 }
 
 enum Protocol {
@@ -51,33 +133,6 @@ enum Protocol {
   TLS = 3;
   TCP = 4;
   HBONE = 5;
-}
-message Route {
-  // Unique key
-  string key = 1;
-  string listener_key = 2;
-  // User facing rule name. May not be unique.
-  string rule_name = 3;
-  // User facing route name May not be unique.
-  string route_name = 4;
-  repeated string hostnames = 5;
-  repeated RouteMatch matches = 6;
-  repeated RouteBackend backends = 8;
-  // Reserved tag numbers for removed fields: filters(7), traffic_policy(9), inline_policies(10)
-  reserved 7, 9, 10;
-  repeated TrafficPolicySpec traffic_policies = 11;
-}
-
-message TCPRoute {
-  // Unique key
-  string key = 1;
-  string listener_key = 2;
-  // User facing rule name. May not be unique.
-  string rule_name = 3;
-  // User facing route name May not be unique.
-  string route_name = 4;
-  repeated string hostnames = 5;
-  repeated RouteBackend backends = 6;
 }
 
 message Timeout {
@@ -281,22 +336,31 @@ message RouteBackend {
 }
 
 message PolicyTarget {
+  message ServiceTarget {
+    string namespace = 1;
+    string hostname = 2;
+    optional uint32 port = 3;
+  }
+  message BackendTarget {
+    string name = 1;
+    string namespace = 2;
+    optional string section = 3;
+  }
+  message GatewayTarget {
+    string name = 1;
+    string namespace = 2;
+    optional string listener = 3;
+  }
+  message RouteTarget {
+    string name = 1;
+    string namespace = 2;
+    optional string route_rule = 3;
+  }
   oneof kind {
-    // Matches Listener.gateway_name
-    string gateway = 1;
-    // Matches Listener.name
-    string listener = 2;
-    // Match Route.route_name
-    string route = 3;
-    // Matches Route.rule_name
-    string route_rule = 4;
-    // For ServicePort: `service/{namespace}/{hostname}:{port}`
-    // For Backend: `{ns}/{name}`
-    string backend = 5;
-    // namespace}/{hostname}
-    string service = 6;
-    // For Backend: `{ns}/{name}/{sub-backend}`
-    string sub_backend = 7;
+    GatewayTarget gateway = 1;
+    RouteTarget route = 2;
+    BackendTarget backend = 3;
+    ServiceTarget service = 4;
   }
 }
 
@@ -308,17 +372,17 @@ message KeepaliveConfig {
   google.protobuf.Duration interval = 2;
 
   // Number of keepalive retries before giving up
-  google.protobuf.UInt32Value retries = 3;
+  optional uint32 retries = 3;
 }
 
 message FrontendPolicySpec {
   message HTTP {
-    google.protobuf.UInt32Value max_buffer_size = 1;
-    google.protobuf.UInt32Value http1_max_headers = 2;
+    optional uint32 max_buffer_size = 1;
+    optional uint32 http1_max_headers = 2;
     google.protobuf.Duration http1_idle_timeout = 3;
-    google.protobuf.UInt32Value http2_window_size = 4;
-    google.protobuf.UInt32Value http2_connection_window_size = 5;
-    google.protobuf.UInt32Value http2_frame_size = 6;
+    optional uint32 http2_window_size = 4;
+    optional uint32 http2_connection_window_size = 5;
+    optional uint32 http2_frame_size = 6;
     google.protobuf.Duration http2_keepalive_interval = 7;
     google.protobuf.Duration http2_keepalive_timeout = 8;
   }
@@ -341,7 +405,7 @@ message FrontendPolicySpec {
   // Logging configuration policy
   message Logging {
     // CEL expression to filter out logs. If unset, all logs are considered.
-    google.protobuf.StringValue filter = 1;
+    optional string filter = 1;
 
     message Field {
       string name = 1;
@@ -415,7 +479,7 @@ message TrafficPolicySpec {
     repeated string include_request_headers = 4;
     BodyOptions include_request_body = 5;
     google.protobuf.Duration timeout = 6;
-    google.protobuf.UInt32Value status_on_error = 7;
+    optional uint32 status_on_error = 7;
   }
   message RBAC {
     repeated string allow = 1;
@@ -465,7 +529,7 @@ message TrafficPolicySpec {
     string htpasswd_content = 1;
 
     // Realm name for WWW-Authenticate header
-    google.protobuf.StringValue realm = 2;
+    optional string realm = 2;
 
     // How the basic authentication should behave
     Mode mode = 3;
@@ -611,7 +675,7 @@ message BackendPolicySpec {
 
     message Moderation {
       // Model to use. Defaults to `omni-moderation-latest`
-      google.protobuf.StringValue model = 1;
+      optional string model = 1;
       repeated BackendPolicySpec inline_policies = 2;
     }
 
@@ -708,14 +772,14 @@ message BackendPolicySpec {
       INSECURE_HOST = 1;
       INSECURE_ALL = 2;
     }
-    google.protobuf.BytesValue cert = 1;
-    google.protobuf.BytesValue key = 2;
+    optional bytes cert = 1;
+    optional bytes key = 2;
     // Root to verify. If not set, system certs will be used.
     // If no verification is desired, use 'insecure'
-    google.protobuf.BytesValue root = 3;
+    optional bytes root = 3;
     VerificationMode verification = 4;
     // If set, override the SNI explicitly. Otherwise, it is auto-derived.
-    google.protobuf.StringValue hostname = 5;
+    optional string hostname = 5;
     // If set, the request must come from one of these hostnames. Otherwise, the destination
     // is used.
     repeated string verify_subject_alt_names = 6;
@@ -775,30 +839,6 @@ message BackendPolicySpec {
   }
 }
 
-message Policy {
-  // Format is "<ns>/<name>"
-  string name = 1;
-  PolicyTarget target = 2;
-  // Reserved tag number for removed PolicySpec field: spec(3)
-  reserved 3;
-  oneof kind {
-    TrafficPolicySpec traffic = 4;
-    BackendPolicySpec backend = 5;
-    FrontendPolicySpec frontend = 6;
-  }
-}
-message Backend {
-  // Format is "<ns>/<name>"
-  string name = 1;
-  oneof kind {
-    StaticBackend static = 2;
-    AIBackend ai = 3;
-    MCPBackend mcp = 4;
-    DynamicForwardProxy dynamic = 6;
-  }
-  repeated BackendPolicySpec inline_policies = 5;
-}
-
 message StaticBackend {
   string host = 1;
   int32 port = 2;
@@ -813,35 +853,35 @@ message AIBackend {
     int32 port = 2;
   }
   message OpenAI {
-    google.protobuf.StringValue model = 1;
+    optional string model = 1;
   }
   message Gemini {
-    google.protobuf.StringValue model = 1;
+    optional string model = 1;
   }
   message Vertex {
-    google.protobuf.StringValue model = 1;
+    optional string model = 1;
     string region = 2;
     string project_id = 3;
   }
   message Anthropic {
-    google.protobuf.StringValue model = 1;
+    optional string model = 1;
   }
   message Bedrock {
-    google.protobuf.StringValue model = 1;
+    optional string model = 1;
     string region = 2;
-    google.protobuf.StringValue guardrail_identifier = 3;
-    google.protobuf.StringValue guardrail_version = 4;
+    optional string guardrail_identifier = 3;
+    optional string guardrail_version = 4;
   }
   message AzureOpenAI {
-    google.protobuf.StringValue model = 1;
+    optional string model = 1;
     string host = 2;
-    google.protobuf.StringValue api_version = 3;
+    optional string api_version = 3;
   }
 
   message Provider {
     string name = 1;
     HostOverride host_override = 2;
-    google.protobuf.StringValue path_override = 3;
+    optional string path_override = 3;
     oneof provider {
       OpenAI openai = 4;
       Gemini gemini = 5;

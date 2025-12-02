@@ -1,7 +1,9 @@
+use std::time::Instant;
+
+use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
+
 use super::RewindSocket;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
-use std::time::Instant;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
 #[tokio::test]
 async fn test_rewind() {

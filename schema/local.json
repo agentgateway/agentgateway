@@ -430,13 +430,22 @@
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "default": null
+                },
+                "namespace": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "default": null
                 },
                 "gatewayName": {
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "default": null
                 },
                 "hostname": {
                   "description": "Can be a wildcard",
@@ -492,13 +501,22 @@
                         "type": [
                           "string",
                           "null"
-                        ]
+                        ],
+                        "default": null
+                      },
+                      "namespace": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "default": null
                       },
                       "ruleName": {
                         "type": [
                           "string",
                           "null"
-                        ]
+                        ],
+                        "default": null
                       },
                       "hostnames": {
                         "description": "Can be a wildcard",
@@ -7567,13 +7585,22 @@
                         "type": [
                           "string",
                           "null"
-                        ]
+                        ],
+                        "default": null
+                      },
+                      "namespace": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "default": null
                       },
                       "ruleName": {
                         "type": [
                           "string",
                           "null"
-                        ]
+                        ],
+                        "default": null
                       },
                       "hostnames": {
                         "description": "Can be a wildcard",
@@ -8650,7 +8677,20 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "namespace": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "namespace"
+            ]
           },
           "target": {
             "oneOf": [
@@ -8658,7 +8698,26 @@
                 "type": "object",
                 "properties": {
                   "gateway": {
-                    "type": "string"
+                    "type": "object",
+                    "properties": {
+                      "gatewayName": {
+                        "type": "string"
+                      },
+                      "gatewayNamespace": {
+                        "type": "string"
+                      },
+                      "listenerName": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "gatewayName",
+                      "gatewayNamespace"
+                    ]
                   }
                 },
                 "required": [
@@ -8669,20 +8728,27 @@
               {
                 "type": "object",
                 "properties": {
-                  "listener": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "listener"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
                   "route": {
-                    "type": "string"
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "namespace": {
+                        "type": "string"
+                      },
+                      "ruleName": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "name",
+                      "namespace"
+                    ]
                   }
                 },
                 "required": [
@@ -8693,48 +8759,84 @@
               {
                 "type": "object",
                 "properties": {
-                  "routeRule": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "routeRule"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "service": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "service"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
                   "backend": {
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "invalid"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "backend": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "namespace": {
+                                "type": "string"
+                              },
+                              "section": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "name",
+                              "namespace"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "backend"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "service": {
+                            "type": "object",
+                            "properties": {
+                              "hostname": {
+                                "type": "string"
+                              },
+                              "namespace": {
+                                "type": "string"
+                              },
+                              "port": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "format": "uint16",
+                                "minimum": 0,
+                                "maximum": 65535
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "hostname",
+                              "namespace"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "service"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
                   }
                 },
                 "required": [
                   "backend"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "subBackend": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "subBackend"
                 ],
                 "additionalProperties": false
               }

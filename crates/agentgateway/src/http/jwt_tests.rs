@@ -1,8 +1,7 @@
 use itertools::Itertools;
 use serde_json::json;
 
-use super::Provider;
-use super::{Jwt, Mode, TokenError};
+use super::{Jwt, Mode, Provider, TokenError};
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
 
@@ -113,7 +112,8 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 }
 
 fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
-	use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+	use base64::Engine as _;
+	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 	let header = json!({ "alg": "ES256", "kid": kid });
 	let payload = json!({ "iss": iss, "aud": aud, "exp": exp });
 	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
@@ -123,7 +123,8 @@ fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
 }
 
 fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
-	use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+	use base64::Engine as _;
+	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 	let header = json!({ "alg": "ES256" });
 	let payload = json!({ "iss": iss, "aud": aud, "exp": exp });
 	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
@@ -135,8 +136,9 @@ fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
 // Validate specific rejection reasons for tokens: audience, issuer, expiry, missing kid, unknown kid
 #[test]
 pub fn test_jwt_rejections_table() {
-	use jsonwebtoken::errors::ErrorKind;
 	use std::time::{SystemTime, UNIX_EPOCH};
+
+	use jsonwebtoken::errors::ErrorKind;
 
 	let (jwt, kid, issuer, allowed_aud) = setup_test_jwt();
 	let now = SystemTime::now()
@@ -357,10 +359,9 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	use frozen_collections::FzHashSet;
 	use prometheus_client::registry::Registry;
 
-	use crate::telemetry::log;
 	use crate::telemetry::log::{LoggingFields, MetricFields, RequestLog};
 	use crate::telemetry::metrics::Metrics;
-	use crate::telemetry::trc;
+	use crate::telemetry::{log, trc};
 	use crate::transport::stream::TCPConnectionInfo;
 
 	let log_cfg = log::Config {

@@ -37,8 +37,7 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener
 		key: name.into(),
 		hostnames: hostnames.into_iter().map(|s| s.into()).collect(),
 		matches,
-		route_name: Default::default(),
-		rule_name: None,
+		name: Default::default(),
 		backends: vec![],
 		inline_policies: vec![],
 	};
@@ -46,7 +45,6 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener
 	Arc::new(Listener {
 		key: Default::default(),
 		name: Default::default(),
-		gateway_name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
 		tcp_routes: Default::default(),
@@ -844,7 +842,6 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 	let listener = Arc::new(Listener {
 		key: Default::default(),
 		name: Default::default(),
-		gateway_name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
 		tcp_routes: Default::default(),
@@ -853,10 +850,9 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 				.into_iter()
 				.map(|(name, host, matches)| Route {
 					key: name.into(),
+					name: Default::default(),
 					hostnames: host.into_iter().map(|s| s.into()).collect(),
 					matches,
-					route_name: Default::default(),
-					rule_name: None,
 					backends: vec![],
 					inline_policies: vec![],
 				})

@@ -1,6 +1,5 @@
-use crate::mcp::MCPOperation;
-use crate::proxy::ProxyResponseReason;
-use crate::types::agent::BindProtocol;
+use std::fmt::Debug;
+
 use agent_core::metrics::{CustomField, DefaultedUnknown, EncodeArc, EncodeDebug, EncodeDisplay};
 use agent_core::strng::RichStrng;
 use agent_core::version;
@@ -11,8 +10,11 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram::Histogram as PromHistogram;
 use prometheus_client::metrics::info::Info;
 use prometheus_client::registry::{Metric, Registry, Unit};
-use std::fmt::Debug;
 use tracing::{debug, trace};
+
+use crate::mcp::MCPOperation;
+use crate::proxy::ProxyResponseReason;
+use crate::types::agent::BindProtocol;
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct RouteIdentifier {

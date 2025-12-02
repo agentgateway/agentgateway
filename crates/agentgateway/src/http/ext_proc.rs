@@ -1,7 +1,6 @@
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::http::HeaderOrPseudo;
 use ::http::HeaderMap;
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -19,7 +18,7 @@ use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, HeaderMutation, HeadersResponse, HttpBody, HttpHeaders, HttpTrailers,
 	ImmediateResponse, ProcessingRequest, ProcessingResponse, processing_response,
 };
-use crate::http::{HeaderName, HeaderValue, PolicyResponse};
+use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::SimpleBackendReference;

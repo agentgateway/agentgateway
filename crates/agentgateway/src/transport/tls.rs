@@ -4,10 +4,6 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::apply;
-use crate::serdes::schema_ser;
-use crate::transport::stream::Socket;
-use crate::types::discovery::Identity;
 use agent_core::strng;
 use agent_core::strng::Strng;
 use futures_util::TryFutureExt;
@@ -15,6 +11,11 @@ use rustls::ServerConfig;
 use rustls::crypto::CryptoProvider;
 use tracing::warn;
 use x509_parser::certificate::X509Certificate;
+
+use crate::apply;
+use crate::serdes::schema_ser;
+use crate::transport::stream::Socket;
+use crate::types::discovery::Identity;
 
 pub static ALL_TLS_VERSIONS: &[&rustls::SupportedProtocolVersion] =
 	&[&rustls::version::TLS12, &rustls::version::TLS13];
@@ -68,11 +69,12 @@ pub async fn accept(conn: Socket, cfg: Arc<ServerConfig>) -> Result<Socket, Erro
 pub mod insecure {
 	use std::sync::Arc;
 
-	use crate::transport::tls::provider;
 	use rustls::client::WebPkiServerVerifier;
 	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 	use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 	use rustls::{DigitallySignedStruct, SignatureScheme};
+
+	use crate::transport::tls::provider;
 
 	#[derive(Debug)]
 	pub struct NoServerNameVerification {

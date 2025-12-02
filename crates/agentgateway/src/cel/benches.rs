@@ -1,12 +1,14 @@
-use crate::cel::{ContextBuilder, Expression};
-use crate::function;
-use crate::http::{Body, Request};
-use divan::Bencher;
-use http::Method;
-use http_body_util::BodyExt;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
+
+use divan::Bencher;
+use http::Method;
+use http_body_util::BodyExt;
+
+use crate::cel::{ContextBuilder, Expression};
+use crate::function;
+use crate::http::{Body, Request};
 
 // Test case structure with name for benchmark identification
 struct TestCase {
@@ -189,13 +191,15 @@ fn bench_execute(b: Bencher, case_name: &str) {
 
 // lookup compares different ways to do field access in CEL
 mod lookup {
-	use crate::cel::{ContextBuilder, Expression};
-	use crate::http::Body;
+	use std::collections::HashMap;
+	use std::sync::Arc;
+
 	use bytes::Bytes;
 	use divan::Bencher;
 	use http::Method;
-	use std::collections::HashMap;
-	use std::sync::Arc;
+
+	use crate::cel::{ContextBuilder, Expression};
+	use crate::http::Body;
 
 	#[divan::bench]
 	fn bench_native(b: Bencher) {

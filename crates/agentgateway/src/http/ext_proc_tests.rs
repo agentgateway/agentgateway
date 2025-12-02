@@ -16,7 +16,9 @@ use crate::test_helpers::extprocmock::{
 	request_header_response, response_body_response,
 };
 use crate::test_helpers::proxymock::*;
-use crate::types::agent::{PolicyTarget, SimpleBackendReference, TargetedPolicy, TrafficPolicy};
+use crate::types::agent::{
+	PolicyTarget, RouteTarget, SimpleBackendReference, TargetedPolicy, TrafficPolicy,
+};
 use crate::*;
 
 #[tokio::test]
@@ -183,12 +185,18 @@ pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 		.with_backend(ext_proc.address)
 		.with_bind(simple_bind(basic_route(*mock.address())))
 		.with_policy(TargetedPolicy {
-			name: strng::new("ext_proc"),
-			target: PolicyTarget::Route("route".into()),
+			key: strng::new("ext_proc"),
+			name: None,
+			target: PolicyTarget::Route(RouteTarget {
+				name: "route".into(),
+				namespace: Default::default(),
+				rule_name: None,
+			}),
 			policy: TrafficPolicy::ExtProc(ext_proc::ExtProc {
-				target: Arc::new(SimpleBackendReference::Backend(
-					ext_proc.address.to_string().into(),
-				)),
+				target: Arc::new(SimpleBackendReference::Backend(strng::format!(
+					"/{}",
+					ext_proc.address
+				))),
 				failure_mode,
 			})
 			.into(),

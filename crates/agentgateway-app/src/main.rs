@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_core::{strng, telemetry, version};
+use agentgateway::types::agent::ListenerTarget;
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use clap::Parser;
 use tracing::info;
@@ -131,7 +132,11 @@ async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result
 		let cs = cfg.read_to_string().await?;
 		agentgateway::types::local::NormalizedLocalConfig::from(
 			client,
-			strng::literal!("default/default"),
+			ListenerTarget {
+				gateway_name: strng::literal!("default"),
+				gateway_namespace: strng::literal!("default"),
+				listener_name: None,
+			},
 			cs.as_str(),
 		)
 		.await?;

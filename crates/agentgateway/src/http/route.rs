@@ -1,14 +1,15 @@
-use agent_core::strng;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use agent_core::strng;
+
 use crate::http::Request;
 use crate::types::agent;
 use crate::types::agent::{
 	BackendReference, HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, PathMatch,
-	QueryValueMatch, Route, RouteBackendReference,
+	QueryValueMatch, Route, RouteBackendReference, RouteName,
 };
 use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::discovery::{NamespacedHostname, NetworkAddress};
@@ -94,9 +95,12 @@ pub fn select_best_route(
 		}
 		// TODO: only build this if we don't match one
 		let default_route = Route {
-			key: strng::new("waypoint-default"),
-			route_name: strng::new("waypoint-default"),
-			rule_name: None,
+			key: strng::literal!("_waypoint-default"),
+			name: RouteName {
+				name: strng::literal!("_waypoint-default"),
+				namespace: svc.namespace.clone(),
+				rule_name: None,
+			},
 			hostnames: vec![],
 			matches: vec![],
 			inline_policies: vec![],

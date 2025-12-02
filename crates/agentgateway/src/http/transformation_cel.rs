@@ -1,11 +1,11 @@
-use crate::cel::{Executor, Expression};
-use crate::http::HeaderOrPseudo;
-use crate::{cel, *};
-use ::http::StatusCode;
-use ::http::{HeaderName, HeaderValue, header};
+use ::http::{HeaderName, HeaderValue, StatusCode, header};
 use agent_core::prelude::Strng;
 use cel::Value;
 use serde_with::{SerializeAs, serde_as};
+
+use crate::cel::{Executor, Expression};
+use crate::http::HeaderOrPseudo;
+use crate::{cel, *};
 
 #[derive(Default)]
 #[apply(schema_de!)]

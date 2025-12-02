@@ -63,6 +63,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].port`||
 |`binds[].listeners`||
 |`binds[].listeners[].name`||
+|`binds[].listeners[].namespace`||
 |`binds[].listeners[].gatewayName`||
 |`binds[].listeners[].hostname`|Can be a wildcard|
 |`binds[].listeners[].protocol`||
@@ -72,6 +73,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].tls.root`||
 |`binds[].listeners[].routes`||
 |`binds[].listeners[].routes[].name`||
+|`binds[].listeners[].routes[].namespace`||
 |`binds[].listeners[].routes[].ruleName`||
 |`binds[].listeners[].routes[].hostnames`|Can be a wildcard|
 |`binds[].listeners[].routes[].matches`||
@@ -820,6 +822,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
 |`binds[].listeners[].tcpRoutes`||
 |`binds[].listeners[].tcpRoutes[].name`||
+|`binds[].listeners[].tcpRoutes[].namespace`||
 |`binds[].listeners[].tcpRoutes[].ruleName`||
 |`binds[].listeners[].tcpRoutes[].hostnames`|Can be a wildcard|
 |`binds[].listeners[].tcpRoutes[].policies`||
@@ -940,14 +943,26 @@ This folder contains JSON schemas for various parts of the project
 |`frontendPolicies.tracing`||
 |`policies`|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route/gateway.|
 |`policies[].name`||
+|`policies[].name.name`||
+|`policies[].name.namespace`||
 |`policies[].target`||
 |`policies[].target.(1)gateway`||
-|`policies[].target.(1)listener`||
+|`policies[].target.(1)gateway.gatewayName`||
+|`policies[].target.(1)gateway.gatewayNamespace`||
+|`policies[].target.(1)gateway.listenerName`||
 |`policies[].target.(1)route`||
-|`policies[].target.(1)routeRule`||
-|`policies[].target.(1)service`||
+|`policies[].target.(1)route.name`||
+|`policies[].target.(1)route.namespace`||
+|`policies[].target.(1)route.ruleName`||
 |`policies[].target.(1)backend`||
-|`policies[].target.(1)subBackend`||
+|`policies[].target.(1)backend.(1)backend`||
+|`policies[].target.(1)backend.(1)backend.name`||
+|`policies[].target.(1)backend.(1)backend.namespace`||
+|`policies[].target.(1)backend.(1)backend.section`||
+|`policies[].target.(1)backend.(1)service`||
+|`policies[].target.(1)backend.(1)service.hostname`||
+|`policies[].target.(1)backend.(1)service.namespace`||
+|`policies[].target.(1)backend.(1)service.port`||
 |`policies[].phase`|phase defines at what level the policy runs at. Gateway policies run pre-routing, while<br>Route policies apply post-routing.<br>Only a subset of policies are eligible as Gateway policies.<br>In general, normal (route level) policies should be used, except you need the policy to influence<br>routing.|
 |`policies[].policy`||
 |`policies[].policy.requestHeaderModifier`|Headers to be modified in the request.|

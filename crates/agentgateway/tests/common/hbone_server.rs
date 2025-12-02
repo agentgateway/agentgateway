@@ -2,15 +2,16 @@
 // Based on ztunnel's test server implementation:
 // https://github.com/istio/ztunnel/blob/master/src/test_helpers/tcp.rs
 
+use std::convert::Infallible;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::Response;
 use hyper::server::conn::http2;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
-use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{debug, error, info};
@@ -176,13 +177,14 @@ where
 
 fn generate_test_certs(name: &str) -> rustls::ServerConfig {
 	// Generate certificates using rcgen with static test keys
+	use std::time::{Duration, SystemTime};
+
 	use rand::RngCore;
 	use rcgen::{
 		CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
 		KeyUsagePurpose, SanType, SerialNumber,
 	};
 	use rustls::pki_types::CertificateDer;
-	use std::time::{Duration, SystemTime};
 
 	// Generate random serial number (159 bits)
 	let serial_number = {

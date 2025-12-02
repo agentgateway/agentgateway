@@ -6,13 +6,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use crate::http::{apikey, basicauth, jwt};
-use crate::llm;
-use crate::llm::{LLMInfo, LLMRequest};
-use crate::serdes::*;
-use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::BackendInfo;
-
 use agent_core::strng::Strng;
 use bytes::Bytes;
 pub use cel::Value;
@@ -21,6 +14,13 @@ use once_cell::sync::Lazy;
 use prometheus_client::encoding::EncodeLabelValue;
 use serde::{Deserialize, Serialize, Serializer};
 use tracing::log::debug;
+
+use crate::http::{apikey, basicauth, jwt};
+use crate::llm;
+use crate::llm::{LLMInfo, LLMRequest};
+use crate::serdes::*;
+use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::agent::BackendInfo;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

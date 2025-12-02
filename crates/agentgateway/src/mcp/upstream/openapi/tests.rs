@@ -13,7 +13,7 @@ use super::*;
 use crate::client::Client;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
-use crate::types::agent::{SimpleBackend, Target};
+use crate::types::agent::{ResourceName, SimpleBackend, Target};
 use crate::{BackendConfig, ProxyInputs, client, mcp};
 
 // Helper to create a handler and mock server for tests
@@ -136,7 +136,7 @@ async fn setup() -> (MockServer, Handler) {
 	};
 
 	let backend = SimpleBackend::Opaque(
-		strng::literal!("dummy"),
+		ResourceName::new(strng::literal!("dummy"), "".into()),
 		Target::Hostname(
 			parsed.host().unwrap().to_string().into(),
 			parsed.port().unwrap_or(8080),

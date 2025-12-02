@@ -1,6 +1,7 @@
-use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+use rand::prelude::IndexedRandom;
 
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, httpproxy};
@@ -11,14 +12,14 @@ use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent;
 use crate::types::agent::{
-	BindName, BindProtocol, Listener, ListenerProtocol, SimpleBackend, TCPRoute, TCPRouteBackend,
-	TCPRouteBackendReference,
+	BackendPolicy, BindKey, BindProtocol, Listener, ListenerProtocol, SimpleBackend,
+	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference,
 };
 use crate::{ProxyInputs, *};
 
 #[derive(Clone)]
 pub struct TCPProxy {
-	pub(super) bind_name: BindName,
+	pub(super) bind_name: BindKey,
 	pub(super) inputs: Arc<ProxyInputs>,
 	pub(super) selected_listener: Arc<Listener>,
 	#[allow(unused)]
@@ -63,8 +64,8 @@ impl TCPProxy {
 			.downstream_connection
 			.get_or_create(&TCPLabels {
 				bind: Some(&self.bind_name).into(),
-				gateway: Some(&self.selected_listener.gateway_name).into(),
-				listener: Some(&self.selected_listener.name).into(),
+				gateway: Some(&self.selected_listener.name.as_gateway_name()).into(),
+				listener: self.selected_listener.name.listener_name.clone().into(),
 				protocol: if log.tls_info.is_some() {
 					BindProtocol::tls
 				} else {
@@ -82,30 +83,30 @@ impl TCPProxy {
 		let bind_name = self.bind_name.clone();
 		debug!(bind=%bind_name, "route for bind");
 		log.bind_name = Some(bind_name.clone());
-		log.gateway_name = Some(selected_listener.gateway_name.clone());
 		log.listener_name = Some(selected_listener.name.clone());
 		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
 
 		let selected_route =
 			select_best_route(sni, selected_listener.clone()).ok_or(ProxyError::RouteNotFound)?;
-		log.route_rule_name = selected_route.rule_name.clone();
-		log.route_name = Some(selected_route.route_name.clone());
+		log.route_name = Some(selected_route.name.clone());
 
 		let route_path = RoutePath {
-			route_rule: selected_route.rule_name.clone(),
-			route: selected_route.route_name.clone(),
-			listener: selected_listener.key.clone(),
-			gateway: selected_listener.gateway_name.clone(),
+			route: selected_route.name.clone(),
+			listener: selected_listener.name.clone(),
 		};
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 		let selected_backend =
 			select_tcp_backend(selected_route.as_ref()).ok_or(ProxyError::NoValidBackends)?;
 		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
-		let backend_policies =
-			get_backend_policies(&self.inputs, &selected_backend.backend, route_path);
+		let backend_policies = get_backend_policies(
+			&self.inputs,
+			&selected_backend.backend,
+			&selected_backend.inline_policies,
+			route_path,
+		);
 
-		let backend_call = match &selected_backend.backend {
+		let backend_call = match &selected_backend.backend.backend {
 			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
 				inputs.as_ref(),
 				backend_policies,
@@ -124,7 +125,7 @@ impl TCPProxy {
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
 
-		let bi = selected_backend.backend.backend_info();
+		let bi = selected_backend.backend.backend.backend_info();
 		if let Some(bp) = log.backend_protocol {
 			log.cel.ctx().with_backend(&bi, bp)
 		}
@@ -144,8 +145,8 @@ impl TCPProxy {
 		let mut connection = connection;
 		let labels = TCPLabels {
 			bind: Some(&self.bind_name).into(),
-			gateway: Some(&self.selected_listener.gateway_name).into(),
-			listener: Some(&self.selected_listener.name).into(),
+			gateway: Some(&self.selected_listener.name.as_gateway_name()).into(),
+			listener: self.selected_listener.name.listener_name.clone().into(),
 			protocol: if log.tls_info.is_some() {
 				BindProtocol::tls
 			} else {
@@ -202,21 +203,19 @@ fn resolve_backend(
 	Ok(TCPRouteBackend {
 		weight: b.weight,
 		backend,
+		inline_policies: b.inline_policies,
 	})
 }
 
 pub fn get_backend_policies(
 	inputs: &ProxyInputs,
-	backend: &SimpleBackend,
+	backend: &SimpleBackendWithPolicies,
+	inline_policies: &[BackendPolicy],
 	route_path: RoutePath,
 ) -> BackendPolicies {
-	let service = match backend {
-		SimpleBackend::Service(svc, _) => Some(strng::format!("{}/{}", svc.namespace, svc.hostname)),
-		_ => None,
-	};
-
-	inputs
-		.stores
-		.read_binds()
-		.backend_policies(backend.name(), service, &[], Some(route_path))
+	inputs.stores.read_binds().backend_policies(
+		backend.backend.target(),
+		&[&backend.inline_policies, inline_policies],
+		Some(route_path),
+	)
 }

@@ -102,8 +102,8 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			address,
 			auth,
 			ca_cert: xds_root_cert,
-			namespace,
-			gateway,
+			namespace: namespace.into(),
+			gateway: gateway.into(),
 			local_config,
 		}
 	};
