@@ -931,13 +931,13 @@ message MCPTarget {
 }
 
 message BackendReference {
+  message Service {
+    string namespace = 1;
+    string hostname = 2;
+  }
   oneof kind {
-    // A service (could be Service, ServiceEntry, etc) in "<ns>/<hostname>" format
-    // These are joined with the service discovery.
-    string service = 1;
-    // A Backend object.
-    // Format is "<ns>/<name>". Joined with the Backend object.
-    // Must be of type StaticBackend.
+    Service service = 1;
+    // A Backend object. The format is "<backend key>"
     string backend = 2;
   }
   // Port, used only with 'service' type

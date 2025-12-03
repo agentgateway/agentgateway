@@ -1532,14 +1532,11 @@ fn resolve_simple_reference(
 	};
 	Ok(match target.kind.as_ref() {
 		None => SimpleBackendReference::Invalid,
-		Some(proto::agent::backend_reference::Kind::Service(svc_key)) => {
-			let ns = match svc_key.split_once('/') {
-				Some((namespace, hostname)) => Ok(NamespacedHostname {
-					namespace: namespace.into(),
-					hostname: hostname.into(),
-				}),
-				None => Err(ProtoError::NamespacedHostnameParse(svc_key.clone())),
-			}?;
+		Some(proto::agent::backend_reference::Kind::Service(svc)) => {
+			let ns = NamespacedHostname {
+				namespace: strng::new(&svc.namespace),
+				hostname: strng::new(&svc.hostname),
+			};
 			SimpleBackendReference::Service {
 				name: ns,
 				port: target.port as u16,
@@ -1659,14 +1656,11 @@ fn resolve_reference(
 	};
 	Ok(match target.kind.as_ref() {
 		None => BackendReference::Invalid,
-		Some(proto::agent::backend_reference::Kind::Service(svc_key)) => {
-			let ns = match svc_key.split_once('/') {
-				Some((namespace, hostname)) => Ok(NamespacedHostname {
-					namespace: namespace.into(),
-					hostname: hostname.into(),
-				}),
-				None => Err(ProtoError::NamespacedHostnameParse(svc_key.clone())),
-			}?;
+		Some(proto::agent::backend_reference::Kind::Service(svc)) => {
+			let ns = NamespacedHostname {
+				namespace: strng::new(&svc.namespace),
+				hostname: strng::new(&svc.hostname),
+			};
 			BackendReference::Service {
 				name: ns,
 				port: target.port as u16,
