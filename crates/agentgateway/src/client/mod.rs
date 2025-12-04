@@ -278,7 +278,6 @@ impl Connector {
 						Target::Hostname(host, _) => ServerName::DnsName(
 							DnsName::try_from(host.to_string()).expect("TODO: hostname conversion failed"),
 						),
-						#[cfg(unix)]
 						Target::UnixSocket(_) => {
 							// This should be unreachable - Unix sockets are handled above
 							unreachable!("Unix sockets should not reach TLS connection path")
@@ -367,7 +366,6 @@ impl Connector {
 					.authority(match &target {
 						Target::Hostname(host, port) => format!("{}:{}", host, port),
 						Target::Address(addr) => addr.to_string(),
-						#[cfg(unix)]
 						Target::UnixSocket(_) => {
 							// This should be unreachable - Unix sockets are handled above
 							unreachable!("Unix sockets should not reach DoubleHbone connection path")

@@ -295,8 +295,8 @@ impl Socket {
 	}
 	#[cfg(not(unix))]
 	pub async fn dial_unix(
-		path: &std::path::Path,
-		cfg: Arc<crate::BackendConfig>,
+		_path: &std::path::Path,
+		_cfg: Arc<crate::BackendConfig>,
 	) -> io::Result<Socket> {
 		Err(io::Error::new(
 			io::ErrorKind::Unsupported,
