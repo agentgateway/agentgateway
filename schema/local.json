@@ -2872,7 +2872,7 @@
                                     "default": "deny"
                                   },
                                   "includeRequestHeaders": {
-                                    "description": "Specific headers to include in the authorization request (empty = all headers)",
+                                    "description": "Specific headers to include in the authorization request.\nIf unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.",
                                     "type": "array",
                                     "items": {
                                       "type": "string"
@@ -8213,7 +8213,7 @@
                               "default": "deny"
                             },
                             "includeRequestHeaders": {
-                              "description": "Specific headers to include in the authorization request (empty = all headers)",
+                              "description": "Specific headers to include in the authorization request.\nIf unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.",
                               "type": "array",
                               "items": {
                                 "type": "string"
@@ -11177,7 +11177,7 @@
                         "default": "deny"
                       },
                       "includeRequestHeaders": {
-                        "description": "Specific headers to include in the authorization request (empty = all headers)",
+                        "description": "Specific headers to include in the authorization request.\nIf unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.",
                         "type": "array",
                         "items": {
                           "type": "string"

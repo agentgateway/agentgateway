@@ -324,7 +324,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
-|`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
@@ -897,7 +897,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].policies.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
 |`binds[].listeners[].policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
 |`binds[].listeners[].policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
-|`binds[].listeners[].policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|
+|`binds[].listeners[].policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
@@ -1212,7 +1212,7 @@ This folder contains JSON schemas for various parts of the project
 |`policies[].policy.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
 |`policies[].policy.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
 |`policies[].policy.extAuthz.(any)failureMode.(1)denyWithStatus`||
-|`policies[].policy.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request (empty = all headers)|
+|`policies[].policy.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
 |`policies[].policy.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
 |`policies[].policy.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`policies[].policy.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
@@ -1265,6 +1265,7 @@ This folder contains JSON schemas for various parts of the project
 |`request.endTime`|The (pre-rendered) time the request completed|
 |`response`|`response` contains attributes about the HTTP response|
 |`response.code`|The HTTP status code of the response.|
+|`response.headers`|The headers of the request.|
 |`response.body`|The body of the response. Warning: accessing the body will cause the body to be buffered.|
 |`jwt`|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
 |`apiKey`|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|

@@ -90,6 +90,13 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "headers": {
+          "description": "The headers of the request.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "body": {
           "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
           "type": [
@@ -107,7 +114,8 @@
       },
       "additionalProperties": false,
       "required": [
-        "code"
+        "code",
+        "headers"
       ]
     },
     "jwt": {

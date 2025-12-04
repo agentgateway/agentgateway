@@ -3,16 +3,10 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
-use ::http::StatusCode;
-use frozen_collections::FzHashSet;
-use itertools::Itertools;
-use llm::{AIBackend, AIProvider, NamedAIProvider};
-use rustls::ServerConfig;
-
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
-use crate::http::{Scheme, authorization};
+use crate::http::{HeaderOrPseudo, Scheme, authorization};
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
@@ -24,6 +18,12 @@ use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::traffic_policy_spec::host_rewrite::Mode;
 use crate::types::{agent, backend, proto};
 use crate::*;
+use ::http::HeaderName;
+use ::http::StatusCode;
+use frozen_collections::FzHashSet;
+use itertools::Itertools;
+use llm::{AIBackend, AIProvider, NamedAIProvider};
+use rustls::ServerConfig;
 
 impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 	fn from(value: &proto::agent::TlsConfig) -> Self {
@@ -1016,23 +1016,17 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				])
 			},
 			Some(tps::Kind::ExtAuthz(ea)) => {
+				use proto::agent::traffic_policy_spec::external_auth;
 				let target = resolve_simple_reference(ea.target.as_ref())?;
-				let failure_mode =
-					match proto::agent::traffic_policy_spec::external_auth::FailureMode::try_from(
-						ea.failure_mode,
-					) {
-						Ok(proto::agent::traffic_policy_spec::external_auth::FailureMode::Allow) => {
-							http::ext_authz::FailureMode::Allow
-						},
-						Ok(proto::agent::traffic_policy_spec::external_auth::FailureMode::Deny) => {
-							http::ext_authz::FailureMode::Deny
-						},
-						Ok(proto::agent::traffic_policy_spec::external_auth::FailureMode::DenyWithStatus) => {
-							let status = ea.status_on_error.unwrap_or(403) as u16;
-							http::ext_authz::FailureMode::DenyWithStatus(status)
-						},
-						_ => http::ext_authz::FailureMode::Deny, // Default fallback
-					};
+				let failure_mode = match external_auth::FailureMode::try_from(ea.failure_mode) {
+					Ok(external_auth::FailureMode::Allow) => http::ext_authz::FailureMode::Allow,
+					Ok(external_auth::FailureMode::Deny) => http::ext_authz::FailureMode::Deny,
+					Ok(external_auth::FailureMode::DenyWithStatus) => {
+						let status = ea.status_on_error.unwrap_or(403) as u16;
+						http::ext_authz::FailureMode::DenyWithStatus(status)
+					},
+					_ => http::ext_authz::FailureMode::Deny, // Default fallback
+				};
 				let include_request_body =
 					ea.include_request_body
 						.as_ref()
@@ -1042,24 +1036,67 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 							pack_as_bytes: body_opts.pack_as_bytes,
 						});
 				let timeout = ea.timeout.map(convert_duration);
-				let metadata: HashMap<_, _> = ea
-					.metadata
-					.iter()
-					.map(|(k, v)| {
-						let ve = cel::Expression::new_permissive(v);
-						Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
-					})
-					.collect::<Result<_, _>>()?;
-				TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
-					// TODO: support HTTP
-					protocol: http::ext_authz::Protocol::Grpc {
-						context: Some(ea.context.clone()),
-						metadata: if metadata.is_empty() {
-							None
-						} else {
-							Some(metadata)
-						},
+				let protocol = match ea
+					.protocol
+					.as_ref()
+					.ok_or(ProtoError::MissingRequiredField)?
+				{
+					external_auth::Protocol::Grpc(g) => {
+						let metadata: HashMap<_, _> = g
+							.metadata
+							.iter()
+							.map(|(k, v)| {
+								let ve = cel::Expression::new_permissive(v);
+								Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
+							})
+							.collect::<Result<_, _>>()?;
+						http::ext_authz::Protocol::Grpc {
+							context: Some(g.context.clone()),
+							metadata: if metadata.is_empty() {
+								None
+							} else {
+								Some(metadata)
+							},
+						}
 					},
+					external_auth::Protocol::Http(h) => http::ext_authz::Protocol::Http {
+						path: h
+							.path
+							.as_ref()
+							.map(cel::Expression::new_permissive)
+							.map(Arc::new),
+						redirect: h
+							.redirect
+							.as_ref()
+							.map(cel::Expression::new_permissive)
+							.map(Arc::new),
+						include_response_headers: h
+							.include_response_headers
+							.iter()
+							.map(|k| HeaderName::try_from(k.as_str()))
+							.collect::<Result<_, _>>()?,
+						add_request_headers: h
+							.add_request_headers
+							.iter()
+							.map(|(k, v)| {
+								let tk = HeaderOrPseudo::try_from(k.as_str())?;
+								let tv = cel::Expression::new_permissive(v.as_str());
+								Ok::<_, anyhow::Error>((tk, Arc::new(tv)))
+							})
+							.collect::<Result<_, _>>()
+							.map_err(|e| ProtoError::Generic(e.to_string()))?,
+						metadata: h
+							.metadata
+							.iter()
+							.map(|(k, v)| {
+								let ve = cel::Expression::new_permissive(v);
+								Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
+							})
+							.collect::<Result<_, _>>()?,
+					},
+				};
+				TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
+					protocol,
 					target: Arc::new(target),
 					failure_mode,
 					include_request_headers: ea

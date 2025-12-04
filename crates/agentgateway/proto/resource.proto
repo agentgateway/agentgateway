@@ -472,14 +472,27 @@ message TrafficPolicySpec {
       bool allow_partial_message = 2;
       bool pack_as_bytes = 3;
     }
+    message GRPCProtocol {
+      map<string, string> context = 1;
+      map<string, string> metadata = 2;
+    }
+    message HTTPProtocol {
+      optional string path = 1;
+      optional string redirect = 2;
+      repeated string include_response_headers = 3;
+      map<string, string> add_request_headers = 4;
+      map<string, string> metadata = 5;
+    }
     BackendReference target = 1;
-    map<string, string> context = 2;
-    map<string, string> metadata = 8;
-    FailureMode failure_mode = 3;
-    repeated string include_request_headers = 4;
-    BodyOptions include_request_body = 5;
-    google.protobuf.Duration timeout = 6;
-    optional uint32 status_on_error = 7;
+    oneof protocol {
+      GRPCProtocol grpc = 2;
+      HTTPProtocol http = 3;
+    }
+    FailureMode failure_mode = 4;
+    optional uint32 status_on_error = 5;
+    repeated string include_request_headers = 6;
+    BodyOptions include_request_body = 7;
+    google.protobuf.Duration timeout = 8;
   }
   message RBAC {
     repeated string allow = 1;

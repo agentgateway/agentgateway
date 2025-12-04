@@ -699,6 +699,28 @@ func (this *TrafficPolicySpec_ExternalAuth_BodyOptions) UnmarshalJSON(b []byte) 
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_ExternalAuth_GRPCProtocol
+func (this *TrafficPolicySpec_ExternalAuth_GRPCProtocol) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ExternalAuth_GRPCProtocol
+func (this *TrafficPolicySpec_ExternalAuth_GRPCProtocol) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_ExternalAuth_HTTPProtocol
+func (this *TrafficPolicySpec_ExternalAuth_HTTPProtocol) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ExternalAuth_HTTPProtocol
+func (this *TrafficPolicySpec_ExternalAuth_HTTPProtocol) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_RBAC
 func (this *TrafficPolicySpec_RBAC) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
