@@ -293,6 +293,16 @@ impl Socket {
 			.map_err(|to| io::Error::new(io::ErrorKind::TimedOut, to))??;
 		Socket::from_unix(res)
 	}
+	#[cfg(not(unix))]
+	pub async fn dial_unix(
+		path: &std::path::Path,
+		cfg: Arc<crate::BackendConfig>,
+	) -> io::Result<Socket> {
+		Err(io::Error::new(
+			io::ErrorKind::Unsupported,
+			"UDS is not supported on windows",
+		))
+	}
 
 	pub fn apply_tcp_settings(&mut self, settings: &TCP) {
 		if let SocketType::Tcp(tcp) = &self.inner

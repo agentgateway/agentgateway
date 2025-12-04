@@ -257,60 +257,19 @@ impl Connector {
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
 
-		// Handle Unix socket targets specially - they don't use the ep parameter
-		#[cfg(unix)]
-		if let Target::UnixSocket(path) = &target {
-			let socket = match transport {
-				Transport::Plaintext => Socket::dial_unix(path, self.backend_config.clone())
+		let mut socket = match (transport, &target) {
+			(Transport::Plaintext, Target::UnixSocket(uds)) => {
+				Socket::dial_unix(uds, self.backend_config.clone())
 					.await
-					.map_err(crate::http::Error::new)?,
-				Transport::Tls(_) => {
-					return Err(crate::http::Error::new(anyhow::anyhow!(
-						"TLS is not supported for Unix domain sockets"
-					)));
-				},
-				Transport::Hbone(_, _) => {
-					return Err(crate::http::Error::new(anyhow::anyhow!(
-						"HBONE is not supported for Unix domain sockets"
-					)));
-				},
-				Transport::DoubleHbone { .. } => {
-					return Err(crate::http::Error::new(anyhow::anyhow!(
-						"Double HBONE is not supported for Unix domain sockets"
-					)));
-				},
-			};
-			let connect_ms = connect_start.elapsed().as_millis();
-			if let Some(m) = &self.metrics {
-				let labels = crate::telemetry::metrics::ConnectLabels {
-					transport: agent_core::strng::RichStrng::from(transport_name).into(),
-				};
-				m.upstream_connect_duration
-					.get_or_create(&labels)
-					.observe((connect_ms as f64) / 1000.0);
-			}
-			event!(
-				target: "upstream tcp",
-				parent: None,
-				tracing::Level::DEBUG,
-
-				endpoint = %path.display(),
-				transport = %transport_name,
-
-				connect_ms = connect_ms,
-
-				"connected"
-			);
-			let mut socket = socket;
-			socket.with_logging(LoggingMode::Upstream);
-			return Ok(socket);
-		}
-
-		let mut socket = match transport {
-			Transport::Plaintext => Socket::dial(ep, self.backend_config.clone())
+					.map_err(crate::http::Error::new)?
+			},
+			(Transport::Plaintext, _) => Socket::dial(ep, self.backend_config.clone())
 				.await
 				.map_err(crate::http::Error::new)?,
-			Transport::Tls(tls) => {
+			(_, Target::UnixSocket(_)) => {
+				return Err(http::Error::new("UDS is only supported with plaintext"));
+			},
+			(Transport::Tls(tls), _) => {
 				let server_name = if let Some(h) = tls.hostname_override {
 					h
 				} else {
@@ -335,7 +294,7 @@ impl Connector {
 
 				tls.call(ep).await.map_err(crate::http::Error::new)?
 			},
-			Transport::Hbone(inner, identity) => {
+			(Transport::Hbone(inner, identity), _) => {
 				if inner.is_some() {
 					return Err(crate::http::Error::new(anyhow::anyhow!(
 						"todo: inner TLS is not currently supported"
@@ -374,12 +333,15 @@ impl Connector {
 				};
 				Socket::from_hbone(Arc::new(stream::Extension::new()), pool_key.dst, rw)
 			},
-			Transport::DoubleHbone {
-				gateway_address,
-				gateway_identity,
-				waypoint_identity,
-				inner_tls,
-			} => {
+			(
+				Transport::DoubleHbone {
+					gateway_address,
+					gateway_identity,
+					waypoint_identity,
+					inner_tls,
+				},
+				_,
+			) => {
 				if inner_tls.is_some() {
 					return Err(crate::http::Error::new(anyhow::anyhow!(
 						"todo: inner TLS after double hbone is not currently supported"
@@ -479,7 +441,6 @@ impl Connector {
 				let inner_authority = match &target {
 					Target::Hostname(host, port) => format!("{}:{}", host, port),
 					Target::Address(addr) => addr.to_string(),
-					#[cfg(unix)]
 					Target::UnixSocket(_) => {
 						// This should be unreachable - Unix sockets are handled above
 						unreachable!("Unix sockets should not reach DoubleHbone connection path")
@@ -664,7 +625,6 @@ impl Client {
 					.map_err(|_| ProxyError::DnsResolution)?;
 				SocketAddr::from((ip, *port))
 			},
-			#[cfg(unix)]
 			(Target::UnixSocket(_), _) => {
 				// Placeholder address for Unix sockets - the actual connection
 				// uses the path from the Target, not this address
@@ -748,7 +708,6 @@ impl Client {
 					.map_err(|_| ProxyError::DnsResolution)?;
 				SocketAddr::from((ip, *port))
 			},
-			#[cfg(unix)]
 			(Target::UnixSocket(_), _) => {
 				// Placeholder address for Unix sockets - the actual connection
 				// uses the path from the Target, not this address
