@@ -1038,6 +1038,7 @@ pub fn preload_tokenizers() {
 pub fn get_bpe_from_tokenizer<'a>(tokenizer: Tokenizer) -> &'a CoreBPE {
 	match tokenizer {
 		Tokenizer::O200kBase => tiktoken_rs::o200k_base_singleton(),
+		Tokenizer::O200kHarmony => tiktoken_rs::o200k_harmony_singleton(),
 		Tokenizer::Cl100kBase => tiktoken_rs::cl100k_base_singleton(),
 		Tokenizer::R50kBase => tiktoken_rs::r50k_base_singleton(),
 		Tokenizer::P50kBase => tiktoken_rs::r50k_base_singleton(),

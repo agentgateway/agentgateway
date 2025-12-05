@@ -1,13 +1,14 @@
-use std::collections::{HashMap, HashSet};
-use std::time::Instant;
-
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use async_openai::types::{ChatCompletionMessageToolCallChunk, FunctionCallStream};
+use async_openai::types::chat::{
+	ChatCompletionToolChoiceOption, ReasoningEffort, ToolChoiceOptions,
+};
 use bytes::Bytes;
 use chrono;
 use itertools::Itertools;
 use rand::Rng;
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 use tracing::trace;
 
 use crate::http::{Body, Response};
@@ -365,28 +366,36 @@ pub(super) fn translate_request_completions(
 	};
 
 	let tool_choice = match req.tool_choice {
-		Some(universal::ToolChoiceOption::Named(universal::NamedToolChoice {
-			r#type: _,
-			function,
-		})) => Some(types::ToolChoice::Tool {
-			name: function.name,
-		}),
-		Some(universal::ToolChoiceOption::Auto) => Some(types::ToolChoice::Auto),
-		Some(universal::ToolChoiceOption::Required) => Some(types::ToolChoice::Any),
-		Some(universal::ToolChoiceOption::None) => None,
+		Some(universal::ToolChoiceOption::Function(universal::NamedToolChoice { function })) => {
+			Some(types::ToolChoice::Tool {
+				name: function.name,
+			})
+		},
+		Some(universal::ToolChoiceOption::Mode(ToolChoiceOptions::Auto)) => {
+			Some(types::ToolChoice::Auto)
+		},
+		Some(universal::ToolChoiceOption::Mode(ToolChoiceOptions::Required)) => {
+			Some(types::ToolChoice::Any)
+		},
+		Some(universal::ToolChoiceOption::Mode(ToolChoiceOptions::None)) => None,
+		Some(ChatCompletionToolChoiceOption::AllowedTools(_)) => None,
+		Some(ChatCompletionToolChoiceOption::Custom(_)) => None,
 		None => None,
 	};
 	let tools = req.tools.map(|tools| {
 		tools
 			.into_iter()
-			.map(|tool| {
+			.flat_map(|tool| {
+				let universal::Tools::Function(tool) = tool else {
+					return None;
+				};
 				let tool_spec = types::ToolSpecification {
 					name: tool.function.name,
 					description: tool.function.description,
 					input_schema: tool.function.parameters.map(types::ToolInputSchema::Json),
 				};
 
-				types::Tool::ToolSpec(tool_spec)
+				Some(types::Tool::ToolSpec(tool_spec))
 			})
 			.collect_vec()
 	});
@@ -423,6 +432,7 @@ pub(super) fn translate_request_completions(
 					"budget_tokens": 4096
 				}
 			})),
+			Some(ReasoningEffort::None) => None,
 			None => None,
 		}
 	};
@@ -523,11 +533,11 @@ pub(super) fn translate_stream_to_completions(
 					tool_calls.insert(start.content_block_index, String::new());
 					// Emit the start of a tool call
 					let d = universal::StreamResponseDelta {
-						tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
+						tool_calls: Some(vec![universal::ChatCompletionMessageToolCallChunk {
 							index: start.content_block_index as u32,
 							id: Some(tu.tool_use_id),
-							r#type: Some(universal::ToolType::Function),
-							function: Some(FunctionCallStream {
+							r#type: Some(universal::FunctionType::Function),
+							function: Some(universal::FunctionCallStream {
 								name: Some(tu.name),
 								arguments: None,
 							}),
@@ -575,11 +585,11 @@ pub(super) fn translate_stream_to_completions(
 							// Accumulate tool call JSON and emit deltas
 							if let Some(json_buffer) = tool_calls.get_mut(&d.content_block_index) {
 								json_buffer.push_str(&tu.input);
-								dr.tool_calls = Some(vec![ChatCompletionMessageToolCallChunk {
+								dr.tool_calls = Some(vec![universal::ChatCompletionMessageToolCallChunk {
 									index: d.content_block_index as u32,
 									id: None, // Only sent in the first chunk
 									r#type: None,
-									function: Some(FunctionCallStream {
+									function: Some(universal::FunctionCallStream {
 										name: None,
 										arguments: Some(tu.input),
 									}),
@@ -1008,10 +1018,10 @@ pub(super) fn translate_request_responses(
 	prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 ) -> Result<ConverseRequest, AIError> {
 	use responses::{
-		ContentType, Input, InputContent, InputItem, InputMessage, Role as ResponsesRole,
+		ContentType, InputParam, InputContent, InputItem, InputMessage, Role as ResponsesRole, Item,
 	};
 
-	let supports_caching = supports_prompt_caching(&req.model);
+	let supports_caching = supports_prompt_caching(&req.model.unwrap_or_default());
 
 	// Convert input to Bedrock messages and system content
 	let mut messages: Vec<types::Message> = Vec::new();
@@ -1023,14 +1033,14 @@ pub(super) fn translate_request_responses(
 
 	// Convert Input format to items
 	let items = match &req.input {
-		Input::Text(text) => {
-			vec![InputItem::Message(InputMessage {
+		InputParam::Text(text) => {
+			vec![InputItem::EasyMessage(Item::Message {
 				kind: Default::default(),
 				role: ResponsesRole::User,
 				content: InputContent::TextInput(text.clone()),
 			})]
 		},
-		Input::Items(items) => items.clone(),
+		InputParam::Items(items) => items.clone(),
 	};
 
 	// Process each input item

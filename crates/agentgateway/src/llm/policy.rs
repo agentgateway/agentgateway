@@ -299,7 +299,7 @@ impl Policy {
 		let resp = client
 			.call_with_explicit_policies(req, mock_be, pols)
 			.await?;
-		let resp: async_openai::types::CreateModerationResponse =
+		let resp: async_openai::types::moderations::CreateModerationResponse =
 			json::from_response_body(resp).await?;
 		if resp.results.iter().any(|r| r.flagged) {
 			Ok(Some(rej.as_response()))
