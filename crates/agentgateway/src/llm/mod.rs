@@ -137,6 +137,7 @@ pub enum InputFormat {
 	Completions,
 	Messages,
 	Responses,
+	Realtime,
 	CountTokens,
 }
 

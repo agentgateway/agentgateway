@@ -861,9 +861,12 @@ async fn handle_upgrade(
 				return;
 			},
 		};
+		let server = TokioIo::new(response_upgraded);
+		let llm = log.as_ref().map(|l| l.llm_response.clone());
+		let mut server = parse::websocket::parser(server, llm.unwrap()).await;
 		let _ = agent_core::copy::copy_bidirectional(
 			&mut TokioIo::new(req),
-			&mut TokioIo::new(response_upgraded),
+			&mut server,
 			&agent_core::copy::ConnectionResult {},
 		)
 		.await;
@@ -1494,7 +1497,7 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 		.and_then(|h| h.to_str().ok())
 		.map(|s| s.contains("trailers"))
 		.unwrap_or(false);
-	let upgrade_type = upgrade_type(req.headers());
+	let upgrade_type = get_upgrade_type(req.headers());
 	for h in HOP_HEADERS.iter() {
 		req.headers_mut().remove(h);
 	}
