@@ -322,6 +322,10 @@ pub fn modify_uri(
 	Ok(())
 }
 
+pub fn as_url(uri: &Uri) -> anyhow::Result<Url> {
+	Ok(Url::parse(&uri.to_string())?)
+}
+
 pub fn modify_url(
 	uri: &mut Uri,
 	f: impl FnOnce(&mut Url) -> anyhow::Result<()>,

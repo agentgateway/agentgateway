@@ -132,6 +132,7 @@ url.workspace = true
 uuid.workspace = true
 x509-parser.workspace = true
 reqwest = { optional = true, workspace = true }
+websocket-sans-io.workspace = true
 
 # Linux only dependencies
 [target.'cfg(target_family = "unix")'.dependencies]

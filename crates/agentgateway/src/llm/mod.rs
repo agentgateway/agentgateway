@@ -110,6 +110,8 @@ pub enum RouteType {
 	Responses,
 	/// OpenAI /embeddings
 	Embeddings,
+	/// OpenAI /realtime (websockets)
+	Realtime,
 	/// Anthropic /v1/messages/count_tokens
 	AnthropicTokenCount,
 }
@@ -145,6 +147,7 @@ pub enum InputFormat {
 	Messages,
 	Responses,
 	Embeddings,
+	Realtime,
 	CountTokens,
 }
 
@@ -154,6 +157,7 @@ impl InputFormat {
 			InputFormat::Completions => true,
 			InputFormat::Messages => true,
 			InputFormat::Responses => true,
+			InputFormat::Realtime => false,
 			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
 		}
@@ -286,6 +290,19 @@ impl AIProvider {
 		Ok(())
 	}
 
+	fn set_path_and_query(uri: &mut http::uri::Parts, path: &'static str) -> anyhow::Result<()> {
+		let query = uri.path_and_query.as_ref().and_then(|p| p.query());
+		if let Some(query) = query {
+			uri.path_and_query = Some(PathAndQuery::from_maybe_shared(format!(
+				"{}?{}",
+				path, query
+			))?);
+		} else {
+			uri.path_and_query = Some(PathAndQuery::from_static(path));
+		};
+		Ok(())
+	}
+
 	pub fn set_host_path_defaults(
 		&self,
 		req: &mut Request,
@@ -297,7 +314,7 @@ impl AIProvider {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path {
-						uri.path_and_query = Some(PathAndQuery::from_static(openai::path(route_type)));
+						Self::set_path_and_query(uri, openai::path(route_type))?;
 					}
 					uri.authority = Some(Authority::from_static(openai::DEFAULT_HOST_STR));
 					Ok(())
@@ -307,7 +324,7 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path {
-						uri.path_and_query = Some(PathAndQuery::from_static(anthropic::DEFAULT_PATH));
+						Self::set_path_and_query(uri, anthropic::DEFAULT_PATH)?;
 					}
 					uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
 					Ok(())
@@ -317,7 +334,7 @@ impl AIProvider {
 			AIProvider::Gemini(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path {
-						uri.path_and_query = Some(PathAndQuery::from_static(gemini::DEFAULT_PATH));
+						Self::set_path_and_query(uri, gemini::DEFAULT_PATH)?;
 					}
 					uri.authority = Some(Authority::from_static(gemini::DEFAULT_HOST_STR));
 					Ok(())
@@ -781,6 +798,9 @@ impl AIProvider {
 			(_, InputFormat::Responses) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider does not support Responses"
 			))),
+			(_, InputFormat::Realtime) => Err(AIError::UnsupportedConversion(strng::literal!(
+				"realtime does not use this codepath"
+			))),
 			(_, InputFormat::CountTokens) => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
 			},
@@ -859,6 +879,11 @@ impl AIProvider {
 			(_, InputFormat::Messages) => {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
 					"this provider does not support Messages for streaming"
+				)));
+			},
+			(_, InputFormat::Realtime) => {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"realtime does not use streaming codepath"
 				)));
 			},
 			(AIProvider::Anthropic(_), InputFormat::Responses) => {

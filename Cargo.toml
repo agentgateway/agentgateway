@@ -44,7 +44,7 @@ anyhow = "1.0"
 arc-swap = "1.7.1"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { version = "0.32.2", default-features = false, features = ["chat-completion-types", "embedding-types", "moderation-types", "response-types"] }
+async-openai = { version = "0.32.2", default-features = false, features = ["chat-completion-types", "embedding-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = "1.8"
@@ -193,6 +193,7 @@ uuid = { version = "1.11", features = ["v4"] }
 wiremock = { version = "0.6", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
 which = "8.0"
+websocket-sans-io = '0.1'
 cel = { git = "https://github.com/cel-rust/cel-rust", rev = "5d2e19934db441ad7dd2eeca62da1b5b238f41f8", features = [
     "json",
     "regex",

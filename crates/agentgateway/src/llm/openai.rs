@@ -22,6 +22,7 @@ pub fn path(route: RouteType) -> &'static str {
 		RouteType::Responses => "/v1/responses",
 		// For Embeddings we forward to the embeddings endpoint
 		RouteType::Embeddings => "/v1/embeddings",
+		RouteType::Realtime => "/v1/realtime",
 		// All others get translated down to completions
 		_ => "/v1/chat/completions",
 	}

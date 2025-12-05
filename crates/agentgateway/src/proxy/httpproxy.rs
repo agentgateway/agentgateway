@@ -25,7 +25,7 @@ use crate::http::{
 	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
 	auth, filters, get_host, merge_in_headers, retry,
 };
-use crate::llm::{LLMRequest, RequestResult, RouteType};
+use crate::llm::{InputFormat, LLMRequest, RequestResult, RouteType};
 use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
@@ -933,12 +933,28 @@ async fn handle_upgrade(
 				return;
 			},
 		};
-		let _ = agent_core::copy::copy_bidirectional(
-			&mut TokioIo::new(req),
-			&mut TokioIo::new(response_upgraded),
-			&agent_core::copy::ConnectionResult {},
-		)
-		.await;
+		let mut server = TokioIo::new(response_upgraded);
+		if let Some(log) = log.as_ref()
+			&& let Some(llm_req) = dbg!(log.llm_request.as_ref())
+			&& llm_req.input_format == InputFormat::Realtime
+		{
+			let llm = log.llm_response.clone();
+			let mut server = parse::websocket::parser2(server, llm).await;
+			let _ = agent_core::copy::copy_bidirectional(
+				&mut TokioIo::new(req),
+				&mut server,
+				&agent_core::copy::ConnectionResult {},
+			)
+			.await;
+		} else {
+			let _ = agent_core::copy::copy_bidirectional(
+				&mut TokioIo::new(req),
+				&mut server,
+				&agent_core::copy::ConnectionResult {},
+			)
+			.await;
+		}
+		// Make sure we only emit log after we are done with the entire connection
 		drop(log);
 	});
 	Ok(resp)
@@ -1333,13 +1349,32 @@ async fn make_backend_call(
 						)
 					}));
 				},
-				RouteType::Passthrough => {
+				RouteType::Passthrough | RouteType::Realtime => {
 					// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
 					// We do not need LLM policies nor token-based rate limits, etc.
+					// For realtime we do the same and handle everything in the Websocket handler
 					llm
 						.provider
 						.setup_request(&mut req, route_type, None, true)
 						.map_err(ProxyError::Processing)?;
+					if route_type == RouteType::Realtime {
+						let request_model = http::as_url(req.uri())
+							.map_err(ProxyError::Processing)?
+							.query_pairs()
+							.find(|(k, _v)| k == "model")
+							.map(|(_, v)| strng::new(v))
+							.unwrap_or_default();
+						log.add(|l| {
+							l.llm_request = Some(LLMRequest {
+								input_format: InputFormat::Realtime,
+								request_model,
+								streaming: true,
+								provider: llm.provider.provider(),
+								input_tokens: None,
+								params: Default::default(),
+							})
+						});
+					}
 					(req, LLMResponsePolicies::default(), None)
 				},
 			}
@@ -1583,7 +1618,7 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 		.and_then(|h| h.to_str().ok())
 		.map(|s| s.contains("trailers"))
 		.unwrap_or(false);
-	let upgrade_type = upgrade_type(req.headers());
+	let upgrade_type = get_upgrade_type(req.headers());
 	for h in HOP_HEADERS.iter() {
 		req.headers_mut().remove(h);
 	}
