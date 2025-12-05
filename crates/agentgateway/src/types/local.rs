@@ -670,6 +670,9 @@ pub struct LocalBackendPolicies {
 	/// Authenticate to the backend.
 	#[serde(default)]
 	pub backend_auth: Option<BackendAuth>,
+
+	pub http: Option<types::backend::HTTP>,
+	pub tcp: Option<types::backend::TCP>,
 }
 
 impl LocalBackendPolicies {
@@ -683,6 +686,8 @@ impl LocalBackendPolicies {
 			ai,
 			backend_tls,
 			backend_auth,
+			http,
+			tcp,
 		} = self;
 		let mut pols = vec![];
 		if let Some(p) = request_header_modifier {
@@ -705,6 +710,12 @@ impl LocalBackendPolicies {
 		}
 		if let Some(p) = backend_auth {
 			pols.push(BackendPolicy::BackendAuth(p))
+		}
+		if let Some(p) = http {
+			pols.push(BackendPolicy::HTTP(p))
+		}
+		if let Some(p) = tcp {
+			pols.push(BackendPolicy::TCP(p))
 		}
 		if let Some(mut p) = ai {
 			p.compile_model_alias_patterns();
