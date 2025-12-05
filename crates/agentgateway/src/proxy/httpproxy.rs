@@ -434,7 +434,7 @@ impl HTTPProxy {
 			}
 		}
 
-		let resp = match response_policies
+		let mut resp = match response_policies
 			.apply(
 				&mut resp,
 				log.as_mut().unwrap(),
@@ -457,8 +457,18 @@ impl HTTPProxy {
 			l.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
 		});
 
-		resp.map(move |b| http::Body::new(LogBody::new(b, log)))
+		if resp.status() == StatusCode::SWITCHING_PROTOCOLS {
+			let Some(req_upgrade) = resp.extensions_mut().remove::<RequestUpgrade>() else {
+				return ProxyError::UpgradeFailed(None, None).into_response();
+			};
+			handle_upgrade(req_upgrade, resp, log)
+				.await
+				.unwrap_or_else(|e| e.into_response())
+		} else {
+			resp.map(move |b| http::Body::new(LogBody::new(b, log)))
+		}
 	}
+
 	async fn proxy_internal(
 		&self,
 		connection: Arc<Extension>,
@@ -855,7 +865,7 @@ impl HTTPProxy {
 		};
 
 		// Run the actual call
-		let resp = match call_result {
+		let mut resp = match call_result {
 			Ok(Ok(resp)) => resp,
 			Ok(Err(e)) => {
 				return Err(e.into());
@@ -865,7 +875,10 @@ impl HTTPProxy {
 			},
 		};
 		if resp.status() == StatusCode::SWITCHING_PROTOCOLS {
-			return handle_upgrade(req_upgrade, resp).await.map_err(Into::into);
+			let Some(upgrade) = req_upgrade.take() else {
+				return Err(ProxyError::UpgradeFailed(None, None).into());
+			};
+			resp.extensions_mut().insert(upgrade);
 		}
 
 		// gRPC status can be in the initial headers or a trailer, add if they are here
@@ -891,20 +904,18 @@ fn resolve_backend(b: RouteBackendReference, pi: &ProxyInputs) -> Result<RouteBa
 }
 
 async fn handle_upgrade(
-	req_upgrade_type: &mut Option<RequestUpgrade>,
+	req_upgrade_type: RequestUpgrade,
 	mut resp: Response,
+	log: DropOnLog,
 ) -> Result<Response, ProxyError> {
-	let Some(RequestUpgrade {
-		upgade_type,
+	let RequestUpgrade {
+		upgrade_type,
 		upgrade,
-	}) = std::mem::take(req_upgrade_type)
-	else {
-		return Err(ProxyError::UpgradeFailed(None, None));
-	};
-	let resp_upgrade_type = upgrade_type(resp.headers());
-	if Some(&upgade_type) != resp_upgrade_type.as_ref() {
+	} = req_upgrade_type;
+	let resp_upgrade_type = get_upgrade_type(resp.headers());
+	if Some(&upgrade_type) != resp_upgrade_type.as_ref() {
 		return Err(ProxyError::UpgradeFailed(
-			Some(upgade_type),
+			Some(upgrade_type),
 			resp_upgrade_type,
 		));
 	}
@@ -928,6 +939,7 @@ async fn handle_upgrade(
 			&agent_core::copy::ConnectionResult {},
 		)
 		.await;
+		drop(log);
 	});
 	Ok(resp)
 }
@@ -1558,8 +1570,9 @@ static HOP_HEADERS: [HeaderName; 9] = [
 	header::UPGRADE,
 ];
 
+#[derive(Clone)]
 struct RequestUpgrade {
-	upgade_type: HeaderValue,
+	upgrade_type: HeaderValue,
 	upgrade: OnUpgrade,
 }
 
@@ -1591,7 +1604,7 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 		&& let Some(u) = on_upgrade
 	{
 		Some(RequestUpgrade {
-			upgade_type: t,
+			upgrade_type: t,
 			upgrade: u,
 		})
 	} else {
@@ -1599,7 +1612,7 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 	}
 }
 
-fn upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
+fn get_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
 	if let Some(con) = headers.typed_get::<headers::Connection>() {
 		if con.contains(http::header::UPGRADE) {
 			headers.get(http::header::UPGRADE).cloned()
