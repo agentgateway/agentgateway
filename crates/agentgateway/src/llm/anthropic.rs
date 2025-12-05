@@ -48,6 +48,9 @@ impl Provider {
 			InputFormat::CountTokens => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
 			},
+			InputFormat::Realtime => {
+				unreachable!("Realtime should be handled by websocket upgrade")
+			},
 		}
 	}
 }
@@ -82,6 +85,9 @@ pub fn process_response(
 		},
 		InputFormat::CountTokens => {
 			unreachable!("CountTokens should be handled by process_count_tokens_response")
+		},
+		InputFormat::Realtime => {
+			unreachable!("Realtime should be handled by websocket upgrade")
 		},
 	}
 }

@@ -45,7 +45,7 @@ anyhow = "1.0"
 arc-swap = "1.7.1"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { version = "0.30.1", default-features = false }
+async-openai = { version = "0.30.1", default-features = false, features = ["realtime"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = "1.8"
@@ -176,6 +176,8 @@ tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-test = "0.4"
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio_sse_codec = "0.0.2"
+tokio-tungstenite = "0.28"
+tungstenite = "0.28"
 tonic = { version = "0.14", features = ["codegen", "transport"] }
 tonic-prost = { version = "0.14" }
 tonic-prost-build = { version = "0.14", features = ["transport"] }

@@ -4488,6 +4488,77 @@
                                     }
                                   ],
                                   "default": null
+                                },
+                                "http": {
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ],
+                                  "properties": {
+                                    "version": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "additionalProperties": false
+                                },
+                                "tcp": {
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ],
+                                  "properties": {
+                                    "keepalives": {
+                                      "type": "object",
+                                      "properties": {
+                                        "enabled": {
+                                          "type": "boolean",
+                                          "default": true
+                                        },
+                                        "time": {
+                                          "type": "string",
+                                          "default": "3m0s"
+                                        },
+                                        "interval": {
+                                          "type": "string",
+                                          "default": "3m0s"
+                                        },
+                                        "retries": {
+                                          "type": "integer",
+                                          "format": "uint32",
+                                          "minimum": 0,
+                                          "default": 9
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    },
+                                    "connectTimeout": {
+                                      "type": "object",
+                                      "properties": {
+                                        "secs": {
+                                          "type": "integer",
+                                          "format": "uint64",
+                                          "minimum": 0
+                                        },
+                                        "nanos": {
+                                          "type": "integer",
+                                          "format": "uint32",
+                                          "minimum": 0
+                                        }
+                                      },
+                                      "required": [
+                                        "secs",
+                                        "nanos"
+                                      ]
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "keepalives",
+                                    "connectTimeout"
+                                  ]
                                 }
                               },
                               "additionalProperties": false
@@ -6172,6 +6243,77 @@
                                                 }
                                               ],
                                               "default": null
+                                            },
+                                            "http": {
+                                              "type": [
+                                                "object",
+                                                "null"
+                                              ],
+                                              "properties": {
+                                                "version": {
+                                                  "type": [
+                                                    "string",
+                                                    "null"
+                                                  ]
+                                                }
+                                              },
+                                              "additionalProperties": false
+                                            },
+                                            "tcp": {
+                                              "type": [
+                                                "object",
+                                                "null"
+                                              ],
+                                              "properties": {
+                                                "keepalives": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "enabled": {
+                                                      "type": "boolean",
+                                                      "default": true
+                                                    },
+                                                    "time": {
+                                                      "type": "string",
+                                                      "default": "3m0s"
+                                                    },
+                                                    "interval": {
+                                                      "type": "string",
+                                                      "default": "3m0s"
+                                                    },
+                                                    "retries": {
+                                                      "type": "integer",
+                                                      "format": "uint32",
+                                                      "minimum": 0,
+                                                      "default": 9
+                                                    }
+                                                  },
+                                                  "additionalProperties": false
+                                                },
+                                                "connectTimeout": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "secs": {
+                                                      "type": "integer",
+                                                      "format": "uint64",
+                                                      "minimum": 0
+                                                    },
+                                                    "nanos": {
+                                                      "type": "integer",
+                                                      "format": "uint32",
+                                                      "minimum": 0
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "secs",
+                                                    "nanos"
+                                                  ]
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "keepalives",
+                                                "connectTimeout"
+                                              ]
                                             }
                                           },
                                           "additionalProperties": false
@@ -7606,6 +7748,77 @@
                                                             }
                                                           ],
                                                           "default": null
+                                                        },
+                                                        "http": {
+                                                          "type": [
+                                                            "object",
+                                                            "null"
+                                                          ],
+                                                          "properties": {
+                                                            "version": {
+                                                              "type": [
+                                                                "string",
+                                                                "null"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "additionalProperties": false
+                                                        },
+                                                        "tcp": {
+                                                          "type": [
+                                                            "object",
+                                                            "null"
+                                                          ],
+                                                          "properties": {
+                                                            "keepalives": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "enabled": {
+                                                                  "type": "boolean",
+                                                                  "default": true
+                                                                },
+                                                                "time": {
+                                                                  "type": "string",
+                                                                  "default": "3m0s"
+                                                                },
+                                                                "interval": {
+                                                                  "type": "string",
+                                                                  "default": "3m0s"
+                                                                },
+                                                                "retries": {
+                                                                  "type": "integer",
+                                                                  "format": "uint32",
+                                                                  "minimum": 0,
+                                                                  "default": 9
+                                                                }
+                                                              },
+                                                              "additionalProperties": false
+                                                            },
+                                                            "connectTimeout": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "secs": {
+                                                                  "type": "integer",
+                                                                  "format": "uint64",
+                                                                  "minimum": 0
+                                                                },
+                                                                "nanos": {
+                                                                  "type": "integer",
+                                                                  "format": "uint32",
+                                                                  "minimum": 0
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "secs",
+                                                                "nanos"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "additionalProperties": false,
+                                                          "required": [
+                                                            "keepalives",
+                                                            "connectTimeout"
+                                                          ]
                                                         }
                                                       },
                                                       "additionalProperties": false

@@ -391,6 +391,9 @@ impl DropOnLog {
 	pub fn as_mut(&mut self) -> Option<&mut RequestLog> {
 		self.log.as_mut()
 	}
+	pub fn as_ref(&self) -> Option<&RequestLog> {
+		self.log.as_ref()
+	}
 	pub fn with(&mut self, f: impl FnOnce(&mut RequestLog)) {
 		if let Some(l) = self.log.as_mut() {
 			f(l)

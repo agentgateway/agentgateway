@@ -16,7 +16,7 @@ use crate::llm::bedrock::types::{
 	ContentBlock, ConverseErrorResponse, ConverseRequest, ConverseResponse, StopReason,
 };
 use crate::llm::openai::responses;
-use crate::llm::{AIError, LLMInfo, universal};
+use crate::llm::{AIError, LLMInfo, universal, InputFormat};
 use crate::telemetry::log::AsyncLog;
 use crate::*;
 
@@ -89,6 +89,9 @@ impl Provider {
 			crate::llm::InputFormat::CountTokens => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
 			},
+			crate::llm::InputFormat::Realtime => {
+				unreachable!("Realtime should be handled by websocket upgrade")
+			},
 		}
 	}
 
@@ -143,6 +146,9 @@ pub fn process_response(
 		},
 		crate::llm::InputFormat::CountTokens => {
 			unreachable!("CountTokens should be handled by process_count_tokens_response")
+		},
+		crate::llm::InputFormat::Realtime => {
+			unreachable!("Realtime should be handled by websocket upgrade")
 		},
 	}
 }

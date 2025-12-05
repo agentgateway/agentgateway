@@ -115,6 +115,9 @@ pub mod passthrough {
 			InputFormat::CountTokens => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
 			},
+			InputFormat::Realtime => {
+				unreachable!("Realtime should be handled by websocket upgrade")
+			},
 		}
 	}
 
