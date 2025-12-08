@@ -28,6 +28,7 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	ctx.add_function("default", default);
 	ctx.add_function("regexReplace", regex_replace);
 	ctx.add_function("fail", fail);
+	ctx.add_function("uuid", uuid_generate);
 
 	// Using the go name, base64.encode is blocked by https://github.com/cel-rust/cel-rust/issues/103 (namespacing)
 	ctx.add_function("base64Encode", base64_encode);
@@ -210,6 +211,20 @@ pub fn regex_replace(
 		)),
 		Err(err) => Err(ftx.error(format!("'{regex}' not a valid regex:\n{err}"))),
 	}
+}
+
+fn uuid_generate() -> Arc<String> {
+	use rand::Rng;
+	let mut rng = rand::rng();
+	let uuid = format!(
+		"{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+		rng.random::<u32>(),
+		rng.random::<u16>(),
+		(rng.random::<u16>() & 0x0fff) | 0x4000, // Version 4
+		(rng.random::<u16>() & 0x3fff) | 0x8000, // Variant 1
+		rng.random::<u64>() & 0xffffffffffff
+	);
+	Arc::new(uuid)
 }
 
 fn default(ftx: &FunctionContext, exp: Expression, d: Value) -> ResolveResult {
