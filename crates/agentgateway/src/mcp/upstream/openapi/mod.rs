@@ -363,6 +363,7 @@ pub(crate) fn parse_openapi_schema(
 								))?
 								.clone();
 							let tool = Tool {
+								meta: None,
 								annotations: None,
 								name: Cow::Owned(name.clone()),
 								description: Some(Cow::Owned(

@@ -1,8 +1,8 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use async_openai::types::{
+use async_openai::types::chat::{
 	ChatCompletionRequestToolMessageContent, ChatCompletionRequestToolMessageContentPart,
-	FinishReason, ReasoningEffort,
+	ChatCompletionToolChoiceOption, FinishReason, ReasoningEffort, ToolChoiceOptions,
 };
 use bytes::Bytes;
 use chrono;
@@ -122,7 +122,6 @@ pub(super) fn translate_response(resp: MessagesResponse) -> universal::Response 
 				};
 				tool_calls.push(universal::MessageToolCall {
 					id: id.clone(),
-					r#type: universal::ToolType::Function,
 					function: universal::FunctionCall {
 						name: name.clone(),
 						arguments: args,
@@ -238,11 +237,16 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 	let tools = if let Some(tools) = req.tools {
 		let mapped_tools: Vec<_> = tools
 			.iter()
-			.map(|tool| types::Tool {
-				name: tool.function.name.clone(),
-				description: tool.function.description.clone(),
-				input_schema: tool.function.parameters.clone().unwrap_or_default(),
-				cache_control: None,
+			.flat_map(|tool| {
+				let universal::Tools::Function(tool) = tool else {
+					return None;
+				};
+				Some(types::Tool {
+					name: tool.function.name.clone(),
+					description: tool.function.description.clone(),
+					input_schema: tool.function.parameters.clone().unwrap_or_default(),
+					cache_control: None,
+				})
 			})
 			.collect();
 		Some(mapped_tools)
@@ -254,15 +258,22 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 	});
 
 	let tool_choice = match req.tool_choice {
-		Some(universal::ToolChoiceOption::Named(universal::NamedToolChoice {
-			r#type: _,
-			function,
-		})) => Some(types::ToolChoice::Tool {
-			name: function.name,
-		}),
-		Some(universal::ToolChoiceOption::Auto) => Some(types::ToolChoice::Auto),
-		Some(universal::ToolChoiceOption::Required) => Some(types::ToolChoice::Any),
-		Some(universal::ToolChoiceOption::None) => Some(types::ToolChoice::None),
+		Some(universal::ToolChoiceOption::Function(universal::NamedToolChoice { function })) => {
+			Some(types::ToolChoice::Tool {
+				name: function.name,
+			})
+		},
+		Some(universal::ToolChoiceOption::Mode(ToolChoiceOptions::Auto)) => {
+			Some(types::ToolChoice::Auto)
+		},
+		Some(universal::ToolChoiceOption::Mode(ToolChoiceOptions::Required)) => {
+			Some(types::ToolChoice::Any)
+		},
+		Some(universal::ToolChoiceOption::Mode(ToolChoiceOptions::None)) => {
+			Some(types::ToolChoice::None)
+		},
+		Some(ChatCompletionToolChoiceOption::AllowedTools(_)) => None,
+		Some(ChatCompletionToolChoiceOption::Custom(_)) => None,
 		None => None,
 	};
 	let thinking = if let Some(budget) = req.vendor_extensions.thinking_budget_tokens {
@@ -285,6 +296,7 @@ pub(super) fn translate_request(req: universal::Request) -> types::MessagesReque
 			Some(ReasoningEffort::High) => Some(types::ThinkingInput::Enabled {
 				budget_tokens: 4096,
 			}),
+			Some(ReasoningEffort::None) => None,
 			None => None,
 		}
 	};
@@ -581,15 +593,16 @@ pub(super) fn translate_anthropic_request(req: types::MessagesRequest) -> univer
 						types::ContentBlock::ToolUse {
 							id, name, input, ..
 						} => {
-							tool_calls.push(universal::MessageToolCall {
-								id,
-								r#type: universal::ToolType::Function,
-								function: universal::FunctionCall {
-									name,
-									// It's assumed that the input is a JSON object that can be stringified.
-									arguments: serde_json::to_string(&input).unwrap_or_default(),
+							tool_calls.push(universal::MessageToolCalls::Function(
+								universal::MessageToolCall {
+									id,
+									function: universal::FunctionCall {
+										name,
+										// It's assumed that the input is a JSON object that can be stringified.
+										arguments: serde_json::to_string(&input).unwrap_or_default(),
+									},
 								},
-							});
+							));
 						},
 						ContentBlock::Thinking { .. } => {
 							// TODO
@@ -622,26 +635,26 @@ pub(super) fn translate_anthropic_request(req: types::MessagesRequest) -> univer
 	let tools = tools
 		.into_iter()
 		.flat_map(|tools| tools.into_iter())
-		.map(|tool| universal::Tool {
-			r#type: universal::ToolType::Function,
-			function: universal::FunctionObject {
-				name: tool.name,
-				description: tool.description,
-				parameters: Some(tool.input_schema),
-				strict: None,
-			},
+		.map(|tool| {
+			universal::Tools::Function(universal::Tool {
+				function: universal::FunctionObject {
+					name: tool.name,
+					description: tool.description,
+					parameters: Some(tool.input_schema),
+					strict: None,
+				},
+			})
 		})
 		.collect_vec();
 	let tool_choice = tool_choice.map(|choice| match choice {
-		types::ToolChoice::Auto => universal::ToolChoiceOption::Auto,
-		types::ToolChoice::Any => universal::ToolChoiceOption::Required,
+		types::ToolChoice::Auto => universal::ToolChoiceOption::Mode(ToolChoiceOptions::Auto),
+		types::ToolChoice::Any => universal::ToolChoiceOption::Mode(ToolChoiceOptions::Required),
 		types::ToolChoice::Tool { name } => {
-			universal::ToolChoiceOption::Named(universal::NamedToolChoice {
-				r#type: universal::ToolType::Function,
+			universal::ToolChoiceOption::Function(universal::NamedToolChoice {
 				function: universal::FunctionName { name },
 			})
 		},
-		types::ToolChoice::None => universal::ToolChoiceOption::None,
+		types::ToolChoice::None => universal::ToolChoiceOption::Mode(ToolChoiceOptions::None),
 	});
 
 	universal::Request {
@@ -654,7 +667,7 @@ pub(super) fn translate_anthropic_request(req: types::MessagesRequest) -> univer
 		stop: if stop_sequences.is_empty() {
 			None
 		} else {
-			Some(universal::Stop::StringArray(stop_sequences))
+			Some(universal::StopConfiguration::StringArray(stop_sequences))
 		},
 		tools: if tools.is_empty() { None } else { Some(tools) },
 		tool_choice,

@@ -33,7 +33,8 @@ impl Provider {
 pub mod responses {
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
-		Content, ContentType, CreateResponse, FunctionCall, Input, InputContent, InputItem,
+		Item,
+		Content, ContentType, CreateResponse, FunctionCall, InputParam, InputContent, InputItem,
 		InputMessage, OutputContent, OutputMessage, OutputStatus, OutputText, ResponseEvent, Role,
 		ToolChoice, ToolChoiceMode, ToolDefinition,
 	};
