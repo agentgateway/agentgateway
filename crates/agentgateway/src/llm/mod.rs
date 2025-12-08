@@ -1,6 +1,10 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::http::auth::{AwsAuth, BackendAuth};
+use crate::http::jwt::Claims;
+use crate::http::{Body, Request, Response};
+use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderValue, StatusCode, header};
 use agent_core::prelude::Strng;
@@ -9,12 +13,9 @@ use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
 use rand::Rng;
+use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
-
-use crate::http::auth::{AwsAuth, BackendAuth};
-use crate::http::jwt::Claims;
-use crate::http::{Body, Request, Response};
 
 use crate::llm::types::completions::typed::{ChatCompletionError, ChatCompletionErrorResponse};
 use crate::llm::types::{RequestType, ResponseType};
@@ -28,15 +29,16 @@ use crate::*;
 pub mod anthropic;
 pub mod azureopenai;
 pub mod bedrock;
-mod conversion;
 pub mod gemini;
 pub mod openai;
+pub mod vertex;
+
+mod conversion;
 pub mod policy;
+mod types;
+
 #[cfg(test)]
 mod tests;
-mod types;
-pub mod universal;
-pub mod vertex;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -270,7 +272,7 @@ impl AIProvider {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path {
-						uri.path_and_query = Some(PathAndQuery::from_static(openai::DEFAULT_PATH));
+						uri.path_and_query = Some(PathAndQuery::from_static(openai::path(route_type)));
 					}
 					uri.authority = Some(Authority::from_static(openai::DEFAULT_HOST_STR));
 					Ok(())
@@ -372,17 +374,9 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		// Buffer the body, max 2mb
-		let buffer_limit = http::buffer_limit(&req);
-		let (parts, body) = req.into_parts();
-		let Ok(bytes) = http::read_body_with_limit(body, buffer_limit).await else {
-			return Err(AIError::RequestTooLarge);
-		};
-		let mut req: universal::passthrough::Request = if let Some(p) = policies {
-			p.unmarshal_request(&bytes)?
-		} else {
-			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
-		};
+		let (parts, mut req) = self
+			.read_body_and_default_model::<types::completions::Request>(policies, req)
+			.await?;
 
 		// If a user doesn't request usage, we will not get token information which we need
 		// We always set it.
@@ -391,16 +385,11 @@ impl AIProvider {
 		// We could actually go remove that on the response, but it would mean we cannot do passthrough-parsing,
 		// so unless we have a compelling use case for it, for now we keep it.
 		if req.stream.unwrap_or_default() && req.stream_options.is_none() {
-			req.stream_options = Some(universal::passthrough::StreamOptions {
+			req.stream_options = Some(types::completions::StreamOptions {
 				include_usage: true,
+				rest: Default::default(),
 			});
 		}
-		if let Some(provider_model) = &self.override_model() {
-			req.model = Some(provider_model.to_string());
-		} else if req.model.is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
-		}
-
 		self
 			.process_request(
 				backend_info,
@@ -422,22 +411,9 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		// Buffer the body, max 2mb
-		let (parts, body) = req.into_parts();
-		let Ok(bytes) = axum::body::to_bytes(body, 2_097_152).await else {
-			return Err(AIError::RequestTooLarge);
-		};
-		let mut req: anthropic::passthrough::Request = if let Some(p) = policies {
-			p.unmarshal_request(&bytes)?
-		} else {
-			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
-		};
-
-		if let Some(provider_model) = &self.override_model() {
-			req.model = Some(provider_model.to_string());
-		} else if req.model.is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
-		}
+		let (parts, req) = self
+			.read_body_and_default_model::<types::messages::Request>(policies, req)
+			.await?;
 
 		self
 			.process_request(
@@ -460,29 +436,14 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		// Buffer the body, max 2mb
-		let buffer_limit = http::buffer_limit(&req);
-		let (mut parts, body) = req.into_parts();
-		let Ok(bytes) = http::read_body_with_limit(body, buffer_limit).await else {
-			return Err(AIError::RequestTooLarge);
-		};
+		let (mut parts, req) = self
+			.read_body_and_default_model::<types::responses::Request>(policies, req)
+			.await?;
 
 		// Strip client-specific headers that cause AWS signature mismatches for Bedrock
 		if matches!(self, AIProvider::Bedrock(_)) {
 			parts.headers.remove("conversation_id");
 			parts.headers.remove("session_id");
-		}
-
-		let mut req: openai::responses::passthrough::Request = if let Some(p) = policies {
-			p.unmarshal_request(&bytes)?
-		} else {
-			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
-		};
-
-		if let Some(provider_model) = &self.override_model() {
-			req.model = Some(provider_model.to_string());
-		} else if req.model.is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
 		}
 
 		self
@@ -611,6 +572,7 @@ impl AIProvider {
 				return Ok(RequestResult::Rejected(dr));
 			}
 		}
+
 		let llm_info = req.to_llm_request(self.provider(), tokenize)?;
 		if let Some(log) = log {
 			let needs_prompt = log.cel.cel_context.with_llm_request(&llm_info);
@@ -636,9 +598,9 @@ impl AIProvider {
 				policies.and_then(|p| p.prompt_caching.as_ref()),
 			)?,
 		};
-		let resp = Body::from(new_request);
+
 		parts.headers.remove(header::CONTENT_LENGTH);
-		let req = Request::from_parts(parts, resp);
+		let req = Request::from_parts(parts, Body::from(new_request));
 		Ok(RequestResult::Success(req, llm_info))
 	}
 
@@ -681,6 +643,9 @@ impl AIProvider {
 			return Err(AIError::ResponseTooLarge);
 		};
 
+		if !parts.status.is_success() {
+			self.process_error()
+		}
 		// 3 cases: success, error properly handled, and unexpected error we need to synthesize
 		let mut resp = self
 			.process_response_status(&req, parts.status, &bytes)
@@ -908,6 +873,37 @@ impl AIProvider {
 				},
 			)
 		})
+	}
+
+	async fn read_body_and_default_model<T: RequestType + DeserializeOwned>(
+		&self,
+		policies: Option<&Policy>,
+		req: Request,
+	) -> Result<(Parts, T), AIError> {
+		// Buffer the body, max 2mb
+		let (parts, body) = req.into_parts();
+		let Ok(bytes) = axum::body::to_bytes(body, 2_097_152).await else {
+			return Err(AIError::RequestTooLarge);
+		};
+		let mut req: T = if let Some(p) = policies {
+			p.unmarshal_request(&bytes)?
+		} else {
+			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
+		};
+
+		if let Some(provider_model) = &self.override_model() {
+			*req.model() = Some(provider_model.to_string());
+		} else if req.model().is_none() {
+			return Err(AIError::MissingField("model not specified".into()));
+		}
+		Ok((parts, req))
+	}
+
+	fn process_error(&self,
+									 req: &LLMRequest,
+									 status: StatusCode,
+									 bytes: &Bytes,) {
+
 	}
 }
 

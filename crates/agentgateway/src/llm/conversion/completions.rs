@@ -1,7 +1,6 @@
 pub mod from_messages {
 	use crate::json;
-	use crate::llm::universal::RequestSystemMessage;
-	use crate::llm::{types, universal, AIError};
+	use crate::llm::{AIError, types};
 	use async_openai::types::{
 		ChatCompletionRequestToolMessageContent, ChatCompletionRequestToolMessageContentPart,
 	};
@@ -12,8 +11,7 @@ pub mod from_messages {
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
-		let typed =
-			json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
 		let xlated = translate_internal(typed);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
@@ -34,7 +32,7 @@ pub mod from_messages {
 			metadata,
 			thinking,
 		} = req;
-		let mut msgs: Vec<universal::RequestMessage> = Vec::new();
+		let mut msgs: Vec<completions::RequestMessage> = Vec::new();
 
 		// Handle the system prompt (convert both string and block formats to string)
 		if let Some(system) = system {
@@ -51,8 +49,8 @@ pub mod from_messages {
 						.join("\n")
 				},
 			};
-			msgs.push(universal::RequestMessage::System(
-				RequestSystemMessage::from(system_text),
+			msgs.push(completions::RequestMessage::System(
+				completions::RequestSystemMessage::from(system_text),
 			));
 		}
 
@@ -75,7 +73,7 @@ pub mod from_messages {
 								..
 							} => {
 								msgs.push(
-									universal::RequestToolMessage {
+									completions::RequestToolMessage {
 										tool_call_id: tool_use_id,
 										content: match content {
 											ToolResultContent::Text(t) => t.into(),
@@ -112,7 +110,7 @@ pub mod from_messages {
 					}
 					if !user_text.is_empty() {
 						msgs.push(
-							universal::RequestUserMessage {
+							completions::RequestUserMessage {
 								content: user_text.into(),
 								name: None,
 							}
@@ -131,10 +129,10 @@ pub mod from_messages {
 							messages::ContentBlock::ToolUse {
 								id, name, input, ..
 							} => {
-								tool_calls.push(universal::MessageToolCall {
+								tool_calls.push(completions::MessageToolCall {
 									id,
-									r#type: universal::ToolType::Function,
-									function: universal::FunctionCall {
+									r#type: completions::ToolType::Function,
+									function: completions::FunctionCall {
 										name,
 										// It's assumed that the input is a JSON object that can be stringified.
 										arguments: serde_json::to_string(&input).unwrap_or_default(),
@@ -153,7 +151,7 @@ pub mod from_messages {
 					}
 					if assistant_text.is_some() || !tool_calls.is_empty() {
 						msgs.push(
-							universal::RequestAssistantMessage {
+							completions::RequestAssistantMessage {
 								content: assistant_text.map(Into::into),
 								tool_calls: if tool_calls.is_empty() {
 									None
@@ -172,9 +170,9 @@ pub mod from_messages {
 		let tools = tools
 			.into_iter()
 			.flat_map(|tools| tools.into_iter())
-			.map(|tool| universal::Tool {
-				r#type: universal::ToolType::Function,
-				function: universal::FunctionObject {
+			.map(|tool| completions::Tool {
+				r#type: completions::ToolType::Function,
+				function: completions::FunctionObject {
 					name: tool.name,
 					description: tool.description,
 					parameters: Some(tool.input_schema),
@@ -183,15 +181,15 @@ pub mod from_messages {
 			})
 			.collect_vec();
 		let tool_choice = tool_choice.map(|choice| match choice {
-			messages::ToolChoice::Auto => universal::ToolChoiceOption::Auto,
-			messages::ToolChoice::Any => universal::ToolChoiceOption::Required,
+			messages::ToolChoice::Auto => completions::ToolChoiceOption::Auto,
+			messages::ToolChoice::Any => completions::ToolChoiceOption::Required,
 			messages::ToolChoice::Tool { name } => {
-				universal::ToolChoiceOption::Named(universal::NamedToolChoice {
-					r#type: universal::ToolType::Function,
-					function: universal::FunctionName { name },
+				completions::ToolChoiceOption::Named(completions::NamedToolChoice {
+					r#type: completions::ToolType::Function,
+					function: completions::FunctionName { name },
 				})
 			},
-			messages::ToolChoice::None => universal::ToolChoiceOption::None,
+			messages::ToolChoice::None => completions::ToolChoiceOption::None,
 		});
 
 		completions::Request {
@@ -204,7 +202,7 @@ pub mod from_messages {
 			stop: if stop_sequences.is_empty() {
 				None
 			} else {
-				Some(universal::Stop::StringArray(stop_sequences))
+				Some(completions::Stop::StringArray(stop_sequences))
 			},
 			tools: if tools.is_empty() { None } else { Some(tools) },
 			tool_choice,

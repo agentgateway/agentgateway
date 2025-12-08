@@ -1,9 +1,10 @@
 pub mod completions;
 pub mod messages;
 pub mod bedrock;
+pub mod responses;
 
 use crate::apply;
-use crate::llm::{AIError, LLMRequest, LLMResponse, Provider, universal};
+use crate::llm::{AIError, LLMRequest, LLMResponse, Provider};
 use crate::serdes::schema;
 use agent_core::prelude::Strng;
 use agent_core::strng;
@@ -23,7 +24,7 @@ pub trait ResponseType: Send + Sync {
 /// RequestType is an abstraction over provider/endpoint specific request formats that enables
 /// uniform policy enforcement and observability
 pub trait RequestType: Send + Sync {
-	fn model(&mut self) -> Option<&mut String>;
+	fn model(&mut self) -> &mut Option<String>;
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError>;
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
@@ -52,15 +53,4 @@ pub trait RequestType: Send + Sync {
 pub struct SimpleChatCompletionMessage {
 	pub role: Strng,
 	pub content: Strng,
-}
-
-impl From<&universal::RequestMessage> for SimpleChatCompletionMessage {
-	fn from(msg: &universal::RequestMessage) -> Self {
-		let role = universal::message_role(msg);
-		let content = universal::message_text(msg).unwrap_or_default();
-		Self {
-			role: role.into(),
-			content: content.into(),
-		}
-	}
 }

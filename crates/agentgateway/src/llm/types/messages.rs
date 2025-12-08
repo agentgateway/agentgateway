@@ -90,8 +90,8 @@ pub struct Usage {
 }
 
 impl RequestType for Request {
-	fn model(&mut self) -> Option<&mut String> {
-		self.model.as_mut()
+	fn model(&mut self) -> &mut Option<String> {
+		&mut self.model
 	}
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		self

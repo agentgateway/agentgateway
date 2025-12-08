@@ -1,7 +1,7 @@
 use crate::http::jwt::Claims;
 use crate::json;
 use crate::llm::policy::Moderation;
-use crate::llm::universal::RequestType;
+use crate::llm::RequestType;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
 use agent_core::strng;

@@ -2,7 +2,7 @@ pub mod from_completions {
 	use super::helpers;
 	use crate::json;
 	use crate::llm::bedrock::Provider;
-	use crate::llm::{AIError, anthropic, types};
+	use crate::llm::{anthropic, types, AIError};
 	use itertools::Itertools;
 	use std::collections::HashMap;
 	use types::bedrock;
@@ -227,8 +227,7 @@ pub mod from_messages {
 	use super::helpers;
 	use crate::json;
 	use crate::llm::bedrock::Provider;
-	use crate::llm::{AIError, anthropic, types};
-	use helpers::*;
+	use crate::llm::{types, AIError};
 	use itertools::Itertools;
 	use types::bedrock;
 	use types::messages::typed as messages;
@@ -585,6 +584,372 @@ pub mod from_messages {
 			request_metadata: metadata,
 			performance_config: None,
 		};
+
+		bedrock_request
+	}
+}
+
+pub mod from_responses {
+	use super::helpers;
+	use crate::json;
+	use crate::llm::bedrock::Provider;
+	use crate::llm::{anthropic, types, AIError};
+	use async_openai::types::responses::{
+		ContentType, Input, InputContent, InputItem, InputMessage, ToolChoice, ToolChoiceMode,
+		ToolDefinition,
+	};
+	use helpers::*;
+	use itertools::Itertools;
+	use types::bedrock;
+	use types::responses::typed as responses;
+
+	/// translate an OpenAI responses request to a Bedrock converse request
+	pub fn translate(
+		req: &types::responses::Request,
+		provider: &Provider,
+		headers: Option<&http::HeaderMap>,
+		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
+	) -> Result<Vec<u8>, AIError> {
+		let typed =
+			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
+		let xlated = translate_internal(typed, provider, headers, prompt_caching);
+		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub(super) fn translate_internal(
+		req: responses::CreateResponse,
+		provider: &Provider,
+		headers: Option<&http::HeaderMap>,
+		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
+	) -> bedrock::ConverseRequest {
+		use crate::llm::openai::responses::{
+			ContentType, Input, InputContent, InputItem, InputMessage, Role as ResponsesRole,
+		};
+
+		let supports_caching = crate::llm::bedrock::supports_prompt_caching(&req.model);
+
+		// Convert input to Bedrock messages and system content
+		let mut messages: Vec<bedrock::Message> = Vec::new();
+		let mut system_blocks: Vec<bedrock::SystemContentBlock> = Vec::new();
+
+		if let Ok(json) = serde_json::to_string_pretty(&req.input) {
+			tracing::debug!("Converting Responses input to Bedrock: {}", json);
+		}
+
+		// Convert Input format to items
+		let items = match &req.input {
+			Input::Text(text) => {
+				vec![InputItem::Message(InputMessage {
+					kind: Default::default(),
+					role: ResponsesRole::User,
+					content: InputContent::TextInput(text.clone()),
+				})]
+			},
+			Input::Items(items) => items.clone(),
+		};
+
+		// Process each input item
+		for item in items {
+			match item {
+				InputItem::Message(msg) => {
+					// Extract role and content
+					let role = match msg.role {
+						ResponsesRole::User => bedrock::Role::User,
+						ResponsesRole::Assistant => bedrock::Role::Assistant,
+						ResponsesRole::System | ResponsesRole::Developer => {
+							// System and developer messages go to system array
+							let text = match &msg.content {
+								InputContent::TextInput(t) => t.clone(),
+								InputContent::InputItemContentList(parts) => {
+									// Extract text from content parts
+									parts
+										.iter()
+										.filter_map(|part| match part {
+											ContentType::InputText(input_text) => Some(input_text.text.clone()),
+											_ => None,
+										})
+										.collect::<Vec<_>>()
+										.join("\n")
+								},
+							};
+							system_blocks.push(bedrock::SystemContentBlock::Text { text });
+							continue;
+						},
+					};
+
+					// Convert content to Bedrock content blocks
+					let content = match &msg.content {
+						InputContent::TextInput(text) => {
+							vec![bedrock::ContentBlock::Text(text.clone())]
+						},
+						InputContent::InputItemContentList(parts) => {
+							let mut blocks = Vec::new();
+							tracing::debug!("Processing {} content parts", parts.len());
+							for part in parts {
+								match part {
+									ContentType::InputText(input_text) => {
+										tracing::debug!("Found InputText with text: {}", input_text.text);
+										blocks.push(bedrock::ContentBlock::Text(input_text.text.clone()));
+									},
+									ContentType::InputImage(_) => {
+										// Image support requires fetching URLs or resolving file_ids
+										tracing::debug!("Image inputs not supported in Responses->Bedrock translation");
+										continue;
+									},
+									ContentType::InputFile(_) => {
+										tracing::debug!("Skipping InputFile");
+										continue;
+									},
+								}
+							}
+							tracing::debug!("Created {} content blocks", blocks.len());
+							blocks
+						},
+					};
+
+					messages.push(bedrock::Message { role, content });
+				},
+				InputItem::Custom(custom_value) => {
+					#[derive(serde::Deserialize)]
+					struct CustomItem {
+						#[serde(rename = "type")]
+						item_type: Option<String>,
+						call_id: Option<String>,
+						name: Option<String>,
+						arguments: Option<String>,
+						output: Option<serde_json::Value>,
+					}
+
+					match serde_json::from_value::<CustomItem>(custom_value.clone()) {
+						Ok(item) => {
+							match item.item_type.as_deref() {
+								Some("function_call") => {
+									if let (Some(call_id), Some(name), Some(arguments)) =
+										(item.call_id, item.name, item.arguments)
+									{
+										// Parse tool arguments, skip this tool call if JSON is invalid
+										let Ok(input) = serde_json::from_str::<serde_json::Value>(&arguments) else {
+											tracing::warn!(
+												"Skipping function_call with invalid JSON arguments for tool '{}': {}",
+												name,
+												arguments
+											);
+											continue;
+										};
+
+										messages.push(bedrock::Message {
+											role: bedrock::Role::Assistant,
+											content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+												tool_use_id: call_id,
+												name,
+												input,
+											})],
+										});
+									}
+								},
+								Some("function_call_output") => {
+									if let (Some(call_id), Some(output)) = (item.call_id, item.output) {
+										let result_content = if let Some(output_str) = output.as_str() {
+											vec![bedrock::ToolResultContentBlock::Text(
+												output_str.to_string(),
+											)]
+										} else {
+											let json_str = serde_json::to_string(&output).unwrap_or_default();
+											vec![bedrock::ToolResultContentBlock::Text(json_str)]
+										};
+
+										messages.push(bedrock::Message {
+											role: bedrock::Role::User,
+											content: vec![bedrock::ContentBlock::ToolResult(
+												bedrock::ToolResultBlock {
+													tool_use_id: call_id,
+													content: result_content,
+													status: Some(bedrock::ToolResultStatus::Success),
+												},
+											)],
+										});
+									}
+								},
+								_ => {
+									// Unknown custom type, skip
+									tracing::warn!("Unknown custom input item type: {:?}", item.item_type);
+									continue;
+								},
+							}
+						},
+						Err(e) => {
+							tracing::warn!("Failed to parse custom input item: {}", e);
+							continue;
+						},
+					}
+				},
+			}
+		}
+
+		let mut system_content = if system_blocks.is_empty() {
+			None
+		} else {
+			Some(system_blocks)
+		};
+
+		// Add instructions field to system content if present
+		if let Some(instructions) = &req.instructions {
+			let instructions_block = bedrock::SystemContentBlock::Text {
+				text: instructions.clone(),
+			};
+			if let Some(ref mut system) = system_content {
+				system.insert(0, instructions_block);
+			} else {
+				system_content = Some(vec![instructions_block]);
+			}
+		}
+
+		// Apply system prompt caching if configured
+		if let Some(caching) = prompt_caching
+			&& caching.cache_system
+			&& supports_caching
+			&& let Some(ref mut system) = system_content
+		{
+			let meets_minimum = if let Some(min_tokens) = caching.min_tokens {
+				estimate_system_tokens(system) >= min_tokens
+			} else {
+				true
+			};
+			if meets_minimum {
+				system.push(bedrock::SystemContentBlock::CachePoint {
+					cache_point: create_cache_point(),
+				});
+			}
+		}
+
+		let inference_config = bedrock::InferenceConfiguration {
+			max_tokens: req.max_output_tokens.unwrap_or(4096) as usize,
+			temperature: req.temperature,
+			top_p: req.top_p,
+			top_k: None,
+			stop_sequences: vec![],
+		};
+
+		// Convert tools from typed Responses API format to Bedrock format
+		let (tools, tool_choice) = if let Some(response_tools) = &req.tools {
+			let bedrock_tools: Vec<bedrock::Tool> = response_tools
+				.iter()
+				.filter_map(|tool_def| {
+					use crate::llm::openai::responses::ToolDefinition;
+					match tool_def {
+						ToolDefinition::Function(func) => {
+							Some(bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
+								name: func.name.clone(),
+								description: func.description.clone(),
+								input_schema: Some(bedrock::ToolInputSchema::Json(func.parameters.clone())),
+							}))
+						},
+						_ => {
+							tracing::warn!("Unsupported tool type in Responses API: {:?}", tool_def);
+							None
+						},
+					}
+				})
+				.collect();
+
+			let bedrock_tool_choice = req.tool_choice.as_ref().and_then(|tc| {
+				use crate::llm::openai::responses::{ToolChoice, ToolChoiceMode};
+				match tc {
+					ToolChoice::Mode(ToolChoiceMode::Auto) => Some(bedrock::ToolChoice::Auto),
+					ToolChoice::Mode(ToolChoiceMode::Required) => Some(bedrock::ToolChoice::Any),
+					ToolChoice::Mode(ToolChoiceMode::None) => None,
+					ToolChoice::Function { name } => Some(bedrock::ToolChoice::Tool { name: name.clone() }),
+					ToolChoice::Hosted { .. } => {
+						tracing::warn!("Hosted tool choice not supported for Bedrock");
+						None
+					},
+				}
+			});
+
+			(bedrock_tools, bedrock_tool_choice)
+		} else {
+			(vec![], None)
+		};
+
+		let tool_config = if !tools.is_empty() {
+			Some(bedrock::ToolConfiguration { tools, tool_choice })
+		} else {
+			None
+		};
+
+		let guardrail_config = if let (Some(identifier), Some(version)) =
+			(&provider.guardrail_identifier, &provider.guardrail_version)
+		{
+			Some(bedrock::GuardrailConfiguration {
+				guardrail_identifier: identifier.to_string(),
+				guardrail_version: version.to_string(),
+				trace: Some("enabled".to_string()),
+			})
+		} else {
+			None
+		};
+
+		// Extract metadata from request body and merge with headers (consistent with Messages/Completions)
+		let mut metadata = req.metadata.clone().unwrap_or_default();
+
+		if let Some(header_metadata) = extract_metadata_from_headers(headers) {
+			metadata.extend(header_metadata);
+		}
+
+		let metadata = if metadata.is_empty() {
+			None
+		} else {
+			Some(metadata)
+		};
+
+		let mut bedrock_request = bedrock::ConverseRequest {
+			model_id: req.model.clone(),
+			messages,
+			system: system_content,
+			inference_config: Some(inference_config),
+			tool_config,
+			guardrail_config,
+			additional_model_request_fields: None,
+			prompt_variables: None,
+			additional_model_response_field_paths: None,
+			request_metadata: metadata,
+			performance_config: None,
+		};
+
+		// Apply user message and tool caching
+		if let Some(caching) = prompt_caching {
+			if caching.cache_messages && supports_caching {
+				insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
+			}
+			if caching.cache_tools
+				&& supports_caching
+				&& let Some(ref mut tool_config) = bedrock_request.tool_config
+				&& !tool_config.tools.is_empty()
+			{
+				tool_config
+					.tools
+					.push(bedrock::Tool::CachePoint(create_cache_point()));
+			}
+		}
+
+		tracing::debug!(
+			"Bedrock request - messages: {}, system blocks: {}, tools: {}, tool_choice: {:?}",
+			bedrock_request.messages.len(),
+			bedrock_request
+				.system
+				.as_ref()
+				.map(|s| s.len())
+				.unwrap_or(0),
+			bedrock_request
+				.tool_config
+				.as_ref()
+				.map(|tc| tc.tools.len())
+				.unwrap_or(0),
+			bedrock_request
+				.tool_config
+				.as_ref()
+				.and_then(|tc| tc.tool_choice.as_ref())
+		);
 
 		bedrock_request
 	}

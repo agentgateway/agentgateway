@@ -3,7 +3,6 @@ use agent_core::strng::Strng;
 use bytes::Bytes;
 use serde_json::{Map, Value};
 
-use super::universal;
 use crate::llm::AIError;
 use crate::*;
 
@@ -52,14 +51,6 @@ impl Provider {
 		serde_json::to_vec(&map).map_err(AIError::RequestMarshal)
 	}
 
-	pub fn process_error(
-		&self,
-		bytes: &Bytes,
-	) -> Result<universal::ChatCompletionErrorResponse, AIError> {
-		let resp = serde_json::from_slice::<universal::ChatCompletionErrorResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
-		Ok(resp)
-	}
 	pub fn get_path_for_model(&self, request_model: Option<&str>, streaming: bool) -> Strng {
 		let location = self
 			.region
@@ -84,6 +75,7 @@ impl Provider {
 			location
 		)
 	}
+
 	pub fn get_host(&self) -> Strng {
 		match &self.region {
 			None => {

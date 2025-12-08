@@ -1,17 +1,13 @@
+use bytes::Bytes;
 use agent_core::strng;
 use agent_core::strng::Strng;
-use bytes::Bytes;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::bedrock::Provider;
 use crate::llm::policy::webhook::{Message, ResponseChoice};
 use crate::llm::types::SimpleChatCompletionMessage;
-use crate::llm::universal::ResponseType;
-use crate::llm::{
-	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, SimpleChatCompletionMessage,
-	anthropic, conversion, universal,
-};
+use crate::llm::{conversion, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
 use crate::{json, llm};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -145,8 +141,8 @@ impl super::ResponseType for Response {
 }
 
 impl super::RequestType for Request {
-	fn model(&mut self) -> Option<&mut String> {
-		self.model.as_mut()
+	fn model(&mut self) -> &mut Option<String> {
+		&mut self.model
 	}
 	fn prepend_prompts(&mut self, prompts: Vec<llm::types::SimpleChatCompletionMessage>) {
 		self
@@ -281,6 +277,17 @@ impl TryInto<typed::Request> for &Request {
 	}
 }
 
+pub fn process_error(bytes: Bytes, input_format: InputFormat) -> Bytes {
+	match input_format {
+		// Passthrough: request was completions and they want completions errors
+		InputFormat::Completions => bytes,
+		// Passthrough: request was completions and they want responses errors
+		InputFormat::Responses => bytes,
+		_ => bytes
+	}
+	ChatCompletionErrorResponse
+}
+
 // 'typed' provides a typed accessor
 pub mod typed {
 	#![allow(deprecated)]
@@ -288,8 +295,6 @@ pub mod typed {
 
 	use std::collections::HashMap;
 
-	use agent_core::strng;
-	use agent_core::strng::Strng;
 	#[allow(deprecated)]
 	#[allow(deprecated_in_future)]
 	pub use async_openai::types::ChatCompletionFunctions;
@@ -320,10 +325,6 @@ pub mod typed {
 		ResponseFormat, Role, ServiceTier, Stop, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
-
-	use crate::llm;
-	use crate::llm::bedrock::Provider;
-	use crate::llm::{AIError, LLMRequest, LLMResponse};
 
 	/// Represents a chat completion response returned by model, based on the provided input.
 	#[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
