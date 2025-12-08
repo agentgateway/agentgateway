@@ -1,0 +1,248 @@
+pub mod from_messages {
+	use crate::json;
+	use crate::llm::universal::RequestSystemMessage;
+	use crate::llm::{types, universal, AIError};
+	use async_openai::types::{
+		ChatCompletionRequestToolMessageContent, ChatCompletionRequestToolMessageContentPart,
+	};
+	use itertools::Itertools;
+	use messages::{ContentBlock, ThinkingInput, ToolResultContent, ToolResultContentPart};
+	use types::completions::typed as completions;
+	use types::messages::typed as messages;
+
+	/// translate an Anthropic messages to an OpenAI completions request
+	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
+		let typed =
+			json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let xlated = translate_internal(typed);
+		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	fn translate_internal(req: messages::Request) -> completions::Request {
+		let messages::Request {
+			messages,
+			system,
+			model,
+			max_tokens,
+			stop_sequences,
+			stream,
+			temperature,
+			top_p,
+			top_k,
+			tools,
+			tool_choice,
+			metadata,
+			thinking,
+		} = req;
+		let mut msgs: Vec<universal::RequestMessage> = Vec::new();
+
+		// Handle the system prompt (convert both string and block formats to string)
+		if let Some(system) = system {
+			let system_text = match system {
+				messages::SystemPrompt::Text(text) => text,
+				messages::SystemPrompt::Blocks(blocks) => {
+					// Join all text blocks into a single string
+					blocks
+						.into_iter()
+						.map(|block| match block {
+							messages::SystemContentBlock::Text { text, .. } => text,
+						})
+						.collect::<Vec<_>>()
+						.join("\n")
+				},
+			};
+			msgs.push(universal::RequestMessage::System(
+				RequestSystemMessage::from(system_text),
+			));
+		}
+
+		// Convert messages from Anthropic to universal format
+		for msg in messages {
+			match msg.role {
+				messages::Role::User => {
+					let mut user_text = String::new();
+					for block in msg.content {
+						match block {
+							messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
+								if !user_text.is_empty() {
+									user_text.push('\n');
+								}
+								user_text.push_str(&text);
+							},
+							messages::ContentBlock::ToolResult {
+								tool_use_id,
+								content,
+								..
+							} => {
+								msgs.push(
+									universal::RequestToolMessage {
+										tool_call_id: tool_use_id,
+										content: match content {
+											ToolResultContent::Text(t) => t.into(),
+											ToolResultContent::Array(parts) => {
+												ChatCompletionRequestToolMessageContent::Array(
+													parts
+														.into_iter()
+														.filter_map(|p| match p {
+															ToolResultContentPart::Text { text, .. } => Some(
+																ChatCompletionRequestToolMessageContentPart::Text(text.into()),
+															),
+															// Other types are not supported
+															_ => None,
+														})
+														.collect_vec(),
+												)
+											},
+										},
+									}
+									.into(),
+								);
+							},
+							// Image content is not directly supported in universal::Message::User in this form.
+							// This would require a different content format not represented here.
+							messages::ContentBlock::Image { .. } => {}, /* Image content is not directly supported in universal::Message::User in this form. */
+							// This would require a different content format not represented here.
+							// ToolUse blocks are expected from assistants, not users.
+							messages::ContentBlock::ServerToolUse { .. }
+							| messages::ContentBlock::ToolUse { .. } => {}, /* ToolUse blocks are expected from assistants, not users. */
+
+							// Other content block types are not expected from the user in a request.
+							_ => {},
+						}
+					}
+					if !user_text.is_empty() {
+						msgs.push(
+							universal::RequestUserMessage {
+								content: user_text.into(),
+								name: None,
+							}
+							.into(),
+						);
+					}
+				},
+				messages::Role::Assistant => {
+					let mut assistant_text = None;
+					let mut tool_calls = Vec::new();
+					for block in msg.content {
+						match block {
+							messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
+								assistant_text = Some(text);
+							},
+							messages::ContentBlock::ToolUse {
+								id, name, input, ..
+							} => {
+								tool_calls.push(universal::MessageToolCall {
+									id,
+									r#type: universal::ToolType::Function,
+									function: universal::FunctionCall {
+										name,
+										// It's assumed that the input is a JSON object that can be stringified.
+										arguments: serde_json::to_string(&input).unwrap_or_default(),
+									},
+								});
+							},
+							ContentBlock::Thinking { .. } => {
+								// TODO
+							},
+							ContentBlock::RedactedThinking { .. } => {
+								// TODO
+							},
+							// Other content block types are not expected from the assistant in a request.
+							_ => {},
+						}
+					}
+					if assistant_text.is_some() || !tool_calls.is_empty() {
+						msgs.push(
+							universal::RequestAssistantMessage {
+								content: assistant_text.map(Into::into),
+								tool_calls: if tool_calls.is_empty() {
+									None
+								} else {
+									Some(tool_calls)
+								},
+								..Default::default()
+							}
+							.into(),
+						);
+					}
+				},
+			}
+		}
+
+		let tools = tools
+			.into_iter()
+			.flat_map(|tools| tools.into_iter())
+			.map(|tool| universal::Tool {
+				r#type: universal::ToolType::Function,
+				function: universal::FunctionObject {
+					name: tool.name,
+					description: tool.description,
+					parameters: Some(tool.input_schema),
+					strict: None,
+				},
+			})
+			.collect_vec();
+		let tool_choice = tool_choice.map(|choice| match choice {
+			messages::ToolChoice::Auto => universal::ToolChoiceOption::Auto,
+			messages::ToolChoice::Any => universal::ToolChoiceOption::Required,
+			messages::ToolChoice::Tool { name } => {
+				universal::ToolChoiceOption::Named(universal::NamedToolChoice {
+					r#type: universal::ToolType::Function,
+					function: universal::FunctionName { name },
+				})
+			},
+			messages::ToolChoice::None => universal::ToolChoiceOption::None,
+		});
+
+		completions::Request {
+			model: Some(model),
+			messages: msgs,
+			stream: Some(stream),
+			temperature,
+			top_p,
+			max_completion_tokens: Some(max_tokens as u32),
+			stop: if stop_sequences.is_empty() {
+				None
+			} else {
+				Some(universal::Stop::StringArray(stop_sequences))
+			},
+			tools: if tools.is_empty() { None } else { Some(tools) },
+			tool_choice,
+			parallel_tool_calls: None,
+			user: metadata.and_then(|m| m.fields.get("user_id").cloned()),
+
+			vendor_extensions: completions::RequestVendorExtensions {
+				top_k,
+				thinking_budget_tokens: thinking.and_then(|t| match t {
+					ThinkingInput::Enabled { budget_tokens } => Some(budget_tokens),
+					ThinkingInput::Disabled { .. } => None,
+				}),
+			},
+
+			// The following OpenAI fields are not supported by Anthropic and are set to None:
+			frequency_penalty: None,
+			logit_bias: None,
+			logprobs: None,
+			top_logprobs: None,
+			n: None,
+			modalities: None,
+			prediction: None,
+			audio: None,
+			presence_penalty: None,
+			response_format: None,
+			seed: None,
+			#[allow(deprecated)]
+			function_call: None,
+			#[allow(deprecated)]
+			functions: None,
+			metadata: None,
+			#[allow(deprecated)]
+			max_tokens: None,
+			service_tier: None,
+			web_search_options: None,
+			stream_options: None,
+			store: None,
+			reasoning_effort: None,
+		}
+	}
+}

@@ -17,6 +17,7 @@ use crate::llm::universal::{RequestSystemMessage, RequestVendorExtensions, Respo
 use crate::llm::{AIError, InputFormat, LLMInfo, universal};
 use crate::telemetry::log::AsyncLog;
 use crate::{parse, *};
+use crate::llm::types::ResponseType;
 
 #[apply(schema!)]
 pub struct Provider {
@@ -52,7 +53,7 @@ impl Provider {
 	}
 }
 
-pub fn process_error(bytes: &Bytes) -> Result<universal::ChatCompletionErrorResponse, AIError> {
+pub fn process_error(bytes: &Bytes) -> Result<llm::types::completions::typed::ChatCompletionErrorResponse, AIError> {
 	let resp =
 		serde_json::from_slice::<MessagesErrorResponse>(bytes).map_err(AIError::ResponseParsing)?;
 	translate_error(resp)

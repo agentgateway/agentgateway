@@ -15,9 +15,9 @@ use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 use crate::http::auth::{AwsAuth, BackendAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
-use crate::llm::universal::{
-	ChatCompletionError, ChatCompletionErrorResponse, RequestType, ResponseType,
-};
+
+use crate::llm::types::completions::typed::{ChatCompletionError, ChatCompletionErrorResponse};
+use crate::llm::types::{RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
@@ -28,12 +28,13 @@ use crate::*;
 pub mod anthropic;
 pub mod azureopenai;
 pub mod bedrock;
+mod conversion;
 pub mod gemini;
 pub mod openai;
-mod pii;
 pub mod policy;
 #[cfg(test)]
 mod tests;
+mod types;
 pub mod universal;
 pub mod vertex;
 
@@ -855,60 +856,64 @@ impl AIProvider {
 			let mut seen_provider = false;
 			let mut saw_token = false;
 			let mut rate_limit = Some(rate_limit);
-			parse::sse::json_passthrough::<universal::StreamResponse>(b, buffer_limit, move |f| {
-				match f {
-					Some(Ok(f)) => {
-						if let Some(c) = completion.as_mut()
-							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
-						{
-							c.push_str(delta);
-						}
-						if !saw_token {
-							saw_token = true;
+			parse::sse::json_passthrough::<types::completions::typed::StreamResponse>(
+				b,
+				buffer_limit,
+				move |f| {
+					match f {
+						Some(Ok(f)) => {
+							if let Some(c) = completion.as_mut()
+								&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
+							{
+								c.push_str(delta);
+							}
+							if !saw_token {
+								saw_token = true;
+								log.non_atomic_mutate(|r| {
+									r.response.first_token = Some(Instant::now());
+								});
+							}
+							if !seen_provider {
+								seen_provider = true;
+								log.non_atomic_mutate(|r| r.response.provider_model = Some(strng::new(&f.model)));
+							}
+							if let Some(u) = f.usage {
+								log.non_atomic_mutate(|r| {
+									r.response.input_tokens = Some(u.prompt_tokens as u64);
+									r.response.output_tokens = Some(u.completion_tokens as u64);
+									r.response.total_tokens = Some(u.total_tokens as u64);
+									if let Some(c) = completion.take() {
+										r.response.completion = Some(vec![c]);
+									}
+
+									if let Some(rl) = rate_limit.take() {
+										amend_tokens(rl, r);
+									}
+								});
+							}
+						},
+						Some(Err(e)) => {
+							debug!("failed to parse streaming response: {e}");
+						},
+						None => {
+							// We are done, try to set completion if we haven't already
+							// This is useful in case we never see "usage"
 							log.non_atomic_mutate(|r| {
-								r.response.first_token = Some(Instant::now());
-							});
-						}
-						if !seen_provider {
-							seen_provider = true;
-							log.non_atomic_mutate(|r| r.response.provider_model = Some(strng::new(&f.model)));
-						}
-						if let Some(u) = f.usage {
-							log.non_atomic_mutate(|r| {
-								r.response.input_tokens = Some(u.prompt_tokens as u64);
-								r.response.output_tokens = Some(u.completion_tokens as u64);
-								r.response.total_tokens = Some(u.total_tokens as u64);
 								if let Some(c) = completion.take() {
 									r.response.completion = Some(vec![c]);
 								}
-
-								if let Some(rl) = rate_limit.take() {
-									amend_tokens(rl, r);
-								}
 							});
-						}
-					},
-					Some(Err(e)) => {
-						debug!("failed to parse streaming response: {e}");
-					},
-					None => {
-						// We are done, try to set completion if we haven't already
-						// This is useful in case we never see "usage"
-						log.non_atomic_mutate(|r| {
-							if let Some(c) = completion.take() {
-								r.response.completion = Some(vec![c]);
-							}
-						});
-					},
-				}
-			})
+						},
+					}
+				},
+			)
 		})
 	}
 }
 
 fn num_tokens_from_messages(
 	model: &str,
-	messages: &[universal::passthrough::RequestMessage],
+	messages: &[types::completions::RequestMessage],
 ) -> Result<u64, AIError> {
 	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
 	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
@@ -943,7 +948,7 @@ fn num_tokens_from_messages(
 
 fn num_tokens_from_anthropic_messages(
 	model: &str,
-	messages: &[anthropic::passthrough::RequestMessage],
+	messages: &[types::messages::RequestMessage],
 ) -> Result<u64, AIError> {
 	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
 	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
@@ -1105,22 +1110,5 @@ fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo) {
 	}
 	if let Some(rrl) = rate_limit.remote_rate_limit {
 		rrl.amend_tokens(tokens_to_remove)
-	}
-}
-
-#[apply(schema!)]
-pub struct SimpleChatCompletionMessage {
-	pub role: Strng,
-	pub content: Strng,
-}
-
-impl From<&universal::RequestMessage> for SimpleChatCompletionMessage {
-	fn from(msg: &universal::RequestMessage) -> Self {
-		let role = universal::message_role(msg);
-		let content = universal::message_text(msg).unwrap_or_default();
-		Self {
-			role: role.into(),
-			content: content.into(),
-		}
 	}
 }

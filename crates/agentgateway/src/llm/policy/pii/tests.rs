@@ -1,8 +1,8 @@
-use crate::llm::pii::email_recognizer::EmailRecognizer;
-use crate::llm::pii::phone_recognizer::PhoneRecognizer;
-use crate::llm::pii::recognizer::Recognizer;
-use crate::llm::pii::url_recognizer::UrlRecognizer;
-use crate::llm::pii::{recognizer_result, *};
+use crate::llm::policy::pii::email_recognizer::EmailRecognizer;
+use crate::llm::policy::pii::phone_recognizer::PhoneRecognizer;
+use crate::llm::policy::pii::recognizer::Recognizer;
+use crate::llm::policy::pii::url_recognizer::UrlRecognizer;
+use crate::llm::policy::pii::{recognizer_result, *};
 
 #[test]
 fn test_recognize() {

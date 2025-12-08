@@ -2,9 +2,9 @@
 
 use once_cell::sync::Lazy;
 
-use crate::llm::pii::email_recognizer::EmailRecognizer;
-use crate::llm::pii::phone_recognizer::PhoneRecognizer;
-use crate::llm::pii::recognizer::Recognizer;
+use crate::llm::policy::pii::email_recognizer::EmailRecognizer;
+use crate::llm::policy::pii::phone_recognizer::PhoneRecognizer;
+use crate::llm::policy::pii::recognizer::Recognizer;
 
 mod credit_card_recognizer;
 mod email_recognizer;

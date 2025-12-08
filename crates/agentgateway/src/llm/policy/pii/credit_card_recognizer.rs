@@ -1,5 +1,5 @@
-use crate::llm::pii::pattern_recognizer::PatternRecognizer;
-use crate::llm::pii::recognizer::Recognizer;
+use crate::llm::policy::pii::pattern_recognizer::PatternRecognizer;
+use crate::llm::policy::pii::recognizer::Recognizer;
 
 pub struct CreditCardRecognizer {
 	recognizer: PatternRecognizer,
