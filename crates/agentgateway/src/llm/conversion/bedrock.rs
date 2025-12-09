@@ -5,6 +5,10 @@ use crate::http::Response;
 use crate::llm::AIError;
 use crate::llm::types::{bedrock, messages, responses};
 
+#[cfg(test)]
+#[path = "bedrock_tests.rs"]
+mod tests;
+
 pub mod from_completions {
 	use std::collections::HashMap;
 	use std::time::Instant;
@@ -2042,7 +2046,7 @@ mod helpers {
 		metadata
 	}
 
-	pub(super) fn extract_beta_headers(
+	pub fn extract_beta_headers(
 		headers: &crate::http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
 		let mut beta_features = Vec::new();

@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use agentgateway::http::{Body, Response};
 use agentgateway::proxy::request_builder::RequestBuilder;
 use agentgateway::yamlviajson;
@@ -7,8 +10,6 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use serde_json::Value;
 use shellexpand::LookupError;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 use tracing::info;
 use url::Url;

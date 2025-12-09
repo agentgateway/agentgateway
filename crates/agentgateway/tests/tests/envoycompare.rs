@@ -1,5 +1,6 @@
-use crate::common::compare::ProxyComparisonTest;
 use wiremock::{Mock, ResponseTemplate};
+
+use crate::common::compare::ProxyComparisonTest;
 
 #[tokio::test]
 async fn test_basic_proxy_comparison() -> anyhow::Result<()> {

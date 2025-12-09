@@ -1,6 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
-description: "bedrock: request_full"
+description: "bedrock-completions: request_full"
 info:
   model: gpt-4-turbo-preview
   messages:

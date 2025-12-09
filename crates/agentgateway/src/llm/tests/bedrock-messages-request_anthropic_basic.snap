@@ -1,9 +1,15 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
-expression: result
+description: "bedrock-messages: request_anthropic_basic"
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 1024
+  messages:
+    - role: user
+      content: "Hello, world"
 ---
 {
-  "modelId": "gpt-4o",
+  "modelId": "claude-sonnet-4-20250514",
   "messages": [
     {
       "role": "user",

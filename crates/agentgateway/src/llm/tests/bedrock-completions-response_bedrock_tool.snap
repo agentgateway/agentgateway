@@ -1,0 +1,43 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response_bedrock_tool.json
+info: "{\n  \"output\": {\n    \"message\": {\n      \"role\": \"assistant\",\n      \"content\": [\n        {\n          \"toolUse\": {\n            \"toolUseId\": \"tooluse_kZJMlvQmRJ6eAyJE5GIl7Q\",\n            \"name\": \"top_song\",\n            \"input\": {\n              \"sign\": \"WZPZ\"\n            }\n          }\n        },\n        {\n          \"toolUse\": {\n            \"toolUseId\": \"tooluse_kZJMlvQmRJ6eAyxxx\",\n            \"name\": \"hello\",\n            \"input\": {\n              \"sign\": \"world\"\n            }\n          }\n        }\n      ]\n    }\n  },\n  \"stopReason\": \"tool_use\"\n}"
+---
+{
+  "model": "fake-model",
+  "usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0
+  },
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
+            "type": "function",
+            "function": {
+              "name": "top_song",
+              "arguments": "{\"sign\":\"WZPZ\"}"
+            }
+          },
+          {
+            "id": "tooluse_kZJMlvQmRJ6eAyxxx",
+            "type": "function",
+            "function": {
+              "name": "hello",
+              "arguments": "{\"sign\":\"world\"}"
+            }
+          }
+        ]
+      },
+      "index": 0,
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "id": "[id]",
+  "created": "[date]",
+  "object": "chat.completion"
+}

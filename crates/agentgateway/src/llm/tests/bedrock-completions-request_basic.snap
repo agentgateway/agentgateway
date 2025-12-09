@@ -1,6 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
-description: "bedrock: request_basic"
+description: "bedrock-completions: request_basic"
 info:
   model: replaceme
   messages:

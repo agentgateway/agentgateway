@@ -1,6 +1,7 @@
-use crate::common::gateway::AgentGateway;
 use http::{Method, StatusCode};
 use wiremock::{Mock, ResponseTemplate};
+
+use crate::common::gateway::AgentGateway;
 
 #[tokio::test]
 async fn test_basic_routes() -> anyhow::Result<()> {

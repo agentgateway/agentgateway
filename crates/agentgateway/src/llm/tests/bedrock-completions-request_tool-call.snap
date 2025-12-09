@@ -1,6 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
-description: "bedrock: request_tool-call"
+description: "bedrock-completions: request_tool-call"
 info:
   model: gpt-3.5-turbo
   messages:

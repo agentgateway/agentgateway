@@ -1,7 +1,8 @@
+use std::net::SocketAddr;
+
 use crate::common::gateway::AgentGateway;
 use crate::common::hbone_server::{HboneTestServer, Mode};
 use crate::common::mock_ca_server::start_mock_ca_server;
-use std::net::SocketAddr;
 
 #[tokio::test]
 async fn test_hbone() -> anyhow::Result<()> {

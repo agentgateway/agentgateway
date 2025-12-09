@@ -1,8 +1,21 @@
-use crate::common::gateway::AgentGateway;
 use agent_core::telemetry::testing;
 use http::StatusCode;
 use serde_json::json;
 use tracing::warn;
+
+use crate::common::gateway::AgentGateway;
+
+/// This module provides real LLM integration tests. These require API keys!
+/// Example running all tests:
+/// 	AZURE_HOST=xxx.azure.com \
+/// 	VERTEX_PROJECT=octo-386314 \
+/// 	GEMINI_API_KEY=`cat ~/.secrets/gemini` \
+/// 	ANTHROPIC_API_KEY=`cat ~/.secrets/anthropic` \
+/// 	OPENAI_API_KEY=`cat ~/.secrets/openai`
+/// 	AGENTGATEWAY_E2E=true \
+/// 	cargo test --test integration tests::llm::
+///
+/// Note: AGENTGATEWAY_E2E must be set to run any tests.
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
 	let policies = if env != "" {
