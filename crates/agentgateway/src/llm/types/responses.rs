@@ -5,7 +5,7 @@ use async_openai::types::responses::{
 	OutputContent, OutputText, Role,
 };
 
-use crate::llm::{conversion, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
+use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
 use crate::llm::{RequestType, ResponseType};
 
 use super::*;

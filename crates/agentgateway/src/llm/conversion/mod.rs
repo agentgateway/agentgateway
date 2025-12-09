@@ -1,3 +1,3 @@
-pub mod messages;
-pub mod completions;
 pub mod bedrock;
+pub mod completions;
+pub mod messages;

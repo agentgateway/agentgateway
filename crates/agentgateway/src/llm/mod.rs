@@ -4,6 +4,14 @@ use std::sync::Arc;
 use crate::http::auth::{AwsAuth, BackendAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
+use crate::llm::types::completions::typed::{ChatCompletionError, ChatCompletionErrorResponse};
+use crate::llm::types::{RequestType, ResponseType};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::store::{BackendPolicies, LLMResponsePolicies};
+use crate::telemetry::log::{AsyncLog, RequestLog};
+use crate::types::agent::{BackendPolicy, Target};
+use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
+use crate::*;
 use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderValue, StatusCode, header};
@@ -16,15 +24,7 @@ use rand::Rng;
 use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
-
-use crate::llm::types::completions::typed::{ChatCompletionError, ChatCompletionErrorResponse};
-use crate::llm::types::{RequestType, ResponseType};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::{BackendPolicies, LLMResponsePolicies};
-use crate::telemetry::log::{AsyncLog, RequestLog};
-use crate::types::agent::{BackendPolicy, Target};
-use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
-use crate::*;
+use tower::ServiceExt;
 
 pub mod anthropic;
 pub mod azureopenai;
@@ -36,6 +36,8 @@ pub mod vertex;
 mod conversion;
 pub mod policy;
 mod types;
+
+pub use types::SimpleChatCompletionMessage;
 
 #[cfg(test)]
 mod tests;
@@ -643,15 +645,12 @@ impl AIProvider {
 			return Err(AIError::ResponseTooLarge);
 		};
 
-		if !parts.status.is_success() {
-			self.process_error()
-		}
-		// 3 cases: success, error properly handled, and unexpected error we need to synthesize
-		let mut resp = self
-			.process_response_status(&req, parts.status, &bytes)
-			.unwrap_or_else(|e| Err(Self::convert_error(e, &bytes)));
+		let (llm_resp, body) = if !parts.status.is_success() {
+			let body = self.process_error(&req, &bytes)?;
+			(LLMResponse::default(), body)
+		} else {
+			let mut resp = self.process_success(&req, &bytes)?;
 
-		if let Ok(resp) = &mut resp {
 			// Apply response prompt guard
 			if let Some(dr) = Policy::apply_response_prompt_guard(
 				&client,
@@ -666,30 +665,10 @@ impl AIProvider {
 			})? {
 				return Ok(dr);
 			}
-		}
 
-		let resp = resp.and_then(|resp| {
 			let llm_resp = resp.to_llm_response(include_completion_in_log);
-			let body = resp
-				.serialize()
-				.map_err(AIError::ResponseParsing)
-				.map_err(|e| Self::convert_error(e, &bytes))?;
-			Ok((llm_resp, body))
-		});
-		let (llm_resp, body) = match resp {
-			Ok(resp) => resp,
-			Err(err) => {
-				let llm_resp = LLMResponse {
-					input_tokens: None,
-					output_tokens: None,
-					total_tokens: None,
-					provider_model: None,
-					completion: None,
-					first_token: None,
-				};
-				let body = serde_json::to_vec(&err).map_err(AIError::ResponseMarshal)?;
-				(llm_resp, body)
-			},
+			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
+			(llm_resp, Bytes::copy_from_slice(&body))
 		};
 
 		let body = if let Some(encoding) = encoding {
@@ -729,47 +708,56 @@ impl AIProvider {
 		}
 	}
 
-	fn process_response_status(
+	fn process_success(
 		&self,
 		req: &LLMRequest,
-		status: StatusCode,
 		bytes: &Bytes,
-	) -> Result<Result<Box<dyn ResponseType>, ChatCompletionErrorResponse>, AIError> {
+	) -> Result<Box<dyn ResponseType>, AIError> {
 		let request_model = req.request_model.as_str();
-		if status.is_success() {
-			let resp = match self {
-				AIProvider::Vertex(provider) => {
-					if provider.is_anthropic_model(Some(request_model)) {
-						anthropic::process_response(bytes, req.input_format)?
-					} else {
-						universal::passthrough::process_response(bytes, req.input_format)?
-					}
-				},
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_) => {
-					universal::passthrough::process_response(bytes, req.input_format)?
-				},
-				AIProvider::Anthropic(_) => anthropic::process_response(bytes, req.input_format)?,
-				AIProvider::Bedrock(_) => {
-					bedrock::process_response(req.request_model.as_str(), bytes, req.input_format)?
-				},
-			};
-			Ok(Ok(resp))
-		} else {
-			let openai_response = match self {
-				AIProvider::Vertex(provider) => {
-					if provider.is_anthropic_model(Some(request_model)) {
-						anthropic::process_error(bytes)?
-					} else {
-						provider.process_error(bytes)?
-					}
-				},
-				AIProvider::OpenAI(p) => p.process_error(bytes)?,
-				AIProvider::Gemini(p) => p.process_error(bytes)?,
-				AIProvider::Anthropic(_) => anthropic::process_error(bytes)?,
-				AIProvider::Bedrock(p) => p.process_error(bytes)?,
-				AIProvider::AzureOpenAI(p) => p.process_error(bytes)?,
-			};
-			Ok(Err(openai_response))
+		match (self, req.input_format) {
+			// Completions with OpenAI: just passthrough
+			(
+				AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::AzureOpenAI(_)
+				| AIProvider::Vertex(_),
+				InputFormat::Completions,
+			) => Ok(Box::new(
+				serde_json::from_slice::<types::completions::Response>(bytes)
+					.map_err(AIError::ResponseParsing)?,
+			)),
+			// Responses with OpenAI: just passthrough
+			(
+				AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::AzureOpenAI(_)
+				| AIProvider::Vertex(_),
+				InputFormat::Responses,
+			) => Ok(Box::new(
+				serde_json::from_slice::<types::responses::Response>(bytes)
+					.map_err(AIError::ResponseParsing)?,
+			)),
+			// Anthropic messages: passthrough
+			(AIProvider::Anthropic(_), InputFormat::Messages) => Ok(Box::new(
+				serde_json::from_slice::<types::messages::Response>(bytes)
+					.map_err(AIError::ResponseParsing)?,
+			)),
+			// Supported paths with conversion...
+			(AIProvider::Anthropic(_), InputFormat::Completions) => {
+				conversion::messages::from_completions::translate_response(bytes)
+			},
+			(AIProvider::Bedrock(_), InputFormat::Completions) => {
+				conversion::bedrock::from_completions::translate_response(bytes, &req.request_model)
+			},
+			(AIProvider::Bedrock(_), InputFormat::Messages) => {
+				conversion::bedrock::from_messages::translate_response(bytes, &req.request_model)
+			},
+			(AIProvider::Bedrock(_), InputFormat::Responses) => {
+				conversion::bedrock::from_responses::translate_response(bytes, &req.request_model)
+			},
+			(_, InputFormat::CountTokens) => {
+				unreachable!("CountTokens should be handled by process_count_tokens_response")
+			}
 		}
 	}
 
@@ -899,11 +887,22 @@ impl AIProvider {
 		Ok((parts, req))
 	}
 
-	fn process_error(&self,
-									 req: &LLMRequest,
-									 status: StatusCode,
-									 bytes: &Bytes,) {
-
+	fn process_error(&self, req: &LLMRequest, bytes: &Bytes) -> Result<Bytes, AIError> {
+		match (self, req.input_format) {
+			(
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				InputFormat::Completions | InputFormat::Responses,
+			) => {
+				// Passthrough; nothing needed
+				Ok(bytes.clone())
+			},
+			(AIProvider::Anthropic(_), InputFormat::Completions) => {
+				conversion::messages::from_completions::translate_error(bytes)
+			},
+			(AIProvider::Bedrock(_), InputFormat::Completions) => {
+				conversion::bedrock::from_completions::translate_error(bytes)
+			},
+		}
 	}
 }
 

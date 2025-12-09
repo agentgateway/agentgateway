@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::llm::policy::webhook::{Message, ResponseChoice};
 use crate::llm::types::{RequestType, ResponseType, SimpleChatCompletionMessage};
 use crate::llm::{
-	conversion, num_tokens_from_anthropic_messages, AIError, InputFormat, LLMRequest, LLMRequestParams,
-	LLMResponse,
+	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion,
+	num_tokens_from_anthropic_messages,
 };
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -680,13 +680,13 @@ pub mod typed {
 	}
 
 	/// Response body for the Messages API.
-	#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+	#[derive(Debug, Deserialize, Serialize, Clone)]
 	pub struct MessagesErrorResponse {
 		pub r#type: String,
 		pub error: MessagesError,
 	}
 
-	#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+	#[derive(Debug, Deserialize, Clone)]
 	pub struct MessagesError {
 		pub r#type: String,
 		pub message: String,

@@ -17,14 +17,14 @@ impl super::Provider for Provider {
 pub const DEFAULT_HOST_STR: &str = "api.openai.com";
 pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 
-	pub fn path(route: RouteType) -> &'static str {
-		match route {
-			// For Responses we forward to the responses endpoint
-			RouteType::Responses => "/v1/responses",
-			// All others get translated down to completions
-			_ => "/v1/chat/completions",
-		}
+pub fn path(route: RouteType) -> &'static str {
+	match route {
+		// For Responses we forward to the responses endpoint
+		RouteType::Responses => "/v1/responses",
+		// All others get translated down to completions
+		_ => "/v1/chat/completions",
 	}
+}
 
 pub mod responses {
 	// Re-export async-openai Responses API types for cleaner usage

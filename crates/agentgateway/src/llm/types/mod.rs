@@ -1,6 +1,6 @@
+pub mod bedrock;
 pub mod completions;
 pub mod messages;
-pub mod bedrock;
 pub mod responses;
 
 use crate::apply;

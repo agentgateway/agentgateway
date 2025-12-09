@@ -3,8 +3,8 @@ use agent_core::strng::Strng;
 use bytes::Bytes;
 
 use crate::llm::AIError;
-use crate::*;
 use crate::llm::types::completions::typed::ChatCompletionErrorResponse;
+use crate::*;
 
 #[apply(schema!)]
 pub struct Provider {

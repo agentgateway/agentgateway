@@ -1,13 +1,13 @@
-use bytes::Bytes;
 use agent_core::strng;
 use agent_core::strng::Strng;
+use bytes::Bytes;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::bedrock::Provider;
 use crate::llm::policy::webhook::{Message, ResponseChoice};
-use crate::llm::types::SimpleChatCompletionMessage;
-use crate::llm::{conversion, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
+use crate::llm::types::{ResponseType, SimpleChatCompletionMessage};
+use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
 use crate::{json, llm};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -89,7 +89,7 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
-impl super::ResponseType for Response {
+impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
@@ -283,9 +283,8 @@ pub fn process_error(bytes: Bytes, input_format: InputFormat) -> Bytes {
 		InputFormat::Completions => bytes,
 		// Passthrough: request was completions and they want responses errors
 		InputFormat::Responses => bytes,
-		_ => bytes
+		_ => bytes,
 	}
-	ChatCompletionErrorResponse
 }
 
 // 'typed' provides a typed accessor
