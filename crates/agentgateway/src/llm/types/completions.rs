@@ -1,6 +1,5 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
-use bytes::Bytes;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -277,16 +276,6 @@ impl TryInto<typed::Request> for &Request {
 	}
 }
 
-pub fn process_error(bytes: Bytes, input_format: InputFormat) -> Bytes {
-	match input_format {
-		// Passthrough: request was completions and they want completions errors
-		InputFormat::Completions => bytes,
-		// Passthrough: request was completions and they want responses errors
-		InputFormat::Responses => bytes,
-		_ => bytes,
-	}
-}
-
 // 'typed' provides a typed accessor
 pub mod typed {
 	#![allow(deprecated)]
@@ -309,7 +298,6 @@ pub mod typed {
 		ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
 		ChatCompletionRequestDeveloperMessage as RequestDeveloperMessage,
 		ChatCompletionRequestDeveloperMessageContent as RequestDeveloperMessageContent,
-		ChatCompletionRequestFunctionMessage as RequestFunctionMessage,
 		ChatCompletionRequestMessage as RequestMessage,
 		ChatCompletionRequestSystemMessage as RequestSystemMessage,
 		ChatCompletionRequestSystemMessageContent as RequestSystemMessageContent,
@@ -319,9 +307,9 @@ pub mod typed {
 		ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
 		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool, ChatCompletionTool as Tool,
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
-		ChatCompletionToolType as ToolType, CompletionUsage as Usage, CreateChatCompletionRequest,
-		FinishReason, FunctionCall, FunctionName, FunctionObject, PredictionContent, ReasoningEffort,
-		ResponseFormat, Role, ServiceTier, Stop, WebSearchOptions,
+		ChatCompletionToolType as ToolType, CompletionUsage as Usage, FinishReason, FunctionCall,
+		FunctionName, FunctionObject, PredictionContent, ReasoningEffort, ResponseFormat, Role,
+		ServiceTier, Stop, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
 
@@ -712,17 +700,6 @@ pub mod typed {
 			RequestMessage::Tool(_) => "tool",
 			RequestMessage::Function(_) => "function",
 			RequestMessage::User(_) => "user",
-		}
-	}
-
-	pub fn message_name(msg: &RequestMessage) -> Option<&str> {
-		match msg {
-			RequestMessage::Developer(RequestDeveloperMessage { name, .. }) => name.as_deref(),
-			RequestMessage::System(RequestSystemMessage { name, .. }) => name.as_deref(),
-			RequestMessage::Assistant(RequestAssistantMessage { name, .. }) => name.as_deref(),
-			RequestMessage::Tool(RequestToolMessage { tool_call_id, .. }) => Some(tool_call_id.as_str()),
-			RequestMessage::Function(RequestFunctionMessage { name, .. }) => Some(name.as_str()),
-			RequestMessage::User(RequestUserMessage { name, .. }) => name.as_deref(),
 		}
 	}
 

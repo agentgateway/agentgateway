@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use async_openai::types::responses::{
-	Content, ContentType, CreateResponse, Input, InputContent, InputItem, InputMessage,
-	OutputContent, OutputText, Role,
+	Content, ContentType, Input, InputContent, InputItem, InputMessage, OutputContent, OutputText,
+	Role,
 };
 
 use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
@@ -291,8 +291,7 @@ impl ResponseType for Response {
 pub mod typed {
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
-		Content, ContentType, CreateResponse, FunctionCall, Input, InputContent, InputItem,
-		InputMessage, OutputContent, OutputMessage, OutputStatus, OutputText, ResponseEvent, Role,
-		ToolChoice, ToolChoiceMode, ToolDefinition,
+		Content, CreateResponse, FunctionCall, OutputContent, OutputMessage, OutputStatus, OutputText,
+		Role,
 	};
 }

@@ -1,14 +1,24 @@
+use crate::http::Body;
+use crate::llm::LLMInfo;
 use crate::llm::types::completions::typed as completions;
 use crate::llm::types::messages::typed as messages;
+use crate::parse;
+use crate::telemetry::log::AsyncLog;
+use agent_core::strng;
+use std::time::Instant;
 
 pub mod from_completions {
-	use crate::json;
+	use crate::http::Body;
 	use crate::llm::types::ResponseType;
 	use crate::llm::types::completions::typed as completions;
 	use crate::llm::types::messages::typed as messages;
-	use crate::llm::{AIError, types};
+	use crate::llm::{AIError, LLMInfo, types};
+	use crate::telemetry::log::AsyncLog;
+	use crate::{json, parse};
+	use agent_core::strng;
 	use bytes::Bytes;
 	use std::collections::HashMap;
+	use std::time::Instant;
 
 	/// translate an OpenAI completions request to an anthropic messages request
 	pub fn translate(req: &types::completions::Request) -> Result<Vec<u8>, AIError> {
@@ -247,7 +257,114 @@ pub mod from_completions {
 				event_id: None,
 			},
 		};
-		Ok(Bytes::from(serde_json::to_vec(&m).map_err(AIError::ResponseMarshal)?))
+		Ok(Bytes::from(
+			serde_json::to_vec(&m).map_err(AIError::ResponseMarshal)?,
+		))
+	}
+
+	pub fn translate_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) -> Body {
+		let mut message_id = None;
+		let mut model = String::new();
+		let created = chrono::Utc::now().timestamp() as u32;
+		// let mut finish_reason = None;
+		let mut input_tokens = 0;
+		let mut saw_token = false;
+		// https://docs.anthropic.com/en/docs/build-with-claude/streaming
+		parse::sse::json_transform::<messages::MessagesStreamEvent, completions::StreamResponse>(
+			b,
+			buffer_limit,
+			move |f| {
+				let mk = |choices: Vec<completions::ChatChoiceStream>,
+				          usage: Option<completions::Usage>| {
+					Some(completions::StreamResponse {
+						id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
+						model: model.clone(),
+						object: "chat.completion.chunk".to_string(),
+						system_fingerprint: None,
+						service_tier: None,
+						created,
+						choices,
+						usage,
+					})
+				};
+				// ignore errors... what else can we do?
+				let f = f.ok()?;
+
+				// Extract info we need
+				match f {
+					messages::MessagesStreamEvent::MessageStart { message } => {
+						message_id = Some(message.id);
+						model = message.model.clone();
+						input_tokens = message.usage.input_tokens;
+						log.non_atomic_mutate(|r| {
+							r.response.output_tokens = Some(message.usage.output_tokens as u64);
+							r.response.input_tokens = Some(message.usage.input_tokens as u64);
+							r.response.provider_model = Some(strng::new(&message.model))
+						});
+						// no need to respond with anything yet
+						None
+					},
+
+					messages::MessagesStreamEvent::ContentBlockStart { .. } => {
+						// There is never(?) any content here
+						None
+					},
+					messages::MessagesStreamEvent::ContentBlockDelta { delta, .. } => {
+						if !saw_token {
+							saw_token = true;
+							log.non_atomic_mutate(|r| {
+								r.response.first_token = Some(Instant::now());
+							});
+						}
+						let mut dr = completions::StreamResponseDelta::default();
+						match delta {
+							messages::ContentBlockDelta::TextDelta { text } => {
+								dr.content = Some(text);
+							},
+							messages::ContentBlockDelta::ThinkingDelta { thinking } => {
+								dr.reasoning_content = Some(thinking)
+							},
+							// TODO
+							messages::ContentBlockDelta::InputJsonDelta { .. } => {},
+							messages::ContentBlockDelta::SignatureDelta { .. } => {},
+							messages::ContentBlockDelta::CitationsDelta { .. } => {},
+						};
+						let choice = completions::ChatChoiceStream {
+							index: 0,
+							logprobs: None,
+							delta: dr,
+							finish_reason: None,
+						};
+						mk(vec![choice], None)
+					},
+					messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
+						// TODO
+						// finish_reason = delta.stop_reason.as_ref().map(translate_stop_reason);
+						log.non_atomic_mutate(|r| {
+							r.response.output_tokens = Some(usage.output_tokens as u64);
+							if let Some(inp) = r.response.input_tokens {
+								r.response.total_tokens = Some(inp + usage.output_tokens as u64)
+							}
+						});
+						mk(
+							vec![],
+							Some(completions::Usage {
+								prompt_tokens: input_tokens as u32,
+								completion_tokens: usage.output_tokens as u32,
+
+								total_tokens: (input_tokens + usage.output_tokens) as u32,
+
+								prompt_tokens_details: None,
+								completion_tokens_details: None,
+							}),
+						)
+					},
+					messages::MessagesStreamEvent::ContentBlockStop { .. } => None,
+					messages::MessagesStreamEvent::MessageStop => None,
+					messages::MessagesStreamEvent::Ping => None,
+				}
+			},
+		)
 	}
 }
 
@@ -261,4 +378,44 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 		messages::StopReason::PauseTurn => completions::FinishReason::Stop,
 		messages::StopReason::ModelContextWindowExceeded => completions::FinishReason::Length,
 	}
+}
+
+pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) -> Body {
+	let mut saw_token = false;
+	// https://docs.anthropic.com/en/docs/build-with-claude/streaming
+	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
+		// ignore errors... what else can we do?
+		let Some(Ok(f)) = f else { return };
+
+		// Extract info we need
+		match f {
+			messages::MessagesStreamEvent::MessageStart { message } => {
+				log.non_atomic_mutate(|r| {
+					r.response.output_tokens = Some(message.usage.output_tokens as u64);
+					r.response.input_tokens = Some(message.usage.input_tokens as u64);
+					r.response.provider_model = Some(strng::new(&message.model))
+				});
+			},
+			messages::MessagesStreamEvent::ContentBlockDelta { .. } => {
+				if !saw_token {
+					saw_token = true;
+					log.non_atomic_mutate(|r| {
+						r.response.first_token = Some(Instant::now());
+					});
+				}
+			},
+			messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
+				log.non_atomic_mutate(|r| {
+					r.response.output_tokens = Some(usage.output_tokens as u64);
+					if let Some(inp) = r.response.input_tokens {
+						r.response.total_tokens = Some(inp + usage.output_tokens as u64)
+					}
+				});
+			},
+			messages::MessagesStreamEvent::ContentBlockStart { .. }
+			| messages::MessagesStreamEvent::ContentBlockStop { .. }
+			| messages::MessagesStreamEvent::MessageStop
+			| messages::MessagesStreamEvent::Ping => {},
+		}
+	})
 }

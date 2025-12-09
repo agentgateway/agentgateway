@@ -4,7 +4,7 @@ pub mod messages;
 pub mod responses;
 
 use crate::apply;
-use crate::llm::{AIError, LLMRequest, LLMResponse, Provider};
+use crate::llm::{AIError, LLMRequest, LLMResponse};
 use crate::serdes::schema;
 use agent_core::prelude::Strng;
 use agent_core::strng;

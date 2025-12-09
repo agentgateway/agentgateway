@@ -14,7 +14,7 @@ use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
 use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
-use ::http::{HeaderValue, StatusCode, header};
+use ::http::{HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
@@ -466,8 +466,9 @@ impl AIProvider {
 		req: Request,
 		policies: Option<&Policy>,
 	) -> Result<RequestResult, AIError> {
-		use crate::http;
+		todo!()
 
+		/*
 		match self {
 			AIProvider::Bedrock(_) => {
 				// Buffer and parse request body
@@ -517,6 +518,7 @@ impl AIProvider {
 				self.provider()
 			))),
 		}
+		 */
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -617,6 +619,9 @@ impl AIProvider {
 	) -> Result<Response, AIError> {
 		// count_tokens has simplified response handling (just format translation)
 		if req.input_format == InputFormat::CountTokens {
+			todo!()
+
+			/*
 			return match self {
 				AIProvider::Bedrock(_) => bedrock::process_count_tokens_response(resp)
 					.await
@@ -628,6 +633,8 @@ impl AIProvider {
 					}),
 				_ => unreachable!("CountTokens already validated at request time"),
 			};
+
+			 */
 		}
 
 		if req.streaming {
@@ -755,9 +762,15 @@ impl AIProvider {
 			(AIProvider::Bedrock(_), InputFormat::Responses) => {
 				conversion::bedrock::from_responses::translate_response(bytes, &req.request_model)
 			},
+			(_, InputFormat::Messages) => Err(AIError::UnsupportedConversion(strng::literal!(
+				"this provider does not support Messages"
+			))),
+			(_, InputFormat::Responses) => Err(AIError::UnsupportedConversion(strng::literal!(
+				"this provider does not support Responses"
+			))),
 			(_, InputFormat::CountTokens) => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
-			}
+			},
 		}
 	}
 
@@ -777,19 +790,74 @@ impl AIProvider {
 			response: LLMResponse::default(),
 		};
 		log.store(Some(llmresp));
-		let resp = match self {
-			AIProvider::Anthropic(p) => p.process_streaming(log, resp, input_format).await,
-			AIProvider::Bedrock(p) => {
-				p.process_streaming(log, resp, model.as_str(), input_format)
-					.await
+		let buffer = http::response_buffer_limit(&resp);
+
+		Ok(match (self, input_format) {
+			// Completions with OpenAI: just passthrough
+			(
+				AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::AzureOpenAI(_)
+				| AIProvider::Vertex(_),
+				InputFormat::Completions,
+			) => conversion::completions::passthrough_stream(
+				log,
+				include_completion_in_log,
+				rate_limit,
+				resp,
+			),
+			// Responses with OpenAI: just passthrough
+			(
+				AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::AzureOpenAI(_)
+				| AIProvider::Vertex(_),
+				InputFormat::Responses,
+			) => {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"Responses streaming not implemented"
+				)));
 			},
-			_ => {
-				self
-					.default_process_streaming(log, include_completion_in_log, rate_limit, resp)
-					.await
+			// Anthropic messages: passthrough
+			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, log))
 			},
-		};
-		Ok(resp)
+			// Supported paths with conversion...
+			(AIProvider::Anthropic(_), InputFormat::Completions) => {
+				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, log))
+			},
+			(AIProvider::Bedrock(_), InputFormat::Completions) => {
+				let msg = conversion::bedrock::message_id(&resp);
+				resp.map(move |b| {
+					conversion::bedrock::from_completions::translate_stream(b, buffer, log, &model, &msg)
+				})
+			},
+			(AIProvider::Bedrock(_), InputFormat::Messages) => {
+				let msg = conversion::bedrock::message_id(&resp);
+				resp.map(move |b| {
+					conversion::bedrock::from_messages::translate_stream(b, buffer, log, &model, &msg)
+				})
+			},
+			(AIProvider::Bedrock(_), InputFormat::Responses) => {
+				let msg = conversion::bedrock::message_id(&resp);
+				resp.map(move |b| {
+					conversion::bedrock::from_responses::translate_stream(b, buffer, log, &model, &msg)
+				})
+			},
+			(_, InputFormat::Messages) => {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"this provider does not support Messages for streaming"
+				)));
+			},
+			(AIProvider::Anthropic(_), InputFormat::Responses) => {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"this provider does not support Responses for streaming"
+				)));
+			},
+			(_, InputFormat::CountTokens) => {
+				unreachable!("CountTokens should be handled by process_count_tokens_response")
+			},
+		})
 	}
 
 	async fn default_process_streaming(
@@ -896,12 +964,25 @@ impl AIProvider {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
+			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+				// Passthrough; nothing needed
+				Ok(bytes.clone())
+			},
 			(AIProvider::Anthropic(_), InputFormat::Completions) => {
 				conversion::messages::from_completions::translate_error(bytes)
 			},
 			(AIProvider::Bedrock(_), InputFormat::Completions) => {
 				conversion::bedrock::from_completions::translate_error(bytes)
 			},
+			(AIProvider::Bedrock(_), InputFormat::Messages) => {
+				conversion::bedrock::from_messages::translate_error(bytes)
+			},
+			(AIProvider::Bedrock(_), InputFormat::Responses) => {
+				conversion::bedrock::from_responses::translate_error(bytes)
+			},
+			(_, _) => Err(AIError::UnsupportedConversion(strng::literal!(
+				"this provider and format is not supported"
+			))),
 		}
 	}
 }

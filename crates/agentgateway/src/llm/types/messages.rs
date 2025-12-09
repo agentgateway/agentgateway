@@ -686,7 +686,7 @@ pub mod typed {
 		pub error: MessagesError,
 	}
 
-	#[derive(Debug, Deserialize, Clone)]
+	#[derive(Debug, Deserialize, Serialize, Clone)]
 	pub struct MessagesError {
 		pub r#type: String,
 		pub message: String,

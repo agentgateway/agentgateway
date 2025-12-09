@@ -1,3 +1,12 @@
+use crate::http::Response;
+use crate::llm::{amend_tokens, types};
+use crate::store::LLMResponsePolicies;
+use crate::telemetry::log::AsyncLog;
+use crate::{llm, parse};
+use agent_core::strng;
+use std::time::Instant;
+use tracing::debug;
+
 pub mod from_messages {
 	use crate::json;
 	use crate::llm::{AIError, types};
@@ -243,4 +252,70 @@ pub mod from_messages {
 			reasoning_effort: None,
 		}
 	}
+}
+
+pub fn passthrough_stream(
+	log: AsyncLog<llm::LLMInfo>,
+	include_completion_in_log: bool,
+	rate_limit: LLMResponsePolicies,
+	resp: Response,
+) -> Response {
+	let mut completion = include_completion_in_log.then(String::new);
+	let buffer_limit = crate::http::response_buffer_limit(&resp);
+	resp.map(|b| {
+		let mut seen_provider = false;
+		let mut saw_token = false;
+		let mut rate_limit = Some(rate_limit);
+		parse::sse::json_passthrough::<types::completions::typed::StreamResponse>(
+			b,
+			buffer_limit,
+			move |f| {
+				match f {
+					Some(Ok(f)) => {
+						if let Some(c) = completion.as_mut()
+							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
+						{
+							c.push_str(delta);
+						}
+						if !saw_token {
+							saw_token = true;
+							log.non_atomic_mutate(|r| {
+								r.response.first_token = Some(Instant::now());
+							});
+						}
+						if !seen_provider {
+							seen_provider = true;
+							log.non_atomic_mutate(|r| r.response.provider_model = Some(strng::new(&f.model)));
+						}
+						if let Some(u) = f.usage {
+							log.non_atomic_mutate(|r| {
+								r.response.input_tokens = Some(u.prompt_tokens as u64);
+								r.response.output_tokens = Some(u.completion_tokens as u64);
+								r.response.total_tokens = Some(u.total_tokens as u64);
+								if let Some(c) = completion.take() {
+									r.response.completion = Some(vec![c]);
+								}
+
+								if let Some(rl) = rate_limit.take() {
+									amend_tokens(rl, r);
+								}
+							});
+						}
+					},
+					Some(Err(e)) => {
+						debug!("failed to parse streaming response: {e}");
+					},
+					None => {
+						// We are done, try to set completion if we haven't already
+						// This is useful in case we never see "usage"
+						log.non_atomic_mutate(|r| {
+							if let Some(c) = completion.take() {
+								r.response.completion = Some(vec![c]);
+							}
+						});
+					},
+				}
+			},
+		)
+	})
 }

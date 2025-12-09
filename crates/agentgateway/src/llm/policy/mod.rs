@@ -10,10 +10,7 @@ use crate::llm::AIError;
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
 use crate::llm::{RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{
-	BackendPolicy, HeaderMatch, HeaderValueMatch, ResourceName, SimpleBackend,
-	SimpleBackendReference, Target,
-};
+use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
 use crate::*;
 
 pub mod webhook;
