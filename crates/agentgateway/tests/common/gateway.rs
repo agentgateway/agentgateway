@@ -133,22 +133,6 @@ impl AgentGateway {
 			.unwrap()
 	}
 
-	pub async fn send_request_body<T: Into<Body>>(
-		&self,
-		method: Method,
-		url: &str,
-		body: T,
-	) -> Response {
-		let mut url = Url::parse(url).unwrap();
-		url.set_port(Some(self.port)).unwrap();
-		RequestBuilder::new(method, url)
-			.header("x-test-id", self.test_id.clone())
-			.body(body)
-			.send(self.client.clone())
-			.await
-			.unwrap()
-	}
-
 	pub fn port(&self) -> u16 {
 		self.port
 	}

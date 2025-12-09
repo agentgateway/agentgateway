@@ -249,6 +249,7 @@ pub mod from_completions {
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
+		tracing::error!("howardjohn: {}", String::from_utf8_lossy(&bytes));
 		let res = serde_json::from_slice::<messages::MessagesErrorResponse>(bytes)
 			.map_err(AIError::ResponseMarshal)?;
 		let m = completions::ChatCompletionErrorResponse {

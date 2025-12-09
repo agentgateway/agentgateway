@@ -5,6 +5,24 @@ use serde_json::json;
 use tracing::warn;
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
+	let policies = if env != "" {
+		format!(
+			r#"
+      policies:
+        backendAuth:
+          key: ${env}
+"#
+		)
+	} else {
+		"".to_string()
+	};
+	let extra = if provider == "bedrock" {
+		r#"
+              region: us-west-2
+              "#
+	} else {
+		""
+	};
 	format!(
 		r#"
 config: {{}}
@@ -21,9 +39,7 @@ binds:
     protocol: HTTP
     routes:
     - name: llm
-      policies:
-        backendAuth:
-          key: ${env}
+{policies}
       backends:
       - ai:
           name: llm
@@ -38,102 +54,193 @@ binds:
           provider:
             {provider}:
               model: {model}
+{extra}
 "#
 	)
 }
 
-#[tokio::test]
-async fn test_openai_responses() {
-	if !require_env("OPENAI_API_KEY") {
-		return;
+mod openai {
+	use super::*;
+	#[tokio::test]
+	async fn responses() {
+		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
+			return;
+		};
+		send_responses(&gw, false).await;
 	}
-	let gw = AgentGateway::new(llm_config("openAI", "OPENAI_API_KEY", "gpt-4.1-nano"))
-		.await
-		.unwrap();
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/responses",
-			json!({
-				"max_output_tokens": 16,
-				"input": "give me a 1 word answer"
-			}),
-		)
-		.await;
 
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/responses", false, &gw.test_id);
+	#[tokio::test]
+	#[ignore] // This is not currently supported! It really ought to be!
+	async fn responses_stream() {
+		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
+			return;
+		};
+		send_responses(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn completions() {
+		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
+			return;
+		};
+		send_completions(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn completions_streaming() {
+		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
+			return;
+		};
+		send_completions(&gw, true).await;
+	}
+
+	#[tokio::test]
+	#[ignore] // TODO
+	async fn messages() {
+		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
+			return;
+		};
+		send_messages(&gw, false).await;
+	}
+
+	#[tokio::test]
+	#[ignore] // TODO
+	async fn messages_streaming() {
+		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
+			return;
+		};
+		send_messages(&gw, true).await;
+	}
 }
 
-#[tokio::test]
-async fn test_openai_responses_stream() {
-	if !require_env("OPENAI_API_KEY") {
-		return;
-	}
-	let gw = AgentGateway::new(llm_config("openAI", "OPENAI_API_KEY", "gpt-4.1-nano"))
-		.await
-		.unwrap();
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/responses",
-			json!({
-				"max_output_tokens": 16,
-				"input": "give me a 1 word answer",
-				"stream": true,
-			}),
-		)
-		.await;
+mod bedrock {
+	use super::*;
 
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/responses", true, &gw.test_id);
+	#[tokio::test]
+	async fn completions() {
+		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
+			return;
+		};
+		send_completions(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn completions_streaming() {
+		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
+			return;
+		};
+		send_completions(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn responses() {
+		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
+			return;
+		};
+		send_responses(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn responses_streaming() {
+		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
+			return;
+		};
+		send_responses(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn messages() {
+		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
+			return;
+		};
+		send_messages(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn messages_streaming() {
+		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
+			return;
+		};
+		send_messages(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn token_count() {
+		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
+			return;
+		};
+		send_messages(&gw, true).await;
+	}
 }
 
-#[tokio::test]
-async fn test_openai_completions() {
-	if !require_env("OPENAI_API_KEY") {
-		return;
-	}
-	let gw = AgentGateway::new(llm_config("openAI", "OPENAI_API_KEY", "gpt-4.1-nano"))
-		.await
-		.unwrap();
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/chat/completions",
-			json!({
-				"messages": [{
-					"role": "user",
-					"content": "give me a 1 word answer"
-				}]
-			}),
-		)
-		.await;
+mod anthropic {
+	use super::*;
 
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/chat/completions", false, &gw.test_id);
+	#[tokio::test]
+	async fn completions() {
+		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
+			return;
+		};
+		send_completions(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn completions_streaming() {
+		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
+			return;
+		};
+		send_completions(&gw, true).await;
+	}
+
+	#[tokio::test]
+	#[ignore]
+	async fn responses() {
+		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
+			return;
+		};
+		send_responses(&gw, false).await;
+	}
+
+	#[tokio::test]
+	#[ignore]
+	async fn responses_streaming() {
+		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
+			return;
+		};
+		send_responses(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn messages() {
+		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
+			return;
+		};
+		send_messages(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn messages_streaming() {
+		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
+			return;
+		};
+		send_messages(&gw, true).await;
+	}
 }
 
-#[tokio::test]
-async fn test_openai_completions_streaming() {
-	if !require_env("OPENAI_API_KEY") {
-		return;
+async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
+	// Explicitly opt in to avoid accidentally using implicit configs
+	if !require_env("AGENTGATEWAY_E2E") {
+		return None;
 	}
-	let gw = AgentGateway::new(llm_config("openAI", "OPENAI_API_KEY", "gpt-4.1-nano"))
+	if env != "" {
+		if !require_env("OPENAI_API_KEY") {
+			return None;
+		}
+	}
+	let gw = AgentGateway::new(llm_config(provider, env, model))
 		.await
 		.unwrap();
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/chat/completions",
-			json!({
-				"messages": [{
-					"role": "user",
-					"content": "give me a 1 word answer"
-				}],
-				"stream": true
-			}),
-		)
-		.await;
-
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/chat/completions", true, &gw.test_id);
+	Some(gw)
 }
 
 fn assert_log(path: &str, streaming: bool, test_id: &str) {
@@ -164,4 +271,73 @@ fn require_env(var: &str) -> bool {
 		warn!("environment variable {} not set, skipping test", var);
 	}
 	found
+}
+
+async fn send_completions(gw: &AgentGateway, stream: bool) {
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/chat/completions",
+			json!({
+			"stream": stream,
+				"messages": [{
+					"role": "user",
+					"content": "give me a 1 word answer"
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	assert_log("/v1/chat/completions", stream, &gw.test_id);
+}
+
+async fn send_responses(gw: &AgentGateway, stream: bool) {
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/responses",
+			json!({
+				"max_output_tokens": 16,
+				"input": "give me a 1 word answer",
+				"stream": stream,
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	assert_log("/v1/responses", stream, &gw.test_id);
+}
+
+async fn send_messages(gw: &AgentGateway, stream: bool) {
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 16,
+				"messages": [
+					{"role": "user", "content": "give me a 1 word answer"}
+				],
+				"stream": stream
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	assert_log("/v1/messages", stream, &gw.test_id);
+}
+
+async fn send_anthropic_token_count(gw: &AgentGateway) {
+	let resp = gw
+	.send_request_json(
+		"http://localhost/v1/messages",
+		json!({
+				"max_tokens": 16,
+				"messages": [
+					{"role": "user", "content": "give me a 1 word answer"}
+				],
+			}),
+	)
+	.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	assert_log("/v1/count", false, &gw.test_id);
 }
