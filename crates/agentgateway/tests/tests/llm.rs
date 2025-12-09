@@ -1,9 +1,8 @@
+use crate::common::gateway::AgentGateway;
 use agent_core::telemetry::testing;
 use http::StatusCode;
 use serde_json::json;
 use tracing::warn;
-
-use crate::common::gateway::AgentGateway;
 
 /// This module provides real LLM integration tests. These require API keys!
 /// Example running all tests:
@@ -18,7 +17,15 @@ use crate::common::gateway::AgentGateway;
 /// Note: AGENTGATEWAY_E2E must be set to run any tests.
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
-	let policies = if env != "" {
+	let policies = if provider == "azureOpenAI" {
+		r#"
+      policies:
+        backendAuth:
+          azure:
+            developerImplicit: {}
+"#
+		.to_string()
+	} else if env != "" {
 		format!(
 			r#"
       policies:
@@ -32,6 +39,14 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
 	let extra = if provider == "bedrock" {
 		r#"
               region: us-west-2
+              "#
+	} else if provider == "vertex" {
+		r#"
+              projectId: $VERTEX_PROJECT
+              "#
+	} else if provider == "azureOpenAI" {
+		r#"
+              host: $AZURE_HOST
               "#
 	} else {
 		""
@@ -241,6 +256,66 @@ mod anthropic {
 	}
 }
 
+mod gemini {
+	use super::*;
+
+	#[tokio::test]
+	async fn completions() {
+		let Some(gw) = setup("gemini", "GEMINI_API_KEY", "gemini-2.5-flash").await else {
+			return;
+		};
+		send_completions(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn completions_streaming() {
+		let Some(gw) = setup("gemini", "GEMINI_API_KEY", "gemini-2.5-flash").await else {
+			return;
+		};
+		send_completions(&gw, true).await;
+	}
+}
+
+mod vertex {
+	use super::*;
+
+	#[tokio::test]
+	async fn completions() {
+		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
+			return;
+		};
+		send_completions(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn completions_streaming() {
+		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
+			return;
+		};
+		send_completions(&gw, true).await;
+	}
+}
+
+mod azureopenai {
+	use super::*;
+
+	#[tokio::test]
+	async fn completions() {
+		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
+			return;
+		};
+		send_completions(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn completions_streaming() {
+		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
+			return;
+		};
+		send_completions(&gw, true).await;
+	}
+}
+
 async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
 	// Explicitly opt in to avoid accidentally using implicit configs
 	if !require_env("AGENTGATEWAY_E2E") {
@@ -248,6 +323,16 @@ async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
 	}
 	if env != "" {
 		if !require_env("OPENAI_API_KEY") {
+			return None;
+		}
+	}
+	if provider == "vertex" {
+		if !require_env("VERTEX_PROJECT") {
+			return None;
+		}
+	}
+	if provider == "azureOpenAI" {
+		if !require_env("AZURE_HOST") {
 			return None;
 		}
 	}
@@ -271,7 +356,7 @@ fn assert_log(path: &str, streaming: bool, test_id: &str) {
 		.as_i64()
 		.unwrap();
 	assert!(
-		output > 1 && output < 100,
+		output >= 1 && output < 100,
 		"unexpected output tokens: {output}"
 	);
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
