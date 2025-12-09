@@ -194,6 +194,7 @@ tracing-subscriber = { version = "0.3", features = [
     "json",
 ] }
 url = "2.5"
+uuid = { version = "1.11", features = ["v4"] }
 wiremock = { version = "0.6.3", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
 which = "8.0.0"

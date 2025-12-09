@@ -17,6 +17,7 @@ ipnet.workspace = true
 regex.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

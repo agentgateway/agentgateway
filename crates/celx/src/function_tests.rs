@@ -230,6 +230,20 @@ fn uuid() {
 	assert_eq!(uuid_str.chars().nth(13).unwrap(), '-');
 	assert_eq!(uuid_str.chars().nth(18).unwrap(), '-');
 	assert_eq!(uuid_str.chars().nth(23).unwrap(), '-');
+	// Test that it conforms to UUID version 4 format specifications
+	// The 13th character (at index 14) should be '4' (version field)
+	assert_eq!(
+		uuid_str.chars().nth(14).unwrap(),
+		'4',
+		"UUID version field should be '4'"
+	);
+	// The 17th character (at index 19) should be one of '8', '9', 'a', or 'b' (variant field)
+	let variant_char = uuid_str.chars().nth(19).unwrap();
+	assert!(
+		['8', '9', 'a', 'b'].contains(&variant_char),
+		"UUID variant field should be '8', '9', 'a', or 'b', got '{}'",
+		variant_char
+	);
 	// Test that multiple calls return different UUIDs
 	let result2 = eval(expr).unwrap().json().unwrap();
 	assert_ne!(

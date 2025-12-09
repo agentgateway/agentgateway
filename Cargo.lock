@@ -39,6 +39,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "uuid 1.18.1",
 ]
 
 [[package]]

@@ -9,6 +9,7 @@ use ::cel::{Context, FunctionContext, ResolveResult, Value};
 use rand::random_range;
 use serde::ser::Error;
 use serde::{Serialize, Serializer};
+use uuid::Uuid;
 
 pub fn insert_all(ctx: &mut Context<'_>) {
 	// Custom to agentgateway
@@ -214,17 +215,7 @@ pub fn regex_replace(
 }
 
 fn uuid_generate() -> Arc<String> {
-	use rand::Rng;
-	let mut rng = rand::rng();
-	let uuid = format!(
-		"{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
-		rng.random::<u32>(),
-		rng.random::<u16>(),
-		(rng.random::<u16>() & 0x0fff) | 0x4000, // Version 4
-		(rng.random::<u16>() & 0x3fff) | 0x8000, // Variant 1
-		rng.random::<u64>() & 0xffffffffffff
-	);
-	Arc::new(uuid)
+	Arc::new(Uuid::new_v4().to_string())
 }
 
 fn default(ftx: &FunctionContext, exp: Expression, d: Value) -> ResolveResult {
