@@ -130,6 +130,12 @@ pub struct PromptGuard {
 	pub response: Vec<ResponseGuard>,
 }
 
+enum GuardrailOutcome {
+	None,
+	Masked,
+	Rejected(Response),
+}
+
 impl Policy {
 	pub fn compile_model_alias_patterns(&mut self) {
 		let mut patterns = Vec::new();
@@ -238,13 +244,41 @@ impl Policy {
 			.flat_map(|g| g.request.iter())
 		{
 			match &g.kind {
-				RequestGuardKind::Regex(rg) => {
-					if let Some(res) = Self::apply_regex(req, rg, &g.rejection)? {
+				RequestGuardKind::Regex(rg) => match Self::apply_regex(req, rg, &g.rejection)? {
+					GuardrailOutcome::Rejected(res) => {
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailKind::Regex,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
 						return Ok(Some(res));
-					}
+					},
+					GuardrailOutcome::Masked => {
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailKind::Regex,
+							crate::telemetry::metrics::GuardrailAction::Mask,
+						);
+					},
+					GuardrailOutcome::None => {
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailKind::Regex,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
+					},
 				},
 				RequestGuardKind::Webhook(wh) => {
 					if let Some(res) = Self::apply_webhook(req, http_headers, &client, wh).await? {
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailKind::Webhook,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
 						return Ok(Some(res));
 					}
 				},
@@ -252,7 +286,20 @@ impl Policy {
 					if let Some(res) =
 						Self::apply_moderation(req, claims.clone(), &client, &g.rejection, m).await?
 					{
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailKind::Moderation,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
 						return Ok(Some(res));
+					} else {
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailKind::Moderation,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
 					}
 				},
 			}
@@ -312,13 +359,13 @@ impl Policy {
 		req: &mut dyn RequestType,
 		rgx: &RegexRules,
 		rej: &RequestRejection,
-	) -> anyhow::Result<Option<Response>> {
+	) -> anyhow::Result<GuardrailOutcome> {
 		let mut msgs = req.get_messages();
 		let mut any_changed = false;
 		for msg in &mut msgs {
 			match Self::apply_prompt_guard_regex(&msg.content, rgx) {
 				Some(RegexResult::Reject) => {
-					return Ok(Some(rej.as_response()));
+					return Ok(GuardrailOutcome::Rejected(rej.as_response()));
 				},
 				Some(RegexResult::Mask(content)) => {
 					any_changed = true;
@@ -329,21 +376,22 @@ impl Policy {
 		}
 		if any_changed {
 			req.set_messages(msgs);
+			return Ok(GuardrailOutcome::Masked);
 		}
-		Ok(None)
+		Ok(GuardrailOutcome::None)
 	}
 
 	fn apply_regex_response(
 		resp: &mut dyn ResponseType,
 		rgx: &RegexRules,
 		rej: &RequestRejection,
-	) -> anyhow::Result<Option<Response>> {
+	) -> anyhow::Result<GuardrailOutcome> {
 		let mut msgs = resp.to_webhook_choices();
 		let mut any_changed = false;
 		for msg in &mut msgs {
 			match Self::apply_prompt_guard_regex(&msg.message.content, rgx) {
 				Some(RegexResult::Reject) => {
-					return Ok(Some(rej.as_response()));
+					return Ok(GuardrailOutcome::Rejected(rej.as_response()));
 				},
 				Some(RegexResult::Mask(content)) => {
 					any_changed = true;
@@ -354,8 +402,9 @@ impl Policy {
 		}
 		if any_changed {
 			resp.set_webhook_choices(msgs)?;
+			return Ok(GuardrailOutcome::Masked);
 		}
-		Ok(None)
+		Ok(GuardrailOutcome::None)
 	}
 
 	async fn apply_webhook(
@@ -380,6 +429,12 @@ impl Policy {
 				};
 				let msgs = body.messages;
 				req.set_messages(msgs);
+				Self::record_guardrail_trip(
+					client,
+					crate::telemetry::metrics::GuardrailPhase::Request,
+					crate::telemetry::metrics::GuardrailKind::Webhook,
+					crate::telemetry::metrics::GuardrailAction::Mask,
+				);
 			},
 			RequestAction::Reject(rej) => {
 				debug!(
@@ -401,7 +456,12 @@ impl Policy {
 						.reason
 						.unwrap_or_else(|| "no reason specified".to_string())
 				);
-				// No action needed
+				Self::record_guardrail_trip(
+					client,
+					crate::telemetry::metrics::GuardrailPhase::Request,
+					crate::telemetry::metrics::GuardrailKind::Webhook,
+					crate::telemetry::metrics::GuardrailAction::Allow,
+				);
 			},
 		}
 		Ok(None)
@@ -429,6 +489,25 @@ impl Policy {
 				};
 				let msgs = body.choices;
 				resp.set_webhook_choices(msgs)?;
+				Self::record_guardrail_trip(
+					client,
+					crate::telemetry::metrics::GuardrailPhase::Response,
+					crate::telemetry::metrics::GuardrailKind::Webhook,
+					crate::telemetry::metrics::GuardrailAction::Mask,
+				);
+			},
+			ResponseAction::Reject(rej) => {
+				debug!(
+					"webhook rejected response: {}",
+					rej
+						.reason
+						.unwrap_or_else(|| "no reason specified".to_string())
+				);
+				return Ok(Some(
+					::http::response::Builder::new()
+						.status(rej.status_code)
+						.body(http::Body::from(rej.body))?,
+				));
 			},
 			ResponseAction::Pass(pass) => {
 				debug!(
@@ -437,7 +516,12 @@ impl Policy {
 						.reason
 						.unwrap_or_else(|| "no reason specified".to_string())
 				);
-				// No action needed
+				Self::record_guardrail_trip(
+					client,
+					crate::telemetry::metrics::GuardrailPhase::Response,
+					crate::telemetry::metrics::GuardrailKind::Webhook,
+					crate::telemetry::metrics::GuardrailAction::Allow,
+				);
 			},
 		}
 		Ok(None)
@@ -480,6 +564,24 @@ impl Policy {
 			headers.insert(header_name, have.clone());
 		}
 		headers
+	}
+
+	fn record_guardrail_trip(
+		client: &PolicyClient,
+		phase: crate::telemetry::metrics::GuardrailPhase,
+		kind: crate::telemetry::metrics::GuardrailKind,
+		action: crate::telemetry::metrics::GuardrailAction,
+	) {
+		client
+			.inputs
+			.metrics
+			.guardrail_checks
+			.get_or_create(&crate::telemetry::metrics::GuardrailLabels {
+				phase,
+				kind,
+				action,
+			})
+			.inc();
 	}
 
 	// fn convert_message(r: Message) -> ChatCompletionRequestMessage {
@@ -576,13 +678,41 @@ impl Policy {
 	) -> anyhow::Result<Option<Response>> {
 		for g in guards {
 			match &g.kind {
-				ResponseGuardKind::Regex(rg) => {
-					if let Some(res) = Self::apply_regex_response(resp, rg, &g.rejection)? {
+				ResponseGuardKind::Regex(rg) => match Self::apply_regex_response(resp, rg, &g.rejection)? {
+					GuardrailOutcome::Rejected(res) => {
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailKind::Regex,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
 						return Ok(Some(res));
-					}
+					},
+					GuardrailOutcome::Masked => {
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailKind::Regex,
+							crate::telemetry::metrics::GuardrailAction::Mask,
+						);
+					},
+					GuardrailOutcome::None => {
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailKind::Regex,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
+					},
 				},
 				ResponseGuardKind::Webhook(wh) => {
 					if let Some(res) = Self::apply_webhook_response(resp, http_headers, client, wh).await? {
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailKind::Webhook,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
 						return Ok(Some(res));
 					}
 				},
@@ -787,6 +917,7 @@ pub mod webhook {
 		/// The following actions are available on the response:
 		/// - PassAction: No action is required.
 		/// - MaskAction: Mask the response body.
+		/// - RejectAction: Reject the response.
 		pub action: ResponseAction,
 	}
 
@@ -860,6 +991,7 @@ pub mod webhook {
 	#[serde(untagged, rename_all = "snake_case")]
 	pub enum ResponseAction {
 		Mask(MaskAction),
+		Reject(RejectAction),
 		Pass(PassAction),
 	}
 
