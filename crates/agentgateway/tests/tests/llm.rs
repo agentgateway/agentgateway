@@ -4,17 +4,17 @@ use http::StatusCode;
 use serde_json::json;
 use tracing::warn;
 
-/// This module provides real LLM integration tests. These require API keys!
-/// Example running all tests:
-/// 	AZURE_HOST=xxx.azure.com \
-/// 	VERTEX_PROJECT=octo-386314 \
-/// 	GEMINI_API_KEY=`cat ~/.secrets/gemini` \
-/// 	ANTHROPIC_API_KEY=`cat ~/.secrets/anthropic` \
-/// 	OPENAI_API_KEY=`cat ~/.secrets/openai`
-/// 	AGENTGATEWAY_E2E=true \
-/// 	cargo test --test integration tests::llm::
-///
-/// Note: AGENTGATEWAY_E2E must be set to run any tests.
+// This module provides real LLM integration tests. These require API keys!
+// Example running all tests:
+//     AZURE_HOST=xxx.azure.com \
+//     VERTEX_PROJECT=octo-386314 \
+//     GEMINI_API_KEY=`cat ~/.secrets/gemini` \
+//     ANTHROPIC_API_KEY=`cat ~/.secrets/anthropic` \
+//     OPENAI_API_KEY=`cat ~/.secrets/openai`
+//     AGENTGATEWAY_E2E=true \
+//     cargo test --test integration tests::llm::
+//
+// Note: AGENTGATEWAY_E2E must be set to run any tests.
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
 	let policies = if provider == "azureOpenAI" {
@@ -25,7 +25,7 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
             developerImplicit: {}
 "#
 		.to_string()
-	} else if env != "" {
+	} else if !env.is_empty() {
 		format!(
 			r#"
       policies:
@@ -321,20 +321,14 @@ async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
 	if !require_env("AGENTGATEWAY_E2E") {
 		return None;
 	}
-	if env != "" {
-		if !require_env("OPENAI_API_KEY") {
-			return None;
-		}
+	if !env.is_empty() && !require_env("OPENAI_API_KEY") {
+		return None;
 	}
-	if provider == "vertex" {
-		if !require_env("VERTEX_PROJECT") {
-			return None;
-		}
+	if provider == "vertex" && !require_env("VERTEX_PROJECT") {
+		return None;
 	}
-	if provider == "azureOpenAI" {
-		if !require_env("AZURE_HOST") {
-			return None;
-		}
+	if provider == "azureOpenAI" && !require_env("AZURE_HOST") {
+		return None;
 	}
 	let gw = AgentGateway::new(llm_config(provider, env, model))
 		.await
@@ -356,7 +350,7 @@ fn assert_log(path: &str, streaming: bool, test_id: &str) {
 		.as_i64()
 		.unwrap();
 	assert!(
-		output >= 1 && output < 100,
+		(1..100).contains(&output),
 		"unexpected output tokens: {output}"
 	);
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
@@ -374,7 +368,7 @@ fn assert_count_log(path: &str, test_id: &str) {
 	let count = log.get("token.count").unwrap().as_i64().unwrap();
 	assert!(count > 1 && count < 100, "unexpected count tokens: {count}");
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
-	assert_eq!(stream, false, "unexpected streaming value: {stream}");
+	assert!(!stream, "unexpected streaming value: {stream}");
 }
 
 fn require_env(var: &str) -> bool {

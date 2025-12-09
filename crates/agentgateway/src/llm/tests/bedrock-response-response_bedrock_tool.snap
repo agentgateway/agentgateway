@@ -19,32 +19,25 @@ info:
   stopReason: tool_use
 ---
 {
-  "model": "fake-model",
-  "usage": {
-    "input_tokens": 0,
-    "output_tokens": 0
-  },
-  "content": [
+  "id": "[id]",
+  "status": "requires_action",
+  "output": [
     {
-      "type": "tool_use",
-      "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
+      "type": "function_call",
+      "id": "[id]",
+      "call_id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
       "name": "top_song",
-      "input": {
-        "sign": "WZPZ"
-      }
+      "arguments": "{\"sign\":\"WZPZ\"}",
+      "status": "completed"
     },
     {
-      "type": "tool_use",
-      "id": "tooluse_kZJMlvQmRJ6eAyxxx",
+      "type": "function_call",
+      "id": "[id]",
+      "call_id": "tooluse_kZJMlvQmRJ6eAyxxx",
       "name": "hello",
-      "input": {
-        "sign": "world"
-      }
+      "arguments": "{\"sign\":\"world\"}",
+      "status": "completed"
     }
   ],
-  "id": "[id]",
-  "type": "message",
-  "role": "assistant",
-  "stop_reason": "tool_use",
-  "stop_sequence": null
+  "model": "fake-model"
 }

@@ -48,7 +48,8 @@ impl AgentGateway {
 			_ => Ok(None),
 		})
 		.map_err(|e: LookupError<anyhow::Error>| anyhow::anyhow!("failed to expand env: {}", e))?;
-		let mut js: Value = yamlviajson::from_str(&config).expect(&format!("invalid yaml: {config}"));
+		let mut js: Value =
+			yamlviajson::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
 		let config = js.pointer_mut("/config").unwrap();
 		config.as_object_mut().unwrap().insert(
 			"adminAddr".to_string(),

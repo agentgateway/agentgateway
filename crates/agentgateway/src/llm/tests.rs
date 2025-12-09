@@ -19,7 +19,7 @@ fn test_response(
 	let input_path = test_dir.join(format!("{test_name}.json"));
 	let provider_str = &fs::read_to_string(&input_path)
 		.unwrap_or_else(|_| panic!("{test_name}: Failed to read input file"));
-	let provider_value = serde_json::from_str::<Value>(&provider_str).unwrap();
+	let provider_value = serde_json::from_str::<Value>(provider_str).unwrap();
 
 	let resp = xlate(Bytes::copy_from_slice(provider_str.as_bytes()))
 		.expect("Failed to translate provider response to OpenAI format");
