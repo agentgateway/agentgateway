@@ -1903,6 +1903,7 @@
                                   "append": {
                                     "type": "array",
                                     "items": {
+                                      "description": "SimpleChatCompletionMessage is a simplified chat message",
                                       "type": "object",
                                       "properties": {
                                         "role": {
@@ -1922,6 +1923,7 @@
                                   "prepend": {
                                     "type": "array",
                                     "items": {
+                                      "description": "SimpleChatCompletionMessage is a simplified chat message",
                                       "type": "object",
                                       "properties": {
                                         "role": {
@@ -4085,6 +4087,7 @@
                                         "append": {
                                           "type": "array",
                                           "items": {
+                                            "description": "SimpleChatCompletionMessage is a simplified chat message",
                                             "type": "object",
                                             "properties": {
                                               "role": {
@@ -4104,6 +4107,7 @@
                                         "prepend": {
                                           "type": "array",
                                           "items": {
+                                            "description": "SimpleChatCompletionMessage is a simplified chat message",
                                             "type": "object",
                                             "properties": {
                                               "role": {
@@ -5769,6 +5773,7 @@
                                                     "append": {
                                                       "type": "array",
                                                       "items": {
+                                                        "description": "SimpleChatCompletionMessage is a simplified chat message",
                                                         "type": "object",
                                                         "properties": {
                                                           "role": {
@@ -5788,6 +5793,7 @@
                                                     "prepend": {
                                                       "type": "array",
                                                       "items": {
+                                                        "description": "SimpleChatCompletionMessage is a simplified chat message",
                                                         "type": "object",
                                                         "properties": {
                                                           "role": {
@@ -7203,6 +7209,7 @@
                                                                 "append": {
                                                                   "type": "array",
                                                                   "items": {
+                                                                    "description": "SimpleChatCompletionMessage is a simplified chat message",
                                                                     "type": "object",
                                                                     "properties": {
                                                                       "role": {
@@ -7222,6 +7229,7 @@
                                                                 "prepend": {
                                                                   "type": "array",
                                                                   "items": {
+                                                                    "description": "SimpleChatCompletionMessage is a simplified chat message",
                                                                     "type": "object",
                                                                     "properties": {
                                                                       "role": {
@@ -10208,6 +10216,7 @@
                       "append": {
                         "type": "array",
                         "items": {
+                          "description": "SimpleChatCompletionMessage is a simplified chat message",
                           "type": "object",
                           "properties": {
                             "role": {
@@ -10227,6 +10236,7 @@
                       "prepend": {
                         "type": "array",
                         "items": {
+                          "description": "SimpleChatCompletionMessage is a simplified chat message",
                           "type": "object",
                           "properties": {
                             "role": {

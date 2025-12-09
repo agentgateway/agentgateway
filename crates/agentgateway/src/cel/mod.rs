@@ -279,6 +279,7 @@ impl ContextBuilder {
 			input_tokens: info.input_tokens,
 			params: info.params.clone(),
 
+			count_tokens: None,
 			response_model: None,
 			output_tokens: None,
 			total_tokens: None,
@@ -313,6 +314,7 @@ impl ContextBuilder {
 		let resp = &info.response;
 		if let Some(o) = self.context.llm.as_mut() {
 			o.output_tokens = resp.output_tokens;
+			o.count_tokens = resp.count_tokens;
 			o.total_tokens = resp.total_tokens;
 			if let Some(pt) = resp.input_tokens {
 				// Better info, override
@@ -667,6 +669,10 @@ pub struct LLMContext {
 	/// The total number of tokens for the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	total_tokens: Option<u64>,
+	/// The number of tokens in the request, when using the token counting endpoint
+	/// These are not counted as 'input tokens' since they do not consume input tokens.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	count_tokens: Option<u64>,
 	/// The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	prompt: Option<Vec<llm::SimpleChatCompletionMessage>>,

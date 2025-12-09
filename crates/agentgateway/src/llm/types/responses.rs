@@ -197,6 +197,7 @@ impl ResponseType for Response {
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			output_tokens: self.usage.as_ref().map(|u| u.output_tokens),
+			count_tokens: None,
 			total_tokens: self
 				.usage
 				.as_ref()

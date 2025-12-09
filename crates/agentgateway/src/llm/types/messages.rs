@@ -187,6 +187,7 @@ impl ResponseType for Response {
 			output_tokens: Some(self.usage.output_tokens),
 			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
 			provider_model: Some(strng::new(&self.model)),
+			count_tokens: None,
 			completion: if include_completion_in_log {
 				Some(
 					self

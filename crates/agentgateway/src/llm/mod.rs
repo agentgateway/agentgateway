@@ -194,6 +194,9 @@ impl LLMInfo {
 #[derive(Debug, Clone, Default)]
 pub struct LLMResponse {
 	pub input_tokens: Option<u64>,
+	/// count_tokens contains the number of tokens in the request, when using the token counting endpoint
+	/// These are not counted as 'input tokens' since they do not consume input tokens.
+	pub count_tokens: Option<u64>,
 	pub output_tokens: Option<u64>,
 	pub total_tokens: Option<u64>,
 	pub provider_model: Option<Strng>,
@@ -621,11 +624,17 @@ impl AIProvider {
 		// count_tokens has simplified response handling (just format translation)
 		if req.input_format == InputFormat::CountTokens {
 			// Currently only bedrock is supported so we have no match needed here
-			let bytes =
-				conversion::bedrock::from_anthropic_token_count::translate_response(bytes.clone());
+			let (bytes, count) =
+				conversion::bedrock::from_anthropic_token_count::translate_response(bytes.clone())?;
 
 			parts.headers.remove(header::CONTENT_LENGTH);
 			let resp = Response::from_parts(parts, bytes.into());
+			let llm_resp = LLMResponse {
+				count_tokens: Some(count),
+				..Default::default()
+			};
+			let llm_info = LLMInfo::new(req, llm_resp);
+			log.store(Some(llm_info));
 			return Ok(resp);
 		}
 

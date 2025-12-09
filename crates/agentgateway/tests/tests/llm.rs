@@ -32,6 +32,7 @@ frontendPolicies:
       streaming: llm.streaming
       body: string(response.body)
       req.id: request.headers["x-test-id"]
+      token.count: llm.countTokens
 binds:
 - port: $PORT
   listeners:
@@ -166,10 +167,10 @@ mod bedrock {
 
 	#[tokio::test]
 	async fn token_count() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
+		let Some(gw) = setup("bedrock", "", "anthropic.claude-3-5-haiku-20241022-v1:0").await else {
 			return;
 		};
-		send_messages(&gw, true).await;
+		send_anthropic_token_count(&gw).await;
 	}
 }
 
@@ -264,6 +265,20 @@ fn assert_log(path: &str, streaming: bool, test_id: &str) {
 	assert_eq!(stream, streaming, "unexpected streaming value: {stream}");
 }
 
+fn assert_count_log(path: &str, test_id: &str) {
+	let logs = agent_core::telemetry::testing::find(&[
+		("scope", "request"),
+		("http.path", path),
+		("req.id", test_id),
+	]);
+	assert_eq!(logs.len(), 1, "{logs:?}");
+	let log = logs.first().unwrap();
+	let count = log.get("token.count").unwrap().as_i64().unwrap();
+	assert!(count > 1 && count < 100, "unexpected count tokens: {count}");
+	let stream = log.get("streaming").unwrap().as_bool().unwrap();
+	assert_eq!(stream, false, "unexpected streaming value: {stream}");
+}
+
 fn require_env(var: &str) -> bool {
 	testing::setup_test_logging();
 	let found = std::env::var(var).is_ok();
@@ -327,17 +342,17 @@ async fn send_messages(gw: &AgentGateway, stream: bool) {
 
 async fn send_anthropic_token_count(gw: &AgentGateway) {
 	let resp = gw
-	.send_request_json(
-		"http://localhost/v1/messages",
-		json!({
+		.send_request_json(
+			"http://localhost/v1/count",
+			json!({
 				"max_tokens": 16,
 				"messages": [
 					{"role": "user", "content": "give me a 1 word answer"}
 				],
 			}),
-	)
-	.await;
+		)
+		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/count", false, &gw.test_id);
+	assert_count_log("/v1/count", &gw.test_id);
 }
