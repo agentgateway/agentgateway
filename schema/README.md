@@ -1280,6 +1280,7 @@ This folder contains JSON schemas for various parts of the project
 |`llm.inputTokens`|The number of tokens in the input/prompt.|
 |`llm.outputTokens`|The number of tokens in the output/completion.|
 |`llm.totalTokens`|The total number of tokens for the request.|
+|`llm.countTokens`|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
 |`llm.prompt`|The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.|
 |`llm.prompt[].role`||
 |`llm.prompt[].content`||
