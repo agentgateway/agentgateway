@@ -194,12 +194,6 @@ pub struct InvokeModelBody {
 	pub body: String,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CountTokensResponse {
-	#[serde(alias = "inputTokens")]
-	pub input_tokens: i32,
-}
-
 #[derive(Clone, Serialize, Debug)]
 pub struct ToolConfiguration {
 	/// An array of tools that you want to pass to a model.

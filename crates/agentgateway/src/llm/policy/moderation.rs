@@ -1,11 +1,12 @@
+use agent_core::strng;
+use itertools::Itertools;
+
 use crate::http::jwt::Claims;
 use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::Moderation;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
-use agent_core::strng;
-use itertools::Itertools;
 
 pub async fn send_request(
 	req: &mut dyn RequestType,

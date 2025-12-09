@@ -12,7 +12,6 @@ members = [
     "crates/celx",
     "crates/core",
     "crates/hbone",
-    "crates/mock-server",
     "crates/xds",
     "crates/xtask",
 ]

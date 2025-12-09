@@ -1192,7 +1192,12 @@ async fn make_backend_call(
 							.map_err(|e| ProxyError::Processing(e.into()))?,
 						RouteType::AnthropicTokenCount => llm
 							.provider
-							.process_count_tokens_request(req, llm_request_policies.llm.as_deref())
+							.process_count_tokens_request(
+								&backend_info,
+								req,
+								llm_request_policies.llm.as_deref(),
+								&mut log,
+							)
 							.await
 							.map_err(|e| ProxyError::Processing(e.into()))?,
 						_ => unreachable!(),

@@ -1,14 +1,12 @@
 use ::http::HeaderMap;
 use bytes::Bytes;
-use itertools::Itertools;
 use serde::de::DeserializeOwned;
 
 use crate::http::filters::HeaderModifier;
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
-use crate::llm::AIError;
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
-use crate::llm::{RequestType, ResponseType};
+use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
 use crate::*;

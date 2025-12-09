@@ -1,13 +1,21 @@
+use std::time::Instant;
+
+use agent_core::strng;
+
 use crate::http::Body;
 use crate::llm::LLMInfo;
 use crate::llm::types::completions::typed as completions;
 use crate::llm::types::messages::typed as messages;
 use crate::parse;
 use crate::telemetry::log::AsyncLog;
-use agent_core::strng;
-use std::time::Instant;
 
 pub mod from_completions {
+	use std::collections::HashMap;
+	use std::time::Instant;
+
+	use agent_core::strng;
+	use bytes::Bytes;
+
 	use crate::http::Body;
 	use crate::llm::types::ResponseType;
 	use crate::llm::types::completions::typed as completions;
@@ -15,10 +23,6 @@ pub mod from_completions {
 	use crate::llm::{AIError, LLMInfo, types};
 	use crate::telemetry::log::AsyncLog;
 	use crate::{json, parse};
-	use agent_core::strng;
-	use bytes::Bytes;
-	use std::collections::HashMap;
-	use std::time::Instant;
 
 	/// translate an OpenAI completions request to an anthropic messages request
 	pub fn translate(req: &types::completions::Request) -> Result<Vec<u8>, AIError> {

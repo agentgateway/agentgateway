@@ -1,10 +1,20 @@
-use crate::http::Response;
-use crate::llm::AIError;
-use crate::llm::types::{bedrock, messages, responses};
 use rand::Rng;
 use tracing::trace;
 
+use crate::http::Response;
+use crate::llm::AIError;
+use crate::llm::types::{bedrock, messages, responses};
+
 pub mod from_completions {
+	use std::collections::HashMap;
+	use std::time::Instant;
+
+	use async_openai::types::{ChatCompletionMessageToolCallChunk, FunctionCallStream};
+	use bytes::Bytes;
+	use itertools::Itertools;
+	use types::bedrock;
+	use types::completions::typed as completions;
+
 	use super::helpers;
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
@@ -12,13 +22,6 @@ pub mod from_completions {
 	use crate::llm::{AIError, LLMInfo, types};
 	use crate::telemetry::log::AsyncLog;
 	use crate::{json, parse};
-	use async_openai::types::{ChatCompletionMessageToolCallChunk, FunctionCallStream};
-	use bytes::Bytes;
-	use itertools::Itertools;
-	use std::collections::HashMap;
-	use std::time::Instant;
-	use types::bedrock;
-	use types::completions::typed as completions;
 
 	/// translate an OpenAI completions request to a Bedrock converse  request
 	pub fn translate(
@@ -271,7 +274,7 @@ pub mod from_completions {
 
 	pub fn translate_stream(
 		b: Body,
-		buffer_limit: usize,
+		_buffer_limit: usize,
 		log: AsyncLog<LLMInfo>,
 		model: &str,
 		message_id: &str,
@@ -465,6 +468,13 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
+	use std::collections::HashSet;
+	use std::time::Instant;
+
+	use bytes::Bytes;
+	use types::bedrock;
+	use types::messages::typed as messages;
+
 	use super::helpers;
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
@@ -472,13 +482,6 @@ pub mod from_messages {
 	use crate::llm::{AIError, LLMInfo, types};
 	use crate::telemetry::log::AsyncLog;
 	use crate::{json, parse};
-
-	use bytes::Bytes;
-	use itertools::Itertools;
-	use std::collections::HashSet;
-	use std::time::Instant;
-	use types::bedrock;
-	use types::messages::typed as messages;
 
 	/// translate an Anthropic messages request to a Bedrock converse request
 	pub fn translate(
@@ -867,10 +870,10 @@ pub mod from_messages {
 
 	pub fn translate_stream(
 		b: Body,
-		buffer_limit: usize,
+		_buffer_limit: usize,
 		log: AsyncLog<LLMInfo>,
 		model: &str,
-		message_id: &str,
+		_message_id: &str,
 	) -> Body {
 		let mut saw_token = false;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
@@ -1106,23 +1109,22 @@ pub mod from_messages {
 }
 
 pub mod from_responses {
+	use std::collections::{HashMap, HashSet};
+	use std::time::Instant;
+
+	use bytes::Bytes;
+	use helpers::*;
+	use rand::Rng;
+	use types::bedrock;
+	use types::responses::typed as responses;
+
 	use super::helpers;
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
-
 	use crate::llm::types::ResponseType;
 	use crate::llm::{AIError, LLMInfo, types};
 	use crate::telemetry::log::AsyncLog;
 	use crate::{json, parse};
-
-	use bytes::Bytes;
-	use helpers::*;
-	use itertools::Itertools;
-	use rand::Rng;
-	use std::collections::{HashMap, HashSet};
-	use std::time::Instant;
-	use types::bedrock;
-	use types::responses::typed as responses;
 
 	/// translate an OpenAI responses request to a Bedrock converse request
 	pub fn translate(
@@ -1503,10 +1505,10 @@ pub mod from_responses {
 
 	pub fn translate_stream(
 		b: Body,
-		buffer_limit: usize,
+		_buffer_limit: usize,
 		log: AsyncLog<LLMInfo>,
 		model: &str,
-		message_id: &str,
+		_message_id: &str,
 	) -> Body {
 		let mut saw_token = false;
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
@@ -1886,10 +1888,55 @@ pub mod from_responses {
 		})
 	}
 }
+
+pub mod from_anthropic_token_count {
+	use bytes::Bytes;
+
+	use crate::llm::{AIError, types};
+
+	pub fn translate(
+		req: &types::count_tokens::Request,
+		headers: &http::HeaderMap,
+	) -> Result<Vec<u8>, AIError> {
+		use base64::Engine;
+		let anthropic_version = headers
+			.get("anthropic-version")
+			.and_then(|v| v.to_str().ok())
+			.unwrap_or("2023-06-01");
+		let mut body = req.rest.clone();
+
+		// AWS Bedrock's count-tokens endpoint wraps InvokeModel, which requires a valid
+		// Anthropic Messages API request. The `max_tokens` parameter is required by Anthropic's API.
+		// We set it to 1 (the minimum valid value) since token counting doesn't generate output.
+		body
+			.entry("max_tokens")
+			.or_insert(serde_json::Value::Number(1.into()));
+		body
+			.entry("anthropic_version")
+			.or_insert(serde_json::Value::String(anthropic_version.into()));
+
+		let body_json = serde_json::to_vec(&body).map_err(AIError::RequestMarshal)?;
+		let body_b64 = base64::engine::general_purpose::STANDARD.encode(&body_json);
+
+		let xlated = types::bedrock::CountTokensRequest {
+			input: types::bedrock::CountTokensInputInvokeModel {
+				invoke_model: types::bedrock::InvokeModelBody { body: body_b64 },
+			},
+		};
+		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_response(bytes: Bytes) -> Bytes {
+		// Right now the bedrock response is identical to the anthropic response; no translation needed
+		bytes
+	}
+}
+
 mod helpers {
+	use std::collections::HashMap;
+
 	use crate::llm::AIError;
 	use crate::llm::types::bedrock;
-	use std::collections::HashMap;
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {

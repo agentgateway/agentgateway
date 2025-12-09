@@ -1,13 +1,15 @@
 pub mod bedrock;
 pub mod completions;
+pub mod count_tokens;
 pub mod messages;
 pub mod responses;
+
+use agent_core::prelude::Strng;
+use agent_core::strng;
 
 use crate::apply;
 use crate::llm::{AIError, LLMRequest, LLMResponse};
 use crate::serdes::schema;
-use agent_core::prelude::Strng;
-use agent_core::strng;
 
 /// ResponseType is an abstraction over provider/endpoint specific response formats that enables
 /// uniform policy enforcement and observability
@@ -45,6 +47,12 @@ pub trait RequestType: Send + Sync {
 		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> Result<Vec<u8>, AIError> {
 		Err(AIError::UnsupportedConversion(strng::literal!("bedrock")))
+	}
+
+	fn to_bedrock_token_count(&self, _headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
+		Err(AIError::UnsupportedConversion(strng::literal!(
+			"bedrock token count"
+		)))
 	}
 }
 

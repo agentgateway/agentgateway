@@ -3737,15 +3737,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mock-server"
-version = "0.7.0"
-dependencies = [
- "axum",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "moka"
 version = "0.12.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

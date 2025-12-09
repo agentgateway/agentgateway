@@ -1,15 +1,15 @@
+use std::time::Instant;
+
+use agent_core::strng;
+use tracing::debug;
+
 use crate::http::Response;
 use crate::llm::{amend_tokens, types};
 use crate::store::LLMResponsePolicies;
 use crate::telemetry::log::AsyncLog;
 use crate::{llm, parse};
-use agent_core::strng;
-use std::time::Instant;
-use tracing::debug;
 
 pub mod from_messages {
-	use crate::json;
-	use crate::llm::{AIError, types};
 	use async_openai::types::{
 		ChatCompletionRequestToolMessageContent, ChatCompletionRequestToolMessageContentPart,
 	};
@@ -17,6 +17,9 @@ pub mod from_messages {
 	use messages::{ContentBlock, ThinkingInput, ToolResultContent, ToolResultContentPart};
 	use types::completions::typed as completions;
 	use types::messages::typed as messages;
+
+	use crate::json;
+	use crate::llm::{AIError, types};
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {

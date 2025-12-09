@@ -1,14 +1,14 @@
-use serde::{Deserialize, Serialize};
-
 use async_openai::types::responses::{
 	Content, ContentType, Input, InputContent, InputItem, InputMessage, OutputContent, OutputText,
 	Role,
 };
-
-use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
-use crate::llm::{RequestType, ResponseType};
+use serde::{Deserialize, Serialize};
 
 use super::*;
+use crate::llm::{
+	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType, ResponseType,
+	conversion,
+};
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Request {
