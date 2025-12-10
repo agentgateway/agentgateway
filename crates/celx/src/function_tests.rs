@@ -231,7 +231,7 @@ fn uuid() {
 	assert_eq!(uuid_str.chars().nth(18).unwrap(), '-');
 	assert_eq!(uuid_str.chars().nth(23).unwrap(), '-');
 	// Test that it conforms to UUID version 4 format specifications
-	// The 13th character (at index 14) should be '4' (version field)
+	// The version field (at index 14, the 15th character) should be '4'
 	assert_eq!(
 		uuid_str.chars().nth(14).unwrap(),
 		'4',
