@@ -237,7 +237,7 @@ fn uuid() {
 		'4',
 		"UUID version field should be '4'"
 	);
-	// The 17th character (at index 19) should be one of '8', '9', 'a', or 'b' (variant field)
+	// The variant field (at index 19, i.e., the 20th character) should be one of '8', '9', 'a', or 'b'
 	let variant_char = uuid_str.chars().nth(19).unwrap();
 	assert!(
 		['8', '9', 'a', 'b'].contains(&variant_char),
