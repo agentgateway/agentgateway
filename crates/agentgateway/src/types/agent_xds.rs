@@ -317,7 +317,11 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 					Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
 						access_key_id: config.access_key_id.into(),
 						secret_access_key: config.secret_access_key.into(),
-						region: config.region,
+						region: if config.region.is_empty() {
+							None
+						} else {
+							Some(config.region.clone())
+						},
 						session_token: config.session_token.map(|token| token.into()),
 					},
 					Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {},

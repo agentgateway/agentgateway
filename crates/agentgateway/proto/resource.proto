@@ -189,7 +189,7 @@ message AwsExplicitConfig {
   string access_key_id = 1;
   // AWS Secret Access Key for authentication
   string secret_access_key = 2;
-  // AWS Region (e.g., "us-west-2", "us-east-1")
+  // AWS Region (e.g., "us-west-2", "us-east-1"). Optional for AWS backends.
   string region = 3;
   // Optional session token for temporary credentials
   optional string session_token = 4;
