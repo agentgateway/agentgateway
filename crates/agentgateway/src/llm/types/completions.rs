@@ -192,6 +192,8 @@ impl super::RequestType for Request {
 					.max_completion_tokens
 					.or(self.max_tokens)
 					.map(Into::into),
+				encoding_format: None,
+				dimensions: None,
 			},
 		};
 		Ok(llm)

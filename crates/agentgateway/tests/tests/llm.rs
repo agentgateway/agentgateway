@@ -58,9 +58,10 @@ frontendPolicies:
   accessLog:
     add:
       streaming: llm.streaming
-      body: string(response.body)
+      #body: string(response.body)
       req.id: request.headers["x-test-id"]
       token.count: llm.countTokens
+      embeddings: json(response.body).data[0].embedding.size()
 binds:
 - port: $PORT
   listeners:
@@ -79,6 +80,7 @@ binds:
                 /v1/messages: messages
                 /v1/responses: responses
                 /v1/count: anthropicTokenCount
+                /v1/embeddings: embeddings
                 "*": passthrough
           provider:
             {provider}:
@@ -139,6 +141,14 @@ mod openai {
 			return;
 		};
 		send_messages(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn embeddings() {
+		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "text-embedding-3-small").await else {
+			return;
+		};
+		send_embeddings(&gw).await;
 	}
 }
 
@@ -294,6 +304,17 @@ mod vertex {
 		};
 		send_completions(&gw, true).await;
 	}
+
+	#[tokio::test]
+	#[ignore]
+	// During testing I have been unable to make embeddings work at all with Vertex, with or without Agentgateway.
+	// This is plausibly from using the OpenAI compatible endpoint?
+	async fn embeddings() {
+		let Some(gw) = setup("vertex", "", "text-embedding-004").await else {
+			return;
+		};
+		send_embeddings(&gw).await;
+	}
 }
 
 mod azureopenai {
@@ -313,6 +334,14 @@ mod azureopenai {
 			return;
 		};
 		send_completions(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn embeddings() {
+		let Some(gw) = setup("azureOpenAI", "", "text-embedding-3-small").await else {
+			return;
+		};
+		send_embeddings(&gw).await;
 	}
 }
 
@@ -369,6 +398,35 @@ fn assert_count_log(path: &str, test_id: &str) {
 	assert!(count > 1 && count < 100, "unexpected count tokens: {count}");
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
 	assert!(!stream, "unexpected streaming value: {stream}");
+}
+
+fn assert_embeddings_log(path: &str, test_id: &str) {
+	let logs = agent_core::telemetry::testing::find(&[
+		("scope", "request"),
+		("http.path", path),
+		("req.id", test_id),
+	]);
+	assert_eq!(logs.len(), 1, "{logs:?}");
+	let log = logs.first().unwrap();
+	let count = log.get("embeddings").unwrap().as_i64().unwrap();
+	assert_eq!(count, 64, "unexpected count tokens: {count}");
+	let stream = log.get("streaming").unwrap().as_bool().unwrap();
+	assert!(!stream, "unexpected streaming value: {stream}");
+	let dim_count = log
+		.get("gen_ai.embeddings.dimension.count")
+		.unwrap()
+		.as_u64()
+		.unwrap();
+	assert_eq!(dim_count, 64, "unexpected dimension count: {dim_count}");
+	let enc_format = log
+		.get("gen_ai.request.encoding_formats")
+		.unwrap()
+		.as_str()
+		.unwrap();
+	assert_eq!(
+		enc_format, "float",
+		"unexpected encoding format: {enc_format}"
+	);
 }
 
 fn require_env(var: &str) -> bool {
@@ -447,4 +505,21 @@ async fn send_anthropic_token_count(gw: &AgentGateway) {
 
 	assert_eq!(resp.status(), StatusCode::OK);
 	assert_count_log("/v1/count", &gw.test_id);
+}
+
+async fn send_embeddings(gw: &AgentGateway) {
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/embeddings",
+			json!({
+				"dimensions": 64,
+				"max_tokens": 16,
+				"encoding_format": "float",
+				"input": "banana"
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	assert_embeddings_log("/v1/embeddings", &gw.test_id);
 }

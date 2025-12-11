@@ -126,6 +126,8 @@ impl RequestType for Request {
 				presence_penalty: None,
 				seed: None,
 				max_tokens: self.max_output_tokens.map(Into::into),
+				dimensions: None,
+				encoding_format: None,
 			},
 		})
 	}
