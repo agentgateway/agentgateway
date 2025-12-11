@@ -108,6 +108,8 @@ pub enum RouteType {
 	Passthrough,
 	/// OpenAI /responses
 	Responses,
+	/// OpenAI /embeddings
+	Embeddings,
 	/// Anthropic /v1/messages/count_tokens
 	AnthropicTokenCount,
 }
@@ -142,6 +144,7 @@ pub enum InputFormat {
 	Completions,
 	Messages,
 	Responses,
+	Embeddings,
 	CountTokens,
 }
 
@@ -151,6 +154,7 @@ impl InputFormat {
 			InputFormat::Completions => true,
 			InputFormat::Messages => true,
 			InputFormat::Responses => true,
+			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
 		}
 	}
@@ -171,6 +175,11 @@ pub struct LLMRequestParams {
 	pub seed: Option<i64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_tokens: Option<u64>,
+	// Embeddings
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub encoding_format: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub dimensions: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -318,7 +327,7 @@ impl AIProvider {
 			AIProvider::Vertex(provider) => {
 				let request_model = llm_request.map(|l| l.request_model.as_str());
 				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
-				let path = provider.get_path_for_model(request_model, streaming);
+				let path = provider.get_path_for_model(route_type, request_model, streaming);
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
@@ -349,7 +358,7 @@ impl AIProvider {
 			AIProvider::AzureOpenAI(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path && let Some(l) = llm_request {
-						let path = provider.get_path_for_model(l.request_model.as_str());
+						let path = provider.get_path_for_model(route_type, l.request_model.as_str());
 						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
 					}
 					uri.authority = Some(Authority::from_str(&provider.get_host())?);
@@ -444,6 +453,31 @@ impl AIProvider {
 			.await
 	}
 
+	pub async fn process_embeddings_request(
+		&self,
+		backend_info: &crate::http::auth::BackendInfo,
+		policies: Option<&Policy>,
+		req: Request,
+		tokenize: bool,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		let (parts, req) = self
+			.read_body_and_default_model::<types::embeddings::Request>(policies, req)
+			.await?;
+
+		self
+			.process_request(
+				backend_info,
+				policies,
+				InputFormat::Embeddings,
+				req,
+				parts,
+				tokenize,
+				log,
+			)
+			.await
+	}
+
 	pub async fn process_responses_request(
 		&self,
 		backend_info: &crate::http::auth::BackendInfo,
@@ -528,6 +562,9 @@ impl AIProvider {
 			},
 			(InputFormat::CountTokens, AIProvider::Bedrock(_)) => {
 				// Bedrock supports count_tokens input via translation
+			},
+			(InputFormat::Embeddings, AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_)) => {
+				// passthrough
 			},
 			(m, p) => {
 				// Messages with OpenAI compatible: currently only supports translating the request
@@ -637,6 +674,14 @@ impl AIProvider {
 			log.store(Some(llm_info));
 			return Ok(resp);
 		}
+		// embeddings has simplified response handling (currently nothing; no translation needed)
+		if req.input_format == InputFormat::Embeddings {
+			let resp = Response::from_parts(parts, bytes.into());
+			let llm_resp = LLMResponse::default();
+			let llm_info = LLMInfo::new(req, llm_resp);
+			log.store(Some(llm_info));
+			return Ok(resp);
+		}
 
 		let (llm_resp, body) = if !parts.status.is_success() {
 			let body = self.process_error(&req, &bytes)?;
@@ -739,6 +784,9 @@ impl AIProvider {
 			(_, InputFormat::CountTokens) => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
 			},
+			(_, InputFormat::Embeddings) => {
+				unreachable!("Embeddings should be handled by process_embeddings_response")
+			},
 		}
 	}
 
@@ -824,6 +872,9 @@ impl AIProvider {
 			},
 			(_, InputFormat::CountTokens) => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
+			},
+			(_, InputFormat::Embeddings) => {
+				unreachable!("Embeddings should be handled by process_embeddings_response")
 			},
 		})
 	}

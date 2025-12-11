@@ -2,7 +2,7 @@ use agent_core::strng;
 use agent_core::strng::Strng;
 use serde_json::{Map, Value};
 
-use crate::llm::AIError;
+use crate::llm::{AIError, RouteType};
 use crate::*;
 
 const ANTHROPIC_VERSION: &str = "vertex-2023-10-16";
@@ -50,7 +50,12 @@ impl Provider {
 		serde_json::to_vec(&map).map_err(AIError::RequestMarshal)
 	}
 
-	pub fn get_path_for_model(&self, request_model: Option<&str>, streaming: bool) -> Strng {
+	pub fn get_path_for_model(
+		&self,
+		route: RouteType,
+		request_model: Option<&str>,
+		streaming: bool,
+	) -> Strng {
 		let location = self
 			.region
 			.clone()
@@ -68,8 +73,13 @@ impl Provider {
 				}
 			);
 		}
+		let t = if route == RouteType::Embeddings {
+			strng::literal!("embeddings")
+		} else {
+			strng::literal!("chat/completions")
+		};
 		strng::format!(
-			"/v1beta1/projects/{}/locations/{}/endpoints/openapi/chat/completions",
+			"/v1beta1/projects/{}/locations/{}/endpoints/openapi/{t}",
 			self.project_id,
 			location
 		)

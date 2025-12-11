@@ -1,6 +1,7 @@
 pub mod bedrock;
 pub mod completions;
 pub mod count_tokens;
+pub mod embeddings;
 pub mod messages;
 pub mod responses;
 
