@@ -22,7 +22,7 @@ use serde_json::Value;
 use tracing::{Level, trace};
 
 use crate::cel::{ContextBuilder, Expression};
-use crate::llm::LLMInfo;
+use crate::llm::{InputFormat, LLMInfo};
 use crate::proxy::ProxyResponseReason;
 use crate::telemetry::metrics::{
 	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
@@ -815,7 +815,13 @@ impl Drop for DropOnLog {
 			// OpenTelemetry Gen AI Semantic Conventions v1.37.0
 			(
 				"gen_ai.operation.name",
-				log.llm_request.as_ref().map(|_| "chat".into()),
+				log.llm_request.as_ref().map(|r| {
+					if r.input_format == InputFormat::Embeddings {
+						"embeddings".into()
+					} else {
+						"chat".into()
+					}
+				}),
 			),
 			(
 				"gen_ai.provider.name",
@@ -846,6 +852,21 @@ impl Drop for DropOnLog {
 					.as_ref()
 					.and_then(|l| l.params.temperature)
 					.map(Into::into),
+			),
+			(
+				"gen_ai.embeddings.dimension.count",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.dimensions)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.request.encoding_formats",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.encoding_format.display()),
 			),
 			(
 				"gen_ai.request.top_p",

@@ -1155,7 +1155,8 @@ async fn make_backend_call(
 				RouteType::Completions
 				| RouteType::Messages
 				| RouteType::Responses
-				| RouteType::AnthropicTokenCount => {
+				| RouteType::AnthropicTokenCount
+				| RouteType::Embeddings => {
 					let r = match route_type {
 						RouteType::Completions => llm
 							.provider
@@ -1182,6 +1183,17 @@ async fn make_backend_call(
 						RouteType::Responses => llm
 							.provider
 							.process_responses_request(
+								&backend_info,
+								llm_request_policies.llm.as_deref(),
+								req,
+								llm.tokenize,
+								&mut log,
+							)
+							.await
+							.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::Embeddings => llm
+							.provider
+							.process_embeddings_request(
 								&backend_info,
 								llm_request_policies.llm.as_deref(),
 								req,
