@@ -56,6 +56,9 @@ impl IncomingRequestContext {
 			req.extensions_mut().insert(claims.clone());
 		}
 	}
+	pub fn otel_parent_context(&self) -> opentelemetry::Context {
+		agent_core::trcng::extract_context_from_request(&self.headers)
+	}
 }
 
 #[derive(Debug, Error)]

@@ -100,7 +100,7 @@ impl Process {
 					},
 					Some(msg) = proc.receive() => {
 						match msg {
-							JsonRpcMessage::Response(res) => {
+							ServerJsonRpcMessage::Response(res) => {
 								let req_id = res.id.clone();
 								if let Some(sender) = pending_requests_clone.lock().unwrap().remove(&req_id) {
 									let _ = sender.send(ServerJsonRpcMessage::Response(res));

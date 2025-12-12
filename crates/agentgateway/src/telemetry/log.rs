@@ -406,8 +406,14 @@ impl DropOnLog {
 		custom_metric_fields: &CustomField,
 	) {
 		if let Some(llm_response) = &llm_response {
+			let operation_name = match llm_response.request.input_format {
+				llm::InputFormat::Messages => strng::literal!("messages"),
+				llm::InputFormat::Completions => strng::literal!("completions"),
+				llm::InputFormat::Responses => strng::literal!("responses"),
+				llm::InputFormat::CountTokens => strng::literal!("count_tokens"),
+			};
 			let gen_ai_labels = Arc::new(GenAILabels {
-				gen_ai_operation_name: strng::literal!("chat").into(),
+				gen_ai_operation_name: operation_name.into(),
 				gen_ai_system: llm_response.request.provider.clone().into(),
 				gen_ai_request_model: llm_response.request.request_model.clone().into(),
 				gen_ai_response_model: llm_response.response.provider_model.clone().into(),
