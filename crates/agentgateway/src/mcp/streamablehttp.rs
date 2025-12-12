@@ -105,8 +105,15 @@ impl StreamableHttpService {
 					);
 				},
 			};
-			let session = self.session_manager.create_session(relay);
-			return session.stateless_send_and_initialize(part, message).await;
+			// Use stateless session - not registered in session manager
+			let session = self.session_manager.create_stateless_session(relay);
+			let response = session
+				.stateless_send_and_initialize(part.clone(), message)
+				.await;
+
+			// Clean up upstream resources (e.g., stdio processes)
+			let _ = session.delete_session(part).await;
+			return response;
 		}
 
 		let session_id = part
