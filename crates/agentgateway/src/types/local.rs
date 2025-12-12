@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use ::http::Uri;
 use agent_core::prelude::Strng;
-use anyhow::{Error, anyhow, bail};
+use anyhow::{Context, Error, anyhow, bail};
 use itertools::Itertools;
 use macro_rules_attribute::apply;
 use openapiv3::OpenAPI;
@@ -27,7 +27,7 @@ use crate::types::agent::{
 	PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
 	RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies,
 	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
-	TargetedPolicy, TrafficPolicy, TypedResourceName,
+	TargetedPolicy, TlsTermination, TrafficPolicy, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::frontend;
@@ -127,13 +127,96 @@ enum LocalListenerProtocol {
 	HBONE,
 }
 
+/// TLS configuration for a listener.
+///
+/// Supports two modes:
+/// - **Static certificates**: Provide `cert` and `key` paths to certificate files
+/// - **Workload identity**: Set `workloadIdentity: true` to use Istio workload identity
+///
+/// These modes are mutually exclusive.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct LocalTLSServerConfig {
-	pub cert: PathBuf,
-	pub key: PathBuf,
+	/// Path to server certificate file. Required unless workloadIdentity is true.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub cert: Option<PathBuf>,
+	/// Path to server private key file. Required unless workloadIdentity is true.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub key: Option<PathBuf>,
+	/// Path to CA certificate for client certificate validation.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub root: Option<PathBuf>,
+	/// Use workload identity certificates from Istio CA instead of static cert/key files.
+	/// When true, cert and key must not be set. Enables mTLS with automatic certificate
+	/// rotation and trust domain validation.
+	#[serde(default, skip_serializing_if = "std::ops::Not::not")]
+	pub workload_identity: bool,
+}
+
+/// Validated TLS source configuration.
+///
+/// This enum represents the two valid TLS configurations after validation.
+/// Use `LocalTLSServerConfig::into_tls_source()` to convert from user config.
+#[derive(Debug, Clone)]
+pub enum TLSSource {
+	/// Use static certificate files from disk.
+	Static {
+		cert: PathBuf,
+		key: PathBuf,
+		root: Option<PathBuf>,
+	},
+	/// Use workload identity certificates from Istio CA.
+	/// Requires CA_ADDRESS, TRUST_DOMAIN, NAMESPACE, and SERVICE_ACCOUNT to be configured.
+	WorkloadIdentity,
+}
+
+impl LocalTLSServerConfig {
+	/// Validate the configuration and convert to a `TLSSource`.
+	///
+	/// This method enforces mutual exclusivity between static certs and workload identity,
+	/// providing clear error messages for invalid configurations.
+	pub fn into_tls_source(self) -> anyhow::Result<TLSSource> {
+		match (self.workload_identity, self.cert, self.key) {
+			// Workload identity mode: cert/key must not be set
+			(true, None, None) => Ok(TLSSource::WorkloadIdentity),
+			(true, Some(_), _) => {
+				bail!("tls.cert must not be set when workloadIdentity is true")
+			},
+			(true, _, Some(_)) => {
+				bail!("tls.key must not be set when workloadIdentity is true")
+			},
+
+			// Static cert mode: both cert and key required
+			(false, Some(cert), Some(key)) => Ok(TLSSource::Static {
+				cert,
+				key,
+				root: self.root,
+			}),
+			(false, None, None) => {
+				bail!("tls requires either workloadIdentity: true or cert/key paths")
+			},
+			(false, Some(_), None) => {
+				bail!("tls.key is required when tls.cert is specified")
+			},
+			(false, None, Some(_)) => {
+				bail!("tls.cert is required when tls.key is specified")
+			},
+		}
+	}
+
+	/// Convert directly to `TlsTermination`, reading certificate files from disk.
+	///
+	/// This is a convenience method that combines `into_tls_source()` and
+	/// `build_static_tls_config()` for simpler usage in tests and local config.
+	pub fn into_termination(self) -> anyhow::Result<TlsTermination> {
+		match self.into_tls_source()? {
+			TLSSource::WorkloadIdentity => Ok(TlsTermination::WorkloadIdentity),
+			TLSSource::Static { cert, key, root } => Ok(TlsTermination::Static(build_static_tls_config(
+				cert, key, root,
+			)?)),
+		}
+	}
 }
 
 #[apply(schema_de!)]
@@ -957,17 +1040,31 @@ async fn convert_listener(
 			if routes.is_none() {
 				bail!("protocol HTTPS requires 'routes'")
 			}
-			ListenerProtocol::HTTPS(
-				tls
-					.ok_or(anyhow!("HTTPS listener requires 'tls'"))?
-					.try_into()?,
-			)
+			let tls_config = tls.ok_or_else(|| anyhow!("HTTPS listener requires 'tls'"))?;
+			let termination = match tls_config.into_tls_source()? {
+				TLSSource::WorkloadIdentity => TlsTermination::WorkloadIdentity,
+				TLSSource::Static { cert, key, root } => {
+					TlsTermination::Static(build_static_tls_config(cert, key, root)?)
+				},
+			};
+			ListenerProtocol::HTTPS(termination)
 		},
 		LocalListenerProtocol::TLS => {
 			if tcp_routes.is_none() {
 				bail!("protocol TLS requires 'tcpRoutes'")
 			}
-			ListenerProtocol::TLS(tls.map(TryInto::try_into).transpose()?)
+			let tls_config = match tls {
+				Some(cfg) => match cfg.into_tls_source()? {
+					TLSSource::WorkloadIdentity => {
+						bail!("workloadIdentity is not supported for TLS protocol; use HTTPS instead")
+					},
+					TLSSource::Static { cert, key, root } => Some(TlsTermination::Static(
+						build_static_tls_config(cert, key, root)?,
+					)),
+				},
+				None => None,
+			};
+			ListenerProtocol::TLS(tls_config)
 		},
 		LocalListenerProtocol::TCP => {
 			if tcp_routes.is_none() {
@@ -1367,40 +1464,121 @@ fn to_simple_backend_and_ref(
 	(bref, backend)
 }
 
-impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
-	type Error = anyhow::Error;
+/// Build a `ServerTLSConfig` from static certificate files.
+///
+/// This function reads certificate and key files from disk and constructs
+/// a rustls ServerConfig suitable for HTTPS/TLS listeners.
+pub fn build_static_tls_config(
+	cert_path: PathBuf,
+	key_path: PathBuf,
+	root_path: Option<PathBuf>,
+) -> anyhow::Result<ServerTLSConfig> {
+	let cert = fs_err::read(&cert_path)
+		.with_context(|| format!("failed to read certificate from {}", cert_path.display()))?;
+	let cert_chain = crate::types::agent::parse_cert(&cert)?;
 
-	fn try_into(self) -> Result<ServerTLSConfig, Self::Error> {
-		let cert = fs_err::read(self.cert)?;
-		let cert_chain = crate::types::agent::parse_cert(&cert)?;
-		let key = fs_err::read(self.key)?;
-		let private_key = crate::types::agent::parse_key(&key)?;
+	let key = fs_err::read(&key_path)
+		.with_context(|| format!("failed to read private key from {}", key_path.display()))?;
+	let private_key = crate::types::agent::parse_key(&key)?;
 
-		let ccb = ServerConfig::builder_with_provider(transport::tls::provider())
-			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-			.expect("server config must be valid");
+	let builder = ServerConfig::builder_with_provider(transport::tls::provider())
+		.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
+		.expect("server config must be valid");
 
-		let ccb = if let Some(root) = self.root {
-			let root = fs_err::read(root)?;
-			let mut roots_store = rustls::RootCertStore::empty();
-			let mut reader = std::io::BufReader::new(Cursor::new(root));
+	let builder = match root_path {
+		Some(root) => {
+			let root_cert = fs_err::read(&root)
+				.with_context(|| format!("failed to read root CA from {}", root.display()))?;
+			let mut roots = rustls::RootCertStore::empty();
+			let mut reader = std::io::BufReader::new(Cursor::new(root_cert));
 			let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
-			roots_store.add_parsable_certificates(certs);
-			let verify = rustls::server::WebPkiClientVerifier::builder_with_provider(
-				Arc::new(roots_store),
+			roots.add_parsable_certificates(certs);
+
+			let verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+				Arc::new(roots),
 				transport::tls::provider(),
 			)
 			.build()?;
-			ccb.with_client_cert_verifier(verify)
-		} else {
-			ccb.with_no_client_auth()
-		};
-		let mut ccb = ccb.with_single_cert(cert_chain, private_key)?;
-		ccb.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-		Ok(ServerTLSConfig::new(Arc::new(ccb)))
-	}
+			builder.with_client_cert_verifier(verifier)
+		},
+		None => builder.with_no_client_auth(),
+	};
+
+	let mut config = builder.with_single_cert(cert_chain, private_key)?;
+	config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+	Ok(ServerTLSConfig::new(Arc::new(config)))
 }
 
 fn local_name(name: Strng) -> ResourceName {
 	ResourceName::new(name, "".into())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn tls_config(
+		cert: Option<&str>,
+		key: Option<&str>,
+		workload_identity: bool,
+	) -> LocalTLSServerConfig {
+		LocalTLSServerConfig {
+			cert: cert.map(Into::into),
+			key: key.map(Into::into),
+			root: None,
+			workload_identity,
+		}
+	}
+
+	#[test]
+	fn test_tls_source_valid_configs() {
+		// Workload identity
+		assert!(matches!(
+			tls_config(None, None, true).into_tls_source().unwrap(),
+			TLSSource::WorkloadIdentity
+		));
+
+		// Static certs
+		assert!(matches!(
+			tls_config(Some("c.pem"), Some("k.pem"), false)
+				.into_tls_source()
+				.unwrap(),
+			TLSSource::Static { .. }
+		));
+	}
+
+	#[test]
+	fn test_tls_source_invalid_configs() {
+		// workload_identity + cert
+		assert!(
+			tls_config(Some("c.pem"), None, true)
+				.into_tls_source()
+				.is_err()
+		);
+
+		// workload_identity + key
+		assert!(
+			tls_config(None, Some("k.pem"), true)
+				.into_tls_source()
+				.is_err()
+		);
+
+		// Neither workload_identity nor certs
+		assert!(tls_config(None, None, false).into_tls_source().is_err());
+
+		// cert without key
+		assert!(
+			tls_config(Some("c.pem"), None, false)
+				.into_tls_source()
+				.is_err()
+		);
+
+		// key without cert
+		assert!(
+			tls_config(None, Some("k.pem"), false)
+				.into_tls_source()
+				.is_err()
+		);
+	}
 }

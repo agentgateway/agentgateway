@@ -139,35 +139,56 @@ pub fn parse_key(mut key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error
 		_ => Err(anyhow!("unsupported key")),
 	}
 }
+/// How TLS is terminated for HTTPS/TLS listeners.
+#[derive(Debug, Clone, serde::Serialize)]
+pub enum TlsTermination {
+	/// Static certificates loaded from disk.
+	Static(ServerTLSConfig),
+	/// Workload identity certificates obtained dynamically from Istio CA.
+	/// Enables mTLS with automatic certificate rotation and trust domain validation.
+	WorkloadIdentity,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum ListenerProtocol {
-	/// HTTP
+	/// HTTP (plaintext)
 	HTTP,
-	/// HTTPS, terminating TLS then treating as HTTP
-	HTTPS(ServerTLSConfig),
-	/// TLS (passthrough or termination)
-	TLS(Option<ServerTLSConfig>),
-	/// Opaque TCP
+	/// HTTPS - TLS terminated then treated as HTTP
+	HTTPS(TlsTermination),
+	/// TLS (passthrough or termination for TCP)
+	TLS(Option<TlsTermination>),
+	/// Opaque TCP (no TLS)
 	TCP,
+	/// HBONE - HTTP/2 CONNECT tunneling for Istio ambient mesh
 	HBONE,
 }
 
 impl ListenerProtocol {
-	pub fn tls(
+	/// Returns the static TLS config if this listener uses static certificates.
+	/// Returns `None` for WorkloadIdentity (handled by separate code path).
+	pub fn static_tls_config(
 		&self,
 		alpns: Option<&[Vec<u8>]>,
 	) -> Option<anyhow::Result<Arc<rustls::ServerConfig>>> {
 		match self {
-			ListenerProtocol::HTTPS(t) => Some(
+			ListenerProtocol::HTTPS(TlsTermination::Static(t)) => Some(
 				t.config_for(alpns)
 					.ok_or_else(|| anyhow!("TLS certificate invalid")),
 			),
-			ListenerProtocol::TLS(t) => t.as_ref().map(|t| {
+			ListenerProtocol::TLS(Some(TlsTermination::Static(t))) => Some(
 				t.config_for(alpns)
-					.ok_or_else(|| anyhow!("TLS certificate invalid"))
-			}),
+					.ok_or_else(|| anyhow!("TLS certificate invalid")),
+			),
 			_ => None,
 		}
+	}
+
+	/// Returns true if this listener uses workload identity for TLS.
+	pub fn uses_workload_identity(&self) -> bool {
+		matches!(
+			self,
+			ListenerProtocol::HTTPS(TlsTermination::WorkloadIdentity)
+		)
 	}
 }
 
