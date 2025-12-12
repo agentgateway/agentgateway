@@ -2619,7 +2619,7 @@ type AwsExplicitConfig struct {
 	AccessKeyId string `protobuf:"bytes,1,opt,name=access_key_id,json=accessKeyId,proto3" json:"access_key_id,omitempty"`
 	// AWS Secret Access Key for authentication
 	SecretAccessKey string `protobuf:"bytes,2,opt,name=secret_access_key,json=secretAccessKey,proto3" json:"secret_access_key,omitempty"`
-	// AWS Region (e.g., "us-west-2", "us-east-1")
+	// AWS Region (e.g., "us-west-2", "us-east-1"). Optional for AWS backends.
 	Region string `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
 	// Optional session token for temporary credentials
 	SessionToken  *string `protobuf:"bytes,4,opt,name=session_token,json=sessionToken,proto3,oneof" json:"session_token,omitempty"` // TODO: make service configurable

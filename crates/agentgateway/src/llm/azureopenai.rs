@@ -1,9 +1,6 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
-use bytes::Bytes;
 
-use super::universal;
-use crate::llm::AIError;
 use crate::*;
 
 #[apply(schema!)]
@@ -20,14 +17,6 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
-	pub fn process_error(
-		&self,
-		bytes: &Bytes,
-	) -> Result<universal::ChatCompletionErrorResponse, AIError> {
-		let resp = serde_json::from_slice::<universal::ChatCompletionErrorResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
-		Ok(resp)
-	}
 	pub fn get_path_for_model(&self, model: &str) -> Strng {
 		let api_version = self.api_version();
 		if api_version == "v1" {

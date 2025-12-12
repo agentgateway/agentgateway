@@ -1903,6 +1903,7 @@
                                   "append": {
                                     "type": "array",
                                     "items": {
+                                      "description": "SimpleChatCompletionMessage is a simplified chat message",
                                       "type": "object",
                                       "properties": {
                                         "role": {
@@ -1922,6 +1923,7 @@
                                   "prepend": {
                                     "type": "array",
                                     "items": {
+                                      "description": "SimpleChatCompletionMessage is a simplified chat message",
                                       "type": "object",
                                       "properties": {
                                         "role": {
@@ -2126,7 +2128,10 @@
                                                 "type": "string"
                                               },
                                               "region": {
-                                                "type": "string"
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
                                               },
                                               "sessionToken": {
                                                 "type": [
@@ -2138,8 +2143,7 @@
                                             "additionalProperties": false,
                                             "required": [
                                               "accessKeyId",
-                                              "secretAccessKey",
-                                              "region"
+                                              "secretAccessKey"
                                             ]
                                           },
                                           {
@@ -4085,6 +4089,7 @@
                                         "append": {
                                           "type": "array",
                                           "items": {
+                                            "description": "SimpleChatCompletionMessage is a simplified chat message",
                                             "type": "object",
                                             "properties": {
                                               "role": {
@@ -4104,6 +4109,7 @@
                                         "prepend": {
                                           "type": "array",
                                           "items": {
+                                            "description": "SimpleChatCompletionMessage is a simplified chat message",
                                             "type": "object",
                                             "properties": {
                                               "role": {
@@ -4308,7 +4314,10 @@
                                                       "type": "string"
                                                     },
                                                     "region": {
-                                                      "type": "string"
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
                                                     },
                                                     "sessionToken": {
                                                       "type": [
@@ -4320,8 +4329,7 @@
                                                   "additionalProperties": false,
                                                   "required": [
                                                     "accessKeyId",
-                                                    "secretAccessKey",
-                                                    "region"
+                                                    "secretAccessKey"
                                                   ]
                                                 },
                                                 {
@@ -5769,6 +5777,7 @@
                                                     "append": {
                                                       "type": "array",
                                                       "items": {
+                                                        "description": "SimpleChatCompletionMessage is a simplified chat message",
                                                         "type": "object",
                                                         "properties": {
                                                           "role": {
@@ -5788,6 +5797,7 @@
                                                     "prepend": {
                                                       "type": "array",
                                                       "items": {
+                                                        "description": "SimpleChatCompletionMessage is a simplified chat message",
                                                         "type": "object",
                                                         "properties": {
                                                           "role": {
@@ -5992,7 +6002,10 @@
                                                                   "type": "string"
                                                                 },
                                                                 "region": {
-                                                                  "type": "string"
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
                                                                 },
                                                                 "sessionToken": {
                                                                   "type": [
@@ -6004,8 +6017,7 @@
                                                               "additionalProperties": false,
                                                               "required": [
                                                                 "accessKeyId",
-                                                                "secretAccessKey",
-                                                                "region"
+                                                                "secretAccessKey"
                                                               ]
                                                             },
                                                             {
@@ -7203,6 +7215,7 @@
                                                                 "append": {
                                                                   "type": "array",
                                                                   "items": {
+                                                                    "description": "SimpleChatCompletionMessage is a simplified chat message",
                                                                     "type": "object",
                                                                     "properties": {
                                                                       "role": {
@@ -7222,6 +7235,7 @@
                                                                 "prepend": {
                                                                   "type": "array",
                                                                   "items": {
+                                                                    "description": "SimpleChatCompletionMessage is a simplified chat message",
                                                                     "type": "object",
                                                                     "properties": {
                                                                       "role": {
@@ -7426,7 +7440,10 @@
                                                                               "type": "string"
                                                                             },
                                                                             "region": {
-                                                                              "type": "string"
+                                                                              "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                              ]
                                                                             },
                                                                             "sessionToken": {
                                                                               "type": [
@@ -7438,8 +7455,7 @@
                                                                           "additionalProperties": false,
                                                                           "required": [
                                                                             "accessKeyId",
-                                                                            "secretAccessKey",
-                                                                            "region"
+                                                                            "secretAccessKey"
                                                                           ]
                                                                         },
                                                                         {
@@ -10208,6 +10224,7 @@
                       "append": {
                         "type": "array",
                         "items": {
+                          "description": "SimpleChatCompletionMessage is a simplified chat message",
                           "type": "object",
                           "properties": {
                             "role": {
@@ -10227,6 +10244,7 @@
                       "prepend": {
                         "type": "array",
                         "items": {
+                          "description": "SimpleChatCompletionMessage is a simplified chat message",
                           "type": "object",
                           "properties": {
                             "role": {
@@ -10431,7 +10449,10 @@
                                     "type": "string"
                                   },
                                   "region": {
-                                    "type": "string"
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
                                   },
                                   "sessionToken": {
                                     "type": [
@@ -10443,8 +10464,7 @@
                                 "additionalProperties": false,
                                 "required": [
                                   "accessKeyId",
-                                  "secretAccessKey",
-                                  "region"
+                                  "secretAccessKey"
                                 ]
                               },
                               {

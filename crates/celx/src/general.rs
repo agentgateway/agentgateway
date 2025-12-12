@@ -9,6 +9,7 @@ use ::cel::{Context, FunctionContext, ResolveResult, Value};
 use rand::random_range;
 use serde::ser::Error;
 use serde::{Serialize, Serializer};
+use uuid::Uuid;
 
 pub fn insert_all(ctx: &mut Context<'_>) {
 	// Custom to agentgateway
@@ -28,6 +29,7 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	ctx.add_function("default", default);
 	ctx.add_function("regexReplace", regex_replace);
 	ctx.add_function("fail", fail);
+	ctx.add_function("uuid", uuid_generate);
 
 	// Using the go name, base64.encode is blocked by https://github.com/cel-rust/cel-rust/issues/103 (namespacing)
 	ctx.add_function("base64Encode", base64_encode);
@@ -210,6 +212,10 @@ pub fn regex_replace(
 		)),
 		Err(err) => Err(ftx.error(format!("'{regex}' not a valid regex:\n{err}"))),
 	}
+}
+
+fn uuid_generate() -> Arc<String> {
+	Arc::new(Uuid::new_v4().to_string())
 }
 
 fn default(ftx: &FunctionContext, exp: Expression, d: Value) -> ResolveResult {

@@ -20,7 +20,7 @@ pub enum AwsAuth {
 		#[serde(serialize_with = "ser_redact")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		secret_access_key: SecretString,
-		region: String,
+		region: Option<String>,
 		#[serde(serialize_with = "ser_redact", skip_serializing_if = "Option::is_none")]
 		#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 		session_token: Option<SecretString>,
@@ -226,8 +226,6 @@ mod gcp {
 }
 
 mod aws {
-	use std::time::SystemTime;
-
 	use aws_config::{BehaviorVersion, SdkConfig};
 	use aws_credential_types::Credentials;
 	use aws_credential_types::provider::ProvideCredentials;
@@ -243,21 +241,31 @@ mod aws {
 
 	pub async fn sign_request(req: &mut http::Request, aws_auth: &AwsAuth) -> anyhow::Result<()> {
 		let creds = load_credentials(aws_auth).await?.into();
-
+		let orig_body = std::mem::take(req.body_mut());
+		let body = orig_body.collect().await?.to_bytes();
 		// Get the region based on auth mode
 		let region = match aws_auth {
-			AwsAuth::ExplicitConfig { region, .. } => region.clone(),
+			AwsAuth::ExplicitConfig {
+				region: Some(region),
+				..
+			} => region.as_str(),
+			AwsAuth::ExplicitConfig { region: None, .. } => req
+				.extensions()
+				.get::<AwsRegion>()
+				.map(|r| r.region.as_str())
+				.ok_or(anyhow::anyhow!(
+					"Region must be specified in AWS auth config when used with non-AWS backends"
+				))?,
 			AwsAuth::Implicit {} => {
 				// Try to get region from request extensions first, then fall back to AWS config
 				if let Some(aws_region) = req.extensions().get::<AwsRegion>() {
-					aws_region.region.clone()
+					aws_region.region.as_str()
 				} else {
 					// Fall back to region from AWS config
 					let config = sdk_config().await;
-					config
-						.region()
-						.map(|r| r.as_ref().to_string())
-						.ok_or_else(|| anyhow::anyhow!("No region found in AWS config or request extensions"))?
+					config.region().map(|r| r.as_ref()).ok_or(anyhow::anyhow!(
+						"No region found in AWS config or request extensions"
+					))?
 				}
 			},
 		};
@@ -267,15 +275,12 @@ mod aws {
 		// Sign the request
 		let signing_params = SigningParams::builder()
 			.identity(&creds)
-			.region(&region)
+			.region(region)
 			.name("bedrock")
-			.time(SystemTime::now())
+			.time(super::now())
 			.settings(aws_sigv4::http_request::SigningSettings::default())
 			.build()?
 			.into();
-
-		let orig_body = std::mem::take(req.body_mut());
-		let body = orig_body.collect().await?.to_bytes();
 
 		let signable_request = aws_sigv4::http_request::SignableRequest::new(
 			req.method().as_str(),
@@ -349,6 +354,18 @@ mod aws {
 			},
 		}
 	}
+}
+
+#[cfg(not(test))]
+fn now() -> std::time::SystemTime {
+	std::time::SystemTime::now()
+}
+
+#[cfg(test)]
+fn now() -> std::time::SystemTime {
+	// in tests, time is always the same
+	use std::time::{Duration, UNIX_EPOCH};
+	UNIX_EPOCH + Duration::from_secs(1_700_000_000)
 }
 
 mod azure {

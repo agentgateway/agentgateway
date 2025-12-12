@@ -39,6 +39,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "uuid 1.18.1",
 ]
 
 [[package]]
@@ -3734,15 +3735,6 @@ dependencies = [
  "log",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "mock-server"
-version = "0.7.0"
-dependencies = [
- "axum",
- "serde",
- "tokio",
 ]
 
 [[package]]

@@ -211,6 +211,15 @@
           "format": "uint64",
           "minimum": 0
         },
+        "countTokens": {
+          "description": "The number of tokens in the request, when using the token counting endpoint\nThese are not counted as 'input tokens' since they do not consume input tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "prompt": {
           "description": "The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.",
           "type": [
@@ -218,6 +227,7 @@
             "null"
           ],
           "items": {
+            "description": "SimpleChatCompletionMessage is a simplified chat message",
             "type": "object",
             "properties": {
               "role": {

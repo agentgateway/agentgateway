@@ -217,6 +217,40 @@ fn cidr() {
 	assert(json!(true), expr);
 }
 
+#[test]
+fn uuid() {
+	// Test that uuid() returns a string
+	let expr = r#"uuid()"#;
+	let result = eval(expr).unwrap().json().unwrap();
+	assert!(result.is_string(), "uuid() should return a string");
+	// Test that it's formatted like a UUID (8-4-4-4-12 hex digits)
+	let uuid_str = result.as_str().unwrap();
+	assert_eq!(uuid_str.len(), 36, "UUID should be 36 characters long");
+	assert_eq!(uuid_str.chars().nth(8).unwrap(), '-');
+	assert_eq!(uuid_str.chars().nth(13).unwrap(), '-');
+	assert_eq!(uuid_str.chars().nth(18).unwrap(), '-');
+	assert_eq!(uuid_str.chars().nth(23).unwrap(), '-');
+	// Test that it conforms to UUID version 4 format specifications
+	// The version field (at index 14, the 15th character) should be '4'
+	assert_eq!(
+		uuid_str.chars().nth(14).unwrap(),
+		'4',
+		"UUID version field should be '4'"
+	);
+	// The variant field (at index 19, i.e., the 20th character) should be one of '8', '9', 'a', or 'b'
+	let variant_char = uuid_str.chars().nth(19).unwrap();
+	assert!(
+		['8', '9', 'a', 'b'].contains(&variant_char),
+		"UUID variant field should be '8', '9', 'a', or 'b', got '{}'",
+		variant_char
+	);
+	// Test that multiple calls return different UUIDs
+	let result2 = eval(expr).unwrap().json().unwrap();
+	assert_ne!(
+		result, result2,
+		"Multiple uuid() calls should return different values"
+	);
+}
 fn assert(want: serde_json::Value, expr: &str) {
 	assert_eq!(
 		want,

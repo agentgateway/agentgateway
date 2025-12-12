@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use agentgateway::http::{Body, Response};
 use agentgateway::proxy::request_builder::RequestBuilder;
@@ -13,6 +14,15 @@ use tempfile::TempDir;
 use tracing::info;
 use url::Url;
 
+fn generate_id() -> String {
+	let timestamp = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_micros();
+
+	format!("{:x}", timestamp)
+}
+
 pub struct AgentGateway {
 	// Used to store temp dirs so they are dropped when the test completes
 	pub _temp_dirs: Vec<TempDir>,
@@ -20,6 +30,8 @@ pub struct AgentGateway {
 	task: tokio::task::JoinHandle<()>,
 	client: Client<HttpConnector, Body>,
 	shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
+
+	pub test_id: String,
 }
 
 impl AgentGateway {
@@ -36,7 +48,8 @@ impl AgentGateway {
 			_ => Ok(None),
 		})
 		.map_err(|e: LookupError<anyhow::Error>| anyhow::anyhow!("failed to expand env: {}", e))?;
-		let mut js: Value = yamlviajson::from_str(&config).unwrap();
+		let mut js: Value =
+			yamlviajson::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
 		let config = js.pointer_mut("/config").unwrap();
 		config.as_object_mut().unwrap().insert(
 			"adminAddr".to_string(),
@@ -87,6 +100,7 @@ impl AgentGateway {
 			task,
 			client,
 			shutdown_tx: Some(shutdown_tx),
+			test_id: generate_id(),
 		})
 	}
 
@@ -102,6 +116,20 @@ impl AgentGateway {
 		let mut url = Url::parse(url).unwrap();
 		url.set_port(Some(self.port)).unwrap();
 		RequestBuilder::new(method, url)
+			.header("x-test-id", self.test_id.clone())
+			.send(self.client.clone())
+			.await
+			.unwrap()
+	}
+
+	pub async fn send_request_json(&self, url: &str, body: serde_json::Value) -> Response {
+		let mut url = Url::parse(url).unwrap();
+		url.set_port(Some(self.port)).unwrap();
+		let body = serde_json::to_vec_pretty(&body).unwrap();
+		RequestBuilder::new(Method::POST, url)
+			.header("x-test-id", self.test_id.clone())
+			.header("Content-Type", "application/json")
+			.body(body)
 			.send(self.client.clone())
 			.await
 			.unwrap()

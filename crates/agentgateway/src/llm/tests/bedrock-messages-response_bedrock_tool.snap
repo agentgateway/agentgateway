@@ -1,0 +1,35 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response_bedrock_tool.json
+info: "{\n  \"output\": {\n    \"message\": {\n      \"role\": \"assistant\",\n      \"content\": [\n        {\n          \"toolUse\": {\n            \"toolUseId\": \"tooluse_kZJMlvQmRJ6eAyJE5GIl7Q\",\n            \"name\": \"top_song\",\n            \"input\": {\n              \"sign\": \"WZPZ\"\n            }\n          }\n        },\n        {\n          \"toolUse\": {\n            \"toolUseId\": \"tooluse_kZJMlvQmRJ6eAyxxx\",\n            \"name\": \"hello\",\n            \"input\": {\n              \"sign\": \"world\"\n            }\n          }\n        }\n      ]\n    }\n  },\n  \"stopReason\": \"tool_use\"\n}"
+---
+{
+  "model": "fake-model",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  },
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
+      "name": "top_song",
+      "input": {
+        "sign": "WZPZ"
+      }
+    },
+    {
+      "type": "tool_use",
+      "id": "tooluse_kZJMlvQmRJ6eAyxxx",
+      "name": "hello",
+      "input": {
+        "sign": "world"
+      }
+    }
+  ],
+  "id": "[id]",
+  "type": "message",
+  "role": "assistant",
+  "stop_reason": "tool_use",
+  "stop_sequence": null
+}

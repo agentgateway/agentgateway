@@ -1,0 +1,23 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response_bedrock_basic.json
+info: "{\n  \"output\": {\n    \"message\": {\n      \"role\": \"assistant\",\n      \"content\": [\n        {\n          \"text\": \"Hello world\"\n        }\n      ]\n    }\n  },\n  \"stopReason\": \"end_turn\",\n  \"usage\": {\n    \"inputTokens\": 18,\n    \"outputTokens\": 46,\n    \"totalTokens\": 64\n  },\n  \"metrics\": {\n    \"latencyMs\": 2083\n  }\n}"
+---
+{
+  "model": "fake-model",
+  "usage": {
+    "input_tokens": 18,
+    "output_tokens": 46
+  },
+  "content": [
+    {
+      "text": "Hello world",
+      "type": "text"
+    }
+  ],
+  "id": "[id]",
+  "type": "message",
+  "role": "assistant",
+  "stop_reason": "end_turn",
+  "stop_sequence": null
+}
