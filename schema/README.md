@@ -67,10 +67,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].gatewayName`||
 |`binds[].listeners[].hostname`|Can be a wildcard|
 |`binds[].listeners[].protocol`||
-|`binds[].listeners[].tls`||
-|`binds[].listeners[].tls.cert`||
-|`binds[].listeners[].tls.key`||
-|`binds[].listeners[].tls.root`||
+|`binds[].listeners[].tls`|TLS configuration for a listener.<br><br>Supports two modes:<br>- **Static certificates**: Provide `cert` and `key` paths to certificate files<br>- **Workload identity**: Set `workloadIdentity: true` to use Istio workload identity<br><br>These modes are mutually exclusive.|
+|`binds[].listeners[].tls.cert`|Path to server certificate file. Required unless workloadIdentity is true.|
+|`binds[].listeners[].tls.key`|Path to server private key file. Required unless workloadIdentity is true.|
+|`binds[].listeners[].tls.root`|Path to CA certificate for client certificate validation.|
+|`binds[].listeners[].tls.workloadIdentity`|Use workload identity certificates from Istio CA instead of static cert/key files.<br>When true, cert and key must not be set. Enables mTLS with automatic certificate<br>rotation and trust domain validation.|
 |`binds[].listeners[].routes`||
 |`binds[].listeners[].routes[].name`||
 |`binds[].listeners[].routes[].namespace`||

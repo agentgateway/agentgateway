@@ -182,29 +182,61 @@ impl WorkloadCertificate {
 			config: Arc::new(cc),
 		})
 	}
+	/// Create a TLS ServerConfig for terminating HBONE (ambient mesh) connections.
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
+		self.mtls_server_config(None)
+	}
+
+	/// Create a TLS ServerConfig for accepting legacy mTLS connections from Istio sidecars.
+	///
+	/// Uses the workload identity certificate obtained from the mesh CA and validates
+	/// client certificates against the mesh trust domain. Unlike HBONE, this is for
+	/// direct mTLS without HTTP CONNECT tunneling ("legacy" sidecar mTLS).
+	pub fn legacy_mtls_termination(&self) -> Result<ServerConfig, Error> {
+		// Istio sidecars expect these ALPNs for in-mesh mTLS:
+		// - "istio": indicates in-mesh traffic (used for routing decisions)
+		// - "h2"/"http/1.1": standard HTTP protocol negotiation
+		const MESH_MTLS_ALPN: &[&[u8]] = &[b"istio", b"h2", b"http/1.1"];
+		self.mtls_server_config(Some(MESH_MTLS_ALPN))
+	}
+
+	/// Build a TLS ServerConfig for mesh mTLS termination.
+	///
+	/// This is the shared implementation for both HBONE and direct sidecar mTLS.
+	/// Both require:
+	/// - Client certificate authentication
+	/// - Trust domain verification (only accept certs from same mesh)
+	/// - Workload identity certificate presentation
+	fn mtls_server_config(&self, alpn: Option<&[&[u8]]>) -> Result<ServerConfig, Error> {
 		let Identity::Spiffe { trust_domain, .. } = &self.identity;
 
-		// TODO: this istoo expensive to build per request
-		let roots = self.roots.clone();
-		let raw_client_cert_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
-			roots.clone(),
+		// Build client certificate verifier that validates against mesh CA roots
+		// and restricts to our trust domain
+		let raw_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+			self.roots.clone(),
 			transport::tls::provider(),
 		)
 		.build()?;
-		let client_cert_verifier = transport::tls::trustdomain::TrustDomainVerifier::new(
-			raw_client_cert_verifier,
+
+		let verifier = transport::tls::trustdomain::TrustDomainVerifier::new(
+			raw_verifier,
 			Some(trust_domain.clone()),
 		);
-		let sc = ServerConfig::builder_with_provider(transport::tls::provider())
+
+		let mut config = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("server config must be valid")
-			.with_client_cert_verifier(client_cert_verifier)
+			.with_client_cert_verifier(verifier)
 			.with_single_cert(
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
-		Ok(sc)
+
+		if let Some(protocols) = alpn {
+			config.alpn_protocols = protocols.iter().map(|p| p.to_vec()).collect();
+		}
+
+		Ok(config)
 	}
 }
 

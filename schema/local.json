@@ -465,29 +465,39 @@
                   ]
                 },
                 "tls": {
+                  "description": "TLS configuration for a listener.\n\nSupports two modes:\n- **Static certificates**: Provide `cert` and `key` paths to certificate files\n- **Workload identity**: Set `workloadIdentity: true` to use Istio workload identity\n\nThese modes are mutually exclusive.",
                   "type": [
                     "object",
                     "null"
                   ],
                   "properties": {
                     "cert": {
-                      "type": "string"
-                    },
-                    "key": {
-                      "type": "string"
-                    },
-                    "root": {
+                      "description": "Path to server certificate file. Required unless workloadIdentity is true.",
                       "type": [
                         "string",
                         "null"
                       ]
+                    },
+                    "key": {
+                      "description": "Path to server private key file. Required unless workloadIdentity is true.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "root": {
+                      "description": "Path to CA certificate for client certificate validation.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "workloadIdentity": {
+                      "description": "Use workload identity certificates from Istio CA instead of static cert/key files.\nWhen true, cert and key must not be set. Enables mTLS with automatic certificate\nrotation and trust domain validation.",
+                      "type": "boolean"
                     }
                   },
-                  "additionalProperties": false,
-                  "required": [
-                    "cert",
-                    "key"
-                  ]
+                  "additionalProperties": false
                 },
                 "routes": {
                   "type": [

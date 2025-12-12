@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use agent_core::drain;
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use bytes::Bytes;
 use futures::pin_mut;
 use futures_util::FutureExt;
@@ -321,20 +321,13 @@ impl Gateway {
 				}
 			},
 			BindProtocol::https => {
-				match Self::maybe_terminate_tls(
-					inputs.clone(),
-					raw_stream,
-					&policies,
-					bind_name.clone(),
-					true,
-				)
-				.await
+				match Self::terminate_https(inputs.clone(), raw_stream, &policies, bind_name.clone()).await
 				{
 					Ok((selected_listener, stream)) => {
 						let _ = Self::proxy(
 							bind_name,
 							inputs,
-							Some(selected_listener),
+							selected_listener,
 							stream,
 							Arc::new(policies),
 							drain,
@@ -351,7 +344,7 @@ impl Gateway {
 							protocol = ?bind_protocol,
 							error = ?e.to_string(),
 
-							"failed to terminate TLS",
+							"failed to terminate HTTPS",
 						);
 					},
 				}
@@ -537,7 +530,7 @@ impl Gateway {
 			let best = listeners
 				.best_match(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
-			match best.protocol.tls(alpn) {
+			match best.protocol.static_tls_config(alpn) {
 				Some(Err(e)) => {
 					// There is a TLS config for this listener, but its invalid. Reject the connection
 					Err(e)
@@ -625,6 +618,64 @@ impl Gateway {
 		);
 		serve_conn.await
 	}
+
+	/// Unified HTTPS termination - handles both static certs and workload identity.
+	///
+	/// Returns `(Option<Listener>, Socket)`:
+	/// - Static certs: `(Some(listener), socket)` - listener selected by SNI
+	/// - Workload identity: `(None, socket)` - listener selected later by Host header
+	async fn terminate_https(
+		inp: Arc<ProxyInputs>,
+		raw_stream: Socket,
+		policies: &FrontendPolices,
+		bind: BindKey,
+	) -> anyhow::Result<(Option<Arc<Listener>>, Socket)> {
+		let listeners = inp.stores.read_binds().listeners(bind.clone()).unwrap();
+
+		let all_workload_identity = listeners
+			.iter()
+			.all(|l| l.protocol.uses_workload_identity());
+		let any_workload_identity = listeners
+			.iter()
+			.any(|l| l.protocol.uses_workload_identity());
+
+		match (all_workload_identity, any_workload_identity) {
+			// All listeners use workload identity: single cert from Istio CA, no SNI-based selection
+			(true, _) => {
+				let ca = inp.ca.as_ref().ok_or_else(|| {
+					anyhow!(
+						"CA client is required for workload identity; \
+						configure CA_ADDRESS, TRUST_DOMAIN, NAMESPACE, and SERVICE_ACCOUNT"
+					)
+				})?;
+				let def = frontend::TLS::default();
+				let timeout_duration = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
+				let cert = ca.get_identity().await?;
+				let server_config = Arc::new(cert.legacy_mtls_termination()?);
+				let tls = tokio::time::timeout(
+					timeout_duration,
+					crate::transport::tls::accept(raw_stream, server_config),
+				)
+				.await??;
+				debug!("accepted workload identity mTLS connection");
+				Ok((None, tls))
+			},
+			// No listeners use workload identity: static certs with SNI-based selection
+			(false, false) => {
+				let (listener, socket) =
+					Self::maybe_terminate_tls(inp, raw_stream, policies, bind, true).await?;
+				Ok((Some(listener), socket))
+			},
+			// Mixed mode: some listeners use workload identity, others use static certs
+			(false, true) => {
+				bail!(
+					"cannot mix workload identity and static TLS listeners on the same bind; \
+					all HTTPS listeners on a bind must use the same TLS mode"
+				)
+			},
+		}
+	}
+
 	/// serve_connect handles a single connection from a client.
 	#[allow(clippy::too_many_arguments)]
 	async fn serve_connect(
