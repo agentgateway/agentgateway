@@ -142,10 +142,24 @@ impl Relay {
 	}
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion) -> Box<MergeFn> {
-		let info = self.get_info(pv);
-		Box::new(move |_| {
+		Box::new(move |s| {
+			if s.len() == 1 {
+				let (_, ServerResult::InitializeResult(ir)) = s.into_iter().next().unwrap() else {
+					return Ok(Self::get_info(pv).into());
+				};
+				return Ok(ir.clone().into());
+			}
+
+			let lowest_version = s
+				.into_iter()
+				.flat_map(|(_, v)| match v {
+					ServerResult::InitializeResult(r) => Some(r.protocol_version),
+					_ => None,
+				})
+				.min_by_key(|i| i.to_string())
+				.unwrap_or(pv);
 			// For now, we just send our own info. In the future, we should merge the results from each upstream.
-			Ok(info.into())
+			Ok(Self::get_info(lowest_version).into())
 		})
 	}
 
@@ -341,7 +355,7 @@ impl Relay {
 
 		Ok(accepted_response())
 	}
-	fn get_info(&self, pv: ProtocolVersion) -> ServerInfo {
+	fn get_info(pv: ProtocolVersion) -> ServerInfo {
 		ServerInfo {
 			protocol_version: pv,
 			capabilities: ServerCapabilities {
