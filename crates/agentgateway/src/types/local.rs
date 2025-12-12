@@ -313,7 +313,7 @@ impl LocalBackend {
 					let spec = match t.spec.clone() {
 						LocalMcpTargetSpec::Sse { backend } => {
 							let (backend, path, tls) = backend.process()?;
-							let (bref, be) = to_simple_backend_and_ref(local_name(name.clone()), &backend);
+							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
 								make_backend(b, tls)?;
 							}
@@ -324,7 +324,7 @@ impl LocalBackend {
 						},
 						LocalMcpTargetSpec::Mcp { backend } => {
 							let (backend, path, tls) = backend.process()?;
-							let (bref, be) = to_simple_backend_and_ref(local_name(name.clone()), &backend);
+							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
 								make_backend(b, tls)?;
 							}
@@ -336,7 +336,7 @@ impl LocalBackend {
 						LocalMcpTargetSpec::Stdio { cmd, args, env } => McpTargetSpec::Stdio { cmd, args, env },
 						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
 							let (backend, _, tls) = backend.process()?;
-							let (bref, be) = to_simple_backend_and_ref(local_name(name.clone()), &backend);
+							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
 								make_backend(b, tls)?;
 							}
@@ -436,11 +436,11 @@ pub struct McpBackendHost {
 }
 
 impl McpBackendHost {
-	pub fn process(&self) -> anyhow::Result<(SimpleLocalBackend, String, bool)> {
+	pub fn process(&self) -> anyhow::Result<(Target, String, bool)> {
 		let McpBackendHost { host, port, path } = self;
 		Ok(match (host, port, path) {
 			(host, Some(port), Some(path)) => {
-				let b = SimpleLocalBackend::Opaque(Target::try_from((host.as_str(), *port))?);
+				let b = Target::try_from((host.as_str(), *port))?;
 				(b, path.clone(), false)
 			},
 			(host, None, None) => {
@@ -459,7 +459,7 @@ impl McpBackendHost {
 					},
 				};
 
-				let b = SimpleLocalBackend::Opaque(Target::try_from((host, port))?);
+				let b = Target::try_from((host, port))?;
 				(b, path.to_string(), scheme == &http::Scheme::HTTPS)
 			},
 			_ => {
@@ -1350,20 +1350,14 @@ async fn convert_tcp_route(
 	Ok((route, external_policies, external_backends))
 }
 
-fn to_simple_backend_and_ref(
+// For most local backends we can just use `InlineBackend`. However, for MCP we allow `https://domain/path`
+// which implies adding inline policies + parsing the path. So we need to use references.
+fn mcp_to_simple_backend_and_ref(
 	name: ResourceName,
-	b: &SimpleLocalBackend,
+	b: Target,
 ) -> (SimpleBackendReference, Option<Backend>) {
-	let bref = match &b {
-		SimpleLocalBackend::Service { name, port } => SimpleBackendReference::Service {
-			name: name.clone(),
-			port: *port,
-		},
-		SimpleLocalBackend::Invalid => SimpleBackendReference::Invalid,
-		SimpleLocalBackend::Opaque(tgt) => SimpleBackendReference::InlineBackend(tgt.clone()),
-		SimpleLocalBackend::Backend(key) => SimpleBackendReference::Backend(key.clone()),
-	};
-	let backend = b.as_backend(name);
+	let bref = SimpleBackendReference::Backend(name.to_string().into());
+	let backend = SimpleLocalBackend::Opaque(b).as_backend(name);
 	(bref, backend)
 }
 
