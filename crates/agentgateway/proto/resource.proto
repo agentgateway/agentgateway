@@ -824,8 +824,19 @@ message BackendPolicySpec {
     }
 
     enum McpIDP {
-      AUTH0 = 0;
-      KEYCLOAK = 1;
+      UNSPECIFIED = 0;
+      AUTH0 = 1;
+      KEYCLOAK = 2;
+    }
+
+    // Validation mode for JWT authentication
+    enum Mode {
+      // Default mode - if a token exists, validate it
+      OPTIONAL = 0;
+      // A valid token must be present
+      STRICT = 1;
+      // Requests are never rejected (useful for claims in later steps)
+      PERMISSIVE = 2;
     }
 
     string issuer = 1;
@@ -833,6 +844,8 @@ message BackendPolicySpec {
     string jwks_inline = 3;
     McpIDP provider = 4;
     ResourceMetadata resource_metadata = 5;
+    // How the JWT validation should behave
+    Mode mode = 6;
   }
 
   oneof kind {

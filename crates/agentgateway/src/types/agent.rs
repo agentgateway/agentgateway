@@ -1496,6 +1496,7 @@ pub struct McpAuthentication {
 	pub provider: Option<McpIDP>,
 	pub resource_metadata: ResourceMetadata,
 	pub jwt_validator: Arc<crate::http::jwt::Jwt>,
+	pub mode: http::jwt::Mode,
 }
 
 // Non-xds config for MCP authentication
@@ -1506,6 +1507,8 @@ pub struct LocalMcpAuthentication {
 	pub provider: Option<McpIDP>,
 	pub resource_metadata: ResourceMetadata,
 	pub jwks: FileInlineOrRemote,
+	#[serde(default)]
+	pub mode: http::jwt::Mode,
 }
 
 impl LocalMcpAuthentication {
@@ -1529,7 +1532,7 @@ impl LocalMcpAuthentication {
 		};
 
 		Ok(http::jwt::LocalJwtConfig::Single {
-			mode: http::jwt::Mode::Optional,
+			mode: self.mode,
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,
@@ -1549,6 +1552,7 @@ impl LocalMcpAuthentication {
 			provider: self.provider.clone(),
 			resource_metadata: self.resource_metadata.clone(),
 			jwt_validator: Arc::new(jwt),
+			mode: self.mode,
 		})
 	}
 }

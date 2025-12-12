@@ -1277,6 +1277,26 @@
                                     ]
                                   }
                                 ]
+                              },
+                              "mode": {
+                                "oneOf": [
+                                  {
+                                    "description": "A valid token, issued by a configured issuer, must be present.",
+                                    "type": "string",
+                                    "const": "strict"
+                                  },
+                                  {
+                                    "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                    "type": "string",
+                                    "const": "optional"
+                                  },
+                                  {
+                                    "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                    "type": "string",
+                                    "const": "permissive"
+                                  }
+                                ],
+                                "default": "optional"
                               }
                             },
                             "additionalProperties": false,
@@ -9598,6 +9618,26 @@
                         ]
                       }
                     ]
+                  },
+                  "mode": {
+                    "oneOf": [
+                      {
+                        "description": "A valid token, issued by a configured issuer, must be present.",
+                        "type": "string",
+                        "const": "strict"
+                      },
+                      {
+                        "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                        "type": "string",
+                        "const": "optional"
+                      },
+                      {
+                        "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                        "type": "string",
+                        "const": "permissive"
+                      }
+                    ],
+                    "default": "optional"
                   }
                 },
                 "additionalProperties": false,

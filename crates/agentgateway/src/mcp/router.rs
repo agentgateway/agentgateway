@@ -165,24 +165,42 @@ impl App {
 			match (authn.as_ref(), has_claims) {
 				// if mcp authn is configured, has a validator, and has no claims yet, validate
 				(Some(auth), false) => {
-					if let Ok(TypedHeader(Authorization(bearer))) = req
+					debug!(
+						"MCP auth configured; validating Authorization header (mode={:?})",
+						auth.mode
+					);
+					match req
 						.extract_parts::<TypedHeader<Authorization<Bearer>>>()
 						.await
 					{
-						match auth.jwt_validator.validate_claims(bearer.token()) {
-							Ok(claims) => {
-								// Populate context with verified JWT claims before continuing
-								ctx.with_jwt(&claims);
-								req.headers_mut().remove(http::header::AUTHORIZATION);
-								req.extensions_mut().insert(claims);
-							},
-							Err(_e) => {
-								debug!("JWT validation failed: {:?}", _e);
+						Ok(TypedHeader(Authorization(bearer))) => {
+							debug!("Authorization header present; validating JWT token");
+							match auth.jwt_validator.validate_claims(bearer.token()) {
+								Ok(claims) => {
+									debug!("JWT validation succeeded; inserting verified claims into context");
+									// Populate context with verified JWT claims before continuing
+									ctx.with_jwt(&claims);
+									req.headers_mut().remove(http::header::AUTHORIZATION);
+									req.extensions_mut().insert(claims);
+								},
+								Err(_e) => {
+									warn!("JWT validation failed; returning 401 (error: {:?})", _e);
+									return Self::create_auth_required_response(&req, auth).into_response();
+								},
+							}
+						},
+						Err(_missing_header) => {
+							// Enforce strict mode when Authorization header is missing
+							if matches!(auth.mode, jwt::Mode::Strict) {
+								debug!("Missing Authorization header and MCP auth is STRICT; returning 401");
 								return Self::create_auth_required_response(&req, auth).into_response();
-							},
-						}
+							}
+							// Optional/Permissive: continue without JWT
+							debug!(
+								"Missing Authorization header but MCP auth not STRICT; continuing without JWT"
+							);
+						},
 					}
-					// MCP authn validation happens in optional mode, so if no token is present, do nothing
 				},
 				// if mcp authn is configured but JWT already validated (claims exist from previous layer),
 				// reject because we cannot validate MCP-specific auth requirements
@@ -193,7 +211,11 @@ impl App {
 					return Self::create_auth_required_response(&req, auth).into_response();
 				},
 				// if no mcp authn is configured, do nothing
-				(None, _) => {},
+				(None, _) => {
+					debug!(
+						"No MCP authentication configured for backend; continuing without JWT enforcement"
+					);
+				},
 			}
 		}
 

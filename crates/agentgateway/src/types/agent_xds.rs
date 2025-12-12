@@ -114,6 +114,11 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 		m: &proto::agent::backend_policy_spec::McpAuthentication,
 	) -> Result<Self, Self::Error> {
 		let provider = match m.provider {
+			x if x
+				== proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Unspecified as i32 =>
+			{
+				None
+			},
 			x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Auth0 as i32 => {
 				Some(McpIDP::Auth0 {})
 			},
@@ -144,10 +149,21 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 				))
 			})?;
 
-		// Create JWT validator with Optional mode (default for MCP auth)
-		let jwt_validator =
-			http::jwt::Jwt::from_providers(vec![jwt_provider], http::jwt::Mode::Optional);
+		let mode = match proto::agent::backend_policy_spec::mcp_authentication::Mode::try_from(m.mode)
+			.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
+		{
+			proto::agent::backend_policy_spec::mcp_authentication::Mode::Optional => {
+				http::jwt::Mode::Optional
+			},
+			proto::agent::backend_policy_spec::mcp_authentication::Mode::Strict => {
+				http::jwt::Mode::Strict
+			},
+			proto::agent::backend_policy_spec::mcp_authentication::Mode::Permissive => {
+				http::jwt::Mode::Permissive
+			},
+		};
 
+		let jwt_validator = http::jwt::Jwt::from_providers(vec![jwt_provider], mode);
 		Ok(McpAuthentication {
 			issuer: m.issuer.clone(),
 			audiences: m.audiences.clone(),
@@ -169,6 +185,7 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 				ResourceMetadata { extra }
 			},
 			jwt_validator: std::sync::Arc::new(jwt_validator),
+			mode,
 		})
 	}
 }
