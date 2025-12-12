@@ -8824,8 +8824,156 @@
           "default": null
         },
         "tracing": {
-          "type": "null",
-          "default": null
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "providerBackend": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "invalid"
+                  ]
+                },
+                {
+                  "description": "Service reference. Service must be defined in the top level services list.",
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "object",
+                          "properties": {
+                            "namespace": {
+                              "type": "string"
+                            },
+                            "hostname": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "namespace",
+                            "hostname"
+                          ]
+                        },
+                        "port": {
+                          "type": "integer",
+                          "format": "uint16",
+                          "minimum": 0,
+                          "maximum": 65535
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "port"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "service"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "description": "Hostname or IP address",
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "description": "Hostname or IP address",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "backend"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "attributes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "value"
+                ]
+              }
+            },
+            "resources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "value"
+                ]
+              }
+            },
+            "insecure": {
+              "description": "When true, use plaintext (http) for OTLP endpoint; otherwise TLS (https).",
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "default": null
+            },
+            "randomSampling": {
+              "description": "Optional per-policy random sampling override.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
+            },
+            "clientSampling": {
+              "description": "Optional per-policy client sampling override.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "providerBackend"
+          ]
         }
       },
       "additionalProperties": false

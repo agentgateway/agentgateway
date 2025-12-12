@@ -424,7 +424,31 @@ message FrontendPolicySpec {
     Fields fields = 2;
   }
 
-  message Tracing {}
+  message Tracing {
+    BackendReference provider_backend = 1;
+    repeated TracingAttribute attributes = 2;
+    repeated TracingAttribute resources = 3;
+      // When true, use plaintext (http) for OTLP endpoint; otherwise use TLS (https).
+      // If unset, defaults to true to preserve existing behavior.
+      optional bool insecure = 4;
+      
+    // random_sampling is a CEL expression to determine the amount of random sampling.
+    // Random sampling will initiate a new trace span if the incoming request does not
+    // have a trace initiated already. This should evaluate to a float between 0.0-1.0,
+    // or a boolean (true/false). If unspecified, random sampling is disabled.
+    optional string random_sampling = 5;
+
+    // client_sampling is a CEL expression to determine the amount of client sampling.
+    // Client sampling determines whether to initiate a new trace span if the incoming
+    // request already has a trace. This should evaluate to a float between 0.0-1.0,
+    // or a boolean (true/false). If unspecified, client sampling is 100% enabled.
+    optional string client_sampling = 6;
+  }
+
+  message TracingAttribute {
+    string name = 1;
+    string value = 2;  // CEL expression
+  }
 
   oneof kind {
     TCP tcp = 1;

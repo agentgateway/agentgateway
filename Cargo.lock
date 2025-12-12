@@ -194,6 +194,7 @@ dependencies = [
  "once_cell",
  "openapiv3",
  "opentelemetry",
+ "opentelemetry-http",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "parking_lot",

@@ -1442,8 +1442,100 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					remove: Arc::new(FzHashSet::new(rm)),
 				})
 			},
-			Some(fps::Kind::Tracing(_)) => FrontendPolicy::Tracing(()),
+			Some(fps::Kind::Tracing(t)) => {
+				// Convert protobuf to TracingConfig
+				let tracing_config = types::agent::TracingConfig::try_from(t)?;
+
+				// Create LoggingFields with the CEL attributes from TracingConfig
+				let logging_fields = {
+					let add_map = crate::telemetry::log::OrderedStringMap::from_iter(
+						tracing_config
+							.attributes
+							.iter()
+							.map(|attr| (attr.name.clone(), attr.value.clone())),
+					);
+					Arc::new(crate::telemetry::log::LoggingFields {
+						remove: Arc::new(Default::default()),
+						add: Arc::new(add_map),
+					})
+				};
+
+				// Instantiate the tracer
+				let tracer =
+					crate::telemetry::trc::Tracer::create_tracer_from_config(&tracing_config, logging_fields)
+						.map_err(|e| ProtoError::Generic(format!("failed to create tracer: {e}")))?;
+
+				FrontendPolicy::Tracing(types::agent::TracingPolicy {
+					config: tracing_config,
+					tracer: Arc::new(tracer),
+				})
+			},
 			None => return Err(ProtoError::MissingRequiredField),
+		})
+	}
+}
+
+impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::TracingConfig {
+	type Error = ProtoError;
+
+	fn try_from(t: &proto::agent::frontend_policy_spec::Tracing) -> Result<Self, Self::Error> {
+		let provider_backend = resolve_simple_reference(t.provider_backend.as_ref())?;
+
+		let attributes = t
+			.attributes
+			.iter()
+			.map(|a| {
+				let expr = cel::Expression::new_strict(&a.value)
+					.map_err(|e| ProtoError::Generic(format!("invalid CEL in attribute: {e}")))?;
+				Ok::<_, ProtoError>(types::agent::TracingAttribute {
+					name: a.name.clone(),
+					value: Arc::new(expr),
+				})
+			})
+			.collect::<Result<Vec<_>, ProtoError>>()?;
+
+		let resources = t
+			.resources
+			.iter()
+			.map(|a| {
+				let expr = cel::Expression::new_strict(&a.value)
+					.map_err(|e| ProtoError::Generic(format!("invalid CEL in resource: {e}")))?;
+				Ok::<_, ProtoError>(types::agent::TracingAttribute {
+					name: a.name.clone(),
+					value: Arc::new(expr),
+				})
+			})
+			.collect::<Result<Vec<_>, ProtoError>>()?;
+
+		let insecure = t.insecure.unwrap_or(true);
+
+		// Optional per-policy sampling overrides
+		let random_sampling = t
+			.random_sampling
+			.as_ref()
+			.map(|s| {
+				cel::Expression::new_strict(s)
+					.map(Arc::new)
+					.map_err(|e| ProtoError::Generic(format!("invalid CEL in random_sampling: {e}")))
+			})
+			.transpose()?;
+		let client_sampling = t
+			.client_sampling
+			.as_ref()
+			.map(|s| {
+				cel::Expression::new_strict(s)
+					.map(Arc::new)
+					.map_err(|e| ProtoError::Generic(format!("invalid CEL in client_sampling: {e}")))
+			})
+			.transpose()?;
+
+		Ok(types::agent::TracingConfig {
+			provider_backend,
+			attributes,
+			resources,
+			insecure,
+			random_sampling,
+			client_sampling,
 		})
 	}
 }

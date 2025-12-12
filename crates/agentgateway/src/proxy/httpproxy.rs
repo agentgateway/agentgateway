@@ -500,10 +500,47 @@ impl HTTPProxy {
 		// Record request now. We may do it later as well, after we have more expressions registered.
 		Self::apply_request_to_cel(log, &mut req).await;
 
+		// Check for per-frontend sampling overrides first, before we decide sampling
+		let frontend_policies = inputs
+			.stores
+			.read_binds()
+			.frontend_policies(self.inputs.cfg.gateway());
+		if let Some(tp) = frontend_policies.tracing.as_ref() {
+			// Apply sampling overrides if present
+			if let Some(rs) = &tp.config.random_sampling {
+				log.cel.tracing_sampler.random_sampling = Some(rs.clone());
+			}
+			if let Some(cs) = &tp.config.client_sampling {
+				log.cel.tracing_sampler.client_sampling = Some(cs.clone());
+			}
+		}
+
 		let trace_parent = trc::TraceParent::from_request(&req);
 		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
+
+		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
 		if trace_sampled {
-			log.tracer = self.inputs.tracer.clone();
+			log.tracer = frontend_policies
+				.tracing
+				.as_ref()
+				.map(|tp| {
+					debug!(
+						resources_count=%tp.config.resources.len(),
+						attrs_count=%tp.config.attributes.len(),
+						"Using dynamic tracer from frontend policy"
+					);
+					tp.tracer.clone()
+				})
+				.or_else(|| {
+					debug!("No frontend tracing policy found, using static tracer");
+					self.inputs.tracer.clone()
+				});
+			// Register CEL expressions from the tracer
+			if let Some(tracer) = &log.tracer {
+				log.cel.register(tracer.fields.as_ref());
+			}
+
+			// Now create outgoing span with the correct tracer already set
 			let ns = match trace_parent {
 				Some(tp) => {
 					// Build a new span off the existing trace
@@ -523,10 +560,7 @@ impl HTTPProxy {
 			log.outgoing_span = Some(ns);
 		}
 
-		if let Some(tracer) = &log.tracer {
-			log.cel.register(&tracer.fields);
-		}
-
+		// Now check if we actually have a listener - fail after tracing is set up
 		let selected_listener = selected_listener
 			.or_else(|| listeners.best_match(&host))
 			.ok_or(ProxyError::ListenerNotFound)?;

@@ -734,6 +734,31 @@ impl LocalTCPBackendPolicies {
 }
 
 #[apply(schema_de!)]
+pub struct LocalTracingConfig {
+	#[serde(rename = "providerBackend")]
+	pub provider_backend: SimpleLocalBackend,
+	#[serde(default)]
+	pub attributes: Vec<LocalTracingAttribute>,
+	#[serde(default)]
+	pub resources: Vec<LocalTracingAttribute>,
+	/// When true, use plaintext (http) for OTLP endpoint; otherwise TLS (https).
+	#[serde(default)]
+	pub insecure: Option<bool>,
+	/// Optional per-policy random sampling override.
+	#[serde(rename = "randomSampling", default)]
+	pub random_sampling: Option<String>,
+	/// Optional per-policy client sampling override.
+	#[serde(rename = "clientSampling", default)]
+	pub client_sampling: Option<String>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalTracingAttribute {
+	pub name: String,
+	pub value: String, // CEL expression as string
+}
+
+#[apply(schema_de!)]
 #[derive(Default)]
 struct LocalFrontendPolicies {
 	/// Settings for handling incoming HTTP requests.
@@ -749,7 +774,7 @@ struct LocalFrontendPolicies {
 	#[serde(default)]
 	pub access_log: Option<frontend::LoggingPolicy>,
 	#[serde(default)]
-	pub tracing: Option<()>,
+	pub tracing: Option<LocalTracingConfig>,
 }
 
 #[apply(schema_de!)]
@@ -858,7 +883,7 @@ struct TCPFilterOrPolicy {
 
 async fn convert(
 	client: client::Client,
-	gateway: ListenerTarget,
+	_gateway: ListenerTarget,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
 	let LocalConfig {
@@ -876,7 +901,14 @@ async fn convert(
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) = convert_listener(client.clone(), bind_name.clone(), idx, l).await?;
+			let (l, pol, backends) = convert_listener(
+				client.clone(),
+				bind_name.clone(),
+				idx,
+				l,
+				Some(frontend_policies.clone()),
+			)
+			.await?;
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
@@ -918,7 +950,8 @@ async fn convert(
 		all_policies.push(tgt_policy);
 	}
 
-	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
+	// Note: frontend_policies are added per-listener in convert_listener
+	// so they can use the listener's specific gateway_name instead of a global one
 
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
@@ -935,6 +968,7 @@ async fn convert_listener(
 	bind_name: BindKey,
 	idx: usize,
 	l: LocalListener,
+	frontend_policies: Option<LocalFrontendPolicies>,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalListener {
 		name,
@@ -991,6 +1025,16 @@ async fn convert_listener(
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
+
+	// Add frontend policies targeted to this listener
+	if let Some(frontend_pols) = frontend_policies {
+		let listener_target = ListenerTarget {
+			gateway_name: gateway_name.clone(),
+			gateway_namespace: namespace.clone(),
+			listener_name: Some(listener_name.clone()),
+		};
+		all_policies.extend_from_slice(&split_frontend_policies(listener_target, frontend_pols).await?);
+	}
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
@@ -1150,7 +1194,90 @@ async fn split_frontend_policies(
 		add(FrontendPolicy::AccessLog(p), "accessLog");
 	}
 	if let Some(p) = tracing {
-		add(FrontendPolicy::Tracing(p), "tracing");
+		// Convert LocalTracingConfig to TracingPolicy
+		let (provider_backend, _) =
+			to_simple_backend_and_ref(local_name(strng::format!("tracing")), &p.provider_backend);
+
+		let insecure = p.insecure.unwrap_or(true);
+
+		let attributes = p
+			.attributes
+			.into_iter()
+			.map(|a| {
+				let expr = cel::Expression::new_strict(&a.value)
+					.map_err(|e| anyhow!("invalid CEL in attribute: {e}"))?;
+				Ok::<_, Error>(crate::types::agent::TracingAttribute {
+					name: a.name,
+					value: Arc::new(expr),
+				})
+			})
+			.collect::<Result<Vec<_>, _>>()?;
+
+		let resources = p
+			.resources
+			.into_iter()
+			.map(|a| {
+				let expr = cel::Expression::new_strict(&a.value)
+					.map_err(|e| anyhow!("invalid CEL in resource: {e}"))?;
+				Ok::<_, Error>(crate::types::agent::TracingAttribute {
+					name: a.name,
+					value: Arc::new(expr),
+				})
+			})
+			.collect::<Result<Vec<_>, _>>()?;
+
+		let random_sampling = p
+			.random_sampling
+			.as_ref()
+			.map(|s| {
+				cel::Expression::new_strict(s)
+					.map(Arc::new)
+					.map_err(|e| anyhow!("invalid CEL in randomSampling: {e}"))
+			})
+			.transpose()?;
+		let client_sampling = p
+			.client_sampling
+			.as_ref()
+			.map(|s| {
+				cel::Expression::new_strict(s)
+					.map(Arc::new)
+					.map_err(|e| anyhow!("invalid CEL in clientSampling: {e}"))
+			})
+			.transpose()?;
+
+		let tracing_config = crate::types::agent::TracingConfig {
+			provider_backend,
+			attributes,
+			resources,
+			insecure,
+			random_sampling,
+			client_sampling,
+		};
+
+		// Build logging fields from attributes for tracer creation
+		let logging_fields = {
+			let add_map = crate::telemetry::log::OrderedStringMap::from_iter(
+				tracing_config
+					.attributes
+					.iter()
+					.map(|attr| (attr.name.clone(), attr.value.clone())),
+			);
+			Arc::new(crate::telemetry::log::LoggingFields {
+				remove: Arc::new(Default::default()),
+				add: Arc::new(add_map),
+			})
+		};
+
+		let tracer =
+			crate::telemetry::trc::Tracer::create_tracer_from_config(&tracing_config, logging_fields)?;
+
+		add(
+			FrontendPolicy::Tracing(crate::types::agent::TracingPolicy {
+				config: tracing_config,
+				tracer: Arc::new(tracer),
+			}),
+			"tracing",
+		);
 	}
 	Ok(pols)
 }

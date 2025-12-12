@@ -527,7 +527,7 @@ pub struct RequestLog {
 	pub tls_info: Option<TLSConnectionInfo>,
 
 	// Set only if the trace is sampled
-	pub tracer: Option<trc::Tracer>,
+	pub tracer: Option<std::sync::Arc<trc::Tracer>>,
 
 	pub endpoint: Option<Target>,
 
