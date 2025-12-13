@@ -2,6 +2,7 @@ use ::http::Uri;
 use ::http::header::CONTENT_TYPE;
 use anyhow::anyhow;
 use futures::StreamExt;
+use headers::HeaderMapExt;
 use reqwest::header::ACCEPT;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
@@ -15,7 +16,7 @@ use sse_stream::SseStream;
 use crate::http::Request;
 use crate::mcp::ClientError;
 use crate::mcp::upstream::IncomingRequestContext;
-use crate::{json, *};
+use crate::*;
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -98,9 +99,18 @@ impl Client {
 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
-				let message = json::from_response_body::<ServerJsonRpcMessage>(resp)
-					.await
-					.map_err(ClientError::new)?;
+				let lim = crate::http::response_buffer_limit(&resp);
+				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
+				let body_bytes = crate::http::compression::to_bytes_with_decompression(
+					resp.into_body(),
+					content_encoding,
+					lim,
+				)
+				.await
+				.map_err(ClientError::new)?
+				.1;
+				let message =
+					serde_json::from_slice::<ServerJsonRpcMessage>(&body_bytes).map_err(ClientError::new)?;
 				Ok(StreamableHttpPostResponse::Json(message, session_id))
 			},
 			_ => Err(ClientError::new(anyhow!(
