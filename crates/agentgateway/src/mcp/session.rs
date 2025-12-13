@@ -376,7 +376,7 @@ impl SessionManager {
 		self.sessions.read().ok()?.get(id).cloned()
 	}
 
-	/// create_session establishes an MCP session.
+	/// create_session establishes an MCP session and registers it in the session manager.
 	pub fn create_session(&self, relay: Relay) -> Session {
 		let id = session_id();
 		let sess = Session {
@@ -387,6 +387,19 @@ impl SessionManager {
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
 		sess
+	}
+
+	/// create_stateless_session creates a session for stateless mode.
+	/// Unlike create_session, this does NOT register the session in the session manager.
+	/// The caller is responsible for calling session.delete_session() when done
+	/// to clean up upstream resources (e.g., stdio processes).
+	pub fn create_stateless_session(&self, relay: Relay) -> Session {
+		let id = session_id();
+		Session {
+			id,
+			relay: Arc::new(relay),
+			tx: None,
+		}
 	}
 
 	/// create_legacy_session establishes a legacy SSE session.
