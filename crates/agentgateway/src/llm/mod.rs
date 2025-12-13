@@ -758,6 +758,14 @@ impl AIProvider {
 			response: LLMResponse::default(),
 		};
 		log.store(Some(llmresp));
+
+		// Early dispatch for Vertex AI which needs custom streaming handling for Anthropic models
+		if let AIProvider::Vertex(p) = self {
+			return Ok(p
+				.process_streaming(log, resp, model.as_str(), input_format)
+				.await);
+		}
+
 		let buffer = http::response_buffer_limit(&resp);
 
 		Ok(match (self, input_format) {
@@ -765,8 +773,7 @@ impl AIProvider {
 			(
 				AIProvider::OpenAI(_)
 				| AIProvider::Gemini(_)
-				| AIProvider::AzureOpenAI(_)
-				| AIProvider::Vertex(_),
+				| AIProvider::AzureOpenAI(_),
 				InputFormat::Completions,
 			) => conversion::completions::passthrough_stream(
 				log,
@@ -778,8 +785,7 @@ impl AIProvider {
 			(
 				AIProvider::OpenAI(_)
 				| AIProvider::Gemini(_)
-				| AIProvider::AzureOpenAI(_)
-				| AIProvider::Vertex(_),
+				| AIProvider::AzureOpenAI(_),
 				InputFormat::Responses,
 			) => {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
@@ -824,6 +830,10 @@ impl AIProvider {
 			},
 			(_, InputFormat::CountTokens) => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
+			},
+			// Vertex AI patterns - these are unreachable due to early dispatch above
+			(AIProvider::Vertex(_), InputFormat::Completions | InputFormat::Responses) => {
+				unreachable!("Vertex AI streaming is handled by early dispatch")
 			},
 		})
 	}
