@@ -110,6 +110,8 @@ pub enum RouteType {
 	Responses,
 	/// Anthropic /v1/messages/count_tokens
 	AnthropicTokenCount,
+	/// OpenAI /v1/embeddings
+	Embeddings,
 }
 
 #[apply(schema!)]

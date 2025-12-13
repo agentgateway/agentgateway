@@ -1249,8 +1249,8 @@ async fn make_backend_call(
 						)
 					}));
 				},
-				RouteType::Passthrough => {
-					// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
+				RouteType::Passthrough | RouteType::Embeddings => {
+					// For passthrough and embeddings, we only need to setup the response so we get default TLS, hostname, etc set.
 					// We do not need LLM policies nor token-based rate limits, etc.
 					llm
 						.provider

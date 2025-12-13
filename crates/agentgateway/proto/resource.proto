@@ -760,6 +760,8 @@ message BackendPolicySpec {
       RESPONSES = 5;
       // Processes Anthropic /v1/messages/count_tokens format requests
       ANTHROPIC_TOKEN_COUNT = 6;
+      // Processes OpenAI /v1/embeddings format requests
+      EMBEDDINGS = 7;
     }
 
     // Routes defines how to identify the type of LLM request to handle.
