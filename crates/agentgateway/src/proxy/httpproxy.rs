@@ -1293,7 +1293,7 @@ async fn make_backend_call(
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
 	Ok(Box::pin(async move {
-		info!("HTTP Request: {} {}", call.req.method(), call.req.uri());
+		debug!("HTTP Request: {} {}", call.req.method(), call.req.uri());
 		let mut resp = upstream.call(call).await?;
 		a2a::apply_to_response(
 			backend_call.backend_policies.a2a.as_ref(),
