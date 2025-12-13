@@ -69,7 +69,7 @@ impl Provider {
 			);
 		}
 		strng::format!(
-			"/v1beta1/projects/{}/locations/{}/endpoints/openapi/chat/completions",
+			"/v1/projects/{}/locations/{}/endpoints/openapi/chat/completions",
 			self.project_id,
 			location
 		)
@@ -77,11 +77,11 @@ impl Provider {
 
 	pub fn get_host(&self) -> Strng {
 		match &self.region {
-			None => {
-				strng::literal!("aiplatform.googleapis.com")
-			},
-			Some(region) => {
+			Some(region) if region != "global" => {
 				strng::format!("{region}-aiplatform.googleapis.com")
+			},
+			_ => {
+				strng::literal!("aiplatform.googleapis.com")
 			},
 		}
 	}
