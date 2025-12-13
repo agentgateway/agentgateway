@@ -85,4 +85,50 @@ impl Provider {
 			},
 		}
 	}
+
+	pub async fn process_streaming(
+		&self,
+		log: crate::telemetry::log::AsyncLog<super::LLMInfo>,
+		resp: crate::http::Response,
+		model: &str,
+		input_format: super::InputFormat,
+	) -> crate::http::Response {
+		let buffer = crate::http::response_buffer_limit(&resp);
+		
+		// Check if this is an Anthropic model - if so, use Anthropic streaming logic
+		if self.is_anthropic_model(Some(model)) {
+			match input_format {
+				super::InputFormat::Completions => {
+					resp.map(|b| super::conversion::messages::from_completions::translate_stream(b, buffer, log))
+				},
+				super::InputFormat::Messages => {
+					resp.map(|b| super::conversion::messages::passthrough_stream(b, buffer, log))
+				},
+				super::InputFormat::Responses | super::InputFormat::CountTokens => {
+					resp // For other input formats, just pass through
+				},
+			}
+		} else {
+			// For standard Vertex AI models, use default OpenAI-compatible streaming
+			resp.map(|b| {
+				super::parse::sse::json_passthrough::<super::types::completions::typed::StreamResponse>(b, buffer, move |f| {
+					match f {
+						Some(Ok(f)) => {
+							log.non_atomic_mutate(|r| {
+								if r.response.provider_model.is_none() {
+									r.response.provider_model = Some(strng::new(&f.model));
+								}
+								if let Some(u) = f.usage {
+									r.response.input_tokens = Some(u.prompt_tokens as u64);
+									r.response.output_tokens = Some(u.completion_tokens as u64);
+									r.response.total_tokens = Some(u.total_tokens as u64);
+								}
+							});
+						},
+						_ => {}
+					}
+				})
+			})
+		}
+	}
 }
