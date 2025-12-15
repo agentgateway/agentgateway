@@ -434,6 +434,12 @@ impl TryFrom<&proto::agent::Bind> for Bind {
 			key: s.key.clone().into(),
 			address: SocketAddr::from((IpAddr::from([0, 0, 0, 0]), s.port as u16)),
 			listeners: Default::default(),
+			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
+				proto::agent::bind::Protocol::Http => BindProtocol::http,
+				proto::agent::bind::Protocol::Tcp => BindProtocol::tcp,
+				proto::agent::bind::Protocol::Tls => BindProtocol::tls,
+				proto::agent::bind::Protocol::Hbone => BindProtocol::hbone,
+			},
 		})
 	}
 }

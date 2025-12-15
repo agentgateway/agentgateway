@@ -16,9 +16,9 @@ use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
-	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, Listener, ListenerProtocol,
-	ListenerSet, PathMatch, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, Target, TargetedPolicy, TrafficPolicy,
+	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindProtocol, Listener,
+	ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, ResourceName, Route,
+	RouteBackendReference, RouteMatch, RouteName, RouteSet, Target, TargetedPolicy, TrafficPolicy,
 };
 use crate::types::backend;
 use crate::*;
@@ -259,6 +259,7 @@ async fn tls_termination() {
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
+		protocol: BindProtocol::tls,
 	};
 
 	let t = setup_proxy_test("{}")

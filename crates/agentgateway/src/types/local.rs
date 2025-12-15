@@ -21,13 +21,13 @@ use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName,
-	ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication, McpAuthentication,
-	McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase,
-	PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
-	RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies,
-	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
-	TargetedPolicy, TrafficPolicy, TypedResourceName,
+	BackendWithPolicies, Bind, BindKey, BindProtocol, FrontendPolicy, Listener, ListenerKey,
+	ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
+	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
+	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
+	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::frontend;
@@ -890,6 +890,7 @@ async fn convert(
 		let b = Bind {
 			key: bind_name,
 			address: sockaddr,
+			protocol: detect_bind_protocol(&ls),
 			listeners: ls,
 		};
 		all_binds.push(b)
@@ -928,6 +929,34 @@ async fn convert(
 		workloads,
 		services,
 	})
+}
+
+fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
+	if listeners
+		.iter()
+		.any(|l| matches!(l.protocol, ListenerProtocol::HBONE))
+	{
+		return BindProtocol::hbone;
+	}
+	if listeners
+		.iter()
+		.any(|l| matches!(l.protocol, ListenerProtocol::HTTPS(_)))
+	{
+		return BindProtocol::tls;
+	}
+	if listeners
+		.iter()
+		.any(|l| matches!(l.protocol, ListenerProtocol::TLS(_)))
+	{
+		return BindProtocol::tls;
+	}
+	if listeners
+		.iter()
+		.any(|l| matches!(l.protocol, ListenerProtocol::TCP))
+	{
+		return BindProtocol::tcp;
+	}
+	BindProtocol::http
 }
 
 async fn convert_listener(

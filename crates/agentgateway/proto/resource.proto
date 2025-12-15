@@ -23,8 +23,18 @@ message Resource {
 }
 
 message Bind {
+  // Protocol defines the bind-level protocol to use. Individual listeners will have more details about this.
+  // For instance, a Bind protocol TLS may have TLS termination and TLS passthrough listeners.
+  // However, it indicates we need to process TLS
+  enum Protocol {
+    HTTP = 0;
+    TCP = 1;
+    TLS = 2;
+    HBONE = 3;
+  }
   string key = 1;
   uint32 port = 2;
+  Protocol protocol = 3;
 }
 
 message RouteName {

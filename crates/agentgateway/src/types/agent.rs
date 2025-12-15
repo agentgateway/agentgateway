@@ -36,6 +36,7 @@ use crate::*;
 pub struct Bind {
 	pub key: BindKey,
 	pub address: SocketAddr,
+	pub protocol: BindProtocol,
 	pub listeners: ListenerSet,
 }
 
@@ -171,10 +172,21 @@ impl ListenerProtocol {
 	}
 }
 
-// Protocol of the entire bind. TODO: we should make this a property of the API
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, EncodeLabelValue)]
+// Protocol of the entire bind.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, EncodeLabelValue, Serialize)]
 #[allow(non_camel_case_types)]
 pub enum BindProtocol {
+	http,
+	// Note: TLS can be TLS (passthrough or termination) or HTTPS
+	tls,
+	hbone,
+	tcp,
+}
+
+// Protocol of the request
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, EncodeLabelValue)]
+#[allow(non_camel_case_types)]
+pub enum TransportProtocol {
 	http,
 	https,
 	hbone,

@@ -17,13 +17,15 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
-use tracing::{Instrument, debug, event, info, info_span, warn};
+use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
 use crate::store::{Event, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{Extension, LoggingMode, Socket, TLSConnectionInfo};
-use crate::types::agent::{Bind, BindKey, BindProtocol, Listener, ListenerProtocol};
+use crate::types::agent::{
+	Bind, BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol,
+};
 use crate::types::frontend;
 use crate::{ProxyInputs, client};
 
@@ -136,6 +138,7 @@ impl Gateway {
 		let min_deadline = pi.cfg.termination_min_deadline;
 		let max_deadline = pi.cfg.termination_max_deadline;
 		let name = b.key.clone();
+		let bind_protocol = b.protocol;
 		let (pi, listener) = if pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
 			let mut pi = Arc::unwrap_or_clone(pi);
 			let client = client::Client::new(
@@ -206,7 +209,7 @@ impl Gateway {
 						_ = force_shutdown.changed() => {
 							info!(bind=?name, "connection forcefully terminated");
 						}
-						_ = Self::proxy_bind(name.clone(), stream, pi, drain) => {}
+						_ = Self::proxy_bind(name.clone(), bind_protocol, stream, pi, drain) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
 				});
@@ -253,11 +256,11 @@ impl Gateway {
 
 	pub async fn proxy_bind(
 		bind_name: BindKey,
+		bind_protocol: BindProtocol,
 		mut raw_stream: Socket,
 		inputs: Arc<ProxyInputs>,
 		drain: DrainWatcher,
 	) {
-		let bind_protocol = bind_protocol(inputs.clone(), bind_name.clone());
 		let policies = inputs
 			.stores
 			.read_binds()
@@ -302,44 +305,27 @@ impl Gateway {
 				)
 				.await
 				{
-					Ok((selected_listener, stream)) => {
-						Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
-					},
-					Err(e) => {
-						event!(
-							target: "downstream connection",
-							parent: None,
-							tracing::Level::WARN,
-
-							src.addr = %peer_addr,
-							protocol = ?bind_protocol,
-							error = ?e.to_string(),
-
-							"failed to terminate TLS",
-						);
-					},
-				}
-			},
-			BindProtocol::https => {
-				match Self::maybe_terminate_tls(
-					inputs.clone(),
-					raw_stream,
-					&policies,
-					bind_name.clone(),
-					true,
-				)
-				.await
-				{
-					Ok((selected_listener, stream)) => {
-						let _ = Self::proxy(
-							bind_name,
-							inputs,
-							Some(selected_listener),
-							stream,
-							Arc::new(policies),
-							drain,
-						)
-						.await;
+					Ok((selected_listener, stream)) => match selected_listener.protocol {
+						ListenerProtocol::HTTPS(_) => {
+							let _ = Self::proxy(
+								bind_name,
+								inputs,
+								Some(selected_listener),
+								stream,
+								Arc::new(policies),
+								drain,
+							)
+							.await;
+						},
+						ListenerProtocol::TLS(_) => {
+							Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
+						},
+						_ => {
+							error!(
+								"invalid: TLS listener protocol is neither HTTPS nor TLS: {:?}",
+								selected_listener.protocol
+							)
+						},
 					},
 					Err(e) => {
 						event!(
@@ -372,34 +358,14 @@ impl Gateway {
 	) -> anyhow::Result<()> {
 		let target_address = stream.target_address();
 		let server = auto_server(policies.http.as_ref());
-		inputs
-			.metrics
-			.downstream_connection
-			.get_or_create(&TCPLabels {
-				bind: Some(&bind_name).into(),
-				// For HTTP, this will be empty
-				gateway: selected_listener
-					.as_ref()
-					.map(|l| l.name.as_gateway_name())
-					.into(),
-				listener: selected_listener
-					.as_ref()
-					.map(|l| l.name.listener_name.clone())
-					.into(),
-				protocol: if stream.ext::<TLSConnectionInfo>().is_some() {
-					BindProtocol::https
-				} else {
-					BindProtocol::http
-				},
-			})
-			.inc();
 
 		// Precompute transport labels and metrics before moving `selected_listener` and `inputs`
 		let transport_protocol = if stream.ext::<TLSConnectionInfo>().is_some() {
-			BindProtocol::https
+			TransportProtocol::https
 		} else {
-			BindProtocol::http
+			TransportProtocol::http
 		};
+
 		let transport_labels = TCPLabels {
 			bind: Some(&bind_name).into(),
 			gateway: selected_listener
@@ -412,6 +378,13 @@ impl Gateway {
 				.into(),
 			protocol: transport_protocol,
 		};
+
+		inputs
+			.metrics
+			.downstream_connection
+			.get_or_create(&transport_labels)
+			.inc();
+
 		let transport_metrics = inputs.metrics.clone();
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
@@ -549,9 +522,9 @@ impl Gateway {
 					let tls_dur = tls_start.elapsed();
 					// TLS handshake duration
 					let protocol = if matches!(best.protocol, ListenerProtocol::HTTPS(_)) {
-						BindProtocol::https
+						TransportProtocol::https
 					} else {
-						BindProtocol::tls
+						TransportProtocol::tls
 					};
 					inp
 						.metrics
@@ -673,35 +646,6 @@ fn tls_looks_like_http(d: Bytes) -> bool {
 		|| d.starts_with(b"PUT /")
 		|| d.starts_with(b"OPTIONS /")
 		|| d.starts_with(b"DELETE /")
-}
-
-fn bind_protocol(inp: Arc<ProxyInputs>, bind: BindKey) -> BindProtocol {
-	let listeners = inp.stores.read_binds().listeners(bind).unwrap();
-	if listeners
-		.iter()
-		.any(|l| matches!(l.protocol, ListenerProtocol::HBONE))
-	{
-		return BindProtocol::hbone;
-	}
-	if listeners
-		.iter()
-		.any(|l| matches!(l.protocol, ListenerProtocol::HTTPS(_)))
-	{
-		return BindProtocol::https;
-	}
-	if listeners
-		.iter()
-		.any(|l| matches!(l.protocol, ListenerProtocol::TLS(_)))
-	{
-		return BindProtocol::tls;
-	}
-	if listeners
-		.iter()
-		.any(|l| matches!(l.protocol, ListenerProtocol::TCP))
-	{
-		return BindProtocol::tcp;
-	}
-	BindProtocol::http
 }
 
 pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt::TokioExecutor> {

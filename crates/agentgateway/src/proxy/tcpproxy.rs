@@ -12,8 +12,8 @@ use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent;
 use crate::types::agent::{
-	BackendPolicy, BindKey, BindProtocol, Listener, ListenerProtocol, SimpleBackend,
-	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference,
+	BackendPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendWithPolicies,
+	TCPRoute, TCPRouteBackend, TCPRouteBackendReference, TransportProtocol,
 };
 use crate::{ProxyInputs, *};
 
@@ -58,20 +58,21 @@ impl TCPProxy {
 	) -> Result<(), ProxyError> {
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::tcp);
+		let tcp_labels = TCPLabels {
+			bind: Some(&self.bind_name).into(),
+			gateway: Some(&self.selected_listener.name.as_gateway_name()).into(),
+			listener: self.selected_listener.name.listener_name.clone().into(),
+			protocol: if log.tls_info.is_some() {
+				TransportProtocol::tls
+			} else {
+				TransportProtocol::tcp
+			},
+		};
 		self
 			.inputs
 			.metrics
 			.downstream_connection
-			.get_or_create(&TCPLabels {
-				bind: Some(&self.bind_name).into(),
-				gateway: Some(&self.selected_listener.name.as_gateway_name()).into(),
-				listener: self.selected_listener.name.listener_name.clone().into(),
-				protocol: if log.tls_info.is_some() {
-					BindProtocol::tls
-				} else {
-					BindProtocol::tcp
-				},
-			})
+			.get_or_create(&tcp_labels)
 			.inc();
 		let sni = log
 			.tls_info
@@ -143,17 +144,7 @@ impl TCPProxy {
 
 		// export rx/tx bytes on drop
 		let mut connection = connection;
-		let labels = TCPLabels {
-			bind: Some(&self.bind_name).into(),
-			gateway: Some(&self.selected_listener.name.as_gateway_name()).into(),
-			listener: self.selected_listener.name.listener_name.clone().into(),
-			protocol: if log.tls_info.is_some() {
-				BindProtocol::tls
-			} else {
-				BindProtocol::tcp
-			},
-		};
-		connection.set_transport_metrics(self.inputs.metrics.clone(), labels);
+		connection.set_transport_metrics(self.inputs.metrics.clone(), tcp_labels);
 
 		inputs
 			.upstream

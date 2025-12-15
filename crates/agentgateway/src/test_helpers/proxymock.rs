@@ -33,10 +33,10 @@ use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::transport::tls;
 use crate::types::agent::{
-	Backend, BackendReference, BackendWithPolicies, Bind, BindKey, Listener, ListenerProtocol,
-	ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, ResourceName, Route,
-	RouteBackendReference, RouteMatch, RouteName, RouteSet, SimpleBackendReference, SseTargetSpec,
-	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
+	Backend, BackendReference, BackendWithPolicies, Bind, BindKey, BindProtocol, Listener,
+	ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, ResourceName,
+	Route, RouteBackendReference, RouteMatch, RouteName, RouteSet, SimpleBackendReference,
+	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
 	TargetedPolicy,
 };
 use crate::types::local::LocalNamedAIProvider;
@@ -217,6 +217,7 @@ pub fn simple_bind(route: Route) -> Bind {
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
+		protocol: BindProtocol::http,
 	}
 }
 
@@ -233,6 +234,7 @@ pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
 			tcp_routes: TCPRouteSet::from_list(vec![route]),
 			routes: Default::default(),
 		}]),
+		protocol: BindProtocol::tcp,
 	}
 }
 
@@ -522,7 +524,14 @@ impl TestBind {
 				start: Instant::now(),
 			},
 		);
-		let bind = Gateway::proxy_bind(bind_name, server, self.pi.clone(), self.drain_rx.clone());
+		let bind = self.pi.stores.read_binds().bind(bind_name.clone()).unwrap();
+		let bind = Gateway::proxy_bind(
+			bind_name,
+			bind.protocol,
+			server,
+			self.pi.clone(),
+			self.drain_rx.clone(),
+		);
 		tokio::spawn(async move {
 			info!("starting bind...");
 			bind.await;
@@ -551,7 +560,13 @@ impl TestBind {
 
 				let socket = Socket::from_tcp(tcp_stream).unwrap();
 
-				let bind = Gateway::proxy_bind(bind_name.clone(), socket, pi.clone(), drain_rx.clone());
+				let bind = Gateway::proxy_bind(
+					bind_name.clone(),
+					BindProtocol::http,
+					socket,
+					pi.clone(),
+					drain_rx.clone(),
+				);
 				tokio::spawn(bind);
 			}
 			info!("finished real listener...");

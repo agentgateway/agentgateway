@@ -14,7 +14,7 @@ use tracing::{debug, trace};
 
 use crate::mcp::MCPOperation;
 use crate::proxy::ProxyResponseReason;
-use crate::types::agent::BindProtocol;
+use crate::types::agent::TransportProtocol;
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct RouteIdentifier {
@@ -83,7 +83,7 @@ pub struct TCPLabels {
 	pub bind: DefaultedUnknown<RichStrng>,
 	pub gateway: DefaultedUnknown<RichStrng>,
 	pub listener: DefaultedUnknown<RichStrng>,
-	pub protocol: BindProtocol,
+	pub protocol: TransportProtocol,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]

@@ -687,6 +687,10 @@ impl Store {
 		self.binds.get(&bind).map(|b| b.listeners.clone())
 	}
 
+	pub fn bind(&self, bind: BindKey) -> Option<Arc<Bind>> {
+		self.binds.get(&bind).cloned()
+	}
+
 	pub fn all(&self) -> Vec<Arc<Bind>> {
 		self.binds.values().cloned().collect()
 	}
