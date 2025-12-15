@@ -37,6 +37,7 @@ pub struct Bind {
 	pub key: BindKey,
 	pub address: SocketAddr,
 	pub protocol: BindProtocol,
+	pub tunnel_protocol: TunnelProtocol,
 	pub listeners: ListenerSet,
 }
 
@@ -179,8 +180,17 @@ pub enum BindProtocol {
 	http,
 	// Note: TLS can be TLS (passthrough or termination) or HTTPS
 	tls,
-	hbone,
 	tcp,
+}
+
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq, Hash, EncodeLabelValue)]
+pub enum TunnelProtocol {
+	#[default]
+	Direct,
+	HboneWaypoint,
+	HboneGateway,
+	Proxy,
 }
 
 // Protocol of the request

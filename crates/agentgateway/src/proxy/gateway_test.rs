@@ -260,6 +260,7 @@ async fn tls_termination() {
 			routes: RouteSet::from_list(vec![route]),
 		}]),
 		protocol: BindProtocol::tls,
+		tunnel_protocol: Default::default(),
 	};
 
 	let t = setup_proxy_test("{}")

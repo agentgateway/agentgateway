@@ -8632,6 +8632,16 @@
               },
               "additionalProperties": false
             }
+          },
+          "tunnelProtocol": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "hboneWaypoint",
+              "hboneGateway",
+              "proxy"
+            ],
+            "default": "direct"
           }
         },
         "additionalProperties": false,

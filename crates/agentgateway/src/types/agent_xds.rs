@@ -439,7 +439,12 @@ impl TryFrom<&proto::agent::Bind> for Bind {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,
 				proto::agent::bind::Protocol::Tcp => BindProtocol::tcp,
 				proto::agent::bind::Protocol::Tls => BindProtocol::tls,
-				proto::agent::bind::Protocol::Hbone => BindProtocol::hbone,
+			},
+			tunnel_protocol: match proto::agent::bind::TunnelProtocol::try_from(s.tunnel_protocol)? {
+				proto::agent::bind::TunnelProtocol::Direct => TunnelProtocol::Direct,
+				proto::agent::bind::TunnelProtocol::HboneGateway => TunnelProtocol::HboneGateway,
+				proto::agent::bind::TunnelProtocol::HboneWaypoint => TunnelProtocol::HboneWaypoint,
+				proto::agent::bind::TunnelProtocol::Proxy => TunnelProtocol::Proxy,
 			},
 		})
 	}

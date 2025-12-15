@@ -27,7 +27,8 @@ use crate::types::agent::{
 	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
 	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
 	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy, TypedResourceName,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy, TunnelProtocol,
+	TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::frontend;
@@ -85,6 +86,8 @@ pub struct LocalConfig {
 struct LocalBind {
 	port: u16,
 	listeners: Vec<LocalListener>,
+	#[serde(default)]
+	tunnel_protocol: TunnelProtocol,
 }
 
 #[apply(schema_de!)]
@@ -892,6 +895,7 @@ async fn convert(
 			address: sockaddr,
 			protocol: detect_bind_protocol(&ls),
 			listeners: ls,
+			tunnel_protocol: b.tunnel_protocol,
 		};
 		all_binds.push(b)
 	}
@@ -932,12 +936,6 @@ async fn convert(
 }
 
 fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
-	if listeners
-		.iter()
-		.any(|l| matches!(l.protocol, ListenerProtocol::HBONE))
-	{
-		return BindProtocol::hbone;
-	}
 	if listeners
 		.iter()
 		.any(|l| matches!(l.protocol, ListenerProtocol::HTTPS(_)))

@@ -930,6 +930,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].policies.apiKey.keys[].key`||
 |`binds[].listeners[].policies.apiKey.keys[].metadata`||
 |`binds[].listeners[].policies.apiKey.mode`|Validation mode for API keys|
+|`binds[].tunnelProtocol`||
 |`frontendPolicies`||
 |`frontendPolicies.http`|Settings for handling incoming HTTP requests.|
 |`frontendPolicies.http.maxBufferSize`||

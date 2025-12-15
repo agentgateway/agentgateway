@@ -686,6 +686,23 @@ impl Store {
 		self.binds.get(&bind).cloned()
 	}
 
+	/// find_bind looks up a bind by address. Typically, this is done by the kernel for us, but in some cases
+	/// we do userspace routing to a bind.
+	pub fn find_bind(&self, want: SocketAddr) -> Option<Arc<Bind>> {
+		self
+			.binds
+			.values()
+			.find(|b| {
+				let have = b.address;
+				if have.ip().is_unspecified() {
+					have.port() == want.port()
+				} else {
+					have == want
+				}
+			})
+			.cloned()
+	}
+
 	pub fn all(&self) -> Vec<Arc<Bind>> {
 		self.binds.values().cloned().collect()
 	}

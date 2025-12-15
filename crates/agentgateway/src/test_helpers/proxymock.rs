@@ -218,6 +218,7 @@ pub fn simple_bind(route: Route) -> Bind {
 			routes: RouteSet::from_list(vec![route]),
 		}]),
 		protocol: BindProtocol::http,
+		tunnel_protocol: Default::default(),
 	}
 }
 
@@ -235,6 +236,7 @@ pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
 			routes: Default::default(),
 		}]),
 		protocol: BindProtocol::tcp,
+		tunnel_protocol: Default::default(),
 	}
 }
 

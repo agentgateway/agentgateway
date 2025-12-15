@@ -25,7 +25,7 @@ use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{Extension, LoggingMode, Socket, TLSConnectionInfo};
 use crate::types::agent::{
-	Bind, BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol,
+	Bind, BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
 use crate::types::frontend;
 use crate::{ProxyInputs, client};
@@ -140,6 +140,7 @@ impl Gateway {
 		let max_deadline = pi.cfg.termination_max_deadline;
 		let name = b.key.clone();
 		let bind_protocol = b.protocol;
+		let tunnel_protocol = b.tunnel_protocol;
 		let (pi, listener) = if pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
 			let mut pi = Arc::unwrap_or_clone(pi);
 			let client = client::Client::new(
@@ -210,7 +211,7 @@ impl Gateway {
 						_ = force_shutdown.changed() => {
 							info!(bind=?name, "connection forcefully terminated");
 						}
-						_ = Self::proxy_bind(name.clone(), bind_protocol, stream, pi, drain) => {}
+						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, drain) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
 				});
@@ -343,8 +344,50 @@ impl Gateway {
 					},
 				}
 			},
-			BindProtocol::hbone => {
-				let _ = Self::terminate_hbone(bind_name, inputs, raw_stream, policies, drain).await;
+		}
+	}
+
+	pub async fn handle_tunnel(
+		bind_name: BindKey,
+		bind_protocol: BindProtocol,
+		tunnel_protocol: TunnelProtocol,
+		mut raw_stream: Socket,
+		inputs: Arc<ProxyInputs>,
+		drain: DrainWatcher,
+	) {
+		let policies = inputs
+			.stores
+			.read_binds()
+			.frontend_policies(inputs.cfg.gateway());
+		if let Some(tcp) = policies.tcp.as_ref() {
+			raw_stream.apply_tcp_settings(tcp)
+		}
+		let peer_addr = raw_stream.tcp().peer_addr;
+		event!(
+			target: "downstream connection",
+			parent: None,
+			tracing::Level::TRACE,
+
+			src.addr = %peer_addr,
+			tunnel_protocol = ?tunnel_protocol,
+
+			"opened tunnel",
+		);
+		match tunnel_protocol {
+			TunnelProtocol::Direct => {
+				// No tunnel
+				Self::proxy_bind(bind_name, bind_protocol, raw_stream, inputs, drain).await
+			},
+			TunnelProtocol::HboneWaypoint => {
+				let _ =
+					Self::terminate_waypoint_hbone(bind_name, inputs, raw_stream, policies, drain).await;
+			},
+			TunnelProtocol::HboneGateway => {
+				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
+			},
+			TunnelProtocol::Proxy => {
+				let _ =
+					Self::terminate_proxy_protocol(bind_name, bind_protocol, inputs, raw_stream, drain).await;
 			},
 		}
 	}
@@ -556,7 +599,19 @@ impl Gateway {
 		tokio::time::timeout(to, handshake).await?
 	}
 
-	async fn terminate_hbone(
+	async fn terminate_proxy_protocol(
+		bind_name: BindKey,
+		bind_protocol: BindProtocol,
+		inp: Arc<ProxyInputs>,
+		raw_stream: Socket,
+		drain: DrainWatcher,
+	) -> anyhow::Result<()> {
+		// TODO: actually terminate the PROXY protocol
+		let _: () = Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, drain).await;
+		Ok(())
+	}
+
+	async fn terminate_waypoint_hbone(
 		bind_name: BindKey,
 		inp: Arc<ProxyInputs>,
 		raw_stream: Socket,
@@ -578,7 +633,7 @@ impl Gateway {
 		let cfg = inp.cfg.clone();
 		let pols = Arc::new(policies);
 		let request_handler = move |req, ext, graceful| {
-			Self::serve_connect(
+			Self::serve_waypoint_connect(
 				bind_name.clone(),
 				inp.clone(),
 				pols.clone(),
@@ -601,9 +656,46 @@ impl Gateway {
 		);
 		serve_conn.await
 	}
-	/// serve_connect handles a single connection from a client.
+
+	async fn terminate_gateway_hbone(
+		inp: Arc<ProxyInputs>,
+		raw_stream: Socket,
+		policies: FrontendPolices,
+		drain: DrainWatcher,
+	) -> anyhow::Result<()> {
+		let Some(ca) = inp.ca.as_ref() else {
+			anyhow::bail!("CA is required for waypoint");
+		};
+
+		let def = frontend::TLS::default();
+		let to = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
+
+		let cert = ca.get_identity().await?;
+		let sc = Arc::new(cert.hbone_termination()?);
+		let tls = tokio::time::timeout(to, crate::transport::tls::accept(raw_stream, sc)).await??;
+
+		debug!("accepted connection");
+		let cfg = inp.cfg.clone();
+		let request_handler = move |req, ext, graceful| {
+			Self::serve_gateway_connect(inp.clone(), req, ext, graceful).instrument(info_span!("inbound"))
+		};
+
+		let (_, force_shutdown) = watch::channel(());
+		let ext = Arc::new(tls.get_ext());
+		let serve_conn = agent_hbone::server::serve_connection(
+			cfg.hbone.clone(),
+			tls,
+			ext,
+			drain,
+			force_shutdown,
+			request_handler,
+		);
+		serve_conn.await
+	}
+
+	/// serve_waypoint_connect handles a single connection from a client.
 	#[allow(clippy::too_many_arguments)]
-	async fn serve_connect(
+	async fn serve_waypoint_connect(
 		bind_name: BindKey,
 		pi: Arc<ProxyInputs>,
 		policies: Arc<FrontendPolices>,
@@ -630,6 +722,9 @@ impl Gateway {
 			drain_tx: None,
 		};
 
+		// TODO: for now, we only handle HTTP for waypoints. In the future, we should support other protocols.
+		// This could be done by sniffing at this layer, but is probably better handled by doing service-selection here
+		// and only falling back to sniffing when there is not an explicit protocol declaration
 		let _ = Self::proxy(
 			bind_name,
 			pi,
@@ -639,6 +734,54 @@ impl Gateway {
 			drain,
 		)
 		.await;
+	}
+
+	/// serve_gateway_connect handles a single connection from a client.
+	#[allow(clippy::too_many_arguments)]
+	async fn serve_gateway_connect(
+		pi: Arc<ProxyInputs>,
+		req: agent_hbone::server::H2Request,
+		ext: Arc<Extension>,
+		drain: DrainWatcher,
+	) {
+		debug!(?req, "received request");
+
+		let hbone_addr = req
+			.uri()
+			.to_string()
+			.as_str()
+			.parse::<SocketAddr>()
+			.map_err(|_| InboundError(anyhow::anyhow!("bad request"), StatusCode::BAD_REQUEST))
+			.unwrap();
+		let Some(bind) = pi.stores.read_binds().find_bind(hbone_addr) else {
+			warn!("no bind for {hbone_addr}");
+			let Ok(_) = req
+				.send_response(build_response(StatusCode::NOT_FOUND))
+				.await
+			else {
+				warn!("failed to send response");
+				return;
+			};
+			return;
+		};
+		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
+			warn!("failed to send response");
+			return;
+		};
+		let con = agent_hbone::RWStream {
+			stream: resp,
+			buf: Bytes::new(),
+			drain_tx: None,
+		};
+
+		Self::proxy_bind(
+			bind.key.clone(),
+			bind.protocol,
+			Socket::from_hbone(ext, hbone_addr, con),
+			pi,
+			drain,
+		)
+		.await
 	}
 }
 
