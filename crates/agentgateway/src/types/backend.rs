@@ -1,16 +1,27 @@
+use crate::http::filters::BackendRequestTimeout;
 use crate::transport::stream::TLSConnectionInfo;
 use crate::{apply, *};
 
 #[apply(schema!)]
 #[derive(Default)]
 pub struct HTTP {
-	#[serde(with = "http_serde::option::version")]
+	#[serde(default, with = "http_serde::option::version")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub version: Option<::http::Version>,
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub request_timeout: Option<Duration>,
 }
 
 impl HTTP {
 	pub fn apply(&self, req: &mut http::Request, version_override: Option<::http::Version>) {
+		if let Some(timeout) = self.request_timeout {
+			req.extensions_mut().insert(BackendRequestTimeout(timeout));
+		};
 		// Version override comes from a Service having a version specified. A policy is more specific
 		// so we use the policy first.
 		let set_version = match self.version.or(version_override) {

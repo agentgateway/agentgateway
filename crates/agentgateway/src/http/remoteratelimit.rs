@@ -24,6 +24,14 @@ pub struct RemoteRateLimit {
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
 	pub descriptors: Arc<DescriptorSet>,
+	/// Timeout for the request
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub timeout: Option<Duration>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -249,6 +257,7 @@ impl RemoteRateLimit {
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			client,
+			timeout: self.timeout,
 		};
 		let mut client = RateLimitServiceClient::new(chan);
 		let resp = client.should_rate_limit(request).await;

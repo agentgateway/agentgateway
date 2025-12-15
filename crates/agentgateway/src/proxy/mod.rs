@@ -54,7 +54,7 @@ impl ProxyResponse {
 			| ProxyError::UpstreamTCPCallFailed(_)
 			| ProxyError::BackendAuthenticationFailed(_)
 			| ProxyError::UpstreamTCPProxy(_) => ProxyResponseReason::UpstreamFailure,
-			ProxyError::RequestTimeout => ProxyResponseReason::Timeout,
+			ProxyError::RequestTimeout | ProxyError::UpstreamCallTimeout => ProxyResponseReason::Timeout,
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
 			ProxyError::RateLimitFailed | ProxyError::RateLimitExceeded { .. } => {
 				ProxyResponseReason::RateLimit
@@ -149,6 +149,8 @@ pub enum ProxyError {
 	BackendAuthenticationFailed(anyhow::Error),
 	#[error("upstream call failed: {0}")]
 	UpstreamCallFailed(HyperError),
+	#[error("upstream call timeout")]
+	UpstreamCallTimeout,
 	#[error("upstream tcp call failed: {0}")]
 	UpstreamTCPCallFailed(http::Error),
 	#[error("upstream tcp proxy failed: {0}")]
@@ -214,6 +216,7 @@ impl ProxyError {
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoHealthyEndpoints => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::UpstreamCallFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::UpstreamCallTimeout => StatusCode::SERVICE_UNAVAILABLE,
 
 			ProxyError::RequestTimeout => StatusCode::GATEWAY_TIMEOUT,
 			ProxyError::Processing(_) => StatusCode::SERVICE_UNAVAILABLE,

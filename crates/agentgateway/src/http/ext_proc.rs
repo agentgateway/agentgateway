@@ -18,6 +18,7 @@ use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, HeaderMutation, HeadersResponse, HttpBody, HttpHeaders, HttpTrailers,
 	ImmediateResponse, ProcessingRequest, ProcessingResponse, processing_response,
 };
+use crate::http::filters::BackendRequestTimeout;
 use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
@@ -187,7 +188,11 @@ impl ExtProcInstance {
 		failure_mode: FailureMode,
 	) -> ExtProcInstance {
 		trace!("connecting to {:?}", target);
-		let chan = GrpcReferenceChannel { target, client };
+		let chan = GrpcReferenceChannel {
+			target,
+			client,
+			timeout: None,
+		};
 		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
@@ -791,6 +796,7 @@ fn processing_request(data: Request) -> ProcessingRequest {
 pub struct GrpcReferenceChannel {
 	pub target: Arc<SimpleBackendReference>,
 	pub client: PolicyClient,
+	pub timeout: Option<Duration>,
 }
 
 impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel {
@@ -802,7 +808,10 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel
 		Ok(()).into()
 	}
 
-	fn call(&mut self, req: ::http::Request<tonic::body::Body>) -> Self::Future {
+	fn call(&mut self, mut req: ::http::Request<tonic::body::Body>) -> Self::Future {
+		if let Some(timeout) = self.timeout {
+			req.extensions_mut().insert(BackendRequestTimeout(timeout));
+		};
 		let client = self.client.clone();
 		let target = self.target.clone();
 		let req = req.map(http::Body::new);

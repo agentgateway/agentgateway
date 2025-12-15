@@ -19,7 +19,7 @@ use types::discovery::*;
 use crate::client::Transport;
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::ExtProcRequest;
-use crate::http::filters::AutoHostname;
+use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
 	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
@@ -764,8 +764,17 @@ impl HTTPProxy {
 		selected_backend: &RouteBackend,
 		backend_policies: BackendPolicies,
 		response_policies: &mut ResponsePolicies,
-		req: Request,
+		mut req: Request,
 	) -> Result<Response, ProxyResponse> {
+		if let Some(backend_timeout) = response_policies
+			.timeout
+			.as_ref()
+			.and_then(|t| t.backend_request_timeout)
+		{
+			req
+				.extensions_mut()
+				.insert(BackendRequestTimeout(backend_timeout));
+		}
 		let call = make_backend_call(
 			self.inputs.clone(),
 			route_policies.clone(),
@@ -780,7 +789,7 @@ impl HTTPProxy {
 		let timeout = response_policies
 			.timeout
 			.as_ref()
-			.and_then(|t| t.effective_timeout());
+			.and_then(|t| t.request_timeout);
 
 		// Setup timeout
 		let call_result = if let Some(timeout) = timeout {

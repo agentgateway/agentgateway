@@ -866,6 +866,7 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 						HttpVersion::Http1 => Some(::http::Version::HTTP_11),
 						HttpVersion::Http2 => Some(::http::Version::HTTP_2),
 					},
+					request_timeout: bhttp.request_timeout.map(convert_duration),
 				})
 			},
 			Some(bps::Kind::BackendTcp(btcp)) => BackendPolicy::TCP(backend::TCP {
@@ -1231,6 +1232,8 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					domain: rrl.domain.clone(),
 					target: Arc::new(target),
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
+					// Not supported over XDS; use a timeout on the backend itself
+					timeout: None,
 				})
 			},
 			Some(tps::Kind::Csrf(csrf_spec)) => {

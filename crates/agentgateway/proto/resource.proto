@@ -827,6 +827,7 @@ message BackendPolicySpec {
       HTTP2 = 2;
     }
     HttpVersion version = 1;
+    google.protobuf.Duration request_timeout = 2;
   }
   message BackendTCP {
     KeepaliveConfig keepalive = 1;

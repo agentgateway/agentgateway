@@ -14,6 +14,7 @@ use crate::http::ext_authz::proto::{
 	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, Metadata, OkHttpResponse,
 };
 use crate::http::ext_proc::GrpcReferenceChannel;
+use crate::http::filters::BackendRequestTimeout;
 use crate::http::transformation_cel::SerAsStr;
 use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse, Request, jwt};
 use crate::proxy::ProxyError;
@@ -233,6 +234,8 @@ impl ExtAuthz {
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			client,
+			// Set the request timeout. This can be overriden by a timeout on the Backend object itself.
+			timeout: Some(self.timeout.unwrap_or(Duration::from_millis(200))),
 		};
 		let mut grpc_client = AuthorizationClient::new(chan);
 		// Get connection info with proper error handling
@@ -408,16 +411,8 @@ impl ExtAuthz {
 				tls_session,
 			}),
 		};
-		let timeout_duration = self.timeout.unwrap_or(Duration::from_millis(200));
-		let check_future = grpc_client.check(authz_req);
 
-		let resp = match tokio::time::timeout(timeout_duration, check_future).await {
-			Ok(result) => result,
-			Err(_) => {
-				warn!("ext_authz request timed out after {:?}", timeout_duration);
-				return self.handle_auth_failure("Authorization service timeout");
-			},
-		};
+		let resp = grpc_client.check(authz_req).await;
 
 		trace!("check response: {:?}", resp);
 		let cr = match resp {
@@ -639,16 +634,12 @@ impl ExtAuthz {
 				hv.as_bytes(),
 			);
 		}
-
-		let check = client.call_reference(check_req, &self.target);
+		// Set the request timeout. This can be overriden by a timeout on the Backend object itself.
 		let timeout_duration = self.timeout.unwrap_or(Duration::from_millis(200));
-		let resp = match tokio::time::timeout(timeout_duration, check).await {
-			Ok(result) => result,
-			Err(_) => {
-				warn!("ext_authz request timed out after {:?}", timeout_duration);
-				return self.handle_auth_failure("Authorization service timeout");
-			},
-		};
+		check_req
+			.extensions_mut()
+			.insert(BackendRequestTimeout(timeout_duration));
+		let resp = client.call_reference(check_req, &self.target).await;
 		let mut resp = match resp {
 			Ok(r) => r,
 			Err(e) => {

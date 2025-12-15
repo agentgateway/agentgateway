@@ -1,6 +1,5 @@
 mod dns;
 mod hyperrustls;
-
 use std::str::FromStr;
 use std::task;
 
@@ -19,6 +18,7 @@ use typespec_client_core::http::Sanitizer;
 
 use crate::http::backendtls::VersionedBackendTLS;
 use crate::http::filters;
+use crate::http::filters::BackendRequestTimeout;
 use crate::proxy::ProxyError;
 use crate::transport::hbone::WorkloadKey;
 use crate::transport::stream::{LoggingMode, Socket};
@@ -752,11 +752,17 @@ impl Client {
 			request =?req
 		);
 		let buffer_limit = http::buffer_limit(&req);
-		let resp = self
-			.client
-			.request(req)
-			.await
-			.map_err(ProxyError::UpstreamCallFailed);
+		let to = req.extensions().get::<BackendRequestTimeout>().cloned();
+		let call = self.client.request(req);
+		let resp = if let Some(to) = to {
+			match tokio::time::timeout(to.0, call).await {
+				Err(_) => Err(ProxyError::UpstreamCallTimeout),
+				Ok(Err(e)) => Err(ProxyError::UpstreamCallFailed(e)),
+				Ok(Ok(resp)) => Ok(resp),
+			}
+		} else {
+			call.await.map_err(ProxyError::UpstreamCallFailed)
+		};
 		let dur = format!("{}ms", start.elapsed().as_millis());
 		// If version changed due to ALPN negotiation, make sure we get the real version
 		let version = resp.as_ref().map(|resp| resp.version()).unwrap_or(version);

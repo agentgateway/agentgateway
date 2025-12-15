@@ -364,6 +364,7 @@ async fn tls_backend_http2_version() {
 	.unwrap();
 	let backend_version = backend::HTTP {
 		version: Some(Version::HTTP_2),
+		..Default::default()
 	};
 
 	let t = setup_proxy_test("{}")
@@ -403,6 +404,7 @@ async fn tls_backend_http1_version() {
 	.unwrap();
 	let backend_version = backend::HTTP {
 		version: Some(Version::HTTP_11),
+		..Default::default()
 	};
 
 	let t = setup_proxy_test("{}")
@@ -443,6 +445,7 @@ async fn tls_backend_version_with_alpn() {
 	.unwrap();
 	let backend_version = backend::HTTP {
 		version: Some(Version::HTTP_2),
+		..Default::default()
 	};
 
 	let t = setup_proxy_test("{}")
