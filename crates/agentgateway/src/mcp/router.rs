@@ -173,7 +173,9 @@ impl App {
 							Ok(claims) => {
 								// Populate context with verified JWT claims before continuing
 								ctx.with_jwt(&claims);
-								req.headers_mut().remove(http::header::AUTHORIZATION);
+								// NOTE: Authorization header is now kept to allow forwarding to HTTP MCP backends
+								// when backendAuth: passthrough is configured
+								// req.headers_mut().remove(http::header::AUTHORIZATION);
 								req.extensions_mut().insert(claims);
 							},
 							Err(_e) => {

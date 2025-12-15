@@ -1,0 +1,90 @@
+# agentgateway Configuration for Sample Commerce MCP Server with Auth0
+# 
+# This configuration protects your sample-commerce MCP server with Auth0 authentication
+# using the MCP Authorization spec.
+#
+# Prerequisites:
+# 1. Auth0 tenant configured (replace YOUR_TENANT in issuer/jwks URLs below)
+# 2. Sample commerce backend services running (port 8000)
+# 3. Sample commerce MCP server running (port 8006)
+#
+# To run:
+#   cargo run -- -f sample-commerce-auth0.yaml
+#
+# Access:
+#   - MCP Server (protected): http://localhost:3000/commerce/mcp
+#   - Resource Metadata: http://localhost:3000/.well-known/oauth-protected-resource/commerce/mcp
+#   - Authorization Server Metadata: http://localhost:3000/.well-known/oauth-authorization-server/commerce/mcp
+
+binds:
+- listeners:
+  - routes:
+
+    # Protected Sample Commerce MCP Server with Auth0
+    - backends:
+      - mcp:
+          targets:
+          - name: sample-commerce
+            mcp:
+              # Point to Rust MCP server for testing
+              host: http://localhost:8010/mcp
+      matches:
+      # Main MCP endpoint
+      - path:
+          exact: /commerce/mcp
+      # OAuth Resource Metadata endpoint
+      - path:
+          exact: /.well-known/oauth-protected-resource/commerce/mcp
+      # OAuth Authorization Server Metadata endpoint
+      - path:
+          exact: /.well-known/oauth-authorization-server/commerce/mcp
+      policies:
+        # Enable CORS for MCP Inspector and other web clients
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - authorization
+          - accept
+          allowOrigins:
+          - '*'
+          allowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        
+        # MCP Authentication - Validates JWTs and provides OAuth metadata
+        mcpAuthentication:
+          issuer: https://sandbox.grainger-development.auth0app.com/
+          audiences:
+          - http://localhost:3000/commerce/mcp
+          - api://commerce
+          jwks:
+            url: https://sandbox.grainger-development.auth0app.com/.well-known/jwks.json
+          provider:
+            auth0: {}
+          resourceMetadata:
+            resource: http://localhost:3000/commerce/mcp
+            scopesSupported:
+            - openid
+            - profile
+            - email
+            - offline_access
+            - read:products
+            - write:cart
+            - write:orders
+            bearerMethodsSupported:
+            - header
+            - body
+            - query
+            resourceDocumentation: http://localhost:3000/commerce/docs
+            resourcePolicyUri: http://localhost:3000/commerce/policies
+
+  # Port where agentgateway will listen
+  port: 3000
+
+# Optional: Enable telemetry for observability
+# Uncomment to send traces to your OTLP endpoint (e.g., Jaeger)
+# config:
+#   tracing:
+#     otlpEndpoint: http://localhost:4317
