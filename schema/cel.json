@@ -300,6 +300,20 @@
               ],
               "format": "uint64",
               "minimum": 0
+            },
+            "encoding_format": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "dimensions": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
             }
           }
         }
