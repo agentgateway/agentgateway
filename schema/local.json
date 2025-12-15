@@ -1662,218 +1662,211 @@
                                             "body": "The request was rejected due to inappropriate content",
                                             "status": 403
                                           }
-                                        },
-                                        "kind": {
-                                          "oneOf": [
-                                            {
+                                        }
+                                      },
+                                      "unevaluatedProperties": false,
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "regex": {
                                               "type": "object",
                                               "properties": {
-                                                "regex": {
-                                                  "type": "object",
-                                                  "properties": {
-                                                    "action": {
-                                                      "type": "string",
-                                                      "enum": [
-                                                        "mask",
-                                                        "reject"
-                                                      ],
-                                                      "default": "mask"
-                                                    },
-                                                    "rules": {
-                                                      "type": "array",
-                                                      "items": {
-                                                        "anyOf": [
-                                                          {
-                                                            "type": "object",
-                                                            "properties": {
-                                                              "builtin": {
-                                                                "type": "string",
-                                                                "enum": [
-                                                                  "ssn",
-                                                                  "creditCard",
-                                                                  "phoneNumber",
-                                                                  "email"
-                                                                ]
-                                                              }
-                                                            },
-                                                            "additionalProperties": false,
-                                                            "required": [
-                                                              "builtin"
-                                                            ]
-                                                          },
-                                                          {
-                                                            "type": "object",
-                                                            "properties": {
-                                                              "pattern": {
-                                                                "type": "string"
-                                                              }
-                                                            },
-                                                            "additionalProperties": false,
-                                                            "required": [
-                                                              "pattern"
-                                                            ]
-                                                          }
-                                                        ]
-                                                      }
-                                                    }
-                                                  },
-                                                  "additionalProperties": false,
-                                                  "required": [
-                                                    "rules"
-                                                  ]
-                                                }
-                                              },
-                                              "required": [
-                                                "regex"
-                                              ],
-                                              "additionalProperties": false
-                                            },
-                                            {
-                                              "type": "object",
-                                              "properties": {
-                                                "webhook": {
-                                                  "type": "object",
-                                                  "properties": {
-                                                    "target": {
-                                                      "oneOf": [
-                                                        {
-                                                          "type": "string",
-                                                          "enum": [
-                                                            "invalid"
-                                                          ]
-                                                        },
-                                                        {
-                                                          "description": "Service reference. Service must be defined in the top level services list.",
-                                                          "type": "object",
-                                                          "properties": {
-                                                            "service": {
-                                                              "type": "object",
-                                                              "properties": {
-                                                                "name": {
-                                                                  "type": "object",
-                                                                  "properties": {
-                                                                    "namespace": {
-                                                                      "type": "string"
-                                                                    },
-                                                                    "hostname": {
-                                                                      "type": "string"
-                                                                    }
-                                                                  },
-                                                                  "required": [
-                                                                    "namespace",
-                                                                    "hostname"
-                                                                  ]
-                                                                },
-                                                                "port": {
-                                                                  "type": "integer",
-                                                                  "format": "uint16",
-                                                                  "minimum": 0,
-                                                                  "maximum": 65535
-                                                                }
-                                                              },
-                                                              "additionalProperties": false,
-                                                              "required": [
-                                                                "name",
-                                                                "port"
-                                                              ]
-                                                            }
-                                                          },
-                                                          "required": [
-                                                            "service"
-                                                          ],
-                                                          "additionalProperties": false
-                                                        },
-                                                        {
-                                                          "description": "Hostname or IP address",
-                                                          "type": "object",
-                                                          "properties": {
-                                                            "host": {
-                                                              "description": "Hostname or IP address",
-                                                              "type": "string"
-                                                            }
-                                                          },
-                                                          "required": [
-                                                            "host"
-                                                          ],
-                                                          "additionalProperties": false
-                                                        },
-                                                        {
-                                                          "type": "object",
-                                                          "properties": {
-                                                            "backend": {
-                                                              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
-                                                              "type": "string"
-                                                            }
-                                                          },
-                                                          "required": [
-                                                            "backend"
-                                                          ],
-                                                          "additionalProperties": false
-                                                        }
-                                                      ]
-                                                    },
-                                                    "forwardHeaderMatches": {
-                                                      "type": "array",
-                                                      "items": {
+                                                "action": {
+                                                  "type": "string",
+                                                  "enum": [
+                                                    "mask",
+                                                    "reject"
+                                                  ],
+                                                  "default": "mask"
+                                                },
+                                                "rules": {
+                                                  "type": "array",
+                                                  "items": {
+                                                    "anyOf": [
+                                                      {
                                                         "type": "object",
                                                         "properties": {
-                                                          "name": {
-                                                            "type": "string"
-                                                          },
-                                                          "value": {
-                                                            "oneOf": [
-                                                              {
-                                                                "type": "object",
-                                                                "properties": {
-                                                                  "exact": {
-                                                                    "type": "string"
-                                                                  }
-                                                                },
-                                                                "required": [
-                                                                  "exact"
-                                                                ],
-                                                                "additionalProperties": false
-                                                              },
-                                                              {
-                                                                "type": "object",
-                                                                "properties": {
-                                                                  "regex": {
-                                                                    "type": "string"
-                                                                  }
-                                                                },
-                                                                "required": [
-                                                                  "regex"
-                                                                ],
-                                                                "additionalProperties": false
-                                                              }
+                                                          "builtin": {
+                                                            "type": "string",
+                                                            "enum": [
+                                                              "ssn",
+                                                              "creditCard",
+                                                              "phoneNumber",
+                                                              "email"
                                                             ]
                                                           }
                                                         },
                                                         "additionalProperties": false,
                                                         "required": [
-                                                          "name",
-                                                          "value"
+                                                          "builtin"
+                                                        ]
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "pattern": {
+                                                            "type": "string"
+                                                          }
+                                                        },
+                                                        "additionalProperties": false,
+                                                        "required": [
+                                                          "pattern"
                                                         ]
                                                       }
-                                                    }
-                                                  },
-                                                  "additionalProperties": false,
-                                                  "required": [
-                                                    "target"
-                                                  ]
+                                                    ]
+                                                  }
                                                 }
                                               },
+                                              "additionalProperties": false,
                                               "required": [
-                                                "webhook"
-                                              ],
-                                              "additionalProperties": false
+                                                "rules"
+                                              ]
                                             }
+                                          },
+                                          "required": [
+                                            "regex"
+                                          ]
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "webhook": {
+                                              "type": "object",
+                                              "properties": {
+                                                "target": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "string",
+                                                      "enum": [
+                                                        "invalid"
+                                                      ]
+                                                    },
+                                                    {
+                                                      "description": "Service reference. Service must be defined in the top level services list.",
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "service": {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "name": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "namespace": {
+                                                                  "type": "string"
+                                                                },
+                                                                "hostname": {
+                                                                  "type": "string"
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "namespace",
+                                                                "hostname"
+                                                              ]
+                                                            },
+                                                            "port": {
+                                                              "type": "integer",
+                                                              "format": "uint16",
+                                                              "minimum": 0,
+                                                              "maximum": 65535
+                                                            }
+                                                          },
+                                                          "additionalProperties": false,
+                                                          "required": [
+                                                            "name",
+                                                            "port"
+                                                          ]
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "service"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "description": "Hostname or IP address",
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "host": {
+                                                          "description": "Hostname or IP address",
+                                                          "type": "string"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "host"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "backend": {
+                                                          "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                                          "type": "string"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "backend"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                },
+                                                "forwardHeaderMatches": {
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "name": {
+                                                        "type": "string"
+                                                      },
+                                                      "value": {
+                                                        "oneOf": [
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "exact": {
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "exact"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "regex": {
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "regex"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          }
+                                                        ]
+                                                      }
+                                                    },
+                                                    "additionalProperties": false,
+                                                    "required": [
+                                                      "name",
+                                                      "value"
+                                                    ]
+                                                  }
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "target"
+                                              ]
+                                            }
+                                          },
+                                          "required": [
+                                            "webhook"
                                           ]
                                         }
-                                      },
-                                      "additionalProperties": false,
-                                      "required": [
-                                        "kind"
                                       ]
                                     }
                                   }
@@ -3848,218 +3841,211 @@
                                                   "body": "The request was rejected due to inappropriate content",
                                                   "status": 403
                                                 }
-                                              },
-                                              "kind": {
-                                                "oneOf": [
-                                                  {
+                                              }
+                                            },
+                                            "unevaluatedProperties": false,
+                                            "oneOf": [
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "regex": {
                                                     "type": "object",
                                                     "properties": {
-                                                      "regex": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                          "action": {
-                                                            "type": "string",
-                                                            "enum": [
-                                                              "mask",
-                                                              "reject"
-                                                            ],
-                                                            "default": "mask"
-                                                          },
-                                                          "rules": {
-                                                            "type": "array",
-                                                            "items": {
-                                                              "anyOf": [
-                                                                {
-                                                                  "type": "object",
-                                                                  "properties": {
-                                                                    "builtin": {
-                                                                      "type": "string",
-                                                                      "enum": [
-                                                                        "ssn",
-                                                                        "creditCard",
-                                                                        "phoneNumber",
-                                                                        "email"
-                                                                      ]
-                                                                    }
-                                                                  },
-                                                                  "additionalProperties": false,
-                                                                  "required": [
-                                                                    "builtin"
-                                                                  ]
-                                                                },
-                                                                {
-                                                                  "type": "object",
-                                                                  "properties": {
-                                                                    "pattern": {
-                                                                      "type": "string"
-                                                                    }
-                                                                  },
-                                                                  "additionalProperties": false,
-                                                                  "required": [
-                                                                    "pattern"
-                                                                  ]
-                                                                }
-                                                              ]
-                                                            }
-                                                          }
-                                                        },
-                                                        "additionalProperties": false,
-                                                        "required": [
-                                                          "rules"
-                                                        ]
-                                                      }
-                                                    },
-                                                    "required": [
-                                                      "regex"
-                                                    ],
-                                                    "additionalProperties": false
-                                                  },
-                                                  {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "webhook": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                          "target": {
-                                                            "oneOf": [
-                                                              {
-                                                                "type": "string",
-                                                                "enum": [
-                                                                  "invalid"
-                                                                ]
-                                                              },
-                                                              {
-                                                                "description": "Service reference. Service must be defined in the top level services list.",
-                                                                "type": "object",
-                                                                "properties": {
-                                                                  "service": {
-                                                                    "type": "object",
-                                                                    "properties": {
-                                                                      "name": {
-                                                                        "type": "object",
-                                                                        "properties": {
-                                                                          "namespace": {
-                                                                            "type": "string"
-                                                                          },
-                                                                          "hostname": {
-                                                                            "type": "string"
-                                                                          }
-                                                                        },
-                                                                        "required": [
-                                                                          "namespace",
-                                                                          "hostname"
-                                                                        ]
-                                                                      },
-                                                                      "port": {
-                                                                        "type": "integer",
-                                                                        "format": "uint16",
-                                                                        "minimum": 0,
-                                                                        "maximum": 65535
-                                                                      }
-                                                                    },
-                                                                    "additionalProperties": false,
-                                                                    "required": [
-                                                                      "name",
-                                                                      "port"
-                                                                    ]
-                                                                  }
-                                                                },
-                                                                "required": [
-                                                                  "service"
-                                                                ],
-                                                                "additionalProperties": false
-                                                              },
-                                                              {
-                                                                "description": "Hostname or IP address",
-                                                                "type": "object",
-                                                                "properties": {
-                                                                  "host": {
-                                                                    "description": "Hostname or IP address",
-                                                                    "type": "string"
-                                                                  }
-                                                                },
-                                                                "required": [
-                                                                  "host"
-                                                                ],
-                                                                "additionalProperties": false
-                                                              },
-                                                              {
-                                                                "type": "object",
-                                                                "properties": {
-                                                                  "backend": {
-                                                                    "description": "Explicit backend reference. Backend must be defined in the top level backends list",
-                                                                    "type": "string"
-                                                                  }
-                                                                },
-                                                                "required": [
-                                                                  "backend"
-                                                                ],
-                                                                "additionalProperties": false
-                                                              }
-                                                            ]
-                                                          },
-                                                          "forwardHeaderMatches": {
-                                                            "type": "array",
-                                                            "items": {
+                                                      "action": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                          "mask",
+                                                          "reject"
+                                                        ],
+                                                        "default": "mask"
+                                                      },
+                                                      "rules": {
+                                                        "type": "array",
+                                                        "items": {
+                                                          "anyOf": [
+                                                            {
                                                               "type": "object",
                                                               "properties": {
-                                                                "name": {
-                                                                  "type": "string"
-                                                                },
-                                                                "value": {
-                                                                  "oneOf": [
-                                                                    {
-                                                                      "type": "object",
-                                                                      "properties": {
-                                                                        "exact": {
-                                                                          "type": "string"
-                                                                        }
-                                                                      },
-                                                                      "required": [
-                                                                        "exact"
-                                                                      ],
-                                                                      "additionalProperties": false
-                                                                    },
-                                                                    {
-                                                                      "type": "object",
-                                                                      "properties": {
-                                                                        "regex": {
-                                                                          "type": "string"
-                                                                        }
-                                                                      },
-                                                                      "required": [
-                                                                        "regex"
-                                                                      ],
-                                                                      "additionalProperties": false
-                                                                    }
+                                                                "builtin": {
+                                                                  "type": "string",
+                                                                  "enum": [
+                                                                    "ssn",
+                                                                    "creditCard",
+                                                                    "phoneNumber",
+                                                                    "email"
                                                                   ]
                                                                 }
                                                               },
                                                               "additionalProperties": false,
                                                               "required": [
-                                                                "name",
-                                                                "value"
+                                                                "builtin"
+                                                              ]
+                                                            },
+                                                            {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "pattern": {
+                                                                  "type": "string"
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "pattern"
                                                               ]
                                                             }
-                                                          }
-                                                        },
-                                                        "additionalProperties": false,
-                                                        "required": [
-                                                          "target"
-                                                        ]
+                                                          ]
+                                                        }
                                                       }
                                                     },
+                                                    "additionalProperties": false,
                                                     "required": [
-                                                      "webhook"
-                                                    ],
-                                                    "additionalProperties": false
+                                                      "rules"
+                                                    ]
                                                   }
+                                                },
+                                                "required": [
+                                                  "regex"
+                                                ]
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "webhook": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "target": {
+                                                        "oneOf": [
+                                                          {
+                                                            "type": "string",
+                                                            "enum": [
+                                                              "invalid"
+                                                            ]
+                                                          },
+                                                          {
+                                                            "description": "Service reference. Service must be defined in the top level services list.",
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "service": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                  "name": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                      "namespace": {
+                                                                        "type": "string"
+                                                                      },
+                                                                      "hostname": {
+                                                                        "type": "string"
+                                                                      }
+                                                                    },
+                                                                    "required": [
+                                                                      "namespace",
+                                                                      "hostname"
+                                                                    ]
+                                                                  },
+                                                                  "port": {
+                                                                    "type": "integer",
+                                                                    "format": "uint16",
+                                                                    "minimum": 0,
+                                                                    "maximum": 65535
+                                                                  }
+                                                                },
+                                                                "additionalProperties": false,
+                                                                "required": [
+                                                                  "name",
+                                                                  "port"
+                                                                ]
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "service"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          },
+                                                          {
+                                                            "description": "Hostname or IP address",
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "host": {
+                                                                "description": "Hostname or IP address",
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "host"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "backend": {
+                                                                "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "backend"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          }
+                                                        ]
+                                                      },
+                                                      "forwardHeaderMatches": {
+                                                        "type": "array",
+                                                        "items": {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "name": {
+                                                              "type": "string"
+                                                            },
+                                                            "value": {
+                                                              "oneOf": [
+                                                                {
+                                                                  "type": "object",
+                                                                  "properties": {
+                                                                    "exact": {
+                                                                      "type": "string"
+                                                                    }
+                                                                  },
+                                                                  "required": [
+                                                                    "exact"
+                                                                  ],
+                                                                  "additionalProperties": false
+                                                                },
+                                                                {
+                                                                  "type": "object",
+                                                                  "properties": {
+                                                                    "regex": {
+                                                                      "type": "string"
+                                                                    }
+                                                                  },
+                                                                  "required": [
+                                                                    "regex"
+                                                                  ],
+                                                                  "additionalProperties": false
+                                                                }
+                                                              ]
+                                                            }
+                                                          },
+                                                          "additionalProperties": false,
+                                                          "required": [
+                                                            "name",
+                                                            "value"
+                                                          ]
+                                                        }
+                                                      }
+                                                    },
+                                                    "additionalProperties": false,
+                                                    "required": [
+                                                      "target"
+                                                    ]
+                                                  }
+                                                },
+                                                "required": [
+                                                  "webhook"
                                                 ]
                                               }
-                                            },
-                                            "additionalProperties": false,
-                                            "required": [
-                                              "kind"
                                             ]
                                           }
                                         }
@@ -5536,218 +5522,211 @@
                                                               "body": "The request was rejected due to inappropriate content",
                                                               "status": 403
                                                             }
-                                                          },
-                                                          "kind": {
-                                                            "oneOf": [
-                                                              {
+                                                          }
+                                                        },
+                                                        "unevaluatedProperties": false,
+                                                        "oneOf": [
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "regex": {
                                                                 "type": "object",
                                                                 "properties": {
-                                                                  "regex": {
-                                                                    "type": "object",
-                                                                    "properties": {
-                                                                      "action": {
-                                                                        "type": "string",
-                                                                        "enum": [
-                                                                          "mask",
-                                                                          "reject"
-                                                                        ],
-                                                                        "default": "mask"
-                                                                      },
-                                                                      "rules": {
-                                                                        "type": "array",
-                                                                        "items": {
-                                                                          "anyOf": [
-                                                                            {
-                                                                              "type": "object",
-                                                                              "properties": {
-                                                                                "builtin": {
-                                                                                  "type": "string",
-                                                                                  "enum": [
-                                                                                    "ssn",
-                                                                                    "creditCard",
-                                                                                    "phoneNumber",
-                                                                                    "email"
-                                                                                  ]
-                                                                                }
-                                                                              },
-                                                                              "additionalProperties": false,
-                                                                              "required": [
-                                                                                "builtin"
-                                                                              ]
-                                                                            },
-                                                                            {
-                                                                              "type": "object",
-                                                                              "properties": {
-                                                                                "pattern": {
-                                                                                  "type": "string"
-                                                                                }
-                                                                              },
-                                                                              "additionalProperties": false,
-                                                                              "required": [
-                                                                                "pattern"
-                                                                              ]
-                                                                            }
-                                                                          ]
-                                                                        }
-                                                                      }
-                                                                    },
-                                                                    "additionalProperties": false,
-                                                                    "required": [
-                                                                      "rules"
-                                                                    ]
-                                                                  }
-                                                                },
-                                                                "required": [
-                                                                  "regex"
-                                                                ],
-                                                                "additionalProperties": false
-                                                              },
-                                                              {
-                                                                "type": "object",
-                                                                "properties": {
-                                                                  "webhook": {
-                                                                    "type": "object",
-                                                                    "properties": {
-                                                                      "target": {
-                                                                        "oneOf": [
-                                                                          {
-                                                                            "type": "string",
-                                                                            "enum": [
-                                                                              "invalid"
-                                                                            ]
-                                                                          },
-                                                                          {
-                                                                            "description": "Service reference. Service must be defined in the top level services list.",
-                                                                            "type": "object",
-                                                                            "properties": {
-                                                                              "service": {
-                                                                                "type": "object",
-                                                                                "properties": {
-                                                                                  "name": {
-                                                                                    "type": "object",
-                                                                                    "properties": {
-                                                                                      "namespace": {
-                                                                                        "type": "string"
-                                                                                      },
-                                                                                      "hostname": {
-                                                                                        "type": "string"
-                                                                                      }
-                                                                                    },
-                                                                                    "required": [
-                                                                                      "namespace",
-                                                                                      "hostname"
-                                                                                    ]
-                                                                                  },
-                                                                                  "port": {
-                                                                                    "type": "integer",
-                                                                                    "format": "uint16",
-                                                                                    "minimum": 0,
-                                                                                    "maximum": 65535
-                                                                                  }
-                                                                                },
-                                                                                "additionalProperties": false,
-                                                                                "required": [
-                                                                                  "name",
-                                                                                  "port"
-                                                                                ]
-                                                                              }
-                                                                            },
-                                                                            "required": [
-                                                                              "service"
-                                                                            ],
-                                                                            "additionalProperties": false
-                                                                          },
-                                                                          {
-                                                                            "description": "Hostname or IP address",
-                                                                            "type": "object",
-                                                                            "properties": {
-                                                                              "host": {
-                                                                                "description": "Hostname or IP address",
-                                                                                "type": "string"
-                                                                              }
-                                                                            },
-                                                                            "required": [
-                                                                              "host"
-                                                                            ],
-                                                                            "additionalProperties": false
-                                                                          },
-                                                                          {
-                                                                            "type": "object",
-                                                                            "properties": {
-                                                                              "backend": {
-                                                                                "description": "Explicit backend reference. Backend must be defined in the top level backends list",
-                                                                                "type": "string"
-                                                                              }
-                                                                            },
-                                                                            "required": [
-                                                                              "backend"
-                                                                            ],
-                                                                            "additionalProperties": false
-                                                                          }
-                                                                        ]
-                                                                      },
-                                                                      "forwardHeaderMatches": {
-                                                                        "type": "array",
-                                                                        "items": {
+                                                                  "action": {
+                                                                    "type": "string",
+                                                                    "enum": [
+                                                                      "mask",
+                                                                      "reject"
+                                                                    ],
+                                                                    "default": "mask"
+                                                                  },
+                                                                  "rules": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                      "anyOf": [
+                                                                        {
                                                                           "type": "object",
                                                                           "properties": {
-                                                                            "name": {
-                                                                              "type": "string"
-                                                                            },
-                                                                            "value": {
-                                                                              "oneOf": [
-                                                                                {
-                                                                                  "type": "object",
-                                                                                  "properties": {
-                                                                                    "exact": {
-                                                                                      "type": "string"
-                                                                                    }
-                                                                                  },
-                                                                                  "required": [
-                                                                                    "exact"
-                                                                                  ],
-                                                                                  "additionalProperties": false
-                                                                                },
-                                                                                {
-                                                                                  "type": "object",
-                                                                                  "properties": {
-                                                                                    "regex": {
-                                                                                      "type": "string"
-                                                                                    }
-                                                                                  },
-                                                                                  "required": [
-                                                                                    "regex"
-                                                                                  ],
-                                                                                  "additionalProperties": false
-                                                                                }
+                                                                            "builtin": {
+                                                                              "type": "string",
+                                                                              "enum": [
+                                                                                "ssn",
+                                                                                "creditCard",
+                                                                                "phoneNumber",
+                                                                                "email"
                                                                               ]
                                                                             }
                                                                           },
                                                                           "additionalProperties": false,
                                                                           "required": [
-                                                                            "name",
-                                                                            "value"
+                                                                            "builtin"
+                                                                          ]
+                                                                        },
+                                                                        {
+                                                                          "type": "object",
+                                                                          "properties": {
+                                                                            "pattern": {
+                                                                              "type": "string"
+                                                                            }
+                                                                          },
+                                                                          "additionalProperties": false,
+                                                                          "required": [
+                                                                            "pattern"
                                                                           ]
                                                                         }
-                                                                      }
-                                                                    },
-                                                                    "additionalProperties": false,
-                                                                    "required": [
-                                                                      "target"
-                                                                    ]
+                                                                      ]
+                                                                    }
                                                                   }
                                                                 },
+                                                                "additionalProperties": false,
                                                                 "required": [
-                                                                  "webhook"
-                                                                ],
-                                                                "additionalProperties": false
+                                                                  "rules"
+                                                                ]
                                                               }
+                                                            },
+                                                            "required": [
+                                                              "regex"
+                                                            ]
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "webhook": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                  "target": {
+                                                                    "oneOf": [
+                                                                      {
+                                                                        "type": "string",
+                                                                        "enum": [
+                                                                          "invalid"
+                                                                        ]
+                                                                      },
+                                                                      {
+                                                                        "description": "Service reference. Service must be defined in the top level services list.",
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "service": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                              "name": {
+                                                                                "type": "object",
+                                                                                "properties": {
+                                                                                  "namespace": {
+                                                                                    "type": "string"
+                                                                                  },
+                                                                                  "hostname": {
+                                                                                    "type": "string"
+                                                                                  }
+                                                                                },
+                                                                                "required": [
+                                                                                  "namespace",
+                                                                                  "hostname"
+                                                                                ]
+                                                                              },
+                                                                              "port": {
+                                                                                "type": "integer",
+                                                                                "format": "uint16",
+                                                                                "minimum": 0,
+                                                                                "maximum": 65535
+                                                                              }
+                                                                            },
+                                                                            "additionalProperties": false,
+                                                                            "required": [
+                                                                              "name",
+                                                                              "port"
+                                                                            ]
+                                                                          }
+                                                                        },
+                                                                        "required": [
+                                                                          "service"
+                                                                        ],
+                                                                        "additionalProperties": false
+                                                                      },
+                                                                      {
+                                                                        "description": "Hostname or IP address",
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "host": {
+                                                                            "description": "Hostname or IP address",
+                                                                            "type": "string"
+                                                                          }
+                                                                        },
+                                                                        "required": [
+                                                                          "host"
+                                                                        ],
+                                                                        "additionalProperties": false
+                                                                      },
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "backend": {
+                                                                            "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                                                            "type": "string"
+                                                                          }
+                                                                        },
+                                                                        "required": [
+                                                                          "backend"
+                                                                        ],
+                                                                        "additionalProperties": false
+                                                                      }
+                                                                    ]
+                                                                  },
+                                                                  "forwardHeaderMatches": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "name": {
+                                                                          "type": "string"
+                                                                        },
+                                                                        "value": {
+                                                                          "oneOf": [
+                                                                            {
+                                                                              "type": "object",
+                                                                              "properties": {
+                                                                                "exact": {
+                                                                                  "type": "string"
+                                                                                }
+                                                                              },
+                                                                              "required": [
+                                                                                "exact"
+                                                                              ],
+                                                                              "additionalProperties": false
+                                                                            },
+                                                                            {
+                                                                              "type": "object",
+                                                                              "properties": {
+                                                                                "regex": {
+                                                                                  "type": "string"
+                                                                                }
+                                                                              },
+                                                                              "required": [
+                                                                                "regex"
+                                                                              ],
+                                                                              "additionalProperties": false
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false,
+                                                                      "required": [
+                                                                        "name",
+                                                                        "value"
+                                                                      ]
+                                                                    }
+                                                                  }
+                                                                },
+                                                                "additionalProperties": false,
+                                                                "required": [
+                                                                  "target"
+                                                                ]
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "webhook"
                                                             ]
                                                           }
-                                                        },
-                                                        "additionalProperties": false,
-                                                        "required": [
-                                                          "kind"
                                                         ]
                                                       }
                                                     }
@@ -6974,218 +6953,211 @@
                                                                           "body": "The request was rejected due to inappropriate content",
                                                                           "status": 403
                                                                         }
-                                                                      },
-                                                                      "kind": {
-                                                                        "oneOf": [
-                                                                          {
+                                                                      }
+                                                                    },
+                                                                    "unevaluatedProperties": false,
+                                                                    "oneOf": [
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "regex": {
                                                                             "type": "object",
                                                                             "properties": {
-                                                                              "regex": {
-                                                                                "type": "object",
-                                                                                "properties": {
-                                                                                  "action": {
-                                                                                    "type": "string",
-                                                                                    "enum": [
-                                                                                      "mask",
-                                                                                      "reject"
-                                                                                    ],
-                                                                                    "default": "mask"
-                                                                                  },
-                                                                                  "rules": {
-                                                                                    "type": "array",
-                                                                                    "items": {
-                                                                                      "anyOf": [
-                                                                                        {
-                                                                                          "type": "object",
-                                                                                          "properties": {
-                                                                                            "builtin": {
-                                                                                              "type": "string",
-                                                                                              "enum": [
-                                                                                                "ssn",
-                                                                                                "creditCard",
-                                                                                                "phoneNumber",
-                                                                                                "email"
-                                                                                              ]
-                                                                                            }
-                                                                                          },
-                                                                                          "additionalProperties": false,
-                                                                                          "required": [
-                                                                                            "builtin"
-                                                                                          ]
-                                                                                        },
-                                                                                        {
-                                                                                          "type": "object",
-                                                                                          "properties": {
-                                                                                            "pattern": {
-                                                                                              "type": "string"
-                                                                                            }
-                                                                                          },
-                                                                                          "additionalProperties": false,
-                                                                                          "required": [
-                                                                                            "pattern"
-                                                                                          ]
-                                                                                        }
-                                                                                      ]
-                                                                                    }
-                                                                                  }
-                                                                                },
-                                                                                "additionalProperties": false,
-                                                                                "required": [
-                                                                                  "rules"
-                                                                                ]
-                                                                              }
-                                                                            },
-                                                                            "required": [
-                                                                              "regex"
-                                                                            ],
-                                                                            "additionalProperties": false
-                                                                          },
-                                                                          {
-                                                                            "type": "object",
-                                                                            "properties": {
-                                                                              "webhook": {
-                                                                                "type": "object",
-                                                                                "properties": {
-                                                                                  "target": {
-                                                                                    "oneOf": [
-                                                                                      {
-                                                                                        "type": "string",
-                                                                                        "enum": [
-                                                                                          "invalid"
-                                                                                        ]
-                                                                                      },
-                                                                                      {
-                                                                                        "description": "Service reference. Service must be defined in the top level services list.",
-                                                                                        "type": "object",
-                                                                                        "properties": {
-                                                                                          "service": {
-                                                                                            "type": "object",
-                                                                                            "properties": {
-                                                                                              "name": {
-                                                                                                "type": "object",
-                                                                                                "properties": {
-                                                                                                  "namespace": {
-                                                                                                    "type": "string"
-                                                                                                  },
-                                                                                                  "hostname": {
-                                                                                                    "type": "string"
-                                                                                                  }
-                                                                                                },
-                                                                                                "required": [
-                                                                                                  "namespace",
-                                                                                                  "hostname"
-                                                                                                ]
-                                                                                              },
-                                                                                              "port": {
-                                                                                                "type": "integer",
-                                                                                                "format": "uint16",
-                                                                                                "minimum": 0,
-                                                                                                "maximum": 65535
-                                                                                              }
-                                                                                            },
-                                                                                            "additionalProperties": false,
-                                                                                            "required": [
-                                                                                              "name",
-                                                                                              "port"
-                                                                                            ]
-                                                                                          }
-                                                                                        },
-                                                                                        "required": [
-                                                                                          "service"
-                                                                                        ],
-                                                                                        "additionalProperties": false
-                                                                                      },
-                                                                                      {
-                                                                                        "description": "Hostname or IP address",
-                                                                                        "type": "object",
-                                                                                        "properties": {
-                                                                                          "host": {
-                                                                                            "description": "Hostname or IP address",
-                                                                                            "type": "string"
-                                                                                          }
-                                                                                        },
-                                                                                        "required": [
-                                                                                          "host"
-                                                                                        ],
-                                                                                        "additionalProperties": false
-                                                                                      },
-                                                                                      {
-                                                                                        "type": "object",
-                                                                                        "properties": {
-                                                                                          "backend": {
-                                                                                            "description": "Explicit backend reference. Backend must be defined in the top level backends list",
-                                                                                            "type": "string"
-                                                                                          }
-                                                                                        },
-                                                                                        "required": [
-                                                                                          "backend"
-                                                                                        ],
-                                                                                        "additionalProperties": false
-                                                                                      }
-                                                                                    ]
-                                                                                  },
-                                                                                  "forwardHeaderMatches": {
-                                                                                    "type": "array",
-                                                                                    "items": {
+                                                                              "action": {
+                                                                                "type": "string",
+                                                                                "enum": [
+                                                                                  "mask",
+                                                                                  "reject"
+                                                                                ],
+                                                                                "default": "mask"
+                                                                              },
+                                                                              "rules": {
+                                                                                "type": "array",
+                                                                                "items": {
+                                                                                  "anyOf": [
+                                                                                    {
                                                                                       "type": "object",
                                                                                       "properties": {
-                                                                                        "name": {
-                                                                                          "type": "string"
-                                                                                        },
-                                                                                        "value": {
-                                                                                          "oneOf": [
-                                                                                            {
-                                                                                              "type": "object",
-                                                                                              "properties": {
-                                                                                                "exact": {
-                                                                                                  "type": "string"
-                                                                                                }
-                                                                                              },
-                                                                                              "required": [
-                                                                                                "exact"
-                                                                                              ],
-                                                                                              "additionalProperties": false
-                                                                                            },
-                                                                                            {
-                                                                                              "type": "object",
-                                                                                              "properties": {
-                                                                                                "regex": {
-                                                                                                  "type": "string"
-                                                                                                }
-                                                                                              },
-                                                                                              "required": [
-                                                                                                "regex"
-                                                                                              ],
-                                                                                              "additionalProperties": false
-                                                                                            }
+                                                                                        "builtin": {
+                                                                                          "type": "string",
+                                                                                          "enum": [
+                                                                                            "ssn",
+                                                                                            "creditCard",
+                                                                                            "phoneNumber",
+                                                                                            "email"
                                                                                           ]
                                                                                         }
                                                                                       },
                                                                                       "additionalProperties": false,
                                                                                       "required": [
-                                                                                        "name",
-                                                                                        "value"
+                                                                                        "builtin"
+                                                                                      ]
+                                                                                    },
+                                                                                    {
+                                                                                      "type": "object",
+                                                                                      "properties": {
+                                                                                        "pattern": {
+                                                                                          "type": "string"
+                                                                                        }
+                                                                                      },
+                                                                                      "additionalProperties": false,
+                                                                                      "required": [
+                                                                                        "pattern"
                                                                                       ]
                                                                                     }
-                                                                                  }
-                                                                                },
-                                                                                "additionalProperties": false,
-                                                                                "required": [
-                                                                                  "target"
-                                                                                ]
+                                                                                  ]
+                                                                                }
                                                                               }
                                                                             },
+                                                                            "additionalProperties": false,
                                                                             "required": [
-                                                                              "webhook"
-                                                                            ],
-                                                                            "additionalProperties": false
+                                                                              "rules"
+                                                                            ]
                                                                           }
+                                                                        },
+                                                                        "required": [
+                                                                          "regex"
+                                                                        ]
+                                                                      },
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "webhook": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                              "target": {
+                                                                                "oneOf": [
+                                                                                  {
+                                                                                    "type": "string",
+                                                                                    "enum": [
+                                                                                      "invalid"
+                                                                                    ]
+                                                                                  },
+                                                                                  {
+                                                                                    "description": "Service reference. Service must be defined in the top level services list.",
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                      "service": {
+                                                                                        "type": "object",
+                                                                                        "properties": {
+                                                                                          "name": {
+                                                                                            "type": "object",
+                                                                                            "properties": {
+                                                                                              "namespace": {
+                                                                                                "type": "string"
+                                                                                              },
+                                                                                              "hostname": {
+                                                                                                "type": "string"
+                                                                                              }
+                                                                                            },
+                                                                                            "required": [
+                                                                                              "namespace",
+                                                                                              "hostname"
+                                                                                            ]
+                                                                                          },
+                                                                                          "port": {
+                                                                                            "type": "integer",
+                                                                                            "format": "uint16",
+                                                                                            "minimum": 0,
+                                                                                            "maximum": 65535
+                                                                                          }
+                                                                                        },
+                                                                                        "additionalProperties": false,
+                                                                                        "required": [
+                                                                                          "name",
+                                                                                          "port"
+                                                                                        ]
+                                                                                      }
+                                                                                    },
+                                                                                    "required": [
+                                                                                      "service"
+                                                                                    ],
+                                                                                    "additionalProperties": false
+                                                                                  },
+                                                                                  {
+                                                                                    "description": "Hostname or IP address",
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                      "host": {
+                                                                                        "description": "Hostname or IP address",
+                                                                                        "type": "string"
+                                                                                      }
+                                                                                    },
+                                                                                    "required": [
+                                                                                      "host"
+                                                                                    ],
+                                                                                    "additionalProperties": false
+                                                                                  },
+                                                                                  {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                      "backend": {
+                                                                                        "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                                                                        "type": "string"
+                                                                                      }
+                                                                                    },
+                                                                                    "required": [
+                                                                                      "backend"
+                                                                                    ],
+                                                                                    "additionalProperties": false
+                                                                                  }
+                                                                                ]
+                                                                              },
+                                                                              "forwardHeaderMatches": {
+                                                                                "type": "array",
+                                                                                "items": {
+                                                                                  "type": "object",
+                                                                                  "properties": {
+                                                                                    "name": {
+                                                                                      "type": "string"
+                                                                                    },
+                                                                                    "value": {
+                                                                                      "oneOf": [
+                                                                                        {
+                                                                                          "type": "object",
+                                                                                          "properties": {
+                                                                                            "exact": {
+                                                                                              "type": "string"
+                                                                                            }
+                                                                                          },
+                                                                                          "required": [
+                                                                                            "exact"
+                                                                                          ],
+                                                                                          "additionalProperties": false
+                                                                                        },
+                                                                                        {
+                                                                                          "type": "object",
+                                                                                          "properties": {
+                                                                                            "regex": {
+                                                                                              "type": "string"
+                                                                                            }
+                                                                                          },
+                                                                                          "required": [
+                                                                                            "regex"
+                                                                                          ],
+                                                                                          "additionalProperties": false
+                                                                                        }
+                                                                                      ]
+                                                                                    }
+                                                                                  },
+                                                                                  "additionalProperties": false,
+                                                                                  "required": [
+                                                                                    "name",
+                                                                                    "value"
+                                                                                  ]
+                                                                                }
+                                                                              }
+                                                                            },
+                                                                            "additionalProperties": false,
+                                                                            "required": [
+                                                                              "target"
+                                                                            ]
+                                                                          }
+                                                                        },
+                                                                        "required": [
+                                                                          "webhook"
                                                                         ]
                                                                       }
-                                                                    },
-                                                                    "additionalProperties": false,
-                                                                    "required": [
-                                                                      "kind"
                                                                     ]
                                                                   }
                                                                 }
@@ -9983,218 +9955,211 @@
                                 "body": "The request was rejected due to inappropriate content",
                                 "status": 403
                               }
-                            },
-                            "kind": {
-                              "oneOf": [
-                                {
+                            }
+                          },
+                          "unevaluatedProperties": false,
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "regex": {
                                   "type": "object",
                                   "properties": {
-                                    "regex": {
-                                      "type": "object",
-                                      "properties": {
-                                        "action": {
-                                          "type": "string",
-                                          "enum": [
-                                            "mask",
-                                            "reject"
-                                          ],
-                                          "default": "mask"
-                                        },
-                                        "rules": {
-                                          "type": "array",
-                                          "items": {
-                                            "anyOf": [
-                                              {
-                                                "type": "object",
-                                                "properties": {
-                                                  "builtin": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                      "ssn",
-                                                      "creditCard",
-                                                      "phoneNumber",
-                                                      "email"
-                                                    ]
-                                                  }
-                                                },
-                                                "additionalProperties": false,
-                                                "required": [
-                                                  "builtin"
-                                                ]
-                                              },
-                                              {
-                                                "type": "object",
-                                                "properties": {
-                                                  "pattern": {
-                                                    "type": "string"
-                                                  }
-                                                },
-                                                "additionalProperties": false,
-                                                "required": [
-                                                  "pattern"
-                                                ]
-                                              }
-                                            ]
-                                          }
-                                        }
-                                      },
-                                      "additionalProperties": false,
-                                      "required": [
-                                        "rules"
-                                      ]
-                                    }
-                                  },
-                                  "required": [
-                                    "regex"
-                                  ],
-                                  "additionalProperties": false
-                                },
-                                {
-                                  "type": "object",
-                                  "properties": {
-                                    "webhook": {
-                                      "type": "object",
-                                      "properties": {
-                                        "target": {
-                                          "oneOf": [
-                                            {
-                                              "type": "string",
-                                              "enum": [
-                                                "invalid"
-                                              ]
-                                            },
-                                            {
-                                              "description": "Service reference. Service must be defined in the top level services list.",
-                                              "type": "object",
-                                              "properties": {
-                                                "service": {
-                                                  "type": "object",
-                                                  "properties": {
-                                                    "name": {
-                                                      "type": "object",
-                                                      "properties": {
-                                                        "namespace": {
-                                                          "type": "string"
-                                                        },
-                                                        "hostname": {
-                                                          "type": "string"
-                                                        }
-                                                      },
-                                                      "required": [
-                                                        "namespace",
-                                                        "hostname"
-                                                      ]
-                                                    },
-                                                    "port": {
-                                                      "type": "integer",
-                                                      "format": "uint16",
-                                                      "minimum": 0,
-                                                      "maximum": 65535
-                                                    }
-                                                  },
-                                                  "additionalProperties": false,
-                                                  "required": [
-                                                    "name",
-                                                    "port"
-                                                  ]
-                                                }
-                                              },
-                                              "required": [
-                                                "service"
-                                              ],
-                                              "additionalProperties": false
-                                            },
-                                            {
-                                              "description": "Hostname or IP address",
-                                              "type": "object",
-                                              "properties": {
-                                                "host": {
-                                                  "description": "Hostname or IP address",
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "host"
-                                              ],
-                                              "additionalProperties": false
-                                            },
-                                            {
-                                              "type": "object",
-                                              "properties": {
-                                                "backend": {
-                                                  "description": "Explicit backend reference. Backend must be defined in the top level backends list",
-                                                  "type": "string"
-                                                }
-                                              },
-                                              "required": [
-                                                "backend"
-                                              ],
-                                              "additionalProperties": false
-                                            }
-                                          ]
-                                        },
-                                        "forwardHeaderMatches": {
-                                          "type": "array",
-                                          "items": {
+                                    "action": {
+                                      "type": "string",
+                                      "enum": [
+                                        "mask",
+                                        "reject"
+                                      ],
+                                      "default": "mask"
+                                    },
+                                    "rules": {
+                                      "type": "array",
+                                      "items": {
+                                        "anyOf": [
+                                          {
                                             "type": "object",
                                             "properties": {
-                                              "name": {
-                                                "type": "string"
-                                              },
-                                              "value": {
-                                                "oneOf": [
-                                                  {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "exact": {
-                                                        "type": "string"
-                                                      }
-                                                    },
-                                                    "required": [
-                                                      "exact"
-                                                    ],
-                                                    "additionalProperties": false
-                                                  },
-                                                  {
-                                                    "type": "object",
-                                                    "properties": {
-                                                      "regex": {
-                                                        "type": "string"
-                                                      }
-                                                    },
-                                                    "required": [
-                                                      "regex"
-                                                    ],
-                                                    "additionalProperties": false
-                                                  }
+                                              "builtin": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "ssn",
+                                                  "creditCard",
+                                                  "phoneNumber",
+                                                  "email"
                                                 ]
                                               }
                                             },
                                             "additionalProperties": false,
                                             "required": [
-                                              "name",
-                                              "value"
+                                              "builtin"
+                                            ]
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "pattern": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "pattern"
                                             ]
                                           }
-                                        }
-                                      },
-                                      "additionalProperties": false,
-                                      "required": [
-                                        "target"
-                                      ]
+                                        ]
+                                      }
                                     }
                                   },
+                                  "additionalProperties": false,
                                   "required": [
-                                    "webhook"
-                                  ],
-                                  "additionalProperties": false
+                                    "rules"
+                                  ]
                                 }
+                              },
+                              "required": [
+                                "regex"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "webhook": {
+                                  "type": "object",
+                                  "properties": {
+                                    "target": {
+                                      "oneOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "invalid"
+                                          ]
+                                        },
+                                        {
+                                          "description": "Service reference. Service must be defined in the top level services list.",
+                                          "type": "object",
+                                          "properties": {
+                                            "service": {
+                                              "type": "object",
+                                              "properties": {
+                                                "name": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "namespace": {
+                                                      "type": "string"
+                                                    },
+                                                    "hostname": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "namespace",
+                                                    "hostname"
+                                                  ]
+                                                },
+                                                "port": {
+                                                  "type": "integer",
+                                                  "format": "uint16",
+                                                  "minimum": 0,
+                                                  "maximum": 65535
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "name",
+                                                "port"
+                                              ]
+                                            }
+                                          },
+                                          "required": [
+                                            "service"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "description": "Hostname or IP address",
+                                          "type": "object",
+                                          "properties": {
+                                            "host": {
+                                              "description": "Hostname or IP address",
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "host"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "backend": {
+                                              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "backend"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    },
+                                    "forwardHeaderMatches": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "value": {
+                                            "oneOf": [
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "exact": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "exact"
+                                                ],
+                                                "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "regex": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "regex"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            ]
+                                          }
+                                        },
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "name",
+                                          "value"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "target"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "webhook"
                               ]
                             }
-                          },
-                          "additionalProperties": false,
-                          "required": [
-                            "kind"
                           ]
                         }
                       }

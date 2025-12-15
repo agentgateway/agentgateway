@@ -694,6 +694,7 @@ impl Default for RequestRejection {
 pub struct ResponseGuard {
 	#[serde(default)]
 	pub rejection: RequestRejection,
+	#[serde(flatten)]
 	pub kind: ResponseGuardKind,
 }
 
