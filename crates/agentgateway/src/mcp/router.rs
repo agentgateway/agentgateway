@@ -125,6 +125,9 @@ impl App {
 			.mcp_authorization
 			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));
 		let authn = backend_policies.mcp_authentication;
+		
+		// Check if backend auth passthrough is configured
+		let has_passthrough = matches!(backend_policies.backend_auth, Some(crate::http::auth::BackendAuth::Passthrough {}));
 
 		// Store an empty value, we will populate each field async
 		log.store(Some(MCPInfo::default()));
@@ -173,7 +176,10 @@ impl App {
 							Ok(claims) => {
 								// Populate context with verified JWT claims before continuing
 								ctx.with_jwt(&claims);
-								req.headers_mut().remove(http::header::AUTHORIZATION);
+								// Only remove Authorization header if passthrough is NOT configured
+								if !has_passthrough {
+									req.headers_mut().remove(http::header::AUTHORIZATION);
+								}
 								req.extensions_mut().insert(claims);
 							},
 							Err(_e) => {
