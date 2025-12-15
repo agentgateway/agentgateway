@@ -472,10 +472,7 @@ impl HTTPProxy {
 		let inputs = self.inputs.clone();
 		let bind_name = self.bind_name.clone();
 		debug!(bind=%bind_name, "route for bind");
-		let Some(listeners) = ({
-			let state = inputs.stores.read_binds();
-			state.listeners(bind_name.clone())
-		}) else {
+		let Some(bind) = inputs.stores.read_binds().bind(bind_name.clone()) else {
 			return Err(ProxyError::BindNotFound.into());
 		};
 
@@ -528,7 +525,7 @@ impl HTTPProxy {
 		}
 
 		let selected_listener = selected_listener
-			.or_else(|| listeners.best_match(&host))
+			.or_else(|| bind.listeners.best_match(&host))
 			.ok_or(ProxyError::ListenerNotFound)?;
 		log.bind_name = Some(bind_name.clone());
 		log.listener_name = Some(selected_listener.name.clone());

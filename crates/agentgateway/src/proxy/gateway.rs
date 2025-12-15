@@ -19,6 +19,7 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
+use crate::proxy::ProxyError;
 use crate::store::{Event, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
@@ -447,12 +448,11 @@ impl Gateway {
 		let selected_listener = match selected_listener {
 			Some(l) => l,
 			None => {
-				let listeners = inputs
-					.stores
-					.read_binds()
-					.listeners(bind_name.clone())
-					.unwrap();
-				let Ok(selected_listener) = listeners.get_exactly_one() else {
+				let Some(bind) = inputs.stores.read_binds().bind(bind_name.clone()) else {
+					error!("no bind found for {bind_name}");
+					return;
+				};
+				let Ok(selected_listener) = bind.listeners.get_exactly_one() else {
 					return;
 				};
 				selected_listener
@@ -475,14 +475,17 @@ impl Gateway {
 		inp: Arc<ProxyInputs>,
 		raw_stream: Socket,
 		policies: &FrontendPolices,
-		bind: BindKey,
+		bind_key: BindKey,
 		is_https: bool,
 	) -> anyhow::Result<(Arc<Listener>, Socket)> {
 		let def = frontend::TLS::default();
 		let to = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
 		let alpn = policies.tls.as_ref().and_then(|t| t.alpn.as_deref());
 		let handshake = async move {
-			let listeners = inp.stores.read_binds().listeners(bind.clone()).unwrap();
+			let Some(bind) = inp.stores.read_binds().bind(bind_key.clone()) else {
+				return Err(ProxyError::BindNotFound.into());
+			};
+			let listeners = &bind.listeners;
 			let (mut ext, counter, inner) = raw_stream.into_parts();
 			let inner = Socket::new_rewind(inner);
 			let acceptor =
@@ -530,7 +533,7 @@ impl Gateway {
 						.metrics
 						.tls_handshake_duration
 						.get_or_create(&TCPLabels {
-							bind: Some(&bind).into(),
+							bind: Some(&bind_key).into(),
 							gateway: Some(best.name.as_gateway_name()).into(),
 							listener: best.name.listener_name.clone().into(),
 							protocol,
