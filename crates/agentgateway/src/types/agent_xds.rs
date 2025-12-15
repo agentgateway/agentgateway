@@ -48,7 +48,7 @@ impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 				scb.with_no_client_auth()
 			};
 			let mut sc = scb.with_single_cert(cert_chain, private_key)?;
-			// Defaults set here. These can be overriden by Frontend policy
+			// Defaults set here. These can be overridden by Frontend policy
 			// TODO: this default only makes sense for HTTPS, distinguish from TLS
 			sc.alpn_protocols = vec![b"h2".into(), b"http/1.1".into()];
 			Ok(sc)

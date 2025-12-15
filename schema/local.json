@@ -4535,7 +4535,7 @@
                                   "default": null
                                 },
                                 "tcp": {
-                                  "description": "Specify HTTP settings for the backend",
+                                  "description": "Specify TCP settings for the backend",
                                   "type": [
                                     "object",
                                     "null"
@@ -6298,7 +6298,7 @@
                                               "default": null
                                             },
                                             "tcp": {
-                                              "description": "Specify HTTP settings for the backend",
+                                              "description": "Specify TCP settings for the backend",
                                               "type": [
                                                 "object",
                                                 "null"
@@ -7811,7 +7811,7 @@
                                                           "default": null
                                                         },
                                                         "tcp": {
-                                                          "description": "Specify HTTP settings for the backend",
+                                                          "description": "Specify TCP settings for the backend",
                                                           "type": [
                                                             "object",
                                                             "null"
@@ -13126,7 +13126,7 @@
                 "default": null
               },
               "tcp": {
-                "description": "Specify HTTP settings for the backend",
+                "description": "Specify TCP settings for the backend",
                 "type": [
                   "object",
                   "null"

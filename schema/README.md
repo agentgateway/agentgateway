@@ -546,7 +546,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.http.version`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.http.requestTimeout`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.tcp`|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.tcp`|Specify TCP settings for the backend|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.tcp.keepalives`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.tcp.keepalives.enabled`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.tcp.keepalives.time`||
@@ -712,7 +712,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.http.version`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.http.requestTimeout`||
-|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.tcp`|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.tcp`|Specify TCP settings for the backend|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.tcp.keepalives`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.tcp.keepalives.enabled`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.tcp.keepalives.time`||
@@ -853,7 +853,7 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].routes[].backends[].policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].backends[].policies.http.version`||
 |`binds[].listeners[].routes[].backends[].policies.http.requestTimeout`||
-|`binds[].listeners[].routes[].backends[].policies.tcp`|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.tcp`|Specify TCP settings for the backend|
 |`binds[].listeners[].routes[].backends[].policies.tcp.keepalives`||
 |`binds[].listeners[].routes[].backends[].policies.tcp.keepalives.enabled`||
 |`binds[].listeners[].routes[].backends[].policies.tcp.keepalives.time`||
@@ -1419,7 +1419,7 @@ This folder contains JSON schemas for various parts of the project
 |`backends[].policies.http`|Specify HTTP settings for the backend|
 |`backends[].policies.http.version`||
 |`backends[].policies.http.requestTimeout`||
-|`backends[].policies.tcp`|Specify HTTP settings for the backend|
+|`backends[].policies.tcp`|Specify TCP settings for the backend|
 |`backends[].policies.tcp.keepalives`||
 |`backends[].policies.tcp.keepalives.enabled`||
 |`backends[].policies.tcp.keepalives.time`||

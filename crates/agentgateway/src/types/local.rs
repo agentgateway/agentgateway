@@ -687,7 +687,7 @@ pub struct LocalBackendPolicies {
 	/// Specify HTTP settings for the backend
 	#[serde(default)]
 	pub http: Option<backend::HTTP>,
-	/// Specify HTTP settings for the backend
+	/// Specify TCP settings for the backend
 	#[serde(default)]
 	pub tcp: Option<backend::TCP>,
 }

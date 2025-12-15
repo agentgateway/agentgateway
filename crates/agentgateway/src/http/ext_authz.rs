@@ -234,7 +234,7 @@ impl ExtAuthz {
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			client,
-			// Set the request timeout. This can be overriden by a timeout on the Backend object itself.
+			// Set the request timeout. This can be overridden by a timeout on the Backend object itself.
 			timeout: Some(self.timeout.unwrap_or(Duration::from_millis(200))),
 		};
 		let mut grpc_client = AuthorizationClient::new(chan);
@@ -634,7 +634,7 @@ impl ExtAuthz {
 				hv.as_bytes(),
 			);
 		}
-		// Set the request timeout. This can be overriden by a timeout on the Backend object itself.
+		// Set the request timeout. This can be overridden by a timeout on the Backend object itself.
 		let timeout_duration = self.timeout.unwrap_or(Duration::from_millis(200));
 		check_req
 			.extensions_mut()
