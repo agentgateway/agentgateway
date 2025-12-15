@@ -536,6 +536,17 @@ pub struct IstioIdentity {
 	service_account: Strng,
 }
 
+impl IstioIdentity {
+	/// Create a new IstioIdentity from SPIFFE URI components.
+	pub fn new(trust_domain: Strng, namespace: Strng, service_account: Strng) -> Self {
+		Self {
+			trust_domain,
+			namespace,
+			service_account,
+		}
+	}
+}
+
 impl fmt::Display for IstioIdentity {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		write!(

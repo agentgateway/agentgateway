@@ -200,6 +200,7 @@ dependencies = [
  "percent-encoding",
  "phonenumber",
  "pin-project-lite",
+ "ppp",
  "pprof",
  "prometheus-client",
  "prost 0.14.1",
@@ -4415,6 +4416,15 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
+
+[[package]]
+name = "ppp"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a7a2049cd2570bd67bf0228e86bf850f8ceb5190a345c471d03a909da6049e0"
+dependencies = [
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "pprof"

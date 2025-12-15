@@ -324,6 +324,7 @@ impl tower::Service<Uri> for MemoryConnector {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
 				local_addr: "127.0.0.1:80".parse().unwrap(),
 				start: Instant::now(),
+				raw_peer_addr: None,
 			},
 		);
 		if let Some(tls_config) = self.tls_config.clone() {
@@ -524,6 +525,7 @@ impl TestBind {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
 				local_addr: "127.0.0.1:80".parse().unwrap(),
 				start: Instant::now(),
+				raw_peer_addr: None,
 			},
 		);
 		let bind = self.pi.stores.read_binds().bind(bind_name.clone()).unwrap();

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use agent_core::drain;
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
@@ -599,15 +599,66 @@ impl Gateway {
 		tokio::time::timeout(to, handshake).await?
 	}
 
+	/// Handle incoming connection with PROXY protocol v2 header.
+	///
+	/// Used for Istio sandwich waypoint mode where ztunnel handles mTLS termination
+	/// and forwards traffic to agentgateway using PROXY protocol. The PROXY header
+	/// contains the original client addresses and peer identity (TLV 0xD0).
 	async fn terminate_proxy_protocol(
 		bind_name: BindKey,
 		bind_protocol: BindProtocol,
 		inp: Arc<ProxyInputs>,
-		raw_stream: Socket,
+		mut raw_stream: Socket,
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
-		// TODO: actually terminate the PROXY protocol
-		let _: () = Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, drain).await;
+		use super::proxy_protocol::parse_proxy_protocol;
+		use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
+		use crate::transport::tls::TlsInfo;
+		use std::time::Instant;
+
+		// PROXY protocol header is small (~232 bytes max), should arrive quickly.
+		// Use a relatively short timeout to detect misbehaving or slow clients.
+		const PROXY_PROTOCOL_TIMEOUT: Duration = Duration::from_secs(5);
+
+		// Parse PROXY protocol header from the stream with timeout
+		let pp_info = tokio::time::timeout(
+			PROXY_PROTOCOL_TIMEOUT,
+			parse_proxy_protocol(&mut raw_stream),
+		)
+		.await??;
+
+		// Capture ztunnel's address (the original TCP peer) before we overwrite it
+		let raw_peer_addr = raw_stream.tcp().peer_addr;
+
+		// Update TCPConnectionInfo with real source/dest from PROXY header
+		// This overwrites ztunnel's loopback address with the actual client address
+		raw_stream.ext_mut().insert(TCPConnectionInfo {
+			peer_addr: pp_info.src_addr,
+			local_addr: pp_info.dst_addr,
+			start: Instant::now(),
+			raw_peer_addr: Some(raw_peer_addr),
+		});
+
+		// Insert TLSConnectionInfo with identity from TLV 0xD0
+		// Even though there's no TLS on this connection, we use this struct
+		// to carry the peer identity that ztunnel extracted from mTLS
+		if let Some(identity) = pp_info.peer_identity {
+			raw_stream.ext_mut().insert(TLSConnectionInfo {
+				src_identity: Some(TlsInfo {
+					identity: Some(identity),
+					subject_alt_names: vec![],
+					issuer: crate::strng::EMPTY,
+					subject: crate::strng::EMPTY,
+					subject_cn: None,
+				}),
+				server_name: None,
+				negotiated_alpn: None,
+			});
+		}
+
+		// Continue with normal protocol handling - the identity is now in the socket
+		// extensions and will flow through to CEL authorization via with_source()
+		Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, drain).await;
 		Ok(())
 	}
 

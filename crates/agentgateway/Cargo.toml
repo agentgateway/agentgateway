@@ -87,6 +87,7 @@ parking_lot.workspace = true
 percent-encoding.workspace = true
 phonenumber.workspace = true
 pin-project-lite.workspace = true
+ppp.workspace = true
 prometheus-client.workspace = true
 prost-types.workspace = true
 prost-wkt-types.workspace = true

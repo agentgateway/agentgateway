@@ -28,6 +28,10 @@ pub struct TCPConnectionInfo {
 	pub peer_addr: SocketAddr,
 	pub local_addr: SocketAddr,
 	pub start: Instant,
+	/// Original TCP peer address before PROXY protocol parsing.
+	/// For PROXY protocol connections, this is ztunnel's address (useful for debugging).
+	/// For regular connections, this is None.
+	pub raw_peer_addr: Option<SocketAddr>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy)]
@@ -179,6 +183,7 @@ impl Socket {
 			peer_addr: to_canonical(stream.peer_addr()?),
 			local_addr: to_canonical(stream.local_addr()?),
 			start: Instant::now(),
+			raw_peer_addr: None,
 		});
 		Ok(Socket {
 			ext,
@@ -236,6 +241,10 @@ impl Socket {
 
 	pub fn ext<T: Send + Sync + 'static>(&self) -> Option<&T> {
 		self.ext.get::<T>()
+	}
+
+	pub fn ext_mut(&mut self) -> &mut Extension {
+		&mut self.ext
 	}
 
 	pub fn must_ext<T: Send + Sync + 'static>(&self) -> &T {
