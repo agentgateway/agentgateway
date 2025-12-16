@@ -339,7 +339,10 @@ mod aws {
 				// TODO this is not caching!!
 				Ok(
 					config
-						.credentials_provider().ok_or(anyhow::anyhow!("No credentials provider found in AWS config"))?
+						.credentials_provider()
+						.ok_or(anyhow::anyhow!(
+							"No credentials provider found in AWS config"
+						))?
 						.provide_credentials()
 						.await?,
 				)
