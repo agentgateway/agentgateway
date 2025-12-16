@@ -465,29 +465,35 @@
                   ]
                 },
                 "tls": {
+                  "description": "TLS configuration for a listener.\n\nEither provide `cert` and `key` paths for static certificates,\nor set `workloadIdentity: true` to use Istio workload identity.",
                   "type": [
                     "object",
                     "null"
                   ],
                   "properties": {
                     "cert": {
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "key": {
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "root": {
                       "type": [
                         "string",
                         "null"
                       ]
+                    },
+                    "workloadIdentity": {
+                      "type": "boolean"
                     }
                   },
-                  "additionalProperties": false,
-                  "required": [
-                    "cert",
-                    "key"
-                  ]
+                  "additionalProperties": false
                 },
                 "routes": {
                   "type": [

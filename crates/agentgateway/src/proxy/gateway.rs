@@ -25,7 +25,8 @@ use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{Extension, LoggingMode, Socket, TLSConnectionInfo};
 use crate::types::agent::{
-	Bind, BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
+	Bind, BindKey, BindProtocol, Listener, ListenerProtocol, ListenerSet, TransportProtocol,
+	TunnelProtocol,
 };
 use crate::types::frontend;
 use crate::{ProxyInputs, client};
@@ -298,35 +299,34 @@ impl Gateway {
 			},
 			BindProtocol::tcp => Self::proxy_tcp(bind_name, inputs, None, raw_stream, drain).await,
 			BindProtocol::tls => {
-				match Self::maybe_terminate_tls(
-					inputs.clone(),
-					raw_stream,
-					&policies,
-					bind_name.clone(),
-					false,
-				)
-				.await
-				{
-					Ok((selected_listener, stream)) => match selected_listener.protocol {
-						ListenerProtocol::HTTPS(_) => {
-							let _ = Self::proxy(
-								bind_name,
-								inputs,
-								Some(selected_listener),
-								stream,
-								Arc::new(policies),
-								drain,
-							)
-							.await;
+				match Self::terminate_tls(inputs.clone(), raw_stream, &policies, bind_name.clone()).await {
+					Ok((selected_listener, stream)) => match selected_listener {
+						// Workload identity: listener selection deferred to Host header
+						None => {
+							let _ = Self::proxy(bind_name, inputs, None, stream, Arc::new(policies), drain).await;
 						},
-						ListenerProtocol::TLS(_) => {
-							Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
-						},
-						_ => {
-							error!(
-								"invalid: TLS listener protocol is neither HTTPS nor TLS: {:?}",
-								selected_listener.protocol
-							)
+						// Static certs: route based on listener protocol
+						Some(listener) => match listener.protocol {
+							ListenerProtocol::HTTPS(_) => {
+								let _ = Self::proxy(
+									bind_name,
+									inputs,
+									Some(listener),
+									stream,
+									Arc::new(policies),
+									drain,
+								)
+								.await;
+							},
+							ListenerProtocol::TLS(_) => {
+								Self::proxy_tcp(bind_name, inputs, Some(listener), stream, drain).await
+							},
+							_ => {
+								error!(
+									"invalid: TLS listener protocol is neither HTTPS nor TLS: {:?}",
+									listener.protocol
+								)
+							},
 						},
 					},
 					Err(e) => {
@@ -511,62 +511,124 @@ impl Gateway {
 		proxy.proxy(stream).await
 	}
 
-	// maybe_terminate_tls will observe the TLS handshake, and once the client hello has been received, select
-	// a listener (based on SNI).
-	// Based on the listener, it will passthrough the TLS or terminate it with the appropriate configuration.
-	async fn maybe_terminate_tls(
+	/// Unified TLS termination handling both workload identity and static certificates.
+	///
+	/// Returns `(Option<Listener>, Socket)`:
+	/// - Workload identity: `(None, socket)` - uses Istio CA cert, listener selected later by Host header
+	/// - Static certs: `(Some(listener), socket)` - uses SNI-based listener selection
+	async fn terminate_tls(
 		inp: Arc<ProxyInputs>,
 		raw_stream: Socket,
 		policies: &FrontendPolices,
 		bind_key: BindKey,
-		is_https: bool,
-	) -> anyhow::Result<(Arc<Listener>, Socket)> {
+	) -> anyhow::Result<(Option<Arc<Listener>>, Socket)> {
 		let def = frontend::TLS::default();
-		let to = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
+		let timeout = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
+
+		// Check workload identity mode and extract what we need from bind.
+		// The bind lock is released at the end of this scope.
+		// Note: Mixed TLS modes are validated at config load time, so we can trust
+		// workload_identity_mode() returns Some(...) here.
+		let (use_workload_identity, listeners) = {
+			let bind = inp
+				.stores
+				.read_binds()
+				.bind(bind_key.clone())
+				.ok_or(ProxyError::BindNotFound)?;
+
+			match bind.listeners.workload_identity_mode() {
+				Some(true) => (true, None),
+				Some(false) => (false, Some(bind.listeners.clone())),
+				None => unreachable!("mixed TLS modes should be rejected at config load time"),
+			}
+		};
+
+		if use_workload_identity {
+			Self::terminate_tls_workload_identity(inp, raw_stream, timeout).await
+		} else {
+			Self::terminate_tls_static(
+				inp,
+				raw_stream,
+				policies,
+				bind_key,
+				timeout,
+				listeners.unwrap(),
+			)
+			.await
+		}
+	}
+
+	/// TLS termination using workload identity (Istio CA certificates).
+	async fn terminate_tls_workload_identity(
+		inp: Arc<ProxyInputs>,
+		raw_stream: Socket,
+		timeout: Duration,
+	) -> anyhow::Result<(Option<Arc<Listener>>, Socket)> {
+		let ca = inp.ca.as_ref().ok_or_else(|| {
+			anyhow!(
+				"CA client is required for workload identity; \
+				configure CA_ADDRESS, TRUST_DOMAIN, NAMESPACE, and SERVICE_ACCOUNT"
+			)
+		})?;
+
+		let cert = ca.get_identity().await?;
+		let server_config = Arc::new(cert.https_mtls_termination()?);
+		let tls = tokio::time::timeout(
+			timeout,
+			crate::transport::tls::accept(raw_stream, server_config),
+		)
+		.await??;
+
+		debug!("accepted workload identity mTLS connection");
+		Ok((None, tls))
+	}
+
+	/// TLS termination using static certificates with SNI-based listener selection.
+	async fn terminate_tls_static(
+		inp: Arc<ProxyInputs>,
+		raw_stream: Socket,
+		policies: &FrontendPolices,
+		bind_key: BindKey,
+		timeout: Duration,
+		listeners: ListenerSet,
+	) -> anyhow::Result<(Option<Arc<Listener>>, Socket)> {
 		let alpn = policies.tls.as_ref().and_then(|t| t.alpn.as_deref());
+
 		let handshake = async move {
-			let Some(bind) = inp.stores.read_binds().bind(bind_key.clone()) else {
-				return Err(ProxyError::BindNotFound.into());
-			};
-			let listeners = &bind.listeners;
 			let (mut ext, counter, inner) = raw_stream.into_parts();
 			let inner = Socket::new_rewind(inner);
 			let acceptor =
 				tokio_rustls::LazyConfigAcceptor::new(rustls::server::Acceptor::default(), inner);
 			pin_mut!(acceptor);
 			let tls_start = std::time::Instant::now();
+
 			let mut start = match acceptor.as_mut().await {
 				Ok(start) => start,
 				Err(e) => {
-					if is_https
-						&& let Some(io) = acceptor.take_io()
+					if let Some(io) = acceptor.take_io()
 						&& let Some(data) = io.buffered()
 						&& tls_looks_like_http(data)
 					{
-						anyhow::bail!("client sent an HTTP request to an HTTPS listener: {e}");
-						// TODO(https://github.com/rustls/tokio-rustls/pull/147): write
-						// let _ = io.write_all(b"HTTP/1.0 400 Bad Request\r\n\r\nclient sent an HTTP request to an HTTPS listener\n").await;
-						// let _ = io.shutdown().await;
+						anyhow::bail!("client sent an HTTP request to a TLS listener: {e}");
 					}
 					anyhow::bail!(e);
 				},
 			};
+
 			let ch = start.client_hello();
 			let sni = ch.server_name().unwrap_or_default();
 			let best = listeners
 				.best_match(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
-			match best.protocol.tls(alpn) {
-				Some(Err(e)) => {
-					// There is a TLS config for this listener, but its invalid. Reject the connection
-					Err(e)
-				},
+
+			match best.protocol.static_tls_config(alpn) {
+				Some(Err(e)) => Err(e),
 				Some(Ok(cfg)) => {
 					let tokio_rustls::StartHandshake { accepted, io, .. } = start;
 					let start = tokio_rustls::StartHandshake::from_parts(accepted, Box::new(io.discard()));
 					let tls = start.into_stream(cfg).await?;
 					let tls_dur = tls_start.elapsed();
-					// TLS handshake duration
+
 					let protocol = if matches!(best.protocol, ListenerProtocol::HTTPS(_)) {
 						TransportProtocol::https
 					} else {
@@ -582,21 +644,23 @@ impl Gateway {
 							protocol,
 						})
 						.observe(tls_dur.as_secs_f64());
-					Ok((best, Socket::from_tls(ext, counter, tls.into())?))
+
+					Ok((Some(best), Socket::from_tls(ext, counter, tls.into())?))
 				},
 				None => {
+					// TLS passthrough
 					let sni = sni.to_string();
-					// Passthrough
 					start.io.rewind();
 					ext.insert(TLSConnectionInfo {
 						server_name: Some(sni),
 						..Default::default()
 					});
-					Ok((best, Socket::from_rewind(ext, counter, start.io)))
+					Ok((Some(best), Socket::from_rewind(ext, counter, start.io)))
 				},
 			}
 		};
-		tokio::time::timeout(to, handshake).await?
+
+		tokio::time::timeout(timeout, handshake).await?
 	}
 
 	/// Handle incoming connection with PROXY protocol v2 header.

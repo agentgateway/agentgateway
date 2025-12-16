@@ -2210,9 +2210,14 @@ type TLSConfig struct {
 	Cert       []byte                 `protobuf:"bytes,1,opt,name=cert,proto3" json:"cert,omitempty"`
 	PrivateKey []byte                 `protobuf:"bytes,2,opt,name=private_key,json=privateKey,proto3" json:"private_key,omitempty"`
 	// Root to verify client certificates. If not set, mTLS will not be used
-	Root          []byte `protobuf:"bytes,3,opt,name=root,proto3,oneof" json:"root,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Root []byte `protobuf:"bytes,3,opt,name=root,proto3,oneof" json:"root,omitempty"`
+	// Use workload identity certificates from Istio CA instead of static cert/key.
+	// When true, cert and private_key are ignored and certificates are obtained
+	// dynamically from the mesh CA. Requires CA_ADDRESS, TRUST_DOMAIN, NAMESPACE,
+	// and SERVICE_ACCOUNT environment variables to be configured.
+	WorkloadIdentity bool `protobuf:"varint,4,opt,name=workload_identity,json=workloadIdentity,proto3" json:"workload_identity,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *TLSConfig) Reset() {
@@ -2264,6 +2269,13 @@ func (x *TLSConfig) GetRoot() []byte {
 		return x.Root
 	}
 	return nil
+}
+
+func (x *TLSConfig) GetWorkloadIdentity() bool {
+	if x != nil {
+		return x.WorkloadIdentity
+	}
+	return false
 }
 
 type Timeout struct {
@@ -9565,12 +9577,13 @@ const file_resource_proto_rawDesc = "" +
 	"\x03mcp\x18\x05 \x01(\v2%.agentgateway.dev.resource.MCPBackendH\x00R\x03mcp\x12J\n" +
 	"\adynamic\x18\x06 \x01(\v2..agentgateway.dev.resource.DynamicForwardProxyH\x00R\adynamic\x12U\n" +
 	"\x0finline_policies\x18\a \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePoliciesB\x06\n" +
-	"\x04kind\"b\n" +
+	"\x04kind\"\x8f\x01\n" +
 	"\tTLSConfig\x12\x12\n" +
 	"\x04cert\x18\x01 \x01(\fR\x04cert\x12\x1f\n" +
 	"\vprivate_key\x18\x02 \x01(\fR\n" +
 	"privateKey\x12\x17\n" +
-	"\x04root\x18\x03 \x01(\fH\x00R\x04root\x88\x01\x01B\a\n" +
+	"\x04root\x18\x03 \x01(\fH\x00R\x04root\x88\x01\x01\x12+\n" +
+	"\x11workload_identity\x18\x04 \x01(\bR\x10workloadIdentityB\a\n" +
 	"\x05_root\"\x82\x01\n" +
 	"\aTimeout\x123\n" +
 	"\arequest\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\arequest\x12B\n" +

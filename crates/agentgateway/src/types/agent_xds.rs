@@ -407,9 +407,25 @@ impl TryFrom<(proto::agent::Protocol, Option<&proto::agent::TlsConfig>)> for Lis
 		match (value.0, value.1) {
 			(Protocol::Unknown, _) => Err(ProtoError::EnumParse("unknown protocol".into())),
 			(Protocol::Http, None) => Ok(ListenerProtocol::HTTP),
-			(Protocol::Https, Some(tls)) => Ok(ListenerProtocol::HTTPS(tls.into())),
-			// TLS termination
-			(Protocol::Tls, Some(tls)) => Ok(ListenerProtocol::TLS(Some(tls.into()))),
+			(Protocol::Https, Some(tls)) => {
+				if tls.workload_identity {
+					Ok(ListenerProtocol::HTTPS(TlsTermination::WorkloadIdentity))
+				} else {
+					Ok(ListenerProtocol::HTTPS(TlsTermination::Static(tls.into())))
+				}
+			},
+			// TLS termination (workload identity not supported - use HTTPS for mesh mTLS)
+			(Protocol::Tls, Some(tls)) => {
+				if tls.workload_identity {
+					Err(ProtoError::Generic(
+						"workload_identity is not supported for TLS protocol; use HTTPS instead".into(),
+					))
+				} else {
+					Ok(ListenerProtocol::TLS(Some(TlsTermination::Static(
+						tls.into(),
+					))))
+				}
+			},
 			// TLS passthrough
 			(Protocol::Tls, None) => Ok(ListenerProtocol::TLS(None)),
 			(Protocol::Tcp, None) => Ok(ListenerProtocol::TCP),

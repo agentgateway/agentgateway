@@ -141,6 +141,11 @@ message TLSConfig {
   bytes private_key = 2;
   // Root to verify client certificates. If not set, mTLS will not be used
   optional bytes root = 3;
+  // Use workload identity certificates from Istio CA instead of static cert/key.
+  // When true, cert and private_key are ignored and certificates are obtained
+  // dynamically from the mesh CA. Requires CA_ADDRESS, TRUST_DOMAIN, NAMESPACE,
+  // and SERVICE_ACCOUNT environment variables to be configured.
+  bool workload_identity = 4;
 }
 
 enum Protocol {

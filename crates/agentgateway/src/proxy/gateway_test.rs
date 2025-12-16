@@ -249,11 +249,12 @@ async fn tls_termination() {
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
+					cert: Some("../../examples/tls/certs/cert.pem".into()),
+					key: Some("../../examples/tls/certs/key.pem".into()),
 					root: None,
+					workload_identity: false,
 				}
-				.try_into()
+				.into_termination()
 				.unwrap(),
 			),
 			tcp_routes: Default::default(),

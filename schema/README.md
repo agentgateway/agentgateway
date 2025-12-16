@@ -67,10 +67,11 @@ This folder contains JSON schemas for various parts of the project
 |`binds[].listeners[].gatewayName`||
 |`binds[].listeners[].hostname`|Can be a wildcard|
 |`binds[].listeners[].protocol`||
-|`binds[].listeners[].tls`||
+|`binds[].listeners[].tls`|TLS configuration for a listener.<br><br>Either provide `cert` and `key` paths for static certificates,<br>or set `workloadIdentity: true` to use Istio workload identity.|
 |`binds[].listeners[].tls.cert`||
 |`binds[].listeners[].tls.key`||
 |`binds[].listeners[].tls.root`||
+|`binds[].listeners[].tls.workloadIdentity`||
 |`binds[].listeners[].routes`||
 |`binds[].listeners[].routes[].name`||
 |`binds[].listeners[].routes[].namespace`||
