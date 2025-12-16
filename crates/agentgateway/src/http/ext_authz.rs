@@ -545,26 +545,6 @@ impl ExtAuthz {
 			unreachable!();
 		};
 
-		let include = if self.include_request_headers.is_empty() {
-			&[HeaderOrPseudo::Header(http::header::AUTHORIZATION)]
-		} else {
-			self.include_request_headers.as_slice()
-		};
-		let mut headers = HeaderMap::with_capacity(include.len());
-		for h in include {
-			match h {
-				HeaderOrPseudo::Header(k) => {
-					req.headers().get_all(k).iter().for_each(|h| {
-						headers.append(k.clone(), h.clone());
-					});
-				},
-				_pseudo => {
-					// Ignored for HTTP.
-					// TODO: reject at config time.
-				},
-			}
-		}
-
 		let body = if let Some(body_opts) = &self.include_request_body {
 			let max_size = body_opts.max_request_bytes as usize;
 			match crate::http::inspect_body_with_limit(req.body_mut(), max_size).await {
@@ -612,7 +592,22 @@ impl ExtAuthz {
 		let mut check_req = rb
 			.body(http::Body::from(body))
 			.map_err(|e| ProxyError::Processing(e.into()))?;
-		*check_req.headers_mut() = headers;
+
+		// Include any request headers
+		let include = if self.include_request_headers.is_empty() {
+			&[HeaderOrPseudo::Header(http::header::AUTHORIZATION)]
+		} else {
+			self.include_request_headers.as_slice()
+		};
+		for h in include {
+			if let Some(hv) = http::get_pseudo_or_header_value(h, req) {
+				let _ = http::apply_header_or_pseudo(
+					&mut http::RequestOrResponse::Request(&mut check_req),
+					h,
+					hv.as_bytes(),
+				);
+			}
+		}
 
 		// Insert any headers derived from CEL expresions.
 		for (hn, hv) in add_request_headers {
