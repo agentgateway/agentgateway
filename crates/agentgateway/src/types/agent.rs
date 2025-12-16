@@ -141,35 +141,56 @@ pub fn parse_key(mut key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error
 		_ => Err(anyhow!("unsupported key")),
 	}
 }
+/// How TLS is terminated for HTTPS/TLS listeners.
+#[derive(Debug, Clone, serde::Serialize)]
+pub enum TlsTermination {
+	/// Static certificates loaded from disk.
+	Static(ServerTLSConfig),
+	/// Workload identity certificates obtained dynamically from Istio CA.
+	/// Enables mTLS with automatic certificate rotation and trust domain validation.
+	WorkloadIdentity,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum ListenerProtocol {
-	/// HTTP
+	/// HTTP (plaintext)
 	HTTP,
-	/// HTTPS, terminating TLS then treating as HTTP
-	HTTPS(ServerTLSConfig),
-	/// TLS (passthrough or termination)
-	TLS(Option<ServerTLSConfig>),
-	/// Opaque TCP
+	/// HTTPS - TLS terminated then treated as HTTP
+	HTTPS(TlsTermination),
+	/// TLS (passthrough or termination for TCP)
+	TLS(Option<TlsTermination>),
+	/// Opaque TCP (no TLS)
 	TCP,
+	/// HBONE - HTTP/2 CONNECT tunneling for Istio ambient mesh
 	HBONE,
 }
 
 impl ListenerProtocol {
-	pub fn tls(
+	/// Returns the static TLS config if this listener uses static certificates.
+	/// Returns `None` for WorkloadIdentity (handled by separate code path).
+	pub fn static_tls_config(
 		&self,
 		alpns: Option<&[Vec<u8>]>,
 	) -> Option<anyhow::Result<Arc<rustls::ServerConfig>>> {
 		match self {
-			ListenerProtocol::HTTPS(t) => Some(
+			ListenerProtocol::HTTPS(TlsTermination::Static(t)) => Some(
 				t.config_for(alpns)
 					.ok_or_else(|| anyhow!("TLS certificate invalid")),
 			),
-			ListenerProtocol::TLS(t) => t.as_ref().map(|t| {
+			ListenerProtocol::TLS(Some(TlsTermination::Static(t))) => Some(
 				t.config_for(alpns)
-					.ok_or_else(|| anyhow!("TLS certificate invalid"))
-			}),
+					.ok_or_else(|| anyhow!("TLS certificate invalid")),
+			),
 			_ => None,
 		}
+	}
+
+	/// Returns true if this listener uses workload identity for TLS.
+	pub fn uses_workload_identity(&self) -> bool {
+		matches!(
+			self,
+			ListenerProtocol::HTTPS(TlsTermination::WorkloadIdentity)
+		)
 	}
 }
 
@@ -985,6 +1006,22 @@ impl ListenerSet {
 
 	pub fn iter(&self) -> impl Iterator<Item = &Listener> {
 		self.inner.values().map(Arc::as_ref)
+	}
+
+	/// Check if all, some, or no listeners use workload identity for TLS.
+	///
+	/// Returns:
+	/// - `Some(true)` if ALL listeners use workload identity
+	/// - `Some(false)` if NO listeners use workload identity
+	/// - `None` if there's a MIX (invalid configuration)
+	pub fn workload_identity_mode(&self) -> Option<bool> {
+		let all = self.iter().all(|l| l.protocol.uses_workload_identity());
+		let any = self.iter().any(|l| l.protocol.uses_workload_identity());
+		match (all, any) {
+			(true, _) => Some(true),
+			(false, false) => Some(false),
+			(false, true) => None,
+		}
 	}
 }
 
@@ -1852,5 +1889,73 @@ InvalidKeyData
 		// Ensure hostname:port still works
 		let target = Target::try_from("example.com:443").unwrap();
 		assert!(matches!(target, Target::Hostname(h, 443) if h.as_str() == "example.com"));
+	}
+
+	fn make_listener(key: &str, protocol: ListenerProtocol) -> Listener {
+		Listener {
+			key: strng::new(key),
+			name: ListenerName {
+				gateway_name: strng::new("test-gateway"),
+				gateway_namespace: strng::new("default"),
+				listener_name: strng::new(key),
+				listener_set: None,
+			},
+			hostname: strng::new(""),
+			protocol,
+			routes: RouteSet::default(),
+			tcp_routes: TCPRouteSet::default(),
+		}
+	}
+
+	#[test]
+	fn test_workload_identity_mode_all_workload_identity() {
+		let mut ls = ListenerSet::default();
+		ls.insert(make_listener(
+			"l1",
+			ListenerProtocol::HTTPS(TlsTermination::WorkloadIdentity),
+		));
+		ls.insert(make_listener(
+			"l2",
+			ListenerProtocol::HTTPS(TlsTermination::WorkloadIdentity),
+		));
+
+		assert_eq!(ls.workload_identity_mode(), Some(true));
+	}
+
+	#[test]
+	fn test_workload_identity_mode_none_workload_identity() {
+		let mut ls = ListenerSet::default();
+		ls.insert(make_listener("l1", ListenerProtocol::HTTP));
+		ls.insert(make_listener(
+			"l2",
+			ListenerProtocol::HTTPS(TlsTermination::Static(ServerTLSConfig::new_invalid())),
+		));
+
+		assert_eq!(ls.workload_identity_mode(), Some(false));
+	}
+
+	#[test]
+	fn test_workload_identity_mode_mixed() {
+		let mut ls = ListenerSet::default();
+		ls.insert(make_listener(
+			"l1",
+			ListenerProtocol::HTTPS(TlsTermination::WorkloadIdentity),
+		));
+		ls.insert(make_listener(
+			"l2",
+			ListenerProtocol::HTTPS(TlsTermination::Static(ServerTLSConfig::new_invalid())),
+		));
+
+		// Mixed configuration returns None (invalid)
+		assert_eq!(ls.workload_identity_mode(), None);
+	}
+
+	#[test]
+	fn test_workload_identity_mode_empty() {
+		let ls = ListenerSet::default();
+		// Empty set: all() returns true (vacuously), any() returns false
+		// Pattern match (true, _) → Some(true)
+		// This is safe because an empty bind won't actually accept connections
+		assert_eq!(ls.workload_identity_mode(), Some(true));
 	}
 }

@@ -1,8 +1,9 @@
 use std::cmp;
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rustls::client::Resumption;
 use rustls::server::VerifierBuilderError;
@@ -74,15 +75,25 @@ pub struct Expiration {
 	pub not_after: SystemTime,
 }
 
-#[derive(Debug)]
 pub struct WorkloadCertificate {
-	// server_config: Arc<ServerConfig>,
-	// client_config: Arc<ClientConfig>,
 	roots: Arc<RootCertStore>,
 	chain: Vec<Certificate>,
 	private_key: PrivateKeyDer<'static>,
 	expiry: Expiration,
 	identity: Identity,
+	/// Cache for outbound mTLS client configs, keyed by sorted destination identities.
+	/// This ensures connection pooling works correctly (pool keys use Arc pointer equality).
+	legacy_mtls_cache: RwLock<HashMap<Vec<Identity>, VersionedBackendTLS>>,
+	hbone_mtls_cache: RwLock<HashMap<Vec<Identity>, VersionedBackendTLS>>,
+}
+
+impl std::fmt::Debug for WorkloadCertificate {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("WorkloadCertificate")
+			.field("identity", &self.identity)
+			.field("expiry", &self.expiry)
+			.finish_non_exhaustive()
+	}
 }
 
 impl WorkloadCertificate {
@@ -126,6 +137,8 @@ impl WorkloadCertificate {
 			private_key: key,
 			chain: cert_and_chain,
 			identity,
+			legacy_mtls_cache: RwLock::new(HashMap::new()),
+			hbone_mtls_cache: RwLock::new(HashMap::new()),
 		})
 	}
 	pub fn is_expired(&self) -> bool {
@@ -141,13 +154,34 @@ impl WorkloadCertificate {
 	}
 
 	pub fn legacy_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
-		// TODO: this is (way) too expensive to build per request
+		// Normalize identity order for consistent cache keys
+		let mut cache_key = identity;
+		cache_key.sort();
+
+		// Check cache with read lock first (fast path)
+		{
+			let reader = self.legacy_mtls_cache.read().unwrap();
+			if let Some(cached) = reader.get(&cache_key) {
+				return Ok(cached.clone());
+			}
+		}
+
+		// Acquire write lock and double-check (another thread may have inserted)
+		let mut writer = self.legacy_mtls_cache.write().unwrap();
+		if let Some(cached) = writer.get(&cache_key) {
+			return Ok(cached.clone());
+		}
+
+		// Build new config while holding write lock to prevent duplicate builds
 		let roots = self.roots.clone();
-		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
+		let verifier = transport::tls::identity::IdentityVerifier {
+			roots,
+			identity: cache_key.clone(),
+		};
 		let mut cc = ClientConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("client config must be valid")
-			.dangerous() // Customer verifier is requires "dangerous" opt-in
+			.dangerous() // Custom verifier requires "dangerous" opt-in
 			.with_custom_certificate_verifier(Arc::new(verifier))
 			.with_client_auth_cert(
 				self.chain.iter().map(|c| c.der.clone()).collect(),
@@ -155,20 +189,44 @@ impl WorkloadCertificate {
 			)?;
 		cc.alpn_protocols = vec![b"istio".into()];
 		cc.resumption = Resumption::disabled();
-		// cc.enable_sni = false;
-		Ok(VersionedBackendTLS {
+
+		let result = VersionedBackendTLS {
 			hostname_override: None,
 			config: Arc::new(cc),
-		})
+		};
+		writer.insert(cache_key, result.clone());
+
+		Ok(result)
 	}
 	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
-		// TODO: this is (way) too expensive to build per request
+		// Normalize identity order for consistent cache keys
+		let mut cache_key = identity;
+		cache_key.sort();
+
+		// Check cache with read lock first (fast path)
+		{
+			let reader = self.hbone_mtls_cache.read().unwrap();
+			if let Some(cached) = reader.get(&cache_key) {
+				return Ok(cached.clone());
+			}
+		}
+
+		// Acquire write lock and double-check (another thread may have inserted)
+		let mut writer = self.hbone_mtls_cache.write().unwrap();
+		if let Some(cached) = writer.get(&cache_key) {
+			return Ok(cached.clone());
+		}
+
+		// Build new config while holding write lock to prevent duplicate builds
 		let roots = self.roots.clone();
-		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
+		let verifier = transport::tls::identity::IdentityVerifier {
+			roots,
+			identity: cache_key.clone(),
+		};
 		let mut cc = ClientConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("client config must be valid")
-			.dangerous() // Customer verifier is requires "dangerous" opt-in
+			.dangerous() // Custom verifier requires "dangerous" opt-in
 			.with_custom_certificate_verifier(Arc::new(verifier))
 			.with_client_auth_cert(
 				self.chain.iter().map(|c| c.der.clone()).collect(),
@@ -177,34 +235,58 @@ impl WorkloadCertificate {
 		cc.alpn_protocols = vec![b"h2".into()];
 		cc.resumption = Resumption::disabled();
 		cc.enable_sni = false;
-		Ok(VersionedBackendTLS {
+
+		let result = VersionedBackendTLS {
 			hostname_override: None,
 			config: Arc::new(cc),
-		})
+		};
+		writer.insert(cache_key, result.clone());
+
+		Ok(result)
 	}
+	/// Create a TLS ServerConfig for terminating HBONE (ambient mesh) connections.
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
+		self.mtls_server_config(None)
+	}
+
+	/// Create a TLS ServerConfig for HTTPS listeners using workload identity mTLS.
+	///
+	/// ALPN protocols:
+	/// - `istio`: For clients with Istio sidecars (mesh mTLS)
+	/// - `h2`, `http/1.1`: For direct HTTP clients without sidecars
+	pub fn https_mtls_termination(&self) -> Result<ServerConfig, Error> {
+		const HTTPS_ALPN: &[&[u8]] = &[b"istio", b"h2", b"http/1.1"];
+		self.mtls_server_config(Some(HTTPS_ALPN))
+	}
+
+	fn mtls_server_config(&self, alpn: Option<&[&[u8]]>) -> Result<ServerConfig, Error> {
 		let Identity::Spiffe { trust_domain, .. } = &self.identity;
 
-		// TODO: this istoo expensive to build per request
-		let roots = self.roots.clone();
-		let raw_client_cert_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
-			roots.clone(),
+		let raw_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+			self.roots.clone(),
 			transport::tls::provider(),
 		)
 		.build()?;
-		let client_cert_verifier = transport::tls::trustdomain::TrustDomainVerifier::new(
-			raw_client_cert_verifier,
+
+		let verifier = transport::tls::trustdomain::TrustDomainVerifier::new(
+			raw_verifier,
 			Some(trust_domain.clone()),
 		);
-		let sc = ServerConfig::builder_with_provider(transport::tls::provider())
+
+		let mut config = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("server config must be valid")
-			.with_client_cert_verifier(client_cert_verifier)
+			.with_client_cert_verifier(verifier)
 			.with_single_cert(
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
-		Ok(sc)
+
+		if let Some(protocols) = alpn {
+			config.alpn_protocols = protocols.iter().map(|p| p.to_vec()).collect();
+		}
+
+		Ok(config)
 	}
 }
 
@@ -308,6 +390,13 @@ fn expiration(cert: X509Certificate) -> Expiration {
 	}
 }
 
+/// Initial backoff delay after a failed certificate fetch.
+const INITIAL_BACKOFF: Duration = Duration::from_secs(1);
+/// Maximum backoff delay between retry attempts.
+const MAX_BACKOFF: Duration = Duration::from_secs(120);
+/// How often to check if refresh is needed when we have a valid certificate.
+const CHECK_INTERVAL: Duration = Duration::from_secs(30);
+
 #[derive(Debug, Clone, Default)]
 enum CertificateState {
 	#[default]
@@ -374,47 +463,81 @@ impl CaClient {
 		config: Config,
 		state_tx: watch::Sender<CertificateState>,
 	) {
-		let mut interval = tokio::time::interval(Duration::from_secs(30)); // Check every 30 seconds
-
-		// Start with an immediate fetch
-		if let Err(e) = Self::fetch_and_update_certificate(client.clone(), &config, &state_tx).await {
-			error!("Initial certificate fetch failed: {:?}", e);
-			let _ = state_tx.send(CertificateState::Error(e));
-		}
+		let mut backoff = INITIAL_BACKOFF;
+		let mut next_attempt = Instant::now();
 
 		loop {
-			interval.tick().await;
+			// Sleep until next attempt time
+			tokio::time::sleep_until(next_attempt.into()).await;
 
-			// Check if we need to renew
-			let should_renew = {
+			// Check current state to determine what to do
+			let (should_fetch, valid_cert_expiry) = {
 				let state = state_tx.borrow();
 				match &*state {
 					CertificateState::Available(cert) => {
-						let refresh_at = cert.refresh_at();
-						SystemTime::now() >= refresh_at
+						let needs_refresh = SystemTime::now() >= cert.refresh_at();
+						let expiry = if cert.is_expired() {
+							None
+						} else {
+							Some(cert.expiry.not_after)
+						};
+						(needs_refresh, expiry)
 					},
-					CertificateState::Error(_) | CertificateState::NotReady => true,
+					CertificateState::Error(_) | CertificateState::NotReady => (true, None),
 				}
 			};
 
-			if should_renew {
-				info!("Renewing certificate for identity: {}", config.identity);
+			if !should_fetch {
+				// Certificate is valid and doesn't need refresh yet, check again later
+				next_attempt = Instant::now() + CHECK_INTERVAL;
+				continue;
+			}
 
-				match Self::fetch_and_update_certificate(client.clone(), &config, &state_tx).await {
-					Ok(_) => {
-						info!(
-							"Successfully renewed certificate for identity: {}",
-							config.identity
+			info!("Fetching certificate for identity: {}", config.identity);
+
+			match Self::fetch_and_update_certificate(client.clone(), &config, &state_tx).await {
+				Ok(_) => {
+					info!(
+						"Successfully fetched certificate for identity: {}",
+						config.identity
+					);
+					// Reset backoff on success
+					backoff = INITIAL_BACKOFF;
+					// Schedule next check based on normal interval
+					next_attempt = Instant::now() + CHECK_INTERVAL;
+				},
+				Err(e) => {
+					// Calculate retry delay, capping at cert expiry if we have a valid cert
+					let retry_delay = match valid_cert_expiry {
+						Some(expiry) => {
+							// Cap retry at cert expiry to maximize renewal attempts
+							let until_expiry = expiry
+								.duration_since(SystemTime::now())
+								.unwrap_or(Duration::ZERO);
+							cmp::min(backoff, until_expiry)
+						},
+						None => backoff,
+					};
+
+					if valid_cert_expiry.is_some() {
+						// We still have a valid certificate - keep using it, retry with backoff
+						warn!(
+							"Certificate refresh failed for {}, retaining valid certificate: {}. Retrying in {:?}",
+							config.identity, e, retry_delay
 						);
-					},
-					Err(e) => {
+						// Don't update state - keep the valid certificate
+					} else {
+						// No valid certificate available - set error state
 						error!(
-							"Failed to renew certificate for identity {}: {}",
-							config.identity, e
+							"Certificate fetch failed for {} with no valid fallback: {}. Retrying in {:?}",
+							config.identity, e, retry_delay
 						);
 						let _ = state_tx.send(CertificateState::Error(e));
-					},
-				}
+					}
+					// Schedule retry
+					next_attempt = Instant::now() + retry_delay;
+					backoff = cmp::min(MAX_BACKOFF, backoff * 2);
+				},
 			}
 		}
 	}
@@ -424,8 +547,6 @@ impl CaClient {
 		config: &Config,
 		state_tx: &watch::Sender<CertificateState>,
 	) -> Result<(), Error> {
-		info!("Fetching certificate for identity: {}", config.identity);
-
 		let svc = control::grpc_connector(
 			client,
 			config.address.clone(),

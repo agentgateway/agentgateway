@@ -19,8 +19,8 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTarget, BackendWithPolicies, Bind, BindKey,
-	FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey, PolicyTarget,
-	Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TrafficPolicy,
+	BindProtocol, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
+	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TrafficPolicy,
 };
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -834,6 +834,15 @@ impl Store {
 			}
 			bind.listeners.insert(v)
 		}
+
+		// Warn if TLS mode is mixed (should be caught by control plane validation)
+		if bind.protocol == BindProtocol::tls && bind.listeners.workload_identity_mode().is_none() {
+			warn!(
+				bind=%bind.key,
+				"bind has mixed workload identity and static TLS listeners; this is unsupported"
+			);
+		}
+
 		let arc = Arc::new(bind);
 		self.binds.insert(arc.key.clone(), arc.clone());
 		// ok to have no subs
