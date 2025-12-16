@@ -242,21 +242,13 @@ mod aws {
 	pub async fn sign_request(req: &mut http::Request, aws_auth: &AwsAuth) -> anyhow::Result<()> {
 		let creds = load_credentials(aws_auth).await?.into();
 		let orig_body = std::mem::take(req.body_mut());
-		let body = orig_body.collect().await?.to_bytes();
 		// Get the region based on auth mode
 		let region = match aws_auth {
 			AwsAuth::ExplicitConfig {
 				region: Some(region),
 				..
 			} => region.as_str(),
-			AwsAuth::ExplicitConfig { region: None, .. } => req
-				.extensions()
-				.get::<AwsRegion>()
-				.map(|r| r.region.as_str())
-				.ok_or(anyhow::anyhow!(
-					"Region must be specified in AWS auth config when used with non-AWS backends"
-				))?,
-			AwsAuth::Implicit {} => {
+			AwsAuth::ExplicitConfig { region: None, .. } | AwsAuth::Implicit {} => {
 				// Try to get region from request extensions first, then fall back to AWS config
 				if let Some(aws_region) = req.extensions().get::<AwsRegion>() {
 					aws_region.region.as_str()
@@ -277,11 +269,12 @@ mod aws {
 			.identity(&creds)
 			.region(region)
 			.name("bedrock")
-			.time(super::now())
+			.time(std::time::SystemTime::now())
 			.settings(aws_sigv4::http_request::SigningSettings::default())
 			.build()?
 			.into();
 
+		let body = orig_body.collect().await?.to_bytes();
 		let signable_request = aws_sigv4::http_request::SignableRequest::new(
 			req.method().as_str(),
 			req.uri().to_string().replace("http://", "https://"),
@@ -314,7 +307,7 @@ mod aws {
 	static SDK_CONFIG: OnceCell<SdkConfig> = OnceCell::const_new();
 	async fn sdk_config<'a>() -> &'a SdkConfig {
 		SDK_CONFIG
-			.get_or_init(|| async { aws_config::load_defaults(BehaviorVersion::latest()).await })
+			.get_or_init(|| async { aws_config::load_defaults(BehaviorVersion::v2025_08_07()).await })
 			.await
 	}
 
@@ -346,26 +339,13 @@ mod aws {
 				// TODO this is not caching!!
 				Ok(
 					config
-						.credentials_provider()
-						.unwrap()
+						.credentials_provider().ok_or(anyhow::anyhow!("No credentials provider found in AWS config"))?
 						.provide_credentials()
 						.await?,
 				)
 			},
 		}
 	}
-}
-
-#[cfg(not(test))]
-fn now() -> std::time::SystemTime {
-	std::time::SystemTime::now()
-}
-
-#[cfg(test)]
-fn now() -> std::time::SystemTime {
-	// in tests, time is always the same
-	use std::time::{Duration, UNIX_EPOCH};
-	UNIX_EPOCH + Duration::from_secs(1_700_000_000)
 }
 
 mod azure {
