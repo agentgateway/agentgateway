@@ -123,6 +123,91 @@ fn test_ssn_recognizer() {
 }
 
 #[test]
+fn test_ca_sin_recognizer() {
+	let recognizer = ca_sin_recognizer::CaSinRecognizer::new();
+
+	// Test formatted SINs with hyphens (using test numbers)
+	let text = "SIN: 123-456-789 or 987-654-321";
+	let results = recognizer.recognize(text);
+
+	// Should find formatted SIN patterns
+	assert!(!results.is_empty());
+	for result in results {
+		assert!(result.score > 0.0);
+		assert!(result.matched.contains("-"));
+		// Verify it's 9 digits with hyphens
+		let digits_only: String = result.matched.chars().filter(|c| c.is_ascii_digit()).collect();
+		assert_eq!(digits_only.len(), 9);
+	}
+}
+
+#[test]
+fn test_ca_sin_recognizer_formatted_with_spaces() {
+	let recognizer = ca_sin_recognizer::CaSinRecognizer::new();
+
+	// Test formatted SINs with spaces
+	let text = "SIN: 123 456 789 or 987 654 321";
+	let results = recognizer.recognize(text);
+
+	// Should find formatted SIN patterns
+	assert!(!results.is_empty());
+	for result in results {
+		assert!(result.score > 0.0);
+		// Verify it's 9 digits
+		let digits_only: String = result.matched.chars().filter(|c| c.is_ascii_digit()).collect();
+		assert_eq!(digits_only.len(), 9);
+	}
+}
+
+#[test]
+fn test_ca_sin_recognizer_unformatted() {
+	let recognizer = ca_sin_recognizer::CaSinRecognizer::new();
+
+	// Test unformatted SINs (using test numbers)
+	let text = "SIN: 123456789 or 987654321";
+	let results = recognizer.recognize(text);
+
+	// Should find unformatted SIN patterns (lower confidence)
+	assert!(!results.is_empty());
+	for result in results {
+		assert!(result.score > 0.0);
+		// Verify it's exactly 9 digits
+		assert_eq!(result.matched.len(), 9);
+		assert!(result.matched.chars().all(|c| c.is_ascii_digit()));
+	}
+}
+
+#[test]
+fn test_ca_sin_recognizer_mixed_formats() {
+	let recognizer = ca_sin_recognizer::CaSinRecognizer::new();
+
+	// Test mixed formats
+	let text = "SINs: 123-456-789, 987 654 321, and 456789012";
+	let results = recognizer.recognize(text);
+
+	// Should find all three formats
+	assert!(results.len() >= 3);
+	
+	let matched_texts: Vec<&str> = results.iter().map(|r| r.matched.as_str()).collect();
+	
+	// Check for formatted with hyphens
+	assert!(matched_texts.iter().any(|&s| s == "123-456-789"));
+	// Check for formatted with spaces
+	assert!(matched_texts.iter().any(|&s| s == "987 654 321"));
+	// Check for unformatted
+	assert!(matched_texts.iter().any(|&s| s == "456789012"));
+	
+	// Verify scores: formatted should have higher confidence
+	for result in results {
+		if result.matched.contains("-") || result.matched.contains(" ") {
+			assert!(result.score >= 0.7, "Formatted SIN should have score >= 0.7, got {}", result.score);
+		} else {
+			assert!(result.score >= 0.3, "Unformatted SIN should have score >= 0.3, got {}", result.score);
+		}
+	}
+}
+
+#[test]
 fn test_pattern_recognizer() {
 	let mut recognizer = pattern_recognizer::PatternRecognizer::new("TEST", vec!["test".to_string()]);
 	recognizer.add_pattern("test", r"\btest\b", 1.0);

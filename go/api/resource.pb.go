@@ -624,6 +624,7 @@ const (
 	BackendPolicySpec_Ai_CREDIT_CARD         BackendPolicySpec_Ai_BuiltinRegexRule = 2
 	BackendPolicySpec_Ai_PHONE_NUMBER        BackendPolicySpec_Ai_BuiltinRegexRule = 3
 	BackendPolicySpec_Ai_EMAIL               BackendPolicySpec_Ai_BuiltinRegexRule = 4
+	BackendPolicySpec_Ai_CA_SIN              BackendPolicySpec_Ai_BuiltinRegexRule = 5
 )
 
 // Enum value maps for BackendPolicySpec_Ai_BuiltinRegexRule.
@@ -634,6 +635,7 @@ var (
 		2: "CREDIT_CARD",
 		3: "PHONE_NUMBER",
 		4: "EMAIL",
+		5: "CA_SIN",
 	}
 	BackendPolicySpec_Ai_BuiltinRegexRule_value = map[string]int32{
 		"BUILTIN_UNSPECIFIED": 0,
@@ -641,6 +643,7 @@ var (
 		"CREDIT_CARD":         2,
 		"PHONE_NUMBER":        3,
 		"EMAIL":               4,
+		"CA_SIN":              5,
 	}
 )
 
@@ -9929,7 +9932,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xa42\n" +
+	"\x04kind\"\xb02\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -9946,7 +9949,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x0erequest_mirror\x18\v \x01(\v2).agentgateway.dev.resource.RequestMirrorsH\x00R\rrequestMirror\x12]\n" +
 	"\fbackend_http\x18\f \x01(\v28.agentgateway.dev.resource.BackendPolicySpec.BackendHTTPH\x00R\vbackendHttp\x12Z\n" +
 	"\vbackend_tcp\x18\r \x01(\v27.agentgateway.dev.resource.BackendPolicySpec.BackendTCPH\x00R\n" +
-	"backendTcp\x1a\xd4\x19\n" +
+	"backendTcp\x1a\xe0\x19\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -10013,13 +10016,15 @@ const file_resource_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1at\n" +
 	"\vRoutesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12O\n" +
-	"\x05value\x18\x02 \x01(\x0e29.agentgateway.dev.resource.BackendPolicySpec.Ai.RouteTypeR\x05value:\x028\x01\"b\n" +
+	"\x05value\x18\x02 \x01(\x0e29.agentgateway.dev.resource.BackendPolicySpec.Ai.RouteTypeR\x05value:\x028\x01\"n\n" +
 	"\x10BuiltinRegexRule\x12\x17\n" +
 	"\x13BUILTIN_UNSPECIFIED\x10\x00\x12\a\n" +
 	"\x03SSN\x10\x01\x12\x0f\n" +
 	"\vCREDIT_CARD\x10\x02\x12\x10\n" +
 	"\fPHONE_NUMBER\x10\x03\x12\t\n" +
-	"\x05EMAIL\x10\x04\":\n" +
+	"\x05EMAIL\x10\x04\x12\n" +
+	"\n" +
+	"\x06CA_SIN\x10\x05\":\n" +
 	"\n" +
 	"ActionKind\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\b\n" +

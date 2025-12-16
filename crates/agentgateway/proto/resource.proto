@@ -678,6 +678,7 @@ message BackendPolicySpec {
       CREDIT_CARD = 2;
       PHONE_NUMBER = 3;
       EMAIL = 4;
+      CA_SIN = 5;
     }
 
     message RegexRule {

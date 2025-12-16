@@ -484,6 +484,7 @@ impl Policy {
 						Builtin::CreditCard => &*pii::CC,
 						Builtin::PhoneNumber => &*pii::PHONE,
 						Builtin::Email => &*pii::EMAIL,
+						Builtin::CaSin => &*pii::CA_SIN,
 					};
 					let results = pii::recognizer(rec, &current_content);
 
@@ -627,6 +628,7 @@ pub enum Builtin {
 	CreditCard,
 	PhoneNumber,
 	Email,
+	CaSin,
 }
 
 #[apply(schema!)]

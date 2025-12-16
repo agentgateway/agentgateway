@@ -1696,6 +1696,9 @@ fn convert_regex_rules(
 							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::Email => {
 								llm::policy::Builtin::Email
 							},
+							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::CaSin => {
+								llm::policy::Builtin::CaSin
+							},
 							_ => {
 								warn!(value = *b, "Unknown builtin regex rule, skipping");
 								return None;

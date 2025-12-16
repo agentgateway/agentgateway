@@ -6,6 +6,7 @@ use crate::llm::policy::pii::email_recognizer::EmailRecognizer;
 use crate::llm::policy::pii::phone_recognizer::PhoneRecognizer;
 use crate::llm::policy::pii::recognizer::Recognizer;
 
+mod ca_sin_recognizer;
 mod credit_card_recognizer;
 mod email_recognizer;
 mod pattern_recognizer;
@@ -26,6 +27,9 @@ pub static CC: Lazy<Box<dyn Recognizer + Sync + Send + 'static>> =
 
 pub static SSN: Lazy<Box<dyn Recognizer + Sync + Send + 'static>> =
 	Lazy::new(|| Box::new(us_ssn_recognizer::UsSsnRecognizer::new()));
+
+pub static CA_SIN: Lazy<Box<dyn Recognizer + Sync + Send + 'static>> =
+	Lazy::new(|| Box::new(ca_sin_recognizer::CaSinRecognizer::new()));
 
 #[allow(clippy::borrowed_box)]
 pub fn recognizer(
