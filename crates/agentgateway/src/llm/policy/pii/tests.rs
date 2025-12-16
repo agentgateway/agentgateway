@@ -199,11 +199,11 @@ fn test_ca_sin_recognizer_mixed_formats() {
 	let matched_texts: Vec<&str> = results.iter().map(|r| r.matched.as_str()).collect();
 
 	// Check for formatted with hyphens
-	assert!(matched_texts.iter().any(|&s| s == "123-456-789"));
+	assert!(matched_texts.contains(&"123-456-789"));
 	// Check for formatted with spaces
-	assert!(matched_texts.iter().any(|&s| s == "987 654 321"));
+	assert!(matched_texts.contains(&"987 654 321"));
 	// Check for unformatted
-	assert!(matched_texts.iter().any(|&s| s == "456789012"));
+	assert!(matched_texts.contains(&"456789012"));
 
 	// Verify scores: formatted should have higher confidence
 	for result in results {
