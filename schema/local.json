@@ -1422,7 +1422,8 @@
                                                               "ssn",
                                                               "creditCard",
                                                               "phoneNumber",
-                                                              "email"
+                                                              "email",
+                                                              "caSin"
                                                             ]
                                                           }
                                                         },
@@ -1713,7 +1714,8 @@
                                                               "ssn",
                                                               "creditCard",
                                                               "phoneNumber",
-                                                              "email"
+                                                              "email",
+                                                              "caSin"
                                                             ]
                                                           }
                                                         },
@@ -3608,7 +3610,8 @@
                                                                     "ssn",
                                                                     "creditCard",
                                                                     "phoneNumber",
-                                                                    "email"
+                                                                    "email",
+                                                                    "caSin"
                                                                   ]
                                                                 }
                                                               },
@@ -3899,7 +3902,8 @@
                                                                     "ssn",
                                                                     "creditCard",
                                                                     "phoneNumber",
-                                                                    "email"
+                                                                    "email",
+                                                                    "caSin"
                                                                   ]
                                                                 }
                                                               },
@@ -5371,7 +5375,8 @@
                                                                                 "ssn",
                                                                                 "creditCard",
                                                                                 "phoneNumber",
-                                                                                "email"
+                                                                                "email",
+                                                                                "caSin"
                                                                               ]
                                                                             }
                                                                           },
@@ -5662,7 +5667,8 @@
                                                                                 "ssn",
                                                                                 "creditCard",
                                                                                 "phoneNumber",
-                                                                                "email"
+                                                                                "email",
+                                                                                "caSin"
                                                                               ]
                                                                             }
                                                                           },
@@ -6884,7 +6890,8 @@
                                                                                             "ssn",
                                                                                             "creditCard",
                                                                                             "phoneNumber",
-                                                                                            "email"
+                                                                                            "email",
+                                                                                            "caSin"
                                                                                           ]
                                                                                         }
                                                                                       },
@@ -7175,7 +7182,8 @@
                                                                                             "ssn",
                                                                                             "creditCard",
                                                                                             "phoneNumber",
-                                                                                            "email"
+                                                                                            "email",
+                                                                                            "caSin"
                                                                                           ]
                                                                                         }
                                                                                       },
@@ -9998,7 +10006,8 @@
                                                   "ssn",
                                                   "creditCard",
                                                   "phoneNumber",
-                                                  "email"
+                                                  "email",
+                                                  "caSin"
                                                 ]
                                               }
                                             },
@@ -10289,7 +10298,8 @@
                                                   "ssn",
                                                   "creditCard",
                                                   "phoneNumber",
-                                                  "email"
+                                                  "email",
+                                                  "caSin"
                                                 ]
                                               }
                                             },
@@ -12199,7 +12209,8 @@
                                                   "ssn",
                                                   "creditCard",
                                                   "phoneNumber",
-                                                  "email"
+                                                  "email",
+                                                  "caSin"
                                                 ]
                                               }
                                             },
@@ -12490,7 +12501,8 @@
                                                   "ssn",
                                                   "creditCard",
                                                   "phoneNumber",
-                                                  "email"
+                                                  "email",
+                                                  "caSin"
                                                 ]
                                               }
                                             },
