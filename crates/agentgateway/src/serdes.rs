@@ -330,3 +330,20 @@ impl FileInlineOrRemote {
 		serde_json::from_str(&s).map_err(Into::into)
 	}
 }
+
+#[derive(Clone, Default, Debug)]
+pub struct RenamedField;
+
+pub fn renamed_field<'de, D>(
+	old: &'static str,
+	new: &'static str,
+	_: D,
+) -> Result<(), D::Error>
+where
+D: Deserializer<'de>,
+{
+	Err(serde::de::Error::custom(format!(
+		"`{}` has been removed; move to `{}`",
+		old, new
+	)))
+}

@@ -104,7 +104,20 @@ pub struct RawConfig {
 	#[serde(default)]
 	backend: BackendConfig,
 
+	#[serde(rename = "listener", deserialize_with = "removed::rename_listener")]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	_listener: serdes::RenamedField,
+
 	hbone: Option<RawHBONE>,
+}
+
+mod removed {
+	use serde::Deserializer;
+	use crate::serdes;
+
+	pub fn rename_listener<'de, D: Deserializer<'de>>(d: D) -> Result<serdes::RenamedField, D::Error> {
+		serdes::renamed_field("listener", "frontendPolicies", d).map(|_| serdes::RenamedField)
+	}
 }
 
 #[apply(schema!)]
