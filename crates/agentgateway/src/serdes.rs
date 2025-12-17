@@ -334,13 +334,9 @@ impl FileInlineOrRemote {
 #[derive(Clone, Default, Debug)]
 pub struct RenamedField;
 
-pub fn renamed_field<'de, D>(
-	old: &'static str,
-	new: &'static str,
-	_: D,
-) -> Result<(), D::Error>
+pub fn renamed_field<'de, D>(old: &'static str, new: &'static str, _: D) -> Result<(), D::Error>
 where
-D: Deserializer<'de>,
+	D: Deserializer<'de>,
 {
 	Err(serde::de::Error::custom(format!(
 		"`{}` has been removed; move to `{}`",
