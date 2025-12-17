@@ -11,6 +11,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	structpb "google.golang.org/protobuf/types/known/structpb"
+	workloadapi "istio.io/istio/pkg/workloadapi"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -1295,7 +1296,7 @@ func (x *Resource) GetTcpRoute() *TCPRoute {
 	return nil
 }
 
-func (x *Resource) GetWorkload() *Workload {
+func (x *Resource) GetWorkload() *workloadapi.Workload {
 	if x != nil {
 		if x, ok := x.Kind.(*Resource_Workload); ok {
 			return x.Workload
@@ -1304,7 +1305,7 @@ func (x *Resource) GetWorkload() *Workload {
 	return nil
 }
 
-func (x *Resource) GetService() *Service {
+func (x *Resource) GetService() *workloadapi.Service {
 	if x != nil {
 		if x, ok := x.Kind.(*Resource_Service); ok {
 			return x.Service
@@ -1342,12 +1343,12 @@ type Resource_TcpRoute struct {
 }
 
 type Resource_Workload struct {
-	Workload *Workload `protobuf:"bytes,7,opt,name=workload,proto3,oneof"`
+	Workload *workloadapi.Workload `protobuf:"bytes,7,opt,name=workload,proto3,oneof"`
 }
 
 type Resource_Service struct {
 	// Service represents a service - a group of workloads that can be accessed together.
-	Service *Service `protobuf:"bytes,8,opt,name=service,proto3,oneof"`
+	Service *workloadapi.Service `protobuf:"bytes,8,opt,name=service,proto3,oneof"`
 }
 
 func (*Resource_Bind) isResource_Kind() {}
@@ -9486,16 +9487,16 @@ var File_resource_proto protoreflect.FileDescriptor
 
 const file_resource_proto_rawDesc = "" +
 	"\n" +
-	"\x0eresource.proto\x12\x19agentgateway.dev.resource\x1a\x1egoogle/protobuf/duration.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x0eworkload.proto\"\x8a\x04\n" +
+	"\x0eresource.proto\x12\x19agentgateway.dev.resource\x1a\x1egoogle/protobuf/duration.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x0eworkload.proto\"\xf4\x03\n" +
 	"\bResource\x125\n" +
 	"\x04bind\x18\x01 \x01(\v2\x1f.agentgateway.dev.resource.BindH\x00R\x04bind\x12A\n" +
 	"\blistener\x18\x02 \x01(\v2#.agentgateway.dev.resource.ListenerH\x00R\blistener\x128\n" +
 	"\x05route\x18\x03 \x01(\v2 .agentgateway.dev.resource.RouteH\x00R\x05route\x12>\n" +
 	"\abackend\x18\x04 \x01(\v2\".agentgateway.dev.resource.BackendH\x00R\abackend\x12;\n" +
 	"\x06policy\x18\x05 \x01(\v2!.agentgateway.dev.resource.PolicyH\x00R\x06policy\x12B\n" +
-	"\ttcp_route\x18\x06 \x01(\v2#.agentgateway.dev.resource.TCPRouteH\x00R\btcpRoute\x12A\n" +
-	"\bworkload\x18\a \x01(\v2#.agentgateway.dev.workload.WorkloadH\x00R\bworkload\x12>\n" +
-	"\aservice\x18\b \x01(\v2\".agentgateway.dev.workload.ServiceH\x00R\aserviceB\x06\n" +
+	"\ttcp_route\x18\x06 \x01(\v2#.agentgateway.dev.resource.TCPRouteH\x00R\btcpRoute\x126\n" +
+	"\bworkload\x18\a \x01(\v2\x18.istio.workload.WorkloadH\x00R\bworkload\x123\n" +
+	"\aservice\x18\b \x01(\v2\x17.istio.workload.ServiceH\x00R\aserviceB\x06\n" +
 	"\x04kind\"\xc3\x02\n" +
 	"\x04Bind\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
@@ -10367,8 +10368,8 @@ var file_resource_proto_goTypes = []any{
 	(*AIBackend_Provider)(nil),       // 145: agentgateway.dev.resource.AIBackend.Provider
 	(*AIBackend_ProviderGroup)(nil),  // 146: agentgateway.dev.resource.AIBackend.ProviderGroup
 	(*BackendReference_Service)(nil), // 147: agentgateway.dev.resource.BackendReference.Service
-	(*Workload)(nil),                 // 148: agentgateway.dev.workload.Workload
-	(*Service)(nil),                  // 149: agentgateway.dev.workload.Service
+	(*workloadapi.Workload)(nil),     // 148: istio.workload.Workload
+	(*workloadapi.Service)(nil),      // 149: istio.workload.Service
 	(*durationpb.Duration)(nil),      // 150: google.protobuf.Duration
 	(*structpb.Struct)(nil),          // 151: google.protobuf.Struct
 	(*structpb.Value)(nil),           // 152: google.protobuf.Value
@@ -10380,8 +10381,8 @@ var file_resource_proto_depIdxs = []int32{
 	33,  // 3: agentgateway.dev.resource.Resource.backend:type_name -> agentgateway.dev.resource.Backend
 	32,  // 4: agentgateway.dev.resource.Resource.policy:type_name -> agentgateway.dev.resource.Policy
 	31,  // 5: agentgateway.dev.resource.Resource.tcp_route:type_name -> agentgateway.dev.resource.TCPRoute
-	148, // 6: agentgateway.dev.resource.Resource.workload:type_name -> agentgateway.dev.workload.Workload
-	149, // 7: agentgateway.dev.resource.Resource.service:type_name -> agentgateway.dev.workload.Service
+	148, // 6: agentgateway.dev.resource.Resource.workload:type_name -> istio.workload.Workload
+	149, // 7: agentgateway.dev.resource.Resource.service:type_name -> istio.workload.Service
 	1,   // 8: agentgateway.dev.resource.Bind.protocol:type_name -> agentgateway.dev.resource.Bind.Protocol
 	2,   // 9: agentgateway.dev.resource.Bind.tunnel_protocol:type_name -> agentgateway.dev.resource.Bind.TunnelProtocol
 	27,  // 10: agentgateway.dev.resource.ListenerName.listener_set:type_name -> agentgateway.dev.resource.ResourceName
@@ -10581,7 +10582,6 @@ func file_resource_proto_init() {
 	if File_resource_proto != nil {
 		return
 	}
-	file_workload_proto_init()
 	file_resource_proto_msgTypes[0].OneofWrappers = []any{
 		(*Resource_Bind)(nil),
 		(*Resource_Listener)(nil),

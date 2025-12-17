@@ -16,9 +16,9 @@ message Resource {
     Backend backend = 4;
     Policy policy = 5;
     TCPRoute tcp_route = 6;
-    agentgateway.dev.workload.Workload workload = 7;
+    istio.workload.Workload workload = 7;
     // Service represents a service - a group of workloads that can be accessed together.
-    agentgateway.dev.workload.Service service = 8;
+    istio.workload.Service service = 8;
   }
 }
 

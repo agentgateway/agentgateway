@@ -21,8 +21,7 @@ pub struct StateManager {
 	xds_client: Option<agent_xds::AdsClient>,
 }
 
-pub const ADDRESS_TYPE: Strng =
-	strng::literal!("type.googleapis.com/agentgateway.dev.workload.Address");
+pub const ADDRESS_TYPE: Strng = strng::literal!("type.googleapis.com/istio.workload.Address");
 pub const AUTHORIZATION_TYPE: Strng =
 	strng::literal!("type.googleapis.com/istio.security.Authorization");
 pub const ADP_TYPE: Strng =
