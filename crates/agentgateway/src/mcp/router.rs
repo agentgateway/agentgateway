@@ -97,7 +97,9 @@ impl App {
 						namespace: backend_group_name.namespace.clone(),
 						section: Some(t.name.clone()),
 					};
-					let backend_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
+					let backend_policies = backend_policies
+						.clone()
+						.merge(binds.sub_backend_policies(sub_backend_target, inline_pols));
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),

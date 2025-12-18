@@ -1,16 +1,18 @@
 use std::net::SocketAddr;
 
+use crate::http::auth::BackendAuth;
+use crate::test_helpers::proxymock::{
+	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
+};
+use crate::types::agent::BackendPolicy;
+use crate::*;
 use agent_core::strng;
 use itertools::Itertools;
 use rmcp::RoleClient;
 use rmcp::model::InitializeRequestParam;
 use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpServerConfig;
-
-use crate::test_helpers::proxymock::{
-	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
-};
-use crate::*;
+use secrecy::SecretString;
 
 #[tokio::test]
 async fn stream_to_stream_single() {
@@ -74,8 +76,10 @@ async fn stream_to_multiplex() {
 		vec![
 			"mcp_decrement".to_string(),
 			"mcp_echo".to_string(),
+			"mcp_echo_http".to_string(),
 			"sse_decrement".to_string(),
-			"sse_echo".to_string()
+			"sse_echo".to_string(),
+			"sse_echo_http".to_string()
 		]
 	);
 
@@ -131,6 +135,32 @@ async fn stateless_to_stateless() {
 	standard_assertions(client).await;
 }
 
+#[tokio::test]
+async fn stream_to_stream_single_tls() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendPolicy::BackendAuth(BackendAuth::Key(
+			SecretString::new("my-key".into()),
+		))],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let ctr = client
+		.call_tool(rmcp::model::CallToolRequestParam {
+			name: "echo_http".into(),
+			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
+		})
+		.await
+		.unwrap();
+	assert_eq!(
+		&ctr.content[0].raw.as_text().unwrap().text,
+		r#"Bearer my-key"#
+	);
+}
+
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParam>) {
 	let tools = client.list_tools(None).await.unwrap();
 	let t = tools
@@ -159,9 +189,18 @@ async fn setup_proxy(
 	stateful: bool,
 	legacy_sse: bool,
 ) -> (TestBind, SocketAddr) {
+	setup_proxy_policies(mock, stateful, legacy_sse, vec![]).await
+}
+
+async fn setup_proxy_policies(
+	mock: &MockServer,
+	stateful: bool,
+	legacy_sse: bool,
+	policies: Vec<BackendPolicy>,
+) -> (TestBind, SocketAddr) {
 	let t = setup_proxy_test("{}")
 		.unwrap()
-		.with_mcp_backend(mock.addr, stateful, legacy_sse)
+		.with_mcp_backend_policies(mock.addr, stateful, legacy_sse, policies)
 		.with_bind(simple_bind(basic_route(mock.addr)));
 	let io = t.serve_real_listener(BIND_KEY).await;
 	(t, io)
@@ -286,6 +325,7 @@ async fn mock_sse_server() -> MockServer {
 mod mockserver {
 	use std::sync::Arc;
 
+	use http::request::Parts;
 	use rmcp::handler::server::router::prompt::PromptRouter;
 	use rmcp::handler::server::router::tool::ToolRouter;
 	use rmcp::handler::server::wrapper::Parameters;
@@ -386,6 +426,19 @@ mod mockserver {
 		) -> Result<CallToolResult, McpError> {
 			Ok(CallToolResult::success(vec![Content::text(
 				(a + b).to_string(),
+			)]))
+		}
+
+		#[tool(description = "Echo HTTP attributes")]
+		fn echo_http(&self, rq: RequestContext<RoleServer>) -> Result<CallToolResult, McpError> {
+			let ext = rq.extensions.get::<Parts>();
+			Ok(CallToolResult::success(vec![Content::text(
+				ext
+					.unwrap()
+					.headers
+					.get("authorization")
+					.map(|s| String::from_utf8_lossy(s.as_bytes()))
+					.unwrap_or_default(),
 			)]))
 		}
 	}

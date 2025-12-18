@@ -33,11 +33,11 @@ use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::transport::tls;
 use crate::types::agent::{
-	Backend, BackendReference, BackendWithPolicies, Bind, BindKey, BindProtocol, Listener,
-	ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, ResourceName,
-	Route, RouteBackendReference, RouteMatch, RouteName, RouteSet, SimpleBackendReference,
-	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
-	TargetedPolicy,
+	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindKey, BindProtocol,
+	Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch,
+	ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, RouteSet,
+	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
 };
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
@@ -387,6 +387,16 @@ impl TestBind {
 	}
 
 	pub fn with_mcp_backend(self, b: SocketAddr, stateful: bool, legacy_sse: bool) -> Self {
+		self.with_mcp_backend_policies(b, stateful, legacy_sse, Default::default())
+	}
+
+	pub fn with_mcp_backend_policies(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+		policies: Vec<BackendPolicy>,
+	) -> Self {
 		let opb = Backend::Opaque(
 			ResourceName::new(strng::format!("basic-{}", b), "".into()),
 			Target::Address(b),
@@ -416,7 +426,13 @@ impl TestBind {
 		{
 			let mut bw = self.pi.stores.binds.write();
 			bw.insert_backend(opb.name(), opb.into());
-			bw.insert_backend(b.name(), b.into());
+			bw.insert_backend(
+				b.name(),
+				BackendWithPolicies {
+					backend: b,
+					inline_policies: policies,
+				},
+			);
 		}
 		self
 	}
