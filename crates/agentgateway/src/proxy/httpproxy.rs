@@ -753,6 +753,12 @@ impl HTTPProxy {
 		if let Some(claims) = req.extensions().get::<crate::http::jwt::Claims>() {
 			log.cel.ctx().with_jwt(claims);
 		}
+		if let Some(claims) = req.extensions().get::<crate::http::apikey::Claims>() {
+			log.cel.ctx().with_api_key(claims);
+		}
+		if let Some(claims) = req.extensions().get::<crate::http::basicauth::Claims>() {
+			log.cel.ctx().with_basic_auth(claims);
+		}
 	}
 
 	#[allow(clippy::too_many_arguments)]
