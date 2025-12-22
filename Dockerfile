@@ -109,7 +109,7 @@ if [ "$TARGETARCH" = "amd64" ]; then
 fi
 EOF
 
-FROM gcr.io/distroless/cc-debian13 AS runner
+FROM cgr.dev/chainguard/glibc-dynamic AS runner
 
 WORKDIR /
 
