@@ -555,6 +555,72 @@ impl HTTPProxy {
 		)
 		.await?;
 
+		if let Some(tls) = &log.tls_info {
+			// From the spec:
+			// * If another Listener has an exact match or more specific wildcard entry,
+			//   the Gateway SHOULD return a 421.
+			// * If the current Listener (selected by SNI matching during ClientHello)
+			//   does not match the Host:
+			//     * If another Listener does match the Host, the Gateway SHOULD return a
+			//       421.
+			//     * If no other Listener matches the Host, the Gateway MUST return a
+			//       404.
+			let host = http::get_host(&req).map_err(|_| ProxyError::RouteNotFound)?;
+			let host_matches_listener = selected_listener.matches(host);
+			let new_best_listener = bind.listeners.best_match(&host);
+			let listener_is_still_best_match = new_best_listener
+				.as_ref()
+				.map(|match_based_on_http| Arc::ptr_eq(match_based_on_http, &selected_listener));
+
+			if !listener_is_still_best_match.unwrap_or(true) {
+				tracing::error!(
+					"howardjohn: misdirected, more specific match for {} ({})",
+					host,
+					new_best_listener
+						.as_ref()
+						.map(|l| l.hostname.as_str())
+						.unwrap_or_default()
+				);
+				// "If another listener has a more specific match..."
+				return Err(ProxyError::MisdirectedRequest.into());
+			}
+			if !host_matches_listener {
+				// "If the current Listener does not match the host..."
+				if listener_is_still_best_match.is_none() {
+					tracing::error!(
+						"howardjohn: misdirected, mismatch host but no other listener matches {}",
+						host,
+					);
+					// "If no other listener matches"
+					return Err(ProxyError::RouteNotFound.into());
+				}
+				tracing::error!(
+					"howardjohn: misdirected, mismatch host and another matches: {}",
+					host,
+				);
+				// "If another Listener does match the Host"
+				return Err(ProxyError::MisdirectedRequest.into());
+			}
+			if !selected_listener.matches(host) {
+				tracing::error!(
+					"howardjohn: misdirected host: {} != {}",
+					host,
+					selected_listener.hostname
+				);
+				return Err(ProxyError::MisdirectedRequest.into());
+			}
+			if let Some(match_based_on_http) = bind.listeners.best_match(&host)
+				&& !Arc::ptr_eq(&match_based_on_http, &selected_listener)
+			{
+				tracing::error!(
+					"howardjohn: misdirected listener: {} != {}",
+					match_based_on_http.key,
+					selected_listener.key
+				);
+				return Err(ProxyError::MisdirectedRequest.into());
+			}
+		};
+
 		let (selected_route, path_match) = http::route::select_best_route(
 			inputs.stores.clone(),
 			inputs.cfg.network.clone(),
