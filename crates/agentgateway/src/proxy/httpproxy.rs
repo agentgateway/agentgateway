@@ -555,6 +555,8 @@ impl HTTPProxy {
 		)
 		.await?;
 
+		Self::detect_misdirected(&log, bind, &req, &selected_listener)?;
+
 		let (selected_route, path_match) = http::route::select_best_route(
 			inputs.stores.clone(),
 			inputs.cfg.network.clone(),
@@ -739,6 +741,56 @@ impl HTTPProxy {
 			last_res = Some(res);
 		}
 		unreachable!()
+	}
+
+	fn detect_misdirected(
+		log: &&mut RequestLog,
+		bind: Arc<Bind>,
+		req: &Request,
+		selected_listener: &Arc<Listener>,
+	) -> Result<(), ProxyError> {
+		if log.tls_info.is_none() {
+			// Only applicable for HTTPS
+			return Ok(());
+		}
+		// From the spec:
+		// * If another Listener has an exact match or more specific wildcard entry,
+		//   the Gateway SHOULD return a 421.
+		// * If the current Listener (selected by SNI matching during ClientHello)
+		//   does not match the Host:
+		//     * If another Listener does match the Host, the Gateway SHOULD return a
+		//       421.
+		//     * If no other Listener matches the Host, the Gateway MUST return a
+		//       404.
+		let host = http::get_host(req).map_err(|_| ProxyError::RouteNotFound)?;
+		let new_best_listener = bind.listeners.best_match(host).filter(|l| {
+			if l.key == selected_listener.key {
+				false
+			// This is not a 'new' listener, we picked the same one!
+			} else {
+				true
+			}
+		});
+
+		// "If another listener has a more specific match..."
+		if let Some(new_best) = new_best_listener {
+			debug!(
+				"misdirected, more specific match for {host} ({})",
+				new_best.key
+			);
+			return Err(ProxyError::MisdirectedRequest);
+		}
+		let host_matches_listener = selected_listener.matches(host);
+		// "If the current Listener does not match the host..."
+		if !host_matches_listener {
+			debug!(
+				"misdirected, host {host} no longer matches ({})",
+				selected_listener.key
+			);
+			Err(ProxyError::RouteNotFound)
+		} else {
+			Ok(())
+		}
 	}
 
 	async fn apply_request_to_cel(log: &mut RequestLog, req: &mut Request) {

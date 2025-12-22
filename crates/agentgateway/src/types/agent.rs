@@ -58,6 +58,14 @@ pub struct Listener {
 	pub tcp_routes: TCPRouteSet,
 }
 
+impl Listener {
+	pub fn matches(&self, hostname: &str) -> bool {
+		self.hostname == hostname
+			|| self.hostname.is_empty()
+			|| self.hostname.starts_with("*") && hostname.ends_with(&self.hostname[1..])
+	}
+}
+
 type Alpns = Vec<Vec<u8>>;
 
 #[derive(Debug, Clone)]
