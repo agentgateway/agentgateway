@@ -32,6 +32,7 @@ impl ProxyResponse {
 			ProxyError::BindNotFound
 			| ProxyError::ListenerNotFound
 			| ProxyError::RouteNotFound
+			| ProxyError::MisdirectedRequest
 			| ProxyError::ServiceNotFound => ProxyResponseReason::NotFound,
 			ProxyError::NoHealthyEndpoints
 			| ProxyError::InvalidBackendType
@@ -118,6 +119,8 @@ pub enum ProxyError {
 	ListenerNotFound,
 	#[error("route not found")]
 	RouteNotFound,
+	#[error("misdirected request")]
+	MisdirectedRequest,
 	#[error("no valid backends")]
 	NoValidBackends,
 	#[error("backends does not exist")]
@@ -193,6 +196,7 @@ impl ProxyError {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
 			ProxyError::ListenerNotFound => StatusCode::NOT_FOUND,
 			ProxyError::RouteNotFound => StatusCode::NOT_FOUND,
+			ProxyError::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
 			ProxyError::NoValidBackends => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendDoesNotExist => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendUnsupportedMirror => StatusCode::INTERNAL_SERVER_ERROR,
