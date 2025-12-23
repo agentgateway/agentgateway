@@ -1,0 +1,228 @@
+# yaml-language-server: $schema=../../schema/local.json
+#
+# UnitOne AgentGateway - Hybrid OAuth Configuration
+# Supports BOTH web login (like MCP Scanner) AND token-based MCP access
+#
+
+binds:
+- port: 8080
+  listeners:
+  - protocol: HTTP
+    routes:
+
+    # ========================================================================
+    # PUBLIC ROUTES (No Authentication)
+    # ========================================================================
+
+    # Admin UI - No auth required for now
+    - name: ui-route
+      matches:
+      - path:
+          pathPrefix: /ui
+      backends:
+      - host: 127.0.0.1:15000
+
+    # Admin API - No auth required for now
+    - name: admin-api-route
+      matches:
+      - path:
+          pathPrefix: /config
+      backends:
+      - host: 127.0.0.1:15000
+
+    # ========================================================================
+    # WEB LOGIN ROUTES (OAuth2 Proxy Pattern - Like MCP Scanner)
+    # Uses External Authorization with OAuth2 Proxy
+    # ========================================================================
+
+    # OAuth2 Proxy endpoints (for web login)
+    - name: oauth2-proxy-route
+      matches:
+      - path:
+          pathPrefix: /oauth2
+      backends:
+      - host: localhost:4180
+      policies:
+        urlRewrite:
+          authority: none
+
+    # Web-authenticated MCP route (requires web login first)
+    - name: mcp-web-auth
+      matches:
+      - path:
+          pathPrefix: /mcp/web
+      backends:
+      - mcp:
+          targets:
+          - name: web-authenticated-mcp
+            stdio:
+              cmd: echo
+              args: ["MCP Server - Web Authenticated"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - cookie
+          allowOrigins:
+          - ${FRONTEND_URL:-http://localhost:3000}
+          allowCredentials: true
+        # External authorization via OAuth2 Proxy (like MCP Scanner)
+        extAuthz:
+          host: localhost:4180
+          includeRequestHeaders:
+          - cookie
+          protocol:
+            http:
+              path: '"/oauth2/auth"'
+              redirect: '"/oauth2/start?rd=" + request.path'
+              metadata:
+                githubUser: response.headers["x-auth-request-user"]
+                githubEmail: response.headers["x-auth-request-email"]
+              addRequestHeaders:
+                x-forwarded-host: request.host
+              includeResponseHeaders:
+              - x-auth-request-user
+              - x-auth-request-email
+
+    # ========================================================================
+    # TOKEN-BASED MCP ROUTES (Bearer Token Authentication)
+    # Direct token validation (for MCP clients like Claude Code)
+    # ========================================================================
+
+    # GitHub token-based MCP (can use SAME GitHub OAuth app as MCP Scanner)
+    - name: mcp-github-token
+      matches:
+      - path:
+          exact: /mcp/github
+      - path:
+          exact: /.well-known/oauth-protected-resource/mcp/github
+      backends:
+      - mcp:
+          targets:
+          - name: github-token-mcp
+            stdio:
+              cmd: echo
+              args: ["MCP Server - GitHub Token Auth"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - authorization
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          # GitHub OAuth (can reuse MCP Scanner GitHub app)
+          issuer: https://token.actions.githubusercontent.com
+          audiences:
+          - ${GITHUB_AUDIENCE:-https://github.com}
+          jwks:
+            url: https://token.actions.githubusercontent.com/.well-known/jwks
+          resourceMetadata:
+            resource: ${BACKEND_URL:-http://localhost:8080}/mcp/github
+            scopesSupported:
+            - read:user
+            - repo
+            bearerMethodsSupported:
+            - header
+
+    # Microsoft/Azure AD token-based MCP (can use SAME Microsoft app as MCP Scanner)
+    - name: mcp-microsoft-token
+      matches:
+      - path:
+          exact: /mcp/microsoft
+      - path:
+          exact: /.well-known/oauth-protected-resource/mcp/microsoft
+      backends:
+      - mcp:
+          targets:
+          - name: microsoft-token-mcp
+            stdio:
+              cmd: echo
+              args: ["MCP Server - Microsoft Token Auth"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - authorization
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          # Microsoft/Azure AD (can reuse MCP Scanner Microsoft app)
+          issuer: https://login.microsoftonline.com/${MICROSOFT_TENANT_ID:-common}/v2.0
+          audiences:
+          - ${MICROSOFT_CLIENT_ID}
+          - api://unitone-agentgateway
+          jwks:
+            url: https://login.microsoftonline.com/${MICROSOFT_TENANT_ID:-common}/discovery/v2.0/keys
+          resourceMetadata:
+            resource: ${BACKEND_URL:-http://localhost:8080}/mcp/microsoft
+            scopesSupported:
+            - User.Read
+            - openid
+            - profile
+            - email
+            bearerMethodsSupported:
+            - header
+
+    # Google token-based MCP (can use SAME Google app as MCP Scanner)
+    - name: mcp-google-token
+      matches:
+      - path:
+          exact: /mcp/google
+      - path:
+          exact: /.well-known/oauth-protected-resource/mcp/google
+      backends:
+      - mcp:
+          targets:
+          - name: google-token-mcp
+            stdio:
+              cmd: echo
+              args: ["MCP Server - Google Token Auth"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - authorization
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          # Google OAuth (can reuse MCP Scanner Google app)
+          issuer: https://accounts.google.com
+          audiences:
+          - ${GOOGLE_CLIENT_ID}
+          jwks:
+            url: https://www.googleapis.com/oauth2/v3/certs
+          resourceMetadata:
+            resource: ${BACKEND_URL:-http://localhost:8080}/mcp/google
+            scopesSupported:
+            - openid
+            - profile
+            - email
+            bearerMethodsSupported:
+            - header
+
+    # ========================================================================
+    # PUBLIC MCP ROUTE (No Authentication) - For Testing
+    # ========================================================================
+    - name: mcp-public
+      matches:
+      - path:
+          pathPrefix: /mcp/public
+      backends:
+      - mcp:
+          targets:
+          - name: public-mcp
+            stdio:
+              cmd: echo
+              args: ["Public MCP Server - No Auth"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          allowOrigins:
+          - '*'

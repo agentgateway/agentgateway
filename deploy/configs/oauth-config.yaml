@@ -1,0 +1,171 @@
+# yaml-language-server: $schema=../../schema/local.json
+#
+# UnitOne AgentGateway - OAuth-Enabled Configuration
+# Based on MCP Scanner OAuth pattern (GitHub, Microsoft, Google)
+#
+
+binds:
+- port: 8080
+  listeners:
+  - protocol: HTTP
+    routes:
+
+    # ========================================================================
+    # UI Routes (No Authentication)
+    # ========================================================================
+    - name: ui-route
+      matches:
+      - path:
+          pathPrefix: /ui
+      backends:
+      - host: 127.0.0.1:15000
+
+    - name: admin-api-route
+      matches:
+      - path:
+          pathPrefix: /config
+      backends:
+      - host: 127.0.0.1:15000
+
+    # ========================================================================
+    # OAuth-Protected MCP Server Routes
+    # GitHub OAuth Example
+    # ========================================================================
+    - name: mcp-github-auth
+      matches:
+      - path:
+          exact: /mcp/github
+      - path:
+          exact: /.well-known/oauth-protected-resource/mcp/github
+      backends:
+      - mcp:
+          targets:
+          - name: echo-server
+            stdio:
+              cmd: echo
+              args: ["MCP Server with GitHub OAuth"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - authorization
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          # Use environment variable for GitHub OAuth issuer
+          issuer: https://token.actions.githubusercontent.com
+          audiences:
+          - ${GITHUB_AUDIENCE:-https://github.com}
+          jwks:
+            url: https://token.actions.githubusercontent.com/.well-known/jwks
+          resourceMetadata:
+            resource: ${BACKEND_URL:-http://localhost:8080}/mcp/github
+            scopesSupported:
+            - read:all
+            - write:all
+            bearerMethodsSupported:
+            - header
+            - body
+            - query
+
+    # ========================================================================
+    # Microsoft Azure AD OAuth Example
+    # ========================================================================
+    - name: mcp-microsoft-auth
+      matches:
+      - path:
+          exact: /mcp/microsoft
+      - path:
+          exact: /.well-known/oauth-protected-resource/mcp/microsoft
+      backends:
+      - mcp:
+          targets:
+          - name: echo-server-microsoft
+            stdio:
+              cmd: echo
+              args: ["MCP Server with Microsoft OAuth"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - authorization
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          # Azure AD OAuth
+          issuer: https://login.microsoftonline.com/${MICROSOFT_TENANT_ID:-common}/v2.0
+          audiences:
+          - api://unitone-agentgateway
+          jwks:
+            url: https://login.microsoftonline.com/${MICROSOFT_TENANT_ID:-common}/discovery/v2.0/keys
+          resourceMetadata:
+            resource: ${BACKEND_URL:-http://localhost:8080}/mcp/microsoft
+            scopesSupported:
+            - api://unitone-agentgateway/read
+            - api://unitone-agentgateway/write
+            bearerMethodsSupported:
+            - header
+
+    # ========================================================================
+    # Google OAuth Example
+    # ========================================================================
+    - name: mcp-google-auth
+      matches:
+      - path:
+          exact: /mcp/google
+      - path:
+          exact: /.well-known/oauth-protected-resource/mcp/google
+      backends:
+      - mcp:
+          targets:
+          - name: echo-server-google
+            stdio:
+              cmd: echo
+              args: ["MCP Server with Google OAuth"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - authorization
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          # Google OAuth
+          issuer: https://accounts.google.com
+          audiences:
+          - ${GOOGLE_CLIENT_ID}
+          jwks:
+            url: https://www.googleapis.com/oauth2/v3/certs
+          resourceMetadata:
+            resource: ${BACKEND_URL:-http://localhost:8080}/mcp/google
+            scopesSupported:
+            - openid
+            - profile
+            - email
+            bearerMethodsSupported:
+            - header
+
+    # ========================================================================
+    # Default MCP Route (No Authentication) - For Testing
+    # ========================================================================
+    - name: mcp-public
+      matches:
+      - path:
+          pathPrefix: /mcp
+      backends:
+      - mcp:
+          targets:
+          - name: public-echo
+            stdio:
+              cmd: echo
+              args: ["Public MCP Server - No Auth Required"]
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          allowOrigins:
+          - '*'

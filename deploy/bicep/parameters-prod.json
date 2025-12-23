@@ -1,0 +1,77 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "value": "prod"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "baseName": {
+      "value": "unitone-agw"
+    },
+    "imageTag": {
+      "value": "stable"
+    },
+    "githubClientId": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/unitone-secrets-rg/providers/Microsoft.KeyVault/vaults/unitone-secrets-kv"
+        },
+        "secretName": "agw-prod-github-client-id"
+      }
+    },
+    "githubClientSecret": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/unitone-secrets-rg/providers/Microsoft.KeyVault/vaults/unitone-secrets-kv"
+        },
+        "secretName": "agw-prod-github-client-secret"
+      }
+    },
+    "microsoftClientId": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/unitone-secrets-rg/providers/Microsoft.KeyVault/vaults/unitone-secrets-kv"
+        },
+        "secretName": "agw-prod-microsoft-client-id"
+      }
+    },
+    "microsoftClientSecret": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/unitone-secrets-rg/providers/Microsoft.KeyVault/vaults/unitone-secrets-kv"
+        },
+        "secretName": "agw-prod-microsoft-client-secret"
+      }
+    },
+    "googleClientId": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/unitone-secrets-rg/providers/Microsoft.KeyVault/vaults/unitone-secrets-kv"
+        },
+        "secretName": "agw-prod-google-client-id"
+      }
+    },
+    "googleClientSecret": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/unitone-secrets-rg/providers/Microsoft.KeyVault/vaults/unitone-secrets-kv"
+        },
+        "secretName": "agw-prod-google-client-secret"
+      }
+    },
+    "acrPassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/unitone-secrets-rg/providers/Microsoft.KeyVault/vaults/unitone-secrets-kv"
+        },
+        "secretName": "agw-prod-acr-password"
+      }
+    },
+    "customDomain": {
+      "value": "agw.unitone.ai"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "encryptionSettings": {},
+  "globalValidation": {
+    "unauthenticatedClientAction": "RedirectToLoginPage"
+  },
+  "identityProviders": {
+    "azureActiveDirectory": {
+      "isAutoProvisioned": false,
+      "registration": {
+        "clientId": "4b497d98-cb3a-400e-9374-0e23d57dd480",
+        "clientSecretSettingName": "unitone-gateway-client-secret",
+        "openIdIssuer": "https://login.microsoftonline.com/2cbdd19f-2624-461f-9901-bd63473655a7/v2.0"
+      },
+      "validation": {
+        "allowedAudiences": [
+          "api://4b497d98-cb3a-400e-9374-0e23d57dd480"
+        ]
+      }
+    },
+    "google": {
+      "registration": {
+        "clientId": "919355621898-us1vie0rv5mqaff752hhqb9espne87ug.apps.googleusercontent.com",
+        "clientSecretSettingName": "google-client-secret"
+      }
+    }
+  },
+  "login": {
+    "preserveUrlFragmentsForLogins": false
+  },
+  "platform": {
+    "enabled": true
+  }
+}

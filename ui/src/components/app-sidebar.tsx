@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useWizard } from "@/lib/wizard-context";
 import { toast } from "sonner";
 import { useServer } from "@/lib/server-context";
+import { themeConfig } from "../../theme.config";
 
 interface AppSidebarProps {
   activeView: string;
@@ -86,10 +88,13 @@ export function AppSidebar({ setActiveView }: AppSidebarProps) {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b">
-        <div className="p-2 flex items-center justify-center mb-2">
-          <AgentgatewayLogo className="h-10 w-auto" />
-          <span className="text-2xl ml-2 font-bold">agentgateway</span>
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="p-4 flex items-center gap-3">
+          <AgentgatewayLogo className="h-9 w-9" width={36} height={36} />
+          <div className="flex flex-col">
+            <span className="text-base font-semibold">{themeConfig.branding.name}</span>
+            <span className="text-xs text-sidebar-muted">{themeConfig.branding.tagline}</span>
+          </div>
         </div>
       </SidebarHeader>
 
@@ -175,6 +180,10 @@ export function AppSidebar({ setActiveView }: AppSidebarProps) {
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <UserMenu />
+          </SidebarMenuItem>
+          <SidebarSeparator />
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Restart Setup Wizard"
