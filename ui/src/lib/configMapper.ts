@@ -49,7 +49,6 @@ function mapToBind(bindData: any, backends: Backend[]): Bind {
 function mapToListener(listenerData: any, backends: Backend[]): Listener {
   return {
     name: listenerData.name,
-    gatewayName: listenerData.gatewayName,
     hostname: listenerData.hostname,
     protocol: listenerData.protocol as ListenerProtocol,
     tls: mapToTlsConfig(listenerData.tls),

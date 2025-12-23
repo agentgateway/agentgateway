@@ -21,14 +21,13 @@ use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindKey, BindProtocol, FrontendPolicy, Listener, ListenerKey,
-	ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy, TunnelProtocol,
-	TypedResourceName,
+	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, Listener, ListenerKey, ListenerName,
+	ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication, McpAuthentication,
+	McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase,
+	PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
+	RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies,
+	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
+	TargetedPolicy, TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -99,9 +98,6 @@ pub struct LocalListenerName {
 	pub name: Option<Strng>,
 	#[serde(default)]
 	pub namespace: Option<Strng>,
-	// User facing name of the Gateway. Option, one will be set if not.
-	#[serde(default)]
-	pub gateway_name: Option<Strng>,
 }
 
 #[apply(schema_de!)]
@@ -777,7 +773,7 @@ struct LocalFrontendPolicies {
 	#[serde(default)]
 	pub access_log: Option<frontend::LoggingPolicy>,
 	#[serde(default)]
-	pub tracing: Option<()>,
+	pub tracing: Option<TracingConfig>,
 }
 
 #[apply(schema_de!)]
@@ -905,7 +901,14 @@ async fn convert(
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) = convert_listener(client.clone(), bind_name.clone(), idx, l).await?;
+			let (l, pol, backends) = convert_listener(
+				client.clone(),
+				idx,
+				l,
+				Some(frontend_policies.clone()),
+				gateway.clone(),
+			)
+			.await?;
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
@@ -949,8 +952,6 @@ async fn convert(
 		all_policies.push(tgt_policy);
 	}
 
-	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
-
 	for b in backends {
 		let policies = b
 			.policies
@@ -966,7 +967,6 @@ async fn convert(
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
-		// TODO: use inline policies!
 		backends: all_backends.into_iter().collect(),
 		workloads,
 		services,
@@ -997,9 +997,10 @@ fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
 
 async fn convert_listener(
 	client: client::Client,
-	bind_name: BindKey,
 	idx: usize,
 	l: LocalListener,
+	frontend_policies: Option<LocalFrontendPolicies>,
+	gateway: ListenerTarget,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalListener {
 		name,
@@ -1047,15 +1048,25 @@ async fn convert_listener(
 		bail!("only 'routes' or 'tcpRoutes' may be set");
 	}
 
-	let namespace = name.namespace.unwrap_or_else(|| strng::new("default"));
 	let listener_name = name
 		.name
 		.unwrap_or_else(|| strng::format!("listener{}", idx));
-	let gateway_name = name.gateway_name.unwrap_or(bind_name);
-	let key: ListenerKey = strng::format!("{namespace}/{gateway_name}/{listener_name}");
+	let gateway_name = gateway.gateway_name.clone();
+	let gateway_namespace = gateway.gateway_namespace.clone();
+	let key: ListenerKey = strng::format!("{gateway_namespace}/{gateway_name}/{listener_name}");
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
+
+	// Add frontend policies targeted to this listener
+	if let Some(frontend_pols) = frontend_policies {
+		let listener_target = ListenerTarget {
+			gateway_name: gateway_name.clone(),
+			gateway_namespace: gateway_namespace.clone(),
+			listener_name: Some(listener_name.clone()),
+		};
+		all_policies.extend_from_slice(&split_frontend_policies(listener_target, frontend_pols).await?);
+	}
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
@@ -1075,7 +1086,7 @@ async fn convert_listener(
 
 	let name = ListenerName {
 		gateway_name,
-		gateway_namespace: namespace,
+		gateway_namespace,
 		listener_name,
 		listener_set: None,
 	};
@@ -1214,8 +1225,29 @@ async fn split_frontend_policies(
 	if let Some(p) = access_log {
 		add(FrontendPolicy::AccessLog(p), "accessLog");
 	}
-	if let Some(p) = tracing {
-		add(FrontendPolicy::Tracing(p), "tracing");
+	if let Some(tracing_config) = tracing {
+		// Build logging fields from attributes for lazy tracer creation
+		let logging_fields = {
+			let add_map = crate::telemetry::log::OrderedStringMap::from_iter(
+				tracing_config
+					.attributes
+					.iter()
+					.map(|attr| (attr.name.clone(), attr.value.clone())),
+			);
+			Arc::new(crate::telemetry::log::LoggingFields {
+				remove: Arc::new(Default::default()),
+				add: Arc::new(add_map),
+			})
+		};
+
+		add(
+			FrontendPolicy::Tracing(crate::types::agent::TracingPolicy {
+				config: tracing_config,
+				fields: logging_fields,
+				tracer: once_cell::sync::OnceCell::new(),
+			}),
+			"tracing",
+		);
 	}
 	Ok(pols)
 }

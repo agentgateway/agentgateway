@@ -64,7 +64,7 @@ pub struct FrontendPolices {
 	pub tls: Option<frontend::TLS>,
 	pub tcp: Option<frontend::TCP>,
 	pub access_log: Option<frontend::LoggingPolicy>,
-	pub tracing: Option<()>,
+	pub tracing: Option<crate::types::agent::TracingPolicy>,
 }
 
 impl FrontendPolices {
@@ -674,8 +674,8 @@ impl Store {
 				FrontendPolicy::AccessLog(p) => {
 					pol.access_log.get_or_insert_with(|| p.clone());
 				},
-				FrontendPolicy::Tracing(_p) => {
-					pol.tracing.get_or_insert(());
+				FrontendPolicy::Tracing(p) => {
+					pol.tracing.get_or_insert_with(|| p.clone());
 				},
 			}
 		}

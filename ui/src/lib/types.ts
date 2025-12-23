@@ -15,7 +15,6 @@ export interface Bind {
 
 export interface Listener {
   name?: string | null;
-  gatewayName?: string | null;
   hostname?: string | null; // Can be a wildcard
   protocol: ListenerProtocol;
   tls?: TlsConfig | null;

@@ -74,7 +74,6 @@ function cleanupConfig(config: LocalConfig): LocalConfig {
 
       // Only include fields that have values
       if (listener.name) cleanedListener.name = listener.name;
-      if (listener.gatewayName) cleanedListener.gatewayName = listener.gatewayName;
       if (listener.hostname) cleanedListener.hostname = listener.hostname;
       if (listener.tls) cleanedListener.tls = listener.tls;
 

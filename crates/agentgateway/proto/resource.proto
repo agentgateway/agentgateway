@@ -441,7 +441,36 @@ message FrontendPolicySpec {
     Fields fields = 2;
   }
 
-  message Tracing {}
+  message Tracing {
+    BackendReference provider_backend = 1;
+    repeated TracingAttribute attributes = 2;
+    repeated TracingAttribute resources = 3;
+      
+    // random_sampling is a CEL expression to determine the amount of random sampling.
+    // Random sampling will initiate a new trace span if the incoming request does not
+    // have a trace initiated already. This should evaluate to a float between 0.0-1.0,
+    // or a boolean (true/false). If unspecified, random sampling is disabled.
+    optional string random_sampling = 4;
+
+    // client_sampling is a CEL expression to determine the amount of client sampling.
+    // Client sampling determines whether to initiate a new trace span if the incoming
+    // request already has a trace. This should evaluate to a float between 0.0-1.0,
+    // or a boolean (true/false). If unspecified, client sampling is 100% enabled.
+    optional string client_sampling = 5;
+
+    // OTLP path. Default is /v1/traces 
+    optional string path = 6;
+
+    // protocol specifies the OTLP protocol variant to use. Default is HTTP
+    Protocol protocol = 7;
+
+    enum Protocol {HTTP = 0; GRPC = 1;}
+  }
+
+  message TracingAttribute {
+    string name = 1;
+    string value = 2;  // CEL expression
+  }
 
   oneof kind {
     TCP tcp = 1;
