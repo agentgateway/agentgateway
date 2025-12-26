@@ -27,6 +27,7 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
+use crate::telemetry::log::SpanWriter;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
 	BackendTarget, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, ResourceName, SimpleBackend,
@@ -79,6 +80,7 @@ impl App {
 		mut req: Request,
 		log: AsyncLog<MCPInfo>,
 		start_time: String,
+		span_writer: Option<SpanWriter>,
 	) -> Response {
 		let backends = {
 			let binds = self.state.read_binds();
@@ -122,6 +124,7 @@ impl App {
 			}
 		};
 		let sm = self.session.clone();
+		let sw = span_writer.clone();
 		let client = PolicyClient { inputs: pi.clone() };
 		let authorization_policies = backend_policies
 			.mcp_authorization
@@ -131,6 +134,9 @@ impl App {
 		// Store an empty value, we will populate each field async
 		log.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(log);
+		if let Some(sw) = sw {
+			req.extensions_mut().insert(sw);
+		}
 
 		// TODO: today we duplicate everything which is error prone. It would be ideal to re-use the parent one
 		// The problem is that we decide whether to include various attributes before we pick the backend,

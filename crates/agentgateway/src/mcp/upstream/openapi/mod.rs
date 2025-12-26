@@ -750,7 +750,7 @@ impl Handler {
 
 		ctx.apply(&mut request);
 
-		let response = self.http_client.call(request).await?;
+		let response = self.http_client.call(request, ctx.span_writer()).await?;
 
 		// Read response body
 		let status = response.status();

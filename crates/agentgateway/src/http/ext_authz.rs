@@ -19,6 +19,7 @@ use crate::http::transformation_cel::SerAsStr;
 use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse, Request, jwt};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReference;
 use crate::{serde_dur_option, *};
@@ -221,10 +222,13 @@ impl ExtAuthz {
 		client: PolicyClient,
 		req: &mut Request,
 		ctx_builder: &ContextBuilder,
+		span_writer: Option<SpanWriter>,
 	) -> Result<PolicyResponse, ProxyError> {
 		if matches!(self.protocol, Protocol::Http { .. }) {
 			trace!(protocol = "http", "connecting to {:?}", self.target);
-			return self.check_http(exec, client, req, ctx_builder).await;
+			return self
+				.check_http(exec, client, req, ctx_builder, span_writer)
+				.await;
 		}
 		trace!(protocol = "grpc", "connecting to {:?}", self.target);
 
@@ -236,6 +240,7 @@ impl ExtAuthz {
 			client,
 			// Set the request timeout. This can be overridden by a timeout on the Backend object itself.
 			timeout: Some(self.timeout.unwrap_or(Duration::from_millis(200))),
+			span_writer,
 		};
 		let mut grpc_client = AuthorizationClient::new(chan);
 		// Get connection info with proper error handling
@@ -533,6 +538,7 @@ impl ExtAuthz {
 		client: PolicyClient,
 		req: &mut Request,
 		ctx_builder: &ContextBuilder,
+		span_writer: Option<SpanWriter>,
 	) -> Result<PolicyResponse, ProxyError> {
 		let Protocol::Http {
 			redirect,
@@ -634,7 +640,9 @@ impl ExtAuthz {
 		check_req
 			.extensions_mut()
 			.insert(BackendRequestTimeout(timeout_duration));
-		let resp = client.call_reference(check_req, &self.target).await;
+		let resp = client
+			.call_reference(check_req, &self.target, span_writer)
+			.await;
 		let mut resp = match resp {
 			Ok(r) => r,
 			Err(e) => {

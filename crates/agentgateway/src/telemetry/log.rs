@@ -3,8 +3,9 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::task::{Context, Poll, ready};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use agent_core::metrics::CustomField;
 use agent_core::strng;
@@ -16,6 +17,8 @@ use frozen_collections::{FzHashSet, FzStringMap};
 use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
+use opentelemetry::TraceFlags;
+use opentelemetry::trace::{Span, SpanBuilder, SpanContext, SpanKind, TraceState, Tracer};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
@@ -483,6 +486,7 @@ impl RequestLog {
 			start,
 			start_time,
 			tcp_info,
+			trace_spans: Default::default(),
 			tls_info: None,
 			tracer: None,
 			endpoint: None,
@@ -528,6 +532,9 @@ pub struct RequestLog {
 
 	// Set only if the trace is sampled
 	pub tracer: Option<trc::Tracer>,
+	/// Additional spans created during the request (e.g. upstream call spans).
+	/// These are flushed on drop when tracing is enabled.
+	pub trace_spans: Arc<Mutex<Vec<SpanBuilder>>>,
 
 	pub endpoint: Option<Target>,
 
@@ -592,6 +599,19 @@ impl RequestLog {
 			return false;
 		};
 		exec.eval_rng(expr.as_ref())
+	}
+
+	pub fn span_writer(&self) -> Option<SpanWriter> {
+		let tp = self.outgoing_span.clone()?;
+		let tc = self.tracer.clone()?;
+		let current = tp.new_span();
+
+		Some(SpanWriter {
+			tracer: tc,
+			parent: tp,
+			current,
+			inner: self.trace_spans.clone(),
+		})
 	}
 }
 
@@ -913,7 +933,14 @@ impl Drop for DropOnLog {
 			("duration", Some(dur.as_str().into())),
 		];
 		if enable_trace && let Some(t) = &log.tracer {
-			t.send(&log, &cel_exec, kv.as_slice())
+			t.send(&log, &cel_exec, kv.as_slice());
+			// Flush any buffered spans created during request processing.
+			// Does best effort, if the lock is poisoned, skip flushing.
+			if let Ok(mut spans) = log.trace_spans.lock() {
+				for sb in spans.drain(..) {
+					sb.start(t.tracer.as_ref()).end();
+				}
+			}
 		};
 		if enable_logs {
 			kv.reserve(fields.add.len());
@@ -992,5 +1019,59 @@ where
 
 	fn size_hint(&self) -> SizeHint {
 		self.body.size_hint()
+	}
+}
+
+#[derive(Debug, Clone)]
+
+pub struct SpanWriter {
+	parent: trc::TraceParent,
+
+	current: trc::TraceParent,
+
+	tracer: trc::Tracer,
+
+	inner: Arc<Mutex<Vec<SpanBuilder>>>,
+}
+
+impl SpanWriter {
+	pub fn traceparent(&self) -> &trc::TraceParent {
+		&self.current
+	}
+
+	pub fn write(
+		&self,
+
+		name: impl Into<Cow<'static, str>>,
+
+		f: impl FnOnce(SpanBuilder) -> SpanBuilder,
+	) {
+		// Create a unique child span ID for this recorded span.
+		let child = self.parent.new_span();
+		let mut sb = self
+			.tracer
+			.tracer
+			.span_builder(name)
+			.with_kind(SpanKind::Server)
+			.with_trace_id(child.trace_id.into())
+			.with_span_id(child.span_id.into());
+
+		sb = f(sb);
+		// Capture end time at write time so it measures the intended operation duration.
+		sb = sb.with_end_time(SystemTime::now());
+
+		let parent = SpanContext::new(
+			self.parent.trace_id.into(),
+			self.parent.span_id.into(),
+			TraceFlags::new(self.parent.flags),
+			true,
+			TraceState::default(),
+		);
+		sb = sb.with_links(vec![opentelemetry::trace::Link::new(parent, vec![], 0)]);
+
+		// Store for later flush when the request log is finalized.
+		if let Ok(mut spans) = self.inner.lock() {
+			spans.push(sb);
+		}
 	}
 }
