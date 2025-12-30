@@ -597,26 +597,63 @@ async fn handle_response_for_request_mutation(
 	Ok((res, false))
 }
 
+fn apply_header_with_action(
+	headers: &mut HeaderMap,
+	hk: HeaderName,
+	append_action: i32,
+	raw_value: &[u8],
+) -> Result<(), Error> {
+	use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
+
+	// Skip content-length as the EPP sets it to invalid values
+	// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
+	if hk == http::header::CONTENT_LENGTH {
+		debug!("skipping invalid content-length");
+		return Ok(());
+	}
+
+	let hv = HeaderValue::from_bytes(raw_value)?;
+
+	// Determine the action (defaults to APPEND_IF_EXISTS_OR_ADD when append_action is 0)
+	let action =
+		HeaderAppendAction::try_from(append_action).unwrap_or(HeaderAppendAction::AppendIfExistsOrAdd);
+
+	match action {
+		HeaderAppendAction::AppendIfExistsOrAdd => {
+			headers.append(hk, hv);
+		},
+		HeaderAppendAction::AddIfAbsent => {
+			if !headers.contains_key(&hk) {
+				headers.insert(hk, hv);
+			}
+		},
+		HeaderAppendAction::OverwriteIfExistsOrAdd => {
+			headers.insert(hk, hv);
+		},
+		HeaderAppendAction::OverwriteIfExists => {
+			if headers.contains_key(&hk) {
+				headers.insert(hk, hv);
+			}
+		},
+	}
+
+	Ok(())
+}
+
 fn apply_header_mutations(
 	headers: &mut HeaderMap,
 	h: Option<&HeaderMutation>,
 ) -> Result<(), Error> {
-	if let Some(h) = h {
-		for rm in &h.remove_headers {
+	if let Some(hm) = h {
+		for rm in &hm.remove_headers {
 			headers.remove(rm);
 		}
-		for set in &h.set_headers {
+		for set in &hm.set_headers {
 			let Some(h) = &set.header else {
 				continue;
 			};
 			let hk = HeaderName::try_from(h.key.as_str())?;
-			if hk == http::header::CONTENT_LENGTH {
-				debug!("skipping invalid content-length");
-				// The EPP actually sets content-length to an invalid value, so don't respect it.
-				// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
-				continue;
-			}
-			headers.insert(hk, HeaderValue::from_bytes(h.raw_value.as_slice())?);
+			apply_header_with_action(headers, hk, set.append_action, &h.raw_value)?;
 		}
 	}
 	Ok(())
@@ -634,13 +671,7 @@ fn apply_header_mutations_request(
 			let Some(h) = &set.header else { continue };
 			match HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(HeaderOrPseudo::Header(hk)) => {
-					if hk == http::header::CONTENT_LENGTH {
-						debug!("skipping invalid content-length");
-						continue;
-					}
-					req
-						.headers_mut()
-						.insert(hk, HeaderValue::from_bytes(h.raw_value.as_slice())?);
+					apply_header_with_action(req.headers_mut(), hk, set.append_action, &h.raw_value)?;
 				},
 				Ok(pseudo) => {
 					let mut rr = crate::http::RequestOrResponse::Request(req);
@@ -665,13 +696,7 @@ fn apply_header_mutations_response(
 			let Some(h) = &set.header else { continue };
 			match crate::http::HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(crate::http::HeaderOrPseudo::Header(hk)) => {
-					if hk == http::header::CONTENT_LENGTH {
-						debug!("skipping invalid content-length");
-						continue;
-					}
-					resp
-						.headers_mut()
-						.insert(hk, HeaderValue::from_bytes(h.raw_value.as_slice())?);
+					apply_header_with_action(resp.headers_mut(), hk, set.append_action, &h.raw_value)?;
 				},
 				Ok(pseudo) => {
 					let mut rr = crate::http::RequestOrResponse::Response(resp);

@@ -6,6 +6,7 @@ use tonic::Status;
 use wiremock::MockServer;
 
 use crate::http::ext_proc::proto;
+use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
 use crate::http::ext_proc::proto::{
 	BodyMutation, CommonResponse, HeaderMutation, HeaderValue, HeaderValueOption, HttpHeaders,
 	ProcessingResponse, body_mutation,
@@ -13,7 +14,7 @@ use crate::http::ext_proc::proto::{
 use crate::http::{Body, ext_proc};
 use crate::test_helpers::extprocmock::{
 	ExtProcMock, ExtProcMockInstance, Handler, immediate_response, request_body_response,
-	request_header_response, response_body_response,
+	request_header_response, response_body_response, response_header_response,
 };
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
@@ -285,7 +286,7 @@ impl Handler for BBRExtProc {
 								key: "X-Gateway-Model-Name".to_string(),
 								raw_value: b"my-model-name".to_vec(),
 							}),
-							append: None,
+							append_action: 0,
 						}],
 						remove_headers: vec![],
 					}),
@@ -424,8 +425,8 @@ impl Handler for FailureExtProcResponse {
 	}
 }
 
-#[tokio::test]
-async fn test_req_to_header_map() {
+#[test]
+fn test_req_to_header_map() {
 	let req = Request::builder()
 		.header("host", "foo.com")
 		.header("content-type", "application/json")
@@ -436,4 +437,304 @@ async fn test_req_to_header_map() {
 	let headers = super::req_to_header_map(&req).unwrap();
 	// 2 regular headers, 4 pseudo headers (method, scheme, authority, path)
 	assert_eq!(headers.headers.len(), 6);
+}
+
+#[test]
+fn test_append_if_exists_or_add() {
+	let mut headers = ::http::HeaderMap::new();
+	headers.insert("existing", "value1".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "existing".to_string(),
+					raw_value: b"value2".to_vec(),
+				}),
+				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "new".to_string(),
+					raw_value: b"added".to_vec(),
+				}),
+				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+			},
+		],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "value1");
+	assert_eq!(values[1], "value2");
+	assert_eq!(headers.get("new").unwrap(), "added");
+}
+
+#[test]
+fn test_add_if_absent() {
+	let mut headers = ::http::HeaderMap::new();
+	headers.insert("existing", "value1".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "existing".to_string(),
+					raw_value: b"should-not-add".to_vec(),
+				}),
+				append_action: HeaderAppendAction::AddIfAbsent as i32,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "new".to_string(),
+					raw_value: b"added".to_vec(),
+				}),
+				append_action: HeaderAppendAction::AddIfAbsent as i32,
+			},
+		],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "value1");
+	assert_eq!(headers.get("new").unwrap(), "added");
+}
+
+#[test]
+fn test_overwrite_if_exists_or_add() {
+	let mut headers = ::http::HeaderMap::new();
+	headers.insert("existing", "old-value".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "existing".to_string(),
+					raw_value: b"overwritten".to_vec(),
+				}),
+				append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "new".to_string(),
+					raw_value: b"added".to_vec(),
+				}),
+				append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+			},
+		],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "overwritten");
+	assert_eq!(headers.get("new").unwrap(), "added");
+}
+
+#[test]
+fn test_overwrite_if_exists() {
+	let mut headers = ::http::HeaderMap::new();
+	headers.insert("existing", "old-value".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "existing".to_string(),
+					raw_value: b"overwritten".to_vec(),
+				}),
+				append_action: HeaderAppendAction::OverwriteIfExists as i32,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "new".to_string(),
+					raw_value: b"should-not-add".to_vec(),
+				}),
+				append_action: HeaderAppendAction::OverwriteIfExists as i32,
+			},
+		],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "overwritten");
+	assert!(headers.get("new").is_none());
+}
+
+#[test]
+fn test_remove_headers() {
+	let mut headers = ::http::HeaderMap::new();
+	headers.insert("to-remove", "value".parse().unwrap());
+	headers.insert("keep", "value".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec!["to-remove".to_string()],
+		set_headers: vec![],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	assert!(headers.get("to-remove").is_none());
+	assert_eq!(headers.get("keep").unwrap(), "value");
+}
+
+#[test]
+fn test_apply_header_mutations_request() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com")
+		.header("existing", "value1")
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec!["to-remove".to_string()],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: "existing".to_string(),
+				raw_value: b"value2".to_vec(),
+			}),
+			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+		}],
+	});
+
+	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+
+	let headers = req.headers();
+	assert!(headers.get("to-remove").is_none());
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "value1");
+	assert_eq!(values[1], "value2");
+}
+
+#[test]
+fn test_apply_header_mutations_response() {
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.header("existing", "value1")
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec!["to-remove".to_string()],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: "existing".to_string(),
+				raw_value: b"value2".to_vec(),
+			}),
+			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+		}],
+	});
+
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+
+	let headers = resp.headers();
+	assert!(headers.get("to-remove").is_none());
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "value1");
+	assert_eq!(values[1], "value2");
+}
+
+#[tokio::test]
+async fn header_append_action_mock() {
+	let mock = mock_with_header("x-test", "existing").await;
+	let handler = HeaderAppendActionExtProc::new(vec![
+		(
+			"x-test",
+			b"new-value",
+			HeaderAppendAction::AppendIfExistsOrAdd,
+		),
+		("x-new", b"added", HeaderAppendAction::AppendIfExistsOrAdd),
+	]);
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(move || handler.clone()),
+		"{}",
+	)
+	.await;
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	let values: Vec<_> = res.headers().get_all("x-test").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "existing");
+	assert_eq!(values[1], "new-value");
+	assert_eq!(res.headers().get("x-new").unwrap(), "added");
+}
+
+#[derive(Debug, Clone)]
+struct HeaderAppendActionExtProc {
+	headers: Vec<(String, Vec<u8>, HeaderAppendAction)>,
+}
+
+impl HeaderAppendActionExtProc {
+	fn new(headers: Vec<(&str, &[u8], HeaderAppendAction)>) -> Self {
+		Self {
+			headers: headers
+				.into_iter()
+				.map(|(k, v, a)| (k.to_string(), v.to_vec(), a))
+				.collect(),
+		}
+	}
+}
+
+#[async_trait::async_trait]
+impl Handler for HeaderAppendActionExtProc {
+	async fn handle_response_headers(
+		&mut self,
+		_: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let set_headers = self
+			.headers
+			.iter()
+			.map(|(key, value, action)| HeaderValueOption {
+				header: Some(HeaderValue {
+					key: key.clone(),
+					raw_value: value.clone(),
+				}),
+				append_action: (*action).into(),
+			})
+			.collect();
+
+		let _ = sender
+			.send(response_header_response(Some(CommonResponse {
+				header_mutation: Some(HeaderMutation {
+					set_headers,
+					remove_headers: vec![],
+				}),
+				..Default::default()
+			})))
+			.await;
+		Ok(())
+	}
+}
+
+async fn mock_with_header(header_name: &str, header_value: &str) -> MockServer {
+	let header_name = header_name.to_string();
+	let header_value = header_value.to_string();
+	let mock = wiremock::MockServer::start().await;
+	wiremock::Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(move |_: &wiremock::Request| {
+			wiremock::ResponseTemplate::new(200)
+				.insert_header(header_name.as_str(), header_value.as_str())
+		})
+		.mount(&mock)
+		.await;
+	mock
 }
