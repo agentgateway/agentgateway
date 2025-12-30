@@ -9,6 +9,8 @@ use agent_core::strng::Strng;
 use futures_util::TryFutureExt;
 use rustls::ServerConfig;
 use rustls::crypto::CryptoProvider;
+use rustls::server::ParsedCertificate;
+use rustls_pki_types::{CertificateDer, InvalidDnsNameError, ServerName};
 use tracing::warn;
 use x509_parser::certificate::X509Certificate;
 
@@ -64,6 +66,64 @@ pub async fn accept(conn: Socket, cfg: Arc<ServerConfig>) -> Result<Socket, Erro
 		.map_err(Error::Handshake)
 		.await?;
 	Ok(Socket::from_tls(ext, counter, stream.into())?)
+}
+
+#[derive(Debug)]
+pub enum ExtendedServerName {
+	Native(ServerName<'static>),
+
+	// A URI SAN
+	URI(String),
+}
+
+impl TryFrom<String> for ExtendedServerName {
+	type Error = InvalidDnsNameError;
+
+	fn try_from(value: String) -> Result<Self, Self::Error> {
+		if let Ok(v) = ServerName::try_from(value.clone()) {
+			Ok(Self::Native(v))
+		} else if value.contains("://") {
+			Ok(Self::URI(value))
+		} else {
+			Err(InvalidDnsNameError)
+		}
+	}
+}
+
+impl ExtendedServerName {
+	pub fn verify_server_name(
+		&self,
+		cert: &ParsedCertificate,
+		der: &CertificateDer,
+	) -> Result<(), rustls::Error> {
+		match self {
+			ExtendedServerName::Native(d) => rustls::client::verify_server_name(cert, d),
+			ExtendedServerName::URI(want) => {
+				use x509_parser::prelude::*;
+
+				let (_, c) = X509Certificate::from_der(der)
+					.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
+				let names = c
+					.subject_alternative_name()
+					.map_err(|_e| {
+						rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidForName)
+					})?
+					.map(|x| &x.value.general_names);
+				names
+					.into_iter()
+					.flatten()
+					.filter_map(|n| match n {
+						GeneralName::URI(uri) => Some(uri),
+						_ => None,
+					})
+					.find(|cert_uri| **cert_uri == want.as_str())
+					.ok_or_else(|| {
+						rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidForName)
+					})
+					.map(|_| ())
+			},
+		}
+	}
 }
 
 pub mod insecure {
@@ -194,13 +254,13 @@ pub mod insecure {
 	#[derive(Debug)]
 	pub struct AltHostnameVerifier {
 		roots: Arc<rustls::RootCertStore>,
-		alt_server_names: Box<[ServerName<'static>]>,
+		alt_server_names: Box<[super::ExtendedServerName]>,
 	}
 
 	impl AltHostnameVerifier {
 		pub fn new(
 			roots: Arc<rustls::RootCertStore>,
-			alt_server_names: Box<[ServerName<'static>]>,
+			alt_server_names: Box<[super::ExtendedServerName]>,
 		) -> Self {
 			Self {
 				roots,
@@ -241,7 +301,7 @@ pub mod insecure {
 			// First attempt to verify the original server name...
 			let mut last_error = None;
 			for option in &self.alt_server_names {
-				match rustls::client::verify_server_name(&cert, option) {
+				match option.verify_server_name(&cert, end_entity) {
 					Ok(_) => return Ok(ServerCertVerified::assertion()),
 					Err(e) => {
 						tracing::debug!("failed to verify alt hostname {option:?} ({e})",);
