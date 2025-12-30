@@ -1,4 +1,5 @@
-use ::http::{Method, Request};
+use ::http::{HeaderMap, Method, Request};
+
 use hyper_util::client::legacy::Client;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
@@ -284,8 +285,10 @@ impl Handler for BBRExtProc {
 						set_headers: vec![HeaderValueOption {
 							header: Some(HeaderValue {
 								key: "X-Gateway-Model-Name".to_string(),
+								value: String::new(),
 								raw_value: b"my-model-name".to_vec(),
 							}),
+							append: None,
 							append_action: 0,
 						}],
 						remove_headers: vec![],
@@ -441,7 +444,7 @@ fn test_req_to_header_map() {
 
 #[test]
 fn test_append_if_exists_or_add() {
-	let mut headers = ::http::HeaderMap::new();
+	let mut headers = HeaderMap::new();
 	headers.insert("existing", "value1".parse().unwrap());
 
 	let mutation = Some(HeaderMutation {
@@ -450,15 +453,19 @@ fn test_append_if_exists_or_add() {
 			HeaderValueOption {
 				header: Some(HeaderValue {
 					key: "existing".to_string(),
+					value: String::new(),
 					raw_value: b"value2".to_vec(),
 				}),
+				append: None,
 				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 			},
 			HeaderValueOption {
 				header: Some(HeaderValue {
 					key: "new".to_string(),
+					value: String::new(),
 					raw_value: b"added".to_vec(),
 				}),
+				append: None,
 				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 			},
 		],
@@ -475,7 +482,7 @@ fn test_append_if_exists_or_add() {
 
 #[test]
 fn test_add_if_absent() {
-	let mut headers = ::http::HeaderMap::new();
+	let mut headers = HeaderMap::new();
 	headers.insert("existing", "value1".parse().unwrap());
 
 	let mutation = Some(HeaderMutation {
@@ -484,15 +491,19 @@ fn test_add_if_absent() {
 			HeaderValueOption {
 				header: Some(HeaderValue {
 					key: "existing".to_string(),
+					value: String::new(),
 					raw_value: b"should-not-add".to_vec(),
 				}),
+				append: None,
 				append_action: HeaderAppendAction::AddIfAbsent as i32,
 			},
 			HeaderValueOption {
 				header: Some(HeaderValue {
 					key: "new".to_string(),
+					value: String::new(),
 					raw_value: b"added".to_vec(),
 				}),
+				append: None,
 				append_action: HeaderAppendAction::AddIfAbsent as i32,
 			},
 		],
@@ -508,7 +519,7 @@ fn test_add_if_absent() {
 
 #[test]
 fn test_overwrite_if_exists_or_add() {
-	let mut headers = ::http::HeaderMap::new();
+	let mut headers = HeaderMap::new();
 	headers.insert("existing", "old-value".parse().unwrap());
 
 	let mutation = Some(HeaderMutation {
@@ -517,15 +528,19 @@ fn test_overwrite_if_exists_or_add() {
 			HeaderValueOption {
 				header: Some(HeaderValue {
 					key: "existing".to_string(),
+					value: String::new(),
 					raw_value: b"overwritten".to_vec(),
 				}),
+				append: None,
 				append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
 			},
 			HeaderValueOption {
 				header: Some(HeaderValue {
 					key: "new".to_string(),
+					value: String::new(),
 					raw_value: b"added".to_vec(),
 				}),
+				append: None,
 				append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
 			},
 		],
@@ -541,7 +556,7 @@ fn test_overwrite_if_exists_or_add() {
 
 #[test]
 fn test_overwrite_if_exists() {
-	let mut headers = ::http::HeaderMap::new();
+	let mut headers = HeaderMap::new();
 	headers.insert("existing", "old-value".parse().unwrap());
 
 	let mutation = Some(HeaderMutation {
@@ -550,15 +565,19 @@ fn test_overwrite_if_exists() {
 			HeaderValueOption {
 				header: Some(HeaderValue {
 					key: "existing".to_string(),
+					value: String::new(),
 					raw_value: b"overwritten".to_vec(),
 				}),
+				append: None,
 				append_action: HeaderAppendAction::OverwriteIfExists as i32,
 			},
 			HeaderValueOption {
 				header: Some(HeaderValue {
 					key: "new".to_string(),
+					value: String::new(),
 					raw_value: b"should-not-add".to_vec(),
 				}),
+				append: None,
 				append_action: HeaderAppendAction::OverwriteIfExists as i32,
 			},
 		],
@@ -574,7 +593,7 @@ fn test_overwrite_if_exists() {
 
 #[test]
 fn test_remove_headers() {
-	let mut headers = ::http::HeaderMap::new();
+	let mut headers = HeaderMap::new();
 	headers.insert("to-remove", "value".parse().unwrap());
 	headers.insert("keep", "value".parse().unwrap());
 
@@ -602,8 +621,10 @@ fn test_apply_header_mutations_request() {
 		set_headers: vec![HeaderValueOption {
 			header: Some(HeaderValue {
 				key: "existing".to_string(),
+				value: String::new(),
 				raw_value: b"value2".to_vec(),
 			}),
+			append: None,
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		}],
 	});
@@ -620,6 +641,131 @@ fn test_apply_header_mutations_request() {
 }
 
 #[test]
+fn test_apply_pseudo_headers_request_with_raw_value() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/old-path")
+		.method("GET")
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: ":method".to_string(),
+					value: String::new(),
+					raw_value: b"POST".to_vec(),
+				}),
+				append: None,
+				append_action: 0,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: ":path".to_string(),
+					value: String::new(),
+					raw_value: b"/new-path".to_vec(),
+				}),
+				append: None,
+				append_action: 0,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: ":authority".to_string(),
+					value: String::new(),
+					raw_value: b"new-host.com".to_vec(),
+				}),
+				append: None,
+				append_action: 0,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: ":scheme".to_string(),
+					value: String::new(),
+					raw_value: b"https".to_vec(),
+				}),
+				append: None,
+				append_action: 0,
+			},
+		],
+	});
+
+	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+
+	// Verify pseudo-headers were applied
+	assert_eq!(req.method(), "POST");
+	assert_eq!(req.uri().path(), "/new-path");
+	assert_eq!(req.uri().scheme_str(), Some("https"));
+	assert_eq!(req.uri().authority().unwrap().as_str(), "new-host.com");
+}
+
+#[test]
+fn test_apply_pseudo_headers_request_with_value_field() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/old-path")
+		.method("GET")
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: ":method".to_string(),
+					value: "PUT".to_string(),
+					raw_value: vec![], // Empty, should use value field
+				}),
+				append: None,
+				append_action: 0,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: ":path".to_string(),
+					value: "/updated-path".to_string(),
+					raw_value: vec![],
+				}),
+				append: None,
+				append_action: 0,
+			},
+		],
+	});
+
+	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+
+	// Verify pseudo-headers from value field were applied
+	assert_eq!(req.method(), "PUT");
+	assert_eq!(req.uri().path(), "/updated-path");
+}
+
+#[test]
+fn test_pseudo_headers_request_raw_value_precedence() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/path")
+		.method("GET")
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: ":method".to_string(),
+				value: "PUT".to_string(),      // Should be ignored
+				raw_value: b"DELETE".to_vec(), // Should be used
+			}),
+			append: None,
+			append_action: 0,
+		}],
+	});
+
+	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+
+	// raw_value should take precedence
+	assert_eq!(req.method(), "DELETE");
+}
+
+#[test]
 fn test_apply_header_mutations_response() {
 	let mut resp = ::http::Response::builder()
 		.status(200)
@@ -632,8 +778,10 @@ fn test_apply_header_mutations_response() {
 		set_headers: vec![HeaderValueOption {
 			header: Some(HeaderValue {
 				key: "existing".to_string(),
+				value: String::new(),
 				raw_value: b"value2".to_vec(),
 			}),
+			append: None,
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		}],
 	});
@@ -647,6 +795,336 @@ fn test_apply_header_mutations_response() {
 	assert_eq!(values.len(), 2);
 	assert_eq!(values[0], "value1");
 	assert_eq!(values[1], "value2");
+}
+
+#[test]
+fn test_apply_pseudo_headers_response_with_raw_value() {
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.header("x-test", "value")
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: ":status".to_string(),
+				value: String::new(),
+				raw_value: b"404".to_vec(),
+			}),
+			append: None,
+			append_action: 0,
+		}],
+	});
+
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+
+	// Verify :status pseudo-header was applied
+	assert_eq!(resp.status(), 404);
+	// Regular headers should still be present
+	assert_eq!(resp.headers().get("x-test").unwrap(), "value");
+}
+
+#[test]
+fn test_apply_pseudo_headers_response_with_value_field() {
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: ":status".to_string(),
+				value: "201".to_string(),
+				raw_value: vec![], // Empty, should use value field
+			}),
+			append: None,
+			append_action: 0,
+		}],
+	});
+
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+
+	// Verify :status pseudo-header from value field was applied
+	assert_eq!(resp.status(), 201);
+}
+
+#[test]
+fn test_pseudo_headers_response_raw_value_precedence() {
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: ":status".to_string(),
+				value: "500".to_string(),   // Should be ignored
+				raw_value: b"403".to_vec(), // Should be used
+			}),
+			append: None,
+			append_action: 0,
+		}],
+	});
+
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+
+	// raw_value should take precedence
+	assert_eq!(resp.status(), 403);
+}
+
+#[test]
+fn test_apply_mixed_headers_and_pseudo_headers_request() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/path")
+		.method("GET")
+		.header("x-custom", "old-value")
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: ":method".to_string(),
+					value: String::new(),
+					raw_value: b"POST".to_vec(),
+				}),
+				append: None,
+				append_action: 0,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "x-custom".to_string(),
+					value: String::new(),
+					raw_value: b"new-value".to_vec(),
+				}),
+				append: None,
+				append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "x-new-header".to_string(),
+					value: "added".to_string(),
+					raw_value: vec![],
+				}),
+				append: None,
+				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+			},
+		],
+	});
+
+	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+
+	// Verify pseudo-header was applied
+	assert_eq!(req.method(), "POST");
+	// Verify regular headers were applied correctly
+	assert_eq!(req.headers().get("x-custom").unwrap(), "new-value");
+	assert_eq!(req.headers().get("x-new-header").unwrap(), "added");
+}
+
+#[test]
+fn test_apply_mixed_headers_and_pseudo_headers_response() {
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.header("x-custom", "old-value")
+		.body(Body::empty())
+		.unwrap();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: ":status".to_string(),
+					value: String::new(),
+					raw_value: b"201".to_vec(),
+				}),
+				append: None,
+				append_action: 0,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "x-custom".to_string(),
+					value: String::new(),
+					raw_value: b"new-value".to_vec(),
+				}),
+				append: None,
+				append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "x-new-header".to_string(),
+					value: "added".to_string(),
+					raw_value: vec![],
+				}),
+				append: None,
+				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+			},
+		],
+	});
+
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+
+	// Verify pseudo-header was applied
+	assert_eq!(resp.status(), 201);
+	// Verify regular headers were applied correctly
+	assert_eq!(resp.headers().get("x-custom").unwrap(), "new-value");
+	assert_eq!(resp.headers().get("x-new-header").unwrap(), "added");
+}
+
+#[test]
+fn test_deprecated_append_true() {
+	let mut headers = HeaderMap::new();
+	headers.insert("existing", "value1".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "existing".to_string(),
+					value: String::new(),
+					raw_value: b"value2".to_vec(),
+				}),
+				append: Some(true),
+				append_action: 0, // Not set, should fall back to append field
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "new".to_string(),
+					value: String::new(),
+					raw_value: b"added".to_vec(),
+				}),
+				append: Some(true),
+				append_action: 0,
+			},
+		],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "value1");
+	assert_eq!(values[1], "value2");
+	assert_eq!(headers.get("new").unwrap(), "added");
+}
+
+#[test]
+fn test_deprecated_append_false() {
+	let mut headers = HeaderMap::new();
+	headers.insert("existing", "old-value".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: "existing".to_string(),
+				value: String::new(),
+				raw_value: b"overwritten".to_vec(),
+			}),
+			append: Some(false),
+			append_action: 0, // Not set, should fall back to append field
+		}],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "overwritten");
+}
+
+#[test]
+fn test_value_field_instead_of_raw_value() {
+	let mut headers = HeaderMap::new();
+	headers.insert("existing", "value1".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "existing".to_string(),
+					value: "value2".to_string(),
+					raw_value: vec![], // Empty raw_value, should use value field
+				}),
+				append: None,
+				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+			},
+			HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "new".to_string(),
+					value: "added".to_string(),
+					raw_value: vec![],
+				}),
+				append: None,
+				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+			},
+		],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "value1");
+	assert_eq!(values[1], "value2");
+	assert_eq!(headers.get("new").unwrap(), "added");
+}
+
+#[test]
+fn test_raw_value_takes_precedence_over_value() {
+	let mut headers = HeaderMap::new();
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: "test".to_string(),
+				value: "should-not-use".to_string(),
+				raw_value: b"raw-value-wins".to_vec(),
+			}),
+			append: None,
+			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
+		}],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	assert_eq!(headers.get("test").unwrap(), "raw-value-wins");
+}
+
+#[test]
+fn test_append_action_priority_over_deprecated_append() {
+	let mut headers = HeaderMap::new();
+	headers.insert("existing", "value1".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: "existing".to_string(),
+				value: String::new(),
+				raw_value: b"overwritten".to_vec(),
+			}),
+			append: Some(true),
+			append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+		}],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "overwritten");
 }
 
 #[tokio::test]
@@ -706,8 +1184,10 @@ impl Handler for HeaderAppendActionExtProc {
 			.map(|(key, value, action)| HeaderValueOption {
 				header: Some(HeaderValue {
 					key: key.clone(),
+					value: String::new(),
 					raw_value: value.clone(),
 				}),
+				append: None,
 				append_action: (*action).into(),
 			})
 			.collect();

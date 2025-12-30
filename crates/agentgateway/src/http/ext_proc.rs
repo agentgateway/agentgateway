@@ -15,8 +15,9 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::http::ext_proc::proto::{
-	BodyMutation, BodyResponse, HeaderMutation, HeadersResponse, HttpBody, HttpHeaders, HttpTrailers,
-	ImmediateResponse, ProcessingRequest, ProcessingResponse, processing_response,
+	BodyMutation, BodyResponse, HeaderMutation, HeaderValueOption, HeadersResponse, HttpBody,
+	HttpHeaders, HttpTrailers, ImmediateResponse, ProcessingRequest, ProcessingResponse,
+	processing_response,
 };
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse};
@@ -600,10 +601,13 @@ async fn handle_response_for_request_mutation(
 fn apply_header_with_action(
 	headers: &mut HeaderMap,
 	hk: HeaderName,
-	append_action: i32,
-	raw_value: &[u8],
+	hvo: &HeaderValueOption,
 ) -> Result<(), Error> {
 	use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
+
+	let Some(ref h) = hvo.header else {
+		return Ok(());
+	};
 
 	// Skip content-length as the EPP sets it to invalid values
 	// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
@@ -612,11 +616,30 @@ fn apply_header_with_action(
 		return Ok(());
 	}
 
-	let hv = HeaderValue::from_bytes(raw_value)?;
+	let hv = if h.raw_value.is_empty() {
+		HeaderValue::from_bytes(h.value.as_bytes())
+	} else {
+		HeaderValue::from_bytes(&h.raw_value)
+	};
+	let Ok(hv) = hv else {
+		warn!("Invalid header value for key: {}", hk);
+		return Ok(());
+	};
 
-	// Determine the action (defaults to APPEND_IF_EXISTS_OR_ADD when append_action is 0)
-	let action =
-		HeaderAppendAction::try_from(append_action).unwrap_or(HeaderAppendAction::AppendIfExistsOrAdd);
+	// Determine the action to take
+	// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
+	let action = if hvo.append_action != 0 || hvo.append.is_none() {
+		// Use append_action if it's explicitly set (non-zero) or if append is not set
+		HeaderAppendAction::try_from(hvo.append_action)
+			.unwrap_or(HeaderAppendAction::AppendIfExistsOrAdd)
+	} else {
+		// Fall back to deprecated append field for backwards compatibility
+		if hvo.append.unwrap_or(false) {
+			HeaderAppendAction::AppendIfExistsOrAdd
+		} else {
+			HeaderAppendAction::OverwriteIfExistsOrAdd
+		}
+	};
 
 	match action {
 		HeaderAppendAction::AppendIfExistsOrAdd => {
@@ -649,11 +672,9 @@ fn apply_header_mutations(
 			headers.remove(rm);
 		}
 		for set in &hm.set_headers {
-			let Some(h) = &set.header else {
-				continue;
-			};
+			let Some(h) = &set.header else { continue };
 			let hk = HeaderName::try_from(h.key.as_str())?;
-			apply_header_with_action(headers, hk, set.append_action, &h.raw_value)?;
+			apply_header_with_action(headers, hk, set)?;
 		}
 	}
 	Ok(())
@@ -671,11 +692,16 @@ fn apply_header_mutations_request(
 			let Some(h) = &set.header else { continue };
 			match HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(HeaderOrPseudo::Header(hk)) => {
-					apply_header_with_action(req.headers_mut(), hk, set.append_action, &h.raw_value)?;
+					apply_header_with_action(req.headers_mut(), hk, set)?;
 				},
 				Ok(pseudo) => {
+					let raw = if !h.raw_value.is_empty() {
+						h.raw_value.as_slice()
+					} else {
+						h.value.as_bytes()
+					};
 					let mut rr = crate::http::RequestOrResponse::Request(req);
-					let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, &h.raw_value);
+					let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, raw);
 				},
 				Err(_) => {},
 			}
@@ -696,11 +722,16 @@ fn apply_header_mutations_response(
 			let Some(h) = &set.header else { continue };
 			match crate::http::HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(crate::http::HeaderOrPseudo::Header(hk)) => {
-					apply_header_with_action(resp.headers_mut(), hk, set.append_action, &h.raw_value)?;
+					apply_header_with_action(resp.headers_mut(), hk, set)?;
 				},
 				Ok(pseudo) => {
+					let raw = if !h.raw_value.is_empty() {
+						h.raw_value.as_slice()
+					} else {
+						h.value.as_bytes()
+					};
 					let mut rr = crate::http::RequestOrResponse::Response(resp);
-					let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, &h.raw_value);
+					let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, raw);
 				},
 				Err(_) => {},
 			}
@@ -798,11 +829,13 @@ fn to_header_map_extra(
 		.iter()
 		.map(|(k, v)| proto::HeaderValue {
 			key: k.to_string(),
+			value: String::new(),
 			raw_value: v.as_bytes().to_vec(),
 		})
 		.chain(additional_headers.iter().map(|(k, v)| proto::HeaderValue {
 			key: k.to_string(),
-			raw_value: v.as_bytes().to_vec(),
+			value: v.to_string(),
+			raw_value: vec![],
 		}))
 		.collect_vec();
 	Some(proto::HeaderMap { headers: h })

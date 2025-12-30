@@ -404,12 +404,12 @@ message HeaderValue {
   // Header name.
   string key = 1;
 
+  string value = 2;
   // Header value.
   //
   // The same :ref:`format specifier <config_access_log_format>` as used for
   // :ref:`HTTP access logging <config_access_log>` applies here, however
   // unknown header values are replaced with the empty string instead of ``-``.
-  //  string value = 2;
   bytes raw_value = 3;
 }
 enum StatusCode {
@@ -508,9 +508,10 @@ message HeaderValueOption {
   // Header name/value pair that this option applies to.
   HeaderValue header = 1;
 
-  // Append was never implemented and should be replaced by append_action inline with ext_authz.
-  reserved 2;
-  reserved "append";
+  // Should the value be appended? If true (default), the value is appended to
+  // existing values.
+  // This field is deprecated and please use append_action as replacement.
+  google.protobuf.BoolValue append = 2;
 
   // Describes the action taken to append/overwrite the given value for an existing header
   // or to only add this header if it's absent.
