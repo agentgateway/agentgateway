@@ -11,6 +11,13 @@ binds:
   listeners:
   - routes:
     - policies:
+        cors:
+          allowOrigins:
+            - "*"
+          allowHeaders:
+            - mcp-protocol-version
+            - content-type
+            - cache-control
         # Mark this route as a2a traffic
         a2a: {}
       backends:
