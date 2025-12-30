@@ -28,7 +28,9 @@ export function configDumpToLocalConfig(configDump: any): LocalConfig {
     appliedPolicies: configDump.policies || [],
   };
 
-  const backends = (configDump.backends || []).map((b: any) => mapToBackend(b)).filter(Boolean);
+  const backends = (configDump.backends || [])
+    .map((b: any) => (b.backend ? mapToBackend(b.backend) : null))
+    .filter(Boolean);
 
   localConfig.binds = (configDump.binds || []).map((bind: any) =>
     mapToBind(bind, backends as Backend[])
@@ -48,7 +50,7 @@ function mapToBind(bindData: any, backends: Backend[]): Bind {
 
 function mapToListener(listenerData: any, backends: Backend[]): Listener {
   return {
-    name: listenerData.name,
+    name: listenerData.listenerName,
     gatewayName: listenerData.gatewayName,
     hostname: listenerData.hostname,
     protocol: listenerData.protocol as ListenerProtocol,
@@ -61,7 +63,7 @@ function mapToListener(listenerData: any, backends: Backend[]): Listener {
 
 function mapToRoute(routeData: any, backends: Backend[]): Route {
   return {
-    name: routeData.routeName,
+    name: routeData.name,
     ruleName: routeData.ruleName || "",
     hostnames: routeData.hostnames || [],
     matches: mapToMatches(routeData.matches),
@@ -116,13 +118,13 @@ function mapToBackend(backendData: any): Backend | undefined {
 }
 
 function mapToRouteBackend(rb: any, backends: Backend[]): Backend | undefined {
-  if (rb.backend) {
+  // Route backend reference is a string in "namespace/name" format
+  if (typeof rb.backend === "string") {
     const found = backends.find((b) => getBackendName(b) === rb.backend);
     if (found) return found;
   }
 
   // Fallback: instantiate a backend in-place based on the route backend data
-  // This covers cases where service/host backends are defined directly inside the route
   return mapToBackend(rb);
 }
 
@@ -166,13 +168,15 @@ function mapToServiceBackend(data: any): ServiceBackend | undefined {
 
 function mapToHostBackend(data: any): HostBackend | undefined {
   if (!data) return undefined;
+  // Include namespace in name to match route backend reference format "namespace/name"
+  const fullName = data.namespace && data.name ? `${data.namespace}/${data.name}` : data.name;
   if (typeof data.target === "string") {
     const [host, portStr] = data.target.split(":");
     const port = Number(portStr);
     if (!isNaN(port)) {
       return {
         Hostname: [host, port],
-        name: data.name,
+        name: fullName,
       } as HostBackend;
     }
   }
@@ -183,7 +187,9 @@ function mapToHostBackend(data: any): HostBackend | undefined {
 function mapToMcpBackend(data: any): McpBackend | undefined {
   if (typeof data?.name !== "string" || !Array.isArray(data?.target?.targets)) return undefined;
   const targets = data.target.targets.map(mapToMcpTarget).filter(Boolean) as McpTarget[];
-  return { name: data.name, targets } as McpBackend;
+  // Include namespace in name to match route backend reference format "namespace/name"
+  const fullName = data.namespace ? `${data.namespace}/${data.name}` : data.name;
+  return { name: fullName, targets } as McpBackend;
 }
 
 function mapToMcpTarget(data: any): McpTarget | undefined {
@@ -223,8 +229,10 @@ function mapToAiBackend(data: any): AiBackend | undefined {
   const providerData = data.target?.provider;
   const hostOverrideRaw = data.target?.hostOverride;
   if (!providerData) return undefined;
+  // Include namespace in name to match route backend reference format "namespace/name"
+  const fullName = data.namespace ? `${data.namespace}/${data.name}` : data.name;
   return {
-    name: data.name,
+    name: fullName,
     provider: providerData,
     hostOverride: hostOverrideRaw ? mapToHostBackend(hostOverrideRaw) : undefined,
     pathOverride: data.target?.pathOverride,
