@@ -217,7 +217,7 @@ impl ProxyError {
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoHealthyEndpoints => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::UpstreamCallFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
-			ProxyError::UpstreamCallTimeout => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::UpstreamCallTimeout => StatusCode::GATEWAY_TIMEOUT,
 
 			ProxyError::RequestTimeout => StatusCode::GATEWAY_TIMEOUT,
 			ProxyError::Processing(_) => StatusCode::SERVICE_UNAVAILABLE,
