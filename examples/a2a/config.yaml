@@ -15,7 +15,6 @@ binds:
           allowOrigins:
             - "*"
           allowHeaders:
-            - mcp-protocol-version
             - content-type
             - cache-control
         # Mark this route as a2a traffic
