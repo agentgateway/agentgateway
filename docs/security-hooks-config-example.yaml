@@ -1,0 +1,487 @@
+# Security Hooks Configuration Example
+# This file demonstrates how to configure the security hooks framework
+
+security:
+  enabled: true
+
+  # Global security settings
+  global:
+    # Header to use for correlation ID tracking
+    correlation_id_header: X-Correlation-ID
+
+    # Generate correlation ID if not present
+    auto_generate_correlation_id: true
+
+    # Default failure mode if not specified per-hook
+    default_failure_mode: fail_closed
+
+    # Maximum execution time for all hooks combined
+    max_total_execution_time_ms: 500
+
+  # Audit logging configuration
+  audit:
+    enabled: true
+    destination:
+      type: grpc
+      endpoint: grpc://audit-service.internal:9001
+      tls: true
+
+    # What to log
+    log_allowed_requests: false
+    log_denied_requests: true
+    log_violations: true
+    log_modifications: true
+
+    # Sensitive data masking
+    mask_sensitive_fields: true
+    sensitive_field_patterns:
+      - "password"
+      - "secret"
+      - "token"
+      - "api_key"
+      - "apiKey"
+
+  # Metrics configuration
+  metrics:
+    enabled: true
+    prometheus_port: 9090
+    include_hook_latency: true
+    include_decision_counts: true
+
+  #############################################################################
+  # TIER 1: MCP-SPECIFIC DIFFERENTIATORS (Native Rust Hooks)
+  #############################################################################
+
+  hooks:
+    # 1. Tool Poisoning Detection
+    - id: tool-poisoning-detector
+      type: native
+      enabled: true
+      priority: 100
+      failure_mode: fail_closed
+      timeout_ms: 50
+      runs_on:
+        - response
+
+      config:
+        # Strict mode: block on any suspicious pattern
+        strict_mode: true
+
+        # Additional custom patterns (regex)
+        custom_patterns:
+          - "(?i)SYSTEM:\\s*override"
+          - "(?i)ignore\\s+all\\s+previous"
+          - "(?i)disregard\\s+safety"
+
+        # Scan these tool fields
+        scan_fields:
+          - name
+          - description
+          - inputSchema
+
+        # Alert threshold (how many patterns to trigger alert)
+        alert_threshold: 1
+
+    # 2. Rug Pull Detection (Tool Integrity Monitoring)
+    - id: rug-pull-detector
+      type: native
+      enabled: true
+      priority: 101
+      failure_mode: fail_closed
+      timeout_ms: 100
+      runs_on:
+        - response
+
+      config:
+        # Where to store tool baselines
+        baseline_store:
+          type: redis
+          connection: redis://localhost:6379/0
+          key_prefix: "tool-baseline:"
+          ttl_seconds: 2592000  # 30 days
+
+        # How often to check for changes
+        check_interval_seconds: 60
+
+        # What changes to flag
+        detect_changes:
+          tool_addition: true
+          tool_removal: true
+          description_change: true
+          schema_change: true
+          auth_downgrade: true
+
+        # Risk scoring
+        risk_thresholds:
+          low: 1
+          medium: 3
+          high: 5
+          critical: 7
+
+    # 3. Tool Shadowing Prevention
+    - id: tool-shadowing-detector
+      type: native
+      enabled: true
+      priority: 102
+      failure_mode: fail_closed
+      timeout_ms: 50
+      runs_on:
+        - response
+
+      config:
+        # Apply namespace prefixes to tools
+        namespace_isolation: true
+        namespace_format: "{server_id}.{tool_name}"
+
+        # Block duplicate tool names across servers
+        block_duplicates: true
+
+        # Detect cross-server references in descriptions
+        detect_cross_references: true
+
+        # Protected MCP protocol names
+        protected_names:
+          - "initialize"
+          - "tools/list"
+          - "tools/call"
+          - "prompts/list"
+          - "prompts/get"
+          - "resources/list"
+          - "resources/read"
+
+    # 4. Server Spoofing & Whitelisting
+    - id: server-whitelisting
+      type: native
+      enabled: true
+      priority: 103
+      failure_mode: fail_closed
+      timeout_ms: 100
+      runs_on:
+        - request
+
+      config:
+        # Server whitelist (only these servers allowed)
+        whitelist:
+          - id: github-mcp
+            name: "GitHub MCP Server"
+            url: https://mcp.github.com
+            tls_required: true
+            min_protocol_version: "2025-06-18"
+
+          - id: slack-mcp
+            name: "Slack MCP Server"
+            url: https://mcp.slack.com
+            tls_required: true
+            min_protocol_version: "2025-06-18"
+
+        # Detect typosquatting attempts
+        detect_typosquats: true
+        similarity_threshold: 0.85  # 85% similar names trigger alert
+
+        # Health check settings
+        health_checks:
+          enabled: true
+          interval_seconds: 300
+          checks:
+            - tls_valid
+            - auth_endpoints_respond
+            - protocol_version_supported
+            - no_debug_endpoints
+
+  #############################################################################
+  # TIER 2: MCP-ENHANCED SECURITY (Hybrid Native + External)
+  #############################################################################
+
+    # 5. Tool-Level Access Control (RBAC/ABAC)
+    - id: rbac-enforcer
+      type: external-grpc
+      endpoint: grpc://rbac-service.internal:9000
+      enabled: true
+      priority: 200
+      timeout_ms: 100
+      failure_mode: fail_closed
+      runs_on:
+        - request
+
+      # Circuit breaker settings
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5
+        timeout_seconds: 60
+        half_open_requests: 3
+
+      # Connection pooling
+      connection_pool:
+        max_idle: 10
+        max_active: 100
+        idle_timeout_seconds: 300
+
+      config:
+        # RBAC policy source
+        policy_source: external_service
+
+        # Cache RBAC decisions to reduce latency
+        cache:
+          enabled: true
+          ttl_seconds: 300
+          max_entries: 10000
+
+    # 6. Content Filtering & Protocol Validation
+    - id: content-filter
+      type: external-grpc
+      endpoint: grpc://content-filter.internal:9001
+      enabled: true
+      priority: 201
+      timeout_ms: 150
+      failure_mode: fail_closed
+      runs_on:
+        - request
+        - response
+
+      config:
+        # Request body inspection
+        inspect_request_body: true
+        max_request_body_size: 1048576  # 1 MB
+
+        # Response body inspection
+        inspect_response_body: true
+        max_response_body_size: 10485760  # 10 MB
+
+        # Injection detection
+        detect_injections:
+          - prompt_injection
+          - command_injection
+          - sql_injection
+          - path_traversal
+
+        # Protocol validation
+        validate_jsonrpc: true
+        enforce_mcp_schema: true
+
+    # 7. Token & Session Security
+    - id: token-validator
+      type: native
+      enabled: true
+      priority: 202
+      failure_mode: fail_closed
+      timeout_ms: 50
+      runs_on:
+        - request
+
+      config:
+        # Enforce MCP spec requirements
+        enforce_audience_binding: true
+        block_token_passthrough: true
+        require_secure_session_ids: true
+
+        # Token validation
+        validate_expiration: true
+        validate_issuer: true
+        validate_signature: true
+
+        # Session format: <user_id>:<session_id>
+        session_format: "^[a-zA-Z0-9-]+:[a-zA-Z0-9-]+$"
+
+    # 8. Context Integrity Validation
+    - id: context-validator
+      type: native
+      enabled: true
+      priority: 203
+      failure_mode: fail_closed
+      timeout_ms: 100
+      runs_on:
+        - request
+        - response
+
+      config:
+        # Validate context state hasn't been tampered
+        validate_context_state: true
+
+        # Session isolation
+        enforce_session_isolation: true
+
+        # Context size limits
+        max_context_size_bytes: 1048576  # 1 MB
+
+        # Detect injection in context
+        scan_context_for_injection: true
+
+  #############################################################################
+  # TIER 3: OPERATIONAL FOUNDATION (External Services & Webhooks)
+  #############################################################################
+
+    # 9. Audit Logging with MCP Correlation
+    - id: audit-logger
+      type: webhook
+      url: https://audit-service.internal/log
+      method: POST
+      enabled: true
+      priority: 900  # Run after all security checks
+      timeout_ms: 500
+      failure_mode: fail_open  # Don't block on audit failure
+      runs_on:
+        - request
+        - response
+
+      # Async execution (non-blocking)
+      async: true
+
+      # Retry policy
+      retry:
+        enabled: true
+        max_attempts: 3
+        backoff: exponential
+        initial_delay_ms: 100
+
+      headers:
+        Authorization: Bearer ${AUDIT_SERVICE_TOKEN}
+        Content-Type: application/json
+
+      config:
+        # What to include in audit logs
+        include_request: true
+        include_response: true
+        include_headers: true
+        include_body: false  # Too large, log summary instead
+        include_security_decisions: true
+
+    # 10. Sensitive Data Protection (DLP)
+    - id: dlp-scanner
+      type: webhook
+      url: https://dlp-service.internal/scan
+      method: POST
+      enabled: true
+      priority: 300
+      timeout_ms: 200
+      failure_mode: fail_open
+      runs_on:
+        - response
+
+      headers:
+        Authorization: Bearer ${DLP_API_KEY}
+        Content-Type: application/json
+
+      config:
+        # What to detect
+        detect_patterns:
+          - credit_card
+          - ssn
+          - api_key
+          - password
+          - email
+          - phone
+          - ip_address
+
+        # Actions
+        actions:
+          mask: true
+          alert: true
+          block_on_critical: true
+
+        # Masking strategy
+        masking:
+          credit_card: "****-****-****-{last4}"
+          ssn: "***-**-{last4}"
+          api_key: "{prefix}-***REDACTED***"
+
+    # 11. Rate Limiting & Abuse Protection
+    - id: rate-limiter
+      type: native
+      enabled: true
+      priority: 50  # Very early in pipeline
+      failure_mode: fail_open
+      timeout_ms: 10
+      runs_on:
+        - request
+
+      config:
+        # Rate limit dimensions
+        limits:
+          # Per-client limits
+          - dimension: client_id
+            rate: 1000
+            period: minute
+            burst: 50
+
+          # Per-tool limits
+          - dimension: tool_name
+            rate: 500
+            period: minute
+            burst: 20
+
+          # Per-server limits
+          - dimension: server_id
+            rate: 5000
+            period: minute
+            burst: 100
+
+          # Global limit
+          - dimension: global
+            rate: 10000
+            period: minute
+            burst: 200
+
+        # Storage backend
+        backend:
+          type: redis
+          connection: redis://localhost:6379/1
+
+        # Response when rate limited
+        rate_limit_response:
+          status: 429
+          message: "Rate limit exceeded"
+          include_retry_after: true
+
+    # 12. Anomaly Detection & Behavior Analytics
+    - id: anomaly-detector
+      type: webhook
+      url: https://ml-service.internal/analyze
+      method: POST
+      enabled: true
+      priority: 901  # Run last
+      timeout_ms: 500
+      failure_mode: fail_open
+      runs_on:
+        - request
+        - response
+
+      # Async execution (non-blocking)
+      async: true
+
+      headers:
+        Authorization: Bearer ${ML_SERVICE_TOKEN}
+        Content-Type: application/json
+
+      config:
+        # Behavioral baselines
+        baseline_learning_period_days: 7
+
+        # Anomaly detection features
+        features:
+          - tool_usage_patterns
+          - request_timing
+          - data_volume
+          - access_patterns
+          - error_rates
+
+        # Alert thresholds (standard deviations)
+        thresholds:
+          low: 2.0
+          medium: 3.0
+          high: 4.0
+          critical: 5.0
+
+        # What to alert on
+        alert_on:
+          - usage_spike
+          - new_tool_access
+          - data_volume_anomaly
+          - timing_anomaly
+          - unusual_error_rate
+
+# Environment variables (referenced above with ${VAR_NAME})
+# These should be set in the environment, not in config
+#
+# AUDIT_SERVICE_TOKEN=<token>
+# DLP_API_KEY=<key>
+# ML_SERVICE_TOKEN=<token>

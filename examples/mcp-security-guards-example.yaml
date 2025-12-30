@@ -1,0 +1,106 @@
+# MCP Security Guards Configuration Example
+#
+# This example demonstrates how to configure security guards for MCP protocol operations.
+# Security guards inspect and validate MCP requests/responses to detect and prevent threats.
+
+binds:
+  - port: 8080
+    listeners:
+      - routes:
+          - backends:
+              - mcp:
+                  # MCP security guards configuration
+                  security_guards:
+                    # Tool Poisoning Detection - detects malicious patterns in tool descriptions
+                    - id: tool-poisoning-detector
+                      enabled: true
+                      priority: 100
+                      failure_mode: fail_closed
+                      timeout_ms: 50
+                      runs_on:
+                        - response
+                      type: tool_poisoning
+                      strict_mode: true
+                      custom_patterns:
+                        - "(?i)SYSTEM:\\s*override"
+                        - "(?i)ignore\\s+all\\s+previous\\s+instructions"
+                      scan_fields:
+                        - name
+                        - description
+                        - input_schema
+                      alert_threshold: 1
+
+                    # Rug Pull Detection - monitors tool changes over time
+                    - id: rug-pull-detector
+                      enabled: false # Disabled: requires baseline storage implementation
+                      priority: 101
+                      failure_mode: fail_closed
+                      timeout_ms: 100
+                      runs_on:
+                        - response
+                      type: rug_pull
+                      risk_threshold: 5
+
+                    # Tool Shadowing Prevention - prevents duplicate/conflicting tools
+                    - id: tool-shadowing-detector
+                      enabled: false # Disabled: placeholder implementation
+                      priority: 102
+                      failure_mode: fail_closed
+                      timeout_ms: 50
+                      runs_on:
+                        - response
+                      type: tool_shadowing
+                      block_duplicates: true
+                      protected_names:
+                        - "initialize"
+                        - "tools/list"
+                        - "tools/call"
+
+                    # Server Whitelist - only allow trusted MCP servers
+                    - id: server-whitelist
+                      enabled: false # Disabled: placeholder implementation
+                      priority: 103
+                      failure_mode: fail_closed
+                      timeout_ms: 100
+                      runs_on:
+                        - request
+                      type: server_whitelist
+                      allowed_servers:
+                        - "github-mcp"
+                        - "slack-mcp"
+                      detect_typosquats: true
+                      similarity_threshold: 0.85
+
+                  # MCP server configuration
+                  targets:
+                    - name: github
+                      stdio:
+                        cmd: npx
+                        args:
+                          - "-y"
+                          - "@modelcontextprotocol/server-github"
+
+                    - name: filesystem
+                      stdio:
+                        cmd: npx
+                        args:
+                          - "-y"
+                          - "@modelcontextprotocol/server-filesystem"
+                          - "/tmp"
+
+# Alternative minimal configuration (just Tool Poisoning)
+# binds:
+#   - port: 8080
+#     listeners:
+#       - routes:
+#           - backends:
+#               - mcp:
+#                   security_guards:
+#                     - id: tool-poisoning
+#                       type: tool_poisoning
+#                       runs_on: [response]
+#                   targets:
+#                     - name: github
+#                       stdio:
+#                         cmd: npx
+#                         args: ["-y", "@modelcontextprotocol/server-github"]

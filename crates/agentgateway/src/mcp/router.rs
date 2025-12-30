@@ -117,6 +117,7 @@ impl App {
 			McpBackendGroup {
 				targets: nt,
 				stateful: backend.stateful,
+			security_guards: backend.security_guards.clone(),
 			}
 		};
 		let sm = self.session.clone();
@@ -268,6 +269,7 @@ impl App {
 pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
+	pub security_guards: Vec<crate::mcp::security::McpSecurityGuard>,
 }
 
 #[derive(Debug)]

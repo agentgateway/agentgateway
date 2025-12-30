@@ -39,7 +39,7 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Relay {
 	upstreams: Arc<upstream::UpstreamGroup>,
 	pub policies: McpAuthorizationSet,
@@ -47,6 +47,17 @@ pub struct Relay {
 	// Else this is empty
 	default_target_name: Option<String>,
 	is_multiplexing: bool,
+	security_guards: Arc<crate::mcp::security::GuardExecutor>,
+}
+
+impl std::fmt::Debug for Relay {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Relay")
+			.field("policies", &self.policies)
+			.field("default_target_name", &self.default_target_name)
+			.field("is_multiplexing", &self.is_multiplexing)
+			.finish()
+	}
 }
 
 impl Relay {
@@ -64,11 +75,22 @@ impl Relay {
 		} else {
 			Some(backend.targets[0].name.to_string())
 		};
+
+		// Initialize security guards before backend is consumed
+		let security_guards = Arc::new(
+			crate::mcp::security::GuardExecutor::new(backend.security_guards.clone())
+				.unwrap_or_else(|e| {
+					tracing::warn!("Failed to initialize security guards: {}", e);
+					crate::mcp::security::GuardExecutor::empty()
+				})
+		);
+
 		Ok(Self {
 			upstreams: Arc::new(upstream::UpstreamGroup::new(client, backend)?),
 			policies,
 			default_target_name,
 			is_multiplexing,
+			security_guards,
 		})
 	}
 
@@ -99,6 +121,7 @@ impl Relay {
 	pub fn merge_tools(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();
+		let security_guards = self.security_guards.clone();
 		Box::new(move |streams| {
 			let tools = streams
 				.into_iter()
@@ -131,6 +154,36 @@ impl Relay {
 						.collect_vec()
 				})
 				.collect_vec();
+
+			// Execute security guards on the tools list
+			let context = crate::mcp::security::GuardContext {
+				server_name: "merged".to_string(),
+				identity: None,
+				metadata: serde_json::Value::Null,
+			};
+
+			match security_guards.evaluate_tools_list(&tools, &context) {
+				Ok(crate::mcp::security::GuardDecision::Allow) => {
+					// Continue normally
+				},
+				Ok(crate::mcp::security::GuardDecision::Deny(reason)) => {
+					tracing::error!("Security guard denied tools list: {} - {}", reason.code, reason.message);
+					return Err(crate::mcp::ClientError::new(anyhow::anyhow!(
+						"Security guard denied: {} - {}", reason.code, reason.message
+					)));
+				},
+				Ok(crate::mcp::security::GuardDecision::Modify(_)) => {
+					// TODO: Implement modification logic
+					tracing::warn!("Security guard requested modification, but modification is not yet implemented");
+				},
+				Err(e) => {
+					tracing::error!("Security guard execution failed: {}", e);
+					return Err(crate::mcp::ClientError::new(anyhow::anyhow!(
+						"Security guard failed: {}", e
+					)));
+				},
+			}
+
 			Ok(
 				ListToolsResult {
 					tools,
@@ -425,3 +478,4 @@ fn accepted_response() -> Response {
 		.body(crate::http::Body::empty())
 		.expect("valid response")
 }
+

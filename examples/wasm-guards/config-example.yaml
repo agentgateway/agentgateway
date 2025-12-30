@@ -1,0 +1,120 @@
+# Example configuration using WASM security guards
+#
+# This demonstrates how to use runtime-loadable WASM modules
+# to extend security capabilities without recompiling the gateway.
+
+binds:
+  - port: 8080
+    listeners:
+      - routes:
+          - backends:
+              - mcp:
+                  # Security guards run in priority order (lower = earlier)
+                  security_guards:
+                    # Native guard - fastest, runs first
+                    - id: builtin-tool-poisoning
+                      type: tool_poisoning
+                      enabled: true
+                      priority: 50
+                      failure_mode: fail_closed
+                      timeout_ms: 50
+                      runs_on: [response]
+                      strict_mode: true
+                      custom_patterns:
+                        - "(?i)SYSTEM:\\s*override"
+                        - "(?i)ignore\\s+previous\\s+instructions"
+                      scan_fields:
+                        - name
+                        - description
+                        - input_schema
+                      alert_threshold: 1
+
+                    # WASM guard - custom pattern blocking
+                    - id: wasm-pattern-guard
+                      type: wasm
+                      enabled: true
+                      priority: 100
+                      failure_mode: fail_closed
+                      timeout_ms: 100
+                      runs_on: [response]
+
+                      # WASM-specific configuration
+                      module_path: ./examples/wasm-guards/simple-pattern-guard/simple-pattern-guard.wasm
+
+                      # Custom config passed to WASM module via get_config()
+                      config:
+                        blocked_patterns:
+                          - "delete"
+                          - "remove"
+                          - "destroy"
+                          - "drop"
+                          - "truncate"
+                          - "eval"
+                          - "exec"
+                          - "system"
+                        max_tool_count: 100
+
+                    # Additional WASM guard (commented out - example only)
+                    # - id: wasm-ml-guard
+                    #   type: wasm
+                    #   enabled: false
+                    #   priority: 200
+                    #   failure_mode: fail_open  # Allow if guard fails
+                    #   timeout_ms: 500
+                    #   runs_on: [response, tool_invoke]
+                    #   module_path: ./custom-guards/ml_anomaly_detector.wasm
+                    #   config:
+                    #     model_version: "v2.1.0"
+                    #     threshold: 0.85
+
+                  # MCP server targets
+                  targets:
+                    - name: github
+                      stdio:
+                        cmd: npx
+                        args:
+                          - "-y"
+                          - "@modelcontextprotocol/server-github"
+                      env:
+                        GITHUB_TOKEN: "${GITHUB_TOKEN}"
+
+                    - name: filesystem
+                      stdio:
+                        cmd: npx
+                        args:
+                          - "-y"
+                          - "@modelcontextprotocol/server-filesystem"
+                          - "/tmp"
+
+# Example with multiple backends, each with different guard configs
+# binds:
+#   - port: 8080
+#     listeners:
+#       - routes:
+#           # Strict security for production backend
+#           - path: /mcp/prod
+#             backends:
+#               - mcp:
+#                   security_guards:
+#                     - id: strict-guard
+#                       type: wasm
+#                       module_path: ./guards/strict.wasm
+#                       failure_mode: fail_closed
+#                   targets:
+#                     - name: prod-server
+#                       stdio:
+#                         cmd: ./prod-mcp-server
+#
+#           # Relaxed security for dev backend
+#           - path: /mcp/dev
+#             backends:
+#               - mcp:
+#                   security_guards:
+#                     - id: dev-guard
+#                       type: wasm
+#                       module_path: ./guards/dev.wasm
+#                       failure_mode: fail_open
+#                   targets:
+#                     - name: dev-server
+#                       stdio:
+#                         cmd: ./dev-mcp-server

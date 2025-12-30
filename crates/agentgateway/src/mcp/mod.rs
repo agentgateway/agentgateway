@@ -2,6 +2,7 @@ mod handler;
 mod mergestream;
 mod rbac;
 mod router;
+pub mod security;
 mod session;
 mod sse;
 mod streamablehttp;

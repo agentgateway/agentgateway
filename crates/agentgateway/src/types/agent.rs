@@ -784,6 +784,8 @@ pub struct McpBackend {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
 	pub always_use_prefix: bool,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub security_guards: Vec<crate::mcp::security::McpSecurityGuard>,
 }
 
 impl McpBackend {
