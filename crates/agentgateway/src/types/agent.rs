@@ -9,6 +9,7 @@ use std::num::NonZeroU16;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use hashbrown::Equivalent;
 use heck::ToSnakeCase;
 use itertools::Itertools;
 use macro_rules_attribute::apply;
@@ -19,7 +20,6 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls_pemfile::Item;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
-
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::RuleSet;
 use crate::http::{
@@ -242,11 +242,18 @@ impl RouteName {
 	pub fn as_route_name(&self) -> Strng {
 		strng::format!("{}/{}", self.namespace, self.name)
 	}
-	pub fn strip_route_rule_field(&self) -> RouteName {
-		Self {
-			name: self.name.clone(),
-			namespace: self.namespace.clone(),
+	pub fn as_route_target_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Route {
+			name: self.name.as_ref(),
+			namespace: self.namespace.as_ref(),
 			rule_name: None,
+		}
+	}
+	pub fn as_route_rule_target_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Route {
+			name: self.name.as_ref(),
+			namespace: self.namespace.as_ref(),
+			rule_name: self.rule_name.as_deref(),
 		}
 	}
 }
@@ -265,6 +272,20 @@ pub struct ListenerName {
 impl ListenerName {
 	pub fn as_gateway_name(&self) -> Strng {
 		strng::format!("{}/{}", self.gateway_namespace, self.gateway_name)
+	}
+	pub fn as_gateway_target_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Gateway {
+			gateway_name: self.gateway_name.as_ref(),
+			gateway_namespace: self.gateway_namespace.as_ref(),
+			listener_name: None,
+		}
+	}
+	pub fn as_listener_target_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Gateway {
+			gateway_name: self.gateway_name.as_ref(),
+			gateway_namespace: self.gateway_namespace.as_ref(),
+			listener_name: Some(self.listener_name.as_ref()),
+		}
 	}
 }
 
@@ -347,6 +368,46 @@ pub enum BackendTarget {
 	Invalid,
 }
 
+#[derive(Hash, Eq, PartialEq)]
+pub enum BackendTargetRef<'a> {
+	Backend {
+		name: &'a str,
+		namespace: &'a str,
+		section: Option<&'a str>,
+	},
+	Service {
+		hostname: &'a str,
+		namespace: &'a str,
+		port: Option<u16>,
+	},
+	Invalid,
+}
+
+impl<'a> From<&'a BackendTarget> for BackendTargetRef<'a> {
+	fn from(value: &'a BackendTarget) -> Self {
+		match value {
+			BackendTarget::Backend {
+				name,
+				namespace,
+				section,
+			} => BackendTargetRef::Backend {
+				name,
+				namespace,
+				section: section.as_deref(),
+			},
+			BackendTarget::Service {
+				hostname,
+				namespace,
+				port,
+			} => BackendTargetRef::Service {
+				hostname,
+				namespace,
+				port: *port,
+			},
+			BackendTarget::Invalid => BackendTargetRef::Invalid,
+		}
+	}
+}
 impl BackendTarget {
 	pub fn strip_section(&self) -> BackendTarget {
 		match self.clone() {
@@ -1400,6 +1461,45 @@ pub enum PolicyTarget {
 	Gateway(ListenerTarget),
 	Route(RouteTarget),
 	Backend(BackendTarget),
+}
+
+impl Equivalent<PolicyTarget> for PolicyTargetRef<'_> {
+	fn equivalent(&self, key: &PolicyTarget) -> bool {
+		self == &PolicyTargetRef::from(key)
+	}
+}
+
+#[derive(Hash, Eq, PartialEq)]
+pub enum PolicyTargetRef<'a> {
+	Gateway {
+		gateway_name: &'a str,
+		gateway_namespace: &'a str,
+		listener_name: Option<&'a str>,
+	},
+	Route {
+		name: &'a str,
+		namespace: &'a str,
+		rule_name: Option<&'a str>,
+	},
+	Backend(BackendTargetRef<'a>),
+}
+
+impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
+	fn from(value: &'a PolicyTarget) -> Self {
+		match value {
+			PolicyTarget::Gateway(v) => PolicyTargetRef::Gateway {
+				gateway_name: &v.gateway_name,
+				gateway_namespace: v.gateway_namespace.as_ref(),
+				listener_name: v.listener_name.as_deref(),
+			},
+			PolicyTarget::Route(v) => PolicyTargetRef::Route {
+				name: &v.name,
+				namespace: v.namespace.as_ref(),
+				rule_name: v.rule_name.as_deref(),
+			},
+			PolicyTarget::Backend(v) => PolicyTargetRef::Backend(v.into()),
+		}
+	}
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

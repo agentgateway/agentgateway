@@ -53,6 +53,7 @@ futures-util.workspace = true
 futures.workspace = true
 go-parse-duration.workspace = true
 google-cloud-auth.workspace = true
+hashbrown.workspace = true
 headers.workspace = true
 heck.workspace = true
 hex.workspace = true

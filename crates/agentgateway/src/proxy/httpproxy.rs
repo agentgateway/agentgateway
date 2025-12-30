@@ -19,7 +19,7 @@ use types::discovery::*;
 use crate::client::Transport;
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::ExtProcRequest;
-use crate::http::filters::{AutoHostname, BackendRequestTimeout};
+use crate::http::filters::{AutoHostname, BackendRequestTimeout, DirectResponse};
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
 	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
@@ -534,7 +534,7 @@ impl HTTPProxy {
 		let mut gateway_policies = inputs
 			.stores
 			.read_binds()
-			.gateway_policies(selected_listener.name.clone());
+			.gateway_policies(&selected_listener.name);
 		gateway_policies.register_cel_expressions(log.cel.ctx());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible
 		// (for logging, etc) and also after we register the expressions since new fields may be available.
@@ -582,14 +582,14 @@ impl HTTPProxy {
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
 		let route_path = RoutePath {
-			route: selected_route.name.clone(),
-			listener: selected_listener.name.clone(),
+			route: &selected_route.name,
+			listener: &selected_listener.name,
 		};
 
 		let mut route_policies = inputs
 			.stores
 			.read_binds()
-			.route_policies(route_path.clone(), &selected_route.inline_policies);
+			.route_policies(&route_path, &selected_route.inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		// This is unfortunate but we record the request twice possibly; we want to record it as early as possible

@@ -46,7 +46,7 @@ pub struct Store {
 	resources: HashMap<Strng, ResourceKind>,
 
 	policies_by_key: HashMap<PolicyKey, Arc<TargetedPolicy>>,
-	policies_by_target: HashMap<PolicyTarget, HashSet<PolicyKey>>,
+	policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
 
 	backends: HashMap<BackendKey, Arc<BackendWithPolicies>>,
 
@@ -303,9 +303,9 @@ impl Default for Store {
 
 // RoutePath describes the objects traversed to reach the given route
 #[derive(Debug, Clone)]
-pub struct RoutePath {
-	pub listener: ListenerName,
-	pub route: RouteName,
+pub struct RoutePath<'a> {
+	pub listener: &'a ListenerName,
+	pub route: &'a RouteName,
 }
 
 impl Store {
@@ -330,24 +330,18 @@ impl Store {
 		tokio_stream::wrappers::BroadcastStream::new(sub)
 	}
 
-	pub fn route_policies(&self, path: RoutePath, inline: &[TrafficPolicy]) -> RoutePolicies {
-		let listener_target: ListenerTarget = path.listener.into();
-		let gateway = self.policies_by_target.get(&PolicyTarget::Gateway(
-			listener_target.strip_listener_fields(),
-		));
-		let listener = listener_target.listener_name.as_ref().and_then(|_| {
-			self
-				.policies_by_target
-				.get(&PolicyTarget::Gateway(listener_target.clone()))
-		});
-		let route = self
+	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[TrafficPolicy]) -> RoutePolicies {
+		let &RoutePath { listener, route } = path;
+		let gateway = self
 			.policies_by_target
-			.get(&PolicyTarget::Route(path.route.strip_route_rule_field()));
-		let route_rule = path.route.rule_name.as_ref().and_then(|_| {
-			self
-				.policies_by_target
-				.get(&PolicyTarget::Route(path.route.clone()))
-		});
+			.get(&listener.as_gateway_target_ref());
+		let listener = self
+			.policies_by_target
+			.get(&listener.as_listener_target_ref());
+		let route_rule = self
+			.policies_by_target
+			.get(&route.as_route_rule_target_ref());
+		let route = self.policies_by_target.get(&route.as_route_target_ref());
 		let rules = route_rule
 			.iter()
 			.copied()
@@ -443,16 +437,9 @@ impl Store {
 		pol
 	}
 
-	pub fn gateway_policies(&self, listener: ListenerName) -> GatewayPolicies {
-		let listener: ListenerTarget = listener.into();
-		let gateway = self
-			.policies_by_target
-			.get(&PolicyTarget::Gateway(listener.strip_listener_fields()));
-		let listener = listener.listener_name.as_ref().and_then(|_| {
-			self
-				.policies_by_target
-				.get(&PolicyTarget::Gateway(listener.clone()))
-		});
+	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
+		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
+		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
 		let rules = listener
 			.iter()
 			.copied()
@@ -555,23 +542,14 @@ impl Store {
 		let sub_backend_rules =
 			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::Backend(t)));
 		let route_rule_rules = route
+			.as_ref()
+			.and_then(|t| self.policies_by_target.get(&t.as_route_rule_target_ref()));
+		let route_rules = route.and_then(|t| self.policies_by_target.get(&t.as_route_target_ref()));
+		let listener_rules = gateway
 			.clone()
-			.and_then(|t| self.policies_by_target.get(&PolicyTarget::Route(t)));
-		let route_rules = route.and_then(|t| {
-			self
-				.policies_by_target
-				.get(&PolicyTarget::Route(t.strip_route_rule_field()))
-		});
-		let listener_rules = gateway.clone().and_then(|t| {
-			self
-				.policies_by_target
-				.get(&PolicyTarget::Gateway(t.into()))
-		});
-		let gateway_rules = gateway.and_then(|t| {
-			self.policies_by_target.get(&PolicyTarget::Gateway(
-				ListenerTarget::from(t).strip_listener_fields(),
-			))
-		});
+			.and_then(|t| self.policies_by_target.get(&t.as_listener_target_ref()));
+		let gateway_rules =
+			gateway.and_then(|t| self.policies_by_target.get(&t.as_gateway_target_ref()));
 
 		// RouteRule > Route > SubBackend > Backend > Service > Gateway
 		// Most specific (route context) to least specific (gateway-wide default)
