@@ -123,11 +123,12 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
             throw new Error("Invalid target type");
         }
 
-        const mcpBackend: McpBackend = {
-          name: mcpName,
+        // LocalMcpBackend in Rust doesn't have a 'name' field - only targets and statefulMode
+        // The 'name' field in McpBackend type is only for display (from config_dump reference)
+        const mcpBackend = {
           targets: [target],
           statefulMode: mcpStateful ? McpStatefulMode.STATEFUL : McpStatefulMode.STATELESS,
-        };
+        } as McpBackend;
 
         backend = {
           weight: 1,

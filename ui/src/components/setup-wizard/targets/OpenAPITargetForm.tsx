@@ -33,7 +33,7 @@ export const OpenAPITargetForm = forwardRef<
     if (existingTarget?.openapi) {
       const openapi = existingTarget.openapi;
       setHost(openapi.host);
-      setPort(openapi.port.toString());
+      setPort(openapi.port?.toString() || "");
       setHeaders([]);
     }
   }, [existingTarget]);

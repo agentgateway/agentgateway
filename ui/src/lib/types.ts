@@ -283,17 +283,19 @@ export interface DynamicBackend {
   // Empty object
 }
 
+// UI-friendly flat structure (matches local config format for write path)
 export interface McpBackend {
   name: string;
   targets: McpTarget[];
-  statefulMode?: McpStatefulMode; // "stateless" or "stateful"
+  statefulMode?: McpStatefulMode;
 }
 
+// UI-friendly flat structure (matches local config format for write path)
 export interface AiBackend {
   name: string;
   provider: AiProvider;
-  hostOverride?: string | null; // String format: "hostname:port" or "ip:port"
-  pathOverride?: string | null; // String format: "/path"
+  hostOverride?: string | null;
+  pathOverride?: string | null;
 }
 
 export interface AiProvider {
@@ -333,9 +335,10 @@ export interface TargetMatcher {
   Regex?: string;
 }
 
+// UI-friendly format for SSE/MCP targets (matches config file format)
 export interface StreamHttpTarget {
   host: string;
-  port?: number; // uint32
+  port?: number;
   path?: string;
 }
 
@@ -345,10 +348,11 @@ export interface StdioTarget {
   env?: { [key: string]: string };
 }
 
+// UI-friendly format for OpenAPI targets (matches config file format)
 export interface OpenApiTarget {
   host: string;
-  port: number; // uint32
-  schema: any; // Schema definition
+  port?: number;
+  schema: any; // OpenAPI schema
 }
 
 export interface BackendRef {

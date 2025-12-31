@@ -1,6 +1,48 @@
-import { Backend, Route, Listener, Bind, McpStatefulMode, StreamHttpTarget } from "@/lib/types";
+import {
+  Backend,
+  Route,
+  Listener,
+  Bind,
+  StreamHttpTarget,
+  McpTarget,
+  McpStatefulMode,
+} from "@/lib/types";
 import { DEFAULT_BACKEND_FORM, BACKEND_TYPE_COLORS } from "./backend-constants";
 import { POLICY_TYPES, BACKEND_POLICY_KEYS } from "./policy-constants";
+
+/**
+ * Extract short hostname from FQDN or return as-is if not a FQDN
+ * e.g., "svc.namespace.svc.cluster.local" -> "svc"
+ */
+export function getShortHostname(hostname: string): string {
+  if (!hostname) return "";
+  return hostname.includes(".") ? hostname.split(".")[0] : hostname;
+}
+
+/**
+ * Helper to get MCP targets from flat structure
+ */
+export function getMcpTargets(backend: Backend): McpTarget[] {
+  return backend.mcp?.targets ?? [];
+}
+
+/**
+ * Helper to get the AI provider type (e.g., "bedrock", "openAI")
+ */
+export function getAiProviderType(backend: Backend): string | undefined {
+  const provider = backend.ai?.provider;
+  if (!provider) return undefined;
+  return Object.keys(provider)[0];
+}
+
+/**
+ * Helper to get the AI provider config
+ */
+export function getAiProviderConfig(backend: Backend): Record<string, any> | undefined {
+  const provider = backend.ai?.provider;
+  if (!provider) return undefined;
+  return Object.values(provider)[0] as Record<string, any>;
+}
 
 /**
  * Determine the backend type based on the backend configuration
@@ -139,17 +181,17 @@ export function normalizeTargetUrl(host: unknown, port?: unknown, path?: unknown
 
 // Get backend name for display
 export const getBackendName = (backend: Backend): string => {
-  if (backend.mcp) {
-    if (backend.mcp.targets && backend.mcp.targets.length > 0) {
-      const targetNames = backend.mcp.targets.map((t) => t.name).join(", ");
-      return `MCP: ${targetNames}`;
-    }
-    return "MCP Backend";
+  // name already includes namespace prefix (e.g., "namespace/name")
+  if (backend.mcp) return backend.mcp.name;
+  if (backend.ai) return backend.ai.name;
+  if (backend.service) {
+    const ns = backend.service.name?.namespace;
+    const hostname = backend.service.name?.hostname;
+    // Use short hostname for display (extract from FQDN if needed)
+    const shortName = getShortHostname(hostname || "");
+    if (ns && shortName) return `${ns}/${shortName}`;
+    return shortName || hostname || "Service Backend";
   }
-  if (backend.ai) {
-    return backend.ai.name;
-  }
-  if (backend.service) return backend.service.name?.hostname || "";
   if (backend.host) {
     return typeof backend.host === "string" ? backend.host : String(backend.host.name ?? "Unknown");
   }
@@ -167,11 +209,12 @@ export const getBackendTypeColor = (type: string): string => {
 // Get backend details for table display
 export const getBackendDetails = (backend: Backend): { primary: string; secondary?: string } => {
   if (backend.mcp) {
-    const targetCount = `${backend.mcp.targets.length} target${backend.mcp.targets.length !== 1 ? "s" : ""}`;
+    const targets = getMcpTargets(backend);
+    const targetCount = `${targets.length} target${targets.length !== 1 ? "s" : ""}`;
 
     // Show details for first target if available
-    if (backend.mcp.targets.length > 0) {
-      const firstTarget = backend.mcp.targets[0];
+    if (targets.length > 0) {
+      const firstTarget = targets[0];
       if (firstTarget.stdio) {
         const cmd = firstTarget.stdio.cmd;
         const args = firstTarget.stdio.args?.join(" ") || "";
@@ -207,8 +250,8 @@ export const getBackendDetails = (backend: Backend): { primary: string; secondar
   }
 
   if (backend.ai) {
-    const provider = Object.keys(backend.ai.provider)[0];
-    const config = Object.values(backend.ai.provider)[0] as any;
+    const provider = getAiProviderType(backend);
+    const config = getAiProviderConfig(backend);
     const model = config?.model;
 
     return {
@@ -218,8 +261,10 @@ export const getBackendDetails = (backend: Backend): { primary: string; secondar
   }
 
   if (backend.service) {
+    // hostname is preserved as the original value (could be FQDN or short name)
+    const hostname = backend.service.name?.hostname || "";
     return {
-      primary: `Service: ${backend.service.name.hostname}`,
+      primary: `Service: ${hostname}`,
       secondary: `Port: ${backend.service.port}`,
     };
   }
@@ -420,12 +465,14 @@ export const createMcpTarget = (target: any) => {
 
 export const createMcpBackend = (form: typeof DEFAULT_BACKEND_FORM, weight: number): Backend => {
   const targets = form.mcpTargets.map(createMcpTarget);
+  // LocalMcpBackend in Rust doesn't have a 'name' field - only targets and statefulMode
+  // The 'name' field in our McpBackend type is only for display (from config_dump reference)
   return addWeightIfNeeded(
     {
       mcp: {
-        targets,
-        statefulMode: form.mcpStateful ? McpStatefulMode.STATEFUL : McpStatefulMode.STATELESS,
-      },
+        targets, // Flat structure for local config format
+        statefulMode: form.mcpStateful ? "stateful" : "stateless",
+      } as any, // Cast needed because McpBackend type includes 'name' for read path
     },
     weight
   );
@@ -596,82 +643,83 @@ export const populateFormFromBackend = (
       return hostStr.includes(":") ? hostStr.split(":")[1] : "";
     })(),
 
-    mcpTargets:
-      backend.mcp?.targets?.map((target) => {
-        const baseTarget = {
-          name: target.name,
-          type: "sse" as "sse" | "mcp" | "stdio" | "openapi",
-          host: "",
-          port: "",
-          path: "",
-          fullUrl: "",
-          cmd: "",
-          args: [] as string[],
-          env: {} as Record<string, string>,
-          schema: true,
-        };
+    mcpTargets: getMcpTargets(backend).map((target) => {
+      const baseTarget = {
+        name: target.name,
+        type: "sse" as "sse" | "mcp" | "stdio" | "openapi",
+        host: "",
+        port: "",
+        path: "",
+        fullUrl: "",
+        cmd: "",
+        args: [] as string[],
+        env: {} as Record<string, string>,
+        schema: true,
+      };
 
-        if (target.sse) {
-          const s: StreamHttpTarget = target.sse as StreamHttpTarget;
-          const url = normalizeTargetUrl(s.host, s.port, s.path);
-          const parsed = parseUrl(url);
-          return {
-            ...baseTarget,
-            type: "sse" as const,
-            host: parsed.host,
-            port: parsed.port,
-            path: parsed.path,
-            fullUrl: url,
-          };
-        } else if (target.mcp) {
-          const m = target.mcp as StreamHttpTarget;
-          const url = normalizeTargetUrl(m.host, m.port, m.path);
-          const parsed = parseUrl(url);
-          return {
-            ...baseTarget,
-            type: "mcp" as const,
-            host: parsed.host,
-            port: parsed.port,
-            path: parsed.path,
-            fullUrl: url,
-          };
-        } else if (target.stdio) {
-          return {
-            ...baseTarget,
-            type: "stdio" as const,
-            cmd: target.stdio.cmd || "",
-            args: target.stdio.args || [],
-            env: target.stdio.env || {},
-          };
-        } else if (target.openapi) {
-          const fullUrl = `http://${target.openapi.host}:${target.openapi.port}`;
-          return {
-            ...baseTarget,
-            type: "openapi" as const,
-            host: target.openapi.host,
-            port: String(target.openapi.port),
-            path: "",
-            fullUrl,
-            schema: target.openapi.schema,
-          };
-        }
-        return baseTarget;
-      }) || [],
-    mcpStateful:
-      backend.mcp?.statefulMode === undefined
-        ? true
-        : backend.mcp?.statefulMode === McpStatefulMode.STATEFUL, // Default to stateful if not specified
+      if (target.sse) {
+        const s: StreamHttpTarget = target.sse as StreamHttpTarget;
+        const url = normalizeTargetUrl(s.host, s.port, s.path);
+        const parsed = parseUrl(url);
+        return {
+          ...baseTarget,
+          type: "sse" as const,
+          host: parsed.host,
+          port: parsed.port,
+          path: parsed.path,
+          fullUrl: url,
+        };
+      } else if (target.mcp) {
+        const m = target.mcp as StreamHttpTarget;
+        const url = normalizeTargetUrl(m.host, m.port, m.path);
+        const parsed = parseUrl(url);
+        return {
+          ...baseTarget,
+          type: "mcp" as const,
+          host: parsed.host,
+          port: parsed.port,
+          path: parsed.path,
+          fullUrl: url,
+        };
+      } else if (target.stdio) {
+        return {
+          ...baseTarget,
+          type: "stdio" as const,
+          cmd: target.stdio.cmd || "",
+          args: target.stdio.args || [],
+          env: target.stdio.env || {},
+        };
+      } else if (target.openapi) {
+        const fullUrl = `http://${target.openapi.host}:${target.openapi.port}`;
+        return {
+          ...baseTarget,
+          type: "openapi" as const,
+          host: target.openapi.host,
+          port: String(target.openapi.port),
+          path: "",
+          fullUrl,
+          schema: target.openapi.schema,
+        };
+      }
+      return baseTarget;
+    }),
+    mcpStateful: backend.mcp?.statefulMode !== McpStatefulMode.STATELESS, // Default to stateful if not specified
     // AI backend
-    aiProvider: backend.ai?.provider ? (Object.keys(backend.ai.provider)[0] as any) : "openAI",
-    aiModel: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.model || "" : "",
-    aiRegion: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.region || "" : "",
-    aiProjectId: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.projectId || "" : "",
+    aiProvider:
+      (getAiProviderType(backend) as
+        | "openAI"
+        | "gemini"
+        | "vertex"
+        | "anthropic"
+        | "bedrock"
+        | "azureOpenAI") || "openAI",
+    aiModel: getAiProviderConfig(backend)?.model || "",
+    aiRegion: getAiProviderConfig(backend)?.region || "",
+    aiProjectId: getAiProviderConfig(backend)?.projectId || "",
     aiHostOverride: backend.ai?.hostOverride || "",
     aiPathOverride: backend.ai?.pathOverride || "",
-    aiHost: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.host || "" : "",
-    aiApiVersion: backend.ai?.provider
-      ? Object.values(backend.ai.provider)[0]?.apiVersion || ""
-      : "",
+    aiHost: getAiProviderConfig(backend)?.host || "",
+    aiApiVersion: getAiProviderConfig(backend)?.apiVersion || "",
   };
 };
 
