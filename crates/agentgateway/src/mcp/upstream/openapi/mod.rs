@@ -363,6 +363,7 @@ pub(crate) fn parse_openapi_schema(
 								))?
 								.clone();
 							let tool = Tool {
+								meta: None,
 								annotations: None,
 								name: Cow::Owned(name.clone()),
 								description: Some(Cow::Owned(
@@ -540,6 +541,7 @@ impl Handler {
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
 				id,
 				ListPromptsResult {
+					meta: None,
 					next_cursor: None,
 					prompts: vec![],
 				},
@@ -547,6 +549,7 @@ impl Handler {
 			ClientRequest::ListResourcesRequest(_) => Messages::from_result(
 				id,
 				ListResourcesResult {
+					meta: None,
 					next_cursor: None,
 					resources: vec![],
 				},
@@ -554,6 +557,7 @@ impl Handler {
 			ClientRequest::ListResourceTemplatesRequest(_) => Messages::from_result(
 				id,
 				ListResourceTemplatesResult {
+					meta: None,
 					next_cursor: None,
 					resource_templates: vec![],
 				},
@@ -562,6 +566,7 @@ impl Handler {
 				Messages::from_result(id, ReadResourceResult { contents: vec![] })
 			},
 			ClientRequest::PingRequest(_)
+			| ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)
 			| ClientRequest::UnsubscribeRequest(_) => Messages::empty(),
@@ -585,6 +590,7 @@ impl Handler {
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,
 				ListToolsResult {
+					meta: None,
 					next_cursor: None,
 					tools: self.tools(),
 				},

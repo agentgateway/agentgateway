@@ -368,9 +368,7 @@ mod azure {
 		auth: &AzureAuth,
 	) -> anyhow::Result<Arc<dyn TokenCredential>> {
 		let client_options = azure_core::http::ClientOptions {
-			transport: Some(azure_core::http::TransportOptions::new(Arc::new(
-				client.clone(),
-			))),
+			transport: Some(azure_core::http::Transport::new(Arc::new(client.clone()))),
 			..Default::default()
 		};
 		match auth {

@@ -7,14 +7,13 @@ use ::http::Uri;
 use ::http::uri::{Authority, Scheme};
 use async_trait::async_trait;
 use azure_core::error::ResultExt;
-use azure_core::http::BufResponse;
 use futures::TryStreamExt;
 use http_body_util::BodyExt;
 use hyper_util_fork::rt::TokioIo;
 use rustls_pki_types::{DnsName, ServerName};
 use tonic::codegen::Service;
 use tracing::event;
-use typespec_client_core::http::Sanitizer;
+use typespec_client_core::http::{AsyncRawResponse, Sanitizer};
 
 use crate::http::backendtls::VersionedBackendTLS;
 use crate::http::filters;
@@ -44,7 +43,7 @@ impl azure_core::http::HttpClient for Client {
 	async fn execute_request(
 		&self,
 		request: &azure_core::http::Request,
-	) -> azure_core::Result<BufResponse> {
+	) -> azure_core::Result<AsyncRawResponse> {
 		let url = request.url().clone();
 		let method = request.method();
 		let mut req = ::http::Request::builder();
@@ -65,7 +64,7 @@ impl azure_core::http::HttpClient for Client {
 			},
 		}
 		.map_err(|e| {
-			azure_core::Error::full(
+			azure_core::Error::with_error(
 				azure_core::error::ErrorKind::Other,
 				e,
 				"failed to build `agentgateway::client::Client` request",
@@ -82,7 +81,7 @@ impl azure_core::http::HttpClient for Client {
 				target: match url.host().expect("url must have a host") {
 					url::Host::Domain(h) => Target::try_from((h, url.port_or_known_default().unwrap_or(80)))
 						.map_err(|e| {
-							azure_core::Error::full(
+							azure_core::Error::with_error(
 								azure_core::error::ErrorKind::Other,
 								e,
 								"failed to parse host for `agentgateway::client::Client` request",
@@ -106,7 +105,7 @@ impl azure_core::http::HttpClient for Client {
 			.await
 			.map_err(|e| {
 				error!("request failed: {e}");
-				azure_core::Error::full(
+				azure_core::Error::with_error(
 					azure_core::error::ErrorKind::Io,
 					e,
 					"failed to execute `agentgateway::client::Client` request",
@@ -118,14 +117,14 @@ impl azure_core::http::HttpClient for Client {
 
 		let body: azure_core::http::response::PinnedStream =
 			Box::pin(rsp.into_data_stream().map_err(|error| {
-				azure_core::Error::full(
+				azure_core::Error::with_error(
 					azure_core::error::ErrorKind::Io,
 					error,
 					"error converting `reqwest` request into a byte stream",
 				)
 			}));
 
-		Ok(BufResponse::new(status.as_u16().into(), headers, body))
+		Ok(AsyncRawResponse::new(status.as_u16().into(), headers, body))
 	}
 }
 
@@ -137,9 +136,8 @@ fn from_method(method: azure_core::http::Method) -> azure_core::Result<http::Met
 		azure_core::http::Method::Put => Ok(http::Method::PUT),
 		azure_core::http::Method::Delete => Ok(http::Method::DELETE),
 		azure_core::http::Method::Patch => Ok(http::Method::PATCH),
-		_ => {
-			http::Method::from_str(method.as_str()).map_kind(azure_core::error::ErrorKind::DataConversion)
-		},
+		_ => http::Method::from_str(method.as_str())
+			.with_kind(azure_core::error::ErrorKind::DataConversion),
 	}
 }
 

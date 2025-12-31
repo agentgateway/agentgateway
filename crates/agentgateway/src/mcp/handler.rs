@@ -135,6 +135,7 @@ impl Relay {
 				ListToolsResult {
 					tools,
 					next_cursor: None,
+					meta: None,
 				}
 				.into(),
 			)
@@ -196,6 +197,7 @@ impl Relay {
 				ListPromptsResult {
 					prompts,
 					next_cursor: None,
+					meta: None,
 				}
 				.into(),
 			)
@@ -231,6 +233,7 @@ impl Relay {
 				ListResourcesResult {
 					resources,
 					next_cursor: None,
+					meta: None,
 				}
 				.into(),
 			)
@@ -266,6 +269,7 @@ impl Relay {
 				ListResourceTemplatesResult {
 					resource_templates,
 					next_cursor: None,
+					meta: None,
 				}
 				.into(),
 			)

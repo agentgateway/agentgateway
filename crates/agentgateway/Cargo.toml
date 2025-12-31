@@ -168,10 +168,6 @@ which.workspace = true
 agentgateway = { version = "0.7.0", path = ".", default-features = false, features = [
     "testing",
 ] }
-rmcp = { workspace = true, features = [
-    "transport-streamable-http-client-reqwest",
-    "transport-sse-client-reqwest",
-] }
 wiremock.workspace = true
 
 [lints.clippy]
