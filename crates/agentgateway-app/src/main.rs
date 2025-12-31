@@ -7,7 +7,6 @@ use agent_core::{strng, telemetry, version};
 use agentgateway::types::agent::ListenerTarget;
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use clap::Parser;
-use tracing::info;
 
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
@@ -151,7 +150,10 @@ async fn proxy(cfg: Arc<Config>) -> anyhow::Result<()> {
 	println!("Starting AgentGateway...");
 	println!("Version:\n{}", version::BuildInfo::new());
 	println!("Configuration:\n{}", serdes::yamlviajson::to_string(&cfg)?);
-	agentgateway::app::run(cfg).await?.wait_termination().await?;
+	agentgateway::app::run(cfg)
+		.await?
+		.wait_termination()
+		.await?;
 	println!("AgentGateway terminated");
 	Ok(())
 }
