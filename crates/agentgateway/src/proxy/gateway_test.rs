@@ -269,7 +269,7 @@ async fn tls_termination() {
 		.with_bind(bind);
 
 	let io = t.serve_https(strng::new("bind"), Some("a.example.com"));
-	let res = RequestBuilder::new(Method::GET, "http://lo")
+	let res = RequestBuilder::new(Method::GET, "http://a.example.com")
 		.send(io)
 		.await
 		.unwrap();

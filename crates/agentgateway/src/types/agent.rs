@@ -62,7 +62,7 @@ impl Listener {
 	pub fn matches(&self, hostname: &str) -> bool {
 		self.hostname == hostname
 			|| self.hostname.is_empty()
-			|| self.hostname.starts_with("*") && hostname.ends_with(&self.hostname[1..])
+			|| (self.hostname.starts_with("*") && hostname.ends_with(&self.hostname[1..]))
 	}
 }
 

@@ -555,7 +555,7 @@ impl HTTPProxy {
 		)
 		.await?;
 
-		Self::detect_misdirected(&log, bind, &req, &selected_listener)?;
+		Self::detect_misdirected(log, bind, &req, &selected_listener)?;
 
 		let (selected_route, path_match) = http::route::select_best_route(
 			inputs.stores.clone(),
@@ -744,7 +744,7 @@ impl HTTPProxy {
 	}
 
 	fn detect_misdirected(
-		log: &&mut RequestLog,
+		log: &RequestLog,
 		bind: Arc<Bind>,
 		req: &Request,
 		selected_listener: &Arc<Listener>,
@@ -763,14 +763,10 @@ impl HTTPProxy {
 		//     * If no other Listener matches the Host, the Gateway MUST return a
 		//       404.
 		let host = http::get_host(req).map_err(|_| ProxyError::RouteNotFound)?;
-		let new_best_listener = bind.listeners.best_match(host).filter(|l| {
-			if l.key == selected_listener.key {
-				false
-			// This is not a 'new' listener, we picked the same one!
-			} else {
-				true
-			}
-		});
+		let new_best_listener = bind
+			.listeners
+			.best_match(host)
+			.filter(|l| l.key != selected_listener.key);
 
 		// "If another listener has a more specific match..."
 		if let Some(new_best) = new_best_listener {
