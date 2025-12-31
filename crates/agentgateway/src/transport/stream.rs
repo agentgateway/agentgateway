@@ -272,10 +272,8 @@ impl Socket {
 				.with_time(cfg.keepalives.time)
 				.with_retries(cfg.keepalives.retries)
 				.with_interval(cfg.keepalives.interval);
-			tracing::trace!(
-				"set keepalive: {:?}",
-				socket2::SockRef::from(&res).set_tcp_keepalive(&ka)
-			);
+			let res = socket2::SockRef::from(&res).set_tcp_keepalive(&ka);
+			tracing::trace!("set keepalive: {:?}", res);
 		}
 		Socket::from_tcp(res)
 	}
@@ -321,12 +319,9 @@ impl Socket {
 				.with_time(settings.keepalives.time)
 				.with_retries(settings.keepalives.retries)
 				.with_interval(settings.keepalives.interval);
-			tracing::trace!(
-				"set keepalive: {:?}",
-				socket2::SockRef::from(tcp).set_tcp_keepalive(&ka)
-			);
+			let res = socket2::SockRef::from(tcp).set_tcp_keepalive(&ka);
+			tracing::trace!("set keepalive: {:?}", res);
 		}
-		todo!()
 	}
 
 	pub fn counter(&self) -> Option<BytesCounter> {
