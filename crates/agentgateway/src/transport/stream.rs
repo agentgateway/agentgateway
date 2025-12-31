@@ -326,10 +326,6 @@ impl Socket {
 		}
 		todo!()
 	}
-
-	pub fn counter(&self) -> Option<BytesCounter> {
-		self.metrics.counter.clone()
-	}
 }
 
 pub enum SocketType {
@@ -546,7 +542,7 @@ fn to_canonical(addr: SocketAddr) -> SocketAddr {
 	SocketAddr::from((ip, addr.port()))
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct BytesCounter {
 	counts: (usize, usize),
 }
