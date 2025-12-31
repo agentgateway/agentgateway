@@ -148,10 +148,10 @@ async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result
 }
 
 async fn proxy(cfg: Arc<Config>) -> anyhow::Result<()> {
-	info!("version: {}", version::BuildInfo::new());
-	info!(
-		"running with config: {}",
-		serdes::yamlviajson::to_string(&cfg)?
-	);
-	agentgateway::app::run(cfg).await?.wait_termination().await
+	println!("Starting AgentGateway...");
+	println!("Version:\n{}", version::BuildInfo::new());
+	println!("Configuration:\n{}", serdes::yamlviajson::to_string(&cfg)?);
+	agentgateway::app::run(cfg).await?.wait_termination().await?;
+	println!("AgentGateway terminated");
+	Ok(())
 }
