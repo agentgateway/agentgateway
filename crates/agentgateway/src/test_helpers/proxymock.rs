@@ -544,7 +544,7 @@ impl TestBind {
 				raw_peer_addr: None,
 			},
 		);
-		let bind = self.pi.stores.read_binds().bind(bind_name.clone()).unwrap();
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
 		let bind = Gateway::proxy_bind(
 			bind_name,
 			bind.protocol,

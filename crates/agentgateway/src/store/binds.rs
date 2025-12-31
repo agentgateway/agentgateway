@@ -660,8 +660,8 @@ impl Store {
 		pol
 	}
 
-	pub fn bind(&self, bind: BindKey) -> Option<Arc<Bind>> {
-		self.binds.get(&bind).cloned()
+	pub fn bind(&self, bind: &BindKey) -> Option<Arc<Bind>> {
+		self.binds.get(bind).cloned()
 	}
 
 	/// find_bind looks up a bind by address. Typically, this is done by the kernel for us, but in some cases

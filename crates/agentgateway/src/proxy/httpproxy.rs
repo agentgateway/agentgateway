@@ -472,7 +472,7 @@ impl HTTPProxy {
 		let inputs = self.inputs.clone();
 		let bind_name = self.bind_name.clone();
 		debug!(bind=%bind_name, "route for bind");
-		let Some(bind) = inputs.stores.read_binds().bind(bind_name.clone()) else {
+		let Some(bind) = inputs.stores.read_binds().bind(&bind_name) else {
 			return Err(ProxyError::BindNotFound.into());
 		};
 

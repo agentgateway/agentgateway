@@ -491,7 +491,7 @@ impl Gateway {
 		let selected_listener = match selected_listener {
 			Some(l) => l,
 			None => {
-				let Some(bind) = inputs.stores.read_binds().bind(bind_name.clone()) else {
+				let Some(bind) = inputs.stores.read_binds().bind(&bind_name) else {
 					error!("no bind found for {bind_name}");
 					return;
 				};
@@ -525,7 +525,7 @@ impl Gateway {
 		let to = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
 		let alpn = policies.tls.as_ref().and_then(|t| t.alpn.as_deref());
 		let handshake = async move {
-			let Some(bind) = inp.stores.read_binds().bind(bind_key.clone()) else {
+			let Some(bind) = inp.stores.read_binds().bind(&bind_key) else {
 				return Err(ProxyError::BindNotFound.into());
 			};
 			let listeners = &bind.listeners;
