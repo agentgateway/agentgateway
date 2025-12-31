@@ -2,16 +2,16 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use ::http::uri::PathAndQuery;
+use ::http::{HeaderMap, header};
 use anyhow::anyhow;
 use futures_util::FutureExt;
 use headers::HeaderMapExt;
-use ::http::uri::PathAndQuery;
-use ::http::{header, HeaderMap};
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
-use rand::seq::IndexedRandom;
 use rand::Rng;
+use rand::seq::IndexedRandom;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -22,11 +22,11 @@ use crate::http::ext_proc::ExtProcRequest;
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
-	auth, filters, get_host, merge_in_headers, retry, Authority, HeaderName, HeaderValue, PolicyResponse,
-	Request, Response, Scheme, StatusCode, Uri,
+	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
+	auth, filters, get_host, merge_in_headers, retry,
 };
 use crate::llm::{LLMRequest, RequestResult, RouteType};
-use crate::proxy::{resolve_simple_backend, ProxyError, ProxyResponse, ProxyResponseReason};
+use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
 	RoutePath,
@@ -36,7 +36,7 @@ use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::{backend, frontend};
-use crate::{store, ProxyInputs, *};
+use crate::{ProxyInputs, store, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
 	route
