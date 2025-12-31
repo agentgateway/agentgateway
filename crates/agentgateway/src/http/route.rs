@@ -24,7 +24,7 @@ pub fn select_best_route(
 	network: Strng,
 	self_addr: Option<Strng>,
 	dst: SocketAddr,
-	listener: Arc<Listener>,
+	listener: &Listener,
 	request: &Request,
 ) -> Option<(Arc<Route>, PathMatch)> {
 	// Order:

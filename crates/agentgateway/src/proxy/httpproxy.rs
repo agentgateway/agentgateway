@@ -2,16 +2,16 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use ::http::uri::PathAndQuery;
-use ::http::{HeaderMap, header};
 use anyhow::anyhow;
 use futures_util::FutureExt;
 use headers::HeaderMapExt;
+use ::http::uri::PathAndQuery;
+use ::http::{header, HeaderMap};
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
-use rand::Rng;
 use rand::seq::IndexedRandom;
+use rand::Rng;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -19,14 +19,14 @@ use types::discovery::*;
 use crate::client::Transport;
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::ExtProcRequest;
-use crate::http::filters::{AutoHostname, BackendRequestTimeout, DirectResponse};
+use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
-	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
-	auth, filters, get_host, merge_in_headers, retry,
+	auth, filters, get_host, merge_in_headers, retry, Authority, HeaderName, HeaderValue, PolicyResponse,
+	Request, Response, Scheme, StatusCode, Uri,
 };
 use crate::llm::{LLMRequest, RequestResult, RouteType};
-use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
+use crate::proxy::{resolve_simple_backend, ProxyError, ProxyResponse, ProxyResponseReason};
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
 	RoutePath,
@@ -36,7 +36,7 @@ use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::{backend, frontend};
-use crate::{ProxyInputs, store, *};
+use crate::{store, ProxyInputs, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
 	route
@@ -560,7 +560,7 @@ impl HTTPProxy {
 			inputs.cfg.network.clone(),
 			inputs.cfg.self_addr.clone(),
 			self.target_address,
-			selected_listener.clone(),
+			&selected_listener,
 			&req,
 		)
 		.ok_or(ProxyError::RouteNotFound)?;
@@ -1581,12 +1581,11 @@ fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()
 		let mut parts = std::mem::take(req.uri_mut()).into_parts();
 		// TODO: handle absolute HTTP/1.1 form
 		let host = req
-			.headers()
-			.get(http::header::HOST)
-			.and_then(|h| h.to_str().ok())
-			.and_then(|h| h.parse::<Authority>().ok())
+			.headers_mut()
+			.remove(http::header::HOST)
+			// TODO(https://github.com/hyperium/http/pull/811) actually make this shared
+			.and_then(|h| Authority::try_from(h.as_bytes()).ok())
 			.ok_or_else(|| anyhow::anyhow!("no authority or host"))?;
-		req.headers_mut().remove(http::header::HOST);
 
 		parts.authority = Some(host);
 		if parts.path_and_query.is_some() {

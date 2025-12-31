@@ -26,7 +26,7 @@ fn run_test(req: &Request, routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Opt
 		network.clone(),
 		None,
 		dummy_dest,
-		listener.clone(),
+		&listener,
 		req,
 	);
 	result.map(|(r, _)| r.key.to_string())
@@ -870,7 +870,7 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 			network.clone(),
 			None,
 			dummy_dest,
-			listener.clone(),
+			&listener,
 			divan::black_box(&req),
 		))
 	});

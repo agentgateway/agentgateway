@@ -1,6 +1,5 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 use std::io::Cursor;
@@ -8,6 +7,16 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
+use crate::http::auth::BackendAuth;
+use crate::http::authorization::RuleSet;
+use crate::http::{
+	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
+};
+use crate::mcp::McpAuthorization;
+use crate::types::discovery::{NamespacedHostname, Service};
+use crate::types::local::SimpleLocalBackend;
+use crate::types::{agent, backend, frontend};
+use crate::*;
 use anyhow::anyhow;
 use hashbrown::Equivalent;
 use heck::ToSnakeCase;
@@ -20,16 +29,6 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls_pemfile::Item;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
-use crate::http::auth::BackendAuth;
-use crate::http::authorization::RuleSet;
-use crate::http::{
-	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
-};
-use crate::mcp::McpAuthorization;
-use crate::types::discovery::{NamespacedHostname, Service};
-use crate::types::local::SimpleLocalBackend;
-use crate::types::{agent, backend, frontend};
-use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1057,6 +1056,29 @@ pub enum HostnameMatch {
 	None,
 }
 
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
+pub enum HostnameMatchRef<'a> {
+	Exact(&'a str),
+	// *.example.com -> Wildcard(example.com)
+	Wildcard(&'a str),
+	None,
+}
+impl Equivalent<HostnameMatch> for HostnameMatchRef<'_> {
+	fn equivalent(&self, key: &HostnameMatch) -> bool {
+		self == &HostnameMatchRef::from(key)
+	}
+}
+
+impl<'a> From<&'a HostnameMatch> for HostnameMatchRef<'a> {
+	fn from(value: &'a HostnameMatch) -> Self {
+		match value {
+			HostnameMatch::Exact(e) => HostnameMatchRef::Exact(e.as_str()),
+			HostnameMatch::Wildcard(w) => HostnameMatchRef::Wildcard(w.as_str()),
+			HostnameMatch::None => HostnameMatchRef::None,
+		}
+	}
+}
+
 impl From<Strng> for HostnameMatch {
 	fn from(s: Strng) -> Self {
 		if let Some(s) = s.strip_prefix("*.") {
@@ -1068,30 +1090,35 @@ impl From<Strng> for HostnameMatch {
 }
 
 impl HostnameMatch {
-	pub fn all_matches_or_none(
-		hostname: Option<&str>,
-	) -> Box<dyn Iterator<Item = HostnameMatch> + '_> {
+	pub fn all_matches_or_none<'a>(
+		hostname: Option<&'a str>,
+	) -> Box<dyn Iterator<Item = HostnameMatchRef<'a>> + '_> {
 		match hostname {
-			None => Box::new(std::iter::once(HostnameMatch::None)),
+			None => Box::new(std::iter::once(HostnameMatchRef::None)),
 			Some(h) => Box::new(Self::all_matches(h)),
 		}
 	}
-	pub fn all_matches(hostname: &str) -> impl Iterator<Item = HostnameMatch> + '_ {
-		Self::all_actual_matches(hostname).chain(std::iter::once(HostnameMatch::None))
+	pub fn all_matches<'a>(hostname: &'a str) -> impl Iterator<Item = HostnameMatchRef<'a>> + '_ {
+		Self::all_actual_matches(hostname).chain(std::iter::once(HostnameMatchRef::None))
 	}
-	fn all_actual_matches(hostname: &str) -> impl Iterator<Item = HostnameMatch> + '_ {
-		let start = if hostname.starts_with("*.") {
+	fn all_actual_matches<'a>(hostname: &'a str) -> impl Iterator<Item = HostnameMatchRef<'a>> + '_ {
+		let has_wildcard_prefix = hostname.starts_with("*.");
+
+		let exact_match = if has_wildcard_prefix {
 			None
 		} else {
-			Some(HostnameMatch::Exact(hostname.into()))
+			Some(HostnameMatchRef::Exact(hostname))
 		};
-		// Build wildcards in reverse order by collecting parts and building from longest to shortest
-		let parts: Vec<_> = hostname.split('.').skip(1).collect();
-		let wildcards = (0..parts.len()).map(move |i| {
-			let suffix = parts[i..].join(".");
-			HostnameMatch::Wildcard(suffix.into())
+
+		let wildcards = hostname.char_indices().filter_map(move |(i, c)| {
+			if c == '.' {
+				Some(HostnameMatchRef::Wildcard(&hostname[i + 1..]))
+			} else {
+				None
+			}
 		});
-		start.into_iter().chain(wildcards)
+
+		exact_match.into_iter().chain(wildcards)
 	}
 }
 
@@ -1104,7 +1131,7 @@ pub struct SingleRouteMatch {
 #[derive(Debug, Clone, Default)]
 pub struct RouteSet {
 	// Hostname -> []routes, sorted so that route matching can do a linear traversal
-	inner: HashMap<HostnameMatch, Vec<SingleRouteMatch>>,
+	inner: hashbrown::HashMap<HostnameMatch, Vec<SingleRouteMatch>>,
 	// All routes
 	all: HashMap<RouteKey, Arc<Route>>,
 }
@@ -1129,7 +1156,7 @@ impl RouteSet {
 
 	pub fn get_hostname(
 		&self,
-		hnm: &HostnameMatch,
+		hnm: &HostnameMatchRef,
 	) -> impl Iterator<Item = (Arc<Route>, &RouteMatch)> {
 		self.inner.get(hnm).into_iter().flatten().flat_map(|rl| {
 			self
@@ -1222,12 +1249,12 @@ impl RouteSet {
 				.entry(hostname_match)
 				.and_modify(|v| v.retain(|r| &r.key != key));
 			match entry {
-				Entry::Occupied(v) => {
+				hashbrown::hash_map::Entry::Occupied(v) => {
 					if v.get().is_empty() {
 						v.remove();
 					}
 				},
-				Entry::Vacant(_) => {},
+				hashbrown::hash_map::Entry::Vacant(_) => {},
 			}
 		}
 	}
@@ -1251,7 +1278,7 @@ impl RouteSet {
 #[derive(Debug, Clone, Default)]
 pub struct TCPRouteSet {
 	// Hostname -> []routes, sorted so that route matching can do a linear traversal
-	inner: HashMap<HostnameMatch, Vec<RouteKey>>,
+	inner: hashbrown::HashMap<HostnameMatch, Vec<RouteKey>>,
 	// All routes
 	all: HashMap<RouteKey, TCPRoute>,
 }
@@ -1274,7 +1301,7 @@ impl TCPRouteSet {
 		rs
 	}
 
-	pub fn get_hostname(&self, hnm: &HostnameMatch) -> Option<&TCPRoute> {
+	pub fn get_hostname(&self, hnm: &HostnameMatchRef) -> Option<&TCPRoute> {
 		self
 			.inner
 			.get(hnm)
@@ -1314,12 +1341,12 @@ impl TCPRouteSet {
 				.entry(hostname_match)
 				.and_modify(|v| v.retain(|r| r != key));
 			match entry {
-				Entry::Occupied(v) => {
+				hashbrown::hash_map::Entry::Occupied(v) => {
 					if v.get().is_empty() {
 						v.remove();
 					}
 				},
-				Entry::Vacant(_) => {},
+				hashbrown::hash_map::Entry::Vacant(_) => {},
 			}
 		}
 	}
@@ -1952,5 +1979,32 @@ InvalidKeyData
 		// Ensure hostname:port still works
 		let target = Target::try_from("example.com:443").unwrap();
 		assert!(matches!(target, Target::Hostname(h, 443) if h.as_str() == "example.com"));
+	}
+
+	#[test]
+	fn test_all_matches_subdomain() {
+		let matches: Vec<_> = HostnameMatch::all_matches("api.example.com").collect();
+
+		assert_eq!(matches.len(), 4);
+		assert_eq!(
+			matches[0],
+			HostnameMatchRef::Exact("api.example.com".into())
+		);
+		assert_eq!(matches[1], HostnameMatchRef::Wildcard("example.com".into()));
+		assert_eq!(matches[2], HostnameMatchRef::Wildcard("com".into()));
+		assert_eq!(matches[3], HostnameMatchRef::None);
+
+		let matches: Vec<_> = HostnameMatch::all_matches("*.example.com").collect();
+
+		assert_eq!(matches.len(), 3);
+		assert_eq!(matches[0], HostnameMatchRef::Wildcard("example.com".into()));
+		assert_eq!(matches[1], HostnameMatchRef::Wildcard("com".into()));
+		assert_eq!(matches[2], HostnameMatchRef::None);
+
+		let matches: Vec<_> = HostnameMatch::all_matches("localhost").collect();
+
+		assert_eq!(matches.len(), 2);
+		assert_eq!(matches[0], HostnameMatchRef::Exact("localhost".into()));
+		assert_eq!(matches[1], HostnameMatchRef::None);
 	}
 }
