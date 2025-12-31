@@ -1986,25 +1986,22 @@ InvalidKeyData
 		let matches: Vec<_> = HostnameMatch::all_matches("api.example.com").collect();
 
 		assert_eq!(matches.len(), 4);
-		assert_eq!(
-			matches[0],
-			HostnameMatchRef::Exact("api.example.com".into())
-		);
-		assert_eq!(matches[1], HostnameMatchRef::Wildcard("example.com".into()));
-		assert_eq!(matches[2], HostnameMatchRef::Wildcard("com".into()));
+		assert_eq!(matches[0], HostnameMatchRef::Exact("api.example.com"));
+		assert_eq!(matches[1], HostnameMatchRef::Wildcard("example.com"));
+		assert_eq!(matches[2], HostnameMatchRef::Wildcard("com"));
 		assert_eq!(matches[3], HostnameMatchRef::None);
 
 		let matches: Vec<_> = HostnameMatch::all_matches("*.example.com").collect();
 
 		assert_eq!(matches.len(), 3);
-		assert_eq!(matches[0], HostnameMatchRef::Wildcard("example.com".into()));
-		assert_eq!(matches[1], HostnameMatchRef::Wildcard("com".into()));
+		assert_eq!(matches[0], HostnameMatchRef::Wildcard("example.com"));
+		assert_eq!(matches[1], HostnameMatchRef::Wildcard("com"));
 		assert_eq!(matches[2], HostnameMatchRef::None);
 
 		let matches: Vec<_> = HostnameMatch::all_matches("localhost").collect();
 
 		assert_eq!(matches.len(), 2);
-		assert_eq!(matches[0], HostnameMatchRef::Exact("localhost".into()));
+		assert_eq!(matches[0], HostnameMatchRef::Exact("localhost"));
 		assert_eq!(matches[1], HostnameMatchRef::None);
 	}
 }
