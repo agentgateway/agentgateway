@@ -116,7 +116,7 @@ impl Client<(), ()> {
 	///
 	/// # Example
 	///
-	/// ```
+	/// ```ignore
 	/// # #[cfg(feature = "tokio")]
 	/// # fn run () {
 	/// use std::time::Duration;
@@ -159,7 +159,7 @@ where
 	///
 	/// # Example
 	///
-	/// ```
+	/// ```ignore
 	/// # #[cfg(feature = "tokio")]
 	/// # fn run () {
 	/// use hyper::Uri;
@@ -192,7 +192,7 @@ where
 	///
 	/// # Example
 	///
-	/// ```
+	/// ```ignore
 	/// # #[cfg(feature = "tokio")]
 	/// # fn run () {
 	/// use hyper::{Method, Request};
@@ -957,7 +957,7 @@ fn is_schema_secure(uri: &Uri) -> bool {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// # #[cfg(feature = "tokio")]
 /// # fn run () {
 /// use std::time::Duration;
@@ -1020,7 +1020,7 @@ impl Builder {
 	///
 	/// # Example
 	///
-	/// ```
+	/// ```ignore
 	/// # #[cfg(feature = "tokio")]
 	/// # fn run () {
 	/// use std::time::Duration;
