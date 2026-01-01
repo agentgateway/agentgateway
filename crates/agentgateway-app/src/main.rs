@@ -7,6 +7,7 @@ use agent_core::{strng, telemetry, version};
 use agentgateway::types::agent::ListenerTarget;
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use clap::Parser;
+#[cfg_attr(not(target_env = "musl"), allow(unused_imports))]
 use tracing::info;
 
 #[cfg(feature = "jemalloc")]
