@@ -1,0 +1,16 @@
+[package]
+name = "htpasswd-verify-fork"
+version = "0.4.0"
+authors = ["aQaTL <mmsoltys@outlook.com>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "Verify hashes stored in apache's htpasswd file"
+repository = "https://github.com/aQaTL/htpasswd-verify"
+keywords = ["apache", "password", "htpasswd"]
+
+[dependencies]
+base64.workspace = true
+bcrypt.workspace = true
+md-5.workspace = true
+pwhash.workspace = true
+sha1.workspace = true
