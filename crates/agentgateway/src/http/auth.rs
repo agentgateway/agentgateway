@@ -381,9 +381,7 @@ mod azure {
 					tenant_id,
 					client_id.to_string(),
 					azure_core::credentials::Secret::new(client_secret.expose_secret().to_string()),
-					Some(azure_identity::ClientSecretCredentialOptions {
-						client_options,
-					}),
+					Some(azure_identity::ClientSecretCredentialOptions { client_options }),
 				)?),
 				AzureAuthCredentialSource::ManagedIdentity {
 					user_assigned_identity,

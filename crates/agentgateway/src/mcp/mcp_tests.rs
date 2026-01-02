@@ -321,7 +321,6 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 
 async fn mock_sse_server() -> MockServer {
 	use legacy_rmcp::transport::sse_server::{SseServer, SseServerConfig};
-	use mockserver::Counter;
 	use tokio_util::sync::CancellationToken;
 
 	agent_core::telemetry::testing::setup_test_logging();
@@ -337,7 +336,7 @@ async fn mock_sse_server() -> MockServer {
 	});
 
 	let (tx, rx) = tokio::sync::oneshot::channel();
-	let ct2 = sse_server.with_service_directly(Counter::new);
+	let ct2 = sse_server.with_service_directly(legacymockserver::Counter::new);
 	tokio::spawn(async move {
 		let _ = axum::serve(tcp_listener, service)
 			.with_graceful_shutdown(async move {
@@ -350,12 +349,10 @@ async fn mock_sse_server() -> MockServer {
 	});
 	MockServer { addr, _cancel: tx }
 }
-
 mod mockserver {
 	use std::sync::Arc;
 
 	use http::request::Parts;
-	use legacy_rmcp::handler::server::router::tool::ToolRouter as LegacyToolRouter;
 	use rmcp::handler::server::router::prompt::PromptRouter;
 	use rmcp::handler::server::router::tool::ToolRouter;
 	use rmcp::handler::server::wrapper::Parameters;
@@ -393,21 +390,7 @@ mod mockserver {
 	pub struct Counter {
 		counter: Arc<Mutex<i32>>,
 		tool_router: ToolRouter<Counter>,
-		legacy_tool_router: LegacyToolRouter<Counter>,
 		prompt_router: PromptRouter<Counter>,
-	}
-
-	fn map_to_legacy<F>(
-		attr: rmcp::model::Tool,
-		f: F,
-	) -> (
-		legacy_rmcp::model::Tool,
-		impl Fn(&Counter) -> Result<legacy_rmcp::model::CallToolResult, legacy_rmcp::ErrorData>,
-	)
-	where
-		F: Fn(&Counter) -> Result<CallToolResult, McpError>,
-	{
-		(todo!(), |_| todo!())
 	}
 
 	#[tool_router]
@@ -417,16 +400,8 @@ mod mockserver {
 			Self {
 				counter: Arc::new(Mutex::new(0)),
 				tool_router: Self::tool_router(),
-				legacy_tool_router: Self::legacy_tool_router(),
 				prompt_router: Self::prompt_router(),
 			}
-		}
-		fn legacy_tool_router() -> LegacyToolRouter<Self> {
-			LegacyToolRouter::<Self>::new()
-				.with_route(map_to_legacy(Self::increment_tool_attr(), Self::increment))
-				.with_route(map_to_legacy(Self::decrement_tool_attr(), Self::decrement))
-				.with_route(map_to_legacy(Self::get_value_tool_attr(), Self::get_value))
-				.with_route(map_to_legacy(Self::say_hello_tool_attr(), Self::say_hello))
 		}
 
 		fn _create_resource_text(&self, uri: &str, name: &str) -> Resource {
@@ -627,53 +602,258 @@ mod mockserver {
 			Ok(self.get_info())
 		}
 	}
+}
 
-	mod legacy {
-		use legacy_rmcp::model::*;
+mod legacymockserver {
+	use std::sync::Arc;
 
-		use legacy_rmcp::service::RequestContext;
-		use legacy_rmcp::{
-			ErrorData as McpError, RoleServer, ServerHandler, prompt, prompt_handler, prompt_router,
-			schemars, tool, tool_handler, tool_router,
-		};
-		impl legacy_rmcp::ServerHandler for super::Counter {
-			fn get_info(&self) -> ServerInfo {
-				ServerInfo {
-					protocol_version: ProtocolVersion::V_2025_06_18,
-					capabilities: ServerCapabilities::builder()
-						.enable_prompts()
-						.enable_resources()
-						.enable_tools()
-						.build(),
-					server_info: Implementation::from_build_env(),
-					instructions: Some("This server provides counter tools and prompts.".to_string()),
-				}
-			}
-			async fn call_tool(
-				&self,
-				request: CallToolRequestParam,
-				context: RequestContext<RoleServer>,
-			) -> Result<CallToolResult, ErrorData> {
-				let tcc = legacy_rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
-				self.legacy_tool_router.call(tcc).await
-			}
-			async fn list_tools(
-				&self,
-				_request: Option<PaginatedRequestParam>,
-				_context: RequestContext<RoleServer>,
-			) -> Result<ListToolsResult, ErrorData> {
-				Ok(ListToolsResult::with_all_items(
-					self.legacy_tool_router.list_all(),
-				))
-			}
+	use http::request::Parts;
+	use legacy_rmcp as rmcp;
+	use rmcp::handler::server::router::prompt::PromptRouter;
+	use rmcp::handler::server::router::tool::ToolRouter;
+	use rmcp::handler::server::wrapper::Parameters;
+	use rmcp::model::*;
+	use rmcp::service::RequestContext;
+	use rmcp::{
+		ErrorData as McpError, RoleServer, ServerHandler, prompt, prompt_handler, prompt_router,
+		schemars, tool, tool_handler, tool_router,
+	};
+	use serde_json::json;
+	use tokio::sync::Mutex;
 
-			async fn initialize(
-				&self,
-				_request: InitializeRequestParam,
-				_: RequestContext<RoleServer>,
-			) -> Result<InitializeResult, McpError> {
-				Ok(self.get_info())
+	#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+	pub struct ExamplePromptArgs {
+		/// A message to put in the prompt
+		pub message: String,
+	}
+
+	#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+	pub struct CounterAnalysisArgs {
+		/// The target value you're trying to reach
+		pub goal: i32,
+		/// Preferred strategy: 'fast' or 'careful'
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub strategy: Option<String>,
+	}
+
+	#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+	pub struct StructRequest {
+		pub a: i32,
+		pub b: i32,
+	}
+
+	#[derive(Clone)]
+	pub struct Counter {
+		counter: Arc<Mutex<i32>>,
+		tool_router: ToolRouter<Counter>,
+		prompt_router: PromptRouter<Counter>,
+	}
+
+	#[tool_router]
+	impl Counter {
+		#[allow(dead_code)]
+		pub fn new() -> Self {
+			Self {
+				counter: Arc::new(Mutex::new(0)),
+				tool_router: Self::tool_router(),
+				prompt_router: Self::prompt_router(),
 			}
+		}
+
+		fn _create_resource_text(&self, uri: &str, name: &str) -> Resource {
+			RawResource::new(uri, name.to_string()).no_annotation()
+		}
+
+		#[tool(description = "Increment the counter by 1")]
+		async fn increment(&self) -> Result<CallToolResult, McpError> {
+			let mut counter = self.counter.lock().await;
+			*counter += 1;
+			Ok(CallToolResult::success(vec![Content::text(
+				counter.to_string(),
+			)]))
+		}
+
+		#[tool(description = "Decrement the counter by 1")]
+		async fn decrement(&self) -> Result<CallToolResult, McpError> {
+			let mut counter = self.counter.lock().await;
+			*counter -= 1;
+			Ok(CallToolResult::success(vec![Content::text(
+				counter.to_string(),
+			)]))
+		}
+
+		#[tool(description = "Get the current counter value")]
+		async fn get_value(&self) -> Result<CallToolResult, McpError> {
+			let counter = self.counter.lock().await;
+			Ok(CallToolResult::success(vec![Content::text(
+				counter.to_string(),
+			)]))
+		}
+
+		#[tool(description = "Say hello to the client")]
+		fn say_hello(&self) -> Result<CallToolResult, McpError> {
+			Ok(CallToolResult::success(vec![Content::text("hello")]))
+		}
+
+		#[tool(description = "Repeat what you say")]
+		fn echo(&self, Parameters(object): Parameters<JsonObject>) -> Result<CallToolResult, McpError> {
+			Ok(CallToolResult::success(vec![Content::text(
+				serde_json::Value::Object(object).to_string(),
+			)]))
+		}
+
+		#[tool(description = "Calculate the sum of two numbers")]
+		fn sum(
+			&self,
+			Parameters(StructRequest { a, b }): Parameters<StructRequest>,
+		) -> Result<CallToolResult, McpError> {
+			Ok(CallToolResult::success(vec![Content::text(
+				(a + b).to_string(),
+			)]))
+		}
+
+		#[tool(description = "Echo HTTP attributes")]
+		fn echo_http(&self, rq: RequestContext<RoleServer>) -> Result<CallToolResult, McpError> {
+			let ext = rq.extensions.get::<Parts>();
+			Ok(CallToolResult::success(vec![Content::text(
+				ext
+					.unwrap()
+					.headers
+					.get("authorization")
+					.map(|s| String::from_utf8_lossy(s.as_bytes()))
+					.unwrap_or_default(),
+			)]))
+		}
+	}
+
+	#[prompt_router]
+	impl Counter {
+		/// This is an example prompt that takes one required argument, message
+		#[prompt(name = "example_prompt")]
+		async fn example_prompt(
+			&self,
+			Parameters(args): Parameters<ExamplePromptArgs>,
+			_ctx: RequestContext<RoleServer>,
+		) -> Result<Vec<PromptMessage>, McpError> {
+			let prompt = format!(
+				"This is an example prompt with your message here: '{}'",
+				args.message
+			);
+			Ok(vec![PromptMessage {
+				role: PromptMessageRole::User,
+				content: PromptMessageContent::text(prompt),
+			}])
+		}
+
+		/// Analyze the current counter value and suggest next steps
+		#[prompt(name = "counter_analysis")]
+		async fn counter_analysis(
+			&self,
+			Parameters(args): Parameters<CounterAnalysisArgs>,
+			_ctx: RequestContext<RoleServer>,
+		) -> Result<GetPromptResult, McpError> {
+			let strategy = args.strategy.unwrap_or_else(|| "careful".to_string());
+			let current_value = *self.counter.lock().await;
+			let difference = args.goal - current_value;
+
+			let messages = vec![
+				PromptMessage::new_text(
+					PromptMessageRole::Assistant,
+					"I'll analyze the counter situation and suggest the best approach.",
+				),
+				PromptMessage::new_text(
+					PromptMessageRole::User,
+					format!(
+						"Current counter value: {}\nGoal value: {}\nDifference: {}\nStrategy preference: {}\n\nPlease analyze the situation and suggest the best approach to reach the goal.",
+						current_value, args.goal, difference, strategy
+					),
+				),
+			];
+
+			Ok(GetPromptResult {
+				description: Some(format!(
+					"Counter analysis for reaching {} from {}",
+					args.goal, current_value
+				)),
+				messages,
+			})
+		}
+	}
+
+	#[tool_handler]
+	#[prompt_handler]
+	impl ServerHandler for Counter {
+		fn get_info(&self) -> ServerInfo {
+			ServerInfo {
+				protocol_version: ProtocolVersion::V_2025_06_18,
+				capabilities: ServerCapabilities::builder()
+					.enable_prompts()
+					.enable_resources()
+					.enable_tools()
+					.build(),
+				server_info: Implementation::from_build_env(),
+				instructions: Some("This server provides counter tools and prompts.".to_string()),
+			}
+		}
+
+		async fn list_resources(
+			&self,
+			_request: Option<PaginatedRequestParam>,
+			_: RequestContext<RoleServer>,
+		) -> Result<ListResourcesResult, McpError> {
+			Ok(ListResourcesResult {
+				resources: vec![
+					self._create_resource_text("str:////Users/to/some/path/", "cwd"),
+					self._create_resource_text("memo://insights", "memo-name"),
+				],
+				next_cursor: None,
+			})
+		}
+
+		async fn read_resource(
+			&self,
+			ReadResourceRequestParam { uri }: ReadResourceRequestParam,
+			_: RequestContext<RoleServer>,
+		) -> Result<ReadResourceResult, McpError> {
+			match uri.as_str() {
+				"str:////Users/to/some/path/" => {
+					let cwd = "/Users/to/some/path/";
+					Ok(ReadResourceResult {
+						contents: vec![ResourceContents::text(cwd, uri)],
+					})
+				},
+				"memo://insights" => {
+					let memo = "Business Intelligence Memo\n\nAnalysis has revealed 5 key insights ...";
+					Ok(ReadResourceResult {
+						contents: vec![ResourceContents::text(memo, uri)],
+					})
+				},
+				_ => Err(McpError::resource_not_found(
+					"resource_not_found",
+					Some(json!({
+							"uri": uri
+					})),
+				)),
+			}
+		}
+
+		async fn list_resource_templates(
+			&self,
+			_request: Option<PaginatedRequestParam>,
+			_: RequestContext<RoleServer>,
+		) -> Result<ListResourceTemplatesResult, McpError> {
+			Ok(ListResourceTemplatesResult {
+				next_cursor: None,
+				resource_templates: Vec::new(),
+			})
+		}
+
+		async fn initialize(
+			&self,
+			_request: InitializeRequestParam,
+			_: RequestContext<RoleServer>,
+		) -> Result<InitializeResult, McpError> {
+			Ok(self.get_info())
 		}
 	}
 }
