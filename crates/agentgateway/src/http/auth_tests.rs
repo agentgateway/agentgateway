@@ -155,7 +155,7 @@ async fn test_aws_sign_requestallback() {
 		.expect("signing failed");
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn test_aws_sign_request_no_region_error() {
 	unsafe {
 		// prevent loading from default profile on developer's laptops, so this test passes consistently.

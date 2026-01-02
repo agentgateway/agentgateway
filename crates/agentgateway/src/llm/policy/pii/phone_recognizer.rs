@@ -96,21 +96,3 @@ impl Recognizer for PhoneRecognizer {
 		"PHONE_NUMBER"
 	}
 }
-
-struct PhoneNumberMatcher {
-	patterns: Regex,
-}
-impl PhoneNumberMatcher {
-	pub fn new() -> Self {
-		// this is _PATTERN from libphonenumbers
-		let r: Regex = Regex::new(r#"(?:[(\[（［+＋][-x‐-―−ー－-／  \u{AD}\u{200B}\u{2060}　()（）［］.\[\]/~⁓∼～]{0,4}){0,2}\d{1,20}(?:[-x‐-―−ー－-／  \u{AD}\u{200B}\u{2060}　()（）［］.\[\]/~⁓∼～]{0,4}\d{1,20}){0,20}(?:;ext=(\d{1,20})|[  \t,]*(?:e?xt(?:ensi(?:ó?|ó))?n?|ｅ?ｘｔｎ?|доб|anexo)[:\.．]?[  \t,-]*(\d{1,20})#?|[  \t,]*(?:[xｘ#＃~～]|int|ｉｎｔ)[:\.．]?[  \t,-]*(\d{1,9})#?|[- ]+(\d{1,6})#)?"#).unwrap();
-
-		Self { patterns: r }
-	}
-
-	pub fn find<'a>(&self, text: &'a str) -> impl std::iter::Iterator<Item = &'a str> {
-		let candidates = self.patterns.find_iter(text);
-
-		candidates.map(|m| m.as_str())
-	}
-}
