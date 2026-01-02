@@ -182,7 +182,18 @@ export function normalizeTargetUrl(host: unknown, port?: unknown, path?: unknown
 // Get backend name for display
 export const getBackendName = (backend: Backend): string => {
   // name already includes namespace prefix (e.g., "namespace/name")
-  if (backend.mcp) return backend.mcp.name;
+  if (backend.mcp) {
+    if (backend.mcp.name) return backend.mcp.name;
+    const targets = getMcpTargets(backend);
+    if (targets.length > 0) {
+      const targetNames = targets
+        .map((t) => t.name)
+        .filter(Boolean)
+        .join(", ");
+      return targetNames ? `MCP: ${targetNames}` : "MCP Backend";
+    }
+    return "MCP Backend";
+  }
   if (backend.ai) return backend.ai.name;
   if (backend.service) {
     const ns = backend.service.name?.namespace;
@@ -238,7 +249,9 @@ export const getBackendDetails = (backend: Backend): { primary: string; secondar
           secondary: url.length > 60 ? `${url.substring(0, 60)}...` : url,
         };
       } else if (firstTarget.openapi) {
-        const url = `${firstTarget.openapi.host}:${firstTarget.openapi.port}`;
+        const host = firstTarget.openapi.host;
+        const port = firstTarget.openapi.port;
+        const url = typeof port === "number" ? `${host}:${port}` : host;
         return {
           primary: targetCount,
           secondary: url.length > 60 ? `${url.substring(0, 60)}...` : url,
@@ -325,8 +338,10 @@ export const validateMcpBackend = (form: typeof DEFAULT_BACKEND_FORM): boolean =
     if (!target.name.trim()) return false;
     if (target.type === "stdio") {
       return !!target.cmd.trim();
+    } else if (target.type === "openapi") {
+      return !!(target.fullUrl.trim() || target.host.trim());
     } else {
-      // For MCP/SSE/OpenAPI, accept a single full URL (preferred),
+      // For MCP/SSE, accept a single full URL (preferred),
       // otherwise fall back to parsed host/port
       return !!(target.fullUrl.trim() || (target.host.trim() && target.port.trim()));
     }
@@ -449,15 +464,20 @@ export const createMcpTarget = (target: any) => {
               : {},
         },
       };
-    case "openapi":
+    case "openapi": {
+      const port =
+        typeof target.port === "string" && target.port.trim()
+          ? parseInt(target.port, 10)
+          : undefined;
       return {
         ...baseTarget,
         openapi: {
           host: target.host,
-          port: parseInt(target.port),
+          port: Number.isFinite(port) ? port : undefined,
           schema: target.schema,
         },
       };
+    }
     default:
       return baseTarget;
   }
@@ -465,14 +485,12 @@ export const createMcpTarget = (target: any) => {
 
 export const createMcpBackend = (form: typeof DEFAULT_BACKEND_FORM, weight: number): Backend => {
   const targets = form.mcpTargets.map(createMcpTarget);
-  // LocalMcpBackend in Rust doesn't have a 'name' field - only targets and statefulMode
-  // The 'name' field in our McpBackend type is only for display (from config_dump reference)
   return addWeightIfNeeded(
     {
       mcp: {
         targets, // Flat structure for local config format
-        statefulMode: form.mcpStateful ? "stateful" : "stateless",
-      } as any, // Cast needed because McpBackend type includes 'name' for read path
+        statefulMode: form.mcpStateful ? McpStatefulMode.STATEFUL : McpStatefulMode.STATELESS,
+      },
     },
     weight
   );
@@ -690,12 +708,16 @@ export const populateFormFromBackend = (
           env: target.stdio.env || {},
         };
       } else if (target.openapi) {
-        const fullUrl = `http://${target.openapi.host}:${target.openapi.port}`;
+        const port = target.openapi.port;
+        const fullUrl =
+          typeof port === "number"
+            ? `http://${target.openapi.host}:${port}`
+            : `http://${target.openapi.host}`;
         return {
           ...baseTarget,
           type: "openapi" as const,
           host: target.openapi.host,
-          port: String(target.openapi.port),
+          port: typeof port === "number" ? String(port) : "",
           path: "",
           fullUrl,
           schema: target.openapi.schema,

@@ -295,7 +295,6 @@ export async function createMcpTarget(
     if (!mcpBackend) {
       const newMcpBackend: Backend = {
         mcp: {
-          name: "mcp-backend",
           targets: [],
           statefulMode: McpStatefulMode.STATEFUL, // Default to stateful
         },

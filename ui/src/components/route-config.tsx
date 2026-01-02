@@ -59,10 +59,9 @@ export function RouteConfig() {
   const xds = useXdsMode();
 
   // Load routes on component mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadRoutes();
-  }, []);
+  }, [loadRoutes]);
 
   // Event handlers
   const handleAddRoute = async () => {

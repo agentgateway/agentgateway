@@ -285,7 +285,8 @@ export interface DynamicBackend {
 
 // UI-friendly flat structure (matches local config format for write path)
 export interface McpBackend {
-  name: string;
+  // Display-only name from config_dump (namespace/name); absent in local config.
+  name?: string;
   targets: McpTarget[];
   statefulMode?: McpStatefulMode;
 }

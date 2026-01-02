@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -105,6 +105,24 @@ interface ListenerWithBackendsAndRoutes extends Listener {
   backendCount?: number;
 }
 
+const getListenerCounts = (listener: Listener): { backendCount: number } => {
+  let backendCount = 0;
+
+  const listenerName = listener.name || "unnamed";
+
+  // Count backends across all routes
+  if (listener.routes && listener.routes.length > 0) {
+    listener.routes.forEach((route) => {
+      if (route.backends && route.backends.length > 0) {
+        backendCount += route.backends.length;
+      }
+    });
+  }
+
+  console.log(`Listener ${listenerName}: ${backendCount} backends`);
+  return { backendCount };
+};
+
 export function ListenerConfig({
   isAddingListener = false,
   setIsAddingListener = () => {},
@@ -142,34 +160,15 @@ export function ListenerConfig({
     isOpen: false,
   });
 
-  const [_deleteConfigDialog, setDeleteConfigDialog] = useState<DeleteConfigDialogState>({
+  const [, setDeleteConfigDialog] = useState<DeleteConfigDialogState>({
     isOpen: false,
     bindPort: 0,
     listenerIndex: -1,
     configType: null,
   });
 
-  // Helper function to count backends from listener structure
-  const getListenerCounts = (listener: Listener): { backendCount: number } => {
-    let backendCount = 0;
-
-    const listenerName = listener.name || "unnamed";
-
-    // Count backends across all routes
-    if (listener.routes && listener.routes.length > 0) {
-      listener.routes.forEach((route, _routeIndex) => {
-        if (route.backends && route.backends.length > 0) {
-          backendCount += route.backends.length;
-        }
-      });
-    }
-
-    console.log(`Listener ${listenerName}: ${backendCount} backends`);
-    return { backendCount };
-  };
-
   // Fetch binds and their listener backend/route counts
-  const loadBinds = async () => {
+  const loadBinds = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedBinds = await fetchBinds();
@@ -206,12 +205,11 @@ export function ListenerConfig({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadBinds();
-  }, []);
+  }, [loadBinds]);
 
   const handleAddBind = async () => {
     setIsSubmitting(true);
@@ -366,20 +364,8 @@ export function ListenerConfig({
     return `${protocol}://${hostname}:${port}`;
   };
 
-  const _hasJWTAuth = (listener: Listener) => {
-    return (
-      listener.routes?.some(
-        (route) => route.policies?.jwtAuth || route.policies?.mcpAuthentication
-      ) || false
-    );
-  };
-
   const hasTLS = (listener: Listener) => {
     return !!listener.tls;
-  };
-
-  const _hasRBAC = (listener: Listener) => {
-    return listener.routes?.some((route) => route.policies?.mcpAuthorization) || false;
   };
 
   const getProtocolString = (protocol: unknown): ListenerProtocol => {

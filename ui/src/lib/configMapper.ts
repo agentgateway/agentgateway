@@ -134,7 +134,7 @@ function getBackendName(backend: Backend): string {
     return `${backend.service.name.namespace}/${backend.service.name.hostname}:${backend.service.port}`;
   if (backend.host) return backend.host.name ?? "";
   // name already includes namespace prefix (e.g., "namespace/name")
-  if (backend.mcp) return backend.mcp.name;
+  if (backend.mcp) return backend.mcp.name || "";
   if (backend.ai) return backend.ai.name;
   return "";
 }

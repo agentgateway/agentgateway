@@ -55,7 +55,10 @@ export default function TargetItem({
                   {target.mcp && `${target.mcp.host}`}
                   {target.sse && `${target.sse.host}`}
                   {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
-                  {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
+                  {target.openapi &&
+                    `${target.openapi.host}${
+                      typeof target.openapi.port === "number" ? `:${target.openapi.port}` : ""
+                    }`}
                   {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
                 </div>
               </TooltipTrigger>
@@ -63,7 +66,10 @@ export default function TargetItem({
                 {target.mcp && `${target.mcp.host}`}
                 {target.sse && `${target.sse.host}`}
                 {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
-                {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
+                {target.openapi &&
+                  `${target.openapi.host}${
+                    typeof target.openapi.port === "number" ? `:${target.openapi.port}` : ""
+                  }`}
                 {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
               </TooltipContent>
             </Tooltip>

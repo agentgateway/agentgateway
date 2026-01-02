@@ -50,10 +50,9 @@ export function BackendConfig() {
   const xds = useXdsMode();
 
   // Load backends on component mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadBackends();
-  }, []);
+  }, [loadBackends]);
 
   // Event handlers
   const handleAddBackend = async () => {
