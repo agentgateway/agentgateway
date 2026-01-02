@@ -293,6 +293,11 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.map(cel::Expression::new_strict)
 				.transpose()?
 				.map(Arc::new),
+			path: raw
+				.tracing
+				.as_ref()
+				.and_then(|t| t.path.clone())
+				.unwrap_or_else(|| "/v1/traces".to_string()),
 		},
 		logging: telemetry::log::Config {
 			filter: raw

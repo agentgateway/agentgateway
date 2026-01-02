@@ -105,7 +105,8 @@ openapiv3 = "2.2"
 opentelemetry = "0.31"
 opentelemetry-http = "0.31"
 opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
-opentelemetry_sdk = "0.31"
+opentelemetry-proto = { version = "0.31", features = ["gen-tonic"] }
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
 parking_lot = "0.12"
 percent-encoding = "2.3"
 phonenumber = "0.3"

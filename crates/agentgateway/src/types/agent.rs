@@ -1405,6 +1405,77 @@ pub struct TargetedPolicy {
 	pub policy: PolicyType,
 }
 
+/// Configuration for dynamic tracing policy
+#[apply(schema!)]
+pub struct TracingConfig {
+	pub provider_backend: SimpleBackendReference,
+	pub attributes: Vec<TracingAttribute>,
+	pub resources: Vec<TracingAttribute>,
+	/// Optional per-policy override for random sampling. If set, overrides global config for
+	/// requests that use this frontend policy.
+	pub random_sampling: Option<Arc<cel::Expression>>,
+	/// Optional per-policy override for client sampling. If set, overrides global config for
+	/// requests that use this frontend policy.
+	pub client_sampling: Option<Arc<cel::Expression>>,
+	// OTLP path. Default is /v1/traces
+	pub path: String,
+	// protocol specifies the OTLP protocol variant to use. Default is HTTP
+	pub protocol: TracingProtocol,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Copy, Eq, PartialEq, Clone, Debug)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
+pub enum TracingProtocol {
+	#[default]
+	Http,
+	Grpc,
+}
+
+/// A single tracing attribute with a CEL expression
+#[apply(schema!)]
+pub struct TracingAttribute {
+	pub name: String,
+	pub value: Arc<cel::Expression>,
+}
+
+/// TracingPolicy holds both the configuration and the compiled OpenTelemetry tracer
+#[derive(Clone, Debug)]
+pub struct TracingPolicy {
+	pub config: TracingConfig,
+	/// CEL fields used by the tracer for span attributes. Stored so we can lazily
+	/// create the tracer at first use with the correct attribute set.
+	pub fields: Arc<crate::telemetry::log::LoggingFields>,
+	/// Lazily initialized tracer. Created on first access in the dataplane
+	/// using a PolicyClient so that backend routing and auth can be applied.
+	pub tracer: once_cell::sync::OnceCell<Arc<crate::telemetry::trc::Tracer>>,
+}
+
+impl serde::Serialize for TracingPolicy {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.config.serialize(serializer)
+	}
+}
+
+impl TracingPolicy {
+	pub fn get_or_init(
+		&self,
+		policy_client: crate::proxy::httpproxy::PolicyClient,
+	) -> anyhow::Result<&Arc<crate::telemetry::trc::Tracer>> {
+		self.tracer.get_or_try_init(|| {
+			let tracer = crate::telemetry::trc::Tracer::create_tracer_from_config_with_client(
+				&self.config,
+				self.fields.clone(),
+				policy_client,
+			)?;
+			Ok(Arc::new(tracer))
+		})
+	}
+}
+
 impl From<BackendPolicy> for PolicyType {
 	fn from(value: BackendPolicy) -> Self {
 		Self::Backend(value)
@@ -1536,7 +1607,7 @@ pub enum FrontendPolicy {
 	TLS(frontend::TLS),
 	TCP(frontend::TCP),
 	AccessLog(frontend::LoggingPolicy),
-	Tracing(()),
+	Tracing(TracingPolicy),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

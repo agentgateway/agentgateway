@@ -184,6 +184,13 @@
                 "boolean",
                 "null"
               ]
+            },
+            "path": {
+              "description": "OTLP path. Default is /v1/traces",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "additionalProperties": false,
@@ -434,13 +441,6 @@
                   "default": null
                 },
                 "namespace": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "default": null
-                },
-                "gatewayName": {
                   "type": [
                     "string",
                     "null"
@@ -9087,7 +9087,163 @@
           "default": null
         },
         "tracing": {
-          "type": "null",
+          "description": "Configuration for dynamic tracing policy",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "providerBackend": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "invalid"
+                  ]
+                },
+                {
+                  "description": "Service reference. Service must be defined in the top level services list.",
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "object",
+                          "properties": {
+                            "namespace": {
+                              "type": "string"
+                            },
+                            "hostname": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "namespace",
+                            "hostname"
+                          ]
+                        },
+                        "port": {
+                          "type": "integer",
+                          "format": "uint16",
+                          "minimum": 0,
+                          "maximum": 65535
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "port"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "service"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "description": "Hostname or IP address",
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "description": "Hostname or IP address",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "backend"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "attributes": {
+              "type": "array",
+              "items": {
+                "description": "A single tracing attribute with a CEL expression",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "value"
+                ]
+              }
+            },
+            "resources": {
+              "type": "array",
+              "items": {
+                "description": "A single tracing attribute with a CEL expression",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "value"
+                ]
+              }
+            },
+            "randomSampling": {
+              "description": "Optional per-policy override for random sampling. If set, overrides global config for\nrequests that use this frontend policy.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "clientSampling": {
+              "description": "Optional per-policy override for client sampling. If set, overrides global config for\nrequests that use this frontend policy.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "protocol": {
+              "type": "string",
+              "enum": [
+                "http",
+                "grpc"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "providerBackend",
+            "attributes",
+            "resources",
+            "path",
+            "protocol"
+          ],
           "default": null
         }
       },
