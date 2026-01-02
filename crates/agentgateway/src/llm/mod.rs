@@ -21,7 +21,7 @@ use crate::http::{Body, Request, Response};
 use crate::llm::types::{RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
-use crate::telemetry::log::{AsyncLog, RequestLog};
+use crate::telemetry::log::{AsyncLog, RequestLog, SpanWriter};
 use crate::types::agent::{BackendPolicy, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
@@ -219,6 +219,14 @@ pub struct LLMResponse {
 pub enum RequestResult {
 	Success(Request, LLMRequest),
 	Rejected(Response),
+}
+
+pub struct ProcessResponseCtx {
+	pub client: PolicyClient,
+	pub rate_limit: LLMResponsePolicies,
+	pub log: AsyncLog<llm::LLMInfo>,
+	pub include_completion_in_log: bool,
+	pub span_writer: Option<SpanWriter>,
 }
 
 impl AIProvider {
@@ -586,8 +594,9 @@ impl AIProvider {
 			if original_format.supports_prompt_guard() {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
+				let span_writer = log.as_deref().and_then(|l| l.span_writer());
 				if let Some(dr) = p
-					.apply_prompt_guard(backend_info, &mut req, http_headers, claims)
+					.apply_prompt_guard(backend_info, &mut req, http_headers, claims, span_writer)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
@@ -636,13 +645,18 @@ impl AIProvider {
 
 	pub async fn process_response(
 		&self,
-		client: PolicyClient,
+		ctx: ProcessResponseCtx,
 		req: LLMRequest,
-		rate_limit: LLMResponsePolicies,
-		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		let ProcessResponseCtx {
+			client,
+			rate_limit,
+			log,
+			include_completion_in_log,
+			span_writer,
+		} = ctx;
+
 		if req.streaming {
 			return self
 				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
@@ -695,6 +709,7 @@ impl AIProvider {
 				resp.as_mut(),
 				&parts.headers,
 				&rate_limit.prompt_guard,
+				span_writer,
 			)
 			.await
 			.map_err(|e| {

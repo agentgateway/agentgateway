@@ -142,9 +142,13 @@ impl BackendPolicies {
 		}
 	}
 	/// build the inference routing configuration. This may be a NO-OP config.
-	pub fn build_inference(&self, client: PolicyClient) -> ext_proc::InferencePoolRouter {
+	pub fn build_inference(
+		&self,
+		client: PolicyClient,
+		span_writer: Option<crate::telemetry::log::SpanWriter>,
+	) -> ext_proc::InferencePoolRouter {
 		if let Some(inference) = &self.inference_routing {
-			inference.build(client)
+			inference.build(client, span_writer)
 		} else {
 			ext_proc::InferencePoolRouter::default()
 		}

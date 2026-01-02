@@ -18,6 +18,7 @@ use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::{mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
 
@@ -25,6 +26,7 @@ use crate::*;
 pub struct IncomingRequestContext {
 	headers: http::HeaderMap,
 	claims: Option<Claims>,
+	span_writer: Option<SpanWriter>,
 }
 
 impl IncomingRequestContext {
@@ -33,14 +35,20 @@ impl IncomingRequestContext {
 		Self {
 			headers: http::HeaderMap::new(),
 			claims: None,
+			span_writer: None,
 		}
 	}
 	pub fn new(parts: ::http::request::Parts) -> Self {
 		let claims = parts.extensions.get::<Claims>().cloned();
+		let span_writer = parts.extensions.get::<SpanWriter>().cloned();
 		Self {
 			headers: parts.headers,
 			claims,
+			span_writer,
 		}
+	}
+	pub fn span_writer(&self) -> Option<SpanWriter> {
+		self.span_writer.clone()
 	}
 	pub fn apply(&self, req: &mut http::Request) {
 		for (k, v) in &self.headers {

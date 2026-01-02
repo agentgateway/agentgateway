@@ -91,7 +91,11 @@ impl ClientCore {
 
 		ctx.apply(&mut req);
 
-		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
+		let resp = self
+			.http_client
+			.call(req, ctx.span_writer())
+			.await
+			.map_err(ClientError::new)?;
 
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));
@@ -114,7 +118,11 @@ impl ClientCore {
 
 		ctx.apply(&mut req);
 
-		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
+		let resp = self
+			.http_client
+			.call(req, ctx.span_writer())
+			.await
+			.map_err(ClientError::new)?;
 
 		if resp.status() == http::StatusCode::ACCEPTED {
 			return Err(ClientError::new(anyhow!("expected an SSE stream")));
