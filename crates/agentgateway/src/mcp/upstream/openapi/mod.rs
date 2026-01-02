@@ -7,7 +7,7 @@ use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_TYPE};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
-use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
+use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool, ToolAnnotations};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -362,9 +362,50 @@ pub(crate) fn parse_openapi_schema(
 									"final schema is not an object".to_string(),
 								))?
 								.clone();
+
+							// Derive tool annotations from HTTP method
+							let annotations = Some(match method.to_uppercase().as_str() {
+								"GET" | "HEAD" | "OPTIONS" => {
+									ToolAnnotations::default().read_only(true)
+								},
+								"DELETE" => ToolAnnotations::default()
+									.read_only(false)
+									.destructive(true),
+								"PUT" => ToolAnnotations::default()
+									.read_only(false)
+									.destructive(true)
+									.idempotent(true),
+								"PATCH" => ToolAnnotations::default()
+									.read_only(false)
+									.destructive(true),
+								// POST and other methods: creates new resources (additive)
+								_ => ToolAnnotations::default()
+									.read_only(false)
+									.destructive(false),
+							});
+
+							// Generate human-readable title from operation_id
+							// e.g., "get_users" -> "Get Users"
+							let title = Some(
+								name.replace(['_', '-'], " ")
+									.split_whitespace()
+									.map(|word| {
+										let mut chars = word.chars();
+										match chars.next() {
+											Some(c) => {
+												c.to_uppercase().collect::<String>()
+													+ chars.as_str()
+											},
+											None => String::new(),
+										}
+									})
+									.collect::<Vec<_>>()
+									.join(" "),
+							);
+
 							let tool = Tool {
 								meta: None,
-								annotations: None,
+								annotations,
 								name: Cow::Owned(name.clone()),
 								description: Some(Cow::Owned(
 									op.description
@@ -376,7 +417,7 @@ pub(crate) fn parse_openapi_schema(
 								// TODO: support output_schema
 								output_schema: None,
 								icons: None,
-								title: None,
+								title,
 							};
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
