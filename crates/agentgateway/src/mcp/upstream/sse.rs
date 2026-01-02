@@ -1,23 +1,23 @@
 use ::http::Uri;
+use ::http::header::ACCEPT;
 use ::http::header::CONTENT_TYPE;
 use anyhow::anyhow;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
-use reqwest::header::ACCEPT;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
-use rmcp::transport::streamable_http_client::{SseError, StreamableHttpPostResponse};
 use sse_stream::{Sse, SseStream};
 
 use crate::mcp::ClientError;
 use crate::mcp::mergestream::Messages;
+use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::upstream::stdio::Process;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::*;
 
-type BoxedSseStream = BoxStream<'static, Result<Sse, SseError>>;
+type BoxedSseStream = BoxStream<'static, Result<Sse, sse_stream::Error>>;
 
 #[derive(Debug, Clone)]
 struct ClientCore {

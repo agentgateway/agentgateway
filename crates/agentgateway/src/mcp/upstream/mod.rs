@@ -9,13 +9,13 @@ use std::io;
 pub(crate) use client::McpHttpClient;
 use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use thiserror::Error;
 use tokio::process::Command;
 
 use crate::http::jwt::Claims;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
+use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;

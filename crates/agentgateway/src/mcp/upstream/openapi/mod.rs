@@ -2,11 +2,11 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use ::http::header::{HeaderName, HeaderValue};
 use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_TYPE};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
-use reqwest::header::{HeaderName, HeaderValue};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

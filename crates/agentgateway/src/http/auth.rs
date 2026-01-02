@@ -383,7 +383,6 @@ mod azure {
 					azure_core::credentials::Secret::new(client_secret.expose_secret().to_string()),
 					Some(azure_identity::ClientSecretCredentialOptions {
 						client_options,
-						..Default::default()
 					}),
 				)?),
 				AzureAuthCredentialSource::ManagedIdentity {

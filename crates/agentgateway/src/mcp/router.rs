@@ -10,7 +10,6 @@ use axum_extra::headers::authorization::Bearer;
 use bytes::Bytes;
 use http::Method;
 use http::uri::PathAndQuery;
-use rmcp::transport::StreamableHttpServerConfig;
 use tracing::{debug, warn};
 
 use crate::cel::ContextBuilder;
@@ -21,7 +20,7 @@ use crate::json::from_body_with_limit;
 use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
-use crate::mcp::streamablehttp::StreamableHttpService;
+use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
 use crate::mcp::{MCPInfo, McpAuthorizationSet};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
@@ -274,7 +273,6 @@ impl App {
 					sm,
 					StreamableHttpServerConfig {
 						stateful_mode: backend.stateful,
-						..Default::default()
 					},
 				);
 				streamable.handle(req).await

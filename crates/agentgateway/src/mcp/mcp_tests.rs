@@ -27,7 +27,7 @@ async fn sse_to_stream_single() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
 	let client = mcp_sse_client(io).await;
-	standard_assertions(client).await;
+	standard_sse_assertions(client).await;
 }
 
 #[tokio::test]
@@ -43,7 +43,7 @@ async fn sse_to_sse_single() {
 	let mock = mock_sse_server().await;
 	let (_bind, io) = setup_proxy(&mock, true, true).await;
 	let client = mcp_sse_client(io).await;
-	standard_assertions(client).await;
+	standard_sse_assertions(client).await;
 }
 
 #[tokio::test]
@@ -184,6 +184,29 @@ async fn standard_assertions(client: RunningService<RoleClient, InitializeReques
 	);
 }
 
+async fn standard_sse_assertions(client: LegacyService) {
+	let tools = client.list_tools(None).await.unwrap();
+	let t = tools
+		.tools
+		.into_iter()
+		.map(|t| t.name.to_string())
+		.sorted()
+		.take(2)
+		.collect_vec();
+	assert_eq!(t, vec!["decrement".to_string(), "echo".to_string()]);
+	let ctr = client
+		.call_tool(legacy_rmcp::model::CallToolRequestParam {
+			name: "echo".into(),
+			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
+		})
+		.await
+		.unwrap();
+	assert_eq!(
+		&ctr.content[0].raw.as_text().unwrap().text,
+		r#"{"hi":"world"}"#
+	);
+}
+
 async fn setup_proxy(
 	mock: &MockServer,
 	stateful: bool,
@@ -235,10 +258,15 @@ pub async fn mcp_streamable_client(
 		.unwrap()
 }
 
-pub async fn mcp_sse_client(s: SocketAddr) -> RunningService<RoleClient, InitializeRequestParam> {
-	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
-	use rmcp::transport::SseClientTransport;
+type LegacyService = legacy_rmcp::service::RunningService<
+	legacy_rmcp::RoleClient,
+	legacy_rmcp::model::InitializeRequestParam,
+>;
+
+pub async fn mcp_sse_client(s: SocketAddr) -> LegacyService {
+	use legacy_rmcp::ServiceExt;
+	use legacy_rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use legacy_rmcp::transport::SseClientTransport;
 	let transport = SseClientTransport::<reqwest::Client>::start(format!("http://{s}/sse"))
 		.await
 		.unwrap();
@@ -274,6 +302,7 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 		StreamableHttpServerConfig {
 			sse_keep_alive: None,
 			stateful_mode: stateful,
+			cancellation_token: Default::default(),
 		},
 	);
 
@@ -291,8 +320,8 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 }
 
 async fn mock_sse_server() -> MockServer {
+	use legacy_rmcp::transport::sse_server::{SseServer, SseServerConfig};
 	use mockserver::Counter;
-	use rmcp::transport::sse_server::{SseServer, SseServerConfig};
 	use tokio_util::sync::CancellationToken;
 
 	agent_core::telemetry::testing::setup_test_logging();
@@ -326,6 +355,7 @@ mod mockserver {
 	use std::sync::Arc;
 
 	use http::request::Parts;
+	use legacy_rmcp::handler::server::router::tool::ToolRouter as LegacyToolRouter;
 	use rmcp::handler::server::router::prompt::PromptRouter;
 	use rmcp::handler::server::router::tool::ToolRouter;
 	use rmcp::handler::server::wrapper::Parameters;
@@ -363,7 +393,21 @@ mod mockserver {
 	pub struct Counter {
 		counter: Arc<Mutex<i32>>,
 		tool_router: ToolRouter<Counter>,
+		legacy_tool_router: LegacyToolRouter<Counter>,
 		prompt_router: PromptRouter<Counter>,
+	}
+
+	fn map_to_legacy<F>(
+		attr: rmcp::model::Tool,
+		f: F,
+	) -> (
+		legacy_rmcp::model::Tool,
+		impl Fn(&Counter) -> Result<legacy_rmcp::model::CallToolResult, legacy_rmcp::ErrorData>,
+	)
+	where
+		F: Fn(&Counter) -> Result<CallToolResult, McpError>,
+	{
+		(todo!(), |_| todo!())
 	}
 
 	#[tool_router]
@@ -373,8 +417,16 @@ mod mockserver {
 			Self {
 				counter: Arc::new(Mutex::new(0)),
 				tool_router: Self::tool_router(),
+				legacy_tool_router: Self::legacy_tool_router(),
 				prompt_router: Self::prompt_router(),
 			}
+		}
+		fn legacy_tool_router() -> LegacyToolRouter<Self> {
+			LegacyToolRouter::<Self>::new()
+				.with_route(map_to_legacy(Self::increment_tool_attr(), Self::increment))
+				.with_route(map_to_legacy(Self::decrement_tool_attr(), Self::decrement))
+				.with_route(map_to_legacy(Self::get_value_tool_attr(), Self::get_value))
+				.with_route(map_to_legacy(Self::say_hello_tool_attr(), Self::say_hello))
 		}
 
 		fn _create_resource_text(&self, uri: &str, name: &str) -> Resource {
@@ -524,6 +576,7 @@ mod mockserver {
 					self._create_resource_text("memo://insights", "memo-name"),
 				],
 				next_cursor: None,
+				meta: None,
 			})
 		}
 
@@ -562,6 +615,7 @@ mod mockserver {
 			Ok(ListResourceTemplatesResult {
 				next_cursor: None,
 				resource_templates: Vec::new(),
+				meta: None,
 			})
 		}
 
@@ -571,6 +625,55 @@ mod mockserver {
 			_: RequestContext<RoleServer>,
 		) -> Result<InitializeResult, McpError> {
 			Ok(self.get_info())
+		}
+	}
+
+	mod legacy {
+		use legacy_rmcp::model::*;
+
+		use legacy_rmcp::service::RequestContext;
+		use legacy_rmcp::{
+			ErrorData as McpError, RoleServer, ServerHandler, prompt, prompt_handler, prompt_router,
+			schemars, tool, tool_handler, tool_router,
+		};
+		impl legacy_rmcp::ServerHandler for super::Counter {
+			fn get_info(&self) -> ServerInfo {
+				ServerInfo {
+					protocol_version: ProtocolVersion::V_2025_06_18,
+					capabilities: ServerCapabilities::builder()
+						.enable_prompts()
+						.enable_resources()
+						.enable_tools()
+						.build(),
+					server_info: Implementation::from_build_env(),
+					instructions: Some("This server provides counter tools and prompts.".to_string()),
+				}
+			}
+			async fn call_tool(
+				&self,
+				request: CallToolRequestParam,
+				context: RequestContext<RoleServer>,
+			) -> Result<CallToolResult, ErrorData> {
+				let tcc = legacy_rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+				self.legacy_tool_router.call(tcc).await
+			}
+			async fn list_tools(
+				&self,
+				_request: Option<PaginatedRequestParam>,
+				_context: RequestContext<RoleServer>,
+			) -> Result<ListToolsResult, ErrorData> {
+				Ok(ListToolsResult::with_all_items(
+					self.legacy_tool_router.list_all(),
+				))
+			}
+
+			async fn initialize(
+				&self,
+				_request: InitializeRequestParam,
+				_: RequestContext<RoleServer>,
+			) -> Result<InitializeResult, McpError> {
+				Ok(self.get_info())
+			}
 		}
 	}
 }

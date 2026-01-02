@@ -1,20 +1,20 @@
 use ::http::Uri;
+use ::http::header::ACCEPT;
 use ::http::header::CONTENT_TYPE;
 use anyhow::anyhow;
 use futures::StreamExt;
 use headers::HeaderMapExt;
-use reqwest::header::ACCEPT;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::SseStream;
 
 use crate::http::Request;
 use crate::mcp::ClientError;
+use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::*;
 

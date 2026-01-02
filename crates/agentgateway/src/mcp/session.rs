@@ -14,14 +14,13 @@ use rmcp::model::{
 	Implementation, JsonRpcError, ProtocolVersion, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
-use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::http::Response;
 use crate::mcp::handler::Relay;
 use crate::mcp::mergestream::Messages;
+use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPOperation, rbac};
 use crate::{mcp, *};
@@ -372,6 +371,10 @@ impl Session {
 #[derive(Default, Debug)]
 pub struct SessionManager {
 	sessions: RwLock<HashMap<String, Session>>,
+}
+
+fn session_id() -> Arc<str> {
+	uuid::Uuid::new_v4().to_string().into()
 }
 
 impl SessionManager {

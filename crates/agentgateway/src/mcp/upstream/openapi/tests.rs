@@ -53,6 +53,7 @@ async fn setup() -> (MockServer, Handler) {
 		description: Some(Cow::Borrowed("Get user details")), // Added description
 		icons: None,
 		title: None,
+		meta: None,
 		input_schema: Arc::new(
 			json!({ // Define a simple schema for testing
 					"type": "object",
@@ -96,6 +97,7 @@ async fn setup() -> (MockServer, Handler) {
 		description: Some(Cow::Borrowed("Create a new user")),
 		icons: None,
 		title: None,
+		meta: None,
 		input_schema: Arc::new(
 			json!({
 				"type": "object",

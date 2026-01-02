@@ -127,19 +127,15 @@ prost-wkt-build = "0.7.0"
 rand = "0.9"
 rcgen = { version = "0.14", features = ["pem"] }
 regex = "1.11"
-reqwest = { version = "0.13", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "http2",
     "charset",
-    "rustls",
+    "macos-system-configuration",
+    "rustls-tls",
 ] }
 rmcp = { version = "0.12", features = [
     "client",
     "transport-child-process",
-    "transport-streamable-http-client-reqwest",
-    "transport-streamable-http-server",
-    "transport-streamable-http-client",
-    "reqwest",
-    "auth",
 ] }
 rustc_version = "0.4"
 rustls = { version = "0.23", features = ["tls12", "ring"] }

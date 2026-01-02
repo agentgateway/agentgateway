@@ -23,6 +23,7 @@ use crate::http::jwt::Claims;
 use crate::mcp::mergestream::MergeFn;
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
+use crate::mcp::streamablehttp::ServerSseMessage;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
@@ -420,7 +421,6 @@ fn messages_to_response(
 ) -> Result<Response, UpstreamError> {
 	use futures_util::StreamExt;
 	use rmcp::model::ServerJsonRpcMessage;
-	use rmcp::transport::common::server_side_http::ServerSseMessage;
 	let stream = stream.map(move |rpc| {
 		let r = match rpc {
 			Ok(rpc) => rpc,

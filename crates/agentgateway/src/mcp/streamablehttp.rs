@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use ::http::StatusCode;
-use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
-use rmcp::transport::StreamableHttpServerConfig;
+use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ServerJsonRpcMessage};
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
@@ -12,6 +11,36 @@ use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
 use crate::*;
 
+#[derive(Debug, Clone)]
+pub struct StreamableHttpServerConfig {
+	/// If true, the server will create a session for each request and keep it alive.
+	pub stateful_mode: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ServerSseMessage {
+	pub event_id: Option<String>,
+	pub message: Arc<ServerJsonRpcMessage>,
+}
+
+type BoxedSseStream =
+	futures::stream::BoxStream<'static, Result<sse_stream::Sse, sse_stream::Error>>;
+#[allow(clippy::large_enum_variant)]
+pub enum StreamableHttpPostResponse {
+	Accepted,
+	Json(ServerJsonRpcMessage, Option<String>),
+	Sse(BoxedSseStream, Option<String>),
+}
+
+impl std::fmt::Debug for StreamableHttpPostResponse {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Accepted => write!(f, "Accepted"),
+			Self::Json(arg0, arg1) => f.debug_tuple("Json").field(arg0).field(arg1).finish(),
+			Self::Sse(_, arg1) => f.debug_tuple("Sse").field(arg1).finish(),
+		}
+	}
+}
 pub struct StreamableHttpService {
 	config: StreamableHttpServerConfig,
 	session_manager: Arc<SessionManager>,
