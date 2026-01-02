@@ -906,7 +906,10 @@ impl AIProvider {
 	fn process_error(&self, req: &LLMRequest, bytes: &Bytes) -> Result<Bytes, AIError> {
 		match (self, req.input_format) {
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::AzureOpenAI(_)
+				| AIProvider::Vertex(_),
 				InputFormat::Completions | InputFormat::Responses,
 			) => {
 				// Passthrough; nothing needed
