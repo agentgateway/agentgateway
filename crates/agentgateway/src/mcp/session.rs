@@ -155,6 +155,24 @@ impl Session {
 				// Forward response as-is
 				return *resp;
 			}
+			// Handle authorization errors specially - return "Unknown" error
+			// to avoid leaking information about resource existence
+			if let UpstreamError::Authorization {
+				resource_type,
+				resource_name,
+			} = &e
+				&& let Some(ref req_id) = req_id
+				&& let Ok(body) = serde_json::to_string(&JsonRpcError {
+					jsonrpc: Default::default(),
+					id: req_id.clone(),
+					error: ErrorData {
+						code: ErrorCode::INVALID_PARAMS,
+						message: format!("Unknown {resource_type}: {resource_name}").into(),
+						data: None,
+					},
+				}) {
+				return http_json_error(StatusCode::OK, body);
+			}
 			let err = if let Some(req_id) = req_id {
 				serde_json::to_string(&JsonRpcError {
 					jsonrpc: Default::default(),
@@ -277,7 +295,10 @@ impl Session {
 							)),
 							cel.as_ref(),
 						) {
-							return Err(UpstreamError::Authorization);
+							return Err(UpstreamError::Authorization {
+								resource_type: "tool".to_string(),
+								resource_name: name.to_string(),
+							});
 						}
 
 						let tn = tool.to_string();
@@ -299,7 +320,10 @@ impl Session {
 							)),
 							cel.as_ref(),
 						) {
-							return Err(UpstreamError::Authorization);
+							return Err(UpstreamError::Authorization {
+								resource_type: "prompt".to_string(),
+								resource_name: name.to_string(),
+							});
 						}
 						gpr.params.name = prompt.to_string();
 						self.relay.send_single(r, ctx, service_name).await
@@ -319,7 +343,10 @@ impl Session {
 								)),
 								cel.as_ref(),
 							) {
-								return Err(UpstreamError::Authorization);
+								return Err(UpstreamError::Authorization {
+									resource_type: "resource".to_string(),
+									resource_name: uri.to_string(),
+								});
 							}
 							self.relay.send_single_without_multiplexing(r, ctx).await
 						} else {
@@ -461,6 +488,14 @@ impl Drop for SessionDropper {
 fn http_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
 	::http::Response::builder()
 		.status(status)
+		.body(body.into())
+		.expect("valid response")
+}
+
+fn http_json_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
+	::http::Response::builder()
+		.status(status)
+		.header(http::header::CONTENT_TYPE, "application/json")
 		.body(body.into())
 		.expect("valid response")
 }

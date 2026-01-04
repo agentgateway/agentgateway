@@ -60,8 +60,11 @@ impl IncomingRequestContext {
 
 #[derive(Debug, Error)]
 pub enum UpstreamError {
-	#[error("unauthorized tool call")]
-	Authorization,
+	#[error("unknown {resource_type}: {resource_name}")]
+	Authorization {
+		resource_type: String,
+		resource_name: String,
+	},
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]

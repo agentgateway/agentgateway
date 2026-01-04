@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 
 use crate::http::auth::BackendAuth;
+use crate::http::authorization::{PolicySet, RuleSet};
+use crate::mcp::McpAuthorization;
 use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
@@ -159,6 +161,177 @@ async fn stream_to_stream_single_tls() {
 		&ctr.content[0].raw.as_text().unwrap().text,
 		r#"Bearer my-key"#
 	);
+}
+
+/// Test that calling a tool denied by MCP authorization policy returns proper JSON-RPC error
+/// with INVALID_PARAMS error code (-32602) and message "Unknown tool: {tool_name}"
+#[tokio::test]
+async fn authorization_denied_returns_unknown_tool_error() {
+	let mock = mock_streamable_http_server(true).await;
+
+	// Create an MCP authorization policy that denies all tools
+	// The deny rule matches all tools; no allow rules means everything is denied
+	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],                                                       // no allow rules
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendPolicy::McpAuthorization(deny_all_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	// Attempt to call a tool - should fail with "Unknown tool" error
+	let result = client
+		.call_tool(rmcp::model::CallToolRequestParam {
+			name: "echo".into(),
+			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
+		})
+		.await;
+
+	// The call should fail
+	assert!(
+		result.is_err(),
+		"Expected tool call to fail due to authorization denial"
+	);
+
+	let err = result.unwrap_err();
+
+	// Verify error code is INVALID_PARAMS (-32602) and message format
+	match &err {
+		rmcp::ServiceError::McpError(mcp_error) => {
+			assert_eq!(
+				mcp_error.code.0, -32602,
+				"Expected INVALID_PARAMS error code (-32602), got: {}",
+				mcp_error.code.0
+			);
+			assert_eq!(
+				mcp_error.message.as_ref(),
+				"Unknown tool: echo",
+				"Expected error message 'Unknown tool: echo', got: {}",
+				mcp_error.message
+			);
+		},
+		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
+	}
+}
+
+/// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
+/// with INVALID_PARAMS error code (-32602) and message "Unknown prompt: {prompt_name}"
+#[tokio::test]
+async fn authorization_denied_returns_unknown_prompt_error() {
+	let mock = mock_streamable_http_server(true).await;
+
+	// Create an MCP authorization policy that denies all prompts
+	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],                                                       // no allow rules
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendPolicy::McpAuthorization(deny_all_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	// Attempt to get a prompt - should fail with "Unknown prompt" error
+	let result = client
+		.get_prompt(rmcp::model::GetPromptRequestParam {
+			name: "example_prompt".into(),
+			arguments: None,
+		})
+		.await;
+
+	// The call should fail
+	assert!(
+		result.is_err(),
+		"Expected get_prompt call to fail due to authorization denial"
+	);
+
+	let err = result.unwrap_err();
+
+	// Verify error code is INVALID_PARAMS (-32602) and message format
+	match &err {
+		rmcp::ServiceError::McpError(mcp_error) => {
+			assert_eq!(
+				mcp_error.code.0, -32602,
+				"Expected INVALID_PARAMS error code (-32602), got: {}",
+				mcp_error.code.0
+			);
+			assert_eq!(
+				mcp_error.message.as_ref(),
+				"Unknown prompt: example_prompt",
+				"Expected error message 'Unknown prompt: example_prompt', got: {}",
+				mcp_error.message
+			);
+		},
+		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
+	}
+}
+
+/// Test that reading a resource denied by MCP authorization policy returns proper JSON-RPC error
+/// with INVALID_PARAMS error code (-32602) and message "Unknown resource: {resource_uri}"
+#[tokio::test]
+async fn authorization_denied_returns_unknown_resource_error() {
+	let mock = mock_streamable_http_server(true).await;
+
+	// Create an MCP authorization policy that denies all resources
+	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],                                                       // no allow rules
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendPolicy::McpAuthorization(deny_all_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	// Attempt to read a resource - should fail with "Unknown resource" error
+	let result = client
+		.read_resource(rmcp::model::ReadResourceRequestParam {
+			uri: "memo://insights".into(),
+		})
+		.await;
+
+	// The call should fail
+	assert!(
+		result.is_err(),
+		"Expected read_resource call to fail due to authorization denial"
+	);
+
+	let err = result.unwrap_err();
+
+	// Verify error code is INVALID_PARAMS (-32602) and message format
+	match &err {
+		rmcp::ServiceError::McpError(mcp_error) => {
+			assert_eq!(
+				mcp_error.code.0, -32602,
+				"Expected INVALID_PARAMS error code (-32602), got: {}",
+				mcp_error.code.0
+			);
+			assert_eq!(
+				mcp_error.message.as_ref(),
+				"Unknown resource: memo://insights",
+				"Expected error message 'Unknown resource: memo://insights', got: {}",
+				mcp_error.message
+			);
+		},
+		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
+	}
 }
 
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParam>) {
