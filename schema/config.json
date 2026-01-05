@@ -2659,6 +2659,11 @@
                                       "const": "embeddings"
                                     },
                                     {
+                                      "description": "OpenAI /realtime (websockets)",
+                                      "type": "string",
+                                      "const": "realtime"
+                                    },
+                                    {
                                       "description": "Anthropic /v1/messages/count_tokens",
                                       "type": "string",
                                       "const": "anthropicTokenCount"
@@ -4889,6 +4894,11 @@
                                             "const": "embeddings"
                                           },
                                           {
+                                            "description": "OpenAI /realtime (websockets)",
+                                            "type": "string",
+                                            "const": "realtime"
+                                          },
+                                          {
                                             "description": "Anthropic /v1/messages/count_tokens",
                                             "type": "string",
                                             "const": "anthropicTokenCount"
@@ -6696,6 +6706,11 @@
                                                         "const": "embeddings"
                                                       },
                                                       {
+                                                        "description": "OpenAI /realtime (websockets)",
+                                                        "type": "string",
+                                                        "const": "realtime"
+                                                      },
+                                                      {
                                                         "description": "Anthropic /v1/messages/count_tokens",
                                                         "type": "string",
                                                         "const": "anthropicTokenCount"
@@ -8251,6 +8266,11 @@
                                                                     "description": "OpenAI /embeddings",
                                                                     "type": "string",
                                                                     "const": "embeddings"
+                                                                  },
+                                                                  {
+                                                                    "description": "OpenAI /realtime (websockets)",
+                                                                    "type": "string",
+                                                                    "const": "realtime"
                                                                   },
                                                                   {
                                                                     "description": "Anthropic /v1/messages/count_tokens",
@@ -12032,6 +12052,11 @@
                           "const": "embeddings"
                         },
                         {
+                          "description": "OpenAI /realtime (websockets)",
+                          "type": "string",
+                          "const": "realtime"
+                        },
+                        {
                           "description": "Anthropic /v1/messages/count_tokens",
                           "type": "string",
                           "const": "anthropicTokenCount"
@@ -14277,6 +14302,11 @@
                           "const": "embeddings"
                         },
                         {
+                          "description": "OpenAI /realtime (websockets)",
+                          "type": "string",
+                          "const": "realtime"
+                        },
+                        {
                           "description": "Anthropic /v1/messages/count_tokens",
                           "type": "string",
                           "const": "anthropicTokenCount"
@@ -14851,6 +14881,11 @@
                 "description": "OpenAI /embeddings",
                 "type": "string",
                 "const": "embeddings"
+              },
+              {
+                "description": "OpenAI /realtime (websockets)",
+                "type": "string",
+                "const": "realtime"
               },
               {
                 "description": "Anthropic /v1/messages/count_tokens",

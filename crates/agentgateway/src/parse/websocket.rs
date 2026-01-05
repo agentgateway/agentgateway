@@ -94,14 +94,13 @@ impl<IO: AsyncRead + Unpin + 'static> AsyncRead for Parser<IO> {
 	) -> Poll<std::io::Result<()>> {
 		let orig = buf.filled().len();
 		ready!(Pin::new(&mut self.inner).poll_read(cx, buf)?);
-		let n = buf.filled().len() - orig;
-		if n == 0 {
+		if buf.filled().len() - orig == 0 {
 			// EOF
 			return Poll::Ready(Ok(()));
 		}
 		let mut processed_offset = 0;
 		loop {
-			let unprocessed_part_of_buf = &buf.filled()[processed_offset..n];
+			let unprocessed_part_of_buf = &buf.filled()[processed_offset..buf.filled().len()];
 			// Websocket logic needs owned copy to apply the mask. However, we need to keep the untouched stuff
 			// so we are not modifying the response.
 			let Ok(ret) = self.decoder.add_data(&mut unprocessed_part_of_buf.to_vec());
@@ -132,7 +131,7 @@ impl<IO: AsyncRead + Unpin + 'static> AsyncRead for Parser<IO> {
 	}
 }
 
-pub async fn parser2<IO>(
+pub async fn parser<IO>(
 	body: IO,
 	log: AsyncLog<LLMInfo>,
 ) -> impl AsyncRead + AsyncWrite + Unpin + 'static

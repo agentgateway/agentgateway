@@ -935,11 +935,11 @@ async fn handle_upgrade(
 		};
 		let mut server = TokioIo::new(response_upgraded);
 		if let Some(log) = log.as_ref()
-			&& let Some(llm_req) = dbg!(log.llm_request.as_ref())
+			&& let Some(llm_req) = log.llm_request.as_ref()
 			&& llm_req.input_format == InputFormat::Realtime
 		{
 			let llm = log.llm_response.clone();
-			let mut server = parse::websocket::parser2(server, llm).await;
+			let mut server = parse::websocket::parser(server, llm).await;
 			let _ = agent_core::copy::copy_bidirectional(
 				&mut TokioIo::new(req),
 				&mut server,
