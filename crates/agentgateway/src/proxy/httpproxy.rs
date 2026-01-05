@@ -275,6 +275,9 @@ async fn apply_gateway_policies(
 	if let Some(j) = &policies.transformation {
 		j.apply_request(req);
 	}
+	if let Some(v) =  req.headers().get("x-gateway-model-name").cloned() {
+		req.extensions_mut().insert(llm::OverrideModel(v.to_str().unwrap().to_string()));
+	}
 
 	Ok(())
 }

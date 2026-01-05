@@ -129,6 +129,35 @@ pub mod serde_dur_option {
 	}
 }
 
+pub mod serde_base64 {
+	use base64::Engine;
+	use base64::prelude::BASE64_STANDARD;
+	use serde::{Deserialize, Deserializer, Serializer};
+
+	pub fn serialize<T, S>(key: &T, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		T: AsRef<[u8]>,
+		S: Serializer,
+	{
+		serializer.serialize_str(&BASE64_STANDARD.encode(key.as_ref()))
+	}
+
+	pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+	where
+		D: Deserializer<'de>,
+		T: From<Vec<u8>>,
+	{
+		use serde::de::Error;
+		String::deserialize(deserializer)
+			.and_then(|string| {
+				BASE64_STANDARD
+					.decode(&string)
+					.map_err(|err| Error::custom(err.to_string()))
+			})
+			.map(|bytes| T::from(bytes))
+	}
+}
+
 pub fn ser_display_option<S: Serializer, T: Display>(
 	t: &Option<T>,
 	serializer: S,

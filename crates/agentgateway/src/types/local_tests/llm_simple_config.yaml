@@ -1,0 +1,40 @@
+frontendPolicies:
+  accessLog:
+    add:
+      user: request.headers["user-agent"]
+
+llm:
+  policies:
+    jwtAuth:
+      issuer: agentgateway.dev
+      audiences: [test.agentgateway.dev]
+      jwks: '{"keys":[]}'
+    authorization:
+      rules:
+      - 'jwt.email.endsWith("@example.com")'
+  models:
+  - name: claude-3-haiku
+    provider: anthropic
+    params:
+      model: claude-3-5-haiku-20241022
+      apiKey: "sk-123"
+    matches:
+    - headers:
+      - name: "X-Org"
+        value:
+          exact: "engineering"
+  - name: gemini-0.5-pro
+    provider: vertex
+    params:
+      model: claude-3-5-haiku-20241022
+      apiKey: "sk-123"
+      vertexRegion: global
+      vertexProject: my-vertex-project
+  - name: gpt-7-max
+    provider: azureOpenAI
+    params:
+      model: gpt-3.5-turbo
+      azureHost: my-azure-openai-endpoint.openai.azure.com
+      azureApiVersion: v1
+  - name: gpt-3.5-turbo
+    provider: openAI

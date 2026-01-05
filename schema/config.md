@@ -2455,3 +2455,1438 @@
 |`backends[].policies.tcp.connectTimeout`||
 |`backends[].policies.tcp.connectTimeout.secs`||
 |`backends[].policies.tcp.connectTimeout.nanos`||
+|`llm`||
+|`llm.models`|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overriden<br>on a per-model basis.|
+|`llm.models[].name`|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
+|`llm.models[].params`|params customizes parameters for the outgoing request|
+|`llm.models[].params.model`|The model to send to the provider.<br>If unset, the same model will be used from the request.|
+|`llm.models[].params.apiKey`|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
+|`llm.models[].params.awsRegion`||
+|`llm.models[].params.vertexRegion`||
+|`llm.models[].params.vertexProject`||
+|`llm.models[].params.azureHost`|For Azure: the host of the deployment|
+|`llm.models[].params.azureApiVersion`|For Azure: the API version to sue|
+|`llm.models[].provider`|provider of the LLM we are connecting too|
+|`llm.models[].defaults`|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
+|`llm.models[].overrides`|overrides allows setting values for the request, overriding any existing values|
+|`llm.models[].requestHeaders`|requestHeaders modifies headers in requests to the LLM provider.|
+|`llm.models[].requestHeaders.add`||
+|`llm.models[].requestHeaders.set`||
+|`llm.models[].requestHeaders.remove`||
+|`llm.models[].guardrails`|guardrails to apply to the request or response|
+|`llm.models[].guardrails.request`||
+|`llm.models[].guardrails.request[].(1)regex`||
+|`llm.models[].guardrails.request[].(1)regex.action`||
+|`llm.models[].guardrails.request[].(1)regex.rules`||
+|`llm.models[].guardrails.request[].(1)regex.rules[].(any)builtin`||
+|`llm.models[].guardrails.request[].(1)regex.rules[].(any)pattern`||
+|`llm.models[].guardrails.request[].(1)webhook`||
+|`llm.models[].guardrails.request[].(1)webhook.target`||
+|`llm.models[].guardrails.request[].(1)webhook.target.(1)service`||
+|`llm.models[].guardrails.request[].(1)webhook.target.(1)service.name`||
+|`llm.models[].guardrails.request[].(1)webhook.target.(1)service.name.namespace`||
+|`llm.models[].guardrails.request[].(1)webhook.target.(1)service.name.hostname`||
+|`llm.models[].guardrails.request[].(1)webhook.target.(1)service.port`||
+|`llm.models[].guardrails.request[].(1)webhook.target.(1)host`|Hostname or IP address|
+|`llm.models[].guardrails.request[].(1)webhook.target.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].(1)webhook.forwardHeaderMatches`||
+|`llm.models[].guardrails.request[].(1)webhook.forwardHeaderMatches[].name`||
+|`llm.models[].guardrails.request[].(1)webhook.forwardHeaderMatches[].value`||
+|`llm.models[].guardrails.request[].(1)webhook.forwardHeaderMatches[].value.(1)exact`||
+|`llm.models[].guardrails.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
+|`llm.models[].guardrails.request[].(1)openAIModeration`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestHeaderModifier.add`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestHeaderModifier.set`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestHeaderModifier.remove`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.responseHeaderModifier.add`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.responseHeaderModifier.set`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.responseHeaderModifier.remove`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.scheme`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.authority`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)full`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)host`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)port`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.path`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.mcpAuthorization.rules`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.promptGuard`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.defaults`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.overrides`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts.append`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts.append[].role`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts.append[].content`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts.prepend`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts.prepend[].role`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts.prepend[].content`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.modelAliases`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.promptCaching`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.promptCaching.cacheSystem`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.promptCaching.cacheMessages`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.promptCaching.cacheTools`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.promptCaching.minTokens`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.routes`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.cert`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.key`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.root`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.hostname`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.insecure`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.insecureHost`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.alpn`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.subjectAltNames`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth`|Authenticate to the backend.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)passthrough`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key.(any)file`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)region`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.http`|Specify HTTP settings for the backend|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.http.version`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.http.requestTimeout`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp`|Specify TCP settings for the backend|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp.keepalives`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp.keepalives.enabled`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp.keepalives.time`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp.keepalives.interval`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp.keepalives.retries`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp.connectTimeout`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp.connectTimeout.secs`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.tcp.connectTimeout.nanos`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.region`|AWS region where the guardrail is deployed|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies`|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestHeaderModifier.add`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestHeaderModifier.set`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestHeaderModifier.remove`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.responseHeaderModifier.add`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.responseHeaderModifier.set`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.responseHeaderModifier.remove`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.scheme`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.authority`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)full`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)host`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)port`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.path`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.mcpAuthorization.rules`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.promptGuard`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.defaults`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.overrides`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts.append`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts.append[].role`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts.append[].content`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts.prepend`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts.prepend[].role`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts.prepend[].content`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.modelAliases`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.promptCaching`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.promptCaching.cacheSystem`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.promptCaching.cacheMessages`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.promptCaching.cacheTools`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.promptCaching.minTokens`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.routes`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.root`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.hostname`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.insecure`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.insecureHost`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.alpn`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.subjectAltNames`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth`|Authenticate to the backend.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)passthrough`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)key`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)key.(any)file`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)region`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.http.version`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.http.requestTimeout`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp`|Specify TCP settings for the backend|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp.keepalives`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp.keepalives.enabled`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp.keepalives.time`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp.keepalives.interval`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp.keepalives.retries`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp.connectTimeout`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp.connectTimeout.secs`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.tcp.connectTimeout.nanos`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.projectId`|The GCP project ID|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.location`|The GCP region (default: us-central1)|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies`|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestHeaderModifier.add`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestHeaderModifier.set`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestHeaderModifier.remove`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.responseHeaderModifier.add`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.responseHeaderModifier.set`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.responseHeaderModifier.remove`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.scheme`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.authority`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)full`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)host`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)port`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.path`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.mcpAuthorization.rules`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.promptGuard`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.defaults`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.overrides`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts.append`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts.append[].role`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts.append[].content`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts.prepend`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts.prepend[].role`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts.prepend[].content`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.modelAliases`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.promptCaching`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.promptCaching.cacheSystem`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.promptCaching.cacheMessages`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.promptCaching.cacheTools`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.promptCaching.minTokens`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.routes`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.cert`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.key`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.root`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.hostname`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.insecure`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.insecureHost`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.alpn`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.subjectAltNames`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth`|Authenticate to the backend.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)passthrough`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)key`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)key.(any)file`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)region`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.http.version`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.http.requestTimeout`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp`|Specify TCP settings for the backend|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp.keepalives`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp.keepalives.enabled`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp.keepalives.time`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp.keepalives.interval`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp.keepalives.retries`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp.connectTimeout`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp.connectTimeout.secs`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.tcp.connectTimeout.nanos`||
+|`llm.models[].guardrails.request[].rejection`||
+|`llm.models[].guardrails.request[].rejection.body`||
+|`llm.models[].guardrails.request[].rejection.status`||
+|`llm.models[].guardrails.request[].rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`llm.models[].guardrails.request[].rejection.headers.add`||
+|`llm.models[].guardrails.request[].rejection.headers.set`||
+|`llm.models[].guardrails.request[].rejection.headers.remove`||
+|`llm.models[].guardrails.response`||
+|`llm.models[].guardrails.response[].(1)regex`||
+|`llm.models[].guardrails.response[].(1)regex.action`||
+|`llm.models[].guardrails.response[].(1)regex.rules`||
+|`llm.models[].guardrails.response[].(1)regex.rules[].(any)builtin`||
+|`llm.models[].guardrails.response[].(1)regex.rules[].(any)pattern`||
+|`llm.models[].guardrails.response[].(1)webhook`||
+|`llm.models[].guardrails.response[].(1)webhook.target`||
+|`llm.models[].guardrails.response[].(1)webhook.target.(1)service`||
+|`llm.models[].guardrails.response[].(1)webhook.target.(1)service.name`||
+|`llm.models[].guardrails.response[].(1)webhook.target.(1)service.name.namespace`||
+|`llm.models[].guardrails.response[].(1)webhook.target.(1)service.name.hostname`||
+|`llm.models[].guardrails.response[].(1)webhook.target.(1)service.port`||
+|`llm.models[].guardrails.response[].(1)webhook.target.(1)host`|Hostname or IP address|
+|`llm.models[].guardrails.response[].(1)webhook.target.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].(1)webhook.forwardHeaderMatches`||
+|`llm.models[].guardrails.response[].(1)webhook.forwardHeaderMatches[].name`||
+|`llm.models[].guardrails.response[].(1)webhook.forwardHeaderMatches[].value`||
+|`llm.models[].guardrails.response[].(1)webhook.forwardHeaderMatches[].value.(1)exact`||
+|`llm.models[].guardrails.response[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.region`|AWS region where the guardrail is deployed|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies`|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestHeaderModifier.add`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestHeaderModifier.set`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestHeaderModifier.remove`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.responseHeaderModifier.add`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.responseHeaderModifier.set`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.responseHeaderModifier.remove`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.scheme`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.authority`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)full`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)host`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)port`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.path`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.mcpAuthorization.rules`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.promptGuard`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.defaults`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.overrides`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts.append`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts.append[].role`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts.append[].content`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts.prepend`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts.prepend[].role`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts.prepend[].content`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.modelAliases`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.promptCaching`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.promptCaching.cacheSystem`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.promptCaching.cacheMessages`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.promptCaching.cacheTools`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.promptCaching.minTokens`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.routes`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.root`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.hostname`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.insecure`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.insecureHost`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.alpn`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.subjectAltNames`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth`|Authenticate to the backend.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)passthrough`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)key`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)key.(any)file`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)region`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.http.version`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.http.requestTimeout`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp`|Specify TCP settings for the backend|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp.keepalives`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp.keepalives.enabled`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp.keepalives.time`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp.keepalives.interval`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp.keepalives.retries`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp.connectTimeout`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp.connectTimeout.secs`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.tcp.connectTimeout.nanos`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.projectId`|The GCP project ID|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.location`|The GCP region (default: us-central1)|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies`|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestHeaderModifier.add`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestHeaderModifier.set`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestHeaderModifier.remove`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.responseHeaderModifier.add`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.responseHeaderModifier.set`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.responseHeaderModifier.remove`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.scheme`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.authority`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)full`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)host`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)port`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.path`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.mcpAuthorization.rules`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.promptGuard`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.defaults`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.overrides`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts.append`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts.append[].role`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts.append[].content`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts.prepend`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts.prepend[].role`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts.prepend[].content`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.modelAliases`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.promptCaching`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.promptCaching.cacheSystem`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.promptCaching.cacheMessages`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.promptCaching.cacheTools`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.promptCaching.minTokens`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.routes`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.cert`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.key`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.root`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.hostname`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.insecure`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.insecureHost`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.alpn`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.subjectAltNames`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth`|Authenticate to the backend.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)passthrough`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)key`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)key.(any)file`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)region`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.http.version`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.http.requestTimeout`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp`|Specify TCP settings for the backend|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp.keepalives`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp.keepalives.enabled`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp.keepalives.time`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp.keepalives.interval`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp.keepalives.retries`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp.connectTimeout`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp.connectTimeout.secs`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.tcp.connectTimeout.nanos`||
+|`llm.models[].guardrails.response[].rejection`||
+|`llm.models[].guardrails.response[].rejection.body`||
+|`llm.models[].guardrails.response[].rejection.status`||
+|`llm.models[].guardrails.response[].rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`llm.models[].guardrails.response[].rejection.headers.add`||
+|`llm.models[].guardrails.response[].rejection.headers.set`||
+|`llm.models[].guardrails.response[].rejection.headers.remove`||
+|`llm.models[].matches`|matches specifies the conditions under which this model should be used in addition to matching the model name.|
+|`llm.models[].matches[].headers`||
+|`llm.models[].matches[].headers[].name`||
+|`llm.models[].matches[].headers[].value`||
+|`llm.models[].matches[].headers[].value.(1)exact`||
+|`llm.models[].matches[].headers[].value.(1)regex`||
+|`llm.policies`|policies defines policies for handling incoming requests, before a model is selected|
+|`llm.policies.jwtAuth`|Authenticate incoming JWT requests.|
+|`llm.policies.jwtAuth.(any)(any)mode`||
+|`llm.policies.jwtAuth.(any)(any)providers`||
+|`llm.policies.jwtAuth.(any)(any)providers[].issuer`||
+|`llm.policies.jwtAuth.(any)(any)providers[].audiences`||
+|`llm.policies.jwtAuth.(any)(any)providers[].jwks`||
+|`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
+|`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`llm.policies.jwtAuth.(any)(any)mode`||
+|`llm.policies.jwtAuth.(any)(any)issuer`||
+|`llm.policies.jwtAuth.(any)(any)audiences`||
+|`llm.policies.jwtAuth.(any)(any)jwks`||
+|`llm.policies.jwtAuth.(any)(any)jwks.(any)file`||
+|`llm.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`llm.policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
+|`llm.policies.extAuthz.(any)(1)service`||
+|`llm.policies.extAuthz.(any)(1)service.name`||
+|`llm.policies.extAuthz.(any)(1)service.name.namespace`||
+|`llm.policies.extAuthz.(any)(1)service.name.hostname`||
+|`llm.policies.extAuthz.(any)(1)service.port`||
+|`llm.policies.extAuthz.(any)(1)host`|Hostname or IP address|
+|`llm.policies.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
+|`llm.policies.extAuthz.(any)protocol.(1)grpc`||
+|`llm.policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`llm.policies.extAuthz.(any)protocol.(1)grpc.metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`llm.policies.extAuthz.(any)protocol.(1)http`||
+|`llm.policies.extAuthz.(any)protocol.(1)http.path`||
+|`llm.policies.extAuthz.(any)protocol.(1)http.redirect`|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`llm.policies.extAuthz.(any)protocol.(1)http.includeResponseHeaders`|Specific headers from the authorization response will be copied into the request to the backend.|
+|`llm.policies.extAuthz.(any)protocol.(1)http.addRequestHeaders`|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`llm.policies.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`llm.policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
+|`llm.policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
+|`llm.policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`llm.policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
+|`llm.policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
+|`llm.policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
+|`llm.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`llm.policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`llm.policies.extProc`|Extend agentgateway with an external processor|
+|`llm.policies.extProc.(any)(1)service`||
+|`llm.policies.extProc.(any)(1)service.name`||
+|`llm.policies.extProc.(any)(1)service.name.namespace`||
+|`llm.policies.extProc.(any)(1)service.name.hostname`||
+|`llm.policies.extProc.(any)(1)service.port`||
+|`llm.policies.extProc.(any)(1)host`|Hostname or IP address|
+|`llm.policies.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
+|`llm.policies.extProc.(any)metadataContext`|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.(any)responseAttributes`|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.transformations`|Modify requests and responses|
+|`llm.policies.transformations.request`||
+|`llm.policies.transformations.request.add`||
+|`llm.policies.transformations.request.set`||
+|`llm.policies.transformations.request.remove`||
+|`llm.policies.transformations.request.body`||
+|`llm.policies.transformations.response`||
+|`llm.policies.transformations.response.add`||
+|`llm.policies.transformations.response.set`||
+|`llm.policies.transformations.response.remove`||
+|`llm.policies.transformations.response.body`||
+|`llm.policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
+|`llm.policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
+|`llm.policies.basicAuth.htpasswd.(any)file`||
+|`llm.policies.basicAuth.realm`|Realm name for the WWW-Authenticate header|
+|`llm.policies.basicAuth.mode`|Validation mode for basic authentication|
+|`llm.policies.apiKey`|Authenticate incoming requests using API Keys|
+|`llm.policies.apiKey.keys`|List of API keys|
+|`llm.policies.apiKey.keys[].key`||
+|`llm.policies.apiKey.keys[].metadata`||
+|`llm.policies.apiKey.mode`|Validation mode for API keys|
+|`llm.policies.authorization`|Authorization policies for HTTP access.|
+|`llm.policies.authorization.rules`||
+|`mcp`||
+|`mcp.port`||
+|`mcp.targets`||
+|`mcp.targets[].(1)sse`||
+|`mcp.targets[].(1)sse.host`||
+|`mcp.targets[].(1)sse.port`||
+|`mcp.targets[].(1)sse.path`||
+|`mcp.targets[].(1)mcp`||
+|`mcp.targets[].(1)mcp.host`||
+|`mcp.targets[].(1)mcp.port`||
+|`mcp.targets[].(1)mcp.path`||
+|`mcp.targets[].(1)stdio`||
+|`mcp.targets[].(1)stdio.cmd`||
+|`mcp.targets[].(1)stdio.args`||
+|`mcp.targets[].(1)stdio.env`||
+|`mcp.targets[].(1)openapi`||
+|`mcp.targets[].(1)openapi.host`||
+|`mcp.targets[].(1)openapi.port`||
+|`mcp.targets[].(1)openapi.path`||
+|`mcp.targets[].(1)openapi.schema`||
+|`mcp.targets[].name`||
+|`mcp.targets[].policies`||
+|`mcp.targets[].policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`mcp.targets[].policies.requestHeaderModifier.add`||
+|`mcp.targets[].policies.requestHeaderModifier.set`||
+|`mcp.targets[].policies.requestHeaderModifier.remove`||
+|`mcp.targets[].policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`mcp.targets[].policies.responseHeaderModifier.add`||
+|`mcp.targets[].policies.responseHeaderModifier.set`||
+|`mcp.targets[].policies.responseHeaderModifier.remove`||
+|`mcp.targets[].policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`mcp.targets[].policies.requestRedirect.scheme`||
+|`mcp.targets[].policies.requestRedirect.authority`||
+|`mcp.targets[].policies.requestRedirect.authority.(any)(1)full`||
+|`mcp.targets[].policies.requestRedirect.authority.(any)(1)host`||
+|`mcp.targets[].policies.requestRedirect.authority.(any)(1)port`||
+|`mcp.targets[].policies.requestRedirect.path`||
+|`mcp.targets[].policies.requestRedirect.path.(any)(1)full`||
+|`mcp.targets[].policies.requestRedirect.path.(any)(1)prefix`||
+|`mcp.targets[].policies.requestRedirect.status`||
+|`mcp.targets[].policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`mcp.targets[].policies.mcpAuthorization.rules`||
+|`mcp.targets[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.targets[].policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`mcp.targets[].policies.ai.promptGuard`||
+|`mcp.targets[].policies.ai.promptGuard.request`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)regex`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)regex.action`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)regex.rules`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)regex.rules[].(any)builtin`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)regex.rules[].(any)pattern`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name.namespace`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name.hostname`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service.port`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)host`|Hostname or IP address|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].name`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)exact`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.region`|AWS region where the guardrail is deployed|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies`|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)googleModelArmor.location`|The GCP region (default: us-central1)|
+|`mcp.targets[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies`|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
+|`mcp.targets[].policies.ai.promptGuard.request[].rejection`||
+|`mcp.targets[].policies.ai.promptGuard.request[].rejection.body`||
+|`mcp.targets[].policies.ai.promptGuard.request[].rejection.status`||
+|`mcp.targets[].policies.ai.promptGuard.request[].rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`mcp.targets[].policies.ai.promptGuard.request[].rejection.headers.add`||
+|`mcp.targets[].policies.ai.promptGuard.request[].rejection.headers.set`||
+|`mcp.targets[].policies.ai.promptGuard.request[].rejection.headers.remove`||
+|`mcp.targets[].policies.ai.promptGuard.response`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)regex`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)regex.action`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)regex.rules`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)regex.rules[].(any)builtin`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)regex.rules[].(any)pattern`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name.namespace`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name.hostname`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service.port`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)host`|Hostname or IP address|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].name`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value.(1)exact`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.region`|AWS region where the guardrail is deployed|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies`|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)googleModelArmor.location`|The GCP region (default: us-central1)|
+|`mcp.targets[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies`|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
+|`mcp.targets[].policies.ai.promptGuard.response[].rejection`||
+|`mcp.targets[].policies.ai.promptGuard.response[].rejection.body`||
+|`mcp.targets[].policies.ai.promptGuard.response[].rejection.status`||
+|`mcp.targets[].policies.ai.promptGuard.response[].rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`mcp.targets[].policies.ai.promptGuard.response[].rejection.headers.add`||
+|`mcp.targets[].policies.ai.promptGuard.response[].rejection.headers.set`||
+|`mcp.targets[].policies.ai.promptGuard.response[].rejection.headers.remove`||
+|`mcp.targets[].policies.ai.defaults`||
+|`mcp.targets[].policies.ai.overrides`||
+|`mcp.targets[].policies.ai.prompts`||
+|`mcp.targets[].policies.ai.prompts.append`||
+|`mcp.targets[].policies.ai.prompts.append[].role`||
+|`mcp.targets[].policies.ai.prompts.append[].content`||
+|`mcp.targets[].policies.ai.prompts.prepend`||
+|`mcp.targets[].policies.ai.prompts.prepend[].role`||
+|`mcp.targets[].policies.ai.prompts.prepend[].content`||
+|`mcp.targets[].policies.ai.modelAliases`||
+|`mcp.targets[].policies.ai.promptCaching`||
+|`mcp.targets[].policies.ai.promptCaching.cacheSystem`||
+|`mcp.targets[].policies.ai.promptCaching.cacheMessages`||
+|`mcp.targets[].policies.ai.promptCaching.cacheTools`||
+|`mcp.targets[].policies.ai.promptCaching.minTokens`||
+|`mcp.targets[].policies.ai.routes`||
+|`mcp.targets[].policies.backendTLS`|Send TLS to the backend.|
+|`mcp.targets[].policies.backendTLS.cert`||
+|`mcp.targets[].policies.backendTLS.key`||
+|`mcp.targets[].policies.backendTLS.root`||
+|`mcp.targets[].policies.backendTLS.hostname`||
+|`mcp.targets[].policies.backendTLS.insecure`||
+|`mcp.targets[].policies.backendTLS.insecureHost`||
+|`mcp.targets[].policies.backendTLS.alpn`||
+|`mcp.targets[].policies.backendTLS.subjectAltNames`||
+|`mcp.targets[].policies.backendAuth`|Authenticate to the backend.|
+|`mcp.targets[].policies.backendAuth.(any)(1)passthrough`||
+|`mcp.targets[].policies.backendAuth.(any)(1)key`||
+|`mcp.targets[].policies.backendAuth.(any)(1)key.(any)file`||
+|`mcp.targets[].policies.backendAuth.(any)(1)gcp`||
+|`mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.targets[].policies.backendAuth.(any)(1)aws`||
+|`mcp.targets[].policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`mcp.targets[].policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`mcp.targets[].policies.backendAuth.(any)(1)aws.(any)region`||
+|`mcp.targets[].policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.targets[].policies.http`|Specify HTTP settings for the backend|
+|`mcp.targets[].policies.http.version`||
+|`mcp.targets[].policies.http.requestTimeout`||
+|`mcp.targets[].policies.tcp`|Specify TCP settings for the backend|
+|`mcp.targets[].policies.tcp.keepalives`||
+|`mcp.targets[].policies.tcp.keepalives.enabled`||
+|`mcp.targets[].policies.tcp.keepalives.time`||
+|`mcp.targets[].policies.tcp.keepalives.interval`||
+|`mcp.targets[].policies.tcp.keepalives.retries`||
+|`mcp.targets[].policies.tcp.connectTimeout`||
+|`mcp.targets[].policies.tcp.connectTimeout.secs`||
+|`mcp.targets[].policies.tcp.connectTimeout.nanos`||
+|`mcp.statefulMode`||
+|`mcp.prefixMode`||
+|`mcp.policies`||
+|`mcp.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`mcp.policies.requestHeaderModifier.add`||
+|`mcp.policies.requestHeaderModifier.set`||
+|`mcp.policies.requestHeaderModifier.remove`||
+|`mcp.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`mcp.policies.responseHeaderModifier.add`||
+|`mcp.policies.responseHeaderModifier.set`||
+|`mcp.policies.responseHeaderModifier.remove`||
+|`mcp.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`mcp.policies.requestRedirect.scheme`||
+|`mcp.policies.requestRedirect.authority`||
+|`mcp.policies.requestRedirect.authority.(any)(1)full`||
+|`mcp.policies.requestRedirect.authority.(any)(1)host`||
+|`mcp.policies.requestRedirect.authority.(any)(1)port`||
+|`mcp.policies.requestRedirect.path`||
+|`mcp.policies.requestRedirect.path.(any)(1)full`||
+|`mcp.policies.requestRedirect.path.(any)(1)prefix`||
+|`mcp.policies.requestRedirect.status`||
+|`mcp.policies.urlRewrite`|Modify the URL path or authority.|
+|`mcp.policies.urlRewrite.authority`||
+|`mcp.policies.urlRewrite.authority.(any)(1)full`||
+|`mcp.policies.urlRewrite.authority.(any)(1)host`||
+|`mcp.policies.urlRewrite.authority.(any)(1)port`||
+|`mcp.policies.urlRewrite.path`||
+|`mcp.policies.urlRewrite.path.(any)(1)full`||
+|`mcp.policies.urlRewrite.path.(any)(1)prefix`||
+|`mcp.policies.requestMirror`|Mirror incoming requests to another destination.|
+|`mcp.policies.requestMirror.backend`||
+|`mcp.policies.requestMirror.backend.(1)service`||
+|`mcp.policies.requestMirror.backend.(1)service.name`||
+|`mcp.policies.requestMirror.backend.(1)service.name.namespace`||
+|`mcp.policies.requestMirror.backend.(1)service.name.hostname`||
+|`mcp.policies.requestMirror.backend.(1)service.port`||
+|`mcp.policies.requestMirror.backend.(1)host`|Hostname or IP address|
+|`mcp.policies.requestMirror.backend.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.requestMirror.percentage`||
+|`mcp.policies.directResponse`|Directly respond to the request with a static response.|
+|`mcp.policies.directResponse.body`||
+|`mcp.policies.directResponse.status`||
+|`mcp.policies.cors`|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
+|`mcp.policies.cors.allowCredentials`||
+|`mcp.policies.cors.allowHeaders`||
+|`mcp.policies.cors.allowMethods`||
+|`mcp.policies.cors.allowOrigins`||
+|`mcp.policies.cors.exposeHeaders`||
+|`mcp.policies.cors.maxAge`||
+|`mcp.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`mcp.policies.mcpAuthorization.rules`||
+|`mcp.policies.authorization`|Authorization policies for HTTP access.|
+|`mcp.policies.authorization.rules`||
+|`mcp.policies.mcpAuthentication`|Authentication for MCP clients.|
+|`mcp.policies.mcpAuthentication.issuer`||
+|`mcp.policies.mcpAuthentication.audiences`||
+|`mcp.policies.mcpAuthentication.provider`||
+|`mcp.policies.mcpAuthentication.provider.(any)(1)auth0`||
+|`mcp.policies.mcpAuthentication.provider.(any)(1)keycloak`||
+|`mcp.policies.mcpAuthentication.resourceMetadata`||
+|`mcp.policies.mcpAuthentication.jwks`||
+|`mcp.policies.mcpAuthentication.jwks.(any)file`||
+|`mcp.policies.mcpAuthentication.jwks.(any)url`||
+|`mcp.policies.mcpAuthentication.mode`||
+|`mcp.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`mcp.policies.ai.promptGuard`||
+|`mcp.policies.ai.promptGuard.request`||
+|`mcp.policies.ai.promptGuard.request[].(1)regex`||
+|`mcp.policies.ai.promptGuard.request[].(1)regex.action`||
+|`mcp.policies.ai.promptGuard.request[].(1)regex.rules`||
+|`mcp.policies.ai.promptGuard.request[].(1)regex.rules[].(any)builtin`||
+|`mcp.policies.ai.promptGuard.request[].(1)regex.rules[].(any)pattern`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.target`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.target.(1)service`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name.namespace`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name.hostname`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.target.(1)service.port`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.target.(1)host`|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.target.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].name`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)exact`||
+|`mcp.policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.scheme`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)host`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)port`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.mcpAuthorization.rules`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.root`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.hostname`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.insecure`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.insecureHost`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.alpn`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.subjectAltNames`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth`|Authenticate to the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)passthrough`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key.(any)file`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)region`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.http`|Specify HTTP settings for the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.http.version`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.http.requestTimeout`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp`|Specify TCP settings for the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.enabled`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.time`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.interval`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.retries`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout.secs`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout.nanos`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.region`|AWS region where the guardrail is deployed|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies`|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.responseHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.responseHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.responseHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.scheme`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.authority`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)host`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)port`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.mcpAuthorization.rules`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.root`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.hostname`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.insecure`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.insecureHost`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.alpn`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.subjectAltNames`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth`|Authenticate to the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)passthrough`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)key`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)key.(any)file`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)region`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http.version`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http.requestTimeout`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp`|Specify TCP settings for the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp.keepalives`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp.keepalives.enabled`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp.keepalives.time`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp.keepalives.interval`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp.keepalives.retries`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp.connectTimeout`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp.connectTimeout.secs`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.tcp.connectTimeout.nanos`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.location`|The GCP region (default: us-central1)|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies`|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.responseHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.responseHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.responseHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.scheme`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.authority`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)host`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)port`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.mcpAuthorization.rules`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.cert`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.key`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.root`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.hostname`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.insecure`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.insecureHost`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.alpn`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.subjectAltNames`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth`|Authenticate to the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)passthrough`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)key`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)key.(any)file`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)region`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http.version`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http.requestTimeout`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp`|Specify TCP settings for the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp.keepalives`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp.keepalives.enabled`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp.keepalives.time`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp.keepalives.interval`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp.keepalives.retries`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp.connectTimeout`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp.connectTimeout.secs`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.tcp.connectTimeout.nanos`||
+|`mcp.policies.ai.promptGuard.request[].rejection`||
+|`mcp.policies.ai.promptGuard.request[].rejection.body`||
+|`mcp.policies.ai.promptGuard.request[].rejection.status`||
+|`mcp.policies.ai.promptGuard.request[].rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`mcp.policies.ai.promptGuard.request[].rejection.headers.add`||
+|`mcp.policies.ai.promptGuard.request[].rejection.headers.set`||
+|`mcp.policies.ai.promptGuard.request[].rejection.headers.remove`||
+|`mcp.policies.ai.promptGuard.response`||
+|`mcp.policies.ai.promptGuard.response[].(1)regex`||
+|`mcp.policies.ai.promptGuard.response[].(1)regex.action`||
+|`mcp.policies.ai.promptGuard.response[].(1)regex.rules`||
+|`mcp.policies.ai.promptGuard.response[].(1)regex.rules[].(any)builtin`||
+|`mcp.policies.ai.promptGuard.response[].(1)regex.rules[].(any)pattern`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.target`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.target.(1)service`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name.namespace`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name.hostname`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.target.(1)service.port`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.target.(1)host`|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.target.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].name`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value.(1)exact`||
+|`mcp.policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.region`|AWS region where the guardrail is deployed|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies`|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.responseHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.responseHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.responseHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.scheme`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.authority`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)host`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.authority.(any)(1)port`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.mcpAuthorization.rules`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.root`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.hostname`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.insecure`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.insecureHost`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.alpn`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.subjectAltNames`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth`|Authenticate to the backend.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)passthrough`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)key`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)key.(any)file`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)region`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http.version`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http.requestTimeout`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp`|Specify TCP settings for the backend|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp.keepalives`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp.keepalives.enabled`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp.keepalives.time`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp.keepalives.interval`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp.keepalives.retries`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp.connectTimeout`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp.connectTimeout.secs`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.tcp.connectTimeout.nanos`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.location`|The GCP region (default: us-central1)|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies`|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.responseHeaderModifier.add`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.responseHeaderModifier.set`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.responseHeaderModifier.remove`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.scheme`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.authority`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)host`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.authority.(any)(1)port`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.mcpAuthorization.rules`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.cert`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.key`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.root`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.hostname`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.insecure`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.insecureHost`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.alpn`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.subjectAltNames`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth`|Authenticate to the backend.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)passthrough`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)key`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)key.(any)file`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)region`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http.version`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http.requestTimeout`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp`|Specify TCP settings for the backend|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp.keepalives`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp.keepalives.enabled`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp.keepalives.time`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp.keepalives.interval`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp.keepalives.retries`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp.connectTimeout`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp.connectTimeout.secs`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.tcp.connectTimeout.nanos`||
+|`mcp.policies.ai.promptGuard.response[].rejection`||
+|`mcp.policies.ai.promptGuard.response[].rejection.body`||
+|`mcp.policies.ai.promptGuard.response[].rejection.status`||
+|`mcp.policies.ai.promptGuard.response[].rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`mcp.policies.ai.promptGuard.response[].rejection.headers.add`||
+|`mcp.policies.ai.promptGuard.response[].rejection.headers.set`||
+|`mcp.policies.ai.promptGuard.response[].rejection.headers.remove`||
+|`mcp.policies.ai.defaults`||
+|`mcp.policies.ai.overrides`||
+|`mcp.policies.ai.prompts`||
+|`mcp.policies.ai.prompts.append`||
+|`mcp.policies.ai.prompts.append[].role`||
+|`mcp.policies.ai.prompts.append[].content`||
+|`mcp.policies.ai.prompts.prepend`||
+|`mcp.policies.ai.prompts.prepend[].role`||
+|`mcp.policies.ai.prompts.prepend[].content`||
+|`mcp.policies.ai.modelAliases`||
+|`mcp.policies.ai.promptCaching`||
+|`mcp.policies.ai.promptCaching.cacheSystem`||
+|`mcp.policies.ai.promptCaching.cacheMessages`||
+|`mcp.policies.ai.promptCaching.cacheTools`||
+|`mcp.policies.ai.promptCaching.minTokens`||
+|`mcp.policies.ai.routes`||
+|`mcp.policies.backendTLS`|Send TLS to the backend.|
+|`mcp.policies.backendTLS.cert`||
+|`mcp.policies.backendTLS.key`||
+|`mcp.policies.backendTLS.root`||
+|`mcp.policies.backendTLS.hostname`||
+|`mcp.policies.backendTLS.insecure`||
+|`mcp.policies.backendTLS.insecureHost`||
+|`mcp.policies.backendTLS.alpn`||
+|`mcp.policies.backendTLS.subjectAltNames`||
+|`mcp.policies.backendAuth`|Authenticate to the backend.|
+|`mcp.policies.backendAuth.(any)(1)passthrough`||
+|`mcp.policies.backendAuth.(any)(1)key`||
+|`mcp.policies.backendAuth.(any)(1)key.(any)file`||
+|`mcp.policies.backendAuth.(any)(1)gcp`||
+|`mcp.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.backendAuth.(any)(1)aws`||
+|`mcp.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`mcp.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`mcp.policies.backendAuth.(any)(1)aws.(any)region`||
+|`mcp.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`mcp.policies.backendAuth.(any)(1)azure`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.localRateLimit`|Rate limit incoming requests. State is kept local.|
+|`mcp.policies.localRateLimit[].maxTokens`||
+|`mcp.policies.localRateLimit[].tokensPerFill`||
+|`mcp.policies.localRateLimit[].fillInterval`||
+|`mcp.policies.localRateLimit[].type`||
+|`mcp.policies.remoteRateLimit`|Rate limit incoming requests. State is managed by a remote server.|
+|`mcp.policies.remoteRateLimit.(any)(1)service`||
+|`mcp.policies.remoteRateLimit.(any)(1)service.name`||
+|`mcp.policies.remoteRateLimit.(any)(1)service.name.namespace`||
+|`mcp.policies.remoteRateLimit.(any)(1)service.name.hostname`||
+|`mcp.policies.remoteRateLimit.(any)(1)service.port`||
+|`mcp.policies.remoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`mcp.policies.remoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.remoteRateLimit.(any)domain`||
+|`mcp.policies.remoteRateLimit.(any)descriptors`||
+|`mcp.policies.remoteRateLimit.(any)descriptors[].entries`||
+|`mcp.policies.remoteRateLimit.(any)descriptors[].entries[].key`||
+|`mcp.policies.remoteRateLimit.(any)descriptors[].entries[].value`||
+|`mcp.policies.remoteRateLimit.(any)descriptors[].type`||
+|`mcp.policies.remoteRateLimit.(any)timeout`|Timeout for the request|
+|`mcp.policies.jwtAuth`|Authenticate incoming JWT requests.|
+|`mcp.policies.jwtAuth.(any)(any)mode`||
+|`mcp.policies.jwtAuth.(any)(any)providers`||
+|`mcp.policies.jwtAuth.(any)(any)providers[].issuer`||
+|`mcp.policies.jwtAuth.(any)(any)providers[].audiences`||
+|`mcp.policies.jwtAuth.(any)(any)providers[].jwks`||
+|`mcp.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
+|`mcp.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`mcp.policies.jwtAuth.(any)(any)mode`||
+|`mcp.policies.jwtAuth.(any)(any)issuer`||
+|`mcp.policies.jwtAuth.(any)(any)audiences`||
+|`mcp.policies.jwtAuth.(any)(any)jwks`||
+|`mcp.policies.jwtAuth.(any)(any)jwks.(any)file`||
+|`mcp.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`mcp.policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
+|`mcp.policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
+|`mcp.policies.basicAuth.htpasswd.(any)file`||
+|`mcp.policies.basicAuth.realm`|Realm name for the WWW-Authenticate header|
+|`mcp.policies.basicAuth.mode`|Validation mode for basic authentication|
+|`mcp.policies.apiKey`|Authenticate incoming requests using API Keys|
+|`mcp.policies.apiKey.keys`|List of API keys|
+|`mcp.policies.apiKey.keys[].key`||
+|`mcp.policies.apiKey.keys[].metadata`||
+|`mcp.policies.apiKey.mode`|Validation mode for API keys|
+|`mcp.policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
+|`mcp.policies.extAuthz.(any)(1)service`||
+|`mcp.policies.extAuthz.(any)(1)service.name`||
+|`mcp.policies.extAuthz.(any)(1)service.name.namespace`||
+|`mcp.policies.extAuthz.(any)(1)service.name.hostname`||
+|`mcp.policies.extAuthz.(any)(1)service.port`||
+|`mcp.policies.extAuthz.(any)(1)host`|Hostname or IP address|
+|`mcp.policies.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
+|`mcp.policies.extAuthz.(any)protocol.(1)grpc`||
+|`mcp.policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`mcp.policies.extAuthz.(any)protocol.(1)grpc.metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`mcp.policies.extAuthz.(any)protocol.(1)http`||
+|`mcp.policies.extAuthz.(any)protocol.(1)http.path`||
+|`mcp.policies.extAuthz.(any)protocol.(1)http.redirect`|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`mcp.policies.extAuthz.(any)protocol.(1)http.includeResponseHeaders`|Specific headers from the authorization response will be copied into the request to the backend.|
+|`mcp.policies.extAuthz.(any)protocol.(1)http.addRequestHeaders`|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`mcp.policies.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`mcp.policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
+|`mcp.policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
+|`mcp.policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`mcp.policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
+|`mcp.policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
+|`mcp.policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
+|`mcp.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`mcp.policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`mcp.policies.extProc`|Extend agentgateway with an external processor|
+|`mcp.policies.extProc.(any)(1)service`||
+|`mcp.policies.extProc.(any)(1)service.name`||
+|`mcp.policies.extProc.(any)(1)service.name.namespace`||
+|`mcp.policies.extProc.(any)(1)service.name.hostname`||
+|`mcp.policies.extProc.(any)(1)service.port`||
+|`mcp.policies.extProc.(any)(1)host`|Hostname or IP address|
+|`mcp.policies.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
+|`mcp.policies.extProc.(any)metadataContext`|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.extProc.(any)responseAttributes`|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.transformations`|Modify requests and responses|
+|`mcp.policies.transformations.request`||
+|`mcp.policies.transformations.request.add`||
+|`mcp.policies.transformations.request.set`||
+|`mcp.policies.transformations.request.remove`||
+|`mcp.policies.transformations.request.body`||
+|`mcp.policies.transformations.response`||
+|`mcp.policies.transformations.response.add`||
+|`mcp.policies.transformations.response.set`||
+|`mcp.policies.transformations.response.remove`||
+|`mcp.policies.transformations.response.body`||
+|`mcp.policies.csrf`|Handle CSRF protection by validating request origins against configured allowed origins.|
+|`mcp.policies.csrf.additionalOrigins`||
+|`mcp.policies.timeout`|Timeout requests that exceed the configured duration.|
+|`mcp.policies.timeout.requestTimeout`||
+|`mcp.policies.timeout.backendRequestTimeout`||
+|`mcp.policies.retry`|Retry matching requests.|
+|`mcp.policies.retry.attempts`||
+|`mcp.policies.retry.backoff`||
+|`mcp.policies.retry.codes`||

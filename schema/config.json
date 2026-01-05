@@ -34,6 +34,26 @@
       "items": {
         "$ref": "#/$defs/FullLocalBackend"
       }
+    },
+    "llm": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalLLMConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mcp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalSimpleMcpConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "additionalProperties": false,
@@ -5042,6 +5062,310 @@
       "required": [
         "name",
         "host"
+      ]
+    },
+    "LocalLLMConfig": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overriden\non a per-model basis.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalLLMModels"
+          }
+        },
+        "policies": {
+          "description": "policies defines policies for handling incoming requests, before a model is selected",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "models"
+      ]
+    },
+    "LocalLLMModels": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "name is the name of the model we are matching from a users request. If params.model is set, that\nwill be used in the request to the LLM provider. If not, the incoming model is used.",
+          "type": "string"
+        },
+        "params": {
+          "description": "params customizes parameters for the outgoing request",
+          "$ref": "#/$defs/LocalLLMParams"
+        },
+        "provider": {
+          "description": "provider of the LLM we are connecting too",
+          "$ref": "#/$defs/LocalModelAIProvider"
+        },
+        "defaults": {
+          "description": "defaults allows setting default values for the request. If these are not present in the request body, they will be set.\nTo override even when set, use `overrides`.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "overrides": {
+          "description": "overrides allows setting values for the request, overriding any existing values",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "requestHeaders": {
+          "description": "requestHeaders modifies headers in requests to the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "guardrails": {
+          "description": "guardrails to apply to the request or response",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptGuard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "matches": {
+          "description": "matches specifies the conditions under which this model should be used in addition to matching the model name.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LLMRouteMatch"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "provider"
+      ]
+    },
+    "LocalLLMParams": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "The model to send to the provider.\nIf unset, the same model will be used from the request.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "apiKey": {
+          "description": "An API key to attach to the request.\nIf unset this will be automatically detected from the environment.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "awsRegion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vertexRegion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vertexProject": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureHost": {
+          "description": "For Azure: the host of the deployment",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureApiVersion": {
+          "description": "For Azure: the API version to sue",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalModelAIProvider": {
+      "type": "string",
+      "enum": [
+        "openAI",
+        "gemini",
+        "vertex",
+        "anthropic",
+        "bedrock",
+        "azureOpenAI"
+      ]
+    },
+    "LLMRouteMatch": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderMatch"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalLLMPolicy": {
+      "type": "object",
+      "properties": {
+        "jwtAuth": {
+          "description": "Authenticate incoming JWT requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalJwtConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extAuthz": {
+          "description": "Authenticate incoming requests by calling an external authorization server.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extProc": {
+          "description": "Extend agentgateway with an external processor",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtProc"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transformations": {
+          "description": "Modify requests and responses",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "basicAuth": {
+          "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBasicAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiKey": {
+          "description": "Authenticate incoming requests using API Keys",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAPIKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "description": "Authorization policies for HTTP access.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalSimpleMcpConfig": {
+      "type": "object",
+      "properties": {
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 3000
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalMcpTarget"
+          }
+        },
+        "statefulMode": {
+          "$ref": "#/$defs/McpStatefulMode"
+        },
+        "prefixMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpPrefixMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FilterOrPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "targets"
       ]
     }
   }
