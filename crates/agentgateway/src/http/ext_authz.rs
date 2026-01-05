@@ -831,8 +831,16 @@ fn process_headers(
 		// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
 		let action = if header.append_action != 0 || header.append.is_none() {
 			// Use append_action if it's explicitly set (non-zero) or if append is not set
-			HeaderAppendAction::try_from(header.append_action)
-				.unwrap_or(HeaderAppendAction::AppendIfExistsOrAdd)
+			match HeaderAppendAction::try_from(header.append_action) {
+				Ok(action) => action,
+				Err(_) => {
+					warn!(
+						"Unexpected header append_action `{:?}` falling back to APPEND_IF_EXISTS_OR_ADD",
+						header.append_action
+					);
+					HeaderAppendAction::AppendIfExistsOrAdd
+				},
+			}
 		} else {
 			// Fall back to deprecated append field for backwards compatibility
 			if header.append.unwrap_or(false) {

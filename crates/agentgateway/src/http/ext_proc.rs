@@ -600,7 +600,7 @@ async fn handle_response_for_request_mutation(
 
 fn apply_header_with_action(
 	headers: &mut HeaderMap,
-	hk: HeaderName,
+	hk: &HeaderName,
 	hvo: &HeaderValueOption,
 ) -> Result<(), Error> {
 	use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
@@ -630,8 +630,16 @@ fn apply_header_with_action(
 	// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
 	let action = if hvo.append_action != 0 || hvo.append.is_none() {
 		// Use append_action if it's explicitly set (non-zero) or if append is not set
-		HeaderAppendAction::try_from(hvo.append_action)
-			.unwrap_or(HeaderAppendAction::AppendIfExistsOrAdd)
+		match HeaderAppendAction::try_from(hvo.append_action) {
+			Ok(action) => action,
+			Err(_) => {
+				warn!(
+					"Unexpected header append_action `{:?}` falling back to APPEND_IF_EXISTS_OR_ADD",
+					hvo.append_action
+				);
+				HeaderAppendAction::AppendIfExistsOrAdd
+			},
+		}
 	} else {
 		// Fall back to deprecated append field for backwards compatibility
 		if hvo.append.unwrap_or(false) {
@@ -646,7 +654,7 @@ fn apply_header_with_action(
 			headers.append(hk, hv);
 		},
 		HeaderAppendAction::AddIfAbsent => {
-			if !headers.contains_key(&hk) {
+			if !headers.contains_key(hk) {
 				headers.insert(hk, hv);
 			}
 		},
@@ -654,7 +662,7 @@ fn apply_header_with_action(
 			headers.insert(hk, hv);
 		},
 		HeaderAppendAction::OverwriteIfExists => {
-			if headers.contains_key(&hk) {
+			if headers.contains_key(hk) {
 				headers.insert(hk, hv);
 			}
 		},
@@ -674,7 +682,7 @@ fn apply_header_mutations(
 		for set in &hm.set_headers {
 			let Some(h) = &set.header else { continue };
 			let hk = HeaderName::try_from(h.key.as_str())?;
-			apply_header_with_action(headers, hk, set)?;
+			apply_header_with_action(headers, &hk, set)?;
 		}
 	}
 	Ok(())
@@ -692,7 +700,7 @@ fn apply_header_mutations_request(
 			let Some(h) = &set.header else { continue };
 			match HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(HeaderOrPseudo::Header(hk)) => {
-					apply_header_with_action(req.headers_mut(), hk, set)?;
+					apply_header_with_action(req.headers_mut(), &hk, set)?;
 				},
 				Ok(pseudo) => {
 					let raw = if !h.raw_value.is_empty() {
@@ -722,7 +730,7 @@ fn apply_header_mutations_response(
 			let Some(h) = &set.header else { continue };
 			match crate::http::HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(crate::http::HeaderOrPseudo::Header(hk)) => {
-					apply_header_with_action(resp.headers_mut(), hk, set)?;
+					apply_header_with_action(resp.headers_mut(), &hk, set)?;
 				},
 				Ok(pseudo) => {
 					let raw = if !h.raw_value.is_empty() {
