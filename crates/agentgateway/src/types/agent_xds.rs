@@ -201,6 +201,7 @@ fn convert_route_type(proto_rt: i32) -> llm::RouteType {
 		Ok(ProtoRT::Responses) => llm::RouteType::Responses,
 		Ok(ProtoRT::AnthropicTokenCount) => llm::RouteType::AnthropicTokenCount,
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
+		Ok(ProtoRT::Realtime) => llm::RouteType::Realtime,
 		Err(_) => {
 			warn!(
 				"Unknown proto RouteType value {}, defaulting to Completions",

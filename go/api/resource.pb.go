@@ -745,6 +745,8 @@ const (
 	BackendPolicySpec_Ai_ANTHROPIC_TOKEN_COUNT BackendPolicySpec_Ai_RouteType = 6
 	// Processes OpenAI /v1/embeddings format requests
 	BackendPolicySpec_Ai_EMBEDDINGS BackendPolicySpec_Ai_RouteType = 7
+	// OpenAI /v1/realtime
+	BackendPolicySpec_Ai_REALTIME BackendPolicySpec_Ai_RouteType = 8
 )
 
 // Enum value maps for BackendPolicySpec_Ai_RouteType.
@@ -758,6 +760,7 @@ var (
 		5: "RESPONSES",
 		6: "ANTHROPIC_TOKEN_COUNT",
 		7: "EMBEDDINGS",
+		8: "REALTIME",
 	}
 	BackendPolicySpec_Ai_RouteType_value = map[string]int32{
 		"UNSPECIFIED":           0,
@@ -768,6 +771,7 @@ var (
 		"RESPONSES":             5,
 		"ANTHROPIC_TOKEN_COUNT": 6,
 		"EMBEDDINGS":            7,
+		"REALTIME":              8,
 	}
 )
 
@@ -9933,7 +9937,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xb02\n" +
+	"\x04kind\"\xbe2\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -9950,7 +9954,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x0erequest_mirror\x18\v \x01(\v2).agentgateway.dev.resource.RequestMirrorsH\x00R\rrequestMirror\x12]\n" +
 	"\fbackend_http\x18\f \x01(\v28.agentgateway.dev.resource.BackendPolicySpec.BackendHTTPH\x00R\vbackendHttp\x12Z\n" +
 	"\vbackend_tcp\x18\r \x01(\v27.agentgateway.dev.resource.BackendPolicySpec.BackendTCPH\x00R\n" +
-	"backendTcp\x1a\xe0\x19\n" +
+	"backendTcp\x1a\xee\x19\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -10031,7 +10035,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04MASK\x10\x01\x12\n" +
 	"\n" +
-	"\x06REJECT\x10\x02\"\x92\x01\n" +
+	"\x06REJECT\x10\x02\"\xa0\x01\n" +
 	"\tRouteType\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vCOMPLETIONS\x10\x01\x12\f\n" +
@@ -10042,7 +10046,8 @@ const file_resource_proto_rawDesc = "" +
 	"\tRESPONSES\x10\x05\x12\x19\n" +
 	"\x15ANTHROPIC_TOKEN_COUNT\x10\x06\x12\x0e\n" +
 	"\n" +
-	"EMBEDDINGS\x10\a\x1a\x05\n" +
+	"EMBEDDINGS\x10\a\x12\f\n" +
+	"\bREALTIME\x10\b\x1a\x05\n" +
 	"\x03A2a\x1a\x92\x02\n" +
 	"\x10InferenceRouting\x12T\n" +
 	"\x0fendpoint_picker\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x0eendpointPicker\x12l\n" +
