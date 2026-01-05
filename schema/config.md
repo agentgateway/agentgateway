@@ -176,6 +176,73 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.scheme`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)full`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)port`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.mcpAuthorization.rules`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.root`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.hostname`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.insecure`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.insecureHost`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.alpn`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.subjectAltNames`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth`|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)passthrough`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key.(any)file`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)region`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.http`|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.http.version`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.http.requestTimeout`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp`|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.enabled`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.time`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.interval`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.retries`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout.secs`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout.nanos`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.status`||
@@ -458,6 +525,7 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].rejection.status`||
@@ -624,6 +692,7 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].rejection.status`||
@@ -765,6 +834,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.status`||
@@ -1099,6 +1169,73 @@
 |`policies[].policy.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.add`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.set`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestHeaderModifier.remove`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.add`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.set`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.responseHeaderModifier.remove`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.scheme`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)full`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)host`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.authority.(any)(1)port`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.mcpAuthorization.rules`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.root`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.hostname`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.insecure`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.insecureHost`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.alpn`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.subjectAltNames`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth`|Authenticate to the backend.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)passthrough`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key.(any)file`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)region`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.http`|Specify HTTP settings for the backend|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.http.version`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.http.requestTimeout`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp`|Specify TCP settings for the backend|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.enabled`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.time`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.interval`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.keepalives.retries`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout.secs`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.tcp.connectTimeout.nanos`||
 |`policies[].policy.ai.promptGuard.request[].rejection`||
 |`policies[].policy.ai.promptGuard.request[].rejection.body`||
 |`policies[].policy.ai.promptGuard.request[].rejection.status`||
@@ -1331,6 +1468,7 @@
 |`backends[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
 |`backends[].policies.ai.promptGuard.request[].rejection`||
 |`backends[].policies.ai.promptGuard.request[].rejection.body`||
 |`backends[].policies.ai.promptGuard.request[].rejection.status`||

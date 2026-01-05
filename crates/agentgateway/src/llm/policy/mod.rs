@@ -9,6 +9,7 @@ use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction}
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
+use crate::types::local::LocalBackendPolicies;
 use crate::*;
 
 pub mod webhook;
@@ -773,9 +774,19 @@ pub struct Moderation {
 	/// Model to use. Defaults to `omni-moderation-latest`
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
-	#[serde(skip_deserializing)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
+	#[serde(deserialize_with = "de_from_local_backend_policy")]
+	#[cfg_attr(feature = "schema", schemars(with = "LocalBackendPolicies"))]
 	pub policies: Vec<BackendPolicy>,
+}
+
+pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(
+	deserializer: D,
+) -> Result<Vec<BackendPolicy>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let s = LocalBackendPolicies::deserialize(deserializer)?;
+	s.translate().map_err(serde::de::Error::custom)
 }
 
 #[apply(schema!)]
