@@ -1,6 +1,7 @@
-use async_openai::types::responses::{
-	Content, ContentType, Input, InputContent, InputItem, InputMessage, OutputContent, OutputText,
-	Role,
+use self::typed::{
+	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputParam as Input,
+	InputRole, InputTextContent, Item, MessageItem, OutputItem, OutputMessageContent as Content,
+	OutputTextContent as OutputText, Role,
 };
 use serde::{Deserialize, Serialize};
 
@@ -40,7 +41,7 @@ pub struct Request {
 pub struct Response {
 	pub id: String,
 	pub status: String,
-	pub output: Vec<OutputContent>,
+	pub output: Vec<OutputItem>,
 	pub model: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub usage: Option<Usage>,
@@ -56,20 +57,140 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
+pub struct ResponseBuilder {
+	response_id: String,
+	model: String,
+	created_at: u64,
+}
+
+impl ResponseBuilder {
+	pub fn new(response_id: impl Into<String>, model: impl Into<String>) -> Self {
+		Self {
+			response_id: response_id.into(),
+			model: model.into(),
+			created_at: chrono::Utc::now().timestamp() as u64,
+		}
+	}
+
+	pub fn response(
+		&self,
+		status: typed::Status,
+		usage: Option<typed::ResponseUsage>,
+		error: Option<typed::ErrorObject>,
+		incomplete_details: Option<typed::IncompleteDetails>,
+	) -> typed::Response {
+		typed::Response {
+			background: None,
+			billing: None,
+			conversation: None,
+			created_at: self.created_at,
+			error,
+			id: self.response_id.clone(),
+			incomplete_details,
+			instructions: None,
+			max_output_tokens: None,
+			metadata: None,
+			model: self.model.clone(),
+			object: "response".to_string(),
+			output: Vec::new(),
+			parallel_tool_calls: None,
+			previous_response_id: None,
+			prompt: None,
+			prompt_cache_key: None,
+			prompt_cache_retention: None,
+			reasoning: None,
+			safety_identifier: None,
+			service_tier: None,
+			status,
+			temperature: None,
+			text: None,
+			tool_choice: None,
+			tools: None,
+			top_logprobs: None,
+			top_p: None,
+			truncation: None,
+			usage,
+		}
+	}
+
+	pub fn created_event(&self, sequence_number: u64) -> typed::ResponseStreamEvent {
+		typed::ResponseStreamEvent::ResponseCreated(typed::ResponseCreatedEvent {
+			sequence_number,
+			response: self.response(typed::Status::InProgress, None, None, None),
+		})
+	}
+
+	pub fn completed_event(
+		&self,
+		sequence_number: u64,
+		usage: Option<typed::ResponseUsage>,
+	) -> typed::ResponseStreamEvent {
+		typed::ResponseStreamEvent::ResponseCompleted(typed::ResponseCompletedEvent {
+			sequence_number,
+			response: self.response(typed::Status::Completed, usage, None, None),
+		})
+	}
+
+	pub fn incomplete_event(
+		&self,
+		sequence_number: u64,
+		usage: Option<typed::ResponseUsage>,
+		incomplete_details: typed::IncompleteDetails,
+	) -> typed::ResponseStreamEvent {
+		typed::ResponseStreamEvent::ResponseIncomplete(typed::ResponseIncompleteEvent {
+			sequence_number,
+			response: self.response(
+				typed::Status::Incomplete,
+				usage,
+				None,
+				Some(incomplete_details),
+			),
+		})
+	}
+
+	pub fn failed_event(
+		&self,
+		sequence_number: u64,
+		usage: Option<typed::ResponseUsage>,
+		error: typed::ErrorObject,
+	) -> typed::ResponseStreamEvent {
+		typed::ResponseStreamEvent::ResponseFailed(typed::ResponseFailedEvent {
+			sequence_number,
+			response: self.response(typed::Status::Failed, usage, Some(error), None),
+		})
+	}
+}
+
 impl From<SimpleChatCompletionMessage> for InputItem {
 	fn from(msg: SimpleChatCompletionMessage) -> Self {
-		let role = match msg.role.as_str() {
-			"assistant" => Role::Assistant,
-			"system" => Role::System,
-			"developer" => Role::Developer,
-			_ => Role::User,
-		};
-
-		InputItem::Message(InputMessage {
-			kind: Default::default(),
-			role,
-			content: InputContent::TextInput(msg.content.to_string()),
-		})
+		match msg.role.as_str() {
+			"assistant" => InputItem::EasyMessage(EasyInputMessage {
+				r#type: Default::default(),
+				role: Role::Assistant,
+				content: EasyInputContent::Text(msg.content.to_string()),
+			}),
+			"system" => InputItem::from(InputMessage {
+				content: vec![InputContent::InputText(InputTextContent {
+					text: msg.content.to_string(),
+				})],
+				role: InputRole::System,
+				status: None,
+			}),
+			"developer" => InputItem::from(InputMessage {
+				content: vec![InputContent::InputText(InputTextContent {
+					text: msg.content.to_string(),
+				})],
+				role: InputRole::Developer,
+				status: None,
+			}),
+			_ => InputItem::from(InputMessage {
+				content: vec![InputContent::InputText(InputTextContent {
+					text: msg.content.to_string(),
+				})],
+				role: InputRole::User,
+				status: None,
+			}),
+		}
 	}
 }
 
@@ -89,10 +210,12 @@ impl RequestType for Request {
 		// Convert existing input to Items format if needed
 		let mut items = match &self.input {
 			Input::Text(text) => {
-				vec![InputItem::Message(InputMessage {
-					kind: Default::default(),
-					role: Role::User,
-					content: InputContent::TextInput(text.clone()),
+				vec![InputItem::from(InputMessage {
+					content: vec![InputContent::InputText(InputTextContent {
+						text: text.clone(),
+					})],
+					role: InputRole::User,
+					status: None,
 				})]
 			},
 			Input::Items(existing_items) => existing_items.clone(),
@@ -143,15 +266,14 @@ impl RequestType for Request {
 			Input::Items(items) => items
 				.iter()
 				.filter_map(|item| match item {
-					InputItem::Message(msg) => {
+					InputItem::EasyMessage(msg) => {
 						let content = match &msg.content {
-							InputContent::TextInput(text) => strng::new(text),
-							InputContent::InputItemContentList(parts) => {
-								// Extract text from all content parts
+							EasyInputContent::Text(text) => strng::new(text),
+							EasyInputContent::ContentList(parts) => {
 								let text = parts
 									.iter()
 									.filter_map(|part| match part {
-										ContentType::InputText(input_text) => Some(input_text.text.as_str()),
+										InputContent::InputText(input_text) => Some(input_text.text.as_str()),
 										_ => None,
 									})
 									.collect::<Vec<_>>()
@@ -168,6 +290,41 @@ impl RequestType for Request {
 						};
 
 						Some(SimpleChatCompletionMessage { role, content })
+					},
+					InputItem::Item(Item::Message(MessageItem::Input(msg))) => {
+						let text = msg
+							.content
+							.iter()
+							.filter_map(|part| match part {
+								InputContent::InputText(input_text) => Some(input_text.text.as_str()),
+								_ => None,
+							})
+							.collect::<Vec<_>>()
+							.join("\n");
+						let role = match msg.role {
+							InputRole::User => strng::literal!("user"),
+							InputRole::System => strng::literal!("system"),
+							InputRole::Developer => strng::literal!("developer"),
+						};
+						Some(SimpleChatCompletionMessage {
+							role,
+							content: strng::new(&text),
+						})
+					},
+					InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
+						let text = msg
+							.content
+							.iter()
+							.filter_map(|part| match part {
+								Content::OutputText(output_text) => Some(output_text.text.as_str()),
+								_ => None,
+							})
+							.collect::<Vec<_>>()
+							.join("\n");
+						Some(SimpleChatCompletionMessage {
+							role: strng::literal!("assistant"),
+							content: strng::new(&text),
+						})
 					},
 					_ => None,
 				})
@@ -211,7 +368,7 @@ impl ResponseType for Response {
 						.output
 						.iter()
 						.filter_map(|o| match o {
-							OutputContent::Message(msg) => Some(msg),
+							OutputItem::Message(msg) => Some(msg),
 							_ => None,
 						})
 						.flat_map(|msg| {
@@ -234,7 +391,7 @@ impl ResponseType for Response {
 			.output
 			.iter()
 			.filter_map(|o| match o {
-				OutputContent::Message(msg) => {
+				OutputItem::Message(msg) => {
 					// Extract text from message content
 					let content = msg
 						.content
@@ -267,7 +424,7 @@ impl ResponseType for Response {
 			.output
 			.iter_mut()
 			.filter_map(|o| match o {
-				OutputContent::Message(msg) => Some(msg),
+				OutputItem::Message(msg) => Some(msg),
 				_ => None,
 			})
 			.collect();
@@ -279,8 +436,9 @@ impl ResponseType for Response {
 		for (msg, wh) in message_outputs.into_iter().zip(choices.into_iter()) {
 			// Replace message content with webhook's modified content
 			msg.content = vec![Content::OutputText(OutputText {
-				text: wh.message.content.to_string(),
 				annotations: vec![],
+				logprobs: None,
+				text: wh.message.content.to_string(),
 			})];
 		}
 		Ok(())
@@ -292,9 +450,64 @@ impl ResponseType for Response {
 }
 
 pub mod typed {
+	use async_openai::types::responses as openai_responses;
+	use serde::{Deserialize, Serialize};
+
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
-		Content, CreateResponse, FunctionCall, OutputContent, OutputMessage, OutputStatus, OutputText,
-		Role,
+		AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
+		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall,
+		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
+		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
+		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
+		Response, ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
+		ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
+		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
+		ResponseIncompleteEvent, ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent,
+		ResponseTextDeltaEvent, ResponseUsage, Role, Status, Tool, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam,
 	};
+
+	/// Event types for streaming responses from the Responses API (minimal strict subset).
+	#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+	#[allow(clippy::enum_variant_names)]
+	#[serde(tag = "type")]
+	pub enum ResponseStreamEvent {
+		/// An event that is emitted when a response is created.
+		#[serde(rename = "response.created")]
+		ResponseCreated(openai_responses::ResponseCreatedEvent),
+		/// Emitted when a new output item is added.
+		#[serde(rename = "response.output_item.added")]
+		ResponseOutputItemAdded(openai_responses::ResponseOutputItemAddedEvent),
+		/// Emitted when a new content part is added.
+		#[serde(rename = "response.content_part.added")]
+		ResponseContentPartAdded(openai_responses::ResponseContentPartAddedEvent),
+		/// Emitted when there is an additional text delta.
+		#[serde(rename = "response.output_text.delta")]
+		ResponseOutputTextDelta(openai_responses::ResponseTextDeltaEvent),
+		/// Emitted when there is a partial function-call arguments delta.
+		#[serde(rename = "response.function_call_arguments.delta")]
+		ResponseFunctionCallArgumentsDelta(openai_responses::ResponseFunctionCallArgumentsDeltaEvent),
+		/// Emitted when function-call arguments are finalized.
+		#[serde(rename = "response.function_call_arguments.done")]
+		ResponseFunctionCallArgumentsDone(openai_responses::ResponseFunctionCallArgumentsDoneEvent),
+		/// Emitted when a content part is done.
+		#[serde(rename = "response.content_part.done")]
+		ResponseContentPartDone(openai_responses::ResponseContentPartDoneEvent),
+		/// Emitted when an output item is marked done.
+		#[serde(rename = "response.output_item.done")]
+		ResponseOutputItemDone(openai_responses::ResponseOutputItemDoneEvent),
+		/// Emitted when the model response is complete.
+		#[serde(rename = "response.completed")]
+		ResponseCompleted(openai_responses::ResponseCompletedEvent),
+		/// An event that is emitted when a response finishes as incomplete.
+		#[serde(rename = "response.incomplete")]
+		ResponseIncomplete(openai_responses::ResponseIncompleteEvent),
+		/// An event that is emitted when a response fails.
+		#[serde(rename = "response.failed")]
+		ResponseFailed(openai_responses::ResponseFailedEvent),
+		/// Emitted when an error occurs.
+		#[serde(rename = "error")]
+		ResponseError(openai_responses::ResponseErrorEvent),
+	}
 }

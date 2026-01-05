@@ -10,9 +10,6 @@ use crate::telemetry::log::AsyncLog;
 use crate::{llm, parse};
 
 pub mod from_messages {
-	use async_openai::types::{
-		ChatCompletionRequestToolMessageContent, ChatCompletionRequestToolMessageContentPart,
-	};
 	use itertools::Itertools;
 	use messages::{ContentBlock, ThinkingInput, ToolResultContent, ToolResultContentPart};
 	use types::completions::typed as completions;
@@ -90,12 +87,12 @@ pub mod from_messages {
 										content: match content {
 											ToolResultContent::Text(t) => t.into(),
 											ToolResultContent::Array(parts) => {
-												ChatCompletionRequestToolMessageContent::Array(
+												completions::RequestToolMessageContent::Array(
 													parts
 														.into_iter()
 														.filter_map(|p| match p {
 															ToolResultContentPart::Text { text, .. } => Some(
-																ChatCompletionRequestToolMessageContentPart::Text(text.into()),
+																completions::RequestToolMessageContentPart::Text(text.into()),
 															),
 															// Other types are not supported
 															_ => None,
@@ -132,7 +129,7 @@ pub mod from_messages {
 				},
 				messages::Role::Assistant => {
 					let mut assistant_text = None;
-					let mut tool_calls = Vec::new();
+					let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 					for block in msg.content {
 						match block {
 							messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
@@ -141,15 +138,16 @@ pub mod from_messages {
 							messages::ContentBlock::ToolUse {
 								id, name, input, ..
 							} => {
-								tool_calls.push(completions::MessageToolCall {
-									id,
-									r#type: completions::ToolType::Function,
-									function: completions::FunctionCall {
-										name,
-										// It's assumed that the input is a JSON object that can be stringified.
-										arguments: serde_json::to_string(&input).unwrap_or_default(),
+								tool_calls.push(completions::MessageToolCalls::Function(
+									completions::MessageToolCall {
+										id,
+										function: completions::FunctionCall {
+											name,
+											// It's assumed that the input is a JSON object that can be stringified.
+											arguments: serde_json::to_string(&input).unwrap_or_default(),
+										},
 									},
-								});
+								));
 							},
 							ContentBlock::Thinking { .. } => {
 								// TODO
@@ -182,26 +180,32 @@ pub mod from_messages {
 		let tools = tools
 			.into_iter()
 			.flat_map(|tools| tools.into_iter())
-			.map(|tool| completions::Tool {
-				r#type: completions::ToolType::Function,
-				function: completions::FunctionObject {
-					name: tool.name,
-					description: tool.description,
-					parameters: Some(tool.input_schema),
-					strict: None,
-				},
+			.map(|tool| {
+				completions::Tool::Function(completions::FunctionTool {
+					function: completions::FunctionObject {
+						name: tool.name,
+						description: tool.description,
+						parameters: Some(tool.input_schema),
+						strict: None,
+					},
+				})
 			})
 			.collect_vec();
 		let tool_choice = tool_choice.map(|choice| match choice {
-			messages::ToolChoice::Auto => completions::ToolChoiceOption::Auto,
-			messages::ToolChoice::Any => completions::ToolChoiceOption::Required,
+			messages::ToolChoice::Auto => {
+				completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Auto)
+			},
+			messages::ToolChoice::Any => {
+				completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Required)
+			},
 			messages::ToolChoice::Tool { name } => {
-				completions::ToolChoiceOption::Named(completions::NamedToolChoice {
-					r#type: completions::ToolType::Function,
+				completions::ToolChoiceOption::Function(completions::NamedToolChoice {
 					function: completions::FunctionName { name },
 				})
 			},
-			messages::ToolChoice::None => completions::ToolChoiceOption::None,
+			messages::ToolChoice::None => {
+				completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::None)
+			},
 		});
 
 		completions::Request {

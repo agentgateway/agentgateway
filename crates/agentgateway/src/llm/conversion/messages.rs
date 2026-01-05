@@ -75,11 +75,18 @@ pub mod from_completions {
 		let tools = if let Some(tools) = req.tools {
 			let mapped_tools: Vec<_> = tools
 				.iter()
-				.map(|tool| messages::Tool {
-					name: tool.function.name.clone(),
-					description: tool.function.description.clone(),
-					input_schema: tool.function.parameters.clone().unwrap_or_default(),
-					cache_control: None,
+				.filter_map(|tool| match tool {
+					completions::Tool::Function(function_tool) => Some(messages::Tool {
+						name: function_tool.function.name.clone(),
+						description: function_tool.function.description.clone(),
+						input_schema: function_tool
+							.function
+							.parameters
+							.clone()
+							.unwrap_or_default(),
+						cache_control: None,
+					}),
+					_ => None,
 				})
 				.collect();
 			Some(mapped_tools)
@@ -91,16 +98,21 @@ pub mod from_completions {
 		});
 
 		let tool_choice = match req.tool_choice {
-			Some(completions::ToolChoiceOption::Named(completions::NamedToolChoice {
-				r#type: _,
-				function,
-			})) => Some(messages::ToolChoice::Tool {
-				name: function.name,
-			}),
-			Some(completions::ToolChoiceOption::Auto) => Some(messages::ToolChoice::Auto),
-			Some(completions::ToolChoiceOption::Required) => Some(messages::ToolChoice::Any),
-			Some(completions::ToolChoiceOption::None) => Some(messages::ToolChoice::None),
-			None => None,
+			Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice { function })) => {
+				Some(messages::ToolChoice::Tool {
+					name: function.name,
+				})
+			},
+			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Auto)) => {
+				Some(messages::ToolChoice::Auto)
+			},
+			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Required)) => {
+				Some(messages::ToolChoice::Any)
+			},
+			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::None)) => {
+				Some(messages::ToolChoice::None)
+			},
+			_ => None,
 		};
 		let thinking = if let Some(budget) = req.vendor_extensions.thinking_budget_tokens {
 			Some(messages::ThinkingInput::Enabled {
@@ -119,10 +131,12 @@ pub mod from_completions {
 				Some(completions::ReasoningEffort::Medium) => Some(messages::ThinkingInput::Enabled {
 					budget_tokens: 2048,
 				}),
-				Some(completions::ReasoningEffort::High) => Some(messages::ThinkingInput::Enabled {
-					budget_tokens: 4096,
-				}),
-				None => None,
+				Some(completions::ReasoningEffort::High) | Some(completions::ReasoningEffort::Xhigh) => {
+					Some(messages::ThinkingInput::Enabled {
+						budget_tokens: 4096,
+					})
+				},
+				Some(completions::ReasoningEffort::None) | None => None,
 			}
 		};
 		messages::Request {
@@ -157,7 +171,7 @@ pub mod from_completions {
 
 	fn translate_response_internal(resp: messages::MessagesResponse) -> completions::Response {
 		// Convert Anthropic content blocks to OpenAI message content
-		let mut tool_calls: Vec<completions::MessageToolCall> = Vec::new();
+		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
 		let mut reasoning_content = None;
 		for block in resp.content {
@@ -174,14 +188,15 @@ pub mod from_completions {
 					let Some(args) = serde_json::to_string(&input).ok() else {
 						continue;
 					};
-					tool_calls.push(completions::MessageToolCall {
-						id: id.clone(),
-						r#type: completions::ToolType::Function,
-						function: completions::FunctionCall {
-							name: name.clone(),
-							arguments: args,
+					tool_calls.push(completions::MessageToolCalls::Function(
+						completions::MessageToolCall {
+							id: id.clone(),
+							function: completions::FunctionCall {
+								name: name.clone(),
+								arguments: args,
+							},
 						},
-					});
+					));
 				},
 				messages::ContentBlock::ToolResult { .. } => {
 					// Should be on the request path, not the response path

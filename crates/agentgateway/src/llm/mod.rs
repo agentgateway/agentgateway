@@ -829,11 +829,7 @@ impl AIProvider {
 				| AIProvider::AzureOpenAI(_)
 				| AIProvider::Vertex(_),
 				InputFormat::Responses,
-			) => {
-				return Err(AIError::UnsupportedConversion(strng::literal!(
-					"Responses streaming not implemented"
-				)));
-			},
+			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, log)),
 			// Anthropic messages: passthrough
 			(AIProvider::Anthropic(_), InputFormat::Messages) => {
 				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, log))
@@ -1006,10 +1002,12 @@ fn num_tokens_from_anthropic_messages(
 
 fn num_tokens_from_responses_input(
 	model: &str,
-	input: &openai::responses::Input,
+	input: &types::responses::typed::InputParam,
 ) -> Result<u64, AIError> {
-	use openai::responses::{ContentType, Input, InputContent, InputItem};
 	use tiktoken_rs::tokenizer::get_tokenizer;
+	use types::responses::typed::{
+		EasyInputContent, InputContent, InputItem, InputParam, Item, MessageItem, OutputMessageContent,
+	};
 
 	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
 	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
@@ -1023,28 +1021,46 @@ fn num_tokens_from_responses_input(
 	let mut num_tokens: u64 = 0;
 
 	match input {
-		Input::Text(text) => {
+		InputParam::Text(text) => {
 			num_tokens += tokens_per_message;
 			num_tokens += 1; // role
 			num_tokens += bpe.encode_with_special_tokens(text).len() as u64;
 		},
-		Input::Items(items) => {
+		InputParam::Items(items) => {
 			for item in items {
 				match item {
-					InputItem::Message(msg) => {
+					InputItem::EasyMessage(msg) => {
 						num_tokens += tokens_per_message;
 						num_tokens += 1; // role
 						match &msg.content {
-							InputContent::TextInput(text) => {
+							EasyInputContent::Text(text) => {
 								num_tokens += bpe.encode_with_special_tokens(text).len() as u64;
 							},
-							InputContent::InputItemContentList(parts) => {
+							EasyInputContent::ContentList(parts) => {
 								for part in parts {
-									if let ContentType::InputText(input_text) = part {
+									if let InputContent::InputText(input_text) = part {
 										num_tokens += bpe.encode_with_special_tokens(&input_text.text).len() as u64;
 									}
 								}
 							},
+						}
+					},
+					InputItem::Item(Item::Message(MessageItem::Input(msg))) => {
+						num_tokens += tokens_per_message;
+						num_tokens += 1; // role
+						for part in &msg.content {
+							if let InputContent::InputText(input_text) = part {
+								num_tokens += bpe.encode_with_special_tokens(&input_text.text).len() as u64;
+							}
+						}
+					},
+					InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
+						num_tokens += tokens_per_message;
+						num_tokens += 1; // role
+						for part in &msg.content {
+							if let OutputMessageContent::OutputText(output_text) = part {
+								num_tokens += bpe.encode_with_special_tokens(&output_text.text).len() as u64;
+							}
 						}
 					},
 					_ => {

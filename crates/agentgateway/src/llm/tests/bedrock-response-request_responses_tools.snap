@@ -1,0 +1,89 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "bedrock-response: request_responses_tools"
+info:
+  input:
+    - type: message
+      role: user
+      content: "What's the weather in San Francisco?"
+  max_output_tokens: 256
+  model: gpt-4.1-mini
+  stream: false
+  temperature: 0.2
+  tool_choice:
+    type: function
+    name: get_weather
+  tools:
+    - type: function
+      name: get_weather
+      parameters:
+        type: object
+        properties:
+          location:
+            type: string
+          unit:
+            type: string
+            enum:
+              - celsius
+              - fahrenheit
+        required:
+          - location
+        additionalProperties: false
+      strict: true
+      description: Get the current weather for a location
+  top_p: 0.9
+---
+{
+  "modelId": "gpt-4.1-mini",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "What's the weather in San Francisco?"
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 256,
+    "temperature": 0.2,
+    "top_p": 0.9
+  },
+  "toolConfig": {
+    "tools": [
+      {
+        "toolSpec": {
+          "name": "get_weather",
+          "description": "Get the current weather for a location",
+          "inputSchema": {
+            "json": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "celsius",
+                    "fahrenheit"
+                  ]
+                }
+              },
+              "required": [
+                "location"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    ],
+    "tool_choice": {
+      "tool": {
+        "name": "get_weather"
+      }
+    }
+  }
+}

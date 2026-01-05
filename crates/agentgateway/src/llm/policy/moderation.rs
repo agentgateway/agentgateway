@@ -13,7 +13,7 @@ pub async fn send_request(
 	claims: Option<Claims>,
 	client: &PolicyClient,
 	moderation: &Moderation,
-) -> anyhow::Result<async_openai::types::CreateModerationResponse> {
+) -> anyhow::Result<async_openai::types::moderations::CreateModerationResponse> {
 	let model = moderation
 		.model
 		.clone()
@@ -48,6 +48,7 @@ pub async fn send_request(
 	let resp = client
 		.call_with_explicit_policies(req, mock_be, pols)
 		.await?;
-	let resp: async_openai::types::CreateModerationResponse = json::from_response_body(resp).await?;
+	let resp: async_openai::types::moderations::CreateModerationResponse =
+		json::from_response_body(resp).await?;
 	Ok(resp)
 }
