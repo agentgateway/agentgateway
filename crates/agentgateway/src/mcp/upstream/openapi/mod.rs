@@ -364,25 +364,15 @@ pub(crate) fn parse_openapi_schema(
 								.clone();
 
 							// Derive tool annotations from HTTP method
+							// Only annotate what's universally safe to assume
 							let annotations = Some(match method.to_uppercase().as_str() {
+								// GET/HEAD/OPTIONS are universally read-only per HTTP spec
 								"GET" | "HEAD" | "OPTIONS" => {
 									ToolAnnotations::default().read_only(true)
 								},
-								"DELETE" => ToolAnnotations::default()
-									.read_only(false)
-									.destructive(true)
-									.idempotent(true),
-								"PUT" => ToolAnnotations::default()
-									.read_only(false)
-									.destructive(true)
-									.idempotent(true),
-								"PATCH" => ToolAnnotations::default()
-									.read_only(false)
-									.destructive(true),
-								// POST and other methods: creates new resources (additive)
-								_ => ToolAnnotations::default()
-									.read_only(false)
-									.destructive(false),
+								// All other methods: no behavioral assumptions
+								// Users can customize via future configuration mechanism
+								_ => ToolAnnotations::default(),
 							});
 
 							// Generate human-readable title from operation_id
