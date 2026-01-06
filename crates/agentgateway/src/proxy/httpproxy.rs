@@ -511,7 +511,7 @@ impl HTTPProxy {
 		let frontend_policies = inputs
 			.stores
 			.read_binds()
-			.frontend_policies(self.inputs.cfg.gateway());
+			.frontend_policies(self.inputs.cfg.gateway_ref());
 		if let Some(tp) = frontend_policies.tracing.as_deref() {
 			// Apply sampling overrides if present
 			if let Some(rs) = &tp.config.random_sampling {
