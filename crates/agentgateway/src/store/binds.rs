@@ -18,9 +18,9 @@ use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{
-	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTarget, BackendWithPolicies, Bind, BindKey,
-	FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey, PolicyTarget,
-	Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TrafficPolicy,
+	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
+	BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
+	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TrafficPolicy,
 };
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -483,7 +483,7 @@ impl Store {
 	// is selected.
 	pub fn sub_backend_policies(
 		&self,
-		sub_backend: BackendTarget,
+		sub_backend: BackendTargetRef,
 		inline_policies: Option<&[BackendPolicy]>,
 	) -> BackendPolicies {
 		self.internal_backend_policies(
@@ -512,16 +512,16 @@ impl Store {
 
 	pub fn backend_policies(
 		&self,
-		backend: BackendTarget,
+		backend: BackendTargetRef,
 		inline_policies: &[&[BackendPolicy]],
 		path: Option<RoutePath>,
 	) -> BackendPolicies {
 		self.internal_backend_policies(
 			Some(backend.strip_section()),
-			Some(backend),
+			Some(backend.clone()),
 			inline_policies,
-			path.as_ref().map(|p| p.listener.clone()),
-			path.as_ref().map(|p| p.route.clone()),
+			path.as_ref().map(|p| p.listener),
+			path.as_ref().map(|p| p.route),
 		)
 	}
 
@@ -529,25 +529,23 @@ impl Store {
 	fn internal_backend_policies(
 		&self,
 		// backend with section stripped, always
-		backend: Option<BackendTarget>,
+		backend: Option<BackendTargetRef>,
 		// backend with section retained.
 		// Note this differs from other types, where just one is passed in and we strip them
-		sub_backend: Option<BackendTarget>,
+		sub_backend: Option<BackendTargetRef>,
 		inline_policies: &[&[BackendPolicy]],
-		gateway: Option<ListenerName>,
-		route: Option<RouteName>,
+		gateway: Option<&ListenerName>,
+		route: Option<&RouteName>,
 	) -> BackendPolicies {
 		let backend_rules =
-			backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::Backend(t)));
+			backend.and_then(|t| self.policies_by_target.get(&PolicyTargetRef::Backend(t)));
 		let sub_backend_rules =
-			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::Backend(t)));
-		let route_rule_rules = route
-			.as_ref()
-			.and_then(|t| self.policies_by_target.get(&t.as_route_rule_target_ref()));
+			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTargetRef::Backend(t)));
+		let route_rule_rules =
+			route.and_then(|t| self.policies_by_target.get(&t.as_route_rule_target_ref()));
 		let route_rules = route.and_then(|t| self.policies_by_target.get(&t.as_route_target_ref()));
-		let listener_rules = gateway
-			.clone()
-			.and_then(|t| self.policies_by_target.get(&t.as_listener_target_ref()));
+		let listener_rules =
+			gateway.and_then(|t| self.policies_by_target.get(&t.as_listener_target_ref()));
 		let gateway_rules =
 			gateway.and_then(|t| self.policies_by_target.get(&t.as_gateway_target_ref()));
 
@@ -628,8 +626,8 @@ impl Store {
 		pol
 	}
 
-	pub fn frontend_policies(&self, gateway: ListenerTarget) -> FrontendPolices {
-		let gw_rules = self.policies_by_target.get(&PolicyTarget::Gateway(gateway));
+	pub fn frontend_policies(&self, gateway: PolicyTargetRef) -> FrontendPolices {
+		let gw_rules = self.policies_by_target.get(&gateway);
 		let rules = gw_rules
 			.iter()
 			.copied()

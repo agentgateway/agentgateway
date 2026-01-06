@@ -49,7 +49,7 @@ use telemetry::{metrics, trc};
 
 use crate::control::{AuthSource, RootCert};
 use crate::telemetry::trc::Protocol;
-use crate::types::agent::ListenerTarget;
+use crate::types::agent::{ListenerTarget, PolicyTargetRef};
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -385,6 +385,13 @@ impl Config {
 		ListenerTarget {
 			gateway_name: self.xds.gateway.clone(),
 			gateway_namespace: self.xds.namespace.clone(),
+			listener_name: None,
+		}
+	}
+	pub fn gateway_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Gateway {
+			gateway_name: self.xds.gateway.as_ref(),
+			gateway_namespace: self.xds.namespace.as_ref(),
 			listener_name: None,
 		}
 	}

@@ -266,7 +266,7 @@ impl Gateway {
 		let policies = inputs
 			.stores
 			.read_binds()
-			.frontend_policies(inputs.cfg.gateway());
+			.frontend_policies(inputs.cfg.gateway_ref());
 		if let Some(tcp) = policies.tcp.as_ref() {
 			raw_stream.apply_tcp_settings(tcp)
 		}
@@ -358,7 +358,7 @@ impl Gateway {
 		let policies = inputs
 			.stores
 			.read_binds()
-			.frontend_policies(inputs.cfg.gateway());
+			.frontend_policies(inputs.cfg.gateway_ref());
 		if let Some(tcp) = policies.tcp.as_ref() {
 			raw_stream.apply_tcp_settings(tcp)
 		}

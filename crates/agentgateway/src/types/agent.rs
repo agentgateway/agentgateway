@@ -375,7 +375,7 @@ pub enum BackendTarget {
 	Invalid,
 }
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum BackendTargetRef<'a> {
 	Backend {
 		name: &'a str,
@@ -415,26 +415,27 @@ impl<'a> From<&'a BackendTarget> for BackendTargetRef<'a> {
 		}
 	}
 }
-impl BackendTarget {
-	pub fn strip_section(&self) -> BackendTarget {
-		match self.clone() {
-			BackendTarget::Backend {
+
+impl BackendTargetRef<'_> {
+	pub fn strip_section(&self) -> BackendTargetRef {
+		match self {
+			BackendTargetRef::Backend {
 				name, namespace, ..
-			} => BackendTarget::Backend {
+			} => BackendTargetRef::Backend {
 				name,
 				namespace,
 				section: None,
 			},
-			BackendTarget::Service {
+			BackendTargetRef::Service {
 				namespace,
 				hostname,
 				..
-			} => BackendTarget::Service {
+			} => BackendTargetRef::Service {
 				namespace,
 				hostname,
 				port: None,
 			},
-			BackendTarget::Invalid => BackendTarget::Invalid,
+			BackendTargetRef::Invalid => BackendTargetRef::Invalid,
 		}
 	}
 }
@@ -771,19 +772,19 @@ impl SimpleBackend {
 		}
 	}
 
-	pub fn target(&self) -> BackendTarget {
+	pub fn target(&self) -> BackendTargetRef {
 		match self {
-			SimpleBackend::Service(svc, port) => BackendTarget::Service {
-				hostname: svc.hostname.clone(),
-				namespace: svc.namespace.clone(),
+			SimpleBackend::Service(svc, port) => BackendTargetRef::Service {
+				hostname: svc.hostname.as_ref(),
+				namespace: svc.namespace.as_ref(),
 				port: Some(*port),
 			},
-			SimpleBackend::Opaque(name, _) => BackendTarget::Backend {
-				name: name.name.clone(),
-				namespace: name.namespace.clone(),
+			SimpleBackend::Opaque(name, _) => BackendTargetRef::Backend {
+				name: name.name.as_ref(),
+				namespace: name.namespace.as_ref(),
 				section: None,
 			},
-			SimpleBackend::Invalid => BackendTarget::Invalid,
+			SimpleBackend::Invalid => BackendTargetRef::Invalid,
 		}
 	}
 
@@ -820,6 +821,25 @@ impl Backend {
 				section: None,
 			},
 			Backend::Invalid => BackendTarget::Invalid,
+		}
+	}
+
+	pub fn target_ref(&self) -> BackendTargetRef {
+		match self {
+			Backend::Service(svc, port) => BackendTargetRef::Service {
+				hostname: svc.hostname.as_ref(),
+				namespace: svc.namespace.as_ref(),
+				port: Some(*port),
+			},
+			Backend::Opaque(name, _)
+			| Backend::MCP(name, _)
+			| Backend::AI(name, _)
+			| Backend::Dynamic(name, _) => BackendTargetRef::Backend {
+				name: name.name.as_ref(),
+				namespace: name.namespace.as_ref(),
+				section: None,
+			},
+			Backend::Invalid => BackendTargetRef::Invalid,
 		}
 	}
 

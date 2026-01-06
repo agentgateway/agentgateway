@@ -1043,7 +1043,7 @@ fn get_backend_policies(
 	path: Option<RoutePath>,
 ) -> BackendPolicies {
 	inputs.stores.read_binds().backend_policies(
-		backend.backend.target(),
+		backend.backend.target_ref(),
 		// Precedence: Selector < Backend inline < backendRef inline
 		// Note this differs from the logical chain of objects (Route -> backendRef -> backend),
 		// because a backendRef is actually more specific: its one *specific usage* of the backend.
@@ -1115,10 +1115,10 @@ async fn make_backend_call(
 		Backend::AI(n, ai) => {
 			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
-			let sub_backend_name = BackendTarget::Backend {
-				name: n.name.clone(),
-				namespace: n.namespace.clone(),
-				section: Some(provider.name.clone()),
+			let sub_backend_name = BackendTargetRef::Backend {
+				name: n.name.as_ref(),
+				namespace: n.namespace.as_ref(),
+				section: Some(provider.name.as_ref()),
 			};
 			let sub_backend_policies = inputs
 				.stores

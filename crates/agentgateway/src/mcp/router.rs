@@ -28,8 +28,8 @@ use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
-	BackendTarget, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, ResourceName, SimpleBackend,
-	SimpleBackendReference,
+	BackendTargetRef, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, ResourceName,
+	SimpleBackend, SimpleBackendReference,
 };
 use crate::{ProxyInputs, json};
 
@@ -91,10 +91,10 @@ impl App {
 						.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, &pi))
 						.transpose()?;
 					let inline_pols = be.as_ref().map(|pol| pol.inline_policies.as_slice());
-					let sub_backend_target = BackendTarget::Backend {
-						name: backend_group_name.name.clone(),
-						namespace: backend_group_name.namespace.clone(),
-						section: Some(t.name.clone()),
+					let sub_backend_target = BackendTargetRef::Backend {
+						name: backend_group_name.name.as_ref(),
+						namespace: backend_group_name.namespace.as_ref(),
+						section: Some(t.name.as_ref()),
 					};
 					let backend_policies = backend_policies
 						.clone()
