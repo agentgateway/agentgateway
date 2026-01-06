@@ -391,6 +391,17 @@ pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 	Ok(host)
 }
 
+pub fn get_host_with_port(req: &Request) -> Result<&str, ProxyError> {
+	// We expect a normalized request, so this will always be in the URI
+	// TODO: handle absolute HTTP/1.1 form
+	let host = req
+		.uri()
+		.authority()
+		.map(|a| a.as_str())
+		.ok_or(ProxyError::InvalidRequest)?;
+	Ok(host)
+}
+
 pub fn buffer_limit(req: &Request) -> usize {
 	req
 		.extensions()

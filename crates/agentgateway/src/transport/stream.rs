@@ -261,7 +261,7 @@ impl Socket {
 		}
 	}
 
-	pub async fn dial(target: SocketAddr, cfg: Arc<crate::BackendConfig>) -> io::Result<Socket> {
+	pub async fn dial(target: SocketAddr, cfg: &crate::BackendConfig) -> io::Result<Socket> {
 		let res = tokio::time::timeout(cfg.connect_timeout, TcpStream::connect(target))
 			.await
 			.map_err(|to| io::Error::new(io::ErrorKind::TimedOut, to))??;
@@ -289,10 +289,7 @@ impl Socket {
 
 	/// Dial a Unix domain socket
 	#[cfg(unix)]
-	pub async fn dial_unix(
-		path: &std::path::Path,
-		cfg: Arc<crate::BackendConfig>,
-	) -> io::Result<Socket> {
+	pub async fn dial_unix(path: &std::path::Path, cfg: &crate::BackendConfig) -> io::Result<Socket> {
 		let res = tokio::time::timeout(cfg.connect_timeout, UnixStream::connect(path))
 			.await
 			.map_err(|to| io::Error::new(io::ErrorKind::TimedOut, to))??;
@@ -301,7 +298,7 @@ impl Socket {
 	#[cfg(not(unix))]
 	pub async fn dial_unix(
 		_path: &std::path::Path,
-		_cfg: Arc<crate::BackendConfig>,
+		_cfg: &crate::BackendConfig,
 	) -> io::Result<Socket> {
 		Err(io::Error::new(
 			io::ErrorKind::Unsupported,

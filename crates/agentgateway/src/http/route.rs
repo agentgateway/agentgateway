@@ -52,6 +52,7 @@ pub fn select_best_route(
 			return None;
 		};
 		// We are going to get a VIP request. Look up the Service
+		// TODO: add a mode to fallback to a DFP backend
 		let svc = stores
 			.read_discovery()
 			.services

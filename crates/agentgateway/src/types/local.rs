@@ -1150,6 +1150,7 @@ async fn convert_route(
 				port: *port,
 			},
 			LocalBackend::Invalid => BackendReference::Invalid,
+			LocalBackend::Dynamic {} => BackendReference::Backend("dynamic".into()),
 			_ => BackendReference::Backend(strng::format!("/{}", backend_key)),
 		};
 		let backends = b.backend.as_backends(be_name.clone())?;

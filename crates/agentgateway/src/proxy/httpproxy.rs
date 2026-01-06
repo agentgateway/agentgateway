@@ -16,14 +16,14 @@ use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
 
-use crate::client::Transport;
+use crate::client::{ApplicationTransport, Transport};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::ExtProcRequest;
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
 	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
-	auth, filters, get_host, merge_in_headers, retry,
+	auth, filters, merge_in_headers, retry,
 };
 use crate::llm::{InputFormat, LLMRequest, RequestResult, RouteType};
 use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
@@ -1007,6 +1007,12 @@ pub async fn build_transport(
 	backend_http_version_override: Option<::http::Version>,
 ) -> Result<Transport, ProxyError> {
 	let backend_tls = backend_tls.map(|btls| btls.config_for(backend_http_version_override));
+	let app_transport = if let Some(tls) = backend_tls {
+		ApplicationTransport::Tls(tls)
+	} else {
+		ApplicationTransport::Plaintext
+	};
+
 	// Check if we need double hbone
 	if let (
 		Some((gw_addr, gw_identity)),
@@ -1023,7 +1029,7 @@ pub async fn build_transport(
 				types::discovery::gatewayaddress::Destination::Address(net_addr) => net_addr.address,
 				types::discovery::gatewayaddress::Destination::Hostname(_) => {
 					warn!("hostname-based gateway addresses not yet supported");
-					return Ok(Transport::Plaintext);
+					return Ok(app_transport.into());
 				},
 			};
 
@@ -1038,41 +1044,41 @@ pub async fn build_transport(
 				gateway_address: gateway_socket_addr,
 				gateway_identity: gw_identity.clone(),
 				waypoint_identity: waypoint_identity.clone(),
-				inner_tls: backend_tls,
+				inner: app_transport,
 			});
 		} else {
 			warn!("wanted double hbone but CA is not available");
-			return Ok(Transport::Plaintext);
+			return Ok(app_transport.into());
 		}
 	}
 
-	Ok(
-		match (&backend_call.transport_override, backend_tls, &inputs.ca) {
-			// Use legacy mTLS if they did not define a TLS policy. We could do double TLS but Istio doesn't,
-			// so maintain bug-for-bug parity
-			(Some((InboundProtocol::LegacyIstioMtls, ident)), None, Some(ca)) => {
-				if let Ok(id) = ca.get_identity().await {
-					Some(
-						id.legacy_mtls(vec![ident.clone()])
-							.map_err(|e| ProxyError::Processing(anyhow!("{e}")))?,
-					)
-					.into()
-				} else {
-					warn!("wanted TLS but CA is not available");
-					Transport::Plaintext
-				}
-			},
-			(Some((InboundProtocol::HBONE, ident)), btls, Some(ca)) => {
-				if ca.get_identity().await.is_ok() {
-					Transport::Hbone(btls, ident.clone())
-				} else {
-					warn!("wanted TLS but CA is not available");
-					Transport::Plaintext
-				}
-			},
-			(_, pol, _) => pol.into(),
+	Ok(match (&backend_call.transport_override, &inputs.ca) {
+		// Use legacy mTLS if they did not define a TLS policy. We could do double TLS but Istio doesn't,
+		// so maintain bug-for-bug parity
+		(Some((InboundProtocol::LegacyIstioMtls, ident)), Some(ca))
+			if matches!(app_transport, ApplicationTransport::Tls(_)) =>
+		{
+			if let Ok(id) = ca.get_identity().await {
+				Some(
+					id.legacy_mtls(vec![ident.clone()])
+						.map_err(|e| ProxyError::Processing(anyhow!("{e}")))?,
+				)
+				.into()
+			} else {
+				warn!("wanted TLS but CA is not available");
+				app_transport.into()
+			}
 		},
-	)
+		(Some((InboundProtocol::HBONE, ident)), Some(ca)) => {
+			if ca.get_identity().await.is_ok() {
+				Transport::Hbone(app_transport, ident.clone())
+			} else {
+				warn!("wanted TLS but CA is not available");
+				app_transport.into()
+			}
+		},
+		(_, _) => app_transport.into(),
+	})
 }
 
 fn get_backend_policies(
@@ -1216,7 +1222,8 @@ async fn make_backend_call(
 				.unwrap()
 				.local_addr
 				.port();
-			let target = Target::try_from((get_host(&req)?, port)).map_err(ProxyError::Processing)?;
+			let target =
+				Target::try_from((http::get_host(&req)?, port)).map_err(ProxyError::Processing)?;
 			BackendCall {
 				target: target.clone(),
 				http_version_override: None,
@@ -1581,6 +1588,8 @@ pub fn build_service_call(
 		);
 		Target::Hostname(svc.hostname.clone(), port)
 	} else {
+		// TODO: support a mode like ServiceEntry DYNAMIC_DNS. Need a way to signal this, though; perhaps:
+		// wl.workload_ips.is_empty() && wl.hostname.starts_with("*.")
 		// For direct connections, we need the workload IP
 		let Some(ip) = wl.workload_ips.first() else {
 			return Err(ProxyError::NoHealthyEndpoints);

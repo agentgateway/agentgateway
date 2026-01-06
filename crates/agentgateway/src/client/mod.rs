@@ -1,33 +1,27 @@
+mod azure;
+mod connect_tunnel;
 mod dns;
-mod hyperrustls;
+mod hbone_tunnel;
+mod tls;
+
 use std::str::FromStr;
 use std::task;
 
-use ::http::Uri;
 use ::http::uri::{Authority, Scheme};
-use async_trait::async_trait;
-use azure_core::error::ResultExt;
-use futures::TryStreamExt;
-use http_body_util::BodyExt;
 use hyper_util_fork::rt::TokioIo;
-use rustls_pki_types::{DnsName, ServerName};
-use tonic::codegen::Service;
 use tracing::event;
-use typespec_client_core::http::{AsyncRawResponse, Sanitizer};
 
 use crate::http::backendtls::VersionedBackendTLS;
 use crate::http::filters;
 use crate::http::filters::BackendRequestTimeout;
 use crate::proxy::ProxyError;
-use crate::transport::hbone::WorkloadKey;
+use crate::transport::hbone;
 use crate::transport::stream::{LoggingMode, Socket};
-use crate::transport::{hbone, stream};
 use crate::types::agent::Target;
 use crate::*;
 
 #[derive(Clone)]
 pub struct Client {
-	resolver: Arc<dns::CachedResolver>,
 	client: hyper_util_fork::client::legacy::Client<Connector, http::Body, PoolKey>,
 	connector: Connector,
 }
@@ -36,128 +30,6 @@ impl Debug for Client {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Client").finish()
 	}
-}
-
-#[async_trait]
-impl azure_core::http::HttpClient for Client {
-	async fn execute_request(
-		&self,
-		request: &azure_core::http::Request,
-	) -> azure_core::Result<AsyncRawResponse> {
-		let url = request.url().clone();
-		let method = request.method();
-		let mut req = ::http::Request::builder();
-		req = req.method(from_method(method)?).uri(url.as_str());
-		for (name, value) in request.headers().iter() {
-			req = req.header(name.as_str(), value.as_str());
-		}
-		let body = request.body().clone();
-
-		let request = match body {
-			azure_core::http::Body::Bytes(bytes) => req.body(crate::http::Body::from(bytes)),
-
-			// We cannot currently implement `Body::SeekableStream` for WASM
-			// because `reqwest::Body::wrap_stream()` is not implemented for WASM.
-			#[cfg(not(target_arch = "wasm32"))]
-			azure_core::http::Body::SeekableStream(seekable_stream) => {
-				req.body(crate::http::Body::from_stream(seekable_stream))
-			},
-		}
-		.map_err(|e| {
-			azure_core::Error::with_error(
-				azure_core::error::ErrorKind::Other,
-				e,
-				"failed to build `agentgateway::client::Client` request",
-			)
-		})?;
-
-		debug!(
-			"performing request {method} '{}' with `agentgateway::client::Client`",
-			url.sanitize(&typespec_client_core::http::DEFAULT_ALLOWED_QUERY_PARAMETERS)
-		);
-		let rsp = self
-			.call(Call {
-				req: request,
-				target: match url.host().expect("url must have a host") {
-					url::Host::Domain(h) => Target::try_from((h, url.port_or_known_default().unwrap_or(80)))
-						.map_err(|e| {
-							azure_core::Error::with_error(
-								azure_core::error::ErrorKind::Other,
-								e,
-								"failed to parse host for `agentgateway::client::Client` request",
-							)
-						})?,
-					url::Host::Ipv4(ip) => Target::Address(SocketAddr::from((
-						ip,
-						url.port_or_known_default().unwrap_or(80),
-					))),
-					url::Host::Ipv6(ip) => Target::Address(SocketAddr::from((
-						ip,
-						url.port_or_known_default().unwrap_or(80),
-					))),
-				},
-				transport: if url.scheme() == "https" {
-					Transport::Tls(http::backendtls::SYSTEM_TRUST.base_config())
-				} else {
-					Transport::Plaintext
-				},
-			})
-			.await
-			.map_err(|e| {
-				error!("request failed: {e}");
-				azure_core::Error::with_error(
-					azure_core::error::ErrorKind::Io,
-					e,
-					"failed to execute `agentgateway::client::Client` request",
-				)
-			})?;
-
-		let status = rsp.status();
-		let headers = to_headers(rsp.headers());
-
-		let body: azure_core::http::response::PinnedStream =
-			Box::pin(rsp.into_data_stream().map_err(|error| {
-				azure_core::Error::with_error(
-					azure_core::error::ErrorKind::Io,
-					error,
-					"error converting `reqwest` request into a byte stream",
-				)
-			}));
-
-		Ok(AsyncRawResponse::new(status.as_u16().into(), headers, body))
-	}
-}
-
-fn from_method(method: azure_core::http::Method) -> azure_core::Result<http::Method> {
-	match method {
-		azure_core::http::Method::Get => Ok(http::Method::GET),
-		azure_core::http::Method::Head => Ok(http::Method::HEAD),
-		azure_core::http::Method::Post => Ok(http::Method::POST),
-		azure_core::http::Method::Put => Ok(http::Method::PUT),
-		azure_core::http::Method::Delete => Ok(http::Method::DELETE),
-		azure_core::http::Method::Patch => Ok(http::Method::PATCH),
-		_ => http::Method::from_str(method.as_str())
-			.with_kind(azure_core::error::ErrorKind::DataConversion),
-	}
-}
-
-fn to_headers(map: &::http::HeaderMap) -> azure_core::http::headers::Headers {
-	let map = map
-		.iter()
-		.filter_map(|(k, v)| {
-			let key = k.as_str();
-			if let Ok(value) = v.to_str() {
-				Some((
-					azure_core::http::headers::HeaderName::from(key.to_owned()),
-					azure_core::http::headers::HeaderValue::from(value.to_owned()),
-				))
-			} else {
-				warn!("header value for `{key}` is not utf8");
-				None
-			}
-		})
-		.collect::<HashMap<_, _>>();
-	azure_core::http::headers::Headers::from(map)
 }
 
 pub struct Call {
@@ -173,25 +45,92 @@ pub struct TCPCall {
 }
 
 #[derive(Default, Debug, Clone, Hash, PartialEq, Eq)]
-pub enum Transport {
+pub enum ApplicationTransport {
 	#[default]
 	Plaintext,
 	Tls(VersionedBackendTLS),
-	Hbone(Option<VersionedBackendTLS>, Identity),
+}
+
+impl From<Option<VersionedBackendTLS>> for ApplicationTransport {
+	fn from(value: Option<VersionedBackendTLS>) -> Self {
+		match value {
+			Some(tls) => ApplicationTransport::Tls(tls),
+			None => ApplicationTransport::Plaintext,
+		}
+	}
+}
+
+impl ApplicationTransport {
+	pub fn name(&self) -> &'static str {
+		match self {
+			ApplicationTransport::Plaintext => "plaintext",
+			ApplicationTransport::Tls(_) => "tls",
+		}
+	}
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct TunnelConfig {
+	pub proxy: Target,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum Transport {
+	Plain(ApplicationTransport),
+	Tunnel(ApplicationTransport, TunnelConfig),
+	Hbone(ApplicationTransport, Identity),
 	DoubleHbone {
 		gateway_address: SocketAddr, // Address of network gateway to connect to
 		gateway_identity: Identity,  // Identity of network gateway
 		waypoint_identity: Identity, // Identity of waypoint/workload
-		inner_tls: Option<VersionedBackendTLS>,
+		inner: ApplicationTransport,
 	},
 }
+
+impl From<ApplicationTransport> for Transport {
+	fn from(value: ApplicationTransport) -> Self {
+		Transport::Plain(value)
+	}
+}
+
+impl Default for Transport {
+	fn default() -> Self {
+		Transport::Plain(ApplicationTransport::Plaintext)
+	}
+}
+
 impl Transport {
+	pub fn application(&self) -> &ApplicationTransport {
+		match self {
+			Transport::Plain(inner) => inner,
+			Transport::Tunnel(inner, _) => inner,
+			Transport::Hbone(inner, _) => inner,
+			Transport::DoubleHbone { inner, .. } => inner,
+		}
+	}
+
+	pub fn skip_dns_resolution(&self) -> bool {
+		// For double HBONE, we don't need to resolve the hostname locally
+		// The gateway will resolve it. Use a placeholder dest (won't be used).
+		matches!(self, Transport::DoubleHbone { .. })
+	}
+
 	pub fn name(&self) -> &'static str {
 		match self {
-			Transport::Plaintext => "plaintext",
-			Transport::Tls(_) => "tls",
-			Transport::Hbone(_, _) => "hbone",
-			Transport::DoubleHbone { .. } => "doublehbone",
+			Transport::Hbone(ApplicationTransport::Plaintext, _) => "hbone",
+			Transport::Hbone(ApplicationTransport::Tls(_), _) => "hbone-tls",
+			Transport::Plain(ApplicationTransport::Plaintext) => "plaintext",
+			Transport::Plain(ApplicationTransport::Tls(_)) => "tls",
+			Transport::Tunnel(ApplicationTransport::Plaintext, _) => "tunnel",
+			Transport::Tunnel(ApplicationTransport::Tls(_), _) => "tunnel-tls",
+			Transport::DoubleHbone {
+				inner: ApplicationTransport::Plaintext,
+				..
+			} => "doublehbone",
+			Transport::DoubleHbone {
+				inner: ApplicationTransport::Tls(_),
+				..
+			} => "doublehbone-tls",
 		}
 	}
 }
@@ -199,9 +138,9 @@ impl Transport {
 impl From<Option<VersionedBackendTLS>> for Transport {
 	fn from(tls: Option<VersionedBackendTLS>) -> Self {
 		if let Some(tls) = tls {
-			client::Transport::Tls(tls)
+			ApplicationTransport::Tls(tls).into()
 		} else {
-			client::Transport::Plaintext
+			ApplicationTransport::Plaintext.into()
 		}
 	}
 }
@@ -214,26 +153,10 @@ pub struct ResolvedDestination(pub SocketAddr);
 
 impl Transport {
 	pub fn scheme(&self) -> Scheme {
-		match self {
-			Transport::Plaintext => Scheme::HTTP,
+		match *self.application() {
+			ApplicationTransport::Plaintext => Scheme::HTTP,
 			// TODO: make sure this is right, envoy had all sorts of issues around this.
-			Transport::Tls(_) => Scheme::HTTPS,
-			Transport::Hbone(inner, _) => {
-				if inner.is_some() {
-					Scheme::HTTPS
-				} else {
-					// It is a tunnel, so the fact its HTTPS is transparent!
-					Scheme::HTTP
-				}
-			},
-			Transport::DoubleHbone { inner_tls, .. } => {
-				if inner_tls.is_some() {
-					Scheme::HTTPS
-				} else {
-					// Double tunnel, so HTTPS is transparent!
-					Scheme::HTTP
-				}
-			},
+			ApplicationTransport::Tls(_) => Scheme::HTTPS,
 		}
 	}
 }
@@ -243,6 +166,22 @@ struct Connector {
 	hbone_pool: Option<agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>>,
 	backend_config: Arc<crate::BackendConfig>,
 	metrics: Option<Arc<crate::metrics::Metrics>>,
+	resolver: Arc<dns::CachedResolver>,
+}
+
+async fn dial(
+	target: &Target,
+	ep: SocketAddr,
+	backend: &crate::BackendConfig,
+) -> Result<Socket, http::Error> {
+	match target {
+		Target::UnixSocket(uds) => Socket::dial_unix(uds, backend)
+			.await
+			.map_err(crate::http::Error::new),
+		_ => Socket::dial(ep, backend)
+			.await
+			.map_err(crate::http::Error::new),
+	}
 }
 
 impl Connector {
@@ -254,226 +193,68 @@ impl Connector {
 	) -> Result<Socket, http::Error> {
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
-
-		let mut socket = match (transport, &target) {
-			(Transport::Plaintext, Target::UnixSocket(uds)) => {
-				Socket::dial_unix(uds, self.backend_config.clone())
+		let skip_dns = transport.skip_dns_resolution();
+		let tls = match transport.application() {
+			ApplicationTransport::Plaintext => None,
+			ApplicationTransport::Tls(application) => Some(application.clone()),
+		};
+		let stream = match transport {
+			Transport::Plain(_) => dial(&target, ep, &self.backend_config).await?,
+			Transport::Tunnel(_, tcfg) => {
+				let proxy_dst: SocketAddr = self
+					.resolve_target(skip_dns, &tcfg.proxy)
 					.await
-					.map_err(crate::http::Error::new)?
-			},
-			(Transport::Plaintext, _) => Socket::dial(ep, self.backend_config.clone())
-				.await
-				.map_err(crate::http::Error::new)?,
-			(_, Target::UnixSocket(_)) => {
-				return Err(http::Error::new("UDS is only supported with plaintext"));
-			},
-			(Transport::Tls(tls), _) => {
-				let server_name = if let Some(h) = tls.hostname_override {
-					h
-				} else {
-					match target {
-						Target::Address(_) => ServerName::IpAddress(ep.ip().into()),
-						Target::Hostname(host, _) => ServerName::DnsName(
-							DnsName::try_from(host.to_string()).expect("TODO: hostname conversion failed"),
-						),
-						Target::UnixSocket(_) => {
-							// This should be unreachable - Unix sockets are handled above
-							unreachable!("Unix sockets should not reach TLS connection path")
-						},
-					}
-				};
+					.map_err(crate::http::Error::new)?;
+				let dest = target.to_string();
 
-				let mut tls = self::hyperrustls::TLSConnector {
-					tls_config: tls.config.clone(),
-					server_name,
-					backend_config: self.backend_config.clone(),
-				};
+				let mut con = dial(&tcfg.proxy, proxy_dst, &self.backend_config).await?;
 
-				tls.call(ep).await.map_err(crate::http::Error::new)?
+				connect_tunnel::handshake(&mut con, &dest)
+					.await
+					.map_err(crate::http::Error::new)?;
+				con
 			},
-			(Transport::Hbone(inner, identity), _) => {
-				if inner.is_some() {
-					return Err(crate::http::Error::new(anyhow::anyhow!(
-						"todo: inner TLS is not currently supported"
-					)));
-				}
-				let uri = Uri::builder()
-					.scheme(Scheme::HTTPS)
-					.authority(ep.to_string())
-					.path_and_query("/")
-					.build()
-					.expect("todo");
-				tracing::debug!("will use HBONE");
-				let req = ::http::Request::builder()
-					.uri(uri)
-					.method(hyper::Method::CONNECT)
-					.version(hyper::Version::HTTP_2)
-					.body(())
-					.expect("builder with known status code should not fail");
-
-				let pool_key = Box::new(WorkloadKey {
-					dst_id: vec![identity],
-					dst: SocketAddr::from((ep.ip(), 15008)),
-				});
-				let mut pool = self
+			Transport::Hbone(_, identity) => {
+				let pool = self
 					.hbone_pool
 					.clone()
 					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
-
-				let upgraded = Box::pin(pool.send_request_pooled(&pool_key, req))
-					.await
-					.map_err(crate::http::Error::new)?;
-				let rw = agent_hbone::RWStream {
-					stream: upgraded,
-					buf: Default::default(),
-					drain_tx: None,
-				};
-				Socket::from_hbone(Arc::new(stream::Extension::new()), pool_key.dst, rw)
+				hbone_tunnel::handshake(pool, ep, identity).await?
 			},
-			(
-				Transport::DoubleHbone {
+
+			Transport::DoubleHbone {
+				gateway_address,
+				gateway_identity,
+				waypoint_identity,
+				inner: _,
+			} => {
+				let pool = self
+					.hbone_pool
+					.clone()
+					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
+				hbone_tunnel::handshake_double(
+					pool,
+					&target,
+					ep,
 					gateway_address,
 					gateway_identity,
 					waypoint_identity,
-					inner_tls,
-				},
-				_,
-			) => {
-				if inner_tls.is_some() {
-					return Err(crate::http::Error::new(anyhow::anyhow!(
-						"todo: inner TLS after double hbone is not currently supported"
-					)));
-				}
-
-				tracing::debug!(
-					"will use DOUBLE HBONE: gateway {} -> workload {}",
-					gateway_address,
-					ep
-				);
-
-				// Fetch the pool once and reuse throughout this branch
-				let pool = self.hbone_pool.as_ref().ok_or_else(|| {
-					crate::http::Error::new(anyhow::anyhow!("hbone pool required for double hbone"))
-				})?;
-
-				// Create outer HBONE connection to network gateway
-				// The outer HBONE CONNECT request uses the service hostname (target) as the authority
-				// This tells the gateway what service we want to reach
-				let outer_uri = Uri::builder()
-					.scheme(Scheme::HTTPS)
-					.authority(match &target {
-						Target::Hostname(host, port) => format!("{}:{}", host, port),
-						Target::Address(addr) => addr.to_string(),
-						Target::UnixSocket(_) => {
-							// This should be unreachable - Unix sockets are handled above
-							unreachable!("Unix sockets should not reach DoubleHbone connection path")
-						},
-					})
-					.path_and_query("/")
-					.build()
-					.expect("uri build should not fail");
-				let outer_req = ::http::Request::builder()
-					.uri(outer_uri)
-					.method(hyper::Method::CONNECT)
-					.version(hyper::Version::HTTP_2)
-					.body(())
-					.expect("builder with known status code should not fail");
-
-				// Connect to the network gateway at its HBONE port
-				let outer_pool_key = Box::new(WorkloadKey {
-					dst_id: vec![gateway_identity.clone()],
-					dst: gateway_address,
-				});
-				let mut pool_clone = pool.clone();
-
-				let outer_upgraded = Box::pin(pool_clone.send_request_pooled(&outer_pool_key, outer_req))
-					.await
-					.map_err(crate::http::Error::new)?;
-
-				// Wrap upgraded to implement tokio's Async{Write,Read}
-				let outer_rw = agent_hbone::RWStream {
-					stream: outer_upgraded,
-					buf: Default::default(),
-					drain_tx: None,
-				};
-
-				// For the inner one, we do it manually to avoid connection pooling.
-				// Otherwise, we would only ever reach one workload in the remote cluster.
-				// We also need to abort tasks the right way to get graceful terminations.
-				let wl_key = WorkloadKey {
-					dst_id: vec![waypoint_identity.clone()],
-					dst: ep,
-				};
-
-				// Use the pool's certificate fetcher to get TLS config for the waypoint
-				let tls_config = pool
-					.fetch_certificate(WorkloadKey {
-						dst_id: vec![waypoint_identity.clone()],
-						dst: ep,
-					})
-					.await
-					.map_err(crate::http::Error::new)?;
-
-				let tls_connector = tokio_rustls::TlsConnector::from(tls_config);
-
-				// Use dummy value for domain because server name verification is not performed in this context.
-				let tls_stream = tls_connector
-					.connect(
-						rustls_pki_types::ServerName::IpAddress(std::net::Ipv4Addr::new(0, 0, 0, 0).into()),
-						outer_rw,
-					)
-					.await
-					.map_err(crate::http::Error::new)?;
-
-				// Spawn inner CONNECT tunnel
-				let (drain_tx, drain_rx) = tokio::sync::watch::channel(false);
-				let hbone_cfg = pool.config();
-				let mut sender =
-					agent_hbone::client::spawn_connection(hbone_cfg, tls_stream, drain_rx, wl_key)
-						.await
-						.map_err(crate::http::Error::new)?;
-
-				// For inner HBONE, use the target (hostname or IP), not ep (which may be a placeholder)
-				let inner_authority = match &target {
-					Target::Hostname(host, port) => format!("{}:{}", host, port),
-					Target::Address(addr) => addr.to_string(),
-					Target::UnixSocket(_) => {
-						// This should be unreachable - Unix sockets are handled above
-						unreachable!("Unix sockets should not reach DoubleHbone connection path")
-					},
-				};
-				let inner_uri = Uri::builder()
-					.scheme(Scheme::HTTPS)
-					.authority(inner_authority)
-					.path_and_query("/")
-					.build()
-					.expect("uri build should not fail");
-				let inner_req = ::http::Request::builder()
-					.uri(inner_uri)
-					.method(hyper::Method::CONNECT)
-					.version(hyper::Version::HTTP_2)
-					.body(())
-					.expect("builder with known status code should not fail");
-
-				let inner_upgraded = sender
-					.send_request(inner_req)
-					.await
-					.map_err(crate::http::Error::new)?;
-
-				let final_rw = agent_hbone::RWStream {
-					stream: inner_upgraded,
-					buf: Default::default(),
-					drain_tx: Some(drain_tx),
-				};
-
-				Socket::from_hbone(Arc::new(stream::Extension::new()), ep, final_rw)
+				)
+				.await?
 			},
+		};
+
+		// Apply application level TLS, if applicable
+		let mut socket = if let Some(tls_cfg) = tls {
+			tls::handshake(stream, &tls_cfg, target).await?
+		} else {
+			stream
 		};
 
 		let connect_ms = connect_start.elapsed().as_millis();
 		if let Some(m) = &self.metrics {
-			let labels = crate::telemetry::metrics::ConnectLabels {
-				transport: agent_core::strng::RichStrng::from(transport_name).into(),
+			let labels = metrics::ConnectLabels {
+				transport: strng::RichStrng::from(transport_name).into(),
 			};
 			// Note: convert from ms to seconds since Prometheus convention for histogram buckets is seconds.
 			m.upstream_connect_duration
@@ -496,6 +277,35 @@ impl Connector {
 
 		socket.with_logging(LoggingMode::Upstream);
 		Ok(socket)
+	}
+
+	async fn resolve_target(
+		&self,
+		skip_resolution: bool,
+		target: &Target,
+	) -> Result<SocketAddr, ProxyError> {
+		if skip_resolution {
+			// For double HBONE, we don't need to resolve the hostname locally
+			// The gateway will resolve it. Use a placeholder dest (won't be used).
+			return Ok(SocketAddr::from(([0, 0, 0, 0], 0)));
+		}
+		let dest = match &target {
+			Target::Address(addr) => *addr,
+			Target::Hostname(hostname, port) => {
+				let ip = self
+					.resolver
+					.resolve(hostname.clone())
+					.await
+					.map_err(|_| ProxyError::DnsResolution)?;
+				SocketAddr::from((ip, *port))
+			},
+			Target::UnixSocket(_) => {
+				// Placeholder address for Unix sockets - the actual connection
+				// uses the path from the Target, not this address
+				SocketAddr::from(([0, 0, 0, 0], 0))
+			},
+		};
+		Ok(dest)
 	}
 }
 
@@ -545,16 +355,13 @@ impl Client {
 		};
 
 		let connector = Connector {
+			resolver: Arc::new(resolver),
 			hbone_pool,
 			backend_config: Arc::new(backend_config),
 			metrics,
 		};
 		let client = b.build_with_pool_key(connector.clone());
-		Client {
-			resolver: Arc::new(resolver),
-			client,
-			connector,
-		}
+		Client { client, connector }
 	}
 
 	pub async fn simple_call(&self, req: http::Request) -> Result<http::Response, ProxyError> {
@@ -572,9 +379,9 @@ impl Client {
 			.map(|p| p.as_u16())
 			.unwrap_or_else(|| if scheme == &Scheme::HTTPS { 443 } else { 80 });
 		let transport = if scheme == &Scheme::HTTPS {
-			Transport::Tls(http::backendtls::SYSTEM_TRUST.base_config())
+			ApplicationTransport::Tls(http::backendtls::SYSTEM_TRUST.base_config()).into()
 		} else {
-			Transport::Plaintext
+			ApplicationTransport::Plaintext.into()
 		};
 		let target = Target::try_from((host, port))
 			.map_err(|e| ProxyError::ProcessingString(format!("failed to parse host: {e}")))?;
@@ -594,39 +401,11 @@ impl Client {
 			target,
 			transport,
 		} = call;
-		// For double HBONE, we don't need to resolve the hostname locally
-		// The gateway will resolve it. Use a placeholder dest (won't be used).
-		// For Unix sockets, we use a placeholder since the actual connection uses the path directly.
-		let dest = match (&target, &transport) {
-			(Target::Address(addr), _) => *addr,
-			(
-				Target::Hostname(hostname, _port),
-				Transport::DoubleHbone {
-					gateway_address, ..
-				},
-			) => {
-				// Don't resolve hostname for double HBONE - gateway will handle it
-				tracing::debug!(
-					hostname=%hostname,
-					"skipping DNS resolution for double hbone, gateway will resolve"
-				);
-				*gateway_address // Placeholder, won't be used for actual connection
-			},
-			(Target::Hostname(hostname, port), _) => {
-				// For non-double-HBONE, resolve hostname locally
-				let ip = self
-					.resolver
-					.resolve(hostname.clone())
-					.await
-					.map_err(|_| ProxyError::DnsResolution)?;
-				SocketAddr::from((ip, *port))
-			},
-			(Target::UnixSocket(_), _) => {
-				// Placeholder address for Unix sockets - the actual connection
-				// uses the path from the Target, not this address
-				SocketAddr::from(([0, 0, 0, 0], 0))
-			},
-		};
+
+		let dest = self
+			.connector
+			.resolve_target(transport.skip_dns_resolution(), &target)
+			.await?;
 
 		let transport_name = transport.name();
 		let target_name = target.to_string();
@@ -677,39 +456,10 @@ impl Client {
 			target,
 			transport,
 		} = call;
-		// For double HBONE, we don't need to resolve the hostname locally
-		// The gateway will resolve it. Use a placeholder dest (won't be used).
-		// For Unix sockets, we use a placeholder since the actual connection uses the path directly.
-		let dest = match (&target, &transport) {
-			(Target::Address(addr), _) => *addr,
-			(
-				Target::Hostname(hostname, _port),
-				Transport::DoubleHbone {
-					gateway_address, ..
-				},
-			) => {
-				// Don't resolve hostname for double HBONE - gateway will handle it
-				tracing::debug!(
-					hostname=%hostname,
-					"skipping DNS resolution for double hbone (HTTP), gateway will resolve"
-				);
-				*gateway_address // Placeholder, won't be used for actual connection
-			},
-			(Target::Hostname(hostname, port), _) => {
-				// For non-double-HBONE, resolve hostname locally
-				let ip = self
-					.resolver
-					.resolve(hostname.clone())
-					.await
-					.map_err(|_| ProxyError::DnsResolution)?;
-				SocketAddr::from((ip, *port))
-			},
-			(Target::UnixSocket(_), _) => {
-				// Placeholder address for Unix sockets - the actual connection
-				// uses the path from the Target, not this address
-				SocketAddr::from(([0, 0, 0, 0], 0))
-			},
-		};
+		let dest = self
+			.connector
+			.resolve_target(transport.skip_dns_resolution(), &target)
+			.await?;
 		let auto_host = req.extensions().get::<filters::AutoHostname>().is_some();
 		http::modify_req_uri(&mut req, |uri| {
 			let scheme = transport.scheme();
