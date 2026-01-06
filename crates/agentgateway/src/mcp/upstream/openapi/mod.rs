@@ -370,7 +370,8 @@ pub(crate) fn parse_openapi_schema(
 								},
 								"DELETE" => ToolAnnotations::default()
 									.read_only(false)
-									.destructive(true),
+									.destructive(true)
+									.idempotent(true),
 								"PUT" => ToolAnnotations::default()
 									.read_only(false)
 									.destructive(true)
