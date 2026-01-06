@@ -1,0 +1,54 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response_anthropic_tool.json
+info:
+  id: msg_01Aq9w938a90dw8q
+  type: message
+  model: claude-opus-4-1-20250805
+  stop_reason: tool_use
+  role: assistant
+  content:
+    - type: text
+      text: "<thinking>I need to call the get_weather function, and the user wants SF, which is likely San Francisco, CA.</thinking>"
+    - type: tool_use
+      id: toolu_01A09q90qw90lq917835lq9
+      name: get_weather
+      input:
+        location: "San Francisco, CA"
+        unit: celsius
+  usage:
+    input_tokens: 558
+    cache_creation_input_tokens: 0
+    cache_read_input_tokens: 0
+    output_tokens: 48
+    service_tier: standard
+---
+{
+  "model": "claude-opus-4-1-20250805",
+  "usage": {
+    "input_tokens": 558,
+    "output_tokens": 48,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "service_tier": "standard"
+  },
+  "content": [
+    {
+      "text": "<thinking>I need to call the get_weather function, and the user wants SF, which is likely San Francisco, CA.</thinking>",
+      "type": "text"
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_01A09q90qw90lq917835lq9",
+      "name": "get_weather",
+      "input": {
+        "location": "San Francisco, CA",
+        "unit": "celsius"
+      }
+    }
+  ],
+  "id": "[id]",
+  "type": "message",
+  "stop_reason": "tool_use",
+  "role": "assistant"
+}

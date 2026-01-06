@@ -230,6 +230,41 @@ async fn test_bedrock_responses() {
 }
 
 #[tokio::test]
+async fn test_vertex_messages() {
+	let provider = vertex::Provider {
+		model: Some(strng::new("anthropic/claude-sonnet-4-5")),
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project-123"),
+	};
+
+	let response = |bytes: Bytes| -> Result<Box<dyn ResponseType>, AIError> {
+		Ok(Box::new(
+			serde_json::from_slice::<types::messages::Response>(&bytes)
+				.map_err(AIError::ResponseParsing)?,
+		))
+	};
+	test_response("vertex-messages", "response_anthropic_basic", response);
+	test_response("vertex-messages", "response_anthropic_tool", response);
+
+	let stream_response = |body, log| Ok(conversion::messages::passthrough_stream(body, 1024, log));
+	test_streaming(
+		"vertex-messages",
+		"response_stream-anthropic_basic.json",
+		stream_response,
+	)
+	.await;
+
+	let request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
+		let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
+		provider.prepare_anthropic_request_body(anthropic_body)
+	};
+
+	for r in MESSAGES_REQUESTS {
+		test_request("vertex-messages", r, request);
+	}
+}
+
+#[tokio::test]
 async fn test_passthrough() {
 	let test_dir = Path::new("src/llm/tests");
 
