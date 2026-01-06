@@ -291,6 +291,8 @@ pub struct ConverseResponse {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ConverseErrorResponse {
+	// Sometimes its capitalized, sometimes it is not... yikes.
+	#[serde(alias = "Message")]
 	pub message: String,
 }
 
