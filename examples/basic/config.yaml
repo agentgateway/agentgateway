@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 binds:
 - port: 3000
   listeners:
@@ -6,11 +6,11 @@ binds:
     - policies:
         cors:
           allowOrigins:
-            - "*"
+          - "*"
           allowHeaders:
-            - mcp-protocol-version
-            - content-type
-            - cache-control
+          - mcp-protocol-version
+          - content-type
+          - cache-control
       backends:
       - mcp:
           targets:

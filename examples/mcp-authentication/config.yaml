@@ -1,8 +1,7 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 binds:
 - listeners:
   - routes:
-
     # --- Scenario A: Local stdio MCP + Spec-compliant External Authorization Server
     # Exposes:
     #   - MCP server (streamable HTTP) at /stdio/mcp
@@ -44,7 +43,6 @@ binds:
             - query
             resourceDocumentation: http://localhost:3000/stdio/docs
             resourcePolicyUri: http://localhost:3000/stdio/policies
-
     # --- Scenario B: Remote MCP over HTTPS + Spec-compliant Authorization Server
     # Proxies to a remote MCP server and serves the same resource metadata locally.
     - backends:
@@ -81,8 +79,6 @@ binds:
             - query
             resourceDocumentation: http://localhost:3000/remote/docs
             resourcePolicyUri: http://localhost:3000/remote/policies
-
-
     # --- Scenario C: Local stdio MCP + Keycloak adaptation (non-spec provider)
     # When the provider isn't spec-compliant, enable an adapter that exposes modified
     # oauth-authorization-server endpoints while still validating JWTs.
@@ -130,49 +126,47 @@ binds:
             - query
             resourceDocumentation: http://localhost:3000/keycloak/docs
             resourcePolicyUri: http://localhost:3000/keycloak/policies
-
-    # Example configuration for Auth0:
-    # - backends:
-    #   - mcp:
-    #       targets:
-    #       - name: everything
-    #         stdio:
-    #           args:
-    #           - '@modelcontextprotocol/server-everything'
-    #           cmd: npx
-    #   matches:
-    #   - path:
-    #       exact: /auth0/mcp
-    #   - path:
-    #       exact: /.well-known/oauth-protected-resource/auth0/mcp
-    #   - path:
-    #       exact: /.well-known/oauth-authorization-server/auth0/mcp
-    #   policies:
-    #     cors:
-    #       allowHeaders:
-    #       - mcp-protocol-version
-    #       - content-type
-    #       allowOrigins:
-    #       - '*'
-    #     mcpAuthentication:
-    #       issuer: https://dev-y6sikgx3n3shy7ci.eu.auth0.com
-    #       audiences:
-    #       - urn:agent-gateway
-    #       jwksUrl: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
-    #       provider:
-    #         auth0: {}
-    #       resourceMetadata:
-    #         resource: http://localhost:3000/auth0/mcp
-    #         scopesSupported:  
-    #         - profile
-    #         - offline_access
-    #         - openid
-    #         bearerMethodsSupported:
-    #         - header
-    #         - body
-    #         - query
-    #         resourceDocumentation: http://localhost:3000/keycloak/docs
-    #         resourcePolicyUri: http://localhost:3000/keycloak/policies
-
+            # Example configuration for Auth0:
+            # - backends:
+            #   - mcp:
+            #       targets:
+            #       - name: everything
+            #         stdio:
+            #           args:
+            #           - '@modelcontextprotocol/server-everything'
+            #           cmd: npx
+            #   matches:
+            #   - path:
+            #       exact: /auth0/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-protected-resource/auth0/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/auth0/mcp
+            #   policies:
+            #     cors:
+            #       allowHeaders:
+            #       - mcp-protocol-version
+            #       - content-type
+            #       allowOrigins:
+            #       - '*'
+            #     mcpAuthentication:
+            #       issuer: https://dev-y6sikgx3n3shy7ci.eu.auth0.com
+            #       audiences:
+            #       - urn:agent-gateway
+            #       jwksUrl: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
+            #       provider:
+            #         auth0: {}
+            #       resourceMetadata:
+            #         resource: http://localhost:3000/auth0/mcp
+            #         scopesSupported:
+            #         - profile
+            #         - offline_access
+            #         - openid
+            #         bearerMethodsSupported:
+            #         - header
+            #         - body
+            #         - query
+            #         resourceDocumentation: http://localhost:3000/keycloak/docs
+            #         resourcePolicyUri: http://localhost:3000/keycloak/policies
   # Public port to listen on
   port: 3000
