@@ -1,0 +1,16 @@
+---
+source: crates/agentgateway/src/llm/vertex_tests.rs
+assertion_line: 105
+expression: prepared_json
+---
+{
+  "anthropic_version": "vertex-2023-10-16",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello"
+    }
+  ],
+  "stream": true,
+  "max_tokens": 1024
+}

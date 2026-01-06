@@ -56,6 +56,54 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	})
 }
 
+pub fn json_transform_multi<I: DeserializeOwned, O: Serialize, It>(
+	b: http::Body,
+	buffer_limit: usize,
+	mut f: impl FnMut(anyhow::Result<I>) -> It + Send + 'static,
+) -> http::Body
+where
+	It: IntoIterator<Item = O>,
+	It::IntoIter: Send,
+{
+	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
+	let encoder = SseEncoder::new();
+
+	transform_parser(b, decoder, encoder, move |o| {
+		let data = unwrap_sse_data(o);
+		// Pass through [DONE] events unchanged
+		if let Some(data) = &data
+			&& data.as_ref() == b"[DONE]"
+		{
+			return vec![Frame::Event(Event::<Bytes> {
+				data: Bytes::from_static(b"[DONE]"),
+				name: std::borrow::Cow::Borrowed(""),
+				id: None,
+			})];
+		}
+		// If unwrap failed, we should probably ignore or handle error?
+		// unwrap_sse_data returns Option. If None, it means it wasn't an event (maybe KeepAlive?).
+		// If None, we return empty vec.
+		let Some(data) = data else {
+			return vec![];
+		};
+
+		let obj = serde_json::from_slice::<I>(&data);
+		let transformed = f(obj.map_err(anyhow::Error::from));
+
+		transformed
+			.into_iter()
+			.filter_map(|item| {
+				let json_bytes = serde_json::to_vec(&item).ok()?;
+				Some(Frame::Event(Event::<Bytes> {
+					data: Bytes::from(json_bytes),
+					name: std::borrow::Cow::Borrowed(""),
+					id: None,
+				}))
+			})
+			.collect()
+	})
+}
+
 fn unwrap_sse_data(frame: Frame<Bytes>) -> Option<Bytes> {
 	let Frame::Event(Event::<Bytes> { data, .. }) = frame else {
 		return None;
