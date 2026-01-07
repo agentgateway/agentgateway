@@ -32,6 +32,7 @@ atomic_float.workspace = true
 aws-config.workspace = true
 aws-credential-types.workspace = true
 aws-sigv4.workspace = true
+aws-lc-rs.workspace = true
 aws_event_stream_parser.workspace = true
 axum-core.workspace = true
 axum-extra.workspace = true
@@ -135,6 +136,7 @@ uuid.workspace = true
 x509-parser.workspace = true
 reqwest = { optional = true, workspace = true }
 websocket-sans-io.workspace = true
+
 
 # Linux only dependencies
 [target.'cfg(target_family = "unix")'.dependencies]

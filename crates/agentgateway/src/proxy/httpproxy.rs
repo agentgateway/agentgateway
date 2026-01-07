@@ -214,6 +214,8 @@ async fn apply_backend_policies(
 		request_header_modifier,
 		response_header_modifier,
 		request_redirect,
+		// TODO: implement session persistence
+		session_persistence: _,
 		// Applied elsewhere
 		request_mirror: _,
 		// Applied elsewhere
