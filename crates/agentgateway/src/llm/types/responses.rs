@@ -194,36 +194,36 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 	}
 }
 
+impl Request {
+	fn take_input_as_items(&mut self) -> Vec<InputItem> {
+		match std::mem::replace(&mut self.input, Input::Items(Vec::new())) {
+			Input::Text(text) => {
+				vec![InputItem::from(InputMessage {
+					content: vec![InputContent::InputText(InputTextContent { text })],
+					role: InputRole::User,
+					status: None,
+				})]
+			},
+			Input::Items(items) => items,
+		}
+	}
+}
+
 impl RequestType for Request {
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}
 
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
-		if prompts.is_empty() {
-			return;
-		}
-
-		// Convert prepend prompts to InputItems
+		let mut items = self.take_input_as_items();
 		let prepend_items: Vec<InputItem> = prompts.into_iter().map(Into::into).collect();
-
-		// Convert existing input to Items format if needed
-		let mut items = match &self.input {
-			Input::Text(text) => {
-				vec![InputItem::from(InputMessage {
-					content: vec![InputContent::InputText(InputTextContent {
-						text: text.clone(),
-					})],
-					role: InputRole::User,
-					status: None,
-				})]
-			},
-			Input::Items(existing_items) => existing_items.clone(),
-		};
-
-		// Prepend the new prompts
 		items.splice(0..0, prepend_items);
+		self.input = Input::Items(items);
+	}
 
+	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
+		let mut items = self.take_input_as_items();
+		items.extend(prompts.into_iter().map(Into::into));
 		self.input = Input::Items(items);
 	}
 

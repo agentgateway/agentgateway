@@ -150,6 +150,12 @@ impl super::RequestType for Request {
 			.splice(..0, prompts.into_iter().map(convert_message));
 	}
 
+	fn append_prompts(&mut self, prompts: Vec<llm::types::SimpleChatCompletionMessage>) {
+		self
+			.messages
+			.extend(prompts.into_iter().map(convert_message));
+	}
+
 	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
 		conversion::messages::from_completions::translate(self)
 	}

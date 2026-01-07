@@ -35,6 +35,10 @@ impl RequestType for Request {
 		// Ignored
 	}
 
+	fn append_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
+		// Ignored
+	}
+
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		Ok(LLMRequest {

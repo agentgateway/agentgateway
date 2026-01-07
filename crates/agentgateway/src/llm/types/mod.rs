@@ -29,6 +29,7 @@ pub trait ResponseType: Send + Sync {
 pub trait RequestType: Send + Sync {
 	fn model(&mut self) -> &mut Option<String>;
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);
+	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError>;
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);

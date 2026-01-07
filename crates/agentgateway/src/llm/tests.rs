@@ -308,27 +308,28 @@ fn test_messages_prepend_prompts_with_system() {
 	req.prepend_prompts(vec![
 		SimpleChatCompletionMessage {
 			role: strng::new("system"),
-			content: strng::new("You are a helpful assistant."),
+			content: strng::new("You are a helpful assistant"),
 		},
 		SimpleChatCompletionMessage {
 			role: strng::new("user"),
-			content: strng::new("Context: This is important."),
+			content: strng::new("Context: This is important"),
 		},
 	]);
 
-	assert!(req.system.is_some());
 	match &req.system {
-		Some(messages::RequestContent::Text(text)) => {
-			assert_eq!(text, "You are a helpful assistant.");
+		Some(messages::RequestContent::Array(arr)) => {
+			assert_eq!(arr.len(), 1);
+			assert_eq!(arr[0].r#type, "text");
+			assert_eq!(arr[0].text.as_deref(), Some("You are a helpful assistant"));
 		},
-		_ => panic!("Expected system Text content"),
+		_ => panic!("Expected system Array content"),
 	}
 
 	assert_eq!(req.messages.len(), 2);
 	assert_eq!(req.messages[0].role, "user");
 	match &req.messages[0].content {
 		Some(messages::RequestContent::Text(text)) => {
-			assert_eq!(text, "Context: This is important.");
+			assert_eq!(text, "Context: This is important");
 		},
 		_ => panic!("Expected Text content"),
 	}
@@ -351,7 +352,7 @@ fn test_messages_prepend_prompts_with_existing_system_string() {
 			rest: Default::default(),
 		}],
 		system: Some(messages::RequestContent::Text(
-			"You are an expert.".to_string(),
+			"You are an expert".to_string(),
 		)),
 		top_p: None,
 		temperature: None,
@@ -362,16 +363,16 @@ fn test_messages_prepend_prompts_with_existing_system_string() {
 
 	req.prepend_prompts(vec![SimpleChatCompletionMessage {
 		role: strng::new("system"),
-		content: strng::new("Additional context."),
+		content: strng::new("Additional context"),
 	}]);
 
 	match &req.system {
 		Some(messages::RequestContent::Array(arr)) => {
 			assert_eq!(arr.len(), 2);
 			assert_eq!(arr[0].r#type, "text");
-			assert_eq!(arr[0].text.as_deref(), Some("Additional context."));
+			assert_eq!(arr[0].text.as_deref(), Some("Additional context"));
 			assert_eq!(arr[1].r#type, "text");
-			assert_eq!(arr[1].text.as_deref(), Some("You are an expert."));
+			assert_eq!(arr[1].text.as_deref(), Some("You are an expert"));
 		},
 		_ => panic!("Expected system Array content"),
 	}
@@ -390,7 +391,7 @@ fn test_messages_prepend_prompts_with_system_array() {
 		system: Some(messages::RequestContent::Array(vec![
 			messages::ContentPart {
 				r#type: "text".to_string(),
-				text: Some("You are an expert.".to_string()),
+				text: Some("You are an expert".to_string()),
 				rest: Default::default(),
 			},
 		])),
@@ -404,7 +405,7 @@ fn test_messages_prepend_prompts_with_system_array() {
 	req.prepend_prompts(vec![
 		SimpleChatCompletionMessage {
 			role: strng::new("system"),
-			content: strng::new("Additional context."),
+			content: strng::new("Additional context"),
 		},
 		SimpleChatCompletionMessage {
 			role: strng::new("user"),
@@ -416,9 +417,9 @@ fn test_messages_prepend_prompts_with_system_array() {
 		Some(messages::RequestContent::Array(arr)) => {
 			assert_eq!(arr.len(), 2);
 			assert_eq!(arr[0].r#type, "text");
-			assert_eq!(arr[0].text.as_deref(), Some("Additional context."));
+			assert_eq!(arr[0].text.as_deref(), Some("Additional context"));
 			assert_eq!(arr[1].r#type, "text");
-			assert_eq!(arr[1].text.as_deref(), Some("You are an expert."));
+			assert_eq!(arr[1].text.as_deref(), Some("You are an expert"));
 		},
 		_ => panic!("Expected system Array content"),
 	}
