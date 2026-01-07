@@ -70,7 +70,7 @@ impl LegacySSEService {
 			},
 		};
 
-		let Some(session) = self.session_manager.get_session(&session_id) else {
+		let Some(mut session) = self.session_manager.get_session(&session_id) else {
 			return http_error(http::StatusCode::NOT_FOUND, "Session not found");
 		};
 

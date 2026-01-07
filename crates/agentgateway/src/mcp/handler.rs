@@ -1,6 +1,3 @@
-use std::borrow::Cow;
-use std::sync::Arc;
-
 use agent_core::trcng;
 use futures_core::Stream;
 use http::StatusCode;
@@ -16,10 +13,13 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
+use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::cel::ContextBuilder;
 use crate::http::Response;
 use crate::http::jwt::Claims;
+use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::mergestream::MergeFn;
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
@@ -90,6 +90,23 @@ impl Relay {
 }
 
 impl Relay {
+	pub fn get_sessions(&self) -> Option<Vec<MCPSession>> {
+		let mut sessions = Vec::with_capacity(self.upstreams.size());
+		for (_, us) in self.upstreams.iter_named() {
+			sessions.push(us.get_session_state()?);
+		}
+		Some(sessions)
+	}
+
+	pub fn set_sessions(&self, sessions: Vec<MCPSession>) {
+		for ((_, us), session) in self.upstreams.iter_named().zip(sessions) {
+			us.set_session_id(&session.session, session.backend);
+		}
+	}
+	pub fn count(&self) -> usize {
+		self.upstreams.size()
+	}
+
 	pub fn is_multiplexing(&self) -> bool {
 		self.is_multiplexing
 	}
@@ -362,20 +379,20 @@ impl Relay {
 	}
 	fn get_info(pv: ProtocolVersion) -> ServerInfo {
 		ServerInfo {
-			protocol_version: pv,
-			capabilities: ServerCapabilities {
-				completions: None,
-				experimental: None,
-				logging: None,
-				prompts: Some(PromptsCapability::default()),
-				resources: Some(ResourcesCapability::default()),
-				tools: Some(ToolsCapability::default()),
-			},
-			server_info: Implementation::from_build_env(),
-			instructions: Some(
-				"This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
-			),
-		}
+            protocol_version: pv,
+            capabilities: ServerCapabilities {
+                completions: None,
+                experimental: None,
+                logging: None,
+                prompts: Some(PromptsCapability::default()),
+                resources: Some(ResourcesCapability::default()),
+                tools: Some(ToolsCapability::default()),
+            },
+            server_info: Implementation::from_build_env(),
+            instructions: Some(
+                "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
+            ),
+        }
 	}
 }
 

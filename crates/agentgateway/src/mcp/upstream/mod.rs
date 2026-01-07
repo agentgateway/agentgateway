@@ -95,6 +95,22 @@ pub(crate) enum Upstream {
 }
 
 impl Upstream {
+	pub fn get_session_state(&self) -> Option<http::sessionpersistence::MCPSession> {
+		match self {
+			Upstream::McpStreamable(c) => c.get_session_state(),
+			_ => None,
+		}
+	}
+
+	pub fn set_session_id(&self, id: &str, pinned: SocketAddr) {
+		match self {
+			Upstream::McpStreamable(c) => c.set_session_id(id, Some(pinned)),
+			Upstream::McpSSE(_) => {},
+			Upstream::McpStdio(_) => {},
+			Upstream::OpenAPI(_) => {},
+		}
+	}
+
 	pub(crate) async fn delete(&self, ctx: &IncomingRequestContext) -> Result<(), UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => {
@@ -149,7 +165,7 @@ impl Upstream {
 						StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
 					};
 					if let Some(sid) = sid {
-						c.set_session_id(sid.clone())
+						c.set_session_id(sid.as_ref(), None)
 					}
 				}
 				res.try_into().map_err(Into::into)
@@ -187,6 +203,10 @@ pub(crate) struct UpstreamGroup {
 }
 
 impl UpstreamGroup {
+	pub fn size(&self) -> usize {
+		self.backend.targets.len()
+	}
+
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> anyhow::Result<Self> {
 		let mut s = Self {
 			backend,

@@ -1913,6 +1913,7 @@ pub enum BackendPolicy {
 	BackendAuth(BackendAuth),
 	InferenceRouting(ext_proc::InferenceRouting),
 	AI(Arc<llm::Policy>),
+	SessionPersistence(http::sessionpersistence::Policy),
 
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(filters::HeaderModifier),

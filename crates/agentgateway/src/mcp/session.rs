@@ -27,6 +27,7 @@ use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
 pub struct Session {
+	encoder: http::sessionpersistence::Encoder,
 	relay: Arc<Relay>,
 	pub id: Arc<str>,
 	tx: Option<Sender<ServerJsonRpcMessage>>,
@@ -34,7 +35,7 @@ pub struct Session {
 
 impl Session {
 	/// send a message to upstream server(s)
-	pub async fn send(&self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
+	pub async fn send(&mut self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
 		let req_id = match &message {
 			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
 			_ => None,
@@ -49,7 +50,7 @@ impl Session {
 	/// This ensures servers that require an InitializeRequest behave correctly.
 	/// In the future, we may have a mode where we know the downstream is stateless as well, and can just forward as-is.
 	pub async fn stateless_send_and_initialize(
-		&self,
+		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
 	) -> Response {
@@ -207,7 +208,7 @@ impl Session {
 	}
 
 	async fn send_internal(
-		&self,
+		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
 	) -> Result<Response, UpstreamError> {
@@ -231,10 +232,19 @@ impl Session {
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
 						let pv = ir.params.protocol_version.clone();
-						self
+						let res = self
 							.relay
 							.send_fanout(r, ctx, self.relay.merge_initialize(pv))
-							.await
+							.await;
+						if let Some(sessions) = self.relay.get_sessions() {
+							let s = http::sessionpersistence::SessionState::MCP(
+								http::sessionpersistence::MCPSessionState { sessions },
+							);
+							if let Ok(id) = s.encode(&self.encoder) {
+								self.id = id.into();
+							}
+						}
+						res
 					},
 					ClientRequest::ListToolsRequest(_) => {
 						log.non_atomic_mutate(|l| {
@@ -411,8 +421,9 @@ impl Session {
 	}
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct SessionManager {
+	encoder: http::sessionpersistence::Encoder,
 	sessions: RwLock<HashMap<String, Session>>,
 }
 
@@ -421,21 +432,68 @@ fn session_id() -> Arc<str> {
 }
 
 impl SessionManager {
+	pub fn new(encoder: http::sessionpersistence::Encoder) -> Self {
+		Self {
+			encoder,
+			sessions: Default::default(),
+		}
+	}
+
 	pub fn get_session(&self, id: &str) -> Option<Session> {
 		self.sessions.read().ok()?.get(id).cloned()
 	}
 
-	/// create_session establishes an MCP session and registers it in the session manager.
-	pub fn create_session(&self, relay: Relay) -> Session {
-		let id = session_id();
+	pub fn get_or_resume_session(
+		&self,
+		id: &str,
+		builder: Arc<dyn Fn() -> Result<Relay, http::Error> + Send + Sync>,
+	) -> Option<Session> {
+		if let Some(s) = self.sessions.read().ok()?.get(id).cloned() {
+			return Some(s);
+		}
+		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder).ok()?;
+		let http::sessionpersistence::SessionState::MCP(state) = d else {
+			return None;
+		};
+		let relay = builder().ok()?;
+		let n = relay.count();
+		if state.sessions.len() != n {
+			warn!(
+				"failed to resume session: sessions {} did not match config {}",
+				state.sessions.len(),
+				n
+			);
+			return None;
+		}
+		relay.set_sessions(state.sessions);
+
 		let sess = Session {
-			id: id.clone(),
+			id: id.into(),
 			relay: Arc::new(relay),
 			tx: None,
+			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
-		sess
+		Some(sess)
+	}
+
+	/// create_session establishes an MCP session.
+	pub fn create_session(&self, relay: Relay) -> Session {
+		let id = session_id();
+
+		// Do NOT insert yet
+		Session {
+			id: id.clone(),
+			relay: Arc::new(relay),
+			tx: None,
+			encoder: self.encoder.clone(),
+		}
+	}
+
+	pub fn insert_session(&self, sess: Session) {
+		let mut sm = self.sessions.write().expect("write lock");
+		sm.insert(sess.id.to_string(), sess);
 	}
 
 	/// create_stateless_session creates a session for stateless mode.
@@ -448,6 +506,7 @@ impl SessionManager {
 			id,
 			relay: Arc::new(relay),
 			tx: None,
+			encoder: self.encoder.clone(),
 		}
 	}
 
@@ -460,6 +519,7 @@ impl SessionManager {
 			id: id.clone(),
 			relay: Arc::new(relay),
 			tx: Some(tx),
+			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());

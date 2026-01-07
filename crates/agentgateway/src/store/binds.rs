@@ -106,6 +106,8 @@ pub struct BackendPolicies {
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub request_mirror: Vec<filters::RequestMirror>,
 
+	pub session_persistence: Option<http::sessionpersistence::Policy>,
+
 	/// Internal-only override for destination endpoint selection.
 	/// Used for stateful MCP routing (session affinity).
 	/// Not exposed through config - set programmatically only.
@@ -138,6 +140,7 @@ impl BackendPolicies {
 			} else {
 				other.request_mirror
 			},
+			session_persistence: other.session_persistence.or(self.session_persistence),
 			override_dest: other.override_dest.or(self.override_dest),
 		}
 	}
@@ -605,6 +608,9 @@ impl Store {
 				},
 				BackendPolicy::RequestRedirect(p) => {
 					pol.request_redirect.get_or_insert_with(|| p.clone());
+				},
+				BackendPolicy::SessionPersistence(p) => {
+					pol.session_persistence.get_or_insert_with(|| p.clone());
 				},
 				BackendPolicy::RequestMirror(p) => {
 					if pol.request_mirror.is_empty() {

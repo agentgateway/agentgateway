@@ -15,6 +15,7 @@ use tracing::{debug, warn};
 use crate::cel::ContextBuilder;
 use crate::http::authorization::RuleSets;
 use crate::http::jwt::Claims;
+use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
 use crate::json::from_body_with_limit;
 use crate::mcp::handler::Relay;
@@ -40,8 +41,8 @@ pub struct App {
 }
 
 impl App {
-	pub fn new(state: Stores) -> Self {
-		let session: Arc<SessionManager> = Arc::new(Default::default());
+	pub fn new(state: Stores, encoder: Encoder) -> Self {
+		let session: Arc<SessionManager> = Arc::new(crate::mcp::session::SessionManager::new(encoder));
 		Self { state, session }
 	}
 

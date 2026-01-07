@@ -12,6 +12,7 @@ use rmcp::transport::common::http_header::{
 };
 use sse_stream::SseStream;
 
+use crate::client::ResolvedDestination;
 use crate::http::Request;
 use crate::mcp::ClientError;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
@@ -34,8 +35,21 @@ impl Client {
 			session_id: Default::default(),
 		})
 	}
-	pub fn set_session_id(&self, s: String) {
-		self.session_id.store(Some(Arc::new(s)));
+
+	pub fn get_session_state(&self) -> Option<http::sessionpersistence::MCPSession> {
+		let session_id = self.session_id.load().clone()?;
+		let be = self.http_client.pinned_backend()?;
+		Some(http::sessionpersistence::MCPSession {
+			session: session_id.to_string(),
+			backend: be,
+		})
+	}
+
+	pub fn set_session_id(&self, s: &str, pinned: Option<SocketAddr>) {
+		self.session_id.store(Some(Arc::new(s.to_string())));
+		if let Some(pinned) = pinned {
+			self.http_client.pin_backend(ResolvedDestination(pinned));
+		}
 	}
 
 	pub async fn send_request(

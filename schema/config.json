@@ -100,6 +100,23 @@
             "null"
           ]
         },
+        "session": {
+          "description": "Configuration for stateful session management",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "key": {
+              "description": "The signing key to be used. If not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ]
+        },
         "connectionTerminationDeadline": {
           "type": [
             "string",

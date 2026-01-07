@@ -22,6 +22,7 @@ async fn setup() -> (MockServer, Handler) {
 	let host = server.uri();
 	let parsed = reqwest::Url::parse(&host).unwrap();
 	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	let encoder = config.session_encoder.clone();
 	let stores = Stores::new();
 	let client = Client::new(
 		&client::Config {
@@ -43,7 +44,7 @@ async fn setup() -> (MockServer, Handler) {
 		upstream: client.clone(),
 		ca: None,
 
-		mcp_state: mcp::router::App::new(stores.clone()),
+		mcp_state: mcp::router::App::new(stores.clone(), encoder),
 	});
 
 	let client = PolicyClient { inputs: pi.clone() };

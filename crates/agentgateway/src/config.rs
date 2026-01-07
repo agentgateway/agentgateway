@@ -1,12 +1,12 @@
+use agent_core::durfmt;
+use agent_core::prelude::*;
+use secrecy::ExposeSecret;
+use serde::de::DeserializeOwned;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, env};
-
-use agent_core::durfmt;
-use agent_core::prelude::*;
-use serde::de::DeserializeOwned;
 
 use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields};
@@ -224,6 +224,11 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		ThreadingMode::default()
 	};
 
+	let session_encoder = match raw.session {
+		None => crate::http::sessionpersistence::Encoder::base64(),
+		Some(s) => crate::http::sessionpersistence::Encoder::aes(s.key.expose_secret())?,
+	};
+
 	Ok(crate::Config {
 		network: network.into(),
 		admin_addr,
@@ -384,6 +389,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				ns = std::env::var("NAMESPACE").unwrap_or_else(|_| "".to_string())
 			),
 		},
+		session_encoder,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?

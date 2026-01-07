@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
+use crate::http::{Request, Response};
+use crate::mcp::handler::Relay;
+use crate::mcp::session::SessionManager;
+use crate::*;
 use ::http::StatusCode;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ServerJsonRpcMessage};
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
-
-use crate::http::{Request, Response};
-use crate::mcp::handler::Relay;
-use crate::mcp::session::SessionManager;
-use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct StreamableHttpServerConfig {
@@ -135,7 +134,7 @@ impl StreamableHttpService {
 				},
 			};
 			// Use stateless session - not registered in session manager
-			let session = self.session_manager.create_stateless_session(relay);
+			let mut session = self.session_manager.create_stateless_session(relay);
 			let response = session
 				.stateless_send_and_initialize(part.clone(), message)
 				.await;
@@ -149,41 +148,45 @@ impl StreamableHttpService {
 			.headers
 			.get(HEADER_SESSION_ID)
 			.and_then(|v| v.to_str().ok());
-		let (session, set_session_id) = if let Some(session_id) = session_id {
-			let Some(session) = self.session_manager.get_session(session_id) else {
+
+		if let Some(session_id) = session_id {
+			let Some(mut session) = self
+				.session_manager
+				.get_or_resume_session(session_id, self.service_factory.clone())
+			else {
 				return http_error(http::StatusCode::NOT_FOUND, "Session not found");
 			};
-			(session, false)
-		} else {
-			// No session header... we need to create one, if it is an initialize
-			if let ClientJsonRpcMessage::Request(req) = &message
-				&& !matches!(req.request, ClientRequest::InitializeRequest(_))
-			{
+
+			let resp = session.send(part, message).await;
+			return resp;
+		}
+
+		// No session header... we need to create one, if it is an initialize
+		if let ClientJsonRpcMessage::Request(req) = &message
+			&& !matches!(req.request, ClientRequest::InitializeRequest(_))
+		{
+			return http_error(
+				StatusCode::UNPROCESSABLE_ENTITY,
+				"session header is required for non-initialize requests",
+			);
+		}
+		let relay = match (self.service_factory)() {
+			Ok(r) => r,
+			Err(e) => {
 				return http_error(
-					StatusCode::UNPROCESSABLE_ENTITY,
-					"session header is required for non-initialize requests",
+					StatusCode::INTERNAL_SERVER_ERROR,
+					format!("fail to create relay: {e}"),
 				);
-			}
-			let relay = match (self.service_factory)() {
-				Ok(r) => r,
-				Err(e) => {
-					return http_error(
-						StatusCode::INTERNAL_SERVER_ERROR,
-						format!("fail to create relay: {e}"),
-					);
-				},
-			};
-			let session = self.session_manager.create_session(relay);
-			(session, true)
+			},
 		};
+		let mut session = self.session_manager.create_session(relay);
 		let mut resp = session.send(part, message).await;
 
-		if set_session_id {
-			let Ok(sid) = session.id.parse() else {
-				return internal_error_response("create session id header");
-			};
-			resp.headers_mut().insert(HEADER_SESSION_ID, sid);
-		}
+		let Ok(sid) = session.id.parse() else {
+			return internal_error_response("create session id header");
+		};
+		resp.headers_mut().insert(HEADER_SESSION_ID, sid);
+		self.session_manager.insert_session(session);
 		resp
 	}
 

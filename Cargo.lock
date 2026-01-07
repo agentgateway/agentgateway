@@ -143,6 +143,7 @@ dependencies = [
  "atomic_float",
  "aws-config",
  "aws-credential-types",
+ "aws-lc-rs",
  "aws-sigv4",
  "aws_event_stream_parser",
  "axum",

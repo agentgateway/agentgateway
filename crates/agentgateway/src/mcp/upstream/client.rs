@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use crate::client::ResolvedDestination;
@@ -65,15 +66,23 @@ impl McpHttpClient {
 			&& self.pinned_dest.lock().unwrap().is_none()
 			&& let Some(resolved) = resp.extensions().get::<ResolvedDestination>()
 		{
-			tracing::debug!(
-				backend = %self.backend,
-				endpoint = %resolved.0,
-				"pinned stateful MCP session to backend endpoint"
-			);
-			*self.pinned_dest.lock().unwrap() = Some(*resolved);
+			self.pin_backend(*resolved);
 		}
 
 		Ok(resp)
+	}
+
+	pub fn pin_backend(&self, resolved: ResolvedDestination) {
+		tracing::debug!(
+			backend = %self.backend,
+			endpoint = %resolved.0,
+			"pinned stateful MCP session to backend endpoint"
+		);
+		*self.pinned_dest.lock().unwrap() = Some(resolved);
+	}
+
+	pub fn pinned_backend(&self) -> Option<SocketAddr> {
+		Some((*self.pinned_dest.lock().unwrap())?.0)
 	}
 
 	pub fn backend(&self) -> &SimpleBackend {
