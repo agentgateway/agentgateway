@@ -2622,9 +2622,7 @@
                                   }
                                 },
                                 "additionalProperties": false,
-                                "required": [
-                                  "prepend"
-                                ]
+                                "minProperties": 1
                               },
                               "modelAliases": {
                                 "type": "object",
@@ -4857,9 +4855,7 @@
                                         }
                                       },
                                       "additionalProperties": false,
-                                      "required": [
-                                        "prepend"
-                                      ]
+                                      "minProperties": 1
                                     },
                                     "modelAliases": {
                                       "type": "object",
@@ -6669,9 +6665,7 @@
                                                     }
                                                   },
                                                   "additionalProperties": false,
-                                                  "required": [
-                                                    "prepend"
-                                                  ]
+                                                  "minProperties": 1
                                                 },
                                                 "modelAliases": {
                                                   "type": "object",
@@ -8231,9 +8225,7 @@
                                                                 }
                                                               },
                                                               "additionalProperties": false,
-                                                              "required": [
-                                                                "prepend"
-                                                              ]
+                                                              "minProperties": 1
                                                             },
                                                             "modelAliases": {
                                                               "type": "object",
@@ -12186,9 +12178,7 @@
                       }
                     },
                     "additionalProperties": false,
-                    "required": [
-                      "prepend"
-                    ]
+                    "minProperties": 1
                   },
                   "modelAliases": {
                     "type": "object",
@@ -14436,9 +14426,7 @@
                       }
                     },
                     "additionalProperties": false,
-                    "required": [
-                      "prepend"
-                    ]
+                    "minProperties": 1
                   },
                   "modelAliases": {
                     "type": "object",
@@ -15017,9 +15005,7 @@
             }
           },
           "additionalProperties": false,
-          "required": [
-            "prepend"
-          ]
+          "minProperties": 1
         },
         "modelAliases": {
           "type": "object",

@@ -1,0 +1,20 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "vertex-messages: request_anthropic_basic"
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 1024
+  messages:
+    - role: user
+      content: "Hello, world"
+---
+{
+  "anthropic_version": "vertex-2023-10-16",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello, world"
+    }
+  ],
+  "max_tokens": 1024
+}

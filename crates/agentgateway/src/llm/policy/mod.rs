@@ -197,9 +197,11 @@ impl Default for PromptCachingConfig {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(extend("minProperties" = 1)))]
 pub struct PromptEnrichment {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub append: Vec<crate::llm::SimpleChatCompletionMessage>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub prepend: Vec<crate::llm::SimpleChatCompletionMessage>,
 }
 

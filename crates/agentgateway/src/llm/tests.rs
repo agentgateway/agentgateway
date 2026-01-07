@@ -5,6 +5,7 @@ use agent_core::strng;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use types::{RequestType, SimpleChatCompletionMessage, messages};
 
 use super::*;
 
@@ -285,4 +286,144 @@ async fn test_completions_to_messages() {
 	for r in COMPLETION_REQUESTS {
 		test_request("anthropic", r, request);
 	}
+}
+
+#[test]
+fn test_messages_prepend_prompts_with_system() {
+	let mut req = messages::Request {
+		model: Some("claude-4-5-sonnet".to_string()),
+		messages: vec![messages::RequestMessage {
+			role: "user".to_string(),
+			content: Some(messages::RequestContent::Text("Hello".to_string())),
+			rest: Default::default(),
+		}],
+		system: None,
+		top_p: None,
+		temperature: None,
+		stream: None,
+		max_tokens: None,
+		rest: Default::default(),
+	};
+
+	req.prepend_prompts(vec![
+		SimpleChatCompletionMessage {
+			role: strng::new("system"),
+			content: strng::new("You are a helpful assistant."),
+		},
+		SimpleChatCompletionMessage {
+			role: strng::new("user"),
+			content: strng::new("Context: This is important."),
+		},
+	]);
+
+	assert!(req.system.is_some());
+	match &req.system {
+		Some(messages::RequestContent::Text(text)) => {
+			assert_eq!(text, "You are a helpful assistant.");
+		},
+		_ => panic!("Expected system Text content"),
+	}
+
+	assert_eq!(req.messages.len(), 2);
+	assert_eq!(req.messages[0].role, "user");
+	match &req.messages[0].content {
+		Some(messages::RequestContent::Text(text)) => {
+			assert_eq!(text, "Context: This is important.");
+		},
+		_ => panic!("Expected Text content"),
+	}
+	assert_eq!(req.messages[1].role, "user");
+	match &req.messages[1].content {
+		Some(messages::RequestContent::Text(text)) => {
+			assert_eq!(text, "Hello");
+		},
+		_ => panic!("Expected Text content"),
+	}
+}
+
+#[test]
+fn test_messages_prepend_prompts_with_existing_system_string() {
+	let mut req = messages::Request {
+		model: Some("claude-4-5-sonnet".to_string()),
+		messages: vec![messages::RequestMessage {
+			role: "user".to_string(),
+			content: Some(messages::RequestContent::Text("Hello".to_string())),
+			rest: Default::default(),
+		}],
+		system: Some(messages::RequestContent::Text(
+			"You are an expert.".to_string(),
+		)),
+		top_p: None,
+		temperature: None,
+		stream: None,
+		max_tokens: None,
+		rest: Default::default(),
+	};
+
+	req.prepend_prompts(vec![SimpleChatCompletionMessage {
+		role: strng::new("system"),
+		content: strng::new("Additional context."),
+	}]);
+
+	match &req.system {
+		Some(messages::RequestContent::Array(arr)) => {
+			assert_eq!(arr.len(), 2);
+			assert_eq!(arr[0].r#type, "text");
+			assert_eq!(arr[0].text.as_deref(), Some("Additional context."));
+			assert_eq!(arr[1].r#type, "text");
+			assert_eq!(arr[1].text.as_deref(), Some("You are an expert."));
+		},
+		_ => panic!("Expected system Array content"),
+	}
+	assert_eq!(req.messages.len(), 1);
+}
+
+#[test]
+fn test_messages_prepend_prompts_with_system_array() {
+	let mut req = messages::Request {
+		model: Some("claude-4-5-sonnet".to_string()),
+		messages: vec![messages::RequestMessage {
+			role: "user".to_string(),
+			content: Some(messages::RequestContent::Text("World".to_string())),
+			rest: Default::default(),
+		}],
+		system: Some(messages::RequestContent::Array(vec![
+			messages::ContentPart {
+				r#type: "text".to_string(),
+				text: Some("You are an expert.".to_string()),
+				rest: Default::default(),
+			},
+		])),
+		top_p: None,
+		temperature: None,
+		stream: None,
+		max_tokens: None,
+		rest: Default::default(),
+	};
+
+	req.prepend_prompts(vec![
+		SimpleChatCompletionMessage {
+			role: strng::new("system"),
+			content: strng::new("Additional context."),
+		},
+		SimpleChatCompletionMessage {
+			role: strng::new("user"),
+			content: strng::new("Hello"),
+		},
+	]);
+
+	match &req.system {
+		Some(messages::RequestContent::Array(arr)) => {
+			assert_eq!(arr.len(), 2);
+			assert_eq!(arr[0].r#type, "text");
+			assert_eq!(arr[0].text.as_deref(), Some("Additional context."));
+			assert_eq!(arr[1].r#type, "text");
+			assert_eq!(arr[1].text.as_deref(), Some("You are an expert."));
+		},
+		_ => panic!("Expected system Array content"),
+	}
+
+	assert_eq!(req.messages.len(), 2);
+	assert_eq!(req.messages[0].message_text().unwrap(), "Hello");
+	assert_eq!(req.messages[1].message_text().unwrap(), "World");
 }
