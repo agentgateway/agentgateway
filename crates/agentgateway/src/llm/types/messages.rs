@@ -121,8 +121,8 @@ impl RequestType for Request {
 				presence_penalty: None,
 				seed: None,
 				max_tokens: self.max_tokens,
-				dimensions: None,
 				encoding_format: None,
+				dimensions: None,
 			},
 		};
 		Ok(llm)

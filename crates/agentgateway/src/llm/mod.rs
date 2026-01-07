@@ -961,8 +961,11 @@ impl AIProvider {
 
 fn num_tokens_from_messages(
 	model: &str,
-	messages: &[types::completions::RequestMessage],
+	messages: &[SimpleChatCompletionMessage],
 ) -> Result<u64, AIError> {
+	// NOTE: This estimator only accounts for textual content in normalized messages.
+	// Non-text items in Responses inputs (e.g., tool calls, images, files) are ignored here.
+	// Use provider token counting endpoints if you need precise totals for those cases.
 	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
 	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
 		// Chat completion is only supported chat models
@@ -970,25 +973,16 @@ fn num_tokens_from_messages(
 	}
 	let bpe = get_bpe_from_tokenizer(tokenizer);
 
-	let (tokens_per_message, tokens_per_name) = (3, 1);
+	let tokens_per_message = 3;
 
 	let mut num_tokens: u64 = 0;
 	for message in messages {
 		num_tokens += tokens_per_message;
 		// Role is always 1 token
 		num_tokens += 1;
-		if let Some(t) = message.message_text() {
-			num_tokens += bpe
-				.encode_with_special_tokens(
-					// We filter non-text previously
-					t,
-				)
-				.len() as u64;
-		}
-		if let Some(name) = &message.name {
-			num_tokens += bpe.encode_with_special_tokens(name).len() as u64;
-			num_tokens += tokens_per_name;
-		}
+		num_tokens += bpe
+			.encode_with_special_tokens(message.content.as_str())
+			.len() as u64;
 	}
 	num_tokens += 3; // every reply is primed with <|start|>assistant<|message|>
 	Ok(num_tokens)
@@ -1021,82 +1015,6 @@ fn num_tokens_from_anthropic_messages(
 				.len() as u64;
 		}
 	}
-	num_tokens += 3; // every reply is primed with <|start|>assistant<|message|>
-	Ok(num_tokens)
-}
-
-fn num_tokens_from_responses_input(
-	model: &str,
-	input: &types::responses::typed::InputParam,
-) -> Result<u64, AIError> {
-	use tiktoken_rs::tokenizer::get_tokenizer;
-	use types::responses::typed::{
-		EasyInputContent, InputContent, InputItem, InputParam, Item, MessageItem, OutputMessageContent,
-	};
-
-	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
-	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
-		// Responses API is only supported for chat models
-		return Err(AIError::UnsupportedModel);
-	}
-	let bpe = get_bpe_from_tokenizer(tokenizer);
-
-	let tokens_per_message = 3;
-
-	let mut num_tokens: u64 = 0;
-
-	match input {
-		InputParam::Text(text) => {
-			num_tokens += tokens_per_message;
-			num_tokens += 1; // role
-			num_tokens += bpe.encode_with_special_tokens(text).len() as u64;
-		},
-		InputParam::Items(items) => {
-			for item in items {
-				match item {
-					InputItem::EasyMessage(msg) => {
-						num_tokens += tokens_per_message;
-						num_tokens += 1; // role
-						match &msg.content {
-							EasyInputContent::Text(text) => {
-								num_tokens += bpe.encode_with_special_tokens(text).len() as u64;
-							},
-							EasyInputContent::ContentList(parts) => {
-								for part in parts {
-									if let InputContent::InputText(input_text) = part {
-										num_tokens += bpe.encode_with_special_tokens(&input_text.text).len() as u64;
-									}
-								}
-							},
-						}
-					},
-					InputItem::Item(Item::Message(MessageItem::Input(msg))) => {
-						num_tokens += tokens_per_message;
-						num_tokens += 1; // role
-						for part in &msg.content {
-							if let InputContent::InputText(input_text) = part {
-								num_tokens += bpe.encode_with_special_tokens(&input_text.text).len() as u64;
-							}
-						}
-					},
-					InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
-						num_tokens += tokens_per_message;
-						num_tokens += 1; // role
-						for part in &msg.content {
-							if let OutputMessageContent::OutputText(output_text) = part {
-								num_tokens += bpe.encode_with_special_tokens(&output_text.text).len() as u64;
-							}
-						}
-					},
-					_ => {
-						// For other items (tool calls, etc.), just estimate
-						num_tokens += 10;
-					},
-				}
-			}
-		},
-	}
-
 	num_tokens += 3; // every reply is primed with <|start|>assistant<|message|>
 	Ok(num_tokens)
 }

@@ -230,12 +230,12 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let tokens = crate::llm::num_tokens_from_responses_input(&model, &self.input)?;
+			let messages = self.get_messages();
+			let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
 			Some(tokens)
 		} else {
 			None
 		};
-
 		Ok(LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Responses,
@@ -249,8 +249,8 @@ impl RequestType for Request {
 				presence_penalty: None,
 				seed: None,
 				max_tokens: self.max_output_tokens.map(Into::into),
-				dimensions: None,
 				encoding_format: None,
+				dimensions: None,
 			},
 		})
 	}

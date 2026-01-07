@@ -34,12 +34,14 @@ pub mod from_completions {
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed, provider, headers, prompt_caching);
+		let model_id = typed.model.clone().unwrap_or_default();
+		let xlated = translate_internal(typed, model_id, provider, headers, prompt_caching);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
 	pub(super) fn translate_internal(
 		req: completions::Request,
+		model_id: String,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
@@ -192,7 +194,6 @@ pub mod from_completions {
 			}
 		};
 
-		let model_id = req.model.unwrap_or_default();
 		let supports_caching = helpers::supports_prompt_caching(&model_id);
 		let system_content = if system_text.is_empty() {
 			None
@@ -1160,12 +1161,14 @@ pub mod from_responses {
 	) -> Result<Vec<u8>, AIError> {
 		let typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed, provider, headers, prompt_caching);
+		let model_id = typed.model.clone().unwrap_or_default();
+		let xlated = translate_internal(typed, model_id, provider, headers, prompt_caching);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
 	pub(super) fn translate_internal(
 		req: responses::CreateResponse,
+		model_id: String,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
@@ -1508,7 +1511,7 @@ pub mod from_responses {
 		};
 
 		let mut bedrock_request = bedrock::ConverseRequest {
-			model_id: req.model.clone().unwrap_or_default(),
+			model_id,
 			messages,
 			system: system_content,
 			inference_config: Some(inference_config),
@@ -1701,19 +1704,6 @@ pub mod from_responses {
 								});
 
 							vec![("event", item_added_event)]
-						},
-						Some(bedrock::ContentBlockStart::Text) => {
-							sequence_number += 1;
-							let part_added_event =
-								ResponseStreamEvent::ResponseContentPartAdded(ResponseContentPartAddedEvent {
-									sequence_number,
-									item_id: message_item_id.clone(),
-									output_index: start.content_block_index as u32,
-									content_index: 0,
-									part: make_output_part(String::new()),
-								});
-
-							vec![("event", part_added_event)]
 						},
 						_ => {
 							sequence_number += 1;

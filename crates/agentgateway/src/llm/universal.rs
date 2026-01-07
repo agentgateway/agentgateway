@@ -6,11 +6,9 @@ use std::collections::HashMap;
 use agent_core::strng;
 use agent_core::strng::Strng;
 pub use async_openai::types::chat::{
-	ChatChoiceLogprobs, ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
-	ChatCompletionResponseMessageAudio, CompletionUsage, FunctionCallStream,
-	ChatCompletionFunctions,
-	ChatCompletionAudio, ChatCompletionFunctionCall,
-	ChatCompletionMessageToolCall as MessageToolCall, ResponseModalities,
+	ChatChoiceLogprobs, ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
+	ChatCompletionMessageToolCall, ChatCompletionMessageToolCall as MessageToolCall,
+	ChatCompletionMessageToolCallChunk, ChatCompletionMessageToolCalls as MessageToolCalls,
 	ChatCompletionNamedToolChoice as NamedToolChoice,
 	ChatCompletionRequestAssistantMessage as RequestAssistantMessage,
 	ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
@@ -24,12 +22,13 @@ pub use async_openai::types::chat::{
 	ChatCompletionRequestToolMessageContent as RequestToolMessageContent,
 	ChatCompletionRequestUserMessage as RequestUserMessage,
 	ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
-	ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool, ChatCompletionTool as Tool,
-	ChatCompletionToolChoiceOption as ToolChoiceOption, ToolChoiceOptions, ChatCompletionToolChoiceOption,
-	CompletionUsage as Usage, CreateChatCompletionRequest,
-	FinishReason, FunctionCall, FunctionName, FunctionObject, PredictionContent, ReasoningEffort,
-	ResponseFormat, Role, ServiceTier, StopConfiguration, WebSearchOptions,
-	ChatCompletionMessageToolCalls as MessageToolCalls, ChatCompletionTools as Tools, FunctionType
+	ChatCompletionResponseMessageAudio, ChatCompletionStreamOptions as StreamOptions,
+	ChatCompletionTool, ChatCompletionTool as Tool,
+	ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
+	ChatCompletionTools as Tools, CompletionUsage, CompletionUsage as Usage,
+	CreateChatCompletionRequest, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
+	FunctionObject, FunctionType, PredictionContent, ReasoningEffort, ResponseFormat,
+	ResponseModalities, Role, ServiceTier, StopConfiguration, ToolChoiceOptions, WebSearchOptions,
 };
 use serde::{Deserialize, Serialize};
 
@@ -82,8 +81,8 @@ pub mod passthrough {
 	use crate::llm::policy::webhook::{Message, ResponseChoice};
 	use crate::llm::universal::ResponseType;
 	use crate::llm::{
-		AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, SimpleChatCompletionMessage,
-		anthropic, universal,
+		anthropic, universal, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse,
+		SimpleChatCompletionMessage,
 	};
 	use crate::{json, llm};
 
@@ -279,7 +278,8 @@ pub mod passthrough {
 		fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 			let model = strng::new(self.model.as_deref().unwrap_or_default());
 			let input_tokens = if tokenize {
-				let tokens = crate::llm::num_tokens_from_messages(&model, &self.messages)?;
+				let messages = self.get_messages();
+				let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
 				Some(tokens)
 			} else {
 				None

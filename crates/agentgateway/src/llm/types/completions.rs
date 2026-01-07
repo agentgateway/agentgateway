@@ -170,7 +170,8 @@ impl super::RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let tokens = crate::llm::num_tokens_from_messages(&model, &self.messages)?;
+			let messages = self.get_messages();
+			let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
 			Some(tokens)
 		} else {
 			None
@@ -229,8 +230,8 @@ impl super::RequestType for Request {
 fn convert_message(r: SimpleChatCompletionMessage) -> RequestMessage {
 	RequestMessage {
 		role: r.role.to_string(),
-		content: Some(Content::Text(r.content.to_string())),
 		name: None,
+		content: Some(Content::Text(r.content.to_string())),
 		rest: Default::default(),
 	}
 }

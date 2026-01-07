@@ -27,11 +27,12 @@ pub mod from_completions {
 	/// translate an OpenAI completions request to an anthropic messages request
 	pub fn translate(req: &types::completions::Request) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed);
+		let model_id = typed.model.clone().unwrap_or_default();
+		let xlated = translate_internal(typed, model_id);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
-	fn translate_internal(req: completions::Request) -> messages::Request {
+	fn translate_internal(req: completions::Request, model_id: String) -> messages::Request {
 		let max_tokens = req.max_tokens();
 		let stop_sequences = req.stop_sequence();
 		// Anthropic has all system prompts in a single field. Join them
@@ -146,7 +147,7 @@ pub mod from_completions {
 			} else {
 				Some(messages::SystemPrompt::Text(system))
 			},
-			model: req.model.unwrap_or_default(),
+			model: model_id,
 			max_tokens,
 			stop_sequences,
 			stream: req.stream.unwrap_or(false),
