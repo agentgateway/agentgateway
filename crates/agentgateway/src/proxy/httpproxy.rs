@@ -713,6 +713,11 @@ impl HTTPProxy {
 		let late_route_policies: Arc<LLMRequestPolicies> = Arc::new(route_policies.into());
 		// attempts is the total number of attempts, not the retries
 		let attempts = retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1);
+		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
+		let request_timeout = response_policies
+			.timeout
+			.as_ref()
+			.and_then(|t| t.request_timeout);
 		let body = if attempts > 1 {
 			// If we are going to attempt a retry we will need to track the incoming bytes for replay
 			let body = http::retry::ReplayBody::try_new(body, MAX_BUFFERED_BYTES);
@@ -784,11 +789,22 @@ impl HTTPProxy {
 				return res;
 			}
 			debug!(
+				backoff=?retry_backoff,
 				"attempting another retry, last result was {} {:?}",
 				res.is_err(),
 				res.as_ref().map(|r| r.status())
 			);
 			last_res = Some(res);
+			if let Some(bo) = retry_backoff {
+				let fut = if let Some(request_timeout) = request_timeout {
+					let deadline = tokio::time::Instant::from_std(log.start + request_timeout);
+					tokio::time::timeout_at(deadline, tokio::time::sleep(bo)).await
+				} else {
+					tokio::time::sleep(bo).await;
+					Ok(())
+				};
+				fut.map_err(|_| ProxyError::RequestTimeout)?
+			}
 		}
 		unreachable!()
 	}

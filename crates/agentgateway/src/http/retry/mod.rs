@@ -22,7 +22,7 @@ pub struct Policy {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub backoff: Option<Duration>,
 	#[serde(serialize_with = "ser_display_iter", deserialize_with = "de_codes")]
-	#[cfg_attr(feature = "schema", schemars(with = "Vec<std::num::NonZeroU8>"))]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<std::num::NonZeroU16>"))]
 	pub codes: Box<[http::StatusCode]>,
 }
 

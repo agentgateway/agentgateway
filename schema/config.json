@@ -3973,9 +3973,9 @@
                                 "type": "array",
                                 "items": {
                                   "type": "integer",
-                                  "format": "uint8",
+                                  "format": "uint16",
                                   "minimum": 1,
-                                  "maximum": 255
+                                  "maximum": 65535
                                 }
                               }
                             },
@@ -13537,9 +13537,9 @@
                     "type": "array",
                     "items": {
                       "type": "integer",
-                      "format": "uint8",
+                      "format": "uint16",
                       "minimum": 1,
-                      "maximum": 255
+                      "maximum": 65535
                     }
                   }
                 },
