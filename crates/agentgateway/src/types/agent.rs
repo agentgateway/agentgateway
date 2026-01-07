@@ -10,7 +10,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::anyhow;
 use hashbrown::Equivalent;
 use heck::ToSnakeCase;
-use itertools::Itertools;
 use macro_rules_attribute::apply;
 use once_cell::sync::Lazy;
 use openapiv3::OpenAPI;
@@ -1556,9 +1555,12 @@ impl ListenerSet {
 		if let Some(best) = self
 			.inner
 			.values()
-			.filter(|l| filter(&l.protocol))
-			.sorted_by_key(|l| -(l.hostname.len() as i64))
-			.find(|l| l.hostname.starts_with("*") && host.ends_with(&l.hostname.as_str()[1..]))
+			.filter(|l| {
+				filter(&l.protocol)
+					&& l.hostname.starts_with("*")
+					&& host.ends_with(&l.hostname.as_str()[1..])
+			})
+			.min_by_key(|l| -(l.hostname.len() as i64))
 		{
 			trace!("found best match for {host} (wildcard {})", best.hostname);
 			return Some(best.clone());
