@@ -279,10 +279,10 @@ impl Policy {
 
 	pub fn apply_prompt_enrichment(&self, chat: &mut dyn RequestType) {
 		if let Some(prompts) = &self.prompts {
-			if prompts.prepend.len() > 0 {
+			if !prompts.prepend.is_empty() {
 				chat.prepend_prompts(prompts.prepend.clone());
 			}
-			if prompts.append.len() > 0 {
+			if !prompts.append.is_empty() {
 				chat.append_prompts(prompts.append.clone());
 			}
 		}
