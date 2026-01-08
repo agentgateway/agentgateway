@@ -1056,7 +1056,7 @@ pub async fn build_transport(
 		// Use legacy mTLS if they did not define a TLS policy. We could do double TLS but Istio doesn't,
 		// so maintain bug-for-bug parity
 		(Some((InboundProtocol::LegacyIstioMtls, ident)), Some(ca))
-			if matches!(app_transport, ApplicationTransport::Tls(_)) =>
+			if matches!(app_transport, ApplicationTransport::Plaintext) =>
 		{
 			if let Ok(id) = ca.get_identity().await {
 				Some(
