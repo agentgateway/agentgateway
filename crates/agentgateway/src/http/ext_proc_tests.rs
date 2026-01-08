@@ -6,12 +6,12 @@ use tokio::sync::mpsc::Sender;
 use tonic::Status;
 use wiremock::MockServer;
 
-use crate::http::ext_proc::proto;
 use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
 use crate::http::ext_proc::proto::{
 	BodyMutation, CommonResponse, HeaderMutation, HeaderValue, HeaderValueOption, HttpHeaders,
 	ProcessingResponse, body_mutation,
 };
+use crate::http::ext_proc::{ExtProcDynamicMetadata, proto};
 use crate::http::{Body, ext_proc};
 use crate::test_helpers::extprocmock::{
 	ExtProcMock, ExtProcMockInstance, Handler, immediate_response, request_body_response,
@@ -201,6 +201,9 @@ pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 					ext_proc.address
 				))),
 				failure_mode,
+				metadata_context: None,
+				request_attributes: None,
+				response_attributes: None,
 			})
 			.into(),
 		});
@@ -1218,4 +1221,18 @@ async fn mock_with_header(header_name: &str, header_value: &str) -> MockServer {
 		.mount(&mock)
 		.await;
 	mock
+}
+
+#[test]
+fn test_dynamic_metadata_extraction() {
+	let mut metadata = ExtProcDynamicMetadata::default();
+
+	metadata
+		.metadata
+		.insert("user_id".to_string(), serde_json::json!("12345"));
+	metadata
+		.metadata
+		.insert("role".to_string(), serde_json::json!("admin"));
+	assert_eq!(metadata.metadata.get("user_id").unwrap(), "12345");
+	assert_eq!(metadata.metadata.get("role").unwrap(), "admin");
 }

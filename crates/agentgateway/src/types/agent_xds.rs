@@ -1320,6 +1320,36 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::ExtProc(http::ext_proc::ExtProc {
 					target: Arc::new(target),
 					failure_mode,
+					metadata_context: if ep.metadata_context.is_empty() {
+						None
+					} else {
+						Some(
+							ep.metadata_context
+								.iter()
+								.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+								.collect(),
+						)
+					},
+					request_attributes: if ep.request_attributes.is_empty() {
+						None
+					} else {
+						Some(
+							ep.request_attributes
+								.iter()
+								.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+								.collect(),
+						)
+					},
+					response_attributes: if ep.response_attributes.is_empty() {
+						None
+					} else {
+						Some(
+							ep.response_attributes
+								.iter()
+								.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+								.collect(),
+						)
+					},
 				})
 			},
 			Some(tps::Kind::RequestHeaderModifier(rhm)) => {
