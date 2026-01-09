@@ -2,6 +2,8 @@
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "4364354fa41897a0c2001d891c0a9a38eafedb82" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "163f20f551c2cf6032254b6dbbe246b91ce727ad" }
 wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b96083125fdabc3e62f92790ee15ae3a10d" }
+# https://github.com/googleapis/google-cloud-rust/pull/4220 + https://github.com/googleapis/google-cloud-rust/pull/4221
+google-cloud-auth = { git = "https://github.com/howardjohn/google-cloud-rust", rev = "cf5406727027ddd66d5edd3d6f05fd12fd5e9362" }
 
 [workspace]
 resolver = "2"
@@ -74,7 +76,7 @@ futures = "0.3"
 futures-channel = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-google-cloud-auth = "1.0"
+google-cloud-auth = { version = "1.0", features = ["idtoken"]}
 hashbrown = "0.16"
 h2 = "0.4"
 headers = "0.4"

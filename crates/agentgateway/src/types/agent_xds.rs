@@ -9,9 +9,9 @@ use llm::{AIBackend, AIProvider, NamedAIProvider};
 use std::collections::HashMap;
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth};
+use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
-use crate::http::{HeaderOrPseudo, Scheme, authorization};
+use crate::http::{HeaderOrPseudo, Scheme, auth, authorization};
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
@@ -384,10 +384,21 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 	type Error = ProtoError;
 
 	fn try_from(s: proto::agent::BackendAuthPolicy) -> Result<Self, Self::Error> {
+		use proto::agent::gcp;
 		Ok(match s.kind {
 			Some(proto::agent::backend_auth_policy::Kind::Passthrough(_)) => BackendAuth::Passthrough {},
 			Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key(k.secret.into()),
-			Some(proto::agent::backend_auth_policy::Kind::Gcp(_)) => BackendAuth::Gcp {},
+			Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
+				BackendAuth::Gcp(match g.token_type {
+					None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
+						r#type: Some(auth::AccessToken),
+					},
+					Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
+						r#type: auth::IdToken,
+						audience,
+					},
+				})
+			},
 			Some(proto::agent::backend_auth_policy::Kind::Aws(a)) => {
 				let aws_auth = match a.kind {
 					Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
