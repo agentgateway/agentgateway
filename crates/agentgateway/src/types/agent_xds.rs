@@ -491,7 +491,7 @@ impl TryFrom<&proto::agent::Bind> for Bind {
 	fn try_from(s: &proto::agent::Bind) -> Result<Self, Self::Error> {
 		Ok(Self {
 			key: s.key.clone().into(),
-			address: SocketAddr::from((IpAddr::from([0, 0, 0, 0]), s.port as u16)),
+			address: SocketAddr::from((IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]), s.port as u16)),
 			listeners: Default::default(),
 			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,
