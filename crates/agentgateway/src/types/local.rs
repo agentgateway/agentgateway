@@ -256,6 +256,7 @@ impl<'de> Deserialize<'de> for LocalAIBackend {
 			.deserialize(deserializer)
 	}
 }
+
 #[apply(schema_de!)]
 pub struct LocalAIProviders {
 	providers: Vec<LocalNamedAIProvider>,

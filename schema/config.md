@@ -218,6 +218,9 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key.(any)file`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)type`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
@@ -312,6 +315,9 @@
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)key`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)key.(any)file`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.backendAuth.(any)(1)gcp.(any)type`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)aws`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
@@ -595,6 +601,9 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)key`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)key.(any)file`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)aws`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
@@ -762,6 +771,9 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)key`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)key.(any)file`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)gcp.(any)type`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)aws`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
@@ -904,6 +916,9 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)key`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)key.(any)file`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)gcp.(any)type`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)aws`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
@@ -1228,6 +1243,9 @@
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)key.(any)file`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)type`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)gcp.(any)type`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
@@ -1322,6 +1340,9 @@
 |`policies[].policy.backendAuth.(any)(1)key`||
 |`policies[].policy.backendAuth.(any)(1)key.(any)file`||
 |`policies[].policy.backendAuth.(any)(1)gcp`||
+|`policies[].policy.backendAuth.(any)(1)gcp.(any)type`||
+|`policies[].policy.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.backendAuth.(any)(1)gcp.(any)type`||
 |`policies[].policy.backendAuth.(any)(1)aws`||
 |`policies[].policy.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`policies[].policy.backendAuth.(any)(1)aws.(any)secretAccessKey`||
@@ -1555,6 +1576,9 @@
 |`backends[].policies.backendAuth.(any)(1)key`||
 |`backends[].policies.backendAuth.(any)(1)key.(any)file`||
 |`backends[].policies.backendAuth.(any)(1)gcp`||
+|`backends[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`backends[].policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.backendAuth.(any)(1)gcp.(any)type`||
 |`backends[].policies.backendAuth.(any)(1)aws`||
 |`backends[].policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`backends[].policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||

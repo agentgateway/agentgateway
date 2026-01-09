@@ -1273,6 +1273,7 @@ async fn make_backend_call(
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_info = auth::BackendInfo {
 		target: backend.target(),
+		call_target: backend_call.target.clone(),
 		inputs: inputs.clone(),
 	};
 	apply_backend_policies(

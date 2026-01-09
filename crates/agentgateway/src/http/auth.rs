@@ -1,12 +1,10 @@
-use macro_rules_attribute::apply;
-use secrecy::{ExposeSecret, SecretString};
-
 use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::proxy::ProxyError;
 use crate::serdes::deser_key_from_file;
-use crate::types::agent::BackendTarget;
+use crate::types::agent::{BackendTarget, Target};
 use crate::*;
+use secrecy::{ExposeSecret, SecretString};
 
 #[apply(schema!)]
 #[serde(untagged)]
@@ -28,6 +26,34 @@ pub enum AwsAuth {
 	},
 	/// Use implicit AWS authentication (environment variables, IAM roles, etc.)
 	Implicit {},
+}
+
+const_string!(IdToken = "idToken");
+const_string!(AccessToken = "accessToken");
+
+#[apply(schema!)]
+#[serde(untagged)]
+pub enum GcpAuth {
+	/// Fetch an id token
+	#[serde(rename_all = "camelCase")]
+	IdToken {
+		r#type: IdToken,
+		/// Audience for the token. If not set, the destination host will be used.
+		audience: Option<String>,
+	},
+	/// Fetch an access token
+	AccessToken {
+		#[serde(default)]
+		r#type: Option<AccessToken>,
+	},
+}
+
+impl Default for GcpAuth {
+	fn default() -> Self {
+		Self::AccessToken {
+			r#type: Default::default(),
+		}
+	}
 }
 
 // The Rust sdk for Azure is the only one that requires users to manually specify their auth method
@@ -104,7 +130,7 @@ pub enum BackendAuth {
 		SecretString,
 	),
 	#[serde(rename = "gcp")]
-	Gcp {},
+	Gcp(GcpAuth),
 	#[serde(rename = "aws")]
 	Aws(AwsAuth),
 	#[serde(rename = "azure")]
@@ -114,6 +140,7 @@ pub enum BackendAuth {
 #[derive(Clone)]
 pub struct BackendInfo {
 	pub target: BackendTarget,
+	pub call_target: Target,
 	pub inputs: Arc<ProxyInputs>,
 }
 
@@ -140,11 +167,10 @@ pub async fn apply_backend_auth(
 				req.headers_mut().insert(http::header::AUTHORIZATION, token);
 			}
 		},
-		BackendAuth::Gcp {} => {
-			let token = gcp::get_token()
+		BackendAuth::Gcp(g) => {
+			gcp::insert_token(g, &backend_info.call_target, req.headers_mut())
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
-			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
 		BackendAuth::Aws(_) => {
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
@@ -169,7 +195,7 @@ pub async fn apply_late_backend_auth(
 	match auth {
 		BackendAuth::Passthrough {} => {},
 		BackendAuth::Key(_) => {},
-		BackendAuth::Gcp {} => {},
+		BackendAuth::Gcp(_) => {},
 		BackendAuth::Aws(aws_auth) => {
 			aws::sign_request(req, aws_auth)
 				.await
@@ -185,42 +211,177 @@ pub async fn apply_late_backend_auth(
 mod tests;
 
 mod gcp {
-	use anyhow::anyhow;
+	use std::collections::HashMap;
+	use std::sync::{Arc, Mutex};
+
+	use crate::http::auth::GcpAuth;
+	use crate::types::agent::Target;
 	use google_cloud_auth::credentials;
-	use google_cloud_auth::credentials::CacheableResource;
-	use google_cloud_auth::errors::CredentialsError;
-	use http::{HeaderMap, HeaderValue};
-	use tokio::sync::OnceCell;
+	use headers::HeaderMapExt;
+	use http::HeaderMap;
+	use once_cell::sync::Lazy;
 	use tracing::trace;
 
-	static CREDS: OnceCell<credentials::Credentials> = OnceCell::const_new();
-	async fn creds<'a>() -> anyhow::Result<&'a credentials::Credentials> {
-		Ok(
-			CREDS
-				.get_or_try_init(|| async { credentials::Builder::default().build() })
-				.await?,
-		)
+	static CREDS: Lazy<anyhow::Result<credentials::AccessTokenCredentials>> = Lazy::new(|| {
+		credentials::Builder::default()
+			.build_access_token_credentials()
+			.map_err(Into::into)
+	});
+
+	fn creds() -> anyhow::Result<&'static credentials::AccessTokenCredentials> {
+		match CREDS.as_ref() {
+			Ok(creds) => Ok(creds),
+			Err(e) => {
+				let msg = format!("Failed to initialize credentials: {}", e);
+				Err(anyhow::anyhow!(msg))
+			},
+		}
 	}
 
-	pub async fn get_token() -> anyhow::Result<HeaderValue> {
-		let mut token = get_headers_from_cache(creds().await?.headers(http::Extensions::new()).await?)?;
-		let mut hv = token
-			.remove(http::header::AUTHORIZATION)
-			.ok_or(anyhow!("no authorization header"))?;
-		hv.set_sensitive(true);
-		trace!("attached GCP token");
-		Ok(hv)
+	struct IdTokenBuilder {
+		user_account: Option<credentials::idtoken::IDTokenCredentials>,
 	}
-	// What a terrible API... the older versions of this crate were usable but pulled in legacy dependency
-	pub fn get_headers_from_cache(
-		headers: CacheableResource<HeaderMap>,
-	) -> Result<HeaderMap, CredentialsError> {
-		match headers {
-			CacheableResource::New { data, .. } => Ok(data),
-			CacheableResource::NotModified => Err(CredentialsError::from_msg(
-				false,
-				"Expecting headers to be present",
-			)),
+
+	static ID_TOKEN_BUILDER: Lazy<anyhow::Result<IdTokenBuilder>> = Lazy::new(|| {
+		if let Some(adc) = adc::adc_is_authorized_user()? {
+			Ok(IdTokenBuilder {
+				user_account: Some(credentials::idtoken::user_account::Builder::new(adc).build()?),
+			})
+		} else {
+			Ok(IdTokenBuilder { user_account: None })
+		}
+	});
+
+	#[allow(clippy::type_complexity)]
+	static ID_TOKEN_CACHE: Lazy<
+		Arc<Mutex<HashMap<String, Arc<credentials::idtoken::IDTokenCredentials>>>>,
+	> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+	async fn fetch_id_token(aud: &str) -> anyhow::Result<String> {
+		match ID_TOKEN_BUILDER.as_ref() {
+			Ok(creds) => match &creds.user_account {
+				Some(c) => Ok(c.id_token().await?),
+				None => {
+					// Check cache first, get or create the IDTokenCredentials for this audience
+					let cache = ID_TOKEN_CACHE.clone();
+					let id_token_creds = {
+						let mut cache_guard = cache.lock().unwrap();
+						// Get or create the IDTokenCredentials for this audience
+						if !cache_guard.contains_key(aud) {
+							let id_token_creds = credentials::idtoken::Builder::new(aud)
+								.with_include_email()
+								.build()?;
+							let v = Arc::new(id_token_creds);
+							cache_guard.insert(aud.to_string(), v.clone());
+							v
+						} else {
+							// Clone the Arc so we can drop the lock before awaiting
+							cache_guard.get(aud).unwrap().clone()
+						}
+					};
+
+					// IDTokenCredentials handles caching internally, so just call id_token()
+					// Lock is dropped, so we can safely await
+					Ok(id_token_creds.id_token().await?)
+				},
+			},
+			Err(e) => {
+				let msg = format!("Failed to initialize credentials: {}", e);
+				Err(anyhow::anyhow!(msg))
+			},
+		}
+	}
+
+	pub async fn insert_token(
+		g: &GcpAuth,
+		call_target: &Target,
+		hm: &mut HeaderMap,
+	) -> anyhow::Result<()> {
+		let token = match g {
+			GcpAuth::IdToken { audience, .. } => {
+				let aud = match (audience, call_target) {
+					(Some(aud), _) => aud.as_str(),
+					(None, Target::Hostname(host, _)) => host.as_str(),
+					_ => anyhow::bail!("idToken auth requires a hostname target or explicit audience"),
+				};
+				fetch_id_token(aud).await?
+			},
+			GcpAuth::AccessToken { .. } => {
+				let token = creds()?.access_token().await?;
+				token.token
+			},
+		};
+		let header = headers::Authorization::bearer(&token)?;
+		hm.typed_insert(header);
+		trace!("attached GCP token");
+		Ok(())
+	}
+
+	// The SDK doesn't make it easy to use idtokens with user ADC. See https://github.com/googleapis/google-cloud-rust/issues/4215
+	// To allow this (for development use cases primarily), we copy-paste some of their code.
+	mod adc {
+		use anyhow::anyhow;
+		use serde_json::Value;
+		use std::path::PathBuf;
+
+		fn adc_path() -> Option<PathBuf> {
+			if let Ok(path) = std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
+				return Some(path.into());
+			}
+			Some(adc_well_known_path()?.into())
+		}
+
+		fn extract_credential_type(json: &Value) -> anyhow::Result<&str> {
+			json
+				.get("type")
+				.ok_or_else(|| anyhow!("no `type` field found."))?
+				.as_str()
+				.ok_or_else(|| anyhow!("`type` field is not a string."))
+		}
+
+		pub fn adc_is_authorized_user() -> anyhow::Result<Option<Value>> {
+			let adc = load_adc()?;
+			match adc {
+				None => Ok(None),
+				Some(d) => {
+					let cred = extract_credential_type(&d)?;
+					if cred == "authorized_user" {
+						Ok(Some(d))
+					} else {
+						Ok(None)
+					}
+				},
+			}
+		}
+
+		fn load_adc() -> anyhow::Result<Option<serde_json::Value>> {
+			let Some(adc) = match adc_path() {
+				None => Ok(None),
+				Some(path) => match fs_err::read_to_string(&path) {
+					Ok(contents) => Ok(Some(contents)),
+					Err(e) => Err(anyhow::Error::new(e)),
+				},
+			}?
+			else {
+				return Ok(None);
+			};
+			Ok(serde_json::from_str(&adc)?)
+		}
+
+		/// The well-known path to ADC on Windows, as specified in [AIP-4113].
+		#[cfg(target_os = "windows")]
+		fn adc_well_known_path() -> Option<String> {
+			std::env::var("APPDATA")
+				.ok()
+				.map(|root| root + "/gcloud/application_default_credentials.json")
+		}
+
+		/// The well-known path to ADC on Linux and Mac, as specified in [AIP-4113].
+		#[cfg(not(target_os = "windows"))]
+		fn adc_well_known_path() -> Option<String> {
+			std::env::var("HOME")
+				.ok()
+				.map(|root| root + "/.config/gcloud/application_default_credentials.json")
 		}
 	}
 }

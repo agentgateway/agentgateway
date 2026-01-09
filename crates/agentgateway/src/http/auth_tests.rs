@@ -21,6 +21,7 @@ async fn test_backend_auth_passthrough_happy_path() {
 	assert!(req.headers().get(http::header::AUTHORIZATION).is_none());
 
 	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
 		target: BackendTarget::Backend {
 			name: Default::default(),
 			namespace: Default::default(),
@@ -51,6 +52,7 @@ async fn test_backend_auth_key() {
 	let inputs = t.inputs();
 
 	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
 		target: BackendTarget::Backend {
 			name: Default::default(),
 			namespace: Default::default(),

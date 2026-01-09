@@ -1996,8 +1996,49 @@
                                                               "type": "object",
                                                               "properties": {
                                                                 "gcp": {
-                                                                  "type": "object",
-                                                                  "additionalProperties": false
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "description": "Fetch an id token",
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "type": {
+                                                                          "type": "string",
+                                                                          "format": "const",
+                                                                          "const": "idToken"
+                                                                        },
+                                                                        "audience": {
+                                                                          "description": "Audience for the token. If not set, the destination host will be used.",
+                                                                          "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                          ]
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false,
+                                                                      "required": [
+                                                                        "type"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "description": "Fetch an access token",
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "type": {
+                                                                          "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                          ],
+                                                                          "format": "const",
+                                                                          "enum": [
+                                                                            "accessToken",
+                                                                            null
+                                                                          ],
+                                                                          "default": null
+                                                                        }
+                                                                      },
+                                                                      "additionalProperties": false
+                                                                    }
+                                                                  ]
                                                                 }
                                                               },
                                                               "required": [
@@ -2839,8 +2880,49 @@
                                     "type": "object",
                                     "properties": {
                                       "gcp": {
-                                        "type": "object",
-                                        "additionalProperties": false
+                                        "anyOf": [
+                                          {
+                                            "description": "Fetch an id token",
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
+                                                "format": "const",
+                                                "const": "idToken"
+                                              },
+                                              "audience": {
+                                                "description": "Audience for the token. If not set, the destination host will be used.",
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              }
+                                            },
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "type"
+                                            ]
+                                          },
+                                          {
+                                            "description": "Fetch an access token",
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ],
+                                                "format": "const",
+                                                "enum": [
+                                                  "accessToken",
+                                                  null
+                                                ],
+                                                "default": null
+                                              }
+                                            },
+                                            "additionalProperties": false
+                                          }
+                                        ]
                                       }
                                     },
                                     "required": [
@@ -5072,8 +5154,49 @@
                                           "type": "object",
                                           "properties": {
                                             "gcp": {
-                                              "type": "object",
-                                              "additionalProperties": false
+                                              "anyOf": [
+                                                {
+                                                  "description": "Fetch an id token",
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "type": {
+                                                      "type": "string",
+                                                      "format": "const",
+                                                      "const": "idToken"
+                                                    },
+                                                    "audience": {
+                                                      "description": "Audience for the token. If not set, the destination host will be used.",
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "required": [
+                                                    "type"
+                                                  ]
+                                                },
+                                                {
+                                                  "description": "Fetch an access token",
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "type": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ],
+                                                      "format": "const",
+                                                      "enum": [
+                                                        "accessToken",
+                                                        null
+                                                      ],
+                                                      "default": null
+                                                    }
+                                                  },
+                                                  "additionalProperties": false
+                                                }
+                                              ]
                                             }
                                           },
                                           "required": [
@@ -6882,8 +7005,49 @@
                                                       "type": "object",
                                                       "properties": {
                                                         "gcp": {
-                                                          "type": "object",
-                                                          "additionalProperties": false
+                                                          "anyOf": [
+                                                            {
+                                                              "description": "Fetch an id token",
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "type": {
+                                                                  "type": "string",
+                                                                  "format": "const",
+                                                                  "const": "idToken"
+                                                                },
+                                                                "audience": {
+                                                                  "description": "Audience for the token. If not set, the destination host will be used.",
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ]
+                                                                }
+                                                              },
+                                                              "additionalProperties": false,
+                                                              "required": [
+                                                                "type"
+                                                              ]
+                                                            },
+                                                            {
+                                                              "description": "Fetch an access token",
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "type": {
+                                                                  "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                  ],
+                                                                  "format": "const",
+                                                                  "enum": [
+                                                                    "accessToken",
+                                                                    null
+                                                                  ],
+                                                                  "default": null
+                                                                }
+                                                              },
+                                                              "additionalProperties": false
+                                                            }
+                                                          ]
                                                         }
                                                       },
                                                       "required": [
@@ -8442,8 +8606,49 @@
                                                                   "type": "object",
                                                                   "properties": {
                                                                     "gcp": {
-                                                                      "type": "object",
-                                                                      "additionalProperties": false
+                                                                      "anyOf": [
+                                                                        {
+                                                                          "description": "Fetch an id token",
+                                                                          "type": "object",
+                                                                          "properties": {
+                                                                            "type": {
+                                                                              "type": "string",
+                                                                              "format": "const",
+                                                                              "const": "idToken"
+                                                                            },
+                                                                            "audience": {
+                                                                              "description": "Audience for the token. If not set, the destination host will be used.",
+                                                                              "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                              ]
+                                                                            }
+                                                                          },
+                                                                          "additionalProperties": false,
+                                                                          "required": [
+                                                                            "type"
+                                                                          ]
+                                                                        },
+                                                                        {
+                                                                          "description": "Fetch an access token",
+                                                                          "type": "object",
+                                                                          "properties": {
+                                                                            "type": {
+                                                                              "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                              ],
+                                                                              "format": "const",
+                                                                              "enum": [
+                                                                                "accessToken",
+                                                                                null
+                                                                              ],
+                                                                              "default": null
+                                                                            }
+                                                                          },
+                                                                          "additionalProperties": false
+                                                                        }
+                                                                      ]
                                                                     }
                                                                   },
                                                                   "required": [
@@ -11552,8 +11757,49 @@
                                                   "type": "object",
                                                   "properties": {
                                                     "gcp": {
-                                                      "type": "object",
-                                                      "additionalProperties": false
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "Fetch an id token",
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "type": {
+                                                              "type": "string",
+                                                              "format": "const",
+                                                              "const": "idToken"
+                                                            },
+                                                            "audience": {
+                                                              "description": "Audience for the token. If not set, the destination host will be used.",
+                                                              "type": [
+                                                                "string",
+                                                                "null"
+                                                              ]
+                                                            }
+                                                          },
+                                                          "additionalProperties": false,
+                                                          "required": [
+                                                            "type"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "description": "Fetch an access token",
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "type": {
+                                                              "type": [
+                                                                "string",
+                                                                "null"
+                                                              ],
+                                                              "format": "const",
+                                                              "enum": [
+                                                                "accessToken",
+                                                                null
+                                                              ],
+                                                              "default": null
+                                                            }
+                                                          },
+                                                          "additionalProperties": false
+                                                        }
+                                                      ]
                                                     }
                                                   },
                                                   "required": [
@@ -12395,8 +12641,49 @@
                         "type": "object",
                         "properties": {
                           "gcp": {
-                            "type": "object",
-                            "additionalProperties": false
+                            "anyOf": [
+                              {
+                                "description": "Fetch an id token",
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "format": "const",
+                                    "const": "idToken"
+                                  },
+                                  "audience": {
+                                    "description": "Audience for the token. If not set, the destination host will be used.",
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                  "type"
+                                ]
+                              },
+                              {
+                                "description": "Fetch an access token",
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "const",
+                                    "enum": [
+                                      "accessToken",
+                                      null
+                                    ],
+                                    "default": null
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -14643,8 +14930,49 @@
                         "type": "object",
                         "properties": {
                           "gcp": {
-                            "type": "object",
-                            "additionalProperties": false
+                            "anyOf": [
+                              {
+                                "description": "Fetch an id token",
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "format": "const",
+                                    "const": "idToken"
+                                  },
+                                  "audience": {
+                                    "description": "Audience for the token. If not set, the destination host will be used.",
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                  "type"
+                                ]
+                              },
+                              {
+                                "description": "Fetch an access token",
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "const",
+                                    "enum": [
+                                      "accessToken",
+                                      null
+                                    ],
+                                    "default": null
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -16022,8 +16350,49 @@
                   "type": "object",
                   "properties": {
                     "gcp": {
-                      "type": "object",
-                      "additionalProperties": false
+                      "anyOf": [
+                        {
+                          "description": "Fetch an id token",
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "format": "const",
+                              "const": "idToken"
+                            },
+                            "audience": {
+                              "description": "Audience for the token. If not set, the destination host will be used.",
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        {
+                          "description": "Fetch an access token",
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "const",
+                              "enum": [
+                                "accessToken",
+                                null
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
                     }
                   },
                   "required": [
