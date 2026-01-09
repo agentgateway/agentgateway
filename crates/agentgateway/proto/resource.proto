@@ -217,7 +217,20 @@ message Key {
 }
 
 // GCP-specific backend authentication.
-message Gcp {}
+message Gcp {
+  message AccessToken {}
+
+  message IdToken {
+    // Optional; else will use the backend hostname
+    optional string audience = 1;
+  }
+
+  oneof token_type {
+    // Default if unset
+    AccessToken access_token = 1;
+    IdToken id_token = 2;
+  }
+}
 
 // AWS-specific backend authentication.
 message Aws {
@@ -489,7 +502,7 @@ message FrontendPolicySpec {
     BackendReference provider_backend = 1;
     repeated TracingAttribute attributes = 2;
     repeated TracingAttribute resources = 3;
-      
+
     // remove is a list of attribute keys to remove from emitted spans.
     // This is applied before `attributes` are evaluated/added, so it can drop defaults
     // or avoid duplicates.

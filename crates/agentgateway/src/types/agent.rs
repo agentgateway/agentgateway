@@ -953,19 +953,6 @@ impl<'de> serde::Deserialize<'de> for SimpleBackendReference {
 	}
 }
 
-impl SimpleBackendReference {
-	// pub fn name(&self) -> BackendName {
-	// 	match self {
-	// 		SimpleBackendReference::Service { name, port } => {
-	// 			strng::format!("service/{}/{}:{port}", name.namespace, name.hostname)
-	// 		},
-	// 		SimpleBackendReference::Backend(name) => name.clone(),
-	// 		SimpleBackendReference::InlineBackend(t) => t.to_string().into(),
-	// 		SimpleBackendReference::Invalid => strng::format!("invalid"),
-	// 	}
-	// }
-}
-
 impl SimpleBackend {
 	pub fn hostport(&self) -> String {
 		match self {
