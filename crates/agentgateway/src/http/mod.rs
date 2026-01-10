@@ -20,6 +20,7 @@ pub mod ext_proc;
 pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
+pub mod sessionpersistence;
 #[cfg(any(test, feature = "internal_benches"))]
 pub mod tests_common;
 pub mod transformation_cel;

@@ -121,7 +121,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		upstream: client.clone(),
 		ca,
 
-		mcp_state: mcp::App::new(stores.clone()),
+		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
 	};
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());

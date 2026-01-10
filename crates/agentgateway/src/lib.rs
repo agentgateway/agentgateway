@@ -87,6 +87,9 @@ pub struct RawConfig {
 	/// Readiness probe server address in the format "ip:port"
 	readiness_addr: Option<String>,
 
+	/// Configuration for stateful session management
+	session: Option<RawSession>,
+
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_termination_deadline: Option<Duration>,
@@ -190,6 +193,15 @@ pub struct RawHBONE {
 	#[serde(with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pool_unused_release_timeout: Option<Duration>,
+}
+
+#[apply(schema_de!)]
+pub struct RawSession {
+	/// The signing key to be used. If not set, sessions will not be encrypted.
+	/// For example, generated via `openssl rand -hex 32`.
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
+	key: secrecy::SecretString,
 }
 
 #[apply(schema_de!)]
@@ -378,6 +390,7 @@ pub struct Config {
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
+	pub session_encoder: http::sessionpersistence::Encoder,
 	/// Handle for tasks/spans emitted on the admin runtime.
 	#[serde(skip)]
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
