@@ -90,6 +90,12 @@ impl Session {
 
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Response {
+		let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, "delete_session");
+		let session_id = self.id.to_string();
+		log.non_atomic_mutate(|l| {
+			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
+			l.session_id = Some(session_id);
+		});
 		let ctx = IncomingRequestContext::new(parts);
 		self
 			.relay
@@ -141,6 +147,12 @@ impl Session {
 
 	/// get_stream establishes a stream for server-sent messages
 	pub async fn get_stream(&self, parts: Parts) -> Response {
+		let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, "get_stream");
+		let session_id = self.id.to_string();
+		log.non_atomic_mutate(|l| {
+			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
+			l.session_id = Some(session_id);
+		});
 		let ctx = IncomingRequestContext::new(parts);
 		self
 			.relay
@@ -210,8 +222,10 @@ impl Session {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method();
 				let (_span, log, cel) = mcp::handler::setup_request_log(&parts, method);
+				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.to_string());
+					l.session_id = Some(session_id);
 				});
 				let ctx = IncomingRequestContext::new(parts);
 				match &mut r.request {
@@ -379,8 +393,10 @@ impl Session {
 					ClientNotification::CustomNotification(r) => r.method.as_str(),
 				};
 				let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, method);
+				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.to_string());
+					l.session_id = Some(session_id);
 				});
 				let ctx = IncomingRequestContext::new(parts);
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
