@@ -828,6 +828,13 @@ impl Drop for DropOnLog {
 					.map(display),
 			),
 			(
+				"mcp.session.id",
+				mcp
+					.as_ref()
+					.and_then(|m| m.session_id.as_ref())
+					.map(display)
+			),
+			(
 				"inferencepool.selected_endpoint",
 				log.inference_pool.display(),
 			),
