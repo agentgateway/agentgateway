@@ -565,11 +565,11 @@ impl AIProvider {
 			(InputFormat::Completions, _) => {
 				// All providers support completions input
 			},
-			(InputFormat::Messages, AIProvider::Anthropic(_)) => {
-				// Anthropic supports messages input
-			},
-			(InputFormat::Messages, AIProvider::Bedrock(_)) => {
-				// Bedrock supports messages input (Anthropic passthrough)
+			(
+				InputFormat::Messages,
+				AIProvider::Anthropic(_) | AIProvider::Bedrock(_) | AIProvider::Vertex(_),
+			) => {
+				// Anthropic supports messages input (Bedrock & Vertex support assuming serving Anthropic models)
 			},
 			(InputFormat::Responses, AIProvider::OpenAI(_)) => {
 				// OpenAI supports responses input
@@ -754,10 +754,7 @@ impl AIProvider {
 		match (self, req.input_format) {
 			// Completions with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::AzureOpenAI(_)
-				| AIProvider::Vertex(_),
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
 				InputFormat::Completions,
 			) => Ok(Box::new(
 				serde_json::from_slice::<types::completions::Response>(bytes)
@@ -765,17 +762,14 @@ impl AIProvider {
 			)),
 			// Responses with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::AzureOpenAI(_)
-				| AIProvider::Vertex(_),
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
 				InputFormat::Responses,
 			) => Ok(Box::new(
 				serde_json::from_slice::<types::responses::Response>(bytes)
 					.map_err(AIError::ResponseParsing)?,
 			)),
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages) => Ok(Box::new(
+			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => Ok(Box::new(
 				serde_json::from_slice::<types::messages::Response>(bytes)
 					.map_err(AIError::ResponseParsing)?,
 			)),
@@ -791,6 +785,16 @@ impl AIProvider {
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses) => {
 				conversion::bedrock::from_responses::translate_response(bytes, &req.request_model)
+			},
+			(AIProvider::Vertex(p), InputFormat::Completions) => {
+				if p.is_anthropic_model(Some(&req.request_model)) {
+					conversion::messages::from_completions::translate_response(bytes)
+				} else {
+					Ok(Box::new(
+						serde_json::from_slice::<types::completions::Response>(bytes)
+							.map_err(AIError::ResponseParsing)?,
+					))
+				}
 			},
 			(_, InputFormat::Messages) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider does not support Messages"
@@ -851,7 +855,7 @@ impl AIProvider {
 				InputFormat::Responses,
 			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, log)),
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => {
 				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, log))
 			},
 			// Supported paths with conversion...

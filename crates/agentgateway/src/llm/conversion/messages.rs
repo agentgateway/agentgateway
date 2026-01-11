@@ -402,7 +402,7 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 
 pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) -> Body {
 	let mut saw_token = false;
-	// https://docs.anthropic.com/en/docs/build-with-claude/streaming
+	// https://platform.claude.com/docs/en/build-with-claude/streaming
 	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
 		// ignore errors... what else can we do?
 		let Some(Ok(f)) = f else { return };
