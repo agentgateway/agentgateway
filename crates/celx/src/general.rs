@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::string::ToString;
 use std::sync::Arc;
 
-use ::cel::extractors::{Identifier, This};
-use ::cel::objects::{Map, ValueType};
-use ::cel::parser::Expression;
-use ::cel::{Context, FunctionContext, ResolveResult, Value};
+use cel::extractors::{Identifier, This};
+use cel::objects::{Map, ValueType};
+use cel::parser::Expression;
+use cel::{Context, FunctionContext, ResolveResult, Value};
 use rand::random_range;
 use serde::ser::Error;
 use serde::{Serialize, Serializer};

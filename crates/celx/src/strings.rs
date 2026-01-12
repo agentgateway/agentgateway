@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
-use ::cel::extractors::{Arguments, This};
-use ::cel::{ExecutionError, ResolveResult, Value};
 use cel::Context;
+use cel::extractors::{Arguments, This};
+use cel::{ExecutionError, ResolveResult, Value};
 
 pub fn insert_all(ctx: &mut Context<'_>) {
 	ctx.add_function("charAt", char_at);
