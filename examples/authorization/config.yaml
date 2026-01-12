@@ -9,6 +9,8 @@ binds:
           - "*"
           allowHeaders:
           - "*"
+          exposeHeaders:
+          - "Mcp-Session-Id"
         backendAuth:
           passthrough: {}
         jwtAuth:

@@ -16,6 +16,8 @@ binds:
             - "*"
           allowHeaders:
             - "*"
+          exposeHeaders:
+            - "Mcp-Session-Id"
         jwtAuth:
           issuer: agentgateway.dev
           audiences: [test.agentgateway.dev]

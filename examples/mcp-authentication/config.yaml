@@ -28,6 +28,8 @@ binds:
           - content-type
           allowOrigins:
           - '*'
+          exposeHeaders:
+          - "Mcp-Session-Id"
         mcpAuthentication:
           issuer: http://localhost:9000
           jwksUrl: http://localhost:9000/.well-known/jwks.json
@@ -63,6 +65,8 @@ binds:
           - content-type
           allowOrigins:
           - '*'
+          exposeHeaders:
+          - "Mcp-Session-Id"
         mcpAuthentication:
           issuer: http://localhost:9000
           jwksUrl: http://localhost:9000/.well-known/jwks.json
