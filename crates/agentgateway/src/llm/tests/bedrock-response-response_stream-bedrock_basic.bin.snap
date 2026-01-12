@@ -1,0 +1,25 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 77
+description: src/llm/tests/response_stream-bedrock_basic.bin
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"model","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":3,"item_id":"","output_index":0,"content_index":0,"delta":"\nOnce upon a time, there was a little boy named Jack who loved to play with his friends in the park. His favorite activity was to climb the tallest tree and swing on the strongest branch. One day, Jac"}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"delta":"k and his friends were playing when they heard a loud noise coming from the tree. They ran over to investigate and found a large bird trapped inside.\n\nJack knew that he had to help the bird, so he climbed up the tree and gently removed the bird from the branches. The bird was grateful and thanked Jack for his help"}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"","output_index":0,"content_index":0,"delta":". From that day on, Jack became known as the bird whisperer in the park and everyone loved to hear his stories about the birds he had helped."}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":6,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":7,"response":{"created_at":123,"id":"","model":"model","object":"response","output":[],"status":"completed","usage":{"input_tokens":15,"input_tokens_details":{"cached_tokens":0},"output_tokens":142,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":157}}}

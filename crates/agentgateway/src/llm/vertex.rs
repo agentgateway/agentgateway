@@ -1,10 +1,11 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
-use bytes::Bytes;
+use serde_json::{Map, Value};
 
-use super::universal;
-use crate::llm::AIError;
+use crate::llm::{AIError, RouteType};
 use crate::*;
+
+const ANTHROPIC_VERSION: &str = "vertex-2023-10-16";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,21 +23,68 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
-	pub fn process_error(
-		&self,
-		bytes: &Bytes,
-	) -> Result<universal::ChatCompletionErrorResponse, AIError> {
-		let resp = serde_json::from_slice::<universal::ChatCompletionErrorResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
-		Ok(resp)
+	fn configured_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<&'a str> {
+		self.model.as_deref().or(request_model)
 	}
-	pub fn get_path_for_model(&self) -> Strng {
+
+	fn anthropic_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<Strng> {
+		let model = self.configured_model(request_model)?;
+		model
+			.strip_prefix("publishers/anthropic/models/")
+			.or_else(|| model.strip_prefix("anthropic/"))
+			.map(strng::new)
+	}
+
+	pub fn is_anthropic_model(&self, request_model: Option<&str>) -> bool {
+		self.anthropic_model(request_model).is_some()
+	}
+
+	pub fn prepare_anthropic_request_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
+		let mut map: Map<String, Value> =
+			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
+		map.insert(
+			"anthropic_version".to_string(),
+			Value::String(ANTHROPIC_VERSION.to_string()),
+		);
+		map.remove("model");
+		serde_json::to_vec(&map).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn get_path_for_model(
+		&self,
+		route: RouteType,
+		request_model: Option<&str>,
+		streaming: bool,
+	) -> Strng {
+		let location = self
+			.region
+			.clone()
+			.unwrap_or_else(|| strng::literal!("global"));
+		if let Some(model) = self.anthropic_model(request_model) {
+			return strng::format!(
+				"/v1/projects/{}/locations/{}/publishers/anthropic/models/{}:{}",
+				self.project_id,
+				location,
+				model,
+				if streaming {
+					"streamRawPredict"
+				} else {
+					"rawPredict"
+				}
+			);
+		}
+		let t = if route == RouteType::Embeddings {
+			strng::literal!("embeddings")
+		} else {
+			strng::literal!("chat/completions")
+		};
 		strng::format!(
-			"/v1beta1/projects/{}/locations/{}/endpoints/openapi/chat/completions",
+			"/v1beta1/projects/{}/locations/{}/endpoints/openapi/{t}",
 			self.project_id,
-			self.region.as_ref().unwrap_or(&strng::literal!("global"))
+			location
 		)
 	}
+
 	pub fn get_host(&self) -> Strng {
 		match &self.region {
 			None => {

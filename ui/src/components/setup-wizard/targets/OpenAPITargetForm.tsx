@@ -33,7 +33,7 @@ export const OpenAPITargetForm = forwardRef<
     if (existingTarget?.openapi) {
       const openapi = existingTarget.openapi;
       setHost(openapi.host);
-      setPort(openapi.port.toString());
+      setPort(openapi.port?.toString() || "");
       setHeaders([]);
     }
   }, [existingTarget]);
@@ -62,13 +62,14 @@ export const OpenAPITargetForm = forwardRef<
         schemaType === "file"
           ? { file_path: schemaFilePath }
           : { inline: new TextEncoder().encode(schemaInline) };
+      const portValue = port.trim() ? parseInt(port, 10) : undefined;
 
       const target: TargetWithType = {
         name: targetName,
         type: "openapi",
         openapi: {
           host,
-          port: parseInt(port),
+          port: Number.isFinite(portValue) ? portValue : undefined,
           schema,
           // Headers are no longer supported in the new schema
         },

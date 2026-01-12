@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import { Backend, Route, Listener, Bind } from "@/lib/types";
 import { fetchConfig, updateConfig } from "@/lib/api";
 import { useServer } from "@/lib/server-context";
@@ -30,7 +30,7 @@ export const useBackendData = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedBinds, setExpandedBinds] = useState<Set<number>>(new Set());
 
-  const loadBackends = async () => {
+  const loadBackends = useCallback(async () => {
     setIsLoading(true);
     try {
       const config = await fetchConfig();
@@ -66,7 +66,7 @@ export const useBackendData = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const getBackendsByBind = () => {
     const backendsByBind = new Map<number, BackendWithContext[]>();

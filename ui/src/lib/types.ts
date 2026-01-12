@@ -5,6 +5,7 @@ export interface LocalConfig {
   binds: Bind[];
   workloads?: any[];
   services?: any[];
+  appliedPolicies?: AppliedPolicy[];
 }
 
 export interface Bind {
@@ -14,7 +15,6 @@ export interface Bind {
 
 export interface Listener {
   name?: string | null;
-  gatewayName?: string | null;
   hostname?: string | null; // Can be a wildcard
   protocol: ListenerProtocol;
   tls?: TlsConfig | null;
@@ -33,6 +33,18 @@ export enum ListenerProtocol {
 export interface TlsConfig {
   cert: string;
   key: string;
+  // Optional mTLS client verification roots (server-side).
+  root?: string;
+  // Optional overrides
+  cipherSuites?: string[];
+  minTLSVersion?: TLSVersion;
+  maxTLSVersion?: TLSVersion;
+}
+
+export enum TLSVersion {
+  // rustls only supports TLS 1.2 and 1.3
+  TLS_V1_2 = "TLS_V1_2",
+  TLS_V1_3 = "TLS_V1_3",
 }
 
 export interface Route {
@@ -104,6 +116,28 @@ export interface Policies {
   extAuthz?: any;
   timeout?: TimeoutPolicy | null;
   retry?: RetryPolicy | null;
+}
+
+// Top-level applied policy entries from config dump
+export interface AppliedPolicy {
+  key: string;
+  name: {
+    kind: string;
+    name: string;
+    namespace: string;
+  };
+  target: {
+    backend?: {
+      backend?: { name: string; namespace: string };
+      service?: { hostname: string; namespace: string };
+    };
+    route?: { name: string; namespace: string };
+  };
+  // Keep flexible to match varying shapes in dump; narrow types over time
+  policy: {
+    backend?: Partial<Policies>;
+    traffic?: Record<string, unknown>;
+  };
 }
 
 export interface TcpPolicies {
@@ -260,25 +294,29 @@ export interface DynamicBackend {
   // Empty object
 }
 
+// UI-friendly flat structure (matches local config format for write path)
 export interface McpBackend {
-  name: string;
+  // Display-only name from config_dump (namespace/name); absent in local config.
+  name?: string;
   targets: McpTarget[];
-  statefulMode?: McpStatefulMode; // "stateless" or "stateful"
+  statefulMode?: McpStatefulMode;
 }
 
+// UI-friendly flat structure (matches local config format for write path)
 export interface AiBackend {
   name: string;
   provider: AiProvider;
-  hostOverride?: string | null; // String format: "hostname:port" or "ip:port"
-  pathOverride?: string | null; // String format: "/path"
+  hostOverride?: string | null;
+  pathOverride?: string | null;
 }
 
 export interface AiProvider {
   openAI?: { model?: string | null };
   gemini?: { model?: string | null };
-  vertex?: { model?: string | null; region?: string | null; projectId: string };
+  vertex?: { model?: string | null; region?: string | null; projectId?: string };
   anthropic?: { model?: string | null };
-  bedrock?: { model: string; region: string };
+  bedrock?: { model?: string | null; region?: string | null };
+  azureOpenAI?: { model?: string | null; host?: string | null; apiVersion?: string | null };
 }
 
 export enum McpStatefulMode {
@@ -290,8 +328,8 @@ export interface McpTarget {
   name: string;
   filters?: TargetFilter[];
   // Target type - one of these will be set
-  sse?: SseTarget;
-  mcp?: McpConnectionTarget;
+  sse?: StreamHttpTarget;
+  mcp?: StreamHttpTarget;
   stdio?: StdioTarget;
   openapi?: OpenApiTarget;
 }
@@ -309,10 +347,11 @@ export interface TargetMatcher {
   Regex?: string;
 }
 
-export interface SseTarget {
+// UI-friendly format for SSE/MCP targets (matches config file format)
+export interface StreamHttpTarget {
   host: string;
-  port: number; // uint32
-  path: string;
+  port?: number;
+  path?: string;
 }
 
 export interface StdioTarget {
@@ -321,10 +360,11 @@ export interface StdioTarget {
   env?: { [key: string]: string };
 }
 
+// UI-friendly format for OpenAPI targets (matches config file format)
 export interface OpenApiTarget {
   host: string;
-  port: number; // uint32
-  schema: any; // Schema definition
+  port?: number;
+  schema: any; // OpenAPI schema
 }
 
 export interface BackendRef {
@@ -337,8 +377,8 @@ export interface Target {
   name: string;
   listeners?: string[];
   filters?: TargetFilter[];
-  sse?: SseTarget;
-  mcp?: McpConnectionTarget;
+  sse?: StreamHttpTarget;
+  mcp?: StreamHttpTarget;
   openapi?: OpenApiTarget;
   stdio?: StdioTarget;
   a2a?: A2aTarget;
@@ -450,10 +490,4 @@ export type PlaygroundListener = z.infer<typeof PlaygroundListenerSchema>;
 
 export interface ListenerInfo extends Listener {
   displayEndpoint: string;
-}
-
-export interface McpConnectionTarget {
-  host: string;
-  port: number; // uint32
-  path: string;
 }

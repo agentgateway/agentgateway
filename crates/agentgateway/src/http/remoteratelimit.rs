@@ -18,12 +18,20 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.ratelimit.v3");
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
 pub struct RemoteRateLimit {
 	pub domain: String,
+	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
 	pub descriptors: Arc<DescriptorSet>,
+	/// Timeout for the request
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub timeout: Option<Duration>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -57,7 +65,7 @@ where
 	let raw = Vec::<KV>::deserialize(deserializer)?;
 	let parsed: Vec<_> = raw
 		.into_iter()
-		.map(|i| cel::Expression::new(i.value).map(|v| Descriptor(i.key, v)))
+		.map(|i| cel::Expression::new_strict(i.value).map(|v| Descriptor(i.key, v)))
 		.collect::<Result<_, _>>()
 		.map_err(|e| serde::de::Error::custom(e.to_string()))?;
 	Ok(Arc::new(parsed))
@@ -249,6 +257,7 @@ impl RemoteRateLimit {
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			client,
+			timeout: self.timeout,
 		};
 		let mut client = RateLimitServiceClient::new(chan);
 		let resp = client.should_rate_limit(request).await;
@@ -331,10 +340,12 @@ fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 		let Ok(hn) = HeaderName::from_bytes(h.key.as_bytes()) else {
 			continue;
 		};
-		let hv = if h.raw_value.is_empty() {
-			HeaderValue::from_bytes(h.key.as_bytes())
-		} else {
+		let hv = if !h.value.is_empty() {
+			HeaderValue::from_bytes(h.value.as_bytes())
+		} else if !h.raw_value.is_empty() {
 			HeaderValue::from_bytes(&h.raw_value)
+		} else {
+			continue;
 		};
 		let Ok(hv) = hv else {
 			continue;

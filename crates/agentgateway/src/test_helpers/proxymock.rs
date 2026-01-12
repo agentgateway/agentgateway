@@ -21,6 +21,7 @@ use serde_json::Value;
 use tokio::io::DuplexStream;
 use tokio_rustls::TlsConnector;
 use tracing::{info, trace};
+use wiremock::tls_certs::MockTlsCertificates;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
@@ -30,10 +31,12 @@ use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
+use crate::transport::tls;
 use crate::types::agent::{
-	Backend, BackendReference, BackendWithPolicies, Bind, BindName, Listener, ListenerProtocol,
-	ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch, Route, RouteBackendReference,
-	RouteMatch, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindKey, BindProtocol,
+	Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch,
+	ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, RouteSet,
+	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
 };
 use crate::types::local::LocalNamedAIProvider;
@@ -90,6 +93,9 @@ pub struct RequestDump {
 	#[serde(with = "http_serde::header_map")]
 	pub headers: ::http::HeaderMap,
 
+	#[serde(with = "http_serde::version")]
+	pub version: ::http::Version,
+
 	pub body: Bytes,
 }
 
@@ -115,8 +121,9 @@ pub fn setup_tcp_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryC
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(simple_tcp_bind(basic_named_tcp_route(strng::new(
-			mock.address().to_string(),
+		.with_bind(simple_tcp_bind(basic_named_tcp_route(strng::format!(
+			"/{}",
+			mock.address()
 		))));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
@@ -136,25 +143,31 @@ pub fn setup_llm_mock(
 		path_override: None,
 		tokenize,
 		policies: None,
-		routes: Default::default(),
 	})
 	.translate()
 	.unwrap();
-	let b = Backend::AI(strng::format!("{}", mock.address()), be);
-	t.pi.stores.binds.write().insert_backend(b.into());
+	let b = Backend::AI(
+		ResourceName::new(strng::format!("{}", mock.address()), "".into()),
+		be,
+	);
+	t.pi.stores.binds.write().insert_backend(b.name(), b.into());
 	let t = t.with_bind(simple_bind(basic_route(*mock.address())));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
 
 pub fn basic_route(target: SocketAddr) -> Route {
-	basic_named_route(target.to_string().into())
+	basic_named_route(strng::format!("/{}", target.to_string()))
 }
 
 pub fn basic_named_route(target: Strng) -> Route {
 	Route {
 		key: "route".into(),
-		route_name: "route".into(),
+		name: RouteName {
+			name: "route".into(),
+			namespace: Default::default(),
+			rule_name: None,
+		},
 		hostnames: Default::default(),
 		matches: vec![RouteMatch {
 			headers: vec![],
@@ -163,7 +176,6 @@ pub fn basic_named_route(target: Strng) -> Route {
 			query: vec![],
 		}],
 		inline_policies: Default::default(),
-		rule_name: None,
 		backends: vec![RouteBackendReference {
 			weight: 1,
 			backend: BackendReference::Backend(target),
@@ -175,12 +187,16 @@ pub fn basic_named_route(target: Strng) -> Route {
 pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 	TCPRoute {
 		key: "route".into(),
-		route_name: "route".into(),
+		name: RouteName {
+			name: "route".into(),
+			namespace: Default::default(),
+			rule_name: None,
+		},
 		hostnames: Default::default(),
-		rule_name: None,
 		backends: vec![TCPRouteBackendReference {
 			weight: 1,
 			backend: SimpleBackendReference::Backend(target),
+			inline_policies: Default::default(),
 		}],
 	}
 }
@@ -196,12 +212,13 @@ pub fn simple_bind(route: Route) -> Bind {
 		listeners: ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
-			gateway_name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
+		protocol: BindProtocol::http,
+		tunnel_protocol: Default::default(),
 	}
 }
 
@@ -213,12 +230,13 @@ pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
 		listeners: ListenerSet::from_list([Listener {
 			key: Default::default(),
 			name: Default::default(),
-			gateway_name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TCP,
 			tcp_routes: TCPRouteSet::from_list(vec![route]),
 			routes: Default::default(),
 		}]),
+		protocol: BindProtocol::tcp,
+		tunnel_protocol: Default::default(),
 	}
 }
 
@@ -243,12 +261,36 @@ pub async fn simple_mock() -> MockServer {
 				uri: req.url.to_string().parse().unwrap(),
 				headers: req.headers.clone(),
 				body: Bytes::copy_from_slice(&req.body),
+				version: req.version,
 			};
 			ResponseTemplate::new(200).set_body_json(r)
 		})
 		.mount(&mock)
 		.await;
 	mock
+}
+
+// Spawn a mock TLS server. It will always respond on h2,http/1.1 ALPN
+pub async fn tls_mock() -> (MockServer, MockTlsCertificates) {
+	let _ = rustls::crypto::CryptoProvider::install_default(Arc::unwrap_or_clone(tls::provider()));
+	let certs = wiremock::tls_certs::MockTlsCertificates::random();
+	let mock = wiremock::MockServer::builder()
+		.start_https(certs.get_server_config())
+		.await;
+	Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(|req: &wiremock::Request| {
+			let r = RequestDump {
+				method: req.method.clone(),
+				uri: req.url.to_string().parse().unwrap(),
+				headers: req.headers.clone(),
+				body: Bytes::copy_from_slice(&req.body),
+				version: req.version,
+			};
+			ResponseTemplate::new(200).set_body_json(r)
+		})
+		.mount(&mock)
+		.await;
+	(mock, certs)
 }
 
 pub struct TestBind {
@@ -282,12 +324,13 @@ impl tower::Service<Uri> for MemoryConnector {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
 				local_addr: "127.0.0.1:80".parse().unwrap(),
 				start: Instant::now(),
+				raw_peer_addr: None,
 			},
 		);
 		if let Some(tls_config) = self.tls_config.clone() {
 			Box::pin(async move {
 				let (ext, counter, inner) = io.into_parts();
-				let tls = TlsConnector::from(tls_config.config)
+				let tls = TlsConnector::from(tls_config.base_config().config)
 					.connect(
 						tls_config
 							.hostname_override
@@ -311,27 +354,56 @@ impl TestBind {
 		self.pi.stores.binds.write().insert_bind(bind);
 		self
 	}
+	pub fn inputs(&self) -> Arc<ProxyInputs> {
+		self.pi.clone()
+	}
 	pub fn with_route(self, r: Route) -> Self {
 		self.pi.stores.binds.write().insert_route(r, LISTENER_KEY);
 		self
 	}
 
 	pub fn with_backend(self, b: SocketAddr) -> Self {
-		let b = Backend::Opaque(strng::format!("{}", b), Target::Address(b));
-		self.pi.stores.binds.write().insert_backend(b.into());
+		let b = Backend::Opaque(
+			ResourceName::new(strng::format!("{}", b), "".into()),
+			Target::Address(b),
+		);
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_backend(b.name(), b.into());
 		self
 	}
 
 	pub fn with_raw_backend(self, b: BackendWithPolicies) -> Self {
-		self.pi.stores.binds.write().insert_backend(b);
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_backend(b.backend.name(), b);
 		self
 	}
 
 	pub fn with_mcp_backend(self, b: SocketAddr, stateful: bool, legacy_sse: bool) -> Self {
-		let opb = Backend::Opaque(strng::format!("basic-{}", b), Target::Address(b));
-		let sb = SimpleBackendReference::Backend(strng::format!("basic-{}", b));
+		self.with_mcp_backend_policies(b, stateful, legacy_sse, Default::default())
+	}
+
+	pub fn with_mcp_backend_policies(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+		policies: Vec<BackendPolicy>,
+	) -> Self {
+		let opb = Backend::Opaque(
+			ResourceName::new(strng::format!("basic-{}", b), "".into()),
+			Target::Address(b),
+		);
+		let sb = SimpleBackendReference::Backend(strng::format!("/basic-{}", b));
 		let b = Backend::MCP(
-			strng::format!("{}", b),
+			ResourceName::new(strng::format!("{}", b), "".into()),
 			McpBackend {
 				targets: vec![Arc::new(McpTarget {
 					name: "mcp".into(),
@@ -353,8 +425,14 @@ impl TestBind {
 		);
 		{
 			let mut bw = self.pi.stores.binds.write();
-			bw.insert_backend(opb.into());
-			bw.insert_backend(b.into());
+			bw.insert_backend(opb.name(), opb.into());
+			bw.insert_backend(
+				b.name(),
+				BackendWithPolicies {
+					backend: b,
+					inline_policies: policies,
+				},
+			);
 		}
 		self
 	}
@@ -366,12 +444,12 @@ impl TestBind {
 		stateful: bool,
 	) -> Self {
 		let b = Backend::MCP(
-			name.into(),
+			ResourceName::new(name.into(), "".into()),
 			McpBackend {
 				targets: servers
 					.iter()
 					.map(|(name, addr, legacy_sse)| {
-						let sb = SimpleBackendReference::Backend(strng::format!("basic-{}", addr));
+						let sb = SimpleBackendReference::Backend(strng::format!("/basic-{}", addr));
 						Arc::new(McpTarget {
 							name: strng::new(name),
 							spec: if !legacy_sse {
@@ -395,9 +473,13 @@ impl TestBind {
 		{
 			let mut bw = self.pi.stores.binds.write();
 			for (_, b, _) in servers {
-				bw.insert_backend(Backend::Opaque(strng::format!("basic-{}", b), Target::Address(b)).into())
+				let name = ResourceName::new(strng::format!("basic-{}", b), "".into());
+				bw.insert_backend(
+					name.to_string().into(),
+					Backend::Opaque(name, Target::Address(b)).into(),
+				)
 			}
-			bw.insert_backend(b.into());
+			bw.insert_backend(b.name(), b.into());
 		}
 		self
 	}
@@ -406,7 +488,7 @@ impl TestBind {
 		self.pi.stores.binds.write().insert_policy(p);
 		self
 	}
-	pub fn serve_http(&self, bind_name: BindName) -> Client<MemoryConnector, Body> {
+	pub fn serve_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
 		let io = self.serve(bind_name);
 		::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
@@ -417,7 +499,7 @@ impl TestBind {
 	}
 	pub fn serve_https(
 		&self,
-		bind_name: BindName,
+		bind_name: BindKey,
 		sni: Option<&str>,
 	) -> Client<MemoryConnector, Body> {
 		let io = self.serve(bind_name);
@@ -429,6 +511,7 @@ impl TestBind {
 			insecure: false,
 			insecure_host: true,
 			alpn: None,
+			subject_alt_names: None,
 		}
 		.try_into()
 		.unwrap();
@@ -440,7 +523,7 @@ impl TestBind {
 			})
 	}
 	// The need to split http/http2 is a hyper limit, not our proxy
-	pub fn serve_http2(&self, bind_name: BindName) -> Client<MemoryConnector, Body> {
+	pub fn serve_http2(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
 		let io = self.serve(bind_name);
 		::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
@@ -450,7 +533,7 @@ impl TestBind {
 				io: Arc::new(Mutex::new(Some(io))),
 			})
 	}
-	pub fn serve(&self, bind_name: BindName) -> DuplexStream {
+	pub fn serve(&self, bind_name: BindKey) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
 		let server = Socket::from_memory(
 			server,
@@ -458,9 +541,17 @@ impl TestBind {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
 				local_addr: "127.0.0.1:80".parse().unwrap(),
 				start: Instant::now(),
+				raw_peer_addr: None,
 			},
 		);
-		let bind = Gateway::proxy_bind(bind_name, server, self.pi.clone(), self.drain_rx.clone());
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
+		let bind = Gateway::proxy_bind(
+			bind_name,
+			bind.protocol,
+			server,
+			self.pi.clone(),
+			self.drain_rx.clone(),
+		);
 		tokio::spawn(async move {
 			info!("starting bind...");
 			bind.await;
@@ -468,7 +559,7 @@ impl TestBind {
 		});
 		client
 	}
-	pub async fn serve_real_listener(&self, bind_name: BindName) -> SocketAddr {
+	pub async fn serve_real_listener(&self, bind_name: BindKey) -> SocketAddr {
 		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 		let addr = listener.local_addr().unwrap();
 
@@ -489,7 +580,13 @@ impl TestBind {
 
 				let socket = Socket::from_tcp(tcp_stream).unwrap();
 
-				let bind = Gateway::proxy_bind(bind_name.clone(), socket, pi.clone(), drain_rx.clone());
+				let bind = Gateway::proxy_bind(
+					bind_name.clone(),
+					BindProtocol::http,
+					socket,
+					pi.clone(),
+					drain_rx.clone(),
+				);
 				tokio::spawn(bind);
 			}
 			info!("finished real listener...");

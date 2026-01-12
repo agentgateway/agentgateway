@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +68,7 @@ import {
   getBackendPolicyTypes,
   canDeleteBackend,
 } from "@/lib/backend-utils";
+import { useXdsMode } from "@/hooks/use-xds-mode";
 
 const getEnvAsRecord = (env: unknown): Record<string, string> => {
   return typeof env === "object" && env !== null ? (env as Record<string, string>) : {};
@@ -106,6 +109,7 @@ export const BackendTable: React.FC<BackendTableProps> = ({
   onDeleteBackend,
   isSubmitting,
 }) => {
+  const xds = useXdsMode();
   return (
     <div className="space-y-4">
       {Array.from(backendsByBind.entries()).map(([port, backendContexts]) => {
@@ -196,7 +200,7 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
-                                {backendContext.listener.name || "unnamed listener"}
+                                {backendContext.listener.name || "unnamed"}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -242,6 +246,8 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => onEditBackend(backendContext)}
+                                  disabled={xds}
+                                  className={xds ? "opacity-50 cursor-not-allowed" : undefined}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
@@ -291,8 +297,8 @@ export const BackendTable: React.FC<BackendTableProps> = ({
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => onDeleteBackend(backendContext)}
-                                      className="text-destructive hover:text-destructive"
-                                      disabled={isSubmitting}
+                                      className={`text-destructive hover:text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+                                      disabled={isSubmitting || xds}
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -442,8 +448,7 @@ export const AddBackendDialog: React.FC<AddBackendDialogProps> = ({
             {editingBackend ? (
               <div className="p-3 bg-muted rounded-md">
                 <p className="text-sm">
-                  Port {editingBackend.bind.port} →{" "}
-                  {editingBackend.listener.name || "unnamed listener"} →{" "}
+                  Port {editingBackend.bind.port} → {editingBackend.listener.name || "unnamed"} →{" "}
                   {editingBackend.route.name || `Route ${editingBackend.routeIndex + 1}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -725,43 +730,13 @@ const McpBackendForm: React.FC<McpBackendFormProps> = ({
           {(target.type === "sse" || target.type === "mcp" || target.type === "openapi") && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Full URL *</Label>
+                <Label>URL *</Label>
                 <Input
                   value={target.fullUrl}
                   onChange={(e) => parseAndUpdateUrl(index, e.target.value)}
-                  placeholder="http://localhost:3000/api/mcp"
+                  placeholder="https://example.com/mcp"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Paste the full URL and it will be automatically parsed into host, port, and path
-                </p>
               </div>
-
-              {target.host && target.port && (
-                <div className="p-3 bg-muted/30 rounded-md">
-                  <p className="text-sm font-medium mb-2">Parsed Components:</p>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Host:</span>
-                        <span className="ml-2 font-mono">{target.host}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Port:</span>
-                        <span className="ml-2 font-mono">{target.port}</span>
-                      </div>
-                    </div>
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Path:</span>
-                      <span
-                        className="ml-2 font-mono truncate block max-w-full"
-                        title={target.path || "/"}
-                      >
-                        {target.path || "/"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -992,6 +967,29 @@ const AiBackendForm: React.FC<AiBackendFormProps> = ({ backendForm, setBackendFo
           value={backendForm.aiProjectId}
           onChange={(e) => setBackendForm((prev) => ({ ...prev, aiProjectId: e.target.value }))}
           placeholder="my-gcp-project"
+        />
+      </div>
+    )}
+
+    {backendForm.aiProvider === "azureOpenAI" && (
+      <div className="space-y-2">
+        <Label htmlFor="ai-host">Host *</Label>
+        <Input
+          id="ai-host"
+          value={backendForm.aiHost}
+          onChange={(e) => setBackendForm((prev) => ({ ...prev, aiHost: e.target.value }))}
+          placeholder="my-resource-name.openai.azure.com"
+        />
+      </div>
+    )}
+    {backendForm.aiProvider === "azureOpenAI" && (
+      <div className="space-y-2">
+        <Label htmlFor="ai-api-version">API Version (optional)</Label>
+        <Input
+          id="ai-api-version"
+          value={backendForm.aiApiVersion}
+          onChange={(e) => setBackendForm((prev) => ({ ...prev, aiApiVersion: e.target.value }))}
+          placeholder="v1, preview, 2024-10-21, etc. (defaults to v1)"
         />
       </div>
     )}

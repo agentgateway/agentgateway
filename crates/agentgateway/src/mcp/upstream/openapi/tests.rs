@@ -11,8 +11,9 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 use crate::client::Client;
-use crate::store::Stores;
-use crate::types::agent::Target;
+use crate::proxy::httpproxy::PolicyClient;
+use crate::store::{BackendPolicies, Stores};
+use crate::types::agent::{ResourceName, SimpleBackend, Target};
 use crate::{BackendConfig, ProxyInputs, client, mcp};
 
 // Helper to create a handler and mock server for tests
@@ -45,13 +46,14 @@ async fn setup() -> (MockServer, Handler) {
 		mcp_state: mcp::router::App::new(stores.clone()),
 	});
 
-	let client = PolicyClient { inputs: pi };
+	let client = PolicyClient { inputs: pi.clone() };
 	// Define a sample tool for testing
 	let test_tool_get = Tool {
 		name: Cow::Borrowed("get_user"),
 		description: Some(Cow::Borrowed("Get user details")), // Added description
 		icons: None,
 		title: None,
+		meta: None,
 		input_schema: Arc::new(
 			json!({ // Define a simple schema for testing
 					"type": "object",
@@ -95,6 +97,7 @@ async fn setup() -> (MockServer, Handler) {
 		description: Some(Cow::Borrowed("Create a new user")),
 		icons: None,
 		title: None,
+		meta: None,
 		input_schema: Arc::new(
 			json!({
 				"type": "object",
@@ -134,22 +137,23 @@ async fn setup() -> (MockServer, Handler) {
 		path: "/users".to_string(),
 	};
 
-	let handler = Handler {
-		prefix: "".to_string(),
-		client,
-		tools: vec![
+	let backend = SimpleBackend::Opaque(
+		ResourceName::new(strng::literal!("dummy"), "".into()),
+		Target::Hostname(
+			parsed.host().unwrap().to_string().into(),
+			parsed.port().unwrap_or(8080),
+		),
+	);
+	let upstream_client =
+		super::super::McpHttpClient::new(client, backend, BackendPolicies::default(), false);
+	let handler = Handler::new(
+		upstream_client,
+		vec![
 			(test_tool_get, upstream_call_get),
 			(test_tool_post, upstream_call_post),
 		],
-		default_policies: BackendPolicies::default(),
-		backend: SimpleBackend::Opaque(
-			strng::literal!("dummy"),
-			Target::Hostname(
-				parsed.host().unwrap().to_string().into(),
-				parsed.port().unwrap_or(8080),
-			),
-		),
-	};
+		"".to_string(),
+	);
 
 	(server, handler)
 }
@@ -457,6 +461,42 @@ async fn test_call_tool_invalid_path_param_value() {
 
 	// If the request *itself* failed before sending (e.g., invalid URL formed),
 	// the error might be different.
+}
+
+#[tokio::test]
+async fn test_call_tool_with_compressed_response() {
+	let (server, handler) = setup().await;
+
+	let user_id = "compressed-user";
+	let expected_response = json!({ "id": user_id, "name": "Compressed User", "data": "This is a longer response that benefits from compression" });
+
+	// Encode the response body with gzip
+	let response_json = serde_json::to_vec(&expected_response).unwrap();
+	let compressed_body = crate::http::compression::encode_body(&response_json, "gzip")
+		.await
+		.unwrap();
+
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.respond_with(
+			ResponseTemplate::new(200)
+				.insert_header("Content-Encoding", "gzip")
+				.set_body_bytes(compressed_body),
+		)
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": user_id } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(result.is_ok());
+	assert_eq!(result.unwrap(), expected_response);
 }
 
 #[tokio::test]

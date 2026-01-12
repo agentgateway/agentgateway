@@ -28,7 +28,7 @@ use istio::ca::IstioCertificateRequest;
 use istio::ca::istio_certificate_service_client::IstioCertificateServiceClient;
 
 use crate::control::{AuthSource, RootCert};
-use crate::http::backendtls::BackendTLS;
+use crate::http::backendtls::VersionedBackendTLS;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -140,7 +140,7 @@ impl WorkloadCertificate {
 		}
 	}
 
-	pub fn legacy_mtls(&self, identity: Vec<Identity>) -> Result<BackendTLS, Error> {
+	pub fn legacy_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
 		// TODO: this is (way) too expensive to build per request
 		let roots = self.roots.clone();
 		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
@@ -156,12 +156,12 @@ impl WorkloadCertificate {
 		cc.alpn_protocols = vec![b"istio".into()];
 		cc.resumption = Resumption::disabled();
 		// cc.enable_sni = false;
-		Ok(BackendTLS {
+		Ok(VersionedBackendTLS {
 			hostname_override: None,
 			config: Arc::new(cc),
 		})
 	}
-	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> Result<BackendTLS, Error> {
+	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
 		// TODO: this is (way) too expensive to build per request
 		let roots = self.roots.clone();
 		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
@@ -177,7 +177,7 @@ impl WorkloadCertificate {
 		cc.alpn_protocols = vec![b"h2".into()];
 		cc.resumption = Resumption::disabled();
 		cc.enable_sni = false;
-		Ok(BackendTLS {
+		Ok(VersionedBackendTLS {
 			hostname_override: None,
 			config: Arc::new(cc),
 		})
@@ -461,10 +461,38 @@ impl CaClient {
 		let response = response.into_inner();
 
 		// Parse the certificate chain
+		#[cfg(feature = "testing")]
+		let mut cert_chain = response.cert_chain;
+		#[cfg(not(feature = "testing"))]
 		let cert_chain = response.cert_chain;
+
 		if cert_chain.is_empty() {
 			return Err(Error::EmptyResponse);
 		}
+
+		// TEST ONLY: Mock CA returns the private key in the cert chain with a special marker
+		// because rcgen doesn't support CSR parsing.
+		// Detect the test marker and use the provided key. Real CAs never return private keys.
+		// Only enabled when the "testing" feature is active (used by integration tests).
+		#[cfg(feature = "testing")]
+		let actual_private_key = {
+			const TEST_CERT_MARKER: &str = "X-Test-Certificate-Key";
+			if cert_chain.len() >= 2 && cert_chain[1].contains(TEST_CERT_MARKER) {
+				// Extract the test private key (strip the marker comment line)
+				let test_key_with_marker = cert_chain.remove(1);
+				let key_pem = test_key_with_marker
+					.lines()
+					.skip(1) // Skip the marker line
+					.collect::<Vec<_>>()
+					.join("\n");
+				key_pem.as_bytes().to_vec()
+			} else {
+				private_key
+			}
+		};
+
+		#[cfg(not(feature = "testing"))]
+		let actual_private_key = private_key;
 
 		let leaf_cert = cert_chain[0].as_bytes();
 		let chain_certs = if cert_chain.len() > 1 {
@@ -476,7 +504,7 @@ impl CaClient {
 
 		// Create the workload certificate
 		let cert = Arc::new(WorkloadCertificate::new(
-			&private_key,
+			&actual_private_key,
 			leaf_cert,
 			chain_certs,
 		)?);

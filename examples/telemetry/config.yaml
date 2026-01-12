@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 config:
   tracing:
     otlpEndpoint: http://localhost:4317

@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use ::http::{HeaderMap, StatusCode, Version};
+use ::http::{HeaderMap, StatusCode, Version, header};
 use prost_types::Timestamp;
 use serde_json::Value as JsonValue;
 
-use crate::cel::{Executor, Expression};
+use crate::cel::{ContextBuilder, Executor, Expression, Value};
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
 use crate::http::ext_authz::proto::check_response::HttpResponse;
@@ -14,8 +14,9 @@ use crate::http::ext_authz::proto::{
 	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, Metadata, OkHttpResponse,
 };
 use crate::http::ext_proc::GrpcReferenceChannel;
-use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
-use crate::http::{HeaderOrPseudo, jwt};
+use crate::http::filters::BackendRequestTimeout;
+use crate::http::transformation_cel::SerAsStr;
+use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse, Request, jwt};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
@@ -38,7 +39,7 @@ pub struct ExtAuthzDynamicMetadata {
 	pub metadata: HashMap<String, JsonValue>,
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
 pub struct BodyOptions {
 	/// Maximum size of request body to buffer (default: 8192)
 	#[serde(default)]
@@ -61,7 +62,7 @@ impl Default for BodyOptions {
 	}
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
 #[derive(Default)]
 pub enum FailureMode {
 	Allow,
@@ -70,23 +71,62 @@ pub enum FailureMode {
 	DenyWithStatus(u16),
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
+pub enum Protocol {
+	#[serde(rename_all = "camelCase")]
+	Grpc {
+		/// Additional context to send to the authorization service.
+		/// This maps to the `context_extensions` field of the request, and only allows static values.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		context: Option<HashMap<String, String>>,
+		/// Additional metadata to send to the authorization service.
+		/// This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
+		/// If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		metadata: Option<HashMap<String, Arc<cel::Expression>>>,
+	},
+	#[serde(rename_all = "camelCase")]
+	Http {
+		path: Option<Arc<cel::Expression>>,
+		/// When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by
+		/// the provided expression rather than directly returning the error.
+		redirect: Option<Arc<cel::Expression>>,
+		/// Specific headers from the authorization response will be copied into the request to the backend.
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		#[serde_as(as = "Vec<SerAsStr>")]
+		#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
+		include_response_headers: Vec<HeaderName>,
+		/// Specific headers to add in the authorization request (empty = all headers), based on the expression
+		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
+		add_request_headers: HashMap<HeaderOrPseudo, Arc<cel::Expression>>,
+		/// Metadata to include under the `extauthz` variable, based on the authorization response.
+		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
+		metadata: HashMap<String, Arc<cel::Expression>>,
+	},
+}
+
+impl Default for Protocol {
+	fn default() -> Self {
+		Protocol::Grpc {
+			context: None,
+			metadata: None,
+		}
+	}
+}
+
+#[apply(schema!)]
 pub struct ExtAuthz {
 	/// Reference to the external authorization service backend
+	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
-	/// Additional context to send to the authorization service.
-	/// This maps to the `context_extensions` field of the request, and only allows static values.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub context: Option<HashMap<String, String>>,
-	/// Additional metadata to send to the authorization service.
-	/// This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
-	/// If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub metadata: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.
+	#[serde(default)]
+	pub protocol: Protocol,
 	/// Behavior when the authorization service is unavailable or returns an error
 	#[serde(default)]
 	pub failure_mode: FailureMode,
-	/// Specific headers to include in the authorization request (empty = all headers)
+	/// Specific headers to include in the authorization request.
+	/// If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub include_request_headers: Vec<HeaderOrPseudo>,
 	/// Options for including the request body in the authorization request
@@ -102,6 +142,32 @@ pub struct ExtAuthz {
 	pub timeout: Option<Duration>,
 }
 
+impl ExtAuthz {
+	pub fn expressions(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
+		match &self.protocol {
+			Protocol::Grpc {
+				metadata: Some(m), ..
+			} => Box::new(m.values().map(|v| v.as_ref())),
+			Protocol::Http {
+				redirect,
+				path,
+				add_request_headers,
+				// TODO: this runs on the response. We would ideally have a way to NOT consider the response
+				// attributes from this.
+				metadata: m,
+				..
+			} => Box::new(
+				add_request_headers
+					.values()
+					.map(|v| v.as_ref())
+					.chain(m.values().map(|v| v.as_ref()))
+					.chain(redirect.as_deref())
+					.chain(path.as_deref()),
+			),
+			_ => Box::new(std::iter::empty()),
+		}
+	}
+}
 impl ExtAuthz {
 	/// Handle authorization failure with FailureMode configuration
 	fn handle_auth_failure(&self, error_msg: &str) -> Result<PolicyResponse, ProxyError> {
@@ -154,11 +220,22 @@ impl ExtAuthz {
 		exec: &Executor<'_>,
 		client: PolicyClient,
 		req: &mut Request,
+		ctx_builder: &ContextBuilder,
 	) -> Result<PolicyResponse, ProxyError> {
-		trace!("connecting to {:?}", self.target);
+		if matches!(self.protocol, Protocol::Http { .. }) {
+			trace!(protocol = "http", "connecting to {:?}", self.target);
+			return self.check_http(exec, client, req, ctx_builder).await;
+		}
+		trace!(protocol = "grpc", "connecting to {:?}", self.target);
+
+		let Protocol::Grpc { context, metadata } = &self.protocol else {
+			unreachable!();
+		};
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			client,
+			// Set the request timeout. This can be overridden by a timeout on the Backend object itself.
+			timeout: Some(self.timeout.unwrap_or(Duration::from_millis(200))),
 		};
 		let mut grpc_client = AuthorizationClient::new(chan);
 		// Get connection info with proper error handling
@@ -289,7 +366,12 @@ impl ExtAuthz {
 			labels: HashMap::new(),
 			principal: tls_info
 				.as_ref()
-				.and_then(|tls| tls.src_identity.as_ref().map(|id| id.to_string()))
+				.and_then(|tls| {
+					tls
+						.src_identity
+						.as_ref()
+						.and_then(|id| id.identity.as_ref().map(|s| s.to_string()))
+				})
 				.unwrap_or_default(),
 			certificate: String::new(),
 		});
@@ -324,21 +406,13 @@ impl ExtAuthz {
 				source,
 				destination,
 				request: Some(request),
-				metadata_context: self.build_metadata(exec, req)?,
-				context_extensions: self.context.clone().unwrap_or_default(),
+				metadata_context: self.build_metadata(metadata, exec, req)?,
+				context_extensions: context.clone().unwrap_or_default(),
 				tls_session,
 			}),
 		};
-		let timeout_duration = self.timeout.unwrap_or(Duration::from_millis(200));
-		let check_future = grpc_client.check(authz_req);
 
-		let resp = match tokio::time::timeout(timeout_duration, check_future).await {
-			Ok(result) => result,
-			Err(_) => {
-				warn!("ext_authz request timed out after {:?}", timeout_duration);
-				return self.handle_auth_failure("Authorization service timeout");
-			},
-		};
+		let resp = grpc_client.check(authz_req).await;
 
 		trace!("check response: {:?}", resp);
 		let cr = match resp {
@@ -453,16 +527,203 @@ impl ExtAuthz {
 		Ok(res)
 	}
 
+	pub async fn check_http(
+		&self,
+		exec: &Executor<'_>,
+		client: PolicyClient,
+		req: &mut Request,
+		ctx_builder: &ContextBuilder,
+	) -> Result<PolicyResponse, ProxyError> {
+		let Protocol::Http {
+			redirect,
+			include_response_headers,
+			add_request_headers,
+			path,
+			metadata,
+		} = &self.protocol
+		else {
+			unreachable!();
+		};
+
+		let body = if let Some(body_opts) = &self.include_request_body {
+			let max_size = body_opts.max_request_bytes as usize;
+			match crate::http::inspect_body_with_limit(req.body_mut(), max_size).await {
+				Ok(body_bytes) => body_bytes,
+				Err(e) => {
+					debug!("Failed to read request body for ext_authz: {:?}", e);
+					Bytes::new()
+				},
+			}
+		} else {
+			Bytes::new()
+		};
+
+		let path = match path {
+			Some(path_expr) => {
+				let res = exec
+					.eval(path_expr)
+					.map_err(|e| anyhow::anyhow!("{e}"))
+					.and_then(|v| {
+						if let Value::String(s) = v {
+							Ok(s)
+						} else {
+							Err(anyhow::anyhow!("redirect resolved to a non-string value"))
+						}
+					});
+				match res {
+					Ok(s) => Some(s),
+					Err(e) => {
+						tracing::warn!("fail to evaluate path: {e}");
+						return Err(ProxyError::ExternalAuthorizationFailed(None));
+					},
+				}
+			},
+			None => None,
+		};
+
+		// If the user defined their own path expression, use that.
+		// Else, use the original URL path.
+		let rb = ::http::Request::builder().method(req.method()).uri(
+			path
+				.as_ref()
+				.map(|s| s.as_str())
+				.unwrap_or_else(|| req.uri().path()),
+		);
+		let mut check_req = rb
+			.body(http::Body::from(body))
+			.map_err(|e| ProxyError::Processing(e.into()))?;
+
+		// Include any request headers
+		let include = if self.include_request_headers.is_empty() {
+			&[HeaderOrPseudo::Header(http::header::AUTHORIZATION)]
+		} else {
+			self.include_request_headers.as_slice()
+		};
+		for h in include {
+			if let Some(hv) = http::get_pseudo_or_header_value(h, req) {
+				let _ = http::apply_header_or_pseudo(
+					&mut http::RequestOrResponse::Request(&mut check_req),
+					h,
+					hv.as_bytes(),
+				);
+			}
+		}
+
+		// Insert any headers derived from CEL expresions.
+		for (hn, hv) in add_request_headers {
+			let Some(hv) = exec
+				.eval(hv)
+				.ok()
+				.as_ref()
+				.and_then(cel::value_as_header_value)
+			else {
+				// Wipe it out incase it was also included
+				if let HeaderOrPseudo::Header(hn) = hn {
+					check_req.headers_mut().remove(hn);
+				}
+				continue;
+			};
+			let _ = http::apply_header_or_pseudo(
+				&mut http::RequestOrResponse::Request(&mut check_req),
+				hn,
+				hv.as_bytes(),
+			);
+		}
+		// Set the request timeout. This can be overridden by a timeout on the Backend object itself.
+		let timeout_duration = self.timeout.unwrap_or(Duration::from_millis(200));
+		check_req
+			.extensions_mut()
+			.insert(BackendRequestTimeout(timeout_duration));
+		let resp = client.call_reference(check_req, &self.target).await;
+		let mut resp = match resp {
+			Ok(r) => r,
+			Err(e) => {
+				trace!("ext_authz failed {e}");
+				return self.handle_auth_failure(&e.to_string());
+			},
+		};
+		if resp.status().is_success() {
+			for k in include_response_headers {
+				resp.headers().get_all(k).iter().for_each(|h| {
+					// TODO: append or insert?
+					req.headers_mut().append(k.clone(), h.clone());
+				});
+			}
+			if !metadata.is_empty() {
+				let mut ctx = ctx_builder.expensive_clone();
+				let include_body = ctx.with_response(&resp);
+				if include_body && let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
+					ctx.with_response_body(body);
+				}
+				if let Ok(exec) = ctx.build() {
+					let m = metadata
+						.iter()
+						.filter_map(|(k, v)| match Self::eval_to_json(&exec, v) {
+							Ok(r) => Some((k.to_string(), r)),
+							Err(e) => {
+								trace!("failed to evaluate: {e}");
+								error!("failed to evaluate: {e}");
+								None
+							},
+						})
+						.collect::<HashMap<_, _>>();
+					req
+						.extensions_mut()
+						.insert(Arc::new(ExtAuthzDynamicMetadata { metadata: m }));
+				}
+			}
+			return Ok(PolicyResponse::default());
+		}
+		if (resp.status() == StatusCode::FORBIDDEN || resp.status() == StatusCode::UNAUTHORIZED)
+			&& let Some(redir) = &redirect
+		{
+			let s = exec
+				.eval(redir)
+				.map_err(|e| anyhow::anyhow!("{e}"))
+				.and_then(|v| {
+					if let Value::String(s) = v {
+						Ok(s)
+					} else {
+						Err(anyhow::anyhow!("redirect resolved to a non-string value"))
+					}
+				});
+			return match s {
+				Err(e) => {
+					tracing::warn!("fail to evaluate redirect: {e}");
+					Err(ProxyError::ExternalAuthorizationFailed(None))
+				},
+				Ok(redir) => {
+					let status = StatusCode::FOUND;
+					let resp = ::http::Response::builder()
+						.status(status)
+						.header(header::LOCATION, redir.as_str())
+						.body(http::Body::empty())
+						.map_err(|e| ProxyError::Processing(e.into()))?;
+					Ok(PolicyResponse {
+						direct_response: Some(resp),
+						response_headers: None,
+					})
+				},
+			};
+		}
+		trace!("ext_authz failed with code {}", resp.status());
+		Ok(PolicyResponse {
+			direct_response: Some(resp),
+			response_headers: None,
+		})
+	}
+
 	fn build_metadata(
 		&self,
+		metadata: &Option<HashMap<String, Arc<cel::Expression>>>,
 		exec: &Executor,
 		req: &mut Request,
 	) -> Result<Option<Metadata>, ProxyError> {
-		Ok(match &self.metadata {
+		Ok(match &metadata {
 			Some(meta) => {
 				let m = meta
 					.iter()
-					.filter_map(|(k, v)| match Self::eval(exec, v) {
+					.filter_map(|(k, v)| match Self::eval_to_pb(exec, v) {
 						Ok(r) => Some((k.to_string(), r)),
 						Err(e) => {
 							trace!("failed to evaluate: {e}");
@@ -487,11 +748,17 @@ impl ExtAuthz {
 		})
 	}
 
-	fn eval(exec: &Executor, v: &Expression) -> anyhow::Result<prost_wkt_types::Struct> {
+	fn eval_to_pb(exec: &Executor, v: &Expression) -> anyhow::Result<prost_wkt_types::Struct> {
 		let res = exec.eval(v)?;
 		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
 		let pb = json_to_struct(js)?;
 		Ok(pb)
+	}
+
+	fn eval_to_json(exec: &Executor, v: &Expression) -> anyhow::Result<serde_json::Value> {
+		let res = exec.eval(v)?;
+		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
+		Ok(js)
 	}
 }
 
@@ -520,7 +787,7 @@ fn apply_pseudo_headers_to_request(req: &mut Request, headers: &[HeaderValueOpti
 				h.value.as_bytes()
 			};
 			let mut rr = crate::http::RequestOrResponse::Request(req);
-			let _ = crate::http::apply_pseudo(&mut rr, &pseudo, raw);
+			let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, raw);
 		}
 	}
 }
@@ -530,6 +797,8 @@ fn process_headers(
 	headers: Vec<HeaderValueOption>,
 	allowlist: Option<&[String]>,
 ) {
+	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
+
 	for header in headers {
 		let Some(h) = header.header else { continue };
 
@@ -544,7 +813,6 @@ fn process_headers(
 			}
 		}
 
-		let append = header.append.unwrap_or_default();
 		let Ok(hn) = HeaderName::from_bytes(h.key.as_bytes()) else {
 			warn!("Invalid header name: {}", h.key);
 			continue;
@@ -558,10 +826,51 @@ fn process_headers(
 			warn!("Invalid header value for key: {}", h.key);
 			continue;
 		};
-		if append {
-			hm.append(hn, hv);
+
+		// Determine the action to take
+		// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
+		let action = if header.append_action != 0 || header.append.is_none() {
+			// Use append_action if it's explicitly set (non-zero) or if append is not set
+			match HeaderAppendAction::try_from(header.append_action) {
+				Ok(action) => action,
+				Err(_) => {
+					warn!(
+						"Unexpected header append_action `{:?}` falling back to APPEND_IF_EXISTS_OR_ADD",
+						header.append_action
+					);
+					HeaderAppendAction::AppendIfExistsOrAdd
+				},
+			}
 		} else {
-			hm.insert(hn, hv);
+			// Fall back to deprecated append field for backwards compatibility
+			if header.append.unwrap_or(false) {
+				HeaderAppendAction::AppendIfExistsOrAdd
+			} else {
+				HeaderAppendAction::OverwriteIfExistsOrAdd
+			}
+		};
+
+		match action {
+			HeaderAppendAction::AppendIfExistsOrAdd => {
+				// Append to existing or add new
+				hm.append(hn, hv);
+			},
+			HeaderAppendAction::AddIfAbsent => {
+				// Only add if header doesn't exist
+				if !hm.contains_key(&hn) {
+					hm.insert(hn, hv);
+				}
+			},
+			HeaderAppendAction::OverwriteIfExistsOrAdd => {
+				// Replace existing or add new
+				hm.insert(hn, hv);
+			},
+			HeaderAppendAction::OverwriteIfExists => {
+				// Replace existing, no-op if doesn't exist
+				if hm.contains_key(&hn) {
+					hm.insert(hn, hv);
+				}
+			},
 		}
 	}
 }

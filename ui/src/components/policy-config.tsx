@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -58,6 +58,7 @@ import {
 } from "@/components/policy/form-renderers";
 import { POLICY_TYPES, PolicyType } from "@/lib/policy-constants";
 import { getDefaultPolicyData } from "@/lib/policy-defaults";
+import { useXdsMode } from "@/hooks/use-xds-mode";
 
 interface RouteWithContext {
   route: RouteType | TcpRoute;
@@ -78,12 +79,12 @@ interface PolicyDialogState {
 
 export function PolicyConfig() {
   const { refreshListeners } = useServer();
-  const [binds, setBinds] = useState<Bind[]>([]);
   const [expandedBinds, setExpandedBinds] = useState<Set<number>>(new Set());
   const [routes, setRoutes] = useState<RouteWithContext[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteWithContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const xds = useXdsMode();
 
   const [policyDialog, setPolicyDialog] = useState<PolicyDialogState>({
     isOpen: false,
@@ -92,11 +93,10 @@ export function PolicyConfig() {
     data: null,
   });
 
-  const loadRoutes = async () => {
+  const loadRoutes = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedBinds = await fetchBinds();
-      setBinds(fetchedBinds);
 
       // Extract all routes with context
       const allRoutes: RouteWithContext[] = [];
@@ -144,18 +144,17 @@ export function PolicyConfig() {
 
       setRoutes(allRoutes);
 
-      if (selectedRoute) {
+      setSelectedRoute((prev) => {
+        if (!prev) return prev;
         const updatedSelectedRoute = allRoutes.find(
           (r) =>
-            r.bind.port === selectedRoute.bind.port &&
-            r.listener.name === selectedRoute.listener.name &&
-            r.routeIndex === selectedRoute.routeIndex &&
-            r.routeType === selectedRoute.routeType
+            r.bind.port === prev.bind.port &&
+            r.listener.name === prev.listener.name &&
+            r.routeIndex === prev.routeIndex &&
+            r.routeType === prev.routeType
         );
-        if (updatedSelectedRoute) {
-          setSelectedRoute(updatedSelectedRoute);
-        }
-      }
+        return updatedSelectedRoute || prev;
+      });
 
       // Auto-expand binds with routes
       const bindsWithRoutes = new Set<number>();
@@ -167,11 +166,11 @@ export function PolicyConfig() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadRoutes();
-  }, []);
+  }, [loadRoutes]);
 
   const getAvailablePolicyTypes = (routeType: "http" | "tcp") => {
     return Object.entries(POLICY_TYPES)
@@ -488,7 +487,8 @@ export function PolicyConfig() {
                             handleAddPolicy(selectedRoute, type as PolicyType);
                           }
                         }}
-                        className="flex-1"
+                        className={`flex-1 ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+                        disabled={xds}
                       >
                         {hasPolicy ? (
                           <>
@@ -507,8 +507,8 @@ export function PolicyConfig() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDeletePolicy(selectedRoute, type as PolicyType)}
-                          className="text-destructive hover:text-destructive"
-                          disabled={isSubmitting}
+                          className={`text-destructive hover:text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+                          disabled={isSubmitting || xds}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -584,7 +584,11 @@ export function PolicyConfig() {
             >
               Cancel
             </Button>
-            <Button onClick={handleSavePolicy} disabled={isSubmitting}>
+            <Button
+              onClick={handleSavePolicy}
+              disabled={isSubmitting || xds}
+              className={xds ? "opacity-50 cursor-not-allowed" : undefined}
+            >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Policy
             </Button>

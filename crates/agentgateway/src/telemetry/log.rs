@@ -6,23 +6,9 @@ use std::sync::Arc;
 use std::task::{Context, Poll, ready};
 use std::time::{Duration, Instant};
 
-use crate::cel::{ContextBuilder, Expression};
-use crate::llm::LLMInfo;
-use crate::proxy::ProxyResponseReason;
-use crate::telemetry::metrics::{
-	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
-};
-use crate::telemetry::trc;
-use crate::telemetry::trc::TraceParent;
-use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::{
-	BackendInfo, BindName, GatewayName, ListenerName, RouteName, RouteRuleName, Target,
-};
-use crate::types::loadbalancer::ActiveHandle;
-use crate::{cel, llm, mcp};
 use agent_core::metrics::CustomField;
 use agent_core::strng;
-use agent_core::strng::RichStrng;
+use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{OptionExt, ValueBag, debug, display};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
@@ -31,9 +17,23 @@ use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::de::DeserializeOwned;
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use tracing::{Level, trace};
+
+use crate::cel::{ContextBuilder, Expression};
+use crate::llm::{InputFormat, LLMInfo};
+use crate::proxy::ProxyResponseReason;
+use crate::telemetry::metrics::{
+	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
+};
+use crate::telemetry::trc;
+use crate::telemetry::trc::TraceParent;
+use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
+use crate::types::loadbalancer::ActiveHandle;
+use crate::{cel, llm, mcp};
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -146,7 +146,11 @@ impl<V: Serialize> Serialize for OrderedStringMap<V> {
 	where
 		S: Serializer,
 	{
-		self.map.serialize(serializer)
+		let mut m = serializer.serialize_map(Some(self.len()))?;
+		for (k, v) in self.iter() {
+			m.serialize_entry(k.as_ref(), v)?;
+		}
+		m.end()
 	}
 }
 
@@ -157,6 +161,17 @@ impl<'de, V: DeserializeOwned> Deserialize<'de> for OrderedStringMap<V> {
 	{
 		let im = IndexMap::<String, V>::deserialize(deserializer)?;
 		Ok(OrderedStringMap::from_iter(im))
+	}
+}
+
+#[cfg(feature = "schema")]
+impl<V: schemars::JsonSchema> schemars::JsonSchema for OrderedStringMap<V> {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		format!("OrderedStringMap_{}", V::schema_name()).into()
+	}
+
+	fn json_schema(schema_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		<std::collections::BTreeMap<String, V>>::json_schema(schema_gen)
 	}
 }
 
@@ -267,32 +282,36 @@ impl<'a> CelLoggingExecutor<'a> {
 		celv: &cel::Value,
 		always_flatten: bool,
 	) {
-		if let cel::Value::Map(m) = celv {
-			if let Some(cel::Value::List(li)) = m.map.get(&cel::FLATTEN_LIST) {
+		match agent_celx::FlattenSignal::from_value(celv) {
+			Some(agent_celx::FlattenSignal::List(li)) => {
 				raws.reserve(li.len());
 				for (idx, v) in li.as_ref().iter().enumerate() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{idx}")), v, false);
 				}
 				return;
-			} else if let Some(cel::Value::List(li)) = m.map.get(&cel::FLATTEN_LIST_RECURSIVE) {
+			},
+			Some(agent_celx::FlattenSignal::ListRecursive(li)) => {
 				raws.reserve(li.len());
 				for (idx, v) in li.as_ref().iter().enumerate() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{idx}")), v, true);
 				}
 				return;
-			} else if let Some(cel::Value::Map(m)) = m.map.get(&cel::FLATTEN_MAP) {
+			},
+			Some(agent_celx::FlattenSignal::Map(m)) => {
 				raws.reserve(m.map.len());
 				for (mk, mv) in m.map.as_ref() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{mk}")), mv, false);
 				}
 				return;
-			} else if let Some(cel::Value::Map(m)) = m.map.get(&cel::FLATTEN_MAP_RECURSIVE) {
+			},
+			Some(agent_celx::FlattenSignal::MapRecursive(m)) => {
 				raws.reserve(m.map.len());
 				for (mk, mv) in m.map.as_ref() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{mk}")), mv, true);
 				}
 				return;
-			}
+			},
+			None => {},
 		}
 		if always_flatten {
 			match celv {
@@ -387,6 +406,9 @@ pub struct DropOnLog {
 impl DropOnLog {
 	pub fn as_mut(&mut self) -> Option<&mut RequestLog> {
 		self.log.as_mut()
+	}
+	pub fn as_ref(&self) -> Option<&RequestLog> {
+		self.log.as_ref()
 	}
 	pub fn with(&mut self, f: impl FnOnce(&mut RequestLog)) {
 		if let Some(l) = self.log.as_mut() {
@@ -484,9 +506,7 @@ impl RequestLog {
 			tracer: None,
 			endpoint: None,
 			bind_name: None,
-			gateway_name: None,
 			listener_name: None,
-			route_rule_name: None,
 			route_name: None,
 			backend_info: None,
 			backend_protocol: None,
@@ -526,14 +546,12 @@ pub struct RequestLog {
 	pub tls_info: Option<TLSConnectionInfo>,
 
 	// Set only if the trace is sampled
-	pub tracer: Option<trc::Tracer>,
+	pub tracer: Option<std::sync::Arc<trc::Tracer>>,
 
 	pub endpoint: Option<Target>,
 
-	pub bind_name: Option<BindName>,
-	pub gateway_name: Option<GatewayName>,
+	pub bind_name: Option<BindKey>,
 	pub listener_name: Option<ListenerName>,
-	pub route_rule_name: Option<RouteRuleName>,
 	pub route_name: Option<RouteName>,
 	pub backend_info: Option<BackendInfo>,
 	pub backend_protocol: Option<cel::BackendProtocol>,
@@ -541,7 +559,7 @@ pub struct RequestLog {
 	pub host: Option<String>,
 	pub method: Option<::http::Method>,
 	pub path: Option<String>,
-	pub path_match: Option<String>,
+	pub path_match: Option<Strng>,
 	pub version: Option<::http::Version>,
 	pub status: Option<crate::http::StatusCode>,
 	pub reason: Option<ProxyResponseReason>,
@@ -604,10 +622,18 @@ impl Drop for DropOnLog {
 
 		let route_identifier = RouteIdentifier {
 			bind: (&log.bind_name).into(),
-			gateway: (&log.gateway_name).into(),
-			listener: (&log.listener_name).into(),
-			route: (&log.route_name).into(),
-			route_rule: (&log.route_rule_name).into(),
+			gateway: log
+				.listener_name
+				.as_ref()
+				.map(|l| l.as_gateway_name())
+				.into(),
+			listener: log.listener_name.as_ref().map(|l| &l.listener_name).into(),
+			route: log.route_name.as_ref().map(|l| l.as_route_name()).into(),
+			route_rule: log
+				.route_name
+				.as_ref()
+				.and_then(|l| l.rule_name.as_ref())
+				.into(),
 		};
 
 		let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
@@ -741,10 +767,16 @@ impl Drop for DropOnLog {
 		let fields = cel_exec.fields;
 
 		let mut kv = vec![
-			("gateway", log.gateway_name.display()),
-			("listener", log.listener_name.display()),
-			("route_rule", log.route_rule_name.display()),
-			("route", log.route_name.display()),
+			("gateway", route_identifier.gateway.as_deref().map(display)),
+			(
+				"listener",
+				route_identifier.listener.as_deref().map(display),
+			),
+			(
+				"route_rule",
+				route_identifier.route_rule.as_deref().map(display),
+			),
+			("route", route_identifier.route.as_deref().map(display)),
 			("endpoint", log.endpoint.display()),
 			("src.addr", Some(display(&log.tcp_info.peer_addr))),
 			("http.method", log.method.display()),
@@ -802,7 +834,13 @@ impl Drop for DropOnLog {
 			// OpenTelemetry Gen AI Semantic Conventions v1.37.0
 			(
 				"gen_ai.operation.name",
-				log.llm_request.as_ref().map(|_| "chat".into()),
+				log.llm_request.as_ref().map(|r| {
+					if r.input_format == InputFormat::Embeddings {
+						"embeddings".into()
+					} else {
+						"chat".into()
+					}
+				}),
 			),
 			(
 				"gen_ai.provider.name",
@@ -833,6 +871,21 @@ impl Drop for DropOnLog {
 					.as_ref()
 					.and_then(|l| l.params.temperature)
 					.map(Into::into),
+			),
+			(
+				"gen_ai.embeddings.dimension.count",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.dimensions)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.request.encoding_formats",
+				log
+					.llm_request
+					.as_ref()
+					.and_then(|l| l.params.encoding_format.display()),
 			),
 			(
 				"gen_ai.request.top_p",

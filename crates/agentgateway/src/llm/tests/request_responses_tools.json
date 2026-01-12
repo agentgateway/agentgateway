@@ -1,0 +1,45 @@
+{
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": "What's the weather in San Francisco?"
+    }
+  ],
+  "max_output_tokens": 256,
+  "model": "gpt-4.1-mini",
+  "stream": false,
+  "temperature": 0.2,
+  "tool_choice": {
+    "type": "function",
+    "name": "get_weather"
+  },
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "celsius",
+              "fahrenheit"
+            ]
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true,
+      "description": "Get the current weather for a location"
+    }
+  ],
+  "top_p": 0.9
+}

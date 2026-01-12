@@ -47,12 +47,8 @@ import {
   ROUTE_TABLE_HEADERS,
   ROUTE_TYPE_CONFIGS,
 } from "@/lib/route-constants";
-import {
-  isTcpListener,
-  getPathDisplayString,
-  populateEditForm,
-  populateTcpEditForm,
-} from "@/lib/route-utils";
+import { isTcpListener, getPathDisplayString } from "@/lib/route-utils";
+import { ListenerProtocol } from "@/lib/types";
 
 interface RouteTableProps {
   allRoutesByBind: Map<number, CombinedRouteWithContext[]>;
@@ -62,6 +58,7 @@ interface RouteTableProps {
   onEditTcpRoute: (tcpRoute: TcpRouteWithContext) => void;
   onDeleteRoute: (route: RouteWithContext) => void;
   onDeleteTcpRoute: (tcpRoute: TcpRouteWithContext) => void;
+  xds: boolean;
 }
 
 export const RouteTable: React.FC<RouteTableProps> = ({
@@ -72,6 +69,7 @@ export const RouteTable: React.FC<RouteTableProps> = ({
   onEditTcpRoute,
   onDeleteRoute,
   onDeleteTcpRoute,
+  xds,
 }) => {
   return (
     <div className="space-y-4">
@@ -170,7 +168,7 @@ export const RouteTable: React.FC<RouteTableProps> = ({
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
-                              {combinedRoute.listener.name || "unnamed listener"}
+                              {combinedRoute.listener.name || "unnamed"}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -233,6 +231,8 @@ export const RouteTable: React.FC<RouteTableProps> = ({
                                     onEditTcpRoute(tcpRouteContext);
                                   }
                                 }}
+                                disabled={xds}
+                                className={xds ? "opacity-50 cursor-not-allowed" : undefined}
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
@@ -258,7 +258,10 @@ export const RouteTable: React.FC<RouteTableProps> = ({
                                     onDeleteTcpRoute(tcpRouteContext);
                                   }
                                 }}
-                                className="text-destructive hover:text-destructive"
+                                disabled={xds}
+                                className={`text-destructive hover:text-destructive ${
+                                  xds ? "opacity-50 cursor-not-allowed" : ""
+                                }`}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -309,6 +312,19 @@ export const AddRouteDialog: React.FC<AddRouteDialogProps> = ({
   onCancel,
   isSubmitting,
 }) => {
+  const getProtocolString = (protocol: unknown): ListenerProtocol | "HTTP" => {
+    if (typeof protocol === "string") {
+      return protocol as ListenerProtocol;
+    }
+    if (protocol && typeof protocol === "object") {
+      const keys = Object.keys(protocol as Record<string, unknown>);
+      if (keys.length > 0) {
+        return keys[0] as ListenerProtocol;
+      }
+    }
+    return "HTTP";
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -340,7 +356,7 @@ export const AddRouteDialog: React.FC<AddRouteDialogProps> = ({
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Route type automatically determined by listener protocol:{" "}
-                  {selectedListener.listener.protocol || "HTTP"}
+                  {getProtocolString(selectedListener.listener.protocol)}
                 </p>
               </div>
             </div>
@@ -396,7 +412,7 @@ export const AddRouteDialog: React.FC<AddRouteDialogProps> = ({
               </p>
             )}
             <div className="grid gap-2">
-              {availableListeners.map((item, index) => {
+              {availableListeners.map((item) => {
                 const isSelected =
                   selectedListener &&
                   (selectedListener.listener.name || "unnamed") ===
@@ -413,7 +429,7 @@ export const AddRouteDialog: React.FC<AddRouteDialogProps> = ({
                   >
                     <Network className="mr-2 h-4 w-4" />
                     {item.listener.name || `Unnamed`} (Port {item.bind.port}) -{" "}
-                    {item.listener.protocol || "HTTP"}
+                    {getProtocolString(item.listener.protocol)}
                   </Button>
                 );
               })}
@@ -561,6 +577,7 @@ interface EditRouteDialogProps {
   onEditRoute: () => void;
   onCancel: () => void;
   isSubmitting: boolean;
+  xds: boolean;
 }
 
 export const EditRouteDialog: React.FC<EditRouteDialogProps> = ({
@@ -572,6 +589,7 @@ export const EditRouteDialog: React.FC<EditRouteDialogProps> = ({
   onEditRoute,
   onCancel,
   isSubmitting,
+  xds,
 }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -703,7 +721,11 @@ export const EditRouteDialog: React.FC<EditRouteDialogProps> = ({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={onEditRoute} disabled={isSubmitting}>
+          <Button
+            onClick={onEditRoute}
+            disabled={isSubmitting || xds}
+            className={xds ? "opacity-50 cursor-not-allowed" : undefined}
+          >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Update Route
           </Button>
@@ -722,6 +744,7 @@ interface EditTcpRouteDialogProps {
   onEditTcpRoute: () => void;
   onCancel: () => void;
   isSubmitting: boolean;
+  xds: boolean;
 }
 
 export const EditTcpRouteDialog: React.FC<EditTcpRouteDialogProps> = ({
@@ -733,6 +756,7 @@ export const EditTcpRouteDialog: React.FC<EditTcpRouteDialogProps> = ({
   onEditTcpRoute,
   onCancel,
   isSubmitting,
+  xds,
 }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -806,7 +830,11 @@ export const EditTcpRouteDialog: React.FC<EditTcpRouteDialogProps> = ({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={onEditTcpRoute} disabled={isSubmitting}>
+          <Button
+            onClick={onEditTcpRoute}
+            disabled={isSubmitting || xds}
+            className={xds ? "opacity-50 cursor-not-allowed" : undefined}
+          >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Update TCP Route
           </Button>

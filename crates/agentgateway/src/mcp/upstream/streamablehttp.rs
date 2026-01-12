@@ -1,47 +1,36 @@
 use ::http::Uri;
+use ::http::header::ACCEPT;
 use ::http::header::CONTENT_TYPE;
 use anyhow::anyhow;
 use futures::StreamExt;
-use reqwest::header::ACCEPT;
+use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::SseStream;
 
 use crate::http::Request;
 use crate::mcp::ClientError;
+use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::upstream::IncomingRequestContext;
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
-use crate::{json, *};
+use crate::*;
 
 #[derive(Clone, Debug)]
 pub struct Client {
-	backend: Arc<SimpleBackend>,
+	http_client: super::McpHttpClient,
 	uri: Uri,
-	client: PolicyClient,
-	policies: BackendPolicies,
 	session_id: AtomicOption<String>,
 }
 
 impl Client {
-	pub fn new(
-		backend: SimpleBackend,
-		path: Strng,
-		client: PolicyClient,
-		policies: BackendPolicies,
-	) -> anyhow::Result<Self> {
-		let hp = backend.hostport();
+	pub fn new(http_client: super::McpHttpClient, path: Strng) -> anyhow::Result<Self> {
+		let hp = http_client.backend().hostport();
 		Ok(Self {
-			backend: Arc::new(backend),
+			http_client,
 			uri: ("http://".to_string() + &hp + path.as_str()).parse()?,
-			client,
-			policies,
 			session_id: Default::default(),
 		})
 	}
@@ -73,8 +62,6 @@ impl Client {
 
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
 		let body = serde_json::to_vec(&message).map_err(ClientError::new)?;
 
 		let mut req = ::http::Request::builder()
@@ -89,10 +76,7 @@ impl Client {
 
 		ctx.apply(&mut req);
 
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
 		if resp.status() == http::StatusCode::ACCEPTED {
 			return Ok(StreamableHttpPostResponse::Accepted);
@@ -115,9 +99,18 @@ impl Client {
 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
-				let message = json::from_response_body::<ServerJsonRpcMessage>(resp)
-					.await
-					.map_err(ClientError::new)?;
+				let lim = crate::http::response_buffer_limit(&resp);
+				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
+				let body_bytes = crate::http::compression::to_bytes_with_decompression(
+					resp.into_body(),
+					content_encoding,
+					lim,
+				)
+				.await
+				.map_err(ClientError::new)?
+				.1;
+				let message =
+					serde_json::from_slice::<ServerJsonRpcMessage>(&body_bytes).map_err(ClientError::new)?;
 				Ok(StreamableHttpPostResponse::Json(message, session_id))
 			},
 			_ => Err(ClientError::new(anyhow!(
@@ -131,8 +124,6 @@ impl Client {
 
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
 		let mut req = ::http::Request::builder()
 			.uri(&self.uri)
 			.method(http::Method::DELETE)
@@ -143,10 +134,7 @@ impl Client {
 
 		ctx.apply(&mut req);
 
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));
@@ -157,8 +145,6 @@ impl Client {
 		&self,
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
 		let mut req = ::http::Request::builder()
 			.uri(&self.uri)
 			.method(http::Method::GET)
@@ -170,10 +156,7 @@ impl Client {
 
 		ctx.apply(&mut req);
 
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));

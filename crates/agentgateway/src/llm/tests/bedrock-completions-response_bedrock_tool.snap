@@ -1,0 +1,59 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 38
+description: src/llm/tests/response_bedrock_tool.json
+info:
+  output:
+    message:
+      role: assistant
+      content:
+        - toolUse:
+            toolUseId: tooluse_kZJMlvQmRJ6eAyJE5GIl7Q
+            name: top_song
+            input:
+              sign: WZPZ
+        - toolUse:
+            toolUseId: tooluse_kZJMlvQmRJ6eAyxxx
+            name: hello
+            input:
+              sign: world
+  stopReason: tool_use
+---
+{
+  "model": "fake-model",
+  "usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0
+  },
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
+            "function": {
+              "name": "top_song",
+              "arguments": "{\"sign\":\"WZPZ\"}"
+            }
+          },
+          {
+            "type": "function",
+            "id": "tooluse_kZJMlvQmRJ6eAyxxx",
+            "function": {
+              "name": "hello",
+              "arguments": "{\"sign\":\"world\"}"
+            }
+          }
+        ]
+      },
+      "index": 0,
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "id": "[id]",
+  "created": "[date]",
+  "object": "chat.completion"
+}

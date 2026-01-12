@@ -102,10 +102,17 @@ pub struct UrlRewrite {
 	pub path: Option<PathRedirect>,
 }
 
+/// OriginalUrl is an HTTP Extension that signals the original URI when a URI was rewritten
 #[derive(Debug, Clone)]
 pub struct OriginalUrl(pub Uri);
+
+/// AutoHostname is an HTTP Extension that signals that auto-hostname rewrite should be used
 #[derive(Debug, Clone)]
 pub struct AutoHostname();
+
+/// BackendRequestTimeout is an HTTP Extension that signals the backend request timeout to use for backend calls.
+#[derive(Debug, Clone)]
+pub struct BackendRequestTimeout(pub Duration);
 
 impl UrlRewrite {
 	pub fn apply(&self, req: &mut Request) -> Result<(), Error> {
@@ -121,8 +128,9 @@ impl UrlRewrite {
 		let scheme = req.uri().scheme().cloned().unwrap_or(Scheme::HTTP);
 
 		let new_authority = rewrite_host(authority, req.uri(), Some(&scheme), &scheme)?;
-		if matches!(authority, Some(HostRedirect::Auto)) {
-			req.extensions_mut().insert(AutoHostname());
+		// AutoHostname is the default, so if they explicitly set something (other than Auto), disable it.
+		if !matches!(authority, Some(HostRedirect::Auto) | None) {
+			req.extensions_mut().remove::<AutoHostname>();
 		}
 		let path_and_query = rewrite_path(path, &path_match, req.uri())?;
 		let new = Uri::builder()
@@ -153,8 +161,7 @@ impl DirectResponse {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[apply(schema!)]
 pub struct RequestMirror {
 	pub backend: SimpleBackendReference,
 	// 0.0-1.0
@@ -169,7 +176,9 @@ fn rewrite_host(
 ) -> Result<http::uri::Authority, Error> {
 	match &rewrite {
 		// For Auto, we need to handle it later after we pick the backend!
-		None | Some(HostRedirect::Auto) => orig.authority().cloned().ok_or(Error::InvalidURI),
+		None | Some(HostRedirect::None) | Some(HostRedirect::Auto) => {
+			orig.authority().cloned().ok_or(Error::InvalidURI)
+		},
 		Some(HostRedirect::Full(hp)) => Ok(hp.as_str().try_into()?),
 		Some(HostRedirect::Host(h)) => {
 			if original_scheme == Some(&Scheme::HTTP) || original_scheme == Some(&Scheme::HTTPS) {

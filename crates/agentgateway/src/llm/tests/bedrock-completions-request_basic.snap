@@ -1,0 +1,32 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "bedrock-completions: request_basic"
+info:
+  model: replaceme
+  messages:
+    - role: system
+      content: You are a helpful assistant.
+    - role: user
+      content: What is the name of the LLM provider?
+---
+{
+  "modelId": "replaceme",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "What is the name of the LLM provider?"
+        }
+      ]
+    }
+  ],
+  "system": [
+    {
+      "text": "You are a helpful assistant."
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 4096
+  }
+}

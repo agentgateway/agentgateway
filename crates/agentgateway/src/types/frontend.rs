@@ -1,8 +1,31 @@
-use crate::telemetry::log::OrderedStringMap;
-use crate::*;
-use crate::{apply, defaults};
-use frozen_collections::FzHashSet;
 use std::time::Duration;
+
+use frozen_collections::FzHashSet;
+use serde::{Deserialize, Serialize};
+
+use crate::telemetry::log::OrderedStringMap;
+use crate::{apply, defaults, *};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[allow(non_camel_case_types)]
+pub enum TLSVersion {
+	TLS_V1_0,
+	TLS_V1_1,
+	TLS_V1_2,
+	TLS_V1_3,
+}
+
+impl From<TLSVersion> for super::agent::TLSVersion {
+	fn from(value: TLSVersion) -> Self {
+		match value {
+			TLSVersion::TLS_V1_0 => super::agent::TLSVersion::TLS_V1_0,
+			TLSVersion::TLS_V1_1 => super::agent::TLSVersion::TLS_V1_1,
+			TLSVersion::TLS_V1_2 => super::agent::TLSVersion::TLS_V1_2,
+			TLSVersion::TLS_V1_3 => super::agent::TLSVersion::TLS_V1_3,
+		}
+	}
+}
 
 #[apply(schema!)]
 pub struct HTTP {
@@ -57,13 +80,26 @@ pub struct TLS {
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::tls_handshake_timeout")]
-	pub tls_handshake_timeout: Duration,
+	pub handshake_timeout: Duration,
+	#[serde(default)]
+	pub alpn: Option<Vec<Vec<u8>>>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub min_version: Option<TLSVersion>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_version: Option<TLSVersion>,
+	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
 }
 
 impl Default for TLS {
 	fn default() -> Self {
 		Self {
-			tls_handshake_timeout: defaults::tls_handshake_timeout(),
+			handshake_timeout: defaults::tls_handshake_timeout(),
+			alpn: None,
+			min_version: None,
+			max_version: None,
+			cipher_suites: None,
 		}
 	}
 }

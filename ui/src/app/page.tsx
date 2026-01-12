@@ -29,11 +29,13 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { LoadingState } from "@/components/loading-state";
+import { useXdsMode } from "@/hooks/use-xds-mode";
 
 export default function Home() {
   const { isLoading, setIsLoading } = useLoading();
-  const { setConfig, isConnected, connectionError, binds, targets } = useServer();
+  const { setConfig, isConnected, connectionError, binds } = useServer();
   const { showWizard, handleWizardComplete, handleWizardSkip, restartWizard } = useWizard();
+  const xds = useXdsMode();
 
   const [configUpdateMessage] = useState<{
     success: boolean;
@@ -65,10 +67,6 @@ export default function Home() {
 
   const getTotalListeners = () => {
     return binds?.reduce((total, bind) => total + bind.listeners.length, 0) || 0;
-  };
-
-  const getTotalTargets = () => {
-    return targets?.length || 0;
   };
 
   const getTotalRoutes = () => {
@@ -138,7 +136,12 @@ export default function Home() {
     const protocols: { [key: string]: number } = {};
     binds?.forEach((bind) => {
       bind.listeners.forEach((listener) => {
-        const protocol = listener.protocol || "HTTP";
+        const protocol =
+          typeof listener.protocol === "string"
+            ? listener.protocol
+            : listener.protocol && typeof listener.protocol === "object"
+              ? Object.keys(listener.protocol as Record<string, unknown>)[0] || "HTTP"
+              : "HTTP";
         protocols[protocol] = (protocols[protocol] || 0) + 1;
       });
     });
@@ -218,13 +221,20 @@ export default function Home() {
               Get started by configuring your first port bind and listener to begin routing traffic.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button asChild>
-                <Link href="/listeners">
+              {xds ? (
+                <Button disabled className="opacity-50 cursor-not-allowed">
                   <Plus className="h-4 w-4 mr-2" />
                   Create First Listener
-                </Link>
-              </Button>
-              <Button variant="outline" onClick={handleRestartWizard}>
+                </Button>
+              ) : (
+                <Button asChild>
+                  <Link href="/listeners">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create First Listener
+                  </Link>
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleRestartWizard} disabled={xds}>
                 <Settings className="h-4 w-4 mr-2" />
                 Run Setup Wizard
               </Button>
@@ -406,24 +416,57 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <Button asChild variant="outline" className="w-full justify-start">
-                  <Link href="/listeners">
+                {xds ? (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start opacity-50 cursor-not-allowed"
+                    disabled
+                  >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Listener
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full justify-start">
-                  <Link href="/routes">
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline" className="w-full justify-start">
+                    <Link href="/listeners">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Listener
+                    </Link>
+                  </Button>
+                )}
+                {xds ? (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start opacity-50 cursor-not-allowed"
+                    disabled
+                  >
                     <Route className="h-4 w-4 mr-2" />
                     Create Route
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full justify-start">
-                  <Link href="/policies">
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline" className="w-full justify-start">
+                    <Link href="/routes">
+                      <Route className="h-4 w-4 mr-2" />
+                      Create Route
+                    </Link>
+                  </Button>
+                )}
+                {xds ? (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start opacity-50 cursor-not-allowed"
+                    disabled
+                  >
                     <Shield className="h-4 w-4 mr-2" />
                     Configure Policy
-                  </Link>
-                </Button>
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline" className="w-full justify-start">
+                    <Link href="/policies">
+                      <Shield className="h-4 w-4 mr-2" />
+                      Configure Policy
+                    </Link>
+                  </Button>
+                )}
                 <Button asChild variant="outline" className="w-full justify-start">
                   <Link href="/playground">
                     <Code className="h-4 w-4 mr-2" />

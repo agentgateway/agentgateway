@@ -215,7 +215,7 @@ fn default_filter(default_level: &str) -> filter::Targets {
 		default_level
 	};
 	const CUSTOM_TARGETS: &str = "rmcp=warn,hickory_server::server::server_future=off,typespec_client_core::http::policies::logging=warn";
-	// Read from env var, but prefix with setting DNS logs to warn as they are noisy; they can be explicitly overriden
+	// Read from env var, but prefix with setting DNS logs to warn as they are noisy; they can be explicitly overridden
 	let base: String = env::var("RUST_LOG").unwrap_or_else(|_| levels.to_string());
 	let v = CUSTOM_TARGETS.to_string() + "," + base.as_str();
 	filter::Targets::from_str(&v).expect("static filter should build")

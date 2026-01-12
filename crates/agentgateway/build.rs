@@ -20,11 +20,10 @@ fn main() -> Result<(), anyhow::Error> {
 		let mut c = prost_build::Config::new();
 		c.disable_comments(Some("."));
 		c.bytes([
-			".agentgateway.dev.workload.Workload",
-			".agentgateway.dev.workload.Service",
-			".agentgateway.dev.workload.GatewayAddress",
-			".agentgateway.dev.workload.Address",
-			".agentgateway.dev.workload.Address",
+			".istio.workload.Workload",
+			".istio.workload.Service",
+			".istio.workload.GatewayAddress",
+			".istio.workload.Address",
 		]);
 		c.extern_path(".google.protobuf.Value", "::prost_wkt_types::Value");
 		c.extern_path(".google.protobuf.Struct", "::prost_wkt_types::Struct");

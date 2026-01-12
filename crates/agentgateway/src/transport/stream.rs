@@ -4,28 +4,32 @@ use std::io::{Error, IoSlice};
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 use std::time::Instant;
+
+use agent_hbone::RWStream;
+use hyper_util::client::legacy::connect::{Connected, Connection};
+use tokio::io::{AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
+use tokio::net::TcpStream;
+#[cfg(unix)]
+use tokio::net::UnixStream;
+use tokio_rustls::TlsStream;
+use tracing::event;
 
 use crate::telemetry::metrics::{Metrics as TelemetryMetrics, TCPLabels};
 use crate::transport::rewind;
 use crate::transport::rewind::RewindSocket;
-use crate::types::discovery::Identity;
 use crate::types::frontend::TCP;
-use agent_hbone::RWStream;
-use hyper_util::client::legacy::connect::{Connected, Connection};
-use prometheus_client::metrics::counter::Atomic;
-use tokio::io::{AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
-use tokio::net::TcpStream;
-use tokio_rustls::TlsStream;
-use tracing::event;
 
 #[derive(Debug, Clone)]
 pub struct TCPConnectionInfo {
 	pub peer_addr: SocketAddr,
 	pub local_addr: SocketAddr,
 	pub start: Instant,
+	/// Original TCP peer address before PROXY protocol parsing.
+	/// For PROXY protocol connections, this is ztunnel's address (useful for debugging).
+	/// For regular connections, this is None.
+	pub raw_peer_addr: Option<SocketAddr>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy)]
@@ -49,7 +53,7 @@ impl From<&[u8]> for Alpn {
 
 #[derive(Default, Debug, Clone)]
 pub struct TLSConnectionInfo {
-	pub src_identity: Option<Identity>,
+	pub src_identity: Option<super::tls::TlsInfo>,
 	pub server_name: Option<String>,
 	pub negotiated_alpn: Option<Alpn>,
 }
@@ -115,13 +119,14 @@ impl Connection for Socket {
 impl hyper_util_fork::client::legacy::connect::Connection for Socket {
 	fn connected(&self) -> hyper_util_fork::client::legacy::connect::Connected {
 		let mut con = hyper_util_fork::client::legacy::connect::Connected::new();
-		if self
+		match self
 			.ext
 			.get::<TLSConnectionInfo>()
 			.and_then(|c| c.negotiated_alpn)
-			== Some(Alpn::H2)
 		{
-			con = con.negotiated_h2()
+			Some(Alpn::H2) => con = con.negotiated_h2(),
+			Some(Alpn::Http11) => con = con.negotiated_h1(),
+			_ => {},
 		}
 		con
 	}
@@ -176,6 +181,7 @@ impl Socket {
 			peer_addr: to_canonical(stream.peer_addr()?),
 			local_addr: to_canonical(stream.local_addr()?),
 			start: Instant::now(),
+			raw_peer_addr: None,
 		});
 		Ok(Socket {
 			ext,
@@ -235,6 +241,10 @@ impl Socket {
 		self.ext.get::<T>()
 	}
 
+	pub fn ext_mut(&mut self) -> &mut Extension {
+		&mut self.ext
+	}
+
 	pub fn must_ext<T: Send + Sync + 'static>(&self) -> &T {
 		self.ext().expect("expected required extension")
 	}
@@ -251,7 +261,7 @@ impl Socket {
 		}
 	}
 
-	pub async fn dial(target: SocketAddr, cfg: Arc<crate::BackendConfig>) -> io::Result<Socket> {
+	pub async fn dial(target: SocketAddr, cfg: &crate::BackendConfig) -> io::Result<Socket> {
 		let res = tokio::time::timeout(cfg.connect_timeout, TcpStream::connect(target))
 			.await
 			.map_err(|to| io::Error::new(io::ErrorKind::TimedOut, to))??;
@@ -260,12 +270,40 @@ impl Socket {
 				.with_time(cfg.keepalives.time)
 				.with_retries(cfg.keepalives.retries)
 				.with_interval(cfg.keepalives.interval);
-			tracing::trace!(
-				"set keepalive: {:?}",
-				socket2::SockRef::from(&res).set_tcp_keepalive(&ka)
-			);
+			let res = socket2::SockRef::from(&res).set_tcp_keepalive(&ka);
+			tracing::trace!("set keepalive: {:?}", res);
 		}
 		Socket::from_tcp(res)
+	}
+
+	/// Create a Socket from a Unix domain socket stream
+	#[cfg(unix)]
+	pub fn from_unix(stream: UnixStream) -> io::Result<Self> {
+		let ext = Extension::new();
+		Ok(Socket {
+			ext,
+			inner: SocketType::Unix(stream),
+			metrics: Metrics::with_counter(),
+		})
+	}
+
+	/// Dial a Unix domain socket
+	#[cfg(unix)]
+	pub async fn dial_unix(path: &std::path::Path, cfg: &crate::BackendConfig) -> io::Result<Socket> {
+		let res = tokio::time::timeout(cfg.connect_timeout, UnixStream::connect(path))
+			.await
+			.map_err(|to| io::Error::new(io::ErrorKind::TimedOut, to))??;
+		Socket::from_unix(res)
+	}
+	#[cfg(not(unix))]
+	pub async fn dial_unix(
+		_path: &std::path::Path,
+		_cfg: &crate::BackendConfig,
+	) -> io::Result<Socket> {
+		Err(io::Error::new(
+			io::ErrorKind::Unsupported,
+			"UDS is not supported on windows",
+		))
 	}
 
 	pub fn apply_tcp_settings(&mut self, settings: &TCP) {
@@ -276,21 +314,16 @@ impl Socket {
 				.with_time(settings.keepalives.time)
 				.with_retries(settings.keepalives.retries)
 				.with_interval(settings.keepalives.interval);
-			tracing::trace!(
-				"set keepalive: {:?}",
-				socket2::SockRef::from(tcp).set_tcp_keepalive(&ka)
-			);
+			let res = socket2::SockRef::from(tcp).set_tcp_keepalive(&ka);
+			tracing::trace!("set keepalive: {:?}", res);
 		}
-		todo!()
-	}
-
-	pub fn counter(&self) -> Option<BytesCounter> {
-		self.metrics.counter.clone()
 	}
 }
 
 pub enum SocketType {
 	Tcp(TcpStream),
+	#[cfg(unix)]
+	Unix(UnixStream),
 	Rewind(Box<rewind::RewindSocket>),
 	Tls(Box<TlsStream<Box<SocketType>>>),
 	Hbone(RWStream),
@@ -306,6 +339,8 @@ impl AsyncRead for SocketType {
 	) -> Poll<std::io::Result<()>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_read(cx, buf),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Tls(inner) => Pin::new(inner).poll_read(cx, buf),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_read(cx, buf),
@@ -322,6 +357,8 @@ impl AsyncWrite for SocketType {
 	) -> Poll<Result<usize, std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_write(cx, buf),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Tls(inner) => Pin::new(inner).poll_write(cx, buf),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_write(cx, buf),
@@ -333,6 +370,8 @@ impl AsyncWrite for SocketType {
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_flush(cx),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Tls(inner) => Pin::new(inner).poll_flush(cx),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_flush(cx),
@@ -344,6 +383,8 @@ impl AsyncWrite for SocketType {
 	fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_shutdown(cx),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Tls(inner) => Pin::new(inner).poll_shutdown(cx),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_shutdown(cx),
@@ -359,6 +400,8 @@ impl AsyncWrite for SocketType {
 	) -> Poll<Result<usize, std::io::Error>> {
 		match self.get_mut() {
 			SocketType::Tcp(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Rewind(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Tls(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
 			SocketType::Hbone(inner) => Pin::new(inner).poll_write_vectored(cx, bufs),
@@ -370,6 +413,8 @@ impl AsyncWrite for SocketType {
 	fn is_write_vectored(&self) -> bool {
 		match &self {
 			SocketType::Tcp(inner) => inner.is_write_vectored(),
+			#[cfg(unix)]
+			SocketType::Unix(inner) => inner.is_write_vectored(),
 			SocketType::Rewind(inner) => inner.is_write_vectored(),
 			SocketType::Tls(inner) => inner.is_write_vectored(),
 			SocketType::Hbone(inner) => inner.is_write_vectored(),
@@ -388,7 +433,7 @@ impl AsyncRead for Socket {
 		let bytes = buf.filled().len();
 		let poll = Pin::new(&mut self.inner).poll_read(cx, buf);
 		let bytes = buf.filled().len() - bytes;
-		if let Some(c) = &self.metrics.counter {
+		if let Some(c) = &mut self.metrics.counter {
 			c.recv(bytes);
 		}
 		poll
@@ -401,7 +446,7 @@ impl AsyncWrite for Socket {
 		buf: &[u8],
 	) -> Poll<Result<usize, Error>> {
 		let poll = Pin::new(&mut self.inner).poll_write(cx, buf);
-		if let Some(c) = &self.metrics.counter
+		if let Some(c) = &mut self.metrics.counter
 			&& let Poll::Ready(Ok(bytes)) = poll
 		{
 			c.sent(bytes);
@@ -423,7 +468,7 @@ impl AsyncWrite for Socket {
 		bufs: &[IoSlice<'_>],
 	) -> Poll<Result<usize, Error>> {
 		let poll = Pin::new(&mut self.inner).poll_write_vectored(cx, bufs);
-		if let Some(c) = &self.metrics.counter
+		if let Some(c) = &mut self.metrics.counter
 			&& let Poll::Ready(Ok(bytes)) = poll
 		{
 			c.sent(bytes);
@@ -489,23 +534,20 @@ fn to_canonical(addr: SocketAddr) -> SocketAddr {
 	SocketAddr::from((ip, addr.port()))
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct BytesCounter {
-	counts: Arc<(AtomicU64, AtomicU64)>,
+	counts: (usize, usize),
 }
 
 impl BytesCounter {
-	pub fn sent(&self, amt: usize) {
-		self.counts.0.inc_by(amt as u64);
+	pub fn sent(&mut self, amt: usize) {
+		self.counts.0 += amt;
 	}
-	pub fn recv(&self, amt: usize) {
-		self.counts.1.inc_by(amt as u64);
+	pub fn recv(&mut self, amt: usize) {
+		self.counts.1 += amt
 	}
 	pub fn load(&self) -> (u64, u64) {
-		(
-			self.counts.0.load(Ordering::Relaxed),
-			self.counts.1.load(Ordering::Relaxed),
-		)
+		(self.counts.0 as u64, self.counts.1 as u64)
 	}
 }
 

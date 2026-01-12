@@ -26,24 +26,19 @@ interface BackendStepProps {
 
 export function BackendStep({ onNext, onPrevious, config, onConfigChange }: BackendStepProps) {
   const [backendType, setBackendType] = useState<"mcp" | "host" | "service">("mcp");
-  const [mcpName, setMcpName] = useState("default-mcp");
   const [mcpStateful, setMcpStateful] = useState(true); // Default to stateful
   const [targetType, setTargetType] = useState<"mcp" | "stdio" | "sse" | "openapi">("mcp");
   const [targetName, setTargetName] = useState("default-target");
 
   // MCP Connection Target
-  const [mcpHost, setMcpHost] = useState("localhost");
-  const [mcpPort, setMcpPort] = useState("3000");
-  const [mcpPath, setMcpPath] = useState("/mcp");
+  const [mcpUrl, setMcpUrl] = useState("https://example.com/mcp");
 
   // Stdio Target
   const [stdioCmd, setStdioCmd] = useState("npx");
   const [stdioArgs, setStdioArgs] = useState("@modelcontextprotocol/server-everything");
 
   // SSE Target
-  const [sseHost, setSseHost] = useState("localhost");
-  const [ssePort, setSsePort] = useState("8080");
-  const [ssePath, setSsePath] = useState("/events");
+  const [sseUrl, setSseUrl] = useState("https://example.com/sse");
 
   // OpenAPI Target
   const [openApiHost, setOpenApiHost] = useState("localhost");
@@ -57,10 +52,6 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
 
   const handleNext = async () => {
     if (backendType === "mcp") {
-      if (!mcpName.trim()) {
-        toast.error("MCP backend name is required.");
-        return;
-      }
       if (!targetName.trim()) {
         toast.error("Target name is required.");
         return;
@@ -85,11 +76,9 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
             target = {
               name: targetName,
               mcp: {
-                host: mcpHost,
-                port: parseInt(mcpPort),
-                path: mcpPath,
+                host: mcpUrl,
               },
-            };
+            } as McpTarget;
             break;
           case "stdio":
             target = {
@@ -104,13 +93,11 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
             target = {
               name: targetName,
               sse: {
-                host: sseHost,
-                port: parseInt(ssePort),
-                path: ssePath,
+                host: sseUrl,
               },
             };
             break;
-          case "openapi":
+          case "openapi": {
             let schema;
             try {
               schema = JSON.parse(openApiSchema);
@@ -118,21 +105,22 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
               toast.error("Invalid OpenAPI schema JSON");
               return;
             }
+            const openApiPortValue = openApiPort.trim() ? parseInt(openApiPort, 10) : undefined;
             target = {
               name: targetName,
               openapi: {
                 host: openApiHost,
-                port: parseInt(openApiPort),
+                port: Number.isFinite(openApiPortValue) ? openApiPortValue : undefined,
                 schema,
               },
             };
             break;
+          }
           default:
             throw new Error("Invalid target type");
         }
 
         const mcpBackend: McpBackend = {
-          name: mcpName,
           targets: [target],
           statefulMode: mcpStateful ? McpStatefulMode.STATEFUL : McpStatefulMode.STATELESS,
         };
@@ -183,16 +171,6 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
     if (backendType === "mcp") {
       return (
         <div className="space-y-4">
-          <div className="space-y-3">
-            <Label htmlFor="mcpName">MCP Backend Name</Label>
-            <Input
-              id="mcpName"
-              value={mcpName}
-              onChange={(e) => setMcpName(e.target.value)}
-              placeholder="e.g., default-mcp"
-            />
-          </div>
-
           <div className="space-y-3">
             <Label>Target Type</Label>
             <RadioGroup
@@ -246,34 +224,13 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
 
           {targetType === "mcp" && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="mcpHost">Host</Label>
-                  <Input
-                    id="mcpHost"
-                    value={mcpHost}
-                    onChange={(e) => setMcpHost(e.target.value)}
-                    placeholder="localhost"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="mcpPort">Port</Label>
-                  <Input
-                    id="mcpPort"
-                    type="number"
-                    value={mcpPort}
-                    onChange={(e) => setMcpPort(e.target.value)}
-                    placeholder="3000"
-                  />
-                </div>
-              </div>
               <div>
-                <Label htmlFor="mcpPath">Path</Label>
+                <Label htmlFor="mcpUrl">MCP URL</Label>
                 <Input
-                  id="mcpPath"
-                  value={mcpPath}
-                  onChange={(e) => setMcpPath(e.target.value)}
-                  placeholder="/mcp"
+                  id="mcpUrl"
+                  value={mcpUrl}
+                  onChange={(e) => setMcpUrl(e.target.value)}
+                  placeholder="https://example.com/mcp"
                 />
               </div>
             </div>
@@ -304,34 +261,13 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
 
           {targetType === "sse" && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="sseHost">Host</Label>
-                  <Input
-                    id="sseHost"
-                    value={sseHost}
-                    onChange={(e) => setSseHost(e.target.value)}
-                    placeholder="localhost"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="ssePort">Port</Label>
-                  <Input
-                    id="ssePort"
-                    type="number"
-                    value={ssePort}
-                    onChange={(e) => setSsePort(e.target.value)}
-                    placeholder="8080"
-                  />
-                </div>
-              </div>
               <div>
-                <Label htmlFor="ssePath">Path</Label>
+                <Label htmlFor="sseUrl">SSE URL</Label>
                 <Input
-                  id="ssePath"
-                  value={ssePath}
-                  onChange={(e) => setSsePath(e.target.value)}
-                  placeholder="/events"
+                  id="sseUrl"
+                  value={sseUrl}
+                  onChange={(e) => setSseUrl(e.target.value)}
+                  placeholder="https://example.com/sse"
                 />
               </div>
             </div>
@@ -453,15 +389,13 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
               Requests will be forwarded to:{" "}
               <code className="bg-muted px-1 py-0.5 rounded text-xs">
                 {backendType === "mcp"
-                  ? `${targetType}://${
-                      targetType === "mcp"
-                        ? mcpHost + ":" + mcpPort + mcpPath
-                        : targetType === "stdio"
-                          ? stdioCmd + " " + stdioArgs
-                          : targetType === "sse"
-                            ? sseHost + ":" + ssePort + ssePath
-                            : openApiHost + ":" + openApiPort
-                    }`
+                  ? targetType === "mcp"
+                    ? mcpUrl
+                    : targetType === "stdio"
+                      ? stdioCmd + " " + stdioArgs
+                      : targetType === "sse"
+                        ? sseUrl
+                        : openApiHost + ":" + openApiPort
                   : hostAddress}
               </code>
             </p>

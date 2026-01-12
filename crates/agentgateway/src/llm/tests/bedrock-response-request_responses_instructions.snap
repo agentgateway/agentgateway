@@ -1,0 +1,24 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "bedrock-response: request_responses_instructions"
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input: What is the weather like in San Francisco? Use the get_weather tool.
+---
+{
+  "modelId": "gpt-4o",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "What is the weather like in San Francisco? Use the get_weather tool."
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 1024
+  }
+}

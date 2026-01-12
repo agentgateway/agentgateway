@@ -1,0 +1,19 @@
+services:
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    container_name: oauth2-proxy
+    restart: unless-stopped
+    ports:
+    - "4180:4180"
+    command:
+    - --provider=github
+    - --email-domain=*
+    - --upstream=file:///dev/null
+    - --http-address=0.0.0.0:4180
+    - --set-xauthrequest
+    - --reverse-proxy=true
+    environment:
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET}
+      OAUTH2_PROXY_COOKIE_SECURE: false

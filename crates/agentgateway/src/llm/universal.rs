@@ -3,21 +3,12 @@
 
 use std::collections::HashMap;
 
-use crate::llm;
-use crate::llm::bedrock::Provider;
-use crate::llm::{AIError, LLMRequest, LLMResponse};
 use agent_core::strng;
 use agent_core::strng::Strng;
-#[allow(deprecated)]
-#[allow(deprecated_in_future)]
-pub use async_openai::types::ChatCompletionFunctions;
-use async_openai::types::{
-	ChatChoiceLogprobs, ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
-	ChatCompletionResponseMessageAudio, CompletionUsage, FunctionCallStream, ServiceTierResponse,
-};
-pub use async_openai::types::{
-	ChatCompletionAudio, ChatCompletionFunctionCall,
-	ChatCompletionMessageToolCall as MessageToolCall, ChatCompletionModalities,
+pub use async_openai::types::chat::{
+	ChatChoiceLogprobs, ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
+	ChatCompletionMessageToolCall, ChatCompletionMessageToolCall as MessageToolCall,
+	ChatCompletionMessageToolCallChunk, ChatCompletionMessageToolCalls as MessageToolCalls,
 	ChatCompletionNamedToolChoice as NamedToolChoice,
 	ChatCompletionRequestAssistantMessage as RequestAssistantMessage,
 	ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
@@ -31,13 +22,19 @@ pub use async_openai::types::{
 	ChatCompletionRequestToolMessageContent as RequestToolMessageContent,
 	ChatCompletionRequestUserMessage as RequestUserMessage,
 	ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
-	ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool, ChatCompletionTool as Tool,
+	ChatCompletionResponseMessageAudio, ChatCompletionStreamOptions as StreamOptions,
+	ChatCompletionTool, ChatCompletionTool as Tool,
 	ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
-	ChatCompletionToolType as ToolType, CompletionUsage as Usage, CreateChatCompletionRequest,
-	FinishReason, FunctionCall, FunctionName, FunctionObject, PredictionContent, ReasoningEffort,
-	ResponseFormat, Role, ServiceTier, Stop, WebSearchOptions,
+	ChatCompletionTools as Tools, CompletionUsage, CompletionUsage as Usage,
+	CreateChatCompletionRequest, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
+	FunctionObject, FunctionType, PredictionContent, ReasoningEffort, ResponseFormat,
+	ResponseModalities, Role, ServiceTier, StopConfiguration, ToolChoiceOptions, WebSearchOptions,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::llm;
+use crate::llm::bedrock::Provider;
+use crate::llm::{AIError, LLMRequest, LLMResponse};
 
 pub trait ResponseType: Send + Sync {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse;
@@ -67,26 +64,27 @@ pub trait RequestType: Send + Sync {
 		&self,
 		_provider: &Provider,
 		_headers: Option<&::http::HeaderMap>,
+		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> Result<Vec<u8>, AIError> {
 		Err(AIError::UnsupportedConversion(strng::literal!("bedrock")))
 	}
 }
 
 pub mod passthrough {
-	use crate::{json, llm};
-
-	use crate::llm::bedrock::Provider;
-	use crate::llm::policy::webhook::{Message, ResponseChoice};
-	use crate::llm::universal::ResponseType;
-	use crate::llm::{
-		AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, SimpleChatCompletionMessage,
-		anthropic, universal,
-	};
 	use agent_core::strng;
 	use agent_core::strng::Strng;
 	use bytes::Bytes;
 	use itertools::Itertools;
 	use serde::{Deserialize, Serialize};
+
+	use crate::llm::bedrock::Provider;
+	use crate::llm::policy::webhook::{Message, ResponseChoice};
+	use crate::llm::universal::ResponseType;
+	use crate::llm::{
+		anthropic, universal, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse,
+		SimpleChatCompletionMessage,
+	};
+	use crate::{json, llm};
 
 	pub fn process_response(
 		bytes: &Bytes,
@@ -106,6 +104,15 @@ pub mod passthrough {
 				let passthrough = json::convert::<_, anthropic::passthrough::Response>(&anthropic)
 					.map_err(AIError::ResponseParsing)?;
 				Ok(Box::new(passthrough))
+			},
+			InputFormat::Responses => {
+				unreachable!("Responses format should not be routed to Universal (OpenAI) provider")
+			},
+			InputFormat::CountTokens => {
+				unreachable!("CountTokens should be handled by process_count_tokens_response")
+			},
+			InputFormat::Realtime => {
+				unreachable!("Realtime should be handled by websocket upgrade")
 			},
 		}
 	}
@@ -256,9 +263,11 @@ pub mod passthrough {
 			&self,
 			provider: &Provider,
 			headers: Option<&::http::HeaderMap>,
+			prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 		) -> Result<Vec<u8>, AIError> {
 			let typed = json::convert::<_, universal::Request>(self).map_err(AIError::RequestMarshal)?;
-			let xlated = llm::bedrock::translate_request_completions(typed, provider, headers);
+			let xlated =
+				llm::bedrock::translate_request_completions(typed, provider, headers, prompt_caching);
 			serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 		}
 
@@ -269,7 +278,8 @@ pub mod passthrough {
 		fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 			let model = strng::new(self.model.as_deref().unwrap_or_default());
 			let input_tokens = if tokenize {
-				let tokens = crate::llm::num_tokens_from_messages(&model, &self.messages)?;
+				let messages = self.get_messages();
+				let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
 				Some(tokens)
 			} else {
 				None
@@ -382,7 +392,7 @@ pub struct Response {
 	pub model: String,
 	/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub service_tier: Option<ServiceTierResponse>,
+	pub service_tier: Option<ServiceTier>,
 	/// This fingerprint represents the backend configuration that the model runs with.
 	///
 	/// Can be used in conjunction with the `seed` request parameter to understand when backend changes have been made that might impact determinism.
@@ -407,7 +417,7 @@ pub struct StreamResponse {
 	/// The model to generate the completion.
 	pub model: String,
 	/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
-	pub service_tier: Option<ServiceTierResponse>,
+	pub service_tier: Option<ServiceTier>,
 	/// This fingerprint represents the backend configuration that the model runs with.
 	/// Can be used in conjunction with the `seed` request parameter to understand when backend changes have been made that might impact determinism.
 	pub system_fingerprint: Option<String>,
@@ -602,7 +612,7 @@ pub struct Request {
 	pub n: Option<u8>, // min:1, max: 128, default: 1
 
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub modalities: Option<Vec<ChatCompletionModalities>>,
+	pub modalities: Option<Vec<ResponseModalities>>,
 
 	/// Configuration for a [Predicted Output](https://platform.openai.com/docs/guides/predicted-outputs),which can greatly improve response times when large parts of the model response are known ahead of time. This is most common when you are regenerating a file with only minor changes to most of the content.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -644,7 +654,7 @@ pub struct Request {
 
 	/// Up to 4 sequences where the API will stop generating further tokens.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub stop: Option<Stop>,
+	pub stop: Option<StopConfiguration>,
 
 	/// If set, partial message deltas will be sent, like in ChatGPT.
 	/// Tokens will be sent as data-only [server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format)
@@ -673,7 +683,7 @@ pub struct Request {
 	/// A list of tools the model may call. Currently, only functions are supported as a tool.
 	/// Use this to provide a list of functions the model may generate JSON inputs for. A max of 128 functions are supported.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub tools: Option<Vec<ChatCompletionTool>>,
+	pub tools: Option<Vec<Tools>>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub tool_choice: Option<ChatCompletionToolChoiceOption>,
@@ -810,8 +820,8 @@ pub fn max_tokens_option(req: &Request) -> Option<u64> {
 
 pub fn stop_sequence(req: &Request) -> Vec<String> {
 	match &req.stop {
-		Some(Stop::String(s)) => vec![s.clone()],
-		Some(Stop::StringArray(s)) => s.clone(),
+		Some(StopConfiguration::String(s)) => vec![s.clone()],
+		Some(StopConfiguration::StringArray(s)) => s.clone(),
 		_ => vec![],
 	}
 }

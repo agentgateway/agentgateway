@@ -13,7 +13,9 @@ use crate::mcp::{ResourceId, ResourceType};
 fn create_policy_set(policies: Vec<&str>) -> PolicySet {
 	let mut policy_set = PolicySet::default();
 	for p in policies.into_iter() {
-		policy_set.add(p).expect("Failed to parse policy");
+		policy_set
+			.allow
+			.push(Arc::new(cel::Expression::new_strict(p).unwrap()));
 	}
 	policy_set
 }

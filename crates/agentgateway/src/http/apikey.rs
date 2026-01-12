@@ -1,15 +1,16 @@
 use std::hash::Hash;
 
-use crate::http::Request;
-use crate::proxy::ProxyError;
-use crate::telemetry::log::RequestLog;
-use crate::*;
 use axum_core::RequestExt;
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use headers::authorization::Bearer;
 use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
+
+use crate::http::Request;
+use crate::proxy::ProxyError;
+use crate::telemetry::log::RequestLog;
+use crate::*;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

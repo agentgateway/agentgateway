@@ -1,7 +1,6 @@
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::http::HeaderOrPseudo;
 use ::http::HeaderMap;
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -16,10 +15,12 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::http::ext_proc::proto::{
-	BodyMutation, BodyResponse, HeaderMutation, HeadersResponse, HttpBody, HttpHeaders, HttpTrailers,
-	ImmediateResponse, ProcessingRequest, ProcessingResponse, processing_response,
+	BodyMutation, BodyResponse, HeaderMutation, HeaderValueOption, HeadersResponse, HttpBody,
+	HttpHeaders, HttpTrailers, ImmediateResponse, ProcessingRequest, ProcessingResponse,
+	processing_response,
 };
-use crate::http::{HeaderName, HeaderValue, PolicyResponse};
+use crate::http::filters::BackendRequestTimeout;
+use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::SimpleBackendReference;
@@ -118,8 +119,9 @@ impl InferencePoolRouter {
 	}
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
 pub struct ExtProc {
+	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
 	#[serde(default)]
 	pub failure_mode: FailureMode,
@@ -187,7 +189,11 @@ impl ExtProcInstance {
 		failure_mode: FailureMode,
 	) -> ExtProcInstance {
 		trace!("connecting to {:?}", target);
-		let chan = GrpcReferenceChannel { target, client };
+		let chan = GrpcReferenceChannel {
+			target,
+			client,
+			timeout: None,
+		};
 		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
@@ -592,26 +598,91 @@ async fn handle_response_for_request_mutation(
 	Ok((res, false))
 }
 
+fn apply_header_with_action(
+	headers: &mut HeaderMap,
+	hk: &HeaderName,
+	hvo: &HeaderValueOption,
+) -> Result<(), Error> {
+	use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
+
+	let Some(ref h) = hvo.header else {
+		return Ok(());
+	};
+
+	// Skip content-length as the EPP sets it to invalid values
+	// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
+	if hk == http::header::CONTENT_LENGTH {
+		debug!("skipping invalid content-length");
+		return Ok(());
+	}
+
+	let hv = if h.raw_value.is_empty() {
+		HeaderValue::from_bytes(h.value.as_bytes())
+	} else {
+		HeaderValue::from_bytes(&h.raw_value)
+	};
+	let Ok(hv) = hv else {
+		warn!("Invalid header value for key: {}", hk);
+		return Ok(());
+	};
+
+	// Determine the action to take
+	// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
+	let action = if hvo.append_action != 0 || hvo.append.is_none() {
+		// Use append_action if it's explicitly set (non-zero) or if append is not set
+		match HeaderAppendAction::try_from(hvo.append_action) {
+			Ok(action) => action,
+			Err(_) => {
+				warn!(
+					"Unexpected header append_action `{:?}` falling back to APPEND_IF_EXISTS_OR_ADD",
+					hvo.append_action
+				);
+				HeaderAppendAction::AppendIfExistsOrAdd
+			},
+		}
+	} else {
+		// Fall back to deprecated append field for backwards compatibility
+		if hvo.append.unwrap_or(false) {
+			HeaderAppendAction::AppendIfExistsOrAdd
+		} else {
+			HeaderAppendAction::OverwriteIfExistsOrAdd
+		}
+	};
+
+	match action {
+		HeaderAppendAction::AppendIfExistsOrAdd => {
+			headers.append(hk, hv);
+		},
+		HeaderAppendAction::AddIfAbsent => {
+			if !headers.contains_key(hk) {
+				headers.insert(hk, hv);
+			}
+		},
+		HeaderAppendAction::OverwriteIfExistsOrAdd => {
+			headers.insert(hk, hv);
+		},
+		HeaderAppendAction::OverwriteIfExists => {
+			if headers.contains_key(hk) {
+				headers.insert(hk, hv);
+			}
+		},
+	}
+
+	Ok(())
+}
+
 fn apply_header_mutations(
 	headers: &mut HeaderMap,
 	h: Option<&HeaderMutation>,
 ) -> Result<(), Error> {
-	if let Some(h) = h {
-		for rm in &h.remove_headers {
+	if let Some(hm) = h {
+		for rm in &hm.remove_headers {
 			headers.remove(rm);
 		}
-		for set in &h.set_headers {
-			let Some(h) = &set.header else {
-				continue;
-			};
+		for set in &hm.set_headers {
+			let Some(h) = &set.header else { continue };
 			let hk = HeaderName::try_from(h.key.as_str())?;
-			if hk == http::header::CONTENT_LENGTH {
-				debug!("skipping invalid content-length");
-				// The EPP actually sets content-length to an invalid value, so don't respect it.
-				// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
-				continue;
-			}
-			headers.insert(hk, HeaderValue::from_bytes(h.raw_value.as_slice())?);
+			apply_header_with_action(headers, &hk, set)?;
 		}
 	}
 	Ok(())
@@ -629,17 +700,16 @@ fn apply_header_mutations_request(
 			let Some(h) = &set.header else { continue };
 			match HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(HeaderOrPseudo::Header(hk)) => {
-					if hk == http::header::CONTENT_LENGTH {
-						debug!("skipping invalid content-length");
-						continue;
-					}
-					req
-						.headers_mut()
-						.insert(hk, HeaderValue::from_bytes(h.raw_value.as_slice())?);
+					apply_header_with_action(req.headers_mut(), &hk, set)?;
 				},
 				Ok(pseudo) => {
+					let raw = if !h.raw_value.is_empty() {
+						h.raw_value.as_slice()
+					} else {
+						h.value.as_bytes()
+					};
 					let mut rr = crate::http::RequestOrResponse::Request(req);
-					let _ = crate::http::apply_pseudo(&mut rr, &pseudo, &h.raw_value);
+					let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, raw);
 				},
 				Err(_) => {},
 			}
@@ -660,17 +730,16 @@ fn apply_header_mutations_response(
 			let Some(h) = &set.header else { continue };
 			match crate::http::HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(crate::http::HeaderOrPseudo::Header(hk)) => {
-					if hk == http::header::CONTENT_LENGTH {
-						debug!("skipping invalid content-length");
-						continue;
-					}
-					resp
-						.headers_mut()
-						.insert(hk, HeaderValue::from_bytes(h.raw_value.as_slice())?);
+					apply_header_with_action(resp.headers_mut(), &hk, set)?;
 				},
 				Ok(pseudo) => {
+					let raw = if !h.raw_value.is_empty() {
+						h.raw_value.as_slice()
+					} else {
+						h.value.as_bytes()
+					};
 					let mut rr = crate::http::RequestOrResponse::Response(resp);
-					let _ = crate::http::apply_pseudo(&mut rr, &pseudo, &h.raw_value);
+					let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, raw);
 				},
 				Err(_) => {},
 			}
@@ -768,11 +837,13 @@ fn to_header_map_extra(
 		.iter()
 		.map(|(k, v)| proto::HeaderValue {
 			key: k.to_string(),
+			value: String::new(),
 			raw_value: v.as_bytes().to_vec(),
 		})
 		.chain(additional_headers.iter().map(|(k, v)| proto::HeaderValue {
 			key: k.to_string(),
-			raw_value: v.as_bytes().to_vec(),
+			value: v.to_string(),
+			raw_value: vec![],
 		}))
 		.collect_vec();
 	Some(proto::HeaderMap { headers: h })
@@ -791,6 +862,7 @@ fn processing_request(data: Request) -> ProcessingRequest {
 pub struct GrpcReferenceChannel {
 	pub target: Arc<SimpleBackendReference>,
 	pub client: PolicyClient,
+	pub timeout: Option<Duration>,
 }
 
 impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel {
@@ -802,7 +874,10 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel
 		Ok(()).into()
 	}
 
-	fn call(&mut self, req: ::http::Request<tonic::body::Body>) -> Self::Future {
+	fn call(&mut self, mut req: ::http::Request<tonic::body::Body>) -> Self::Future {
+		if let Some(timeout) = self.timeout {
+			req.extensions_mut().insert(BackendRequestTimeout(timeout));
+		};
 		let client = self.client.clone();
 		let target = self.target.clone();
 		let req = req.map(http::Body::new);

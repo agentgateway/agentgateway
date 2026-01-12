@@ -78,6 +78,9 @@ async fn do_ping_pong(
 pub struct RWStream {
 	pub stream: H2Stream,
 	pub buf: Bytes,
+	/// Optional drain sender - when dropped, signals the H2 connection to drain.
+	/// Used for double HBONE to properly terminate the inner connection.
+	pub drain_tx: Option<tokio::sync::watch::Sender<bool>>,
 }
 
 impl tokio::io::AsyncRead for RWStream {
@@ -117,6 +120,16 @@ impl tokio::io::AsyncWrite for RWStream {
 	fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
 		use copy::AsyncWriteBuf;
 		Pin::new(&mut self.stream.write).poll_shutdown(cx)
+	}
+}
+
+impl Drop for RWStream {
+	fn drop(&mut self) {
+		// Send drain signal if we have a drain_tx
+		if let Some(drain_tx) = &self.drain_tx {
+			let _ = drain_tx.send(true);
+			trace!("sent drain signal for H2 connection");
+		}
 	}
 }
 // H2Stream represents an active HTTP2 stream. Consumers can only Read/Write

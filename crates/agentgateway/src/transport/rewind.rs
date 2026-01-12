@@ -1,11 +1,12 @@
-use crate::transport::stream::SocketType;
-use bytes::{Buf, Bytes, BytesMut};
 use std::cmp;
 use std::io::{Error, IoSlice};
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
-use tokio::io::AsyncWrite;
-use tokio::io::{AsyncRead, ReadBuf};
+
+use bytes::{Buf, Bytes, BytesMut};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+use crate::transport::stream::SocketType;
 
 #[cfg(test)]
 #[path = "rewind_tests.rs"]
@@ -21,6 +22,14 @@ impl RewindSocket {
 		Self {
 			state: State::Filling(Default::default()),
 			io,
+		}
+	}
+
+	pub fn buffered(&self) -> Option<Bytes> {
+		if let State::Filling(b) = &self.state {
+			Some(b.clone().freeze())
+		} else {
+			None
 		}
 	}
 

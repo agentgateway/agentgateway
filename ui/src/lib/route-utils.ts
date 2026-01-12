@@ -1,9 +1,14 @@
-import { Route as RouteType, TcpRoute, Listener, Match, PathMatch } from "@/lib/types";
+import { Route as RouteType, TcpRoute, Listener, Match } from "@/lib/types";
 import { DEFAULT_HTTP_ROUTE_FORM, DEFAULT_TCP_ROUTE_FORM } from "./route-constants";
 
 // Helper function to determine if a listener protocol supports TCP routes
 export const isTcpListener = (listener: Listener): boolean => {
-  const protocol = listener.protocol || "HTTP";
+  const protocol =
+    typeof listener.protocol === "string"
+      ? listener.protocol
+      : listener.protocol && typeof listener.protocol === "object"
+        ? Object.keys(listener.protocol as Record<string, unknown>)[0] || "HTTP"
+        : "HTTP";
   return protocol === "TCP" || protocol === "TLS";
 };
 

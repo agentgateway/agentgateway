@@ -26,7 +26,7 @@ fn run_test(req: &Request, routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Opt
 		network.clone(),
 		None,
 		dummy_dest,
-		listener.clone(),
+		&listener,
 		req,
 	);
 	result.map(|(r, _)| r.key.to_string())
@@ -37,8 +37,7 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener
 		key: name.into(),
 		hostnames: hostnames.into_iter().map(|s| s.into()).collect(),
 		matches,
-		route_name: Default::default(),
-		rule_name: None,
+		name: Default::default(),
 		backends: vec![],
 		inline_policies: vec![],
 	};
@@ -46,7 +45,6 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener
 	Arc::new(Listener {
 		key: Default::default(),
 		name: Default::default(),
-		gateway_name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
 		tcp_routes: Default::default(),
@@ -324,14 +322,14 @@ fn test_header_matching() {
 		(
 			"exact-header",
 			vec![HeaderMatch {
-				name: http::HeaderName::from_static("content-type"),
+				name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("content-type")),
 				value: HeaderValueMatch::Exact(http::HeaderValue::from_static("application/json")),
 			}],
 		),
 		(
 			"regex-header",
 			vec![HeaderMatch {
-				name: http::HeaderName::from_static("user-agent"),
+				name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("user-agent")),
 				value: HeaderValueMatch::Regex(Regex::new(r"^Mozilla/.*$").unwrap()),
 			}],
 		),
@@ -339,11 +337,11 @@ fn test_header_matching() {
 			"multiple-headers",
 			vec![
 				HeaderMatch {
-					name: http::HeaderName::from_static("content-type"),
+					name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("content-type")),
 					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("application/json")),
 				},
 				HeaderMatch {
-					name: http::HeaderName::from_static("authorization"),
+					name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("authorization")),
 					value: HeaderValueMatch::Regex(Regex::new(r"^Bearer .*$").unwrap()),
 				},
 			],
@@ -392,6 +390,146 @@ fn test_header_matching() {
 
 	for case in cases {
 		let req = request("http://example.com/", http::Method::GET, &case.headers);
+		let routes = routes
+			.clone()
+			.into_iter()
+			.map(|(name, hm)| {
+				(
+					name,
+					vec![],
+					vec![RouteMatch {
+						headers: hm,
+						path: PathMatch::PathPrefix("/".into()),
+						method: None,
+						query: vec![],
+					}],
+				)
+			})
+			.collect_vec();
+		let result = run_test(&req, routes.as_slice());
+		assert_eq!(
+			result,
+			case.expected_route.map(|s| s.to_string()),
+			"{}",
+			case.name
+		);
+	}
+}
+
+#[test]
+fn test_pseudo_header_matching() {
+	let routes = vec![
+		("no-headers", vec![]),
+		(
+			"authority-exact",
+			vec![HeaderMatch {
+				name: crate::http::HeaderOrPseudo::Authority,
+				value: HeaderValueMatch::Exact(http::HeaderValue::from_static("api.example.com")),
+			}],
+		),
+		(
+			"authority-regex",
+			vec![HeaderMatch {
+				name: crate::http::HeaderOrPseudo::Authority,
+				value: HeaderValueMatch::Regex(Regex::new(r"^.*\.example\.com$").unwrap()),
+			}],
+		),
+		(
+			"method-post",
+			vec![HeaderMatch {
+				name: crate::http::HeaderOrPseudo::Method,
+				value: HeaderValueMatch::Exact(http::HeaderValue::from_static("POST")),
+			}],
+		),
+		(
+			"scheme-https",
+			vec![HeaderMatch {
+				name: crate::http::HeaderOrPseudo::Scheme,
+				value: HeaderValueMatch::Exact(http::HeaderValue::from_static("https")),
+			}],
+		),
+		(
+			"path-regex",
+			vec![HeaderMatch {
+				name: crate::http::HeaderOrPseudo::Path,
+				value: HeaderValueMatch::Regex(Regex::new(r"^/api/.*$").unwrap()),
+			}],
+		),
+		(
+			"multiple-pseudo",
+			vec![
+				HeaderMatch {
+					name: crate::http::HeaderOrPseudo::Authority,
+					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("api.example.com")),
+				},
+				HeaderMatch {
+					name: crate::http::HeaderOrPseudo::Method,
+					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("POST")),
+				},
+			],
+		),
+	];
+
+	struct TestCase {
+		name: &'static str,
+		url: &'static str,
+		method: http::Method,
+		expected_route: Option<&'static str>,
+	}
+
+	let cases = vec![
+		TestCase {
+			name: "no pseudo headers matches no-headers route",
+			url: "http://example.com/",
+			method: http::Method::GET,
+			expected_route: Some("no-headers"),
+		},
+		TestCase {
+			name: "exact authority match",
+			url: "http://api.example.com/",
+			method: http::Method::GET,
+			expected_route: Some("authority-exact"),
+		},
+		TestCase {
+			name: "regex authority match",
+			url: "http://test.example.com/",
+			method: http::Method::GET,
+			expected_route: Some("authority-regex"),
+		},
+		TestCase {
+			name: "method POST match",
+			url: "http://example.com/",
+			method: http::Method::POST,
+			expected_route: Some("method-post"),
+		},
+		TestCase {
+			name: "scheme https match",
+			url: "https://example.com/",
+			method: http::Method::GET,
+			expected_route: Some("scheme-https"),
+		},
+		TestCase {
+			name: "path regex match",
+			url: "http://example.com/api/users",
+			method: http::Method::GET,
+			expected_route: Some("path-regex"),
+		},
+		TestCase {
+			name: "multiple pseudo headers match",
+			url: "http://api.example.com/",
+			method: http::Method::POST,
+			expected_route: Some("multiple-pseudo"),
+		},
+		TestCase {
+			name: "authority mismatch returns no match",
+			url: "http://other.com/",
+			method: http::Method::GET,
+			expected_route: Some("no-headers"),
+		},
+	];
+
+	for case in cases {
+		let req = request(case.url, case.method, &[]);
 		let routes = routes
 			.clone()
 			.into_iter()
@@ -581,11 +719,11 @@ fn test_route_precedence() {
 			None,
 			vec![
 				HeaderMatch {
-					name: http::HeaderName::from_static("content-type"),
+					name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("content-type")),
 					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("application/json")),
 				},
 				HeaderMatch {
-					name: http::HeaderName::from_static("authorization"),
+					name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("authorization")),
 					value: HeaderValueMatch::Exact(http::HeaderValue::from_static("Bearer token")),
 				},
 			],
@@ -596,7 +734,7 @@ fn test_route_precedence() {
 			PathMatch::PathPrefix("/api/".into()),
 			None,
 			vec![HeaderMatch {
-				name: http::HeaderName::from_static("content-type"),
+				name: crate::http::HeaderOrPseudo::Header(http::HeaderName::from_static("content-type")),
 				value: HeaderValueMatch::Exact(http::HeaderValue::from_static("application/json")),
 			}],
 		),
@@ -704,7 +842,6 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 	let listener = Arc::new(Listener {
 		key: Default::default(),
 		name: Default::default(),
-		gateway_name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
 		tcp_routes: Default::default(),
@@ -713,10 +850,9 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 				.into_iter()
 				.map(|(name, host, matches)| Route {
 					key: name.into(),
+					name: Default::default(),
 					hostnames: host.into_iter().map(|s| s.into()).collect(),
 					matches,
-					route_name: Default::default(),
-					rule_name: None,
 					backends: vec![],
 					inline_policies: vec![],
 				})
@@ -734,7 +870,7 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 			network.clone(),
 			None,
 			dummy_dest,
-			listener.clone(),
+			&listener,
 			divan::black_box(&req),
 		))
 	});

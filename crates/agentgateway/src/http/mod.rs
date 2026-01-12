@@ -38,6 +38,7 @@ pub enum RequestOrResponse<'a> {
 
 use std::fmt::Debug;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::task::{Context, Poll};
 
 pub use ::http::uri::{Authority, Scheme};
@@ -46,16 +47,15 @@ pub use ::http::{
 };
 use bytes::Bytes;
 use http_body::{Frame, SizeHint};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::Url;
 
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::BufferLimit;
 
-use serde::{Serialize, Serializer};
-
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HeaderOrPseudo {
 	Header(HeaderName),
 	Method,
@@ -96,6 +96,26 @@ impl Serialize for HeaderOrPseudo {
 	}
 }
 
+impl<'de> Deserialize<'de> for HeaderOrPseudo {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let s = String::deserialize(deserializer)?;
+
+		match s.as_str() {
+			":method" => Ok(HeaderOrPseudo::Method),
+			":scheme" => Ok(HeaderOrPseudo::Scheme),
+			":authority" => Ok(HeaderOrPseudo::Authority),
+			":path" => Ok(HeaderOrPseudo::Path),
+			":status" => Ok(HeaderOrPseudo::Status),
+			_ => Ok(HeaderOrPseudo::Header(
+				HeaderName::from_str(&s).map_err(serde::de::Error::custom)?,
+			)),
+		}
+	}
+}
+
 #[cfg(feature = "schema")]
 impl schemars::JsonSchema for HeaderOrPseudo {
 	fn schema_name() -> std::borrow::Cow<'static, str> {
@@ -117,6 +137,18 @@ impl std::fmt::Display for HeaderOrPseudo {
 			HeaderOrPseudo::Path => write!(f, ":path"),
 			HeaderOrPseudo::Status => write!(f, ":status"),
 		}
+	}
+}
+
+/// Extract the value for a pseudo header or header from the request
+pub fn get_pseudo_or_header_value<'a>(
+	pseudo: &HeaderOrPseudo,
+	req: &'a Request,
+) -> Option<std::borrow::Cow<'a, HeaderValue>> {
+	match pseudo {
+		HeaderOrPseudo::Header(v) => req.headers().get(v).map(std::borrow::Cow::Borrowed),
+		_ => get_pseudo_header_value(pseudo, req)
+			.and_then(|v| HeaderValue::try_from(&v).ok().map(std::borrow::Cow::Owned)),
 	}
 }
 
@@ -160,7 +192,11 @@ pub fn get_request_pseudo_headers(req: &Request) -> Vec<(HeaderOrPseudo, String)
 }
 
 /// Apply a pseudo header mutation to either a request or a response. Returns true if applied.
-pub fn apply_pseudo(rr: &mut RequestOrResponse, pseudo: &HeaderOrPseudo, raw: &[u8]) -> bool {
+pub fn apply_header_or_pseudo(
+	rr: &mut RequestOrResponse,
+	pseudo: &HeaderOrPseudo,
+	raw: &[u8],
+) -> bool {
 	match (rr, pseudo) {
 		(RequestOrResponse::Request(req), HeaderOrPseudo::Method) => {
 			if let Ok(m) = ::http::Method::from_bytes(raw) {
@@ -181,6 +217,11 @@ pub fn apply_pseudo(rr: &mut RequestOrResponse, pseudo: &HeaderOrPseudo, raw: &[
 			if let Ok(a) = ::http::uri::Authority::try_from(raw) {
 				let _ = modify_req_uri(req, |uri| {
 					uri.authority = Some(a);
+					if uri.scheme.is_none() {
+						// When authority is set, scheme must also be set
+						// TODO: do the same for HeaderOrPseudo::Scheme
+						uri.scheme = Some(Scheme::HTTP);
+					}
 					Ok(())
 				});
 				return true;
@@ -205,7 +246,21 @@ pub fn apply_pseudo(rr: &mut RequestOrResponse, pseudo: &HeaderOrPseudo, raw: &[
 				return true;
 			}
 		},
-		// Non-applicable combinations or regular headers
+		(RequestOrResponse::Response(resp), HeaderOrPseudo::Header(hn)) => {
+			let Ok(hv) = HeaderValue::try_from(raw) else {
+				return false;
+			};
+			resp.headers_mut().insert(hn, hv);
+			return true;
+		},
+		(RequestOrResponse::Request(req), HeaderOrPseudo::Header(hn)) => {
+			let Ok(hv) = HeaderValue::try_from(raw) else {
+				return false;
+			};
+			req.headers_mut().insert(hn, hv);
+			return true;
+		},
+		// Not applicable combination
 		_ => {},
 	}
 	false
@@ -265,6 +320,10 @@ pub fn modify_uri(
 	f(&mut parts)?;
 	head.uri = Uri::from_parts(parts)?;
 	Ok(())
+}
+
+pub fn as_url(uri: &Uri) -> anyhow::Result<Url> {
+	Ok(Url::parse(&uri.to_string())?)
 }
 
 pub fn modify_url(
@@ -329,7 +388,17 @@ pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 	// We expect a normalized request, so this will always be in the URI
 	// TODO: handle absolute HTTP/1.1 form
 	let host = req.uri().host().ok_or(ProxyError::InvalidRequest)?;
-	let host = strip_port(host);
+	Ok(host)
+}
+
+pub fn get_host_with_port(req: &Request) -> Result<&str, ProxyError> {
+	// We expect a normalized request, so this will always be in the URI
+	// TODO: handle absolute HTTP/1.1 form
+	let host = req
+		.uri()
+		.authority()
+		.map(|a| a.as_str())
+		.ok_or(ProxyError::InvalidRequest)?;
 	Ok(host)
 }
 
@@ -370,27 +439,6 @@ pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<Bytes>
 
 pub async fn inspect_body_with_limit(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {
 	peekbody::inspect_body(body, limit).await
-}
-
-// copied from private `http` method
-fn strip_port(auth: &str) -> &str {
-	let host_port = auth
-		.rsplit('@')
-		.next()
-		.expect("split always has at least 1 item");
-
-	if host_port.as_bytes()[0] == b'[' {
-		let i = host_port
-			.find(']')
-			.expect("parsing should validate brackets");
-		// ..= ranges aren't available in 1.20, our minimum Rust version...
-		&host_port[0..i + 1]
-	} else {
-		host_port
-			.split(':')
-			.next()
-			.expect("split always has at least 1 item")
-	}
 }
 
 #[derive(Debug, Default)]

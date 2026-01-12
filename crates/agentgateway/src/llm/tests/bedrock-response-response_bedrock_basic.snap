@@ -1,0 +1,43 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 38
+description: src/llm/tests/response_bedrock_basic.json
+info:
+  output:
+    message:
+      role: assistant
+      content:
+        - text: Hello world
+  stopReason: end_turn
+  usage:
+    inputTokens: 18
+    outputTokens: 46
+    totalTokens: 64
+  metrics:
+    latencyMs: 2083
+---
+{
+  "id": "[id]",
+  "status": "completed",
+  "output": [
+    {
+      "type": "message",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": null,
+          "text": "Hello world"
+        }
+      ],
+      "id": "[id]",
+      "role": "assistant",
+      "status": "completed"
+    }
+  ],
+  "model": "fake-model",
+  "usage": {
+    "input_tokens": 18,
+    "output_tokens": 46
+  }
+}

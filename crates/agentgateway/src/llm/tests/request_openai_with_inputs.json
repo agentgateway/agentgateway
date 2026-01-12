@@ -1,0 +1,11 @@
+{
+  "model": "gpt-4o",
+  "max_tokens": 1024,
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [{ "type": "input_text", "text": "Hello, world" }]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,7 @@ import { useServer } from "@/lib/server-context";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { useXdsMode } from "@/hooks/use-xds-mode";
 
 interface ListenerConfigProps {
   isAddingListener?: boolean;
@@ -67,7 +68,6 @@ interface NewBindState {
 
 interface NewListenerState {
   name: string;
-  gatewayName: string;
   hostname: string;
   protocol: ListenerProtocol;
   targetBindPort: number | null;
@@ -104,11 +104,30 @@ interface ListenerWithBackendsAndRoutes extends Listener {
   backendCount?: number;
 }
 
+const getListenerCounts = (listener: Listener): { backendCount: number } => {
+  let backendCount = 0;
+
+  const listenerName = listener.name || "unnamed";
+
+  // Count backends across all routes
+  if (listener.routes && listener.routes.length > 0) {
+    listener.routes.forEach((route) => {
+      if (route.backends && route.backends.length > 0) {
+        backendCount += route.backends.length;
+      }
+    });
+  }
+
+  console.log(`Listener ${listenerName}: ${backendCount} backends`);
+  return { backendCount };
+};
+
 export function ListenerConfig({
   isAddingListener = false,
   setIsAddingListener = () => {},
 }: ListenerConfigProps) {
   const { refreshListeners } = useServer();
+  const xds = useXdsMode();
   const [binds, setBinds] = useState<BindWithBackendsAndRoutes[]>([]);
   const [expandedBinds, setExpandedBinds] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -129,7 +148,6 @@ export function ListenerConfig({
 
   const [newListener, setNewListener] = useState<NewListenerState>({
     name: "",
-    gatewayName: "",
     hostname: "localhost",
     protocol: ListenerProtocol.HTTP,
     targetBindPort: null,
@@ -140,34 +158,15 @@ export function ListenerConfig({
     isOpen: false,
   });
 
-  const [deleteConfigDialog, setDeleteConfigDialog] = useState<DeleteConfigDialogState>({
+  const [, setDeleteConfigDialog] = useState<DeleteConfigDialogState>({
     isOpen: false,
     bindPort: 0,
     listenerIndex: -1,
     configType: null,
   });
 
-  // Helper function to count backends from listener structure
-  const getListenerCounts = (listener: Listener): { backendCount: number } => {
-    let backendCount = 0;
-
-    const listenerName = listener.name || "unnamed";
-
-    // Count backends across all routes
-    if (listener.routes && listener.routes.length > 0) {
-      listener.routes.forEach((route, routeIndex) => {
-        if (route.backends && route.backends.length > 0) {
-          backendCount += route.backends.length;
-        }
-      });
-    }
-
-    console.log(`Listener ${listenerName}: ${backendCount} backends`);
-    return { backendCount };
-  };
-
   // Fetch binds and their listener backend/route counts
-  const loadBinds = async () => {
+  const loadBinds = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedBinds = await fetchBinds();
@@ -204,11 +203,11 @@ export function ListenerConfig({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadBinds();
-  }, []);
+  }, [loadBinds]);
 
   const handleAddBind = async () => {
     setIsSubmitting(true);
@@ -259,7 +258,6 @@ export function ListenerConfig({
 
       const listenerToAdd: Listener = {
         name: newListener.name || `listener-${Date.now()}`,
-        gatewayName: newListener.gatewayName || null,
         hostname: newListener.hostname,
         protocol: newListener.protocol,
         ...(newListener.protocol === ListenerProtocol.TCP ||
@@ -277,7 +275,6 @@ export function ListenerConfig({
 
       setNewListener({
         name: "",
-        gatewayName: "",
         hostname: "localhost",
         protocol: ListenerProtocol.HTTP,
         targetBindPort: null,
@@ -312,7 +309,6 @@ export function ListenerConfig({
   const handleAddListenerToBind = (bindPort: number) => {
     setNewListener({
       name: "",
-      gatewayName: "",
       hostname: "localhost",
       protocol: ListenerProtocol.HTTP,
       targetBindPort: bindPort,
@@ -363,20 +359,21 @@ export function ListenerConfig({
     return `${protocol}://${hostname}:${port}`;
   };
 
-  const hasJWTAuth = (listener: Listener) => {
-    return (
-      listener.routes?.some(
-        (route) => route.policies?.jwtAuth || route.policies?.mcpAuthentication
-      ) || false
-    );
-  };
-
   const hasTLS = (listener: Listener) => {
     return !!listener.tls;
   };
 
-  const hasRBAC = (listener: Listener) => {
-    return listener.routes?.some((route) => route.policies?.mcpAuthorization) || false;
+  const getProtocolString = (protocol: unknown): ListenerProtocol => {
+    if (typeof protocol === "string") {
+      return protocol as ListenerProtocol;
+    }
+    if (protocol && typeof protocol === "object") {
+      const keys = Object.keys(protocol as Record<string, unknown>);
+      if (keys.length > 0) {
+        return keys[0] as ListenerProtocol;
+      }
+    }
+    return ListenerProtocol.HTTP;
   };
 
   if (isLoading) {
@@ -391,7 +388,12 @@ export function ListenerConfig({
   return (
     <div className="space-y-6">
       <div className="flex gap-2">
-        <Button onClick={() => setIsAddingBind(true)} variant="outline">
+        <Button
+          onClick={() => setIsAddingBind(true)}
+          variant="outline"
+          disabled={xds}
+          className={xds ? "opacity-50 cursor-not-allowed" : undefined}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Bind
         </Button>
@@ -445,7 +447,8 @@ export function ListenerConfig({
                               bindPort: bind.port,
                             });
                           }}
-                          className="text-destructive hover:text-destructive"
+                          disabled={xds}
+                          className={`text-destructive hover:text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -463,7 +466,8 @@ export function ListenerConfig({
                       <Button
                         size="sm"
                         onClick={() => handleAddListenerToBind(bind.port)}
-                        className="h-8"
+                        disabled={xds}
+                        className={`h-8 ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
                         <Plus className="mr-2 h-3 w-3" />
                         Add Listener
@@ -506,12 +510,18 @@ export function ListenerConfig({
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="outline">
-                                    {listener.protocol || ListenerProtocol.HTTP}
+                                    {getProtocolString(listener.protocol)}
                                   </Badge>
                                 </TableCell>
                                 <TableCell>{listener.hostname || "localhost"}</TableCell>
                                 <TableCell className="font-mono text-sm">
-                                  {getDisplayEndpoint(listener, bind.port)}
+                                  {getDisplayEndpoint(
+                                    {
+                                      ...listener,
+                                      protocol: getProtocolString(listener.protocol),
+                                    },
+                                    bind.port
+                                  )}
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="outline">
@@ -564,7 +574,8 @@ export function ListenerConfig({
                                         </DropdownMenuItem>
                                         {hasTLS(listener) && (
                                           <DropdownMenuItem
-                                            className="text-destructive"
+                                            className={`text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+                                            disabled={xds}
                                             onClick={() => {
                                               setDeleteConfigDialog({
                                                 isOpen: true,
@@ -605,7 +616,8 @@ export function ListenerConfig({
                                         listenerIndex,
                                       })
                                     }
-                                    className="text-destructive hover:text-destructive"
+                                    disabled={xds}
+                                    className={`text-destructive hover:text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -657,7 +669,7 @@ export function ListenerConfig({
             >
               Cancel
             </Button>
-            <Button onClick={handleAddBind} disabled={isSubmitting}>
+            <Button onClick={handleAddBind} disabled={isSubmitting || xds}>
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Add Bind
             </Button>
@@ -685,19 +697,6 @@ export function ListenerConfig({
               />
               <p className="text-xs text-muted-foreground">
                 A unique name for this listener. If left empty, a default name will be generated.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="gatewayName">Gateway Name</Label>
-              <Input
-                id="gatewayName"
-                value={newListener.gatewayName}
-                onChange={(e) => setNewListener({ ...newListener, gatewayName: e.target.value })}
-                placeholder="e.g., main-gateway"
-              />
-              <p className="text-xs text-muted-foreground">
-                Optional gateway name for this listener. Can be used for grouping or identification.
               </p>
             </div>
 
@@ -782,7 +781,7 @@ export function ListenerConfig({
             </Button>
             <Button
               onClick={handleAddListener}
-              disabled={isSubmitting || !newListener.targetBindPort}
+              disabled={isSubmitting || !newListener.targetBindPort || xds}
             >
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Add Listener
@@ -885,7 +884,8 @@ export function ListenerConfig({
                   handleDeleteListener(deleteDialog.listenerName);
                 }
               }}
-              disabled={isSubmitting}
+              disabled={isSubmitting || xds}
+              className={xds ? "opacity-50 cursor-not-allowed" : undefined}
             >
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Delete

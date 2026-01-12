@@ -5,7 +5,7 @@ use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::proxy::ProxyError;
 use crate::serdes::deser_key_from_file;
-use crate::types::agent::BackendName;
+use crate::types::agent::BackendTarget;
 use crate::*;
 
 #[apply(schema!)]
@@ -20,7 +20,7 @@ pub enum AwsAuth {
 		#[serde(serialize_with = "ser_redact")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		secret_access_key: SecretString,
-		region: String,
+		region: Option<String>,
 		#[serde(serialize_with = "ser_redact", skip_serializing_if = "Option::is_none")]
 		#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 		session_token: Option<SecretString>,
@@ -113,7 +113,7 @@ pub enum BackendAuth {
 
 #[derive(Clone)]
 pub struct BackendInfo {
-	pub name: BackendName,
+	pub target: BackendTarget,
 	pub inputs: Arc<ProxyInputs>,
 }
 
@@ -180,6 +180,10 @@ pub async fn apply_late_backend_auth(
 	Ok(())
 }
 
+#[cfg(test)]
+#[path = "auth_tests.rs"]
+mod tests;
+
 mod gcp {
 	use anyhow::anyhow;
 	use google_cloud_auth::credentials;
@@ -222,8 +226,6 @@ mod gcp {
 }
 
 mod aws {
-	use std::time::SystemTime;
-
 	use aws_config::{BehaviorVersion, SdkConfig};
 	use aws_credential_types::Credentials;
 	use aws_credential_types::provider::ProvideCredentials;
@@ -239,21 +241,23 @@ mod aws {
 
 	pub async fn sign_request(req: &mut http::Request, aws_auth: &AwsAuth) -> anyhow::Result<()> {
 		let creds = load_credentials(aws_auth).await?.into();
-
+		let orig_body = std::mem::take(req.body_mut());
 		// Get the region based on auth mode
 		let region = match aws_auth {
-			AwsAuth::ExplicitConfig { region, .. } => region.clone(),
-			AwsAuth::Implicit {} => {
+			AwsAuth::ExplicitConfig {
+				region: Some(region),
+				..
+			} => region.as_str(),
+			AwsAuth::ExplicitConfig { region: None, .. } | AwsAuth::Implicit {} => {
 				// Try to get region from request extensions first, then fall back to AWS config
 				if let Some(aws_region) = req.extensions().get::<AwsRegion>() {
-					aws_region.region.clone()
+					aws_region.region.as_str()
 				} else {
 					// Fall back to region from AWS config
 					let config = sdk_config().await;
-					config
-						.region()
-						.map(|r| r.as_ref().to_string())
-						.ok_or_else(|| anyhow::anyhow!("No region found in AWS config or request extensions"))?
+					config.region().map(|r| r.as_ref()).ok_or(anyhow::anyhow!(
+						"No region found in AWS config or request extensions"
+					))?
 				}
 			},
 		};
@@ -263,16 +267,14 @@ mod aws {
 		// Sign the request
 		let signing_params = SigningParams::builder()
 			.identity(&creds)
-			.region(&region)
+			.region(region)
 			.name("bedrock")
-			.time(SystemTime::now())
+			.time(std::time::SystemTime::now())
 			.settings(aws_sigv4::http_request::SigningSettings::default())
 			.build()?
 			.into();
 
-		let orig_body = std::mem::take(req.body_mut());
 		let body = orig_body.collect().await?.to_bytes();
-
 		let signable_request = aws_sigv4::http_request::SignableRequest::new(
 			req.method().as_str(),
 			req.uri().to_string().replace("http://", "https://"),
@@ -305,7 +307,7 @@ mod aws {
 	static SDK_CONFIG: OnceCell<SdkConfig> = OnceCell::const_new();
 	async fn sdk_config<'a>() -> &'a SdkConfig {
 		SDK_CONFIG
-			.get_or_init(|| async { aws_config::load_defaults(BehaviorVersion::latest()).await })
+			.get_or_init(|| async { aws_config::load_defaults(BehaviorVersion::v2025_08_07()).await })
 			.await
 	}
 
@@ -338,7 +340,9 @@ mod aws {
 				Ok(
 					config
 						.credentials_provider()
-						.unwrap()
+						.ok_or(anyhow::anyhow!(
+							"No credentials provider found in AWS config"
+						))?
 						.provide_credentials()
 						.await?,
 				)
@@ -364,9 +368,7 @@ mod azure {
 		auth: &AzureAuth,
 	) -> anyhow::Result<Arc<dyn TokenCredential>> {
 		let client_options = azure_core::http::ClientOptions {
-			transport: Some(azure_core::http::TransportOptions::new(Arc::new(
-				client.clone(),
-			))),
+			transport: Some(azure_core::http::Transport::new(Arc::new(client.clone()))),
 			..Default::default()
 		};
 		match auth {
@@ -379,10 +381,7 @@ mod azure {
 					tenant_id,
 					client_id.to_string(),
 					azure_core::credentials::Secret::new(client_secret.expose_secret().to_string()),
-					Some(azure_identity::ClientSecretCredentialOptions {
-						client_options,
-						..Default::default()
-					}),
+					Some(azure_identity::ClientSecretCredentialOptions { client_options }),
 				)?),
 				AzureAuthCredentialSource::ManagedIdentity {
 					user_assigned_identity,

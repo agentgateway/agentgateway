@@ -1,8 +1,7 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 binds:
 - listeners:
   - routes:
-
     # --- Scenario A: Local stdio MCP + Spec-compliant External Authorization Server
     # Exposes:
     #   - MCP server (streamable HTTP) at /stdio/mcp
@@ -32,8 +31,10 @@ binds:
           - "Mcp-Session-Id"
         mcpAuthentication:
           issuer: http://localhost:9000
-          jwksUrl: http://localhost:9000/.well-known/jwks.json
-          audience: http://localhost:3000/stdio/mcp
+          audiences:
+          - http://localhost:3000/stdio/mcp
+          jwks:
+            url: http://localhost:9000/.well-known/jwks.json
           resourceMetadata:
             resource: http://localhost:3000/stdio/mcp
             scopesSupported:
@@ -44,7 +45,6 @@ binds:
             - query
             resourceDocumentation: http://localhost:3000/stdio/docs
             resourcePolicyUri: http://localhost:3000/stdio/policies
-
     # --- Scenario B: Remote MCP over HTTPS + Spec-compliant Authorization Server
     # Proxies to a remote MCP server and serves the same resource metadata locally.
     - backends:
@@ -69,8 +69,10 @@ binds:
           - "Mcp-Session-Id"
         mcpAuthentication:
           issuer: http://localhost:9000
-          jwksUrl: http://localhost:9000/.well-known/jwks.json
-          audience: http://localhost:3000/remote/mcp
+          audiences:
+          - http://localhost:3000/remote/mcp
+          jwks:
+            url: http://localhost:9000/.well-known/jwks.json
           resourceMetadata:
             resource: http://localhost:3000/remote/mcp
             scopesSupported:
@@ -81,8 +83,6 @@ binds:
             - query
             resourceDocumentation: http://localhost:3000/remote/docs
             resourcePolicyUri: http://localhost:3000/remote/policies
-
-
     # --- Scenario C: Local stdio MCP + Keycloak adaptation (non-spec provider)
     # When the provider isn't spec-compliant, enable an adapter that exposes modified
     # oauth-authorization-server endpoints while still validating JWTs.
@@ -112,8 +112,10 @@ binds:
           - '*'
         mcpAuthentication:
           issuer: http://localhost:7080/realms/mcp
-          jwksUrl: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
-          audience: mcp_proxy
+          audiences:
+          - mcp_proxy
+          jwks:
+            url: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
           provider:
             keycloak: {}
           resourceMetadata:
@@ -128,48 +130,47 @@ binds:
             - query
             resourceDocumentation: http://localhost:3000/keycloak/docs
             resourcePolicyUri: http://localhost:3000/keycloak/policies
-
-    # Example configuration for Auth0:
-    # - backends:
-    #   - mcp:
-    #       targets:
-    #       - name: everything
-    #         stdio:
-    #           args:
-    #           - '@modelcontextprotocol/server-everything'
-    #           cmd: npx
-    #   matches:
-    #   - path:
-    #       exact: /auth0/mcp
-    #   - path:
-    #       exact: /.well-known/oauth-protected-resource/auth0/mcp
-    #   - path:
-    #       exact: /.well-known/oauth-authorization-server/auth0/mcp
-    #   policies:
-    #     cors:
-    #       allowHeaders:
-    #       - mcp-protocol-version
-    #       - content-type
-    #       allowOrigins:
-    #       - '*'
-    #     mcpAuthentication:
-    #       issuer: https://dev-y6sikgx3n3shy7ci.eu.auth0.com
-    #       jwksUrl: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
-    #       audience: urn:agent-gateway
-    #       provider:
-    #         auth0: {}
-    #       resourceMetadata:
-    #         resource: http://localhost:3000/auth0/mcp
-    #         scopesSupported:  
-    #         - profile
-    #         - offline_access
-    #         - openid
-    #         bearerMethodsSupported:
-    #         - header
-    #         - body
-    #         - query
-    #         resourceDocumentation: http://localhost:3000/keycloak/docs
-    #         resourcePolicyUri: http://localhost:3000/keycloak/policies
-
+            # Example configuration for Auth0:
+            # - backends:
+            #   - mcp:
+            #       targets:
+            #       - name: everything
+            #         stdio:
+            #           args:
+            #           - '@modelcontextprotocol/server-everything'
+            #           cmd: npx
+            #   matches:
+            #   - path:
+            #       exact: /auth0/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-protected-resource/auth0/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/auth0/mcp
+            #   policies:
+            #     cors:
+            #       allowHeaders:
+            #       - mcp-protocol-version
+            #       - content-type
+            #       allowOrigins:
+            #       - '*'
+            #     mcpAuthentication:
+            #       issuer: https://dev-y6sikgx3n3shy7ci.eu.auth0.com
+            #       audiences:
+            #       - urn:agent-gateway
+            #       jwksUrl: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
+            #       provider:
+            #         auth0: {}
+            #       resourceMetadata:
+            #         resource: http://localhost:3000/auth0/mcp
+            #         scopesSupported:
+            #         - profile
+            #         - offline_access
+            #         - openid
+            #         bearerMethodsSupported:
+            #         - header
+            #         - body
+            #         - query
+            #         resourceDocumentation: http://localhost:3000/keycloak/docs
+            #         resourcePolicyUri: http://localhost:3000/keycloak/policies
   # Public port to listen on
   port: 3000

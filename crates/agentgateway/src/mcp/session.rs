@@ -14,14 +14,13 @@ use rmcp::model::{
 	Implementation, JsonRpcError, ProtocolVersion, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
-use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::http::Response;
 use crate::mcp::handler::Relay;
 use crate::mcp::mergestream::Messages;
+use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPOperation, rbac};
 use crate::{mcp, *};
@@ -156,6 +155,24 @@ impl Session {
 				// Forward response as-is
 				return *resp;
 			}
+			// Handle authorization errors specially - return "Unknown" error
+			// to avoid leaking information about resource existence
+			if let UpstreamError::Authorization {
+				resource_type,
+				resource_name,
+			} = &e
+				&& let Some(ref req_id) = req_id
+				&& let Ok(body) = serde_json::to_string(&JsonRpcError {
+					jsonrpc: Default::default(),
+					id: req_id.clone(),
+					error: ErrorData {
+						code: ErrorCode::INVALID_PARAMS,
+						message: format!("Unknown {resource_type}: {resource_name}").into(),
+						data: None,
+					},
+				}) {
+				return http_json_error(StatusCode::OK, body);
+			}
 			let err = if let Some(req_id) = req_id {
 				serde_json::to_string(&JsonRpcError {
 					jsonrpc: Default::default(),
@@ -278,7 +295,10 @@ impl Session {
 							)),
 							cel.as_ref(),
 						) {
-							return Err(UpstreamError::Authorization);
+							return Err(UpstreamError::Authorization {
+								resource_type: "tool".to_string(),
+								resource_name: name.to_string(),
+							});
 						}
 
 						let tn = tool.to_string();
@@ -300,7 +320,10 @@ impl Session {
 							)),
 							cel.as_ref(),
 						) {
-							return Err(UpstreamError::Authorization);
+							return Err(UpstreamError::Authorization {
+								resource_type: "prompt".to_string(),
+								resource_name: name.to_string(),
+							});
 						}
 						gpr.params.name = prompt.to_string();
 						self.relay.send_single(r, ctx, service_name).await
@@ -320,7 +343,10 @@ impl Session {
 								)),
 								cel.as_ref(),
 							) {
-								return Err(UpstreamError::Authorization);
+								return Err(UpstreamError::Authorization {
+									resource_type: "resource".to_string(),
+									resource_name: uri.to_string(),
+								});
 							}
 							self.relay.send_single_without_multiplexing(r, ctx).await
 						} else {
@@ -331,7 +357,9 @@ impl Session {
 							))
 						}
 					},
-					ClientRequest::SubscribeRequest(_) | ClientRequest::UnsubscribeRequest(_) => {
+					ClientRequest::SubscribeRequest(_)
+					| ClientRequest::UnsubscribeRequest(_)
+					| ClientRequest::CustomRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
 					},
@@ -348,6 +376,7 @@ impl Session {
 					ClientNotification::ProgressNotification(r) => r.method.as_str(),
 					ClientNotification::InitializedNotification(r) => r.method.as_str(),
 					ClientNotification::RootsListChangedNotification(r) => r.method.as_str(),
+					ClientNotification::CustomNotification(r) => r.method.as_str(),
 				};
 				let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, method);
 				log.non_atomic_mutate(|l| {
@@ -371,12 +400,16 @@ pub struct SessionManager {
 	sessions: RwLock<HashMap<String, Session>>,
 }
 
+fn session_id() -> Arc<str> {
+	uuid::Uuid::new_v4().to_string().into()
+}
+
 impl SessionManager {
 	pub fn get_session(&self, id: &str) -> Option<Session> {
 		self.sessions.read().ok()?.get(id).cloned()
 	}
 
-	/// create_session establishes an MCP session.
+	/// create_session establishes an MCP session and registers it in the session manager.
 	pub fn create_session(&self, relay: Relay) -> Session {
 		let id = session_id();
 		let sess = Session {
@@ -387,6 +420,19 @@ impl SessionManager {
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
 		sess
+	}
+
+	/// create_stateless_session creates a session for stateless mode.
+	/// Unlike create_session, this does NOT register the session in the session manager.
+	/// The caller is responsible for calling session.delete_session() when done
+	/// to clean up upstream resources (e.g., stdio processes).
+	pub fn create_stateless_session(&self, relay: Relay) -> Session {
+		let id = session_id();
+		Session {
+			id,
+			relay: Arc::new(relay),
+			tx: None,
+		}
 	}
 
 	/// create_legacy_session establishes a legacy SSE session.
@@ -442,6 +488,14 @@ impl Drop for SessionDropper {
 fn http_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
 	::http::Response::builder()
 		.status(status)
+		.body(body.into())
+		.expect("valid response")
+}
+
+fn http_json_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
+	::http::Response::builder()
+		.status(status)
+		.header(http::header::CONTENT_TYPE, "application/json")
 		.body(body.into())
 		.expect("valid response")
 }

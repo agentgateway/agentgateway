@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport as McpSseTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import {
@@ -50,6 +50,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getBackendName } from "@/lib/backend-utils";
 import { v4 as uuidv4 } from "uuid";
 
 import { CapabilitiesList } from "@/components/playground/CapabilitiesList";
@@ -182,6 +183,59 @@ export default function PlaygroundPage() {
     isLoadingCapabilities: false,
   });
 
+  // Determine backend type of selected route
+  const getRouteBackendType = (route: RouteInfo): "mcp" | "a2a" | "http" => {
+    // Check if route has A2A policy first - this takes precedence
+    if (route.route.policies?.a2a) {
+      return "a2a";
+    }
+
+    if (!route.route.backends || route.route.backends.length === 0) return "http";
+
+    const backend = route.route.backends[0]; // Use first backend to determine type
+    if (backend.mcp) return "mcp";
+    if (backend.ai) return "a2a"; // Treat AI backends as A2A for now
+    return "http"; // Host, Service, etc.
+  };
+
+  const updateRequestFromRoute = useCallback((routeInfo: RouteInfo) => {
+    let initialPath = "/";
+
+    if (routeInfo.route.matches && routeInfo.route.matches.length > 0) {
+      const firstMatch = routeInfo.route.matches[0];
+      if (firstMatch.path.exact) {
+        initialPath = firstMatch.path.exact;
+      } else if (firstMatch.path.pathPrefix) {
+        initialPath = firstMatch.path.pathPrefix;
+      } else if (firstMatch.path.regex) {
+        initialPath = "/";
+      }
+    }
+
+    setRequest({
+      method: "GET",
+      path: initialPath,
+      headers: {},
+      body: "",
+      query: {},
+    });
+    setResponse(null);
+
+    // Reset MCP/A2A responses
+    setMcpState((prev) => ({ ...prev, response: null }));
+    setA2aState((prev) => ({ ...prev, response: null }));
+
+    // Set connection type based on backend
+    const backendType = getRouteBackendType(routeInfo);
+    setConnectionState((prev) => ({
+      ...prev,
+      connectionType: backendType,
+      selectedEndpoint: routeInfo.endpoint,
+      selectedListenerName: routeInfo.listener.name || null,
+      selectedListenerProtocol: routeInfo.listener.protocol,
+    }));
+  }, []);
+
   // Extract routes from configuration
   useEffect(() => {
     if (!binds || binds.length === 0) return;
@@ -200,22 +254,18 @@ export default function PlaygroundPage() {
             // Generate route path and description with better pattern recognition
             let routePath = "/";
             let routePattern = "/*";
-            let pathType = "prefix";
 
             if (route.matches?.[0]?.path) {
               const pathMatch = route.matches[0].path;
               if (pathMatch.exact) {
                 routePath = pathMatch.exact;
                 routePattern = pathMatch.exact;
-                pathType = "exact";
               } else if (pathMatch.pathPrefix) {
                 routePath = pathMatch.pathPrefix;
                 routePattern = pathMatch.pathPrefix + "*";
-                pathType = "prefix";
               } else if (pathMatch.regex) {
                 routePath = "/";
                 routePattern = `~${pathMatch.regex}`;
-                pathType = "regex";
               }
             }
 
@@ -262,60 +312,9 @@ export default function PlaygroundPage() {
       setSelectedRoute(extractedRoutes[0]);
       updateRequestFromRoute(extractedRoutes[0]);
     }
-  }, [binds]);
+  }, [binds, selectedRoute, updateRequestFromRoute]);
 
-  // Determine backend type of selected route
-  const getRouteBackendType = (route: RouteInfo): "mcp" | "a2a" | "http" => {
-    // Check if route has A2A policy first - this takes precedence
-    if (route.route.policies?.a2a) {
-      return "a2a";
-    }
-
-    if (!route.route.backends || route.route.backends.length === 0) return "http";
-
-    const backend = route.route.backends[0]; // Use first backend to determine type
-    if (backend.mcp) return "mcp";
-    if (backend.ai) return "a2a"; // Treat AI backends as A2A for now
-    return "http"; // Host, Service, etc.
-  };
-
-  const updateRequestFromRoute = (routeInfo: RouteInfo) => {
-    let initialPath = "/";
-
-    if (routeInfo.route.matches && routeInfo.route.matches.length > 0) {
-      const firstMatch = routeInfo.route.matches[0];
-      if (firstMatch.path.exact) {
-        initialPath = firstMatch.path.exact;
-      } else if (firstMatch.path.pathPrefix) {
-        initialPath = firstMatch.path.pathPrefix;
-      } else if (firstMatch.path.regex) {
-        initialPath = "/";
-      }
-    }
-
-    setRequest({
-      method: "GET",
-      path: initialPath,
-      headers: {},
-      body: "",
-      query: {},
-    });
-    setResponse(null);
-
-    // Reset MCP/A2A responses
-    setMcpState((prev) => ({ ...prev, response: null }));
-    setA2aState((prev) => ({ ...prev, response: null }));
-
-    // Set connection type based on backend
-    const backendType = getRouteBackendType(routeInfo);
-    setConnectionState((prev) => ({
-      ...prev,
-      connectionType: backendType,
-      selectedEndpoint: routeInfo.endpoint,
-      selectedListenerName: routeInfo.listener.name || null,
-      selectedListenerProtocol: routeInfo.listener.protocol,
-    }));
-  };
+  // (moved getRouteBackendType and updateRequestFromRoute above useEffect)
 
   const handleRouteSelect = (routeInfo: RouteInfo) => {
     // Don't allow selection of routes with no backends unless they have A2A policy
@@ -804,17 +803,13 @@ export default function PlaygroundPage() {
     setConnectionState((prev) => ({ ...prev, authToken: token }));
   };
 
-  const handleA2aTargetSelect = (target: string | null) => {
-    setA2aState((prev) => ({ ...prev, selectedTarget: target }));
-  };
-
   const handleA2aMessageChange = (message: string) => {
     setA2aState((prev) => ({ ...prev, message }));
   };
 
   const getBackendInfo = (backend: Backend) => {
     if (backend.mcp) {
-      return { type: "MCP", name: backend.mcp.name, icon: Server };
+      return { type: "MCP", name: getBackendName(backend), icon: Server };
     } else if (backend.host) {
       return {
         type: "Host",
@@ -887,7 +882,7 @@ export default function PlaygroundPage() {
                   return Array.from(groupedRoutes.entries()).map(([groupKey, routeInfos]) => {
                     const firstRoute = routeInfos[0];
                     const port = firstRoute.bindPort;
-                    const listenerName = firstRoute.listener.name || "unnamed listener";
+                    const listenerName = firstRoute.listener.name || "unnamed";
                     const endpoint = firstRoute.endpoint;
 
                     return (

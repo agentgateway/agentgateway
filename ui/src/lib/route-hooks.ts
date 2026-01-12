@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import { Route as RouteType, TcpRoute, Listener, Bind } from "@/lib/types";
 import { fetchBinds, updateConfig, fetchConfig } from "@/lib/api";
 import { useServer } from "@/lib/server-context";
@@ -43,7 +43,7 @@ export const useRouteData = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedBinds, setExpandedBinds] = useState<Set<number>>(new Set());
 
-  const loadRoutes = async () => {
+  const loadRoutes = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedBinds = await fetchBinds();
@@ -79,7 +79,7 @@ export const useRouteData = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const getAvailableListeners = (): { listener: Listener; bind: Bind }[] => {
     const listeners: { listener: Listener; bind: Bind }[] = [];

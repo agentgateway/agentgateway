@@ -1,6 +1,48 @@
-import { Backend, Route, Listener, Bind, McpStatefulMode } from "@/lib/types";
+import {
+  Backend,
+  Route,
+  Listener,
+  Bind,
+  StreamHttpTarget,
+  McpTarget,
+  McpStatefulMode,
+} from "@/lib/types";
 import { DEFAULT_BACKEND_FORM, BACKEND_TYPE_COLORS } from "./backend-constants";
 import { POLICY_TYPES, BACKEND_POLICY_KEYS } from "./policy-constants";
+
+/**
+ * Extract short hostname from FQDN or return as-is if not a FQDN
+ * e.g., "svc.namespace.svc.cluster.local" -> "svc"
+ */
+export function getShortHostname(hostname: string): string {
+  if (!hostname) return "";
+  return hostname.includes(".") ? hostname.split(".")[0] : hostname;
+}
+
+/**
+ * Helper to get MCP targets from flat structure
+ */
+export function getMcpTargets(backend: Backend): McpTarget[] {
+  return backend.mcp?.targets ?? [];
+}
+
+/**
+ * Helper to get the AI provider type (e.g., "bedrock", "openAI")
+ */
+export function getAiProviderType(backend: Backend): string | undefined {
+  const provider = backend.ai?.provider;
+  if (!provider) return undefined;
+  return Object.keys(provider)[0];
+}
+
+/**
+ * Helper to get the AI provider config
+ */
+export function getAiProviderConfig(backend: Backend): Record<string, any> | undefined {
+  const provider = backend.ai?.provider;
+  if (!provider) return undefined;
+  return Object.values(provider)[0] as Record<string, any>;
+}
 
 /**
  * Determine the backend type based on the backend configuration
@@ -35,6 +77,7 @@ export const AI_PROVIDERS = [
   { value: "vertex", label: "Vertex" },
   { value: "anthropic", label: "Anthropic" },
   { value: "bedrock", label: "Bedrock" },
+  { value: "azureOpenAI", label: "Azure OpenAI" },
 ] as const;
 
 /**
@@ -72,21 +115,94 @@ export function ensurePortInAddress(
   return `${address}:${defaultPort}`;
 }
 
-// New utility functions extracted from backend-config.tsx
+// Build a full URL from legacy host/port/path triples. Handles cases where
+// `host` was actually used to store the scheme ("http" or "https") and `path`
+// contains the hostname, as seen in older configs.
+export function buildFullUrlFromLegacy(
+  host: string,
+  port?: string | number,
+  path?: string
+): string {
+  const trimmedHost = (host || "").trim();
+  const trimmedPath = (path || "").trim();
+  const portNum =
+    typeof port === "string" ? parseInt(port || "", 10) : (port as number | undefined);
+
+  const isScheme = trimmedHost === "http" || trimmedHost === "https";
+  let scheme = "http";
+  let hostname = "";
+  let urlPath = "";
+
+  if (isScheme) {
+    scheme = trimmedHost as "http" | "https";
+    // If path looks like a hostname (contains a dot and no leading '/'), treat it as the hostname
+    if (trimmedPath && !trimmedPath.startsWith("/") && trimmedPath.includes(".")) {
+      hostname = trimmedPath;
+      urlPath = "";
+    } else {
+      // Otherwise, we don't know the hostname; treat path as path
+      hostname = "";
+      urlPath = trimmedPath.startsWith("/") ? trimmedPath : trimmedPath ? `/${trimmedPath}` : "";
+    }
+  } else {
+    // Normal legacy triple
+    hostname = trimmedHost;
+    urlPath = trimmedPath ? (trimmedPath.startsWith("/") ? trimmedPath : `/${trimmedPath}`) : "";
+    // Guess scheme based on port if provided
+    if (portNum === 443) scheme = "https";
+    else scheme = "http";
+  }
+
+  // Compose authority
+  const authority = hostname;
+  // If hostname is empty (malformed), just return path as-is to avoid making it worse
+  if (!authority) {
+    return `${scheme}://${trimmedPath || ""}`;
+  }
+
+  // Only include port if it's non-default for the scheme
+  const defaultPortForScheme = scheme === "https" ? 443 : 80;
+  const includePort =
+    typeof portNum === "number" && portNum > 0 && portNum !== defaultPortForScheme;
+  const portPart = includePort ? `:${portNum}` : "";
+
+  return `${scheme}://${authority}${portPart}${urlPath}`;
+}
+
+// Normalize a possibly legacy (host, port, path) triple or a host-only URL to a full URL string
+export function normalizeTargetUrl(host: unknown, port?: unknown, path?: unknown): string {
+  const h = String(host ?? "");
+  const p = typeof port === "undefined" ? undefined : String(port ?? "");
+  const pa = typeof path === "undefined" ? undefined : String(path ?? "");
+  const looksLegacy =
+    typeof port !== "undefined" || typeof path !== "undefined" || h === "http" || h === "https";
+  return looksLegacy ? buildFullUrlFromLegacy(h, p, pa) : h;
+}
 
 // Get backend name for display
 export const getBackendName = (backend: Backend): string => {
+  // name already includes namespace prefix (e.g., "namespace/name")
   if (backend.mcp) {
-    if (backend.mcp.targets && backend.mcp.targets.length > 0) {
-      const targetNames = backend.mcp.targets.map((t) => t.name).join(", ");
-      return `MCP: ${targetNames}`;
+    if (backend.mcp.name) return backend.mcp.name;
+    const targets = getMcpTargets(backend);
+    if (targets.length > 0) {
+      const targetNames = targets
+        .map((t) => t.name)
+        .filter(Boolean)
+        .join(", ");
+      return targetNames ? `MCP: ${targetNames}` : "MCP Backend";
     }
     return "MCP Backend";
   }
-  if (backend.ai) {
-    return backend.ai.name;
+  if (backend.ai) return backend.ai.name;
+  if (backend.service) {
+    const ns = backend.service.name?.namespace;
+    const hostname = backend.service.name?.hostname;
+    // Use short hostname for display (extract from FQDN if needed)
+    const shortName = getShortHostname(hostname || "");
+    if (ns && shortName) return `${ns}/${shortName}`;
+    return shortName || hostname || "Service Backend";
   }
-  if (backend.service) return backend.service.name?.hostname || "";
   if (backend.host) {
     return typeof backend.host === "string" ? backend.host : String(backend.host.name ?? "Unknown");
   }
@@ -104,11 +220,12 @@ export const getBackendTypeColor = (type: string): string => {
 // Get backend details for table display
 export const getBackendDetails = (backend: Backend): { primary: string; secondary?: string } => {
   if (backend.mcp) {
-    const targetCount = `${backend.mcp.targets.length} target${backend.mcp.targets.length !== 1 ? "s" : ""}`;
+    const targets = getMcpTargets(backend);
+    const targetCount = `${targets.length} target${targets.length !== 1 ? "s" : ""}`;
 
     // Show details for first target if available
-    if (backend.mcp.targets.length > 0) {
-      const firstTarget = backend.mcp.targets[0];
+    if (targets.length > 0) {
+      const firstTarget = targets[0];
       if (firstTarget.stdio) {
         const cmd = firstTarget.stdio.cmd;
         const args = firstTarget.stdio.args?.join(" ") || "";
@@ -118,19 +235,23 @@ export const getBackendDetails = (backend: Backend): { primary: string; secondar
           secondary: fullCmd.length > 60 ? `${fullCmd.substring(0, 60)}...` : fullCmd,
         };
       } else if (firstTarget.sse) {
-        const url = `${firstTarget.sse.host}:${firstTarget.sse.port}${firstTarget.sse.path}`;
+        const s: StreamHttpTarget = firstTarget.sse as StreamHttpTarget;
+        const url = normalizeTargetUrl(s.host, s.port, s.path);
         return {
           primary: targetCount,
           secondary: url.length > 60 ? `${url.substring(0, 60)}...` : url,
         };
       } else if (firstTarget.mcp) {
-        const url = `${firstTarget.mcp.host}:${firstTarget.mcp.port}${firstTarget.mcp.path}`;
+        const m: StreamHttpTarget = firstTarget.mcp as StreamHttpTarget;
+        const url = normalizeTargetUrl(m.host, m.port, m.path);
         return {
           primary: targetCount,
           secondary: url.length > 60 ? `${url.substring(0, 60)}...` : url,
         };
       } else if (firstTarget.openapi) {
-        const url = `${firstTarget.openapi.host}:${firstTarget.openapi.port}`;
+        const host = firstTarget.openapi.host;
+        const port = firstTarget.openapi.port;
+        const url = typeof port === "number" ? `${host}:${port}` : host;
         return {
           primary: targetCount,
           secondary: url.length > 60 ? `${url.substring(0, 60)}...` : url,
@@ -142,8 +263,8 @@ export const getBackendDetails = (backend: Backend): { primary: string; secondar
   }
 
   if (backend.ai) {
-    const provider = Object.keys(backend.ai.provider)[0];
-    const config = Object.values(backend.ai.provider)[0] as any;
+    const provider = getAiProviderType(backend);
+    const config = getAiProviderConfig(backend);
     const model = config?.model;
 
     return {
@@ -153,8 +274,10 @@ export const getBackendDetails = (backend: Backend): { primary: string; secondar
   }
 
   if (backend.service) {
+    // hostname is preserved as the original value (could be FQDN or short name)
+    const hostname = backend.service.name?.hostname || "";
     return {
-      primary: `Service: ${backend.service.name.hostname}`,
+      primary: `Service: ${hostname}`,
       secondary: `Port: ${backend.service.port}`,
     };
   }
@@ -215,9 +338,12 @@ export const validateMcpBackend = (form: typeof DEFAULT_BACKEND_FORM): boolean =
     if (!target.name.trim()) return false;
     if (target.type === "stdio") {
       return !!target.cmd.trim();
+    } else if (target.type === "openapi") {
+      return !!(target.fullUrl.trim() || target.host.trim());
     } else {
-      // For SSE/MCP/OpenAPI, check if URL is provided and parsed correctly
-      return !!(target.fullUrl.trim() && target.host.trim() && target.port.trim());
+      // For MCP/SSE, accept a single full URL (preferred),
+      // otherwise fall back to parsed host/port
+      return !!(target.fullUrl.trim() || (target.host.trim() && target.port.trim()));
     }
   });
 };
@@ -294,24 +420,34 @@ export const createMcpTarget = (target: any) => {
   };
 
   switch (target.type) {
-    case "sse":
+    case "sse": {
+      const fullUrl =
+        target.fullUrl && target.fullUrl.trim()
+          ? target.fullUrl.trim()
+          : target.host
+            ? normalizeTargetUrl(target.host, target.port, target.path)
+            : "";
       return {
         ...baseTarget,
         sse: {
-          host: target.host,
-          port: parseInt(target.port),
-          path: target.path,
+          host: fullUrl,
         },
       };
-    case "mcp":
+    }
+    case "mcp": {
+      const fullUrl =
+        target.fullUrl && target.fullUrl.trim()
+          ? target.fullUrl.trim()
+          : target.host
+            ? normalizeTargetUrl(target.host, target.port, target.path)
+            : "";
       return {
         ...baseTarget,
         mcp: {
-          host: target.host,
-          port: parseInt(target.port),
-          path: target.path,
+          host: fullUrl,
         },
       };
+    }
     case "stdio":
       return {
         ...baseTarget,
@@ -328,15 +464,20 @@ export const createMcpTarget = (target: any) => {
               : {},
         },
       };
-    case "openapi":
+    case "openapi": {
+      const port =
+        typeof target.port === "string" && target.port.trim()
+          ? parseInt(target.port, 10)
+          : undefined;
       return {
         ...baseTarget,
         openapi: {
           host: target.host,
-          port: parseInt(target.port),
+          port: Number.isFinite(port) ? port : undefined,
           schema: target.schema,
         },
       };
+    }
     default:
       return baseTarget;
   }
@@ -347,7 +488,7 @@ export const createMcpBackend = (form: typeof DEFAULT_BACKEND_FORM, weight: numb
   return addWeightIfNeeded(
     {
       mcp: {
-        targets,
+        targets, // Flat structure for local config format
         statefulMode: form.mcpStateful ? McpStatefulMode.STATEFUL : McpStatefulMode.STATELESS,
       },
     },
@@ -379,6 +520,13 @@ export const createAiProviderConfig = (form: typeof DEFAULT_BACKEND_FORM) => {
       provider.bedrock = {
         model: form.aiModel,
         region: form.aiRegion,
+      };
+      break;
+    case "azureOpenAI":
+      provider.azureOpenAI = {
+        host: form.aiHost,
+        ...(form.aiModel && { model: form.aiModel }),
+        ...(form.aiApiVersion && { apiVersion: form.aiApiVersion }),
       };
       break;
   }
@@ -452,7 +600,7 @@ export const getAvailableRoutes = (binds: Bind[]) => {
 
         routes.push({
           bindPort: bind.port,
-          listenerName: listener.name || "unnamed listener",
+          listenerName: listener.name || "unnamed",
           routeIndex,
           routeName,
           path,
@@ -473,7 +621,7 @@ export const parseUrl = (url: string): { host: string; port: string; path: strin
     const path = urlObj.pathname + urlObj.search;
 
     return { host, port, path };
-  } catch (err) {
+  } catch {
     // Invalid URL, return empty values
     return { host: "", port: "", path: "" };
   }
@@ -513,74 +661,87 @@ export const populateFormFromBackend = (
       return hostStr.includes(":") ? hostStr.split(":")[1] : "";
     })(),
 
-    mcpTargets:
-      backend.mcp?.targets?.map((target) => {
-        const baseTarget = {
-          name: target.name,
-          type: "sse" as "sse" | "mcp" | "stdio" | "openapi",
-          host: "",
-          port: "",
-          path: "",
-          fullUrl: "",
-          cmd: "",
-          args: [] as string[],
-          env: {} as Record<string, string>,
-          schema: true,
-        };
+    mcpTargets: getMcpTargets(backend).map((target) => {
+      const baseTarget = {
+        name: target.name,
+        type: "sse" as "sse" | "mcp" | "stdio" | "openapi",
+        host: "",
+        port: "",
+        path: "",
+        fullUrl: "",
+        cmd: "",
+        args: [] as string[],
+        env: {} as Record<string, string>,
+        schema: true,
+      };
 
-        if (target.sse) {
-          const fullUrl = `http://${target.sse.host}:${target.sse.port}${target.sse.path}`;
-          return {
-            ...baseTarget,
-            type: "sse" as const,
-            host: target.sse.host,
-            port: String(target.sse.port),
-            path: target.sse.path,
-            fullUrl,
-          };
-        } else if (target.mcp) {
-          const fullUrl = `http://${target.mcp.host}:${target.mcp.port}${target.mcp.path}`;
-          return {
-            ...baseTarget,
-            type: "mcp" as const,
-            host: target.mcp.host,
-            port: String(target.mcp.port),
-            path: target.mcp.path,
-            fullUrl,
-          };
-        } else if (target.stdio) {
-          return {
-            ...baseTarget,
-            type: "stdio" as const,
-            cmd: target.stdio.cmd || "",
-            args: target.stdio.args || [],
-            env: target.stdio.env || {},
-          };
-        } else if (target.openapi) {
-          const fullUrl = `http://${target.openapi.host}:${target.openapi.port}`;
-          return {
-            ...baseTarget,
-            type: "openapi" as const,
-            host: target.openapi.host,
-            port: String(target.openapi.port),
-            path: "",
-            fullUrl,
-            schema: target.openapi.schema,
-          };
-        }
-        return baseTarget;
-      }) || [],
-    mcpStateful:
-      backend.mcp?.statefulMode === undefined
-        ? true
-        : backend.mcp?.statefulMode === McpStatefulMode.STATEFUL, // Default to stateful if not specified
+      if (target.sse) {
+        const s: StreamHttpTarget = target.sse as StreamHttpTarget;
+        const url = normalizeTargetUrl(s.host, s.port, s.path);
+        const parsed = parseUrl(url);
+        return {
+          ...baseTarget,
+          type: "sse" as const,
+          host: parsed.host,
+          port: parsed.port,
+          path: parsed.path,
+          fullUrl: url,
+        };
+      } else if (target.mcp) {
+        const m = target.mcp as StreamHttpTarget;
+        const url = normalizeTargetUrl(m.host, m.port, m.path);
+        const parsed = parseUrl(url);
+        return {
+          ...baseTarget,
+          type: "mcp" as const,
+          host: parsed.host,
+          port: parsed.port,
+          path: parsed.path,
+          fullUrl: url,
+        };
+      } else if (target.stdio) {
+        return {
+          ...baseTarget,
+          type: "stdio" as const,
+          cmd: target.stdio.cmd || "",
+          args: target.stdio.args || [],
+          env: target.stdio.env || {},
+        };
+      } else if (target.openapi) {
+        const port = target.openapi.port;
+        const fullUrl =
+          typeof port === "number"
+            ? `http://${target.openapi.host}:${port}`
+            : `http://${target.openapi.host}`;
+        return {
+          ...baseTarget,
+          type: "openapi" as const,
+          host: target.openapi.host,
+          port: typeof port === "number" ? String(port) : "",
+          path: "",
+          fullUrl,
+          schema: target.openapi.schema,
+        };
+      }
+      return baseTarget;
+    }),
+    mcpStateful: backend.mcp?.statefulMode !== McpStatefulMode.STATELESS, // Default to stateful if not specified
     // AI backend
-    aiProvider: backend.ai?.provider ? (Object.keys(backend.ai.provider)[0] as any) : "openAI",
-    aiModel: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.model || "" : "",
-    aiRegion: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.region || "" : "",
-    aiProjectId: backend.ai?.provider ? Object.values(backend.ai.provider)[0]?.projectId || "" : "",
+    aiProvider:
+      (getAiProviderType(backend) as
+        | "openAI"
+        | "gemini"
+        | "vertex"
+        | "anthropic"
+        | "bedrock"
+        | "azureOpenAI") || "openAI",
+    aiModel: getAiProviderConfig(backend)?.model || "",
+    aiRegion: getAiProviderConfig(backend)?.region || "",
+    aiProjectId: getAiProviderConfig(backend)?.projectId || "",
     aiHostOverride: backend.ai?.hostOverride || "",
     aiPathOverride: backend.ai?.pathOverride || "",
+    aiHost: getAiProviderConfig(backend)?.host || "",
+    aiApiVersion: getAiProviderConfig(backend)?.apiVersion || "",
   };
 };
 

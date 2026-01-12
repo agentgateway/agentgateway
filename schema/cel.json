@@ -90,6 +90,13 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "headers": {
+          "description": "The headers of the request.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "body": {
           "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
           "type": [
@@ -107,7 +114,8 @@
       },
       "additionalProperties": false,
       "required": [
-        "code"
+        "code",
+        "headers"
       ]
     },
     "jwt": {
@@ -203,6 +211,15 @@
           "format": "uint64",
           "minimum": 0
         },
+        "countTokens": {
+          "description": "The number of tokens in the request, when using the token counting endpoint\nThese are not counted as 'input tokens' since they do not consume input tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "prompt": {
           "description": "The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.",
           "type": [
@@ -210,6 +227,7 @@
             "null"
           ],
           "items": {
+            "description": "SimpleChatCompletionMessage is a simplified chat message",
             "type": "object",
             "properties": {
               "role": {
@@ -282,6 +300,20 @@
               ],
               "format": "uint64",
               "minimum": 0
+            },
+            "encoding_format": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "dimensions": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
             }
           }
         }
@@ -338,6 +370,28 @@
             "trustDomain",
             "namespace",
             "serviceAccount"
+          ]
+        },
+        "subjectAltNames": {
+          "description": "The subject alt names from the downstream certificate, if available.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "issuer": {
+          "description": "The issuer from the downstream certificate, if available.",
+          "type": "string"
+        },
+        "subject": {
+          "description": "The subject from the downstream certificate, if available.",
+          "type": "string"
+        },
+        "subjectCn": {
+          "description": "The CN of the subject from the downstream certificate, if available.",
+          "type": [
+            "string",
+            "null"
           ]
         }
       },

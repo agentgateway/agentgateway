@@ -1,14 +1,15 @@
-use agent_core::strng;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use agent_core::strng;
+
 use crate::http::Request;
 use crate::types::agent;
 use crate::types::agent::{
 	BackendReference, HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, PathMatch,
-	QueryValueMatch, Route, RouteBackendReference,
+	QueryValueMatch, Route, RouteBackendReference, RouteName,
 };
 use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::discovery::{NamespacedHostname, NetworkAddress};
@@ -23,7 +24,7 @@ pub fn select_best_route(
 	network: Strng,
 	self_addr: Option<Strng>,
 	dst: SocketAddr,
-	listener: Arc<Listener>,
+	listener: &Listener,
 	request: &Request,
 ) -> Option<(Arc<Route>, PathMatch)> {
 	// Order:
@@ -51,6 +52,7 @@ pub fn select_best_route(
 			return None;
 		};
 		// We are going to get a VIP request. Look up the Service
+		// TODO: add a mode to fallback to a DFP backend
 		let svc = stores
 			.read_discovery()
 			.services
@@ -94,9 +96,12 @@ pub fn select_best_route(
 		}
 		// TODO: only build this if we don't match one
 		let default_route = Route {
-			key: strng::new("waypoint-default"),
-			route_name: strng::new("waypoint-default"),
-			rule_name: None,
+			key: strng::literal!("_waypoint-default"),
+			name: RouteName {
+				name: strng::literal!("_waypoint-default"),
+				namespace: svc.namespace.clone(),
+				rule_name: None,
+			},
 			hostnames: vec![],
 			matches: vec![],
 			inline_policies: vec![],
@@ -149,25 +154,25 @@ pub fn select_best_route(
 				return false;
 			}
 			for HeaderMatch { name, value } in &m.headers {
-				let Some(have) = request.headers().get(name.as_str()) else {
+				let Some(have) = http::get_pseudo_or_header_value(name, request) else {
 					return false;
 				};
 				match value {
 					HeaderValueMatch::Exact(want) => {
-						if have != want {
+						if have.as_ref() != *want {
 							return false;
 						}
 					},
 					HeaderValueMatch::Regex(want) => {
 						// Must be a valid string to do regex match
-						let Some(have) = have.to_str().ok() else {
+						let Some(have_str) = have.to_str().ok() else {
 							return false;
 						};
-						let Some(m) = want.find(have) else {
+						let Some(m) = want.find(have_str) else {
 							return false;
 						};
 						// Make sure we matched the entire thing
-						if !(m.start() == 0 && m.end() == have.len()) {
+						if !(m.start() == 0 && m.end() == have_str.len()) {
 							return false;
 						}
 					},

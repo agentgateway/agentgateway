@@ -1,33 +1,28 @@
 use ::http::Uri;
+use ::http::header::ACCEPT;
 use ::http::header::CONTENT_TYPE;
 use anyhow::anyhow;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
-use reqwest::header::ACCEPT;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
-use rmcp::transport::streamable_http_client::{SseError, StreamableHttpPostResponse};
 use sse_stream::{Sse, SseStream};
 
 use crate::mcp::ClientError;
 use crate::mcp::mergestream::Messages;
+use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::upstream::stdio::Process;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
 use crate::*;
 
-type BoxedSseStream = BoxStream<'static, Result<Sse, SseError>>;
+type BoxedSseStream = BoxStream<'static, Result<Sse, sse_stream::Error>>;
 
 #[derive(Debug, Clone)]
 struct ClientCore {
-	backend: Arc<SimpleBackend>,
+	http_client: super::McpHttpClient,
 	uri: Uri,
-	client: PolicyClient,
-	policies: BackendPolicies,
 }
 
 #[derive(Debug)]
@@ -50,6 +45,9 @@ impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
 			let Some(data) = raw.data else {
 				continue;
 			};
+			if data.is_empty() {
+				continue;
+			}
 			match serde_json::from_str::<ServerJsonRpcMessage>(&data) {
 				Err(e) => {
 					// Not a hard error, for now?
@@ -82,8 +80,6 @@ impl ClientCore {
 		message: ClientJsonRpcMessage,
 		ctx: &IncomingRequestContext,
 	) -> Result<(), ClientError> {
-		let client = self.client.clone();
-
 		let body = serde_json::to_vec(&message).map_err(ClientError::new)?;
 
 		let mut req = ::http::Request::builder()
@@ -95,10 +91,7 @@ impl ClientCore {
 
 		ctx.apply(&mut req);
 
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));
@@ -112,8 +105,6 @@ impl ClientCore {
 		&self,
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
-		let client = self.client.clone();
-
 		let mut req = ::http::Request::builder()
 			.uri(&self.uri)
 			.method(http::Method::GET)
@@ -123,10 +114,7 @@ impl ClientCore {
 
 		ctx.apply(&mut req);
 
-		let resp = client
-			.call_with_default_policies(req, &self.backend, self.policies.clone())
-			.await
-			.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
 		if resp.status() == http::StatusCode::ACCEPTED {
 			return Err(ClientError::new(anyhow!("expected an SSE stream")));
@@ -151,20 +139,12 @@ impl ClientCore {
 	}
 }
 impl Client {
-	pub fn new(
-		backend: SimpleBackend,
-		path: Strng,
-		client: PolicyClient,
-		policies: BackendPolicies,
-	) -> anyhow::Result<Self> {
-		let hp = backend.hostport();
+	pub fn new(http_client: super::McpHttpClient, path: Strng) -> anyhow::Result<Self> {
+		let hp = http_client.backend().hostport();
+		let uri = format!("http://{}{}", hp, path);
+		let uri = uri.parse().expect("invalid URI");
 		Ok(Self {
-			client: ClientCore {
-				backend: Arc::new(backend),
-				uri: ("http://".to_string() + &hp + path.as_str()).parse()?,
-				policies,
-				client,
-			},
+			client: ClientCore { http_client, uri },
 			active_stream: Default::default(),
 		})
 	}

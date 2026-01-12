@@ -1,11 +1,13 @@
+use std::str::FromStr;
+
+use ::http::{HeaderName, HeaderValue, StatusCode, header};
+use agent_core::prelude::Strng;
+use cel::Value;
+use serde_with::{DeserializeAs, SerializeAs, serde_as};
+
 use crate::cel::{Executor, Expression};
 use crate::http::HeaderOrPseudo;
 use crate::{cel, *};
-use ::http::StatusCode;
-use ::http::{HeaderName, HeaderValue, header};
-use agent_core::prelude::Strng;
-use cel::Value;
-use serde_with::{SerializeAs, serde_as};
 
 #[derive(Default)]
 #[apply(schema_de!)]
@@ -31,16 +33,21 @@ pub struct LocalTransform {
 	pub body: Option<Strng>,
 }
 
-impl TryFrom<LocalTransform> for TransformerConfig {
-	type Error = anyhow::Error;
-
-	fn try_from(req: LocalTransform) -> Result<Self, Self::Error> {
+impl TransformerConfig {
+	fn try_from_local_config(req: LocalTransform, strict: bool) -> anyhow::Result<Self> {
+		let compile = |s: &str| {
+			if strict {
+				cel::Expression::new_strict(s)
+			} else {
+				Ok(cel::Expression::new_permissive(s))
+			}
+		};
 		let set = req
 			.set
 			.into_iter()
 			.map(|(k, v)| {
 				let tk = HeaderOrPseudo::try_from(k.as_str())?;
-				let tv = cel::Expression::new(v.as_str())?;
+				let tv = compile(v.as_str())?;
 				Ok::<_, anyhow::Error>((tk, tv))
 			})
 			.collect::<Result<_, _>>()?;
@@ -49,7 +56,7 @@ impl TryFrom<LocalTransform> for TransformerConfig {
 			.into_iter()
 			.map(|(k, v)| {
 				let tk = HeaderOrPseudo::try_from(k.as_str())?;
-				let tv = cel::Expression::new(v.as_str())?;
+				let tv = compile(v.as_str())?;
 				Ok::<_, anyhow::Error>((tk, tv))
 			})
 			.collect::<Result<_, _>>()?;
@@ -58,10 +65,7 @@ impl TryFrom<LocalTransform> for TransformerConfig {
 			.into_iter()
 			.map(|k| HeaderName::try_from(k.as_str()))
 			.collect::<Result<_, _>>()?;
-		let body = req
-			.body
-			.map(|b| cel::Expression::new(b.as_str()))
-			.transpose()?;
+		let body = req.body.map(|b| compile(b.as_str())).transpose()?;
 		Ok(TransformerConfig {
 			set,
 			add,
@@ -70,18 +74,20 @@ impl TryFrom<LocalTransform> for TransformerConfig {
 		})
 	}
 }
-impl TryFrom<LocalTransformationConfig> for Transformation {
-	type Error = anyhow::Error;
 
-	fn try_from(value: LocalTransformationConfig) -> Result<Self, Self::Error> {
+impl Transformation {
+	pub fn try_from_local_config(
+		value: LocalTransformationConfig,
+		strict: bool,
+	) -> anyhow::Result<Self> {
 		let LocalTransformationConfig { request, response } = value;
 		let request = if let Some(req) = request {
-			req.try_into()?
+			TransformerConfig::try_from_local_config(req, strict)?
 		} else {
 			Default::default()
 		};
 		let response = if let Some(resp) = response {
-			resp.try_into()?
+			TransformerConfig::try_from_local_config(resp, strict)?
 		} else {
 			Default::default()
 		};
@@ -133,6 +139,19 @@ where
 		S: Serializer,
 	{
 		source.as_ref().serialize(serializer)
+	}
+}
+impl<'de, T> DeserializeAs<'de, T> for SerAsStr
+where
+	T: FromStr,
+	<T as FromStr>::Err: std::fmt::Display,
+{
+	fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let s = <&str>::deserialize(deserializer)?;
+		s.parse().map_err(serde::de::Error::custom)
 	}
 }
 
@@ -214,7 +233,7 @@ impl<'a> RequestOrResponse<'a> {
 					&& let Some(b) = cel::value_as_bytes(&v)
 				{
 					let mut rr = crate::http::RequestOrResponse::Request(r);
-					let _ = crate::http::apply_pseudo(&mut rr, k, b);
+					let _ = crate::http::apply_header_or_pseudo(&mut rr, k, b);
 				}
 			},
 			_ => {},
@@ -223,8 +242,21 @@ impl<'a> RequestOrResponse<'a> {
 }
 
 impl Transformation {
+	pub fn has_request(&self) -> bool {
+		self.request.body.is_some()
+			|| !self.request.add.is_empty()
+			|| !self.request.set.is_empty()
+			|| !self.request.remove.is_empty()
+	}
 	pub fn apply_request(&self, req: &mut crate::http::Request, exec: &cel::Executor<'_>) {
 		Self::apply(req.into(), self.request.as_ref(), exec)
+	}
+
+	pub fn has_response(&self) -> bool {
+		self.response.body.is_some()
+			|| !self.response.add.is_empty()
+			|| !self.response.set.is_empty()
+			|| !self.response.remove.is_empty()
 	}
 
 	pub fn apply_response(&self, resp: &mut crate::http::Response, exec: &cel::Executor<'_>) {

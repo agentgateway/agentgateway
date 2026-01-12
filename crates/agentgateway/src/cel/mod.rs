@@ -6,25 +6,21 @@ use std::fmt::{Debug, Display, Formatter};
 use std::net::IpAddr;
 use std::sync::Arc;
 
+use agent_core::strng::Strng;
+use bytes::Bytes;
+pub use cel::Value;
+use cel::{Context, ExecutionError, ParseError, ParseErrors, Program};
+use once_cell::sync::Lazy;
+use prometheus_client::encoding::EncodeLabelValue;
+use serde::{Deserialize, Serialize, Serializer};
+use tracing::log::debug;
+
 use crate::http::{apikey, basicauth, jwt};
 use crate::llm;
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::serdes::*;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::BackendInfo;
-use crate::types::discovery::Identity;
-use agent_core::strng::Strng;
-use bytes::Bytes;
-pub use cel::Value;
-use cel::objects::Key;
-use cel::{Context, ExecutionError, ParseError, ParseErrors, Program};
-pub use functions::{FLATTEN_LIST, FLATTEN_LIST_RECURSIVE, FLATTEN_MAP, FLATTEN_MAP_RECURSIVE};
-use once_cell::sync::Lazy;
-use prometheus_client::encoding::EncodeLabelValue;
-use serde::{Deserialize, Serialize, Serializer};
-
-mod functions;
-mod strings;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -98,7 +94,8 @@ impl<'de> Deserialize<'de> for Expression {
 		D: serde::Deserializer<'de>,
 	{
 		let e = String::deserialize(deserializer)?;
-		crate::cel::Expression::new(&e).map_err(|e| serde::de::Error::custom(e.to_string()))
+		// For local configs, we treat CEL as strict parsing
+		crate::cel::Expression::new_strict(&e).map_err(|e| serde::de::Error::custom(e.to_string()))
 	}
 }
 
@@ -123,7 +120,7 @@ impl Debug for Expression {
 
 fn root_context() -> Arc<Context<'static>> {
 	let mut ctx = Context::default();
-	functions::insert_all(&mut ctx);
+	agent_celx::insert_all(&mut ctx);
 	Arc::new(ctx)
 }
 
@@ -133,7 +130,6 @@ static ROOT_CONTEXT: Lazy<Arc<Context<'static>>> = Lazy::new(root_context);
 pub struct ContextBuilder {
 	pub attributes: HashSet<String>,
 	pub context: ExpressionContext,
-	pub log_format: Option<crate::LoggingFormat>,
 }
 
 impl Default for ContextBuilder {
@@ -143,11 +139,17 @@ impl Default for ContextBuilder {
 }
 
 impl ContextBuilder {
+	/// expensive_clone is just a normal clone but more clear that its NOT a cheap ref count
+	pub fn expensive_clone(&self) -> Self {
+		Self {
+			attributes: self.attributes.clone(),
+			context: self.context.clone(),
+		}
+	}
 	pub fn new() -> Self {
 		Self {
 			attributes: Default::default(),
 			context: Default::default(),
-			log_format: None,
 		}
 	}
 	/// register_expression registers the given expressions attributes as required attributes.
@@ -197,6 +199,7 @@ impl ContextBuilder {
 		}
 		self.context.response = Some(ResponseContext {
 			code: resp.status(),
+			headers: resp.headers().clone(),
 			body: None,
 		});
 		self.attributes.contains(RESPONSE_BODY_ATTRIBUTE)
@@ -223,9 +226,10 @@ impl ContextBuilder {
 		self.context.basic_auth = Some(info.clone())
 	}
 
-	pub fn with_extauthz(&mut self, req: &crate::http::Request) {
+	// returns true if there were any changes made
+	pub fn with_extauthz(&mut self, req: &crate::http::Request) -> bool {
 		if !self.attributes.contains(EXTAUTHZ_ATTRIBUTE) {
-			return;
+			return false;
 		}
 
 		// Extract dynamic metadata from ext_authz if present
@@ -243,6 +247,9 @@ impl ContextBuilder {
 					self.context.extauthz = Some(ext_authz_metadata.metadata.clone());
 				}
 			}
+			true
+		} else {
+			false
 		}
 	}
 
@@ -256,17 +263,7 @@ impl ContextBuilder {
 		self.context.source = Some(SourceContext {
 			address: tcp.peer_addr.ip(),
 			port: tcp.peer_addr.port(),
-			identity: tls.and_then(|t| t.src_identity.as_ref()).map(|m| match m {
-				Identity::Spiffe {
-					trust_domain,
-					namespace,
-					service_account,
-				} => IdentityContext {
-					trust_domain: trust_domain.clone(),
-					namespace: namespace.clone(),
-					service_account: service_account.clone(),
-				},
-			}),
+			tls: tls.and_then(|t| t.src_identity.clone()),
 		})
 	}
 
@@ -282,6 +279,7 @@ impl ContextBuilder {
 			input_tokens: info.input_tokens,
 			params: info.params.clone(),
 
+			count_tokens: None,
 			response_model: None,
 			output_tokens: None,
 			total_tokens: None,
@@ -316,6 +314,7 @@ impl ContextBuilder {
 		let resp = &info.response;
 		if let Some(o) = self.context.llm.as_mut() {
 			o.output_tokens = resp.output_tokens;
+			o.count_tokens = resp.count_tokens;
 			o.total_tokens = resp.total_tokens;
 			if let Some(pt) = resp.input_tokens {
 				// Better info, override
@@ -423,11 +422,45 @@ pub fn value_as_string(v: &Value) -> Option<String> {
 	}
 }
 
+pub fn value_as_header_value(v: &Value) -> Option<http::HeaderValue> {
+	match v {
+		Value::String(v) => Some(http::HeaderValue::from_str(v.as_str()).ok()?),
+		Value::Bool(v) => Some(http::HeaderValue::from_str(&v.to_string()).ok()?),
+		Value::Int(v) => Some(http::HeaderValue::from_str(&v.to_string()).ok()?),
+		Value::UInt(v) => Some(http::HeaderValue::from_str(&v.to_string()).ok()?),
+		Value::Bytes(v) => {
+			use base64::Engine;
+			let b = base64::prelude::BASE64_STANDARD.encode(v.as_ref());
+			Some(http::HeaderValue::from_str(&b).ok()?)
+		},
+		_ => None,
+	}
+}
+
 pub struct Executor<'a> {
 	ctx: Context<'a>,
 }
 impl Expression {
-	pub fn new(original_expression: impl Into<String>) -> Result<Self, Error> {
+	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
+	/// with an expression that always fails to evaluate
+	pub fn new_permissive(original_expression: impl Into<String>) -> Self {
+		let expr = original_expression.into();
+		match Self::new_strict(&expr) {
+			Ok(ok) => ok,
+			Err(err) => {
+				debug!("ignoring failed expression: {}", err);
+				Self {
+					attributes: Default::default(),
+					expression: Self::new_strict("fail('the expression could not be compiled')")
+						.expect("must be valid")
+						.expression,
+					original_expression: expr,
+				}
+			},
+		}
+	}
+	/// new_strict compiles the expression, and returns an error if its invalid.
+	pub fn new_strict(original_expression: impl Into<String>) -> Result<Self, Error> {
 		let original_expression = original_expression.into();
 		let expression = Program::compile(&original_expression)?;
 
@@ -549,6 +582,14 @@ pub struct ResponseContext {
 	/// The HTTP status code of the response.
 	pub code: ::http::StatusCode,
 
+	#[serde(with = "http_serde::header_map")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	/// The headers of the request.
+	pub headers: ::http::HeaderMap,
+
 	/// The body of the response. Warning: accessing the body will cause the body to be buffered.
 	pub body: Option<Bytes>,
 }
@@ -560,7 +601,8 @@ pub struct SourceContext {
 	/// The port of the downstream connection.
 	port: u16,
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
-	identity: Option<IdentityContext>,
+	#[serde(flatten)]
+	tls: Option<crate::transport::tls::TlsInfo>,
 }
 
 #[apply(schema_ser!)]
@@ -627,6 +669,10 @@ pub struct LLMContext {
 	/// The total number of tokens for the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	total_tokens: Option<u64>,
+	/// The number of tokens in the request, when using the token counting endpoint
+	/// These are not counted as 'input tokens' since they do not consume input tokens.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	count_tokens: Option<u64>,
 	/// The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	prompt: Option<Vec<llm::SimpleChatCompletionMessage>>,
@@ -699,6 +745,7 @@ fn properties<'e>(
 			}
 		},
 		Literal(_) => {},
+		// Inline(_) => {},
 		Ident(v) => {
 			if !v.starts_with("@") {
 				path.insert(0, v.as_str());
@@ -789,6 +836,10 @@ fn to_value(v: impl Serialize) -> Result<Value, Error> {
 	cel::to_value(v).map_err(|e| Error::Variable(e.to_string()))
 }
 
-#[cfg(any(test, feature = "internal_benches"))]
+#[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(any(test, feature = "internal_benches"))]
+#[path = "benches.rs"]
+mod benches;

@@ -48,9 +48,9 @@ pub mod yamlviajson {
 pub use macro_rules_attribute::{apply, attribute_alias};
 
 attribute_alias! {
-		#[apply(schema_de!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Deserialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(JsonSchema))];
-		#[apply(schema_ser!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Serialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(JsonSchema))];
-		#[apply(schema!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(JsonSchema))];
+		#[apply(schema_de!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Deserialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))];
+		#[apply(schema_ser!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Serialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))];
+		#[apply(schema!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))];
 }
 
 pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
@@ -329,4 +329,17 @@ impl FileInlineOrRemote {
 		};
 		serde_json::from_str(&s).map_err(Into::into)
 	}
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct RenamedField;
+
+pub fn renamed_field<'de, D>(old: &'static str, new: &'static str, _: D) -> Result<(), D::Error>
+where
+	D: Deserializer<'de>,
+{
+	Err(serde::de::Error::custom(format!(
+		"`{}` has been removed; move to `{}`",
+		old, new
+	)))
 }

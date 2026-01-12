@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_core::{strng, telemetry, version};
+use agentgateway::types::agent::ListenerTarget;
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use clap::Parser;
 use tracing::info;
@@ -96,7 +97,10 @@ fn main() -> anyhow::Result<()> {
 			if validate_only {
 				return validate(contents, filename).await;
 			}
-			let config = agentgateway::config::parse_config(contents, filename)?;
+			let mut config = agentgateway::config::parse_config(contents, filename)?;
+			// Capture the admin/runtime handle to ensure some background tasks (e.g., OTLP exporters created from dataplane
+			// policy initialization) run on the admin runtime rather than the dataplane runtime.
+			config.admin_runtime_handle = Some(tokio::runtime::Handle::current());
 			let _log_flush = telemetry::setup_logging(
 				&config.logging.level,
 				config.logging.format == LoggingFormat::Json,
@@ -131,7 +135,11 @@ async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result
 		let cs = cfg.read_to_string().await?;
 		agentgateway::types::local::NormalizedLocalConfig::from(
 			client,
-			strng::literal!("default/default"),
+			ListenerTarget {
+				gateway_name: strng::literal!("default"),
+				gateway_namespace: strng::literal!("default"),
+				listener_name: None,
+			},
 			cs.as_str(),
 		)
 		.await?;

@@ -22,6 +22,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		},
 		tags: Default::default(),
 	})?;
+	// Initialize OpenTelemetry resource defaults from gateway + proxy metadata
+	trc::set_resource_defaults_from_config(config.as_ref());
 	let shutdown = signal::Shutdown::new();
 	// Setup a drain channel. drain_tx is used to trigger a drain, which will complete
 	// once all drain_rx handlers are dropped.
@@ -70,7 +72,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		.map(|ca| agent_hbone::pool::WorkloadHBONEPool::new(config.hbone.clone(), ca));
 	// Build metrics and then the upstream client with metrics wired in
 	let sub_registry = metrics::sub_registry(&mut registry);
-	let tracer = trc::Tracer::new(&config.tracing)?;
+	let tracer = trc::Tracer::new(&config.tracing)?.map(Arc::new);
 	let metrics_handle = Arc::new(crate::metrics::Metrics::new(
 		sub_registry,
 		config.logging.excluded_metrics.clone(),
@@ -159,7 +161,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 pub struct Bound {
 	pub shutdown: signal::Shutdown,
 	drain_tx: drain::DrainTrigger,
-	tracer: Option<Tracer>,
+	tracer: Option<Arc<Tracer>>,
 }
 
 impl Bound {

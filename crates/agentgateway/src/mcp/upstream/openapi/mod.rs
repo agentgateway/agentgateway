@@ -2,21 +2,18 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use ::http::header::{HeaderName, HeaderValue};
+use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_TYPE};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
-use reqwest::header::{HeaderName, HeaderValue};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::json;
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
-use crate::types::agent::SimpleBackend;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -283,9 +280,6 @@ pub(crate) fn parse_openapi_schema(
 											let schema = resolve_nested_schema(schema_ref, open_api)?;
 											let body_schema =
 												serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
-											if body.required {
-												final_schema.required.push(BODY_NAME.clone());
-											}
 											final_schema
 												.properties
 												.insert(BODY_NAME.clone(), body_schema.clone());
@@ -369,6 +363,7 @@ pub(crate) fn parse_openapi_schema(
 								))?
 								.clone();
 							let tool = Tool {
+								meta: None,
 								annotations: None,
 								name: Cow::Owned(name.clone()),
 								description: Some(Cow::Owned(
@@ -503,13 +498,23 @@ fn normalize_url_path(prefix: &str, path: &str) -> String {
 #[derive(Debug)]
 pub struct Handler {
 	pub prefix: String,
-	pub client: PolicyClient,
+	pub http_client: super::McpHttpClient,
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
-	pub default_policies: BackendPolicies,
-	pub backend: SimpleBackend,
 }
 
 impl Handler {
+	pub fn new(
+		http_client: super::McpHttpClient,
+		tools: Vec<(Tool, UpstreamOpenAPICall)>,
+		prefix: String,
+	) -> Self {
+		Self {
+			prefix,
+			http_client,
+			tools,
+		}
+	}
+
 	pub async fn send_message(
 		&self,
 		request: JsonRpcRequest<ClientRequest>,
@@ -536,6 +541,7 @@ impl Handler {
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
 				id,
 				ListPromptsResult {
+					meta: None,
 					next_cursor: None,
 					prompts: vec![],
 				},
@@ -543,6 +549,7 @@ impl Handler {
 			ClientRequest::ListResourcesRequest(_) => Messages::from_result(
 				id,
 				ListResourcesResult {
+					meta: None,
 					next_cursor: None,
 					resources: vec![],
 				},
@@ -550,6 +557,7 @@ impl Handler {
 			ClientRequest::ListResourceTemplatesRequest(_) => Messages::from_result(
 				id,
 				ListResourceTemplatesResult {
+					meta: None,
 					next_cursor: None,
 					resource_templates: vec![],
 				},
@@ -558,6 +566,7 @@ impl Handler {
 				Messages::from_result(id, ReadResourceResult { contents: vec![] })
 			},
 			ClientRequest::PingRequest(_)
+			| ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)
 			| ClientRequest::UnsubscribeRequest(_) => Messages::empty(),
@@ -581,6 +590,7 @@ impl Handler {
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,
 				ListToolsResult {
+					meta: None,
 					next_cursor: None,
 					tools: self.tools(),
 				},
@@ -659,7 +669,7 @@ impl Handler {
 		let base_url = format!(
 			"{}://{}{}",
 			"http",
-			self.backend.hostport(),
+			self.http_client.backend().hostport(),
 			normalized_path
 		);
 
@@ -746,17 +756,23 @@ impl Handler {
 
 		ctx.apply(&mut request);
 
-		// Make the request
-		let response = self
-			.client
-			.call_with_default_policies(request, &self.backend, self.default_policies.clone())
-			.await?;
+		let response = self.http_client.call(request).await?;
 
 		// Read response body
 		let status = response.status();
 		// Check if the request was successful
 		if status.is_success() {
-			let body = json::from_response_body::<serde_json::Value>(response).await?;
+			let lim = crate::http::response_buffer_limit(&response);
+			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
+			let body_bytes = crate::http::compression::to_bytes_with_decompression(
+				response.into_body(),
+				content_encoding,
+				lim,
+			)
+			.await?
+			.1;
+
+			let body = serde_json::from_slice::<serde_json::Value>(&body_bytes)?;
 			Ok(body)
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);

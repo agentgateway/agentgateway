@@ -4,9 +4,9 @@ use futures_core::stream::BoxStream;
 use futures_util::StreamExt;
 use itertools::Itertools;
 use rmcp::model::{RequestId, ServerJsonRpcMessage, ServerResult};
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 
 use crate::mcp::ClientError;
+use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::*;
 
 pub(crate) struct Messages(BoxStream<'static, Result<ServerJsonRpcMessage, ClientError>>);
@@ -65,6 +65,7 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 							.and_then(|item| {
 								item
 									.data
+									.filter(|data| !data.is_empty())
 									.map(|data| {
 										serde_json::from_str::<ServerJsonRpcMessage>(&data).map_err(ClientError::new)
 									})

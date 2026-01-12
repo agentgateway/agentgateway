@@ -1,4 +1,3 @@
-use std::cmp;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
@@ -28,30 +27,6 @@ pub struct Policy {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub backend_request_timeout: Option<Duration>,
-}
-
-impl Policy {
-	pub fn effective_timeout(&self) -> Option<Duration> {
-		match self {
-			Policy {
-				request_timeout: Some(request_timeout),
-				backend_request_timeout: Some(backend_request_timeout),
-			} => {
-				// We do not distinguish these yet, so just take min
-				// TODO: one should apply to per-request attempt
-				Some(cmp::min(*request_timeout, *backend_request_timeout))
-			},
-			Policy {
-				request_timeout: Some(request_timeout),
-				..
-			} => Some(*request_timeout),
-			Policy {
-				backend_request_timeout: Some(backend_request_timeout),
-				..
-			} => Some(*backend_request_timeout),
-			_ => None,
-		}
-	}
 }
 
 pub enum BodyTimeout {

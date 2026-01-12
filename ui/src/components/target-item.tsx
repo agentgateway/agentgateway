@@ -1,8 +1,11 @@
+"use client";
+
 import { TargetType, TargetWithType } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2 } from "lucide-react";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useXdsMode } from "@/hooks/use-xds-mode";
 
 interface TargetItemProps {
   target: TargetWithType;
@@ -37,6 +40,7 @@ export default function TargetItem({
   isUpdating,
 }: TargetItemProps) {
   const targetType = getTargetType(target as TargetWithType);
+  const xds = useXdsMode();
 
   return (
     <div className="flex items-center justify-between w-full">
@@ -48,16 +52,24 @@ export default function TargetItem({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="text-xs text-muted-foreground truncate max-w-[400px]">
-                  {target.sse && `${target.sse.host}:${target.sse.port}${target.sse.path}`}
+                  {target.mcp && `${target.mcp.host}`}
+                  {target.sse && `${target.sse.host}`}
                   {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
-                  {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
+                  {target.openapi &&
+                    `${target.openapi.host}${
+                      typeof target.openapi.port === "number" ? `:${target.openapi.port}` : ""
+                    }`}
                   {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                {target.sse && `${target.sse.host}:${target.sse.port}${target.sse.path}`}
+                {target.mcp && `${target.mcp.host}`}
+                {target.sse && `${target.sse.host}`}
                 {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
-                {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
+                {target.openapi &&
+                  `${target.openapi.host}${
+                    typeof target.openapi.port === "number" ? `:${target.openapi.port}` : ""
+                  }`}
                 {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
               </TooltipContent>
             </Tooltip>
@@ -82,8 +94,8 @@ export default function TargetItem({
           variant="ghost"
           size="icon"
           onClick={() => onDelete(index)}
-          className="h-8 w-8 ml-2 text-muted-foreground hover:bg-primary/20 flex-shrink-0"
-          disabled={isUpdating}
+          className={`h-8 w-8 ml-2 text-muted-foreground hover:bg-primary/20 flex-shrink-0 ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+          disabled={isUpdating || xds}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -92,8 +104,8 @@ export default function TargetItem({
           variant="ghost"
           size="icon"
           onClick={() => onEdit(target)}
-          className="h-8 w-8 ml-2 text-muted-foreground hover:bg-primary/20 flex-shrink-0"
-          disabled={isUpdating}
+          className={`h-8 w-8 ml-2 text-muted-foreground hover:bg-primary/20 flex-shrink-0 ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+          disabled={isUpdating || xds}
         >
           <Edit2 className="h-4 w-4" />
         </Button>

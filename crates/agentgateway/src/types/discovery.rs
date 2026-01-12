@@ -516,6 +516,9 @@ pub enum LoadBalancerMode {
 	Strict,
 	// Prefer select endpoints matching all LoadBalancerScopes when picking endpoints but allow mismatches
 	Failover,
+	// In PASSTHROUGH mode, endpoint selection will not be done and traffic passes directly through to the original
+	// destination address.
+	Passthrough,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
@@ -838,6 +841,7 @@ impl From<workload::load_balancing::Mode> for LoadBalancerMode {
 		match value {
 			workload::load_balancing::Mode::Strict => LoadBalancerMode::Strict,
 			workload::load_balancing::Mode::Failover => LoadBalancerMode::Failover,
+			workload::load_balancing::Mode::Passthrough => LoadBalancerMode::Passthrough,
 			workload::load_balancing::Mode::UnspecifiedMode => LoadBalancerMode::Standard,
 		}
 	}

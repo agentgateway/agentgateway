@@ -9,7 +9,7 @@ use tracing::{Level, instrument};
 
 use crate::cel::ContextBuilder;
 use crate::http::auth::BackendAuth;
-use crate::http::authorization::{HTTPAuthorizationSet, RuleSets};
+use crate::http::authorization::HTTPAuthorizationSet;
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
 use crate::http::{ext_authz, ext_proc, filters, remoteratelimit, retry, timeout};
@@ -18,31 +18,40 @@ use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{
-	A2aPolicy, Backend, BackendName, BackendPolicy, BackendWithPolicies, Bind, BindName,
-	FrontendPolicy, GatewayName, Listener, ListenerKey, ListenerSet, McpAuthentication, PolicyName,
-	PolicyTarget, Route, RouteKey, RouteName, RouteRuleName, ServiceName, SubBackendName, TCPRoute,
-	TargetedPolicy, TrafficPolicy,
+	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
+	BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
+	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TrafficPolicy,
 };
-use crate::types::frontend;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
 	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Policy as XdsPolicy,
 	Resource as ADPResource, Route as XdsRoute, TcpRoute as XdsTcpRoute,
 };
+use crate::types::{agent, frontend};
 use crate::*;
 
 #[derive(Debug)]
+enum ResourceKind {
+	Policy(PolicyKey),
+	Bind(BindKey),
+	Route(RouteKey),
+	TcpRoute(RouteKey),
+	Listener(ListenerKey),
+	Backend(ListenerKey),
+}
+
+#[derive(Debug)]
 pub struct Store {
-	/// Allows for lookup of services by network address, the service's xds secondary key.
-	by_name: HashMap<BindName, Arc<Bind>>,
+	binds: HashMap<BindKey, Arc<Bind>>,
+	resources: HashMap<Strng, ResourceKind>,
 
-	policies_by_name: HashMap<PolicyName, Arc<TargetedPolicy>>,
-	policies_by_target: HashMap<PolicyTarget, HashSet<PolicyName>>,
+	policies_by_key: HashMap<PolicyKey, Arc<TargetedPolicy>>,
+	policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
 
-	backends_by_name: HashMap<BackendName, Arc<BackendWithPolicies>>,
+	backends: HashMap<BackendKey, Arc<BackendWithPolicies>>,
 
 	// Listeners we got before a Bind arrived
-	staged_listeners: HashMap<BindName, HashMap<ListenerKey, Listener>>,
+	staged_listeners: HashMap<BindKey, HashMap<ListenerKey, Listener>>,
 	staged_routes: HashMap<ListenerKey, HashMap<RouteKey, Route>>,
 	staged_tcp_routes: HashMap<ListenerKey, HashMap<RouteKey, TCPRoute>>,
 
@@ -55,7 +64,7 @@ pub struct FrontendPolices {
 	pub tls: Option<frontend::TLS>,
 	pub tcp: Option<frontend::TCP>,
 	pub access_log: Option<frontend::LoggingPolicy>,
-	pub tracing: Option<()>,
+	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 }
 
 impl FrontendPolices {
@@ -86,10 +95,21 @@ pub struct BackendPolicies {
 	pub llm: Option<Arc<llm::Policy>>,
 	pub inference_routing: Option<InferenceRouting>,
 
+	pub mcp_authorization: Option<McpAuthorizationSet>,
+	pub mcp_authentication: Option<McpAuthentication>,
+
+	pub http: Option<types::backend::HTTP>,
+	pub tcp: Option<types::backend::TCP>,
+
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: Option<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub request_mirror: Vec<filters::RequestMirror>,
+
+	/// Internal-only override for destination endpoint selection.
+	/// Used for stateful MCP routing (session affinity).
+	/// Not exposed through config - set programmatically only.
+	pub override_dest: Option<std::net::SocketAddr>,
 }
 
 impl BackendPolicies {
@@ -101,7 +121,11 @@ impl BackendPolicies {
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
+			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
+			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			inference_routing: other.inference_routing.or(self.inference_routing),
+			http: other.http.or(self.http),
+			tcp: other.tcp.or(self.tcp),
 			request_header_modifier: other
 				.request_header_modifier
 				.or(self.request_header_modifier),
@@ -114,6 +138,7 @@ impl BackendPolicies {
 			} else {
 				other.request_mirror
 			},
+			override_dest: other.override_dest.or(self.override_dest),
 		}
 	}
 	/// build the inference routing configuration. This may be a NO-OP config.
@@ -146,6 +171,7 @@ pub struct RoutePolicies {
 	pub response_header_modifier: Option<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub url_rewrite: Option<filters::UrlRewrite>,
+	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub direct_response: Option<filters::DirectResponse>,
 	pub cors: Option<http::cors::Cors>,
@@ -167,7 +193,13 @@ impl GatewayPolicies {
 			for expr in xfm.expressions() {
 				ctx.register_expression(expr)
 			}
-		};
+		}
+
+		if let Some(extauthz) = &self.ext_authz {
+			for expr in extauthz.expressions() {
+				ctx.register_expression(expr)
+			}
+		}
 	}
 }
 
@@ -186,6 +218,11 @@ impl RoutePolicies {
 		if let Some(rrl) = &self.authorization {
 			rrl.register(ctx)
 		};
+		if let Some(extauthz) = &self.ext_authz {
+			for expr in extauthz.expressions() {
+				ctx.register_expression(expr)
+			}
+		}
 	}
 }
 
@@ -223,15 +260,28 @@ impl LLMRequestPolicies {
 			return Arc::new(route_policies);
 		};
 
+		// Backend aliases replace route aliases entirely (consistent with defaults/overrides)
+		let (merged_aliases, merged_wildcard_patterns) = if be.model_aliases.is_empty() {
+			(re.model_aliases.clone(), Arc::clone(&re.wildcard_patterns))
+		} else {
+			(be.model_aliases.clone(), Arc::clone(&be.wildcard_patterns))
+		};
+
 		route_policies.llm = Some(Arc::new(llm::Policy {
 			prompt_guard: be.prompt_guard.clone().or_else(|| re.prompt_guard.clone()),
 			defaults: be.defaults.clone().or_else(|| re.defaults.clone()),
 			overrides: be.overrides.clone().or_else(|| re.overrides.clone()),
 			prompts: be.prompts.clone().or_else(|| re.prompts.clone()),
-			model_aliases: if be.model_aliases.is_empty() {
-				re.model_aliases.clone()
+			model_aliases: merged_aliases,
+			wildcard_patterns: merged_wildcard_patterns,
+			prompt_caching: be
+				.prompt_caching
+				.clone()
+				.or_else(|| re.prompt_caching.clone()),
+			routes: if be.routes.is_empty() {
+				re.routes.clone()
 			} else {
-				be.model_aliases.clone()
+				be.routes.clone()
 			},
 		}));
 		Arc::new(route_policies)
@@ -242,7 +292,7 @@ impl LLMRequestPolicies {
 pub struct LLMResponsePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
-	pub prompt_guard: Option<ResponseGuard>,
+	pub prompt_guard: Vec<ResponseGuard>,
 }
 
 impl Default for Store {
@@ -250,14 +300,23 @@ impl Default for Store {
 		Self::new()
 	}
 }
+
+// RoutePath describes the objects traversed to reach the given route
+#[derive(Debug, Clone)]
+pub struct RoutePath<'a> {
+	pub listener: &'a ListenerName,
+	pub route: &'a RouteName,
+}
+
 impl Store {
 	pub fn new() -> Self {
 		let (tx, _) = tokio::sync::broadcast::channel(1000);
 		Self {
-			by_name: Default::default(),
-			policies_by_name: Default::default(),
+			binds: Default::default(),
+			resources: Default::default(),
+			policies_by_key: Default::default(),
 			policies_by_target: Default::default(),
-			backends_by_name: Default::default(),
+			backends: Default::default(),
 			staged_routes: Default::default(),
 			staged_listeners: Default::default(),
 			staged_tcp_routes: Default::default(),
@@ -271,27 +330,18 @@ impl Store {
 		tokio_stream::wrappers::BroadcastStream::new(sub)
 	}
 
-	pub fn route_policies(
-		&self,
-		route_rule: Option<RouteRuleName>,
-		route: RouteName,
-		listener: ListenerKey,
-		gateway: GatewayName,
-		inline: &[TrafficPolicy],
-	) -> RoutePolicies {
-		// Changes we must do:
-		// * Index the store by the target
-		// * Avoid the N lookups, or at least the boilerplate, for each type
-		// Changes we may want to consider:
-		// * We do this lookup under one lock, but we will lookup backend rules and listener rules under a different
-		//   lock. This can lead to inconsistent state..
-		let gateway = self.policies_by_target.get(&PolicyTarget::Gateway(gateway));
+	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[TrafficPolicy]) -> RoutePolicies {
+		let &RoutePath { listener, route } = path;
+		let gateway = self
+			.policies_by_target
+			.get(&listener.as_gateway_target_ref());
 		let listener = self
 			.policies_by_target
-			.get(&PolicyTarget::Listener(listener));
-		let route = self.policies_by_target.get(&PolicyTarget::Route(route));
-		let route_rule =
-			route_rule.and_then(|rr| self.policies_by_target.get(&PolicyTarget::RouteRule(rr)));
+			.get(&listener.as_listener_target_ref());
+		let route_rule = self
+			.policies_by_target
+			.get(&route.as_route_rule_target_ref());
+		let route = self.policies_by_target.get(&route.as_route_target_ref());
 		let rules = route_rule
 			.iter()
 			.copied()
@@ -299,7 +349,7 @@ impl Store {
 			.chain(route.iter().copied().flatten())
 			.chain(listener.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_name.get(n))
+			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_traffic_route_phase());
 		let rules = inline.iter().chain(rules);
 
@@ -364,6 +414,9 @@ impl Store {
 				TrafficPolicy::UrlRewrite(p) => {
 					pol.url_rewrite.get_or_insert_with(|| p.clone());
 				},
+				TrafficPolicy::HostRewrite(p) => {
+					pol.hostname_rewrite.get_or_insert(*p);
+				},
 				TrafficPolicy::RequestMirror(p) => {
 					if pol.request_mirror.is_empty() {
 						pol.request_mirror = p.clone();
@@ -384,17 +437,15 @@ impl Store {
 		pol
 	}
 
-	pub fn gateway_policies(&self, listener: ListenerKey, gateway: GatewayName) -> GatewayPolicies {
-		let gateway = self.policies_by_target.get(&PolicyTarget::Gateway(gateway));
-		let listener = self
-			.policies_by_target
-			.get(&PolicyTarget::Listener(listener));
+	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
+		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
+		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
 		let rules = listener
 			.iter()
 			.copied()
 			.flatten()
 			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_name.get(n))
+			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
 
 		let mut pol = GatewayPolicies::default();
@@ -427,29 +478,89 @@ impl Store {
 		pol
 	}
 
+	// sub_backend_policies looks up the sub-backends policies. Generally, these will be queried separately
+	// from the primary backend policies and then merged, just due to the lifecycle of when the sub-backend
+	// is selected.
+	pub fn sub_backend_policies(
+		&self,
+		sub_backend: BackendTargetRef,
+		inline_policies: Option<&[BackendPolicy]>,
+	) -> BackendPolicies {
+		self.internal_backend_policies(
+			None,
+			Some(sub_backend),
+			if let Some(s) = &inline_policies {
+				std::slice::from_ref(s)
+			} else {
+				&[]
+			},
+			None,
+			None,
+		)
+	}
+
+	// inline_backend_policies flattens out a list of inline policies,
+	pub fn inline_backend_policies(&self, inline_policies: &[BackendPolicy]) -> BackendPolicies {
+		self.internal_backend_policies(
+			None,
+			None,
+			std::slice::from_ref(&inline_policies),
+			None,
+			None,
+		)
+	}
+
 	pub fn backend_policies(
 		&self,
-		backend: Option<BackendName>,
-		service: Option<ServiceName>,
-		sub_backend: Option<SubBackendName>,
-		// Set of inline policies. Last one wins
+		backend: BackendTargetRef,
 		inline_policies: &[&[BackendPolicy]],
+		path: Option<RoutePath>,
+	) -> BackendPolicies {
+		self.internal_backend_policies(
+			Some(backend.strip_section()),
+			Some(backend.clone()),
+			inline_policies,
+			path.as_ref().map(|p| p.listener),
+			path.as_ref().map(|p| p.route),
+		)
+	}
+
+	#[allow(clippy::too_many_arguments)]
+	fn internal_backend_policies(
+		&self,
+		// backend with section stripped, always
+		backend: Option<BackendTargetRef>,
+		// backend with section retained.
+		// Note this differs from other types, where just one is passed in and we strip them
+		sub_backend: Option<BackendTargetRef>,
+		inline_policies: &[&[BackendPolicy]],
+		gateway: Option<&ListenerName>,
+		route: Option<&RouteName>,
 	) -> BackendPolicies {
 		let backend_rules =
-			backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::Backend(t)));
-		let service_rules =
-			service.and_then(|t| self.policies_by_target.get(&PolicyTarget::Service(t)));
+			backend.and_then(|t| self.policies_by_target.get(&PolicyTargetRef::Backend(t)));
 		let sub_backend_rules =
-			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTarget::SubBackend(t)));
+			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTargetRef::Backend(t)));
+		let route_rule_rules =
+			route.and_then(|t| self.policies_by_target.get(&t.as_route_rule_target_ref()));
+		let route_rules = route.and_then(|t| self.policies_by_target.get(&t.as_route_target_ref()));
+		let listener_rules =
+			gateway.and_then(|t| self.policies_by_target.get(&t.as_listener_target_ref()));
+		let gateway_rules =
+			gateway.and_then(|t| self.policies_by_target.get(&t.as_gateway_target_ref()));
 
-		// Subbackend > Backend > Service
-		let rules = sub_backend_rules
+		// RouteRule > Route > SubBackend > Backend > Service > Gateway
+		// Most specific (route context) to least specific (gateway-wide default)
+		let rules = route_rule_rules
 			.iter()
 			.copied()
 			.flatten()
+			.chain(sub_backend_rules.iter().copied().flatten())
+			.chain(route_rules.iter().copied().flatten())
 			.chain(backend_rules.iter().copied().flatten())
-			.chain(service_rules.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_name.get(n))
+			.chain(listener_rules.iter().copied().flatten())
+			.chain(gateway_rules.iter().copied().flatten())
+			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_backend());
 		let rules = inline_policies
 			.iter()
@@ -457,9 +568,9 @@ impl Store {
 			.flat_map(|p| p.iter())
 			.chain(rules);
 
+		let mut mcp_authz = Vec::new();
 		let mut pol = BackendPolicies::default();
 		for rule in rules {
-			tracing::error!("howardjohn: resolve pol {rule:?}");
 			match &rule {
 				BackendPolicy::A2a(p) => {
 					pol.a2a.get_or_insert_with(|| p.clone());
@@ -475,6 +586,13 @@ impl Store {
 				},
 				BackendPolicy::AI(p) => {
 					pol.llm.get_or_insert_with(|| p.clone());
+				},
+
+				BackendPolicy::HTTP(p) => {
+					pol.http.get_or_insert_with(|| p.clone());
+				},
+				BackendPolicy::TCP(p) => {
+					pol.tcp.get_or_insert_with(|| p.clone());
 				},
 
 				BackendPolicy::RequestHeaderModifier(p) => {
@@ -493,64 +611,33 @@ impl Store {
 						pol.request_mirror = p.clone();
 					}
 				},
-
-				// TODO??
-				BackendPolicy::McpAuthorization(_) => {},
-				BackendPolicy::McpAuthentication(_) => {},
+				BackendPolicy::McpAuthorization(p) => {
+					// Authorization policies merge, unlike others
+					mcp_authz.push(p.clone().into_inner());
+				},
+				BackendPolicy::McpAuthentication(p) => {
+					pol.mcp_authentication.get_or_insert_with(|| p.clone());
+				},
 			}
+		}
+		if !mcp_authz.is_empty() {
+			pol.mcp_authorization = Some(McpAuthorizationSet::new(mcp_authz.into()));
 		}
 		pol
 	}
 
-	pub fn mcp_policies(
-		&self,
-		backend: BackendName,
-	) -> (McpAuthorizationSet, Option<McpAuthentication>) {
-		let t = PolicyTarget::Backend(backend);
-		let rs = McpAuthorizationSet::new(RuleSets::from(
-			self
-				.policies_by_name
-				.values()
-				.filter_map(|p| {
-					if p.target != t {
-						return None;
-					};
-					match p.policy.as_backend() {
-						Some(BackendPolicy::McpAuthorization(authz)) => Some(authz.clone().into_inner()),
-						_ => None,
-					}
-				})
-				.collect_vec(),
-		));
-		let auth = self
-			// This is a terrible approach!
-			.policies_by_name
-			.values()
-			.filter_map(|p| {
-				if p.target != t {
-					return None;
-				};
-				match p.policy.as_backend() {
-					Some(BackendPolicy::McpAuthentication(ba)) => Some(ba.clone()),
-					_ => None,
-				}
-			})
-			.next();
-		(rs, auth)
-	}
-
-	pub fn frontend_policies(&self, gateway: GatewayName) -> FrontendPolices {
-		let gw_rules = self.policies_by_target.get(&PolicyTarget::Gateway(gateway));
+	pub fn frontend_policies(&self, gateway: PolicyTargetRef) -> FrontendPolices {
+		let gw_rules = self.policies_by_target.get(&gateway);
 		let rules = gw_rules
 			.iter()
 			.copied()
 			.flatten()
-			.filter_map(|n| self.policies_by_name.get(n))
+			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_frontend());
 
 		let mut pol = FrontendPolices::default();
 		for rule in rules {
-			match &rule {
+			match rule {
 				FrontendPolicy::HTTP(p) => {
 					pol.http.get_or_insert_with(|| p.clone());
 				},
@@ -563,25 +650,41 @@ impl Store {
 				FrontendPolicy::AccessLog(p) => {
 					pol.access_log.get_or_insert_with(|| p.clone());
 				},
-				FrontendPolicy::Tracing(_p) => {
-					pol.tracing.get_or_insert(());
+				FrontendPolicy::Tracing(p) => {
+					pol.tracing.get_or_insert_with(|| p.clone());
 				},
 			}
 		}
 		pol
 	}
 
-	pub fn listeners(&self, bind: BindName) -> Option<ListenerSet> {
-		// TODO: clone here is terrible!!!
-		self.by_name.get(&bind).map(|b| b.listeners.clone())
+	pub fn bind(&self, bind: &BindKey) -> Option<Arc<Bind>> {
+		self.binds.get(bind).cloned()
+	}
+
+	/// find_bind looks up a bind by address. Typically, this is done by the kernel for us, but in some cases
+	/// we do userspace routing to a bind.
+	pub fn find_bind(&self, want: SocketAddr) -> Option<Arc<Bind>> {
+		self
+			.binds
+			.values()
+			.find(|b| {
+				let have = b.address;
+				if have.ip().is_unspecified() {
+					have.port() == want.port()
+				} else {
+					have == want
+				}
+			})
+			.cloned()
 	}
 
 	pub fn all(&self) -> Vec<Arc<Bind>> {
-		self.by_name.values().cloned().collect()
+		self.binds.values().cloned().collect()
 	}
 
-	pub fn backend(&self, r: &BackendName) -> Option<Arc<BackendWithPolicies>> {
-		self.backends_by_name.get(r).cloned()
+	pub fn backend(&self, r: &BackendKey) -> Option<Arc<BackendWithPolicies>> {
+		self.backends.get(r).cloned()
 	}
 
 	#[instrument(
@@ -590,8 +693,8 @@ impl Store {
         skip_all,
         fields(bind),
     )]
-	pub fn remove_bind(&mut self, bind: BindName) {
-		if let Some(old) = self.by_name.remove(&bind) {
+	pub fn remove_bind(&mut self, bind: BindKey) {
+		if let Some(old) = self.binds.remove(&bind) {
 			let _ = self.tx.send(Event::Remove(old));
 		}
 	}
@@ -601,8 +704,8 @@ impl Store {
         skip_all,
         fields(bind),
     )]
-	pub fn remove_policy(&mut self, pol: PolicyName) {
-		if let Some(old) = self.policies_by_name.remove(&pol)
+	pub fn remove_policy(&mut self, pol: PolicyKey) {
+		if let Some(old) = self.policies_by_key.remove(&pol)
 			&& let Some(o) = self.policies_by_target.get_mut(&old.target)
 		{
 			o.remove(&pol);
@@ -614,8 +717,8 @@ impl Store {
         skip_all,
         fields(bind),
     )]
-	pub fn remove_backend(&mut self, backend: BackendName) {
-		self.backends_by_name.remove(&backend);
+	pub fn remove_backend(&mut self, backend: BackendKey) {
+		self.backends.remove(&backend);
 	}
 
 	#[instrument(
@@ -626,7 +729,7 @@ impl Store {
     )]
 	pub fn remove_listener(&mut self, listener: ListenerKey) {
 		let Some(bind) = self
-			.by_name
+			.binds
 			.values()
 			.find(|v| v.listeners.contains(&listener))
 		else {
@@ -644,7 +747,7 @@ impl Store {
         fields(route),
     )]
 	pub fn remove_route(&mut self, route: RouteKey) {
-		let Some((_, bind, listener)) = self.by_name.iter().find_map(|(k, v)| {
+		let Some((_, bind, listener)) = self.binds.iter().find_map(|(k, v)| {
 			let l = v.listeners.iter().find(|l| l.routes.contains(&route));
 			l.map(|l| (k.clone(), v.clone(), l.clone()))
 		}) else {
@@ -664,7 +767,7 @@ impl Store {
         fields(tcp_route),
     )]
 	pub fn remove_tcp_route(&mut self, tcp_route: RouteKey) {
-		let Some((_, bind, listener)) = self.by_name.iter().find_map(|(k, v)| {
+		let Some((_, bind, listener)) = self.binds.iter().find_map(|(k, v)| {
 			let l = v
 				.listeners
 				.iter()
@@ -708,46 +811,39 @@ impl Store {
 			bind.listeners.insert(v)
 		}
 		let arc = Arc::new(bind);
-		self.by_name.insert(arc.key.clone(), arc.clone());
+		self.binds.insert(arc.key.clone(), arc.clone());
 		// ok to have no subs
 		let _ = self.tx.send(Event::Add(arc));
 	}
 
-	pub fn insert_backend(&mut self, b: BackendWithPolicies) {
-		let name = b.backend.name();
+	pub fn insert_backend(&mut self, key: BackendKey, b: BackendWithPolicies) {
 		if let Backend::AI(_, t) = &b.backend
 			&& t.providers.any(|p| p.tokenize)
 		{
 			preload_tokenizers()
 		}
 		let arc = Arc::new(b);
-		self.backends_by_name.insert(name, arc);
+		self.backends.insert(key, arc);
 	}
 
-	#[instrument(
-        level = Level::INFO,
-        name="insert_policy",
-        skip_all,
-        fields(pol=%pol.name),
-    )]
 	pub fn insert_policy(&mut self, pol: TargetedPolicy) {
 		let pol = Arc::new(pol);
-		if let Some(old) = self.policies_by_name.insert(pol.name.clone(), pol.clone()) {
+		if let Some(old) = self.policies_by_key.insert(pol.key.clone(), pol.clone()) {
 			// Remove the old target. We may add it back, though.
 			if let Some(o) = self.policies_by_target.get_mut(&old.target) {
-				o.remove(&pol.name);
+				o.remove(&pol.key);
 			}
 		}
 		self
 			.policies_by_target
 			.entry(pol.target.clone())
 			.or_default()
-			.insert(pol.name.clone());
+			.insert(pol.key.clone());
 	}
 
-	pub fn insert_listener(&mut self, mut lis: Listener, bind_name: BindName) {
-		debug!(listener=%lis.name,bind=%bind_name, "insert listener");
-		if let Some(b) = self.by_name.get(&bind_name) {
+	pub fn insert_listener(&mut self, mut lis: Listener, bind_name: BindKey) {
+		debug!(listener=%lis.key,bind=%bind_name, "insert listener");
+		if let Some(b) = self.binds.get(&bind_name) {
 			let mut bind = Arc::unwrap_or_clone(b.clone());
 			// If this is a listener update, copy things over
 			if let Some(old) = bind.listeners.remove(&lis.key) {
@@ -795,9 +891,9 @@ impl Store {
 	}
 
 	pub fn insert_route(&mut self, r: Route, ln: ListenerKey) {
-		debug!(listener=%ln,route=%r.key, "insert route");
+		debug!(listener=%ln, route=%r.key, "insert route");
 		let Some((bind, lis)) = self
-			.by_name
+			.binds
 			.values()
 			.find_map(|l| l.listeners.get(&ln).map(|ls| (l, ls)))
 		else {
@@ -819,7 +915,7 @@ impl Store {
 	pub fn insert_tcp_route(&mut self, r: TCPRoute, ln: ListenerKey) {
 		debug!(listener=%ln,route=%r.key, "insert tcp route");
 		let Some((bind, lis)) = self
-			.by_name
+			.binds
 			.values()
 			.find_map(|l| l.listeners.get(&ln).map(|ls| (l, ls)))
 		else {
@@ -840,44 +936,59 @@ impl Store {
 
 	fn remove_resource(&mut self, res: &Strng) {
 		trace!("removing res {res}...");
-		let Some((res, res_name)) = res.split_once("/") else {
-			trace!("unknown resource name {res}");
+		let Some(old) = self.resources.remove(res) else {
+			debug!("unknown resource name {res}");
 			return;
 		};
-		match res {
-			"bind" => {
-				self.remove_bind(strng::new(res_name));
-			},
-			"listener" => {
-				self.remove_listener(strng::new(res_name));
-			},
-			"route" => {
-				self.remove_route(strng::new(res_name));
-			},
-			"policy" => {
-				self.remove_policy(strng::new(res_name));
-			},
-			"backend" => {
-				self.remove_backend(strng::new(res_name));
-			},
-			"tcp_route" => {
-				self.remove_tcp_route(strng::new(res_name));
-			},
-			_ => {
-				error!("unknown resource kind {res}");
-			},
+		match old {
+			ResourceKind::Policy(n) => self.remove_policy(n),
+			ResourceKind::Bind(n) => self.remove_bind(n),
+			ResourceKind::Route(n) => self.remove_route(n),
+			ResourceKind::TcpRoute(n) => self.remove_tcp_route(n),
+			ResourceKind::Listener(n) => self.remove_listener(n),
+			ResourceKind::Backend(n) => self.remove_backend(n),
 		}
 	}
 
-	fn insert_xds(&mut self, res: ADPResource) -> anyhow::Result<()> {
-		trace!("insert resource {res:?}");
+	fn insert_xds(&mut self, name: Strng, res: ADPResource) -> anyhow::Result<()> {
+		trace!(%name, "insert resource {res:?}");
 		match res.kind {
-			Some(XdsKind::Bind(w)) => self.insert_xds_bind(w),
-			Some(XdsKind::Listener(w)) => self.insert_xds_listener(w),
-			Some(XdsKind::Route(w)) => self.insert_xds_route(w),
-			Some(XdsKind::TcpRoute(w)) => self.insert_xds_tcp_route(w),
-			Some(XdsKind::Backend(w)) => self.insert_xds_backend(w),
-			Some(XdsKind::Policy(w)) => self.insert_xds_policy(w),
+			Some(XdsKind::Bind(w)) => {
+				self
+					.resources
+					.insert(name, ResourceKind::Bind(strng::new(&w.key)));
+				self.insert_xds_bind(w)
+			},
+			Some(XdsKind::Listener(w)) => {
+				self
+					.resources
+					.insert(name, ResourceKind::Listener(strng::new(&w.key)));
+				self.insert_xds_listener(w)
+			},
+			Some(XdsKind::Route(w)) => {
+				self
+					.resources
+					.insert(name, ResourceKind::Route(strng::new(&w.key)));
+				self.insert_xds_route(w)
+			},
+			Some(XdsKind::TcpRoute(w)) => {
+				self
+					.resources
+					.insert(name, ResourceKind::TcpRoute(strng::new(&w.key)));
+				self.insert_xds_tcp_route(w)
+			},
+			Some(XdsKind::Backend(w)) => {
+				self
+					.resources
+					.insert(name, ResourceKind::Backend(strng::new(&w.key)));
+				self.insert_xds_backend(w)
+			},
+			Some(XdsKind::Policy(w)) => {
+				self
+					.resources
+					.insert(name, ResourceKind::Policy(strng::new(&w.key)));
+				self.insert_xds_policy(w)
+			},
 			_ => Err(anyhow::anyhow!("unknown resource type")),
 		}
 	}
@@ -886,7 +997,7 @@ impl Store {
 		let mut bind = Bind::try_from(&raw)?;
 		// If XDS server pushes the same bind twice (which it shouldn't really do, but oh well),
 		// we need to copy the listeners over.
-		if let Some(old) = self.by_name.remove(&bind.key) {
+		if let Some(old) = self.binds.remove(&bind.key) {
 			debug!("bind update, copy old listeners over");
 			bind.listeners = Arc::unwrap_or_clone(old).listeners;
 		}
@@ -894,7 +1005,7 @@ impl Store {
 		Ok(())
 	}
 	fn insert_xds_listener(&mut self, raw: XdsListener) -> anyhow::Result<()> {
-		let (lis, bind_name): (Listener, BindName) = (&raw).try_into()?;
+		let (lis, bind_name): (Listener, BindKey) = (&raw).try_into()?;
 		self.insert_listener(lis, bind_name);
 		Ok(())
 	}
@@ -909,8 +1020,9 @@ impl Store {
 		Ok(())
 	}
 	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
+		let key = strng::new(&raw.key);
 		let backend: BackendWithPolicies = (&raw).try_into()?;
-		self.insert_backend(backend);
+		self.insert_backend(key, backend);
 		Ok(())
 	}
 	fn insert_xds_policy(&mut self, raw: XdsPolicy) -> anyhow::Result<()> {
@@ -946,19 +1058,19 @@ impl StoreUpdater {
 		let store = self.state.read().expect("mutex");
 		// Services all have hostname, so use that as the key
 		let binds: Vec<_> = store
-			.by_name
+			.binds
 			.iter()
 			.sorted_by_key(|k| k.0)
 			.map(|k| k.1.clone())
 			.collect();
 		let policies: Vec<_> = store
-			.policies_by_name
+			.policies_by_key
 			.iter()
 			.sorted_by_key(|k| k.0)
 			.map(|k| k.1.clone())
 			.collect();
 		let backends: Vec<_> = store
-			.backends_by_name
+			.backends
 			.iter()
 			.sorted_by_key(|k| k.0)
 			.map(|k| k.1.clone())
@@ -991,13 +1103,14 @@ impl StoreUpdater {
 			s.insert_bind(b);
 		}
 		for b in backends {
+			// Here we use the 'name' as the key. This is appropriate for local case only
 			old_backends.remove(&b.backend.name());
 			next_state.backends.insert(b.backend.name());
-			s.insert_backend(b);
+			s.insert_backend(b.backend.name(), b);
 		}
 		for p in policies {
-			old_pols.remove(&p.name);
-			next_state.policies.insert(p.name.clone());
+			old_pols.remove(&p.key);
+			next_state.policies.insert(p.key.clone());
 			s.insert_policy(p);
 		}
 		for remaining_bind in old_binds {
@@ -1015,9 +1128,9 @@ impl StoreUpdater {
 
 #[derive(Clone, Debug, Default)]
 pub struct PreviousState {
-	pub binds: HashSet<BindName>,
-	pub policies: HashSet<PolicyName>,
-	pub backends: HashSet<BackendName>,
+	pub binds: HashSet<BindKey>,
+	pub policies: HashSet<PolicyKey>,
+	pub backends: HashSet<BackendKey>,
 }
 
 impl agent_xds::Handler<ADPResource> for StoreUpdater {
@@ -1028,7 +1141,7 @@ impl agent_xds::Handler<ADPResource> for StoreUpdater {
 		let mut state = self.state.write().unwrap();
 		let handle = |res: XdsUpdate<ADPResource>| {
 			match res {
-				XdsUpdate::Update(w) => state.insert_xds(w.resource)?,
+				XdsUpdate::Update(w) => state.insert_xds(w.name, w.resource)?,
 				XdsUpdate::Remove(name) => {
 					debug!("handling delete {}", name);
 					state.remove_resource(&strng::new(name))
