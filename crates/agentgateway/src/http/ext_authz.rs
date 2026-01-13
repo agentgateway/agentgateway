@@ -644,10 +644,10 @@ impl ExtAuthz {
 		};
 		if resp.status().is_success() {
 			for k in include_response_headers {
-				resp.headers().get_all(k).iter().for_each(|h| {
-					// TODO: append or insert?
-					req.headers_mut().append(k.clone(), h.clone());
-				});
+				if let Some(h) = resp.headers().get(k) {
+					// TODO: today we always insert. We should consider adding a mode to append.
+					req.headers_mut().insert(k.clone(), h.clone());
+				}
 			}
 			if !metadata.is_empty() {
 				let mut ctx = ctx_builder.expensive_clone();
