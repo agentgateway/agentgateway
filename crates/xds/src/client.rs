@@ -686,7 +686,7 @@ impl AdsClient {
 		let type_url = response.type_url.clone();
 		let nonce = response.nonce.clone();
 		self.metrics.record(&response, ());
-		info!(
+		debug!(
 			type_url = type_url, // this is a borrow, it's OK
 			size = response.resources.len(),
 			removes = response.removed_resources.len(),
