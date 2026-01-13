@@ -58,8 +58,36 @@ pub fn immediate_response(cr: proto::ImmediateResponse) -> Result<ProcessingResp
 	})
 }
 
+pub fn request_header_response_with_dynamic_metadata(
+	cr: Option<CommonResponse>,
+	metadata: prost_wkt_types::Struct,
+) -> Result<ProcessingResponse, Status> {
+	Ok(ProcessingResponse {
+		response: Some(processing_response::Response::RequestHeaders(
+			proto::HeadersResponse { response: cr },
+		)),
+		dynamic_metadata: Some(metadata),
+		..Default::default()
+	})
+}
+
+pub fn response_header_response_with_dynamic_metadata(
+	cr: Option<CommonResponse>,
+	metadata: prost_wkt_types::Struct,
+) -> Result<ProcessingResponse, Status> {
+	Ok(ProcessingResponse {
+		response: Some(processing_response::Response::ResponseHeaders(
+			proto::HeadersResponse { response: cr },
+		)),
+		dynamic_metadata: Some(metadata),
+		..Default::default()
+	})
+}
+
 #[async_trait]
 pub trait Handler {
+	async fn on_request(&mut self, _request: &ProcessingRequest) {}
+
 	async fn handle_request_headers(
 		&mut self,
 		_headers: &HttpHeaders,
@@ -198,6 +226,7 @@ where
 
 			while let Some(request_result) = request_stream.message().await? {
 				trace!("Received request: {:?}", request_result.request);
+				handler.on_request(&request_result).await;
 				match request_result.request {
 					Some(processing_request::Request::RequestHeaders(headers)) => {
 						handler.handle_request_headers(&headers, &tx).await?;

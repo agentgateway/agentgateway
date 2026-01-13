@@ -227,13 +227,13 @@ message HttpHeaders {
   // lower-cased, because HTTP header keys are case-insensitive.
   HeaderMap headers = 1;
 
+  // HttpHeaders.attributes removed in favour of ProcessingRequest attributes
+  reserved 2;
+  reserved "attributes";
+
   // If true, then there is no message body associated with this
   // request or response.
   bool end_of_stream = 3;
-
-  // NOTE: moved to ProcessingRequest attributes
-  reserved 2;
-  reserved "attributes";
 }
 
 // This message contains the message body that Envoy sends to the external server.

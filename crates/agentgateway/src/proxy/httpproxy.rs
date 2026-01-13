@@ -114,7 +114,6 @@ async fn apply_request_policies(
 		// Reset the cached state
 		let _ = exec.take();
 	}
-
 	if let Some(j) = &policies.authorization {
 		j.apply(build_ctx(&exec, log)?)
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
@@ -131,7 +130,6 @@ async fn apply_request_policies(
 	}
 	.apply(response_policies.headers())?;
 
-	let had_ext_proc = response_policies.ext_proc.is_some();
 	if let Some(x) = response_policies.ext_proc.as_mut() {
 		x.mutate_request(req, Some(build_ctx(&exec, log)?)).await?
 	} else {
@@ -139,12 +137,8 @@ async fn apply_request_policies(
 	}
 	.apply(response_policies.headers())?;
 
-	// Extract metadata and attributes for CEL context
-	if log.cel.ctx().with_extproc(req) {
-		// Reset the cached executor so downstream filters see updated context
-		let _ = exec.take();
-	} else if had_ext_proc {
-		// Reset executor even without metadata since ext_proc may have mutated headers
+	// Reset executor since ext_proc may have mutated headers
+	if response_policies.ext_proc.is_some() {
 		let _ = exec.take();
 	}
 
@@ -319,12 +313,8 @@ async fn apply_gateway_policies(
 	}
 	.apply(response_headers)?;
 
-	// Extract dynamic metadata for CEL context
-	if log.cel.ctx().with_extproc(req) {
-		// Reset the cached executor so downstream filters see updated context
-		let _ = exec.take();
-	} else if had_ext_proc {
-		// Reset executor even without metadata since ext_proc may have mutated headers
+	// Reset executor since ext_proc may have mutated headers
+	if had_ext_proc {
 		let _ = exec.take();
 	}
 

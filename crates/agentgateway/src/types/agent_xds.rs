@@ -1326,8 +1326,17 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						Some(
 							ep.metadata_context
 								.iter()
-								.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
-								.collect(),
+								.fold(HashMap::new(), |mut meta, (namespace, data)| {
+									meta.insert(
+										namespace.to_string(),
+										data
+											.context
+											.iter()
+											.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+											.collect(),
+									);
+									meta
+								}),
 						)
 					},
 					request_attributes: if ep.request_attributes.is_empty() {
