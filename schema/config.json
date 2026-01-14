@@ -5652,6 +5652,7 @@
                                                       "type": "string"
                                                     }
                                                   },
+                                                  "additionalProperties": false,
                                                   "required": [
                                                     "projectId"
                                                   ]
@@ -7214,6 +7215,7 @@
                                                                   "type": "string"
                                                                 }
                                                               },
+                                                              "additionalProperties": false,
                                                               "required": [
                                                                 "projectId"
                                                               ]
