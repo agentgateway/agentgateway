@@ -289,47 +289,88 @@ mod gemini {
 mod vertex {
 	use super::*;
 
-	#[tokio::test]
-	async fn completions() {
-		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
-			return;
-		};
-		send_completions(&gw, false).await;
+	// Gemini models use the OpenAI-compatible endpoint
+	mod gemini {
+		use super::*;
+
+		#[tokio::test]
+		async fn completions() {
+			let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
+				return;
+			};
+			send_completions(&gw, false).await;
+		}
+
+		#[tokio::test]
+		async fn completions_streaming() {
+			let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
+				return;
+			};
+			send_completions(&gw, true).await;
+		}
+
+		#[tokio::test]
+		async fn messages() {
+			let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
+				return;
+			};
+			send_messages(&gw, false).await;
+		}
+
+		#[tokio::test]
+		async fn messages_streaming() {
+			let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
+				return;
+			};
+			send_messages(&gw, true).await;
+		}
+
+		#[tokio::test]
+		#[ignore]
+		// During testing I have been unable to make embeddings work at all with Vertex.
+		async fn embeddings() {
+			let Some(gw) = setup("vertex", "", "text-embedding-004").await else {
+				return;
+			};
+			send_embeddings(&gw).await;
+		}
 	}
 
-	#[tokio::test]
-	async fn completions_streaming() {
-		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
-			return;
-		};
-		send_completions(&gw, true).await;
-	}
+	// Anthropic models use the rawPredict endpoint
+	mod anthropic {
+		use super::*;
 
-	#[tokio::test]
-	async fn messages() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
-		send_messages(&gw, false).await;
-	}
+		#[tokio::test]
+		async fn completions() {
+			let Some(gw) = setup("vertex", "", "anthropic/claude-3-5-sonnet-v2@20241022").await else {
+				return;
+			};
+			send_completions(&gw, false).await;
+		}
 
-	#[tokio::test]
-	async fn messages_streaming() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
-		send_messages(&gw, true).await;
-	}
+		#[tokio::test]
+		async fn completions_streaming() {
+			let Some(gw) = setup("vertex", "", "anthropic/claude-3-5-sonnet-v2@20241022").await else {
+				return;
+			};
+			send_completions(&gw, true).await;
+		}
 
-	#[tokio::test]
-	#[ignore]
-	// During testing I have been unable to make embeddings work at all with Vertex, with or without Agentgateway.
-	// This is plausibly from using the OpenAI compatible endpoint?
-	async fn embeddings() {
-		let Some(gw) = setup("vertex", "", "text-embedding-004").await else {
-			return;
-		};
-		send_embeddings(&gw).await;
+		#[tokio::test]
+		async fn messages() {
+			let Some(gw) = setup("vertex", "", "anthropic/claude-3-5-sonnet-v2@20241022").await else {
+				return;
+			};
+			send_messages(&gw, false).await;
+		}
+
+		#[tokio::test]
+		async fn messages_streaming() {
+			let Some(gw) = setup("vertex", "", "anthropic/claude-3-5-sonnet-v2@20241022").await else {
+				return;
+			};
+			send_messages(&gw, true).await;
+		}
 	}
 }
 

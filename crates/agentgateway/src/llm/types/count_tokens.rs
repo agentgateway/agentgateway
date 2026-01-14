@@ -2,14 +2,45 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::types::RequestType;
-use crate::llm::{AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, conversion};
+use crate::llm::types::{RequestType, ResponseType};
+use crate::llm::{
+	AIError, InputFormat, LLMRequest, LLMResponse, SimpleChatCompletionMessage, conversion,
+};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Request {
 	pub model: Option<String>,
 	#[serde(flatten)]
 	pub rest: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct Response {
+	pub input_tokens: u64,
+}
+
+impl ResponseType for Response {
+	fn to_llm_response(&self, _include_completion_in_log: bool) -> LLMResponse {
+		LLMResponse {
+			count_tokens: Some(self.input_tokens),
+			..Default::default()
+		}
+	}
+
+	fn set_webhook_choices(
+		&mut self,
+		_choices: Vec<crate::llm::policy::webhook::ResponseChoice>,
+	) -> anyhow::Result<()> {
+		Ok(())
+	}
+
+	fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice> {
+		vec![]
+	}
+
+	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
+		serde_json::to_vec(&self)
+	}
 }
 
 impl RequestType for Request {
@@ -52,5 +83,9 @@ impl RequestType for Request {
 
 	fn to_bedrock_token_count(&self, headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
 		conversion::bedrock::from_anthropic_token_count::translate(self, headers)
+	}
+
+	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
+		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
 	}
 }
