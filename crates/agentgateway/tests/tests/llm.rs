@@ -43,6 +43,7 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
 	} else if provider == "vertex" {
 		r#"
               projectId: $VERTEX_PROJECT
+              region: us-central1
               "#
 	} else if provider == "azureOpenAI" {
 		r#"
@@ -303,6 +304,22 @@ mod vertex {
 			return;
 		};
 		send_completions(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn messages() {
+		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+			return;
+		};
+		send_messages(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn messages_streaming() {
+		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+			return;
+		};
+		send_messages(&gw, true).await;
 	}
 
 	#[tokio::test]

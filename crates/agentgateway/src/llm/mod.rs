@@ -940,7 +940,7 @@ impl AIProvider {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
-			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
