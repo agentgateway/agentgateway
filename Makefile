@@ -40,7 +40,7 @@ lint:
 
 .PHONY: fix-lint
 fix-lint:
-	cargo clippy --fix --allow-staged --allow-dirty --workspace
+	cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs --workspace
 	cargo fmt
 
 # test
