@@ -787,6 +787,9 @@ impl HTTPProxy {
 			if last || !should_retry(&res, retries.as_ref().unwrap()) {
 				if !last {
 					debug!("response not retry-able");
+				} else if should_retry(&res, retries.as_ref().unwrap()) {
+					// Last attempt and would have retried - mark as exhausted
+					log.retry_exhausted = true;
 				}
 				return res;
 			}

@@ -148,6 +148,9 @@ pub struct Metrics {
 
 	// metrics for guardrail checks (allow/mask/reject) for request/response
 	pub guardrail_checks: Family<GuardrailLabels, counter::Counter>,
+
+	pub retry_attempts: Counter,
+	pub retry_exhausted: Counter,
 }
 
 // FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
@@ -280,6 +283,16 @@ impl Metrics {
 				);
 				m
 			},
+			retry_attempts: build(
+				&mut registry,
+				"retry_attempts",
+				"Total number of retry attempts made for failed requests",
+			),
+			retry_exhausted: build(
+				&mut registry,
+				"retry_exhausted",
+				"Total number of requests that exhausted all retry attempts",
+			),
 			downstream_connection: build(
 				&mut registry,
 				"downstream_connections",
