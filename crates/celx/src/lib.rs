@@ -1,6 +1,7 @@
 use cel::Context;
 
 mod cidr;
+mod format;
 mod general;
 mod strings;
 #[cfg(test)]
@@ -15,6 +16,8 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	// "Strings" extension
 	// https://pkg.go.dev/github.com/google/cel-go/ext#Strings
 	strings::insert_all(ctx);
+	// Format and parse functions
+	format::insert_all(ctx);
 	// https://kubernetes.io/docs/reference/using-api/cel/#kubernetes-cidr-library and
 	// https://kubernetes.io/docs/reference/using-api/cel/#kubernetes-ip-address-library
 	cidr::insert_all(ctx);
