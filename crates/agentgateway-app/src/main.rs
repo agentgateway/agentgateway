@@ -131,7 +131,7 @@ async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result
 	if let Some(cfg) = config.xds.local_config.as_ref() {
 		let cs = cfg.read_to_string().await?;
 		agentgateway::types::local::NormalizedLocalConfig::from(
-            Arc::new(config),
+			Arc::new(config),
 			client,
 			ListenerTarget {
 				gateway_name: strng::literal!("default"),

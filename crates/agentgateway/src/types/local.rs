@@ -36,7 +36,7 @@ use crate::*;
 
 impl NormalizedLocalConfig {
 	pub async fn from(
-        config: Arc<crate::Config>,
+		config: Arc<crate::Config>,
 		client: client::Client,
 		gateway_name: ListenerTarget,
 		s: &str,
@@ -888,7 +888,7 @@ struct TCPFilterOrPolicy {
 async fn convert(
 	client: client::Client,
 	gateway: ListenerTarget,
-    config: Arc<crate::Config>,
+	config: Arc<crate::Config>,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
 	let LocalConfig {

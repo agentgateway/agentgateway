@@ -34,7 +34,7 @@ impl StateManager {
 		xds_metrics: agent_xds::Metrics,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
-        let xds = &config.clone().xds;
+		let xds = &config.clone().xds;
 		let stores = Stores::new();
 		let xds_client = if xds.address.is_some() {
 			let connector = control::grpc_connector(
@@ -60,7 +60,7 @@ impl StateManager {
 		};
 		if let Some(cfg) = &xds.local_config {
 			let local_client = LocalClient {
-                config,
+				config,
 				stores: stores.clone(),
 				cfg: cfg.clone(),
 				client,
@@ -90,7 +90,7 @@ impl StateManager {
 /// LocalClient serves as a local file reader alternative for XDS. This is intended for testing.
 #[derive(Debug, Clone)]
 pub struct LocalClient {
-    config: Arc<crate::Config>,
+	config: Arc<crate::Config>,
 	pub cfg: ConfigSource,
 	pub stores: Stores,
 	pub client: Client,
@@ -187,7 +187,7 @@ impl LocalClient {
 	async fn reload_config(&self, prev: PreviousState) -> anyhow::Result<PreviousState> {
 		let config_content = self.cfg.read_to_string().await?;
 		let config = crate::types::local::NormalizedLocalConfig::from(
-            self.config.clone(),
+			self.config.clone(),
 			self.client.clone(),
 			self.gateway.clone(),
 			config_content.as_str(),
