@@ -537,6 +537,14 @@
         "null"
       ],
       "additionalProperties": true
+    },
+    "extproc": {
+      "description": "`extproc` contains dynamic metadata from ext_proc filters",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
     }
   },
   "additionalProperties": false
