@@ -3838,19 +3838,6 @@
                                     ],
                                     "default": "failClosed"
                                   },
-                                  "metadataContext": {
-                                    "description": "Additional metadata to send to the external processing service.\nMaps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.",
-                                    "type": [
-                                      "object",
-                                      "null"
-                                    ],
-                                    "additionalProperties": {
-                                      "type": "object",
-                                      "additionalProperties": {
-                                        "type": "string"
-                                      }
-                                    }
-                                  },
                                   "requestAttributes": {
                                     "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
                                     "type": [
@@ -9716,19 +9703,6 @@
                               ],
                               "default": "failClosed"
                             },
-                            "metadataContext": {
-                              "description": "Additional metadata to send to the external processing service.\nMaps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.",
-                              "type": [
-                                "object",
-                                "null"
-                              ],
-                              "additionalProperties": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "type": "string"
-                                }
-                              }
-                            },
                             "requestAttributes": {
                               "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
                               "type": [
@@ -13674,19 +13648,6 @@
                           "failOpen"
                         ],
                         "default": "failClosed"
-                      },
-                      "metadataContext": {
-                        "description": "Additional metadata to send to the external processing service.\nMaps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.",
-                        "type": [
-                          "object",
-                          "null"
-                        ],
-                        "additionalProperties": {
-                          "type": "object",
-                          "additionalProperties": {
-                            "type": "string"
-                          }
-                        }
                       },
                       "requestAttributes": {
                         "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",

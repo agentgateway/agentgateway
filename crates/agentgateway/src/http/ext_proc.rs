@@ -18,7 +18,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::cel::{Executor, Expression};
 use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, HeaderMutation, HeaderValueOption, HeadersResponse, HttpBody,
-	HttpHeaders, HttpTrailers, ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse,
+	HttpHeaders, HttpTrailers, ImmediateResponse, ProcessingRequest, ProcessingResponse,
 	processing_response,
 };
 use crate::http::filters::BackendRequestTimeout;
@@ -95,7 +95,6 @@ impl InferenceRouting {
 				self.failure_mode,
 				None,
 				None,
-				None,
 			)),
 		}
 	}
@@ -144,12 +143,6 @@ pub struct ExtProc {
 	/// Behavior when the ext_proc service is unavailable or returns an error
 	#[serde(default)]
 	pub failure_mode: FailureMode,
-
-	/// Additional metadata to send to the external processing service.
-	/// Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
-
 	/// Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub request_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
@@ -165,7 +158,6 @@ impl ExtProc {
 				client,
 				self.target.clone(),
 				self.failure_mode,
-				self.metadata_context.clone(),
 				self.request_attributes.clone(),
 				self.response_attributes.clone(),
 			)),
@@ -173,22 +165,12 @@ impl ExtProc {
 	}
 
 	pub fn expressions(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
-		// Return a reference to all expressions including the namespaced metadata_context
 		Box::new(
 			self
-				.metadata_context
+				.request_attributes
 				.iter()
-				.flat_map(|m| {
-					m.values()
-						.flat_map(|inner| inner.values().map(AsRef::as_ref))
-				})
-				.chain(
-					self
-						.request_attributes
-						.iter()
-						.chain(self.response_attributes.iter())
-						.flat_map(|m| m.values().map(AsRef::as_ref)),
-				),
+				.chain(self.response_attributes.iter())
+				.flat_map(|m| m.values().map(AsRef::as_ref)),
 		)
 	}
 }
@@ -236,7 +218,6 @@ struct ExtProcInstance {
 	tx_req: Sender<ProcessingRequest>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
-	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 	req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 }
@@ -246,7 +227,6 @@ impl ExtProcInstance {
 		client: PolicyClient,
 		target: Arc<SimpleBackendReference>,
 		failure_mode: FailureMode,
-		metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 		req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 		resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	) -> ExtProcInstance {
@@ -309,7 +289,6 @@ impl ExtProcInstance {
 			tx_req,
 			rx_resp_for_request: Some(rx_resp_for_request),
 			rx_resp_for_response: Some(rx_resp_for_response),
-			metadata_context,
 			req_attributes,
 			resp_attributes,
 		}
@@ -343,27 +322,15 @@ impl ExtProcInstance {
 
 		// request_attributes should only be sent on first ProcessingRequest
 		// this will need to be modified if we configure which Requests to send
-		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let (metadata_context, mut attributes) = if let Some(exec) = exec {
-			(
-				self.metadata_context.as_ref().map(|meta| {
-					Arc::new(Metadata {
-						filter_metadata: meta
-							.iter()
-							.filter_map(|(n, e)| {
-								eval_to_struct(exec, e).map(|v| (n.clone(), v)).ok() // TODO(mk): where best to log convertion issues
-							})
-							.collect(),
-					})
-				}),
-				self.req_attributes.as_ref().and_then(|attrs| {
-					eval_to_struct(exec, attrs)
-						.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
-						.ok()
-				}),
-			)
+		let mut attributes = if let Some(exec) = exec {
+			self.req_attributes.as_ref().map(|attrs| {
+				HashMap::from([(
+					EXTPROC_ATTRIBUTES_NAMESPACE.to_string(),
+					eval_attributes_struct(exec, attrs),
+				)])
+			})
 		} else {
-			(None, None)
+			None
 		};
 
 		// Send the request headers to ext_proc.
@@ -373,7 +340,6 @@ impl ExtProcInstance {
 					headers,
 					end_of_stream,
 				})),
-				metadata_context: metadata_context.as_deref().cloned(),
 				attributes: attributes.take().unwrap_or_default(),
 				protocol_config: Default::default(),
 				observability_mode: false,
@@ -409,7 +375,6 @@ impl ExtProcInstance {
 					let Ok(()) = tx
 						.send(ProcessingRequest {
 							request,
-							metadata_context: metadata_context.as_deref().cloned(),
 							attributes: Default::default(),
 							protocol_config: Default::default(),
 							observability_mode: false,
@@ -421,15 +386,12 @@ impl ExtProcInstance {
 					};
 				}
 
-				// Send end of stream marker - try to unwrap Arc to avoid final clone
-				let final_metadata = metadata_context.and_then(Arc::into_inner);
 				let _ = tx
 					.send(ProcessingRequest {
 						request: Some(Request::RequestBody(HttpBody {
 							body: Default::default(),
 							end_of_stream: true,
 						})),
-						metadata_context: final_metadata,
 						attributes: Default::default(),
 						protocol_config: Default::default(),
 						observability_mode: false,
@@ -530,27 +492,15 @@ impl ExtProcInstance {
 
 		// response_attributes should only be sent on first ProcessingRequest
 		// this will need to be modified if we configure which Requests to send
-		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let (metadata_context, mut attributes) = if let Some(exec) = exec {
-			(
-				self.metadata_context.as_ref().map(|meta| {
-					Arc::new(Metadata {
-						filter_metadata: meta
-							.iter()
-							.filter_map(|(n, e)| {
-								eval_to_struct(exec, e).map(|v| (n.clone(), v)).ok() // TODO(mk): where best to log convertion issues
-							})
-							.collect(),
-					})
-				}),
-				self.resp_attributes.as_ref().and_then(|attrs| {
-					eval_to_struct(exec, attrs)
-						.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
-						.ok()
-				}),
-			)
+		let mut attributes = if let Some(exec) = exec {
+			self.resp_attributes.as_ref().map(|attrs| {
+				HashMap::from([(
+					EXTPROC_ATTRIBUTES_NAMESPACE.to_string(),
+					eval_attributes_struct(exec, attrs),
+				)])
+			})
 		} else {
-			(None, None)
+			None
 		};
 
 		// Send the response headers to ext_proc.
@@ -560,7 +510,6 @@ impl ExtProcInstance {
 					headers,
 					end_of_stream,
 				})),
-				metadata_context: metadata_context.as_deref().cloned(),
 				attributes: attributes.take().unwrap_or_default(),
 				protocol_config: Default::default(),
 				observability_mode: false,
@@ -595,7 +544,6 @@ impl ExtProcInstance {
 					let Ok(()) = tx
 						.send(ProcessingRequest {
 							request,
-							metadata_context: metadata_context.as_deref().cloned(),
 							attributes: HashMap::new(),
 							protocol_config: Default::default(),
 							observability_mode: false,
@@ -607,15 +555,12 @@ impl ExtProcInstance {
 					};
 				}
 
-				// Send end of stream marker - try to unwrap Arc to avoid final clone
-				let final_metadata = metadata_context.and_then(Arc::into_inner);
 				let _ = tx
 					.send(ProcessingRequest {
 						request: Some(Request::ResponseBody(HttpBody {
 							body: Default::default(),
 							end_of_stream: true,
 						})),
-						metadata_context: final_metadata,
 						attributes: HashMap::new(),
 						protocol_config: Default::default(),
 						observability_mode: false,
@@ -1071,28 +1016,22 @@ fn eval_expression(exec: &Executor, v: &Expression) -> Result<prost_wkt_types::V
 	serde_json::from_value(js).map_err(|e| ProxyError::Processing(e.into()))
 }
 
-fn eval_to_struct(
+fn eval_attributes_struct(
 	exec: &Executor<'_>,
 	expressions: &HashMap<String, Arc<cel::Expression>>,
-) -> Result<prost_wkt_types::Struct, ProxyError> {
-	Ok(Struct {
+) -> prost_wkt_types::Struct {
+	Struct {
 		fields: expressions
 			.iter()
 			.filter_map(|(key, expr)| match eval_expression(exec, expr) {
 				Ok(result) => Some((key.clone(), result)),
 				Err(error) => {
-					// TODO(mk): Add Expression::expression_str() accessor to avoid Debug formatting
-					warn!(
-						%key,
-						expression = ?expr,
-						%error,
-						"failed to evaluate CEL expression for ext_proc metadata"
-					);
+					warn!(%key, %error, "failed to evaluate attributes CEL expression");
 					None
 				},
 			})
 			.collect(),
-	})
+	}
 }
 
 #[derive(Clone, Debug)]

@@ -720,12 +720,8 @@ message TrafficPolicySpec {
     BackendReference target = 1;
     FailureMode failure_mode = 2;
 
-    message NamespacedMetadataContext {
-      map<string, string> context = 1;
-    }
-    map<string, NamespacedMetadataContext> metadata_context = 3;
-    map<string, string> request_attributes = 4;
-    map<string, string> response_attributes = 5;
+    map<string, string> request_attributes = 3;
+    map<string, string> response_attributes = 4;
   }
   enum PolicyPhase {
     ROUTE = 0;

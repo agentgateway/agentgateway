@@ -1317,48 +1317,25 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					Ok(tps::ext_proc::FailureMode::FailOpen) => http::ext_proc::FailureMode::FailOpen,
 					_ => http::ext_proc::FailureMode::FailClosed,
 				};
+				fn to_cel_attrs(
+					attrs: &HashMap<String, String>,
+				) -> Option<HashMap<String, Arc<cel::Expression>>> {
+					if attrs.is_empty() {
+						None
+					} else {
+						Some(
+							attrs
+								.iter()
+								.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+								.collect(),
+						)
+					}
+				}
 				TrafficPolicy::ExtProc(http::ext_proc::ExtProc {
 					target: Arc::new(target),
 					failure_mode,
-					metadata_context: if ep.metadata_context.is_empty() {
-						None
-					} else {
-						Some(
-							ep.metadata_context
-								.iter()
-								.fold(HashMap::new(), |mut meta, (namespace, data)| {
-									meta.insert(
-										namespace.to_string(),
-										data
-											.context
-											.iter()
-											.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
-											.collect(),
-									);
-									meta
-								}),
-						)
-					},
-					request_attributes: if ep.request_attributes.is_empty() {
-						None
-					} else {
-						Some(
-							ep.request_attributes
-								.iter()
-								.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
-								.collect(),
-						)
-					},
-					response_attributes: if ep.response_attributes.is_empty() {
-						None
-					} else {
-						Some(
-							ep.response_attributes
-								.iter()
-								.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
-								.collect(),
-						)
-					},
+					request_attributes: to_cel_attrs(&ep.request_attributes),
+					response_attributes: to_cel_attrs(&ep.response_attributes),
 				})
 			},
 			Some(tps::Kind::RequestHeaderModifier(rhm)) => {
