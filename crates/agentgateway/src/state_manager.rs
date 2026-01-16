@@ -34,7 +34,7 @@ impl StateManager {
 		xds_metrics: agent_xds::Metrics,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
-		let xds = &config.clone().xds;
+		let xds = &config.xds;
 		let stores = Stores::new();
 		let xds_client = if xds.address.is_some() {
 			let connector = control::grpc_connector(
@@ -60,7 +60,7 @@ impl StateManager {
 		};
 		if let Some(cfg) = &xds.local_config {
 			let local_client = LocalClient {
-				config,
+				config: config.clone(),
 				stores: stores.clone(),
 				cfg: cfg.clone(),
 				client,
