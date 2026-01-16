@@ -86,7 +86,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
 	let state_mgr =
-		state_manager::StateManager::new(&config.xds, control_client.clone(), xds_metrics, xds_tx)
+		state_manager::StateManager::new(config.clone(), control_client.clone(), xds_metrics, xds_tx)
 			.await?;
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {

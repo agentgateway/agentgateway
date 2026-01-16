@@ -230,6 +230,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 	};
 
 	Ok(crate::Config {
+		ipv6_enabled,
 		network: network.into(),
 		admin_addr,
 		stats_addr,

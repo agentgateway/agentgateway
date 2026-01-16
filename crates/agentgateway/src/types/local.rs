@@ -33,6 +33,7 @@ use crate::*;
 
 impl NormalizedLocalConfig {
 	pub async fn from(
+		config: &crate::Config,
 		client: client::Client,
 		gateway_name: ListenerTarget,
 		s: &str,
@@ -40,8 +41,8 @@ impl NormalizedLocalConfig {
 		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
 		let s = s.replace("# yaml-language-server: $schema", "#");
 		let s = shellexpand::full(&s)?;
-		let config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
-		let t = convert(client, gateway_name, config).await?;
+		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
+		let t = convert(client, gateway_name, config, local_config).await?;
 		Ok(t)
 	}
 }
@@ -62,7 +63,7 @@ pub struct LocalConfig {
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "RawConfig"))]
 	#[allow(unused)]
-	config: Arc<Option<serde_json::value::Value>>,
+	config: Arc<Option<serde_json::Value>>,
 	#[serde(default)]
 	binds: Vec<LocalBind>,
 	#[serde(default)]
@@ -902,6 +903,7 @@ struct TCPFilterOrPolicy {
 async fn convert(
 	client: client::Client,
 	gateway: ListenerTarget,
+	config: &crate::Config,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
 	let LocalConfig {
@@ -932,7 +934,7 @@ async fn convert(
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
 		}
-		let sockaddr = if cfg!(target_family = "unix") {
+		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
 			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), b.port)
 		} else {
 			// Windows and IPv6 don't mix well apparently?
