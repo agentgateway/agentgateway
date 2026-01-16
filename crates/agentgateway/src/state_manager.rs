@@ -187,7 +187,7 @@ impl LocalClient {
 	async fn reload_config(&self, prev: PreviousState) -> anyhow::Result<PreviousState> {
 		let config_content = self.cfg.read_to_string().await?;
 		let config = crate::types::local::NormalizedLocalConfig::from(
-			self.config.clone(),
+			&self.config,
 			self.client.clone(),
 			self.gateway.clone(),
 			config_content.as_str(),
