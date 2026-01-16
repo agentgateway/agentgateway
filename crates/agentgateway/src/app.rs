@@ -228,10 +228,14 @@ fn new_data_plane_pool(
 					match join_result {
 						Ok(result) => {
 							if let Err(e) = result {
-								warn!("data plane task failed: {e}");
+								error!("data plane task failed: {e}");
+								std::process::exit(1);
 							}
 						},
-						Err(e) => warn!("failed joining data plane task: {e}"),
+						Err(e) => {
+							error!("data plane task panicked: {e}");
+							std::process::exit(1);
+						}
 					}
 				}
 			}
