@@ -134,8 +134,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 			// Wait for XDS to be ready
 			let _ = xds_rx_for_proxy.changed().await;
 			// Now run
-			gw.run().in_current_span().await;
-			Ok(())
+			gw.run().in_current_span().await
 		}),
 	})?;
 
