@@ -881,6 +881,20 @@ message BackendPolicySpec {
     // The special "*" wildcard matches any path.
     // If empty or no route matches, the implementation defaults to COMPLETIONS behavior.
     map<string, RouteType> routes = 7;
+
+    // Model represents an AI model available in a backend
+    message Model {
+      // The model identifier (e.g., "gpt-4o-mini", "claude-3-5-sonnet")
+      string id = 1;
+      // The organization that owns/provides the model (e.g., "openai", "anthropic")
+      string owned_by = 2;
+      // Unix timestamp of when the model was created (optional)
+      optional int64 created = 3;
+    }
+
+    // Models that should be advertised at the /v1/models endpoint
+    // When configured, GET /v1/models will return these models
+    repeated Model models = 8;
   }
   message A2a {
   }

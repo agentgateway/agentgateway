@@ -1,0 +1,26 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI: {}
+      policies:
+        ai:
+          # Declare models that will be returned by GET /v1/models
+          models:
+          - id: gpt-4o-mini
+            ownedBy: openai
+            created: 1704067200
+          - id: gpt-4-turbo
+            ownedBy: openai
+            created: 1704067200
+          - id: gpt-3.5-turbo
+            ownedBy: openai
+            created: 1677649963
+          # Map different route paths to appropriate handlers
+          routes:
+            "/v1/models": Models
+            "/v1/chat/completions": Completions

@@ -8051,6 +8051,9 @@ type BackendPolicySpec_Ai struct {
 	// The special "*" wildcard matches any path.
 	// If empty or no route matches, the implementation defaults to COMPLETIONS behavior.
 	Routes        map[string]BackendPolicySpec_Ai_RouteType `protobuf:"bytes,7,rep,name=routes,proto3" json:"routes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=agentgateway.dev.resource.BackendPolicySpec_Ai_RouteType"`
+	// Models that should be advertised at the /v1/models endpoint
+	// When configured, GET /v1/models will return these models
+	Models        []*BackendPolicySpec_Ai_Model `protobuf:"bytes,8,rep,name=models,proto3" json:"models,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8130,6 +8133,13 @@ func (x *BackendPolicySpec_Ai) GetPromptCaching() *BackendPolicySpec_Ai_PromptCa
 func (x *BackendPolicySpec_Ai) GetRoutes() map[string]BackendPolicySpec_Ai_RouteType {
 	if x != nil {
 		return x.Routes
+	}
+	return nil
+}
+
+func (x *BackendPolicySpec_Ai) GetModels() []*BackendPolicySpec_Ai_Model {
+	if x != nil {
+		return x.Models
 	}
 	return nil
 }
@@ -8665,6 +8675,69 @@ func (x *BackendPolicySpec_Ai_PromptEnrichment) GetPrepend() []*BackendPolicySpe
 		return x.Prepend
 	}
 	return nil
+}
+
+type BackendPolicySpec_Ai_Model struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The model identifier (e.g., "gpt-4o-mini", "claude-3-5-sonnet")
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// The organization that owns/provides the model (e.g., "openai", "anthropic")
+	OwnedBy string `protobuf:"bytes,2,opt,name=owned_by,json=ownedBy,proto3" json:"owned_by,omitempty"`
+	// Unix timestamp of when the model was created (optional)
+	Created       *int64 `protobuf:"varint,3,opt,name=created,proto3,oneof" json:"created,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BackendPolicySpec_Ai_Model) Reset() {
+	*x = BackendPolicySpec_Ai_Model{}
+	mi := &file_resource_proto_msgTypes[101]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BackendPolicySpec_Ai_Model) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BackendPolicySpec_Ai_Model) ProtoMessage() {}
+
+func (x *BackendPolicySpec_Ai_Model) ProtoReflect() protoreflect.Message {
+	mi := &file_resource_proto_msgTypes[101]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BackendPolicySpec_Ai_Model.ProtoReflect.Descriptor instead.
+func (*BackendPolicySpec_Ai_Model) Descriptor() ([]byte, []int) {
+	return file_resource_proto_rawDescGZIP(), []int{44, 0, 2}
+}
+
+func (x *BackendPolicySpec_Ai_Model) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *BackendPolicySpec_Ai_Model) GetOwnedBy() string {
+	if x != nil {
+		return x.OwnedBy
+	}
+	return ""
+}
+
+func (x *BackendPolicySpec_Ai_Model) GetCreated() int64 {
+	if x != nil && x.Created != nil {
+		return *x.Created
+	}
+	return 0
 }
 
 type BackendPolicySpec_Ai_RegexRule struct {
