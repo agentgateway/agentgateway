@@ -182,7 +182,7 @@ pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	TestBind,
 	Client<MemoryConnector, Body>,
 ) {
-	setup_ext_proc_mock_with_meta(mock, failure_mode, mock_ext_proc, config, None, None).await
+	setup_ext_proc_mock_with_meta(mock, failure_mode, mock_ext_proc, config, None, None, None).await
 }
 
 pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
@@ -190,6 +190,7 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 	failure_mode: ext_proc::FailureMode,
 	mock_ext_proc: ExtProcMock<T>,
 	config: &str,
+	initial_metadata: Option<HashMap<String, Arc<Expression>>>,
 	request_attributes: Option<HashMap<String, Arc<Expression>>>,
 	response_attributes: Option<HashMap<String, Arc<Expression>>>,
 ) -> (
@@ -220,6 +221,7 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 					ext_proc.address
 				))),
 				failure_mode,
+				initial_metadata,
 				request_attributes,
 				response_attributes,
 			})
@@ -1606,6 +1608,7 @@ async fn test_cel_req_attributes() {
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(move || tracker.clone()),
 		"{}",
+		None,
 		Some(
 			[(
 				"method".to_string(),
@@ -1654,6 +1657,7 @@ async fn test_cel_resp_attributes() {
 		ExtProcMock::new(move || tracker.clone()),
 		"{}",
 		None,
+		None,
 		Some(
 			[(
 				"status".to_string(),
@@ -1687,4 +1691,117 @@ async fn test_cel_resp_attributes() {
 		Some(prost_wkt_types::value::Kind::NumberValue(n)) => assert_eq!(*n, 200.0),
 		invalid => panic!("exepected a number got {:?}", invalid),
 	}
+}
+
+#[derive(Clone)]
+struct GrpcMetadataTracker {
+	metadata: Arc<std::sync::Mutex<Option<tonic::metadata::MetadataMap>>>,
+}
+
+impl GrpcMetadataTracker {
+	fn new() -> Self {
+		Self {
+			metadata: Arc::new(std::sync::Mutex::new(None)),
+		}
+	}
+}
+
+#[async_trait::async_trait]
+impl Handler for GrpcMetadataTracker {
+	async fn on_stream_start(&mut self, metadata: &tonic::metadata::MetadataMap) {
+		*self.metadata.lock().unwrap() = Some(metadata.clone());
+	}
+}
+
+#[tokio::test]
+async fn test_grpc_initial_metadata_static() {
+	let mock = simple_mock().await;
+	let tracker = GrpcMetadataTracker::new();
+	let captured_metadata = tracker.metadata.clone();
+
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(move || tracker.clone()),
+		"{}",
+		Some(
+			[(
+				"x-custom-header".to_string(),
+				Arc::new(Expression::new_strict("\"static-value\"").unwrap()),
+			)]
+			.into(),
+		),
+		None,
+		None,
+	)
+	.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	let metadata = captured_metadata.lock().unwrap();
+	let metadata = metadata.as_ref().expect("metadata should be captured");
+	let value = metadata
+		.get("x-custom-header")
+		.expect("x-custom-header should be present");
+	assert_eq!(value.to_str().unwrap(), "String(\"static-value\")");
+}
+
+#[tokio::test]
+async fn test_grpc_initial_metadata_with_request_context() {
+	let mock = simple_mock().await;
+	let tracker = GrpcMetadataTracker::new();
+	let captured_metadata = tracker.metadata.clone();
+
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(move || tracker.clone()),
+		"{}",
+		Some(
+			[(
+				"x-request-method".to_string(),
+				Arc::new(Expression::new_strict("request.method").unwrap()),
+			)]
+			.into(),
+		),
+		None,
+		None,
+	)
+	.await;
+
+	let res = send_request(io, Method::POST, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	let metadata = captured_metadata.lock().unwrap();
+	let metadata = metadata.as_ref().expect("metadata should be captured");
+	let value = metadata
+		.get("x-request-method")
+		.expect("x-request-method should be present");
+	assert_eq!(value.to_str().unwrap(), "String(\"POST\")");
+}
+
+#[tokio::test]
+async fn test_grpc_initial_metadata_empty_without_config() {
+	let mock = simple_mock().await;
+	let tracker = GrpcMetadataTracker::new();
+	let captured_metadata = tracker.metadata.clone();
+
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(move || tracker.clone()),
+		"{}",
+	)
+	.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	let metadata = captured_metadata.lock().unwrap();
+	let metadata = metadata.as_ref().expect("metadata should be captured");
+	assert!(
+		metadata.get("x-custom-header").is_none(),
+		"no custom metadata should be present when not configured"
+	);
 }

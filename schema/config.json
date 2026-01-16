@@ -3838,6 +3838,16 @@
                                     ],
                                     "default": "failClosed"
                                   },
+                                  "initialMetadata": {
+                                    "description": "Initial metadata applied as HTTP/2 headers when establishing the gRPC stream.\nSupports CEL expressions evaluated with full request context.",
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
                                   "requestAttributes": {
                                     "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
                                     "type": [
@@ -9703,6 +9713,16 @@
                               ],
                               "default": "failClosed"
                             },
+                            "initialMetadata": {
+                              "description": "Initial metadata applied as HTTP/2 headers when establishing the gRPC stream.\nSupports CEL expressions evaluated with full request context.",
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
                             "requestAttributes": {
                               "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
                               "type": [
@@ -13648,6 +13668,16 @@
                           "failOpen"
                         ],
                         "default": "failClosed"
+                      },
+                      "initialMetadata": {
+                        "description": "Initial metadata applied as HTTP/2 headers when establishing the gRPC stream.\nSupports CEL expressions evaluated with full request context.",
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "additionalProperties": {
+                          "type": "string"
+                        }
                       },
                       "requestAttributes": {
                         "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",

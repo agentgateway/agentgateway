@@ -1334,6 +1334,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::ExtProc(http::ext_proc::ExtProc {
 					target: Arc::new(target),
 					failure_mode,
+					initial_metadata: None,
 					request_attributes: to_cel_attrs(&ep.request_attributes),
 					response_attributes: to_cel_attrs(&ep.response_attributes),
 				})

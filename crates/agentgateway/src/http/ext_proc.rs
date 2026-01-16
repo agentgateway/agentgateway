@@ -95,6 +95,7 @@ impl InferenceRouting {
 				self.failure_mode,
 				None,
 				None,
+				None,
 			)),
 		}
 	}
@@ -143,6 +144,10 @@ pub struct ExtProc {
 	/// Behavior when the ext_proc service is unavailable or returns an error
 	#[serde(default)]
 	pub failure_mode: FailureMode,
+	/// Initial metadata applied as HTTP/2 headers when establishing the gRPC stream.
+	/// Supports CEL expressions evaluated with full request context.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub initial_metadata: Option<HashMap<String, Arc<cel::Expression>>>,
 	/// Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub request_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
@@ -158,6 +163,7 @@ impl ExtProc {
 				client,
 				self.target.clone(),
 				self.failure_mode,
+				self.initial_metadata.clone(),
 				self.request_attributes.clone(),
 				self.response_attributes.clone(),
 			)),
@@ -167,8 +173,9 @@ impl ExtProc {
 	pub fn expressions(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
 		Box::new(
 			self
-				.request_attributes
+				.initial_metadata
 				.iter()
+				.chain(self.request_attributes.iter())
 				.chain(self.response_attributes.iter())
 				.flat_map(|m| m.values().map(AsRef::as_ref)),
 		)
@@ -216,8 +223,10 @@ struct ExtProcInstance {
 	failure_mode: FailureMode,
 	skipped: Arc<AtomicBool>,
 	tx_req: Sender<ProcessingRequest>,
+	tx_grpc_metadata: Option<tokio::sync::oneshot::Sender<tonic::metadata::MetadataMap>>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
+	initial_metadata: Option<HashMap<String, Arc<cel::Expression>>>,
 	req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 }
@@ -227,6 +236,7 @@ impl ExtProcInstance {
 		client: PolicyClient,
 		target: Arc<SimpleBackendReference>,
 		failure_mode: FailureMode,
+		initial_metadata: Option<HashMap<String, Arc<cel::Expression>>>,
 		req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 		resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	) -> ExtProcInstance {
@@ -240,10 +250,22 @@ impl ExtProcInstance {
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
 		let req_stream = tokio_stream::wrappers::ReceiverStream::new(rx_req);
+
+		let (tx_grpc_metadata, rx_grpc_metadata) = tokio::sync::oneshot::channel();
+
 		tokio::task::spawn(async move {
+			let grpc_metadata: tonic::metadata::MetadataMap = rx_grpc_metadata.await.unwrap_or_default();
+
+			let mut request = tonic::Request::new(req_stream);
+			for key_and_value in grpc_metadata.iter() {
+				if let tonic::metadata::KeyAndValueRef::Ascii(key, value) = key_and_value {
+					request.metadata_mut().insert(key, value.clone());
+				}
+			}
+
 			// Spawn a task to handle processing requests.
 			// Incoming requests get send to tx_req and will be piped through here.
-			let responses = match c.process(req_stream).await {
+			let responses = match c.process(request).await {
 				Ok(r) => r,
 				Err(e) => {
 					warn!(?failure_mode, "failed to initialize endpoint picker: {e:?}");
@@ -257,6 +279,7 @@ impl ExtProcInstance {
 				let _ = tx_resp.send(item).await;
 			}
 		});
+
 		let (tx_resp_for_request, rx_resp_for_request) = tokio::sync::mpsc::channel(1);
 		let (tx_resp_for_response, rx_resp_for_response) = tokio::sync::mpsc::channel(1);
 		tokio::task::spawn(async move {
@@ -287,8 +310,10 @@ impl ExtProcInstance {
 			skipped: Default::default(),
 			failure_mode,
 			tx_req,
+			tx_grpc_metadata: Some(tx_grpc_metadata),
 			rx_resp_for_request: Some(rx_resp_for_request),
 			rx_resp_for_response: Some(rx_resp_for_response),
+			initial_metadata,
 			req_attributes,
 			resp_attributes,
 		}
@@ -303,6 +328,20 @@ impl ExtProcInstance {
 		req: http::Request,
 		exec: Option<&Executor<'_>>,
 	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
+		if let Some(tx) = self.tx_grpc_metadata.take() {
+			let metadata = if let Some(exec) = exec {
+				self
+					.initial_metadata
+					.as_ref()
+					.map(|m| eval_initial_metadata(exec, m))
+					.transpose()?
+					.unwrap_or_default()
+			} else {
+				tonic::metadata::MetadataMap::new()
+			};
+			let _ = tx.send(metadata);
+		}
+
 		let headers = req_to_header_map(&req);
 		let buffer = http::buffer_limit(&req);
 		let (parts, body) = req.into_parts();
@@ -1032,6 +1071,54 @@ fn eval_attributes_struct(
 			})
 			.collect(),
 	}
+}
+
+fn to_tonic_metadata_value(
+	value: cel::Value,
+) -> Option<tonic::metadata::MetadataValue<tonic::metadata::Ascii>> {
+	match format!("{:?}", value).parse() {
+		Ok(v) => Some(v),
+		Err(error) => {
+			warn!(%error, "invalid metadata value for initial_metadata");
+			None
+		},
+	}
+}
+
+fn eval_initial_metadata(
+	exec: &Executor<'_>,
+	expressions: &HashMap<String, Arc<cel::Expression>>,
+) -> Result<tonic::metadata::MetadataMap, Error> {
+	use tonic::metadata::{Ascii, MetadataKey};
+
+	let headers = expressions
+		.iter()
+		.filter_map(|(k, expr)| {
+			let key = match k.parse::<MetadataKey<Ascii>>() {
+				Ok(key) => key,
+				Err(error) => {
+					warn!(key=%k, %error, "invalid metadata key for initial_metadata");
+					return None;
+				},
+			};
+			let value = match exec.eval(expr) {
+				Ok(value) => value,
+				Err(error) => {
+					warn!(%key, %error, "failed to evaluate CEL expression for initial_metadata");
+					return None;
+				},
+			};
+			Some((key, to_tonic_metadata_value(value)?))
+		})
+		.fold(
+			// with_capacity used becdause MetadataMap does not implement FromIterator
+			tonic::metadata::MetadataMap::with_capacity(expressions.len()),
+			|mut map, (k, v)| {
+				map.insert(k, v);
+				map
+			},
+		);
+	Ok(headers)
 }
 
 #[derive(Clone, Debug)]
