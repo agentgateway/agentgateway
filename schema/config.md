@@ -414,7 +414,9 @@
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)host`|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.extProc.(any)failureMode`||
+|`binds[].listeners[].routes[].policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
+|`binds[].listeners[].routes[].policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].routes[].policies.extProc.(any)responseAttributes`|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.transformations`|Modify requests and responses|
 |`binds[].listeners[].routes[].policies.transformations.request`||
 |`binds[].listeners[].routes[].policies.transformations.request.add`||
@@ -1032,7 +1034,9 @@
 |`binds[].listeners[].policies.extProc.(any)(1)service.port`||
 |`binds[].listeners[].policies.extProc.(any)(1)host`|Hostname or IP address|
 |`binds[].listeners[].policies.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].policies.extProc.(any)failureMode`||
+|`binds[].listeners[].policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
+|`binds[].listeners[].policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].policies.extProc.(any)responseAttributes`|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.transformations`|Modify requests and responses|
 |`binds[].listeners[].policies.transformations.request`||
 |`binds[].listeners[].policies.transformations.request.add`||
@@ -1440,7 +1444,9 @@
 |`policies[].policy.extProc.(any)(1)service.port`||
 |`policies[].policy.extProc.(any)(1)host`|Hostname or IP address|
 |`policies[].policy.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.extProc.(any)failureMode`||
+|`policies[].policy.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
+|`policies[].policy.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`policies[].policy.extProc.(any)responseAttributes`|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.transformations`|Modify requests and responses|
 |`policies[].policy.transformations.request`||
 |`policies[].policy.transformations.request.add`||

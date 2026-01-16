@@ -140,7 +140,7 @@ message TLSConfig {
   enum TLSVersion {
     TLS_VERSION_UNSPECIFIED = 0;
 
-    // TLS 1.0/1.1 are not currently supported 
+    // TLS 1.0/1.1 are not currently supported
     // Keep the old number/name reserved for future support
     reserved "TLS_V1_0";
     reserved 1;
@@ -521,18 +521,21 @@ message FrontendPolicySpec {
     // or a boolean (true/false). If unspecified, client sampling is 100% enabled.
     optional string client_sampling = 5;
 
-    // OTLP path. Default is /v1/traces 
+    // OTLP path. Default is /v1/traces
     optional string path = 6;
 
     // protocol specifies the OTLP protocol variant to use. Default is HTTP
     Protocol protocol = 7;
 
-    enum Protocol {HTTP = 0; GRPC = 1;}
+    enum Protocol {
+      HTTP = 0;
+      GRPC = 1;
+    }
   }
 
   message TracingAttribute {
     string name = 1;
-    string value = 2;  // CEL expression
+    string value = 2; // CEL expression
   }
 
   oneof kind {
@@ -550,7 +553,10 @@ message TrafficPolicySpec {
     repeated Descriptor descriptors = 2;
     BackendReference target = 3;
 
-    enum Type {REQUESTS = 0; TOKENS = 1;}
+    enum Type {
+      REQUESTS = 0;
+      TOKENS = 1;
+    }
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
@@ -707,14 +713,17 @@ message TrafficPolicySpec {
   }
 
   message ExtProc {
-    enum FailureMode{
+    enum FailureMode {
       FAIL_CLOSED = 0;
       FAIL_OPEN = 1;
     }
     BackendReference target = 1;
     FailureMode failure_mode = 2;
+
+    map<string, string> request_attributes = 3;
+    map<string, string> response_attributes = 4;
   }
-  enum PolicyPhase{
+  enum PolicyPhase {
     ROUTE = 0;
     GATEWAY = 1;
   }
@@ -882,8 +891,7 @@ message BackendPolicySpec {
     // If empty or no route matches, the implementation defaults to COMPLETIONS behavior.
     map<string, RouteType> routes = 7;
   }
-  message A2a {
-  }
+  message A2a {}
   message InferenceRouting {
     enum FailureMode {
       UNKNOWN = 0;
@@ -985,8 +993,7 @@ message StaticBackend {
   int32 port = 2;
 }
 
-message DynamicForwardProxy {
-}
+message DynamicForwardProxy {}
 
 message AIBackend {
   message HostOverride {

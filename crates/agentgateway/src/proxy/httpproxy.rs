@@ -114,7 +114,6 @@ async fn apply_request_policies(
 		// Reset the cached state
 		let _ = exec.take();
 	}
-
 	if let Some(j) = &policies.authorization {
 		j.apply(build_ctx(&exec, log)?)
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
@@ -132,11 +131,16 @@ async fn apply_request_policies(
 	.apply(response_policies.headers())?;
 
 	if let Some(x) = response_policies.ext_proc.as_mut() {
-		x.mutate_request(req).await?
+		x.mutate_request(req, Some(build_ctx(&exec, log)?)).await?
 	} else {
 		http::PolicyResponse::default()
 	}
 	.apply(response_policies.headers())?;
+
+	// Reset executor since ext_proc may have mutated headers
+	if response_policies.ext_proc.is_some() {
+		let _ = exec.take();
+	}
 
 	if let Some(j) = &policies.transformation
 		&& j.has_request()
@@ -301,12 +305,18 @@ async fn apply_gateway_policies(
 		let _ = exec.take();
 	}
 
+	let had_ext_proc = ext_proc.is_some();
 	if let Some(x) = ext_proc {
-		x.mutate_request(req).await?
+		x.mutate_request(req, Some(build_ctx(&exec, log)?)).await?
 	} else {
 		http::PolicyResponse::default()
 	}
 	.apply(response_headers)?;
+
+	// Reset executor since ext_proc may have mutated headers
+	if had_ext_proc {
+		let _ = exec.take();
+	}
 
 	if let Some(j) = &policies.transformation
 		&& j.has_request()
@@ -1819,13 +1829,15 @@ impl ResponsePolicies {
 		// ext_proc is only intended to run on responses from upstream
 		if is_upstream_response {
 			if let Some(x) = self.ext_proc.as_mut() {
-				x.mutate_response(resp).await?
+				x.mutate_response(resp, Some(build_ctx(&exec, log)?))
+					.await?
 			} else {
 				PolicyResponse::default()
 			}
 			.apply(&mut self.response_headers)?;
 			if let Some(x) = self.gateway_ext_proc.as_mut() {
-				x.mutate_response(resp).await?
+				x.mutate_response(resp, Some(build_ctx(&exec, log)?))
+					.await?
 			} else {
 				PolicyResponse::default()
 			}

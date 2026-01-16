@@ -1,17 +1,20 @@
 use ::http::{HeaderMap, Method, Request};
 
+use crate::cel::Expression;
 use hyper_util::client::legacy::Client;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tonic::Status;
 use wiremock::MockServer;
 
-use crate::http::ext_proc::proto;
 use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
 use crate::http::ext_proc::proto::{
 	BodyMutation, CommonResponse, HeaderMutation, HeaderValue, HeaderValueOption, HttpHeaders,
 	ProcessingResponse, body_mutation,
 };
+use crate::http::ext_proc::{ExtProcDynamicMetadata, proto};
 use crate::http::{Body, ext_proc};
 use crate::test_helpers::extprocmock::{
 	ExtProcMock, ExtProcMockInstance, Handler, immediate_response, request_body_response,
@@ -179,6 +182,22 @@ pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	TestBind,
 	Client<MemoryConnector, Body>,
 ) {
+	setup_ext_proc_mock_with_meta(mock, failure_mode, mock_ext_proc, config, None, None).await
+}
+
+pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
+	mock: MockServer,
+	failure_mode: ext_proc::FailureMode,
+	mock_ext_proc: ExtProcMock<T>,
+	config: &str,
+	request_attributes: Option<HashMap<String, Arc<Expression>>>,
+	response_attributes: Option<HashMap<String, Arc<Expression>>>,
+) -> (
+	MockServer,
+	ExtProcMockInstance,
+	TestBind,
+	Client<MemoryConnector, Body>,
+) {
 	let ext_proc = mock_ext_proc.spawn().await;
 
 	let t = setup_proxy_test(config)
@@ -201,6 +220,8 @@ pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 					ext_proc.address
 				))),
 				failure_mode,
+				request_attributes,
+				response_attributes,
 			})
 			.into(),
 		});
@@ -1218,4 +1239,452 @@ async fn mock_with_header(header_name: &str, header_value: &str) -> MockServer {
 		.mount(&mock)
 		.await;
 	mock
+}
+
+#[test]
+fn test_dynamic_metadata_extraction() {
+	let mut metadata = ExtProcDynamicMetadata::default();
+
+	metadata
+		.metadata
+		.insert("user_id".to_string(), serde_json::json!("12345"));
+	metadata
+		.metadata
+		.insert("role".to_string(), serde_json::json!("admin"));
+	assert_eq!(metadata.metadata.get("user_id").unwrap(), "12345");
+	assert_eq!(metadata.metadata.get("role").unwrap(), "admin");
+}
+
+mod extract_dynamic_metadata_tests {
+	use super::*;
+	use crate::http::ext_proc::ExtProcInstance;
+	use prost_wkt_types::{Struct, Value, value::Kind};
+	use std::collections::HashMap;
+	use std::sync::Arc;
+
+	#[test]
+	fn test_extract_creates_extension() {
+		let metadata = Struct {
+			fields: [(
+				"user_id".to_string(),
+				Value {
+					kind: Some(Kind::StringValue("12345".to_string())),
+				},
+			)]
+			.into(),
+		};
+		let mut req = ::http::Request::builder()
+			.uri("http://test.com")
+			.body(Body::empty())
+			.unwrap();
+
+		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+
+		let extracted = req
+			.extensions()
+			.get::<Arc<ExtProcDynamicMetadata>>()
+			.expect("metadata should be in extensions");
+		assert_eq!(
+			extracted.metadata.get("user_id"),
+			Some(&serde_json::json!("12345"))
+		);
+	}
+
+	#[test]
+	fn test_extract_merges_with_existing() {
+		let mut req = ::http::Request::builder()
+			.uri("http://test.com")
+			.body(Body::empty())
+			.unwrap();
+
+		let existing = ExtProcDynamicMetadata {
+			metadata: [("existing".to_string(), serde_json::json!("value"))].into(),
+		};
+		req.extensions_mut().insert(Arc::new(existing));
+
+		let metadata = Struct {
+			fields: [(
+				"new_key".to_string(),
+				Value {
+					kind: Some(Kind::StringValue("new_value".to_string())),
+				},
+			)]
+			.into(),
+		};
+		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+
+		let extracted = req
+			.extensions()
+			.get::<Arc<ExtProcDynamicMetadata>>()
+			.unwrap();
+		assert_eq!(extracted.metadata.len(), 2);
+		assert_eq!(
+			extracted.metadata.get("existing"),
+			Some(&serde_json::json!("value"))
+		);
+		assert_eq!(
+			extracted.metadata.get("new_key"),
+			Some(&serde_json::json!("new_value"))
+		);
+	}
+
+	#[test]
+	fn test_extract_overwrites_existing_keys() {
+		let mut req = ::http::Request::builder()
+			.uri("http://test.com")
+			.body(Body::empty())
+			.unwrap();
+
+		let existing = ExtProcDynamicMetadata {
+			metadata: [("key".to_string(), serde_json::json!("old_value"))].into(),
+		};
+		req.extensions_mut().insert(Arc::new(existing));
+
+		let metadata = Struct {
+			fields: [(
+				"key".to_string(),
+				Value {
+					kind: Some(Kind::StringValue("new_value".to_string())),
+				},
+			)]
+			.into(),
+		};
+		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+
+		let extracted = req
+			.extensions()
+			.get::<Arc<ExtProcDynamicMetadata>>()
+			.unwrap();
+		assert_eq!(extracted.metadata.len(), 1);
+		assert_eq!(
+			extracted.metadata.get("key"),
+			Some(&serde_json::json!("new_value"))
+		);
+	}
+
+	#[test]
+	fn test_extract_none_request_ok() {
+		let metadata = Struct {
+			fields: [(
+				"key".to_string(),
+				Value {
+					kind: Some(Kind::StringValue("value".to_string())),
+				},
+			)]
+			.into(),
+		};
+		let result = ExtProcInstance::extract_dynamic_metadata(None, &metadata);
+		assert!(result.is_ok());
+	}
+
+	#[test]
+	fn test_extract_empty_metadata_no_extension() {
+		let metadata = Struct {
+			fields: HashMap::new(),
+		};
+		let mut req = ::http::Request::builder()
+			.uri("http://test.com")
+			.body(Body::empty())
+			.unwrap();
+
+		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+
+		assert!(
+			req
+				.extensions()
+				.get::<Arc<ExtProcDynamicMetadata>>()
+				.is_none()
+		);
+	}
+
+	#[test]
+	fn test_extract_string_and_bool_values() {
+		let metadata = Struct {
+			fields: [
+				(
+					"string_val".to_string(),
+					Value {
+						kind: Some(Kind::StringValue("hello".to_string())),
+					},
+				),
+				(
+					"bool_true".to_string(),
+					Value {
+						kind: Some(Kind::BoolValue(true)),
+					},
+				),
+				(
+					"bool_false".to_string(),
+					Value {
+						kind: Some(Kind::BoolValue(false)),
+					},
+				),
+			]
+			.into(),
+		};
+
+		let mut req = ::http::Request::builder()
+			.uri("http://test.com")
+			.body(Body::empty())
+			.unwrap();
+
+		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+
+		let extracted = req
+			.extensions()
+			.get::<Arc<ExtProcDynamicMetadata>>()
+			.unwrap();
+
+		assert_eq!(extracted.metadata.len(), 3);
+		assert_eq!(
+			extracted.metadata.get("string_val"),
+			Some(&serde_json::json!("hello"))
+		);
+		assert_eq!(
+			extracted.metadata.get("bool_true"),
+			Some(&serde_json::json!(true))
+		);
+		assert_eq!(
+			extracted.metadata.get("bool_false"),
+			Some(&serde_json::json!(false))
+		);
+	}
+
+	#[test]
+	fn test_extract_multiple_calls_accumulate() {
+		let mut req = ::http::Request::builder()
+			.uri("http://test.com")
+			.body(Body::empty())
+			.unwrap();
+
+		let metadata1 = Struct {
+			fields: [(
+				"key1".to_string(),
+				Value {
+					kind: Some(Kind::StringValue("value1".to_string())),
+				},
+			)]
+			.into(),
+		};
+		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata1).unwrap();
+
+		let metadata2 = Struct {
+			fields: [(
+				"key2".to_string(),
+				Value {
+					kind: Some(Kind::BoolValue(true)),
+				},
+			)]
+			.into(),
+		};
+		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata2).unwrap();
+
+		let extracted = req
+			.extensions()
+			.get::<Arc<ExtProcDynamicMetadata>>()
+			.unwrap();
+		assert_eq!(extracted.metadata.len(), 2);
+		assert_eq!(
+			extracted.metadata.get("key1"),
+			Some(&serde_json::json!("value1"))
+		);
+		assert_eq!(
+			extracted.metadata.get("key2"),
+			Some(&serde_json::json!(true))
+		);
+	}
+}
+
+#[derive(Clone)]
+struct MetadataTracker {
+	requests: Arc<std::sync::Mutex<Vec<proto::ProcessingRequest>>>,
+}
+
+impl MetadataTracker {
+	fn new() -> Self {
+		Self {
+			requests: Arc::new(std::sync::Mutex::new(Vec::new())),
+		}
+	}
+}
+
+#[async_trait::async_trait]
+impl Handler for MetadataTracker {
+	async fn on_request(&mut self, request: &proto::ProcessingRequest) {
+		self.requests.lock().unwrap().push(request.clone());
+	}
+}
+
+#[tokio::test]
+async fn test_attributes_empty_without_config() {
+	let mock = simple_mock().await;
+	let tracker = MetadataTracker::new();
+	let requests = tracker.requests.clone();
+
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(move || tracker.clone()),
+		"{}",
+	)
+	.await;
+	let res = send_request_body(io, Method::POST, "http://lo", b"request body").await;
+	assert_eq!(res.status(), 200);
+
+	let captured = requests.lock().unwrap();
+	assert!(captured.len() >= 2);
+
+	for (i, req) in captured.iter().enumerate() {
+		assert!(
+			req.attributes.is_empty(),
+			"Message {} should have empty attributes when no config",
+			i
+		);
+	}
+}
+
+struct DynamicMetadataResponder;
+
+#[async_trait::async_trait]
+impl Handler for DynamicMetadataResponder {
+	async fn handle_request_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		use crate::test_helpers::extprocmock::request_header_response_with_dynamic_metadata;
+		use prost_wkt_types::{Struct, Value, value::Kind};
+
+		let metadata = Struct {
+			fields: [
+				(
+					"auth_user".to_string(),
+					Value {
+						kind: Some(Kind::StringValue("test-user".to_string())),
+					},
+				),
+				(
+					"is_admin".to_string(),
+					Value {
+						kind: Some(Kind::BoolValue(true)),
+					},
+				),
+			]
+			.into(),
+		};
+		let _ = sender
+			.send(request_header_response_with_dynamic_metadata(
+				None, metadata,
+			))
+			.await;
+		Ok(())
+	}
+}
+
+#[tokio::test]
+async fn test_dynamic_metadata_response() {
+	let mock = simple_mock().await;
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(|| DynamicMetadataResponder),
+		"{}",
+	)
+	.await;
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+}
+
+#[tokio::test]
+async fn test_cel_req_attributes() {
+	let mock = simple_mock().await;
+	let tracker = MetadataTracker::new();
+	let requests = tracker.requests.clone();
+
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(move || tracker.clone()),
+		"{}",
+		Some(
+			[(
+				"method".to_string(),
+				Arc::new(Expression::new_strict("request.method").unwrap()),
+			)]
+			.into(),
+		),
+		None,
+	)
+	.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	let req = requests.lock().unwrap();
+	let headers = req
+		.iter()
+		.find(|r| {
+			matches!(
+				r.request,
+				Some(proto::processing_request::Request::RequestHeaders(_))
+			)
+		})
+		.unwrap();
+
+	let ns_attrs = &headers
+		.attributes
+		.get("envoy.filters.http.ext_proc")
+		.expect("envoy ext_proc namespace");
+
+	match &ns_attrs.fields.get("method").unwrap().kind {
+		Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "GET"),
+		invalid => panic!("exepected a string got {:?}", invalid),
+	}
+}
+
+#[tokio::test]
+async fn test_cel_resp_attributes() {
+	let mock = simple_mock().await;
+	let tracker = MetadataTracker::new();
+	let requests = tracker.requests.clone();
+
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(move || tracker.clone()),
+		"{}",
+		None,
+		Some(
+			[(
+				"status".to_string(),
+				Arc::new(Expression::new_strict("response.code").unwrap()),
+			)]
+			.into(),
+		),
+	)
+	.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	let resp = requests.lock().unwrap();
+	let headers = resp
+		.iter()
+		.find(|r| {
+			matches!(
+				r.request,
+				Some(proto::processing_request::Request::ResponseHeaders(_))
+			)
+		})
+		.unwrap();
+
+	let ns_attrs = &headers
+		.attributes
+		.get("envoy.filters.http.ext_proc")
+		.expect("envoy ext_proc namespace");
+
+	match &ns_attrs.fields.get("status").unwrap().kind {
+		Some(prost_wkt_types::value::Kind::NumberValue(n)) => assert_eq!(*n, 200.0),
+		invalid => panic!("exepected a number got {:?}", invalid),
+	}
 }

@@ -56,6 +56,7 @@ pub const API_KEY_ATTRIBUTE: &str = "apiKey";
 pub const BASIC_AUTH_ATTRIBUTE: &str = "basicAuth";
 pub const MCP_ATTRIBUTE: &str = "mcp";
 pub const EXTAUTHZ_ATTRIBUTE: &str = "extauthz";
+pub const EXTPROC_ATTRIBUTE: &str = "extproc";
 pub const ALL_ATTRIBUTES: &[&str] = &[
 	SOURCE_ATTRIBUTE,
 	REQUEST_ATTRIBUTE,
@@ -71,6 +72,7 @@ pub const ALL_ATTRIBUTES: &[&str] = &[
 	BASIC_AUTH_ATTRIBUTE,
 	MCP_ATTRIBUTE,
 	EXTAUTHZ_ATTRIBUTE,
+	EXTPROC_ATTRIBUTE,
 ];
 
 pub struct Expression {
@@ -253,6 +255,34 @@ impl ContextBuilder {
 		}
 	}
 
+	/// Add ext_proc dynamic metadata to the context
+	/// Returns true if there were any changes made
+	pub fn with_extproc(&mut self, req: &crate::http::Request) -> bool {
+		if !self.attributes.contains(EXTPROC_ATTRIBUTE) {
+			return false;
+		}
+
+		// Extract dynamic metadata from ext_proc if present
+		if let Some(ext_proc_metadata) = req
+			.extensions()
+			.get::<Arc<crate::http::ext_proc::ExtProcDynamicMetadata>>()
+		{
+			// Direct access to extproc.field - metadata is already stored flat
+			if !ext_proc_metadata.metadata.is_empty() {
+				if let Some(existing) = &mut self.context.extproc {
+					for (k, v) in ext_proc_metadata.metadata.iter() {
+						existing.insert(k.clone(), v.clone());
+					}
+				} else {
+					self.context.extproc = Some(ext_proc_metadata.metadata.clone());
+				}
+			}
+			true
+		} else {
+			false
+		}
+	}
+
 	pub fn with_source(&mut self, tcp: &TCPConnectionInfo, tls: Option<&TLSConnectionInfo>) {
 		if !self.attributes.contains(SOURCE_ATTRIBUTE) {
 			return;
@@ -353,6 +383,7 @@ impl ContextBuilder {
 			mcp: _,
 			backend,
 			extauthz,
+			extproc,
 		} = &self.context;
 
 		ctx.add_variable_from_value(REQUEST_ATTRIBUTE, opt_to_value(request)?);
@@ -365,6 +396,7 @@ impl ContextBuilder {
 		ctx.add_variable_from_value(LLM_ATTRIBUTE, opt_to_value(llm)?);
 		ctx.add_variable_from_value(SOURCE_ATTRIBUTE, opt_to_value(source)?);
 		ctx.add_variable_from_value(EXTAUTHZ_ATTRIBUTE, opt_to_value(extauthz)?);
+		ctx.add_variable_from_value(EXTPROC_ATTRIBUTE, opt_to_value(extproc)?);
 
 		Ok(Executor { ctx })
 	}
@@ -490,6 +522,7 @@ impl Expression {
 					LLM_COMPLETION_ATTRIBUTE.to_string(),
 				],
 				["extauthz", ..] => vec![EXTAUTHZ_ATTRIBUTE.to_string()],
+				["extproc", ..] => vec![EXTPROC_ATTRIBUTE.to_string()],
 				[first, ..] => vec![first.to_string()],
 				_ => Vec::default(),
 			})
@@ -532,6 +565,8 @@ pub struct ExpressionContext {
 	pub backend: Option<BackendContext>,
 	/// `extauthz` contains dynamic metadata from ext_authz filters
 	pub extauthz: Option<std::collections::HashMap<String, serde_json::Value>>,
+	/// `extproc` contains dynamic metadata from ext_proc filters
+	pub extproc: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 #[apply(schema_ser!)]

@@ -109,7 +109,7 @@ message ProcessingRequest {
   }
 
   // Dynamic metadata associated with the request.
-  //  Metadata metadata_context = 8;
+  // Metadata metadata_context = 8;
 
   // The values of properties selected by the ``request_attributes``
   // or ``response_attributes`` list in the configuration. Each entry
@@ -227,13 +227,9 @@ message HttpHeaders {
   // lower-cased, because HTTP header keys are case-insensitive.
   HeaderMap headers = 1;
 
-  // [#not-implemented-hide:]
-  // The values of properties selected by the ``request_attributes``
-  // or ``response_attributes`` list in the configuration. Each entry
-  // in the list is populated
-  // from the standard :ref:`attributes <arch_overview_attributes>`
-  // supported across Envoy.
-  map<string, google.protobuf.Struct> attributes = 2;
+  // HttpHeaders.attributes removed in favour of ProcessingRequest attributes
+  reserved 2;
+  reserved "attributes";
 
   // If true, then there is no message body associated with this
   // request or response.

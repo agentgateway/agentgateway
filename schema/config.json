@@ -3830,12 +3830,33 @@
                                 "type": "object",
                                 "properties": {
                                   "failureMode": {
+                                    "description": "Behavior when the ext_proc service is unavailable or returns an error",
                                     "type": "string",
                                     "enum": [
                                       "failClosed",
                                       "failOpen"
                                     ],
                                     "default": "failClosed"
+                                  },
+                                  "requestAttributes": {
+                                    "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "responseAttributes": {
+                                    "description": "Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
                                   }
                                 },
                                 "unevaluatedProperties": false,
@@ -9674,12 +9695,33 @@
                           "type": "object",
                           "properties": {
                             "failureMode": {
+                              "description": "Behavior when the ext_proc service is unavailable or returns an error",
                               "type": "string",
                               "enum": [
                                 "failClosed",
                                 "failOpen"
                               ],
                               "default": "failClosed"
+                            },
+                            "requestAttributes": {
+                              "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "responseAttributes": {
+                              "description": "Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "additionalProperties": {
+                                "type": "string"
+                              }
                             }
                           },
                           "unevaluatedProperties": false,
@@ -13599,12 +13641,33 @@
                     "type": "object",
                     "properties": {
                       "failureMode": {
+                        "description": "Behavior when the ext_proc service is unavailable or returns an error",
                         "type": "string",
                         "enum": [
                           "failClosed",
                           "failOpen"
                         ],
                         "default": "failClosed"
+                      },
+                      "requestAttributes": {
+                        "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "responseAttributes": {
+                        "description": "Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "additionalProperties": {
+                          "type": "string"
+                        }
                       }
                     },
                     "unevaluatedProperties": false,
