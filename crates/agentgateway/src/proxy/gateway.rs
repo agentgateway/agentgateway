@@ -87,9 +87,12 @@ impl Gateway {
 								.build()
 								.unwrap()
 								.block_on(async {
-									let _ = Self::run_bind(pi.clone(), subdrain.clone(), b.clone())
+									if let Err(e) = Self::run_bind(pi.clone(), subdrain.clone(), b.clone())
 										.in_current_span()
-										.await;
+										.await
+									{
+										panic!("bind task failed on core {}: {}", id.id, e);
+									}
 								})
 						})
 					})
