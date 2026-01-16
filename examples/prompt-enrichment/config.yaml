@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=../../../main/schema/config.json
+binds:
+- port: 3000
+  listeners:
+  - name: openai-prompt-enrichment
+    routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI: {}
+      policies:
+        ai:
+          routes:
+            /v1/chat/completions: completions
+            /v1/responses: responses
+          prompts:
+            append:
+            - role: system
+              content: Respond with emoji's only
