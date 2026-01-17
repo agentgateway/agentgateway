@@ -21,6 +21,11 @@ use super::hyper_helpers::{Server, empty_response, plaintext_response};
 use crate::Config;
 use crate::http::Response;
 
+// Constants for pprof profiling
+const PPROF_DEFAULT_SECONDS: u64 = 10;
+const PPROF_MIN_SECONDS: u64 = 1;
+const PPROF_MAX_SECONDS: u64 = 300;
+
 pub trait ConfigDumpHandler: Sync + Send {
 	fn key(&self) -> &'static str;
 	// sadly can't use async trait because no Sync
@@ -211,14 +216,14 @@ async fn handle_pprof(req: Request<Incoming>) -> anyhow::Result<Response> {
 		})
 		.unwrap_or_default();
 
-	// Extract seconds parameter with validation (1-300 seconds range)
+	// Extract seconds parameter with validation
 	let seconds = if let Some(seconds_str) = qp.get("seconds") {
 		match seconds_str.parse::<u64>() {
-			Ok(s) if (1..=300).contains(&s) => s,
-			_ => 10, // Default to 10 if invalid or out of range
+			Ok(s) if (PPROF_MIN_SECONDS..=PPROF_MAX_SECONDS).contains(&s) => s,
+			_ => PPROF_DEFAULT_SECONDS, // Default if invalid or out of range
 		}
 	} else {
-		10 // Default to 10 if not provided
+		PPROF_DEFAULT_SECONDS // Default if not provided
 	};
 
 	let guard = pprof::ProfilerGuardBuilder::default()
