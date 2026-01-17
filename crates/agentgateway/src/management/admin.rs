@@ -162,7 +162,7 @@ async fn handle_dashboard(_req: Request<Incoming>) -> Response {
 	let apis = &[
 		(
 			"debug/pprof/profile",
-			"build profile using the pprof profiler (if supported)",
+			"build profile using the pprof profiler (if supported). Use ?seconds=N to specify duration (1-300s, default: 10s)",
 		),
 		(
 			"debug/pprof/heap",
@@ -197,14 +197,36 @@ async fn handle_dashboard(_req: Request<Incoming>) -> Response {
 }
 
 #[cfg(target_os = "linux")]
-async fn handle_pprof(_req: Request<Incoming>) -> anyhow::Result<Response> {
+async fn handle_pprof(req: Request<Incoming>) -> anyhow::Result<Response> {
 	use pprof::protos::Message;
+
+	// Parse query parameters to extract optional "seconds" parameter
+	let qp: HashMap<String, String> = req
+		.uri()
+		.query()
+		.map(|v| {
+			url::form_urlencoded::parse(v.as_bytes())
+				.into_owned()
+				.collect()
+		})
+		.unwrap_or_default();
+
+	// Extract seconds parameter with validation (1-300 seconds range)
+	let seconds = if let Some(seconds_str) = qp.get("seconds") {
+		match seconds_str.parse::<u64>() {
+			Ok(s) if (1..=300).contains(&s) => s,
+			_ => 10, // Default to 10 if invalid or out of range
+		}
+	} else {
+		10 // Default to 10 if not provided
+	};
+
 	let guard = pprof::ProfilerGuardBuilder::default()
 		.frequency(1000)
 		// .blocklist(&["libc", "libgcc", "pthread", "vdso"])
 		.build()?;
 
-	tokio::time::sleep(Duration::from_secs(10)).await;
+	tokio::time::sleep(Duration::from_secs(seconds)).await;
 	let report = guard.report().build()?;
 	let profile = report.pprof()?;
 
