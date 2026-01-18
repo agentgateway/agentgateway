@@ -68,6 +68,25 @@ pub struct FrontendPolices {
 }
 
 impl FrontendPolices {
+	pub fn set_if_empty(&mut self, rule: &FrontendPolicy) {
+		match rule {
+			FrontendPolicy::HTTP(p) => {
+				self.http.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::TLS(p) => {
+				self.tls.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::TCP(p) => {
+				self.tcp.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::AccessLog(p) => {
+				self.access_log.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::Tracing(p) => {
+				self.tracing.get_or_insert_with(|| p.clone());
+			},
+		}
+	}
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
 		let Some(frontend::LoggingPolicy {
 			filter,
@@ -643,25 +662,22 @@ impl Store {
 			.filter_map(|p| p.policy.as_frontend());
 
 		let mut pol = FrontendPolices::default();
-		for rule in rules {
-			match rule {
-				FrontendPolicy::HTTP(p) => {
-					pol.http.get_or_insert_with(|| p.clone());
-				},
-				FrontendPolicy::TLS(p) => {
-					pol.tls.get_or_insert_with(|| p.clone());
-				},
-				FrontendPolicy::TCP(p) => {
-					pol.tcp.get_or_insert_with(|| p.clone());
-				},
-				FrontendPolicy::AccessLog(p) => {
-					pol.access_log.get_or_insert_with(|| p.clone());
-				},
-				FrontendPolicy::Tracing(p) => {
-					pol.tracing.get_or_insert_with(|| p.clone());
-				},
-			}
-		}
+		rules.for_each(|r| pol.set_if_empty(r));
+		pol
+	}
+
+	pub fn listener_frontend_policies(&self, name: &ListenerName) -> FrontendPolices {
+		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
+		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
+		let rules = listener
+			.iter()
+			.copied()
+			.flatten()
+			.chain(gateway.iter().copied().flatten())
+			.filter_map(|n| self.policies_by_key.get(n))
+			.filter_map(|p| p.policy.as_frontend());
+		let mut pol = FrontendPolices::default();
+		rules.for_each(|r| pol.set_if_empty(r));
 		pol
 	}
 
@@ -1174,6 +1190,10 @@ fn preload_tokenizers() {
 
 #[cfg(test)]
 mod tests {
+	use frozen_collections::FzHashSet;
+
+	use crate::{telemetry::log::OrderedStringMap, types::frontend::LoggingPolicy};
+
 	use super::*;
 	use std::time::Duration;
 
@@ -1225,6 +1245,71 @@ mod tests {
 		pol
 	}
 
+	fn create_access_log_policy(remove_item: &str) -> FrontendPolicy {
+		FrontendPolicy::AccessLog(LoggingPolicy {
+			filter: None,
+			add: Arc::new(OrderedStringMap::default()),
+			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),
+		})
+	}
+
+	fn insert_policy_at_level(
+		store: &mut Store,
+		listener: &ListenerName,
+		policy_name: &str,
+		for_listener: bool,
+		remove_item: &str,
+	) {
+		let policy_key = strng::new(policy_name);
+		let listener_name = if for_listener {
+			Some(listener.listener_name.clone())
+		} else {
+			None
+		};
+		let target = PolicyTarget::Gateway(ListenerTarget {
+			gateway_name: listener.gateway_name.clone(),
+			gateway_namespace: listener.gateway_namespace.clone(),
+			listener_name,
+		});
+		let policy = TargetedPolicy {
+			key: policy_key.clone(),
+			name: None,
+			target: target.clone(),
+			policy: agent::PolicyType::Frontend(create_access_log_policy(remove_item)),
+		};
+
+		store
+			.policies_by_key
+			.insert(policy_key.clone(), Arc::new(policy));
+		store
+			.policies_by_target
+			.entry(target.clone())
+			.or_default()
+			.insert(policy_key);
+	}
+
+	fn insert_gateway_level_frontend_policy(
+		store: &mut Store,
+		listener: &ListenerName,
+		remove_item: &str,
+	) {
+		insert_policy_at_level(store, listener, "gw_frontend_policy", false, remove_item);
+	}
+
+	fn insert_listener_level_frontend_policy(
+		store: &mut Store,
+		listener: &ListenerName,
+		remove_item: &str,
+	) {
+		insert_policy_at_level(
+			store,
+			listener,
+			"listener_frontend_policy",
+			true,
+			remove_item,
+		);
+	}
+
 	#[test]
 	fn route_policies_are_kind_scoped() {
 		let mut store = Store::new();
@@ -1253,5 +1338,33 @@ mod tests {
 			&[],
 		);
 		assert_eq!(grpc_pols.timeout, Some(grpc_timeout));
+	}
+
+	/// Tests that frontend policies at listener level take precedence over gateway level policies
+	#[test]
+	fn frontend_policy_listener_precedence() {
+		let mut store = Store::new();
+		let listener = listener();
+
+		// Insert both gateway and listener level frontend policies
+		insert_gateway_level_frontend_policy(&mut store, &listener, "gw_remove");
+		insert_listener_level_frontend_policy(&mut store, &listener, "listener_remove");
+
+		let merged_pols = store.listener_frontend_policies(&listener);
+		// Verify that listener policy takes precedence over gateway policy
+		assert!(
+			merged_pols.access_log.is_some(),
+			"Expected access log policy to be present"
+		);
+
+		let access_log = merged_pols.access_log.as_ref().unwrap();
+		assert!(
+			access_log.remove.contains("listener_remove"),
+			"Expected listener policy to take precedence for remove field"
+		);
+		assert!(
+			!access_log.remove.contains("gw_remove"),
+			"Gateway policy should not override listener policy"
+		);
 	}
 }

@@ -506,14 +506,28 @@ impl HTTPProxy {
 		);
 		log.version = Some(req.version());
 
-		// Record request now. We may do it later as well, after we have more expressions registered.
-		Self::apply_request_to_cel(log, &mut req).await;
+		// Now check if we actually have a listener - fail after tracing is set up
+		let selected_listener = selected_listener
+			.or_else(|| bind.listeners.best_match(&host))
+			.ok_or(ProxyError::ListenerNotFound)?;
+		log.bind_name = Some(bind_name.clone());
+		log.listener_name = Some(selected_listener.name.clone());
+		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
 
 		// Check for per-frontend sampling overrides first, before we decide sampling
 		let frontend_policies = inputs
 			.stores
 			.read_binds()
-			.frontend_policies(self.inputs.cfg.gateway_ref());
+			.listener_frontend_policies(&selected_listener.name);
+
+		frontend_policies.register_cel_expressions(log.cel.ctx());
+
+		if let Some(lp) = &frontend_policies.access_log {
+			apply_logging_policy_to_log(log, lp);
+		}
+		// Record request now. We may do it later as well, after we have more expressions registered.
+		Self::apply_request_to_cel(log, &mut req).await;
+
 		if let Some(tp) = frontend_policies.tracing.as_deref() {
 			// Apply sampling overrides if present
 			if let Some(rs) = &tp.config.random_sampling {
@@ -575,14 +589,6 @@ impl HTTPProxy {
 			log.outgoing_span = Some(ns);
 		}
 
-		// Now check if we actually have a listener - fail after tracing is set up
-		let selected_listener = selected_listener
-			.or_else(|| bind.listeners.best_match(&host))
-			.ok_or(ProxyError::ListenerNotFound)?;
-		log.bind_name = Some(bind_name.clone());
-		log.listener_name = Some(selected_listener.name.clone());
-
-		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
 		let mut gateway_policies = inputs
 			.stores
 			.read_binds()
