@@ -21,6 +21,19 @@ mod pii;
 #[path = "tests.rs"]
 mod tests;
 
+/// Represents an AI model that can be advertised at the /v1/models endpoint
+#[apply(schema!)]
+pub struct AIModel {
+	/// The model identifier (e.g., "gpt-4o-mini", "claude-3-5-sonnet")
+	pub id: Strng,
+	/// The organization that owns/provides the model (e.g., "openai", "anthropic")
+	#[serde(rename = "ownedBy")]
+	pub owned_by: Strng,
+	/// Unix timestamp of when the model was created (optional)
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub created: Option<i64>,
+}
+
 /// Routes stored in a deterministic order: **longest key to shortest key**, with `"*"` always last.
 ///
 /// This lets us iterate and match more-specific suffixes first.
@@ -129,6 +142,8 @@ pub struct Policy {
 		schemars(with = "std::collections::HashMap<String, crate::llm::RouteType>")
 	)]
 	pub routes: SortedRoutes,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub models: Vec<AIModel>,
 }
 
 /// Wildcard pattern converted to regex for model name matching.

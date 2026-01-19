@@ -38,6 +38,10 @@ use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::{backend, frontend};
 use crate::{ProxyInputs, store, *};
 
+// Default timestamp for model creation if not specified in configuration
+// January 1, 2024, 00:00:00 UTC
+const DEFAULT_MODEL_CREATED_TIMESTAMP: i64 = 1704067200;
+
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
 	route
 		.backends
@@ -1403,14 +1407,40 @@ async fn make_backend_call(
 					(req, response_policies, Some(llm_request))
 				},
 				RouteType::Models => {
+					// Get models from the policy, if available
+					let models = llm_request_policies
+						.llm
+						.as_ref()
+						.map(|p| p.models.as_slice())
+						.unwrap_or(&[]);
+					
+					// Build OpenAI-compatible /v1/models response
+					let models_json: Vec<serde_json::Value> = models
+						.iter()
+						.map(|m| {
+							serde_json::json!({
+								"id": m.id.as_str(),
+								"object": "model",
+								"owned_by": m.owned_by.as_str(),
+								"created": m.created.unwrap_or(DEFAULT_MODEL_CREATED_TIMESTAMP)
+							})
+						})
+						.collect();
+					
+					let response_body = serde_json::json!({
+						"object": "list",
+						"data": models_json
+					});
+					
+					let body_bytes = serde_json::to_vec(&response_body)
+						.map_err(|e| ProxyError::ProcessingString(format!("Failed to serialize models response: {}", e)))?;
+					
 					return Ok(Box::pin(async move {
 						Ok(
 							::http::Response::builder()
-								.status(::http::StatusCode::NOT_IMPLEMENTED)
+								.status(::http::StatusCode::OK)
 								.header(::http::header::CONTENT_TYPE, "application/json")
-								.body(http::Body::from(format!(
-									"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
-								)))
+								.body(http::Body::from(body_bytes))
 								.expect("Failed to build response"),
 						)
 					}));

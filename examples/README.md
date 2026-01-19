@@ -30,3 +30,11 @@ The `a2a` example shows how to use agentgateway to serve an [A2A](https://a2apro
 ### [HTTP](http/README.md)
 
 The `http` example shows how to use agentgateway to serve generic HTTP traffic.
+
+### [AI Models](ai-models/README.md)
+
+The `ai-models` example demonstrates how to configure agentgateway to aggregate and return a list of models at the `/v1/models` endpoint, providing OpenAI-compatible model discovery.
+
+### [AI Prompt Guard](ai-prompt-guard/README.md)
+
+The `ai-prompt-guard` example shows how to use agentgateway to apply prompt guards to AI requests.

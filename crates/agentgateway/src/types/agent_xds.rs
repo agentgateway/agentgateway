@@ -372,6 +372,15 @@ fn convert_backend_ai_policy(
 			.iter()
 			.map(|(k, v)| (strng::new(k), convert_route_type(*v)))
 			.collect(),
+		models: ai
+			.models
+			.iter()
+			.map(|m| llm::policy::AIModel {
+				id: strng::new(&m.id),
+				owned_by: strng::new(&m.owned_by),
+				created: m.created,
+			})
+			.collect(),
 	};
 
 	// Compile wildcard patterns from model_aliases
