@@ -22,8 +22,11 @@ use crate::Config;
 use crate::http::Response;
 
 // Constants for pprof profiling
+#[cfg(target_os = "linux")]
 const PPROF_DEFAULT_SECONDS: u64 = 10;
+#[cfg(target_os = "linux")]
 const PPROF_MIN_SECONDS: u64 = 1;
+#[cfg(target_os = "linux")]
 const PPROF_MAX_SECONDS: u64 = 300;
 
 pub trait ConfigDumpHandler: Sync + Send {
