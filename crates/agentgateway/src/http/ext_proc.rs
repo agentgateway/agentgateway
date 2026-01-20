@@ -173,7 +173,6 @@ impl ExtProc {
 	}
 
 	pub fn expressions(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
-		// Return a reference to all expressions including the namespaced metadata_context
 		Box::new(
 			self
 				.metadata_context
@@ -528,21 +527,19 @@ impl ExtProcInstance {
 		let end_of_stream = body.is_end_stream();
 		let had_body = !end_of_stream;
 
-		// response_attributes should only be sent on first ProcessingRequest
-		// this will need to be modified if we configure which Requests to send
-		// Wrap metadata_context in Arc for cheap cloning across body chunks
 		let (metadata_context, mut attributes) = if let Some(exec) = exec {
 			(
+				// Wrap metadata_context in Arc for cheap cloning across body chunks
 				self.metadata_context.as_ref().map(|meta| {
 					Arc::new(Metadata {
 						filter_metadata: meta
 							.iter()
-							.filter_map(|(n, e)| {
-								eval_to_struct(exec, e).map(|v| (n.clone(), v)).ok() // TODO(mk): where best to log convertion issues
-							})
+							.filter_map(|(n, e)| eval_to_struct(exec, e).map(|v| (n.clone(), v)).ok())
 							.collect(),
 					})
 				}),
+				// response_attributes should only be sent on first ProcessingRequest
+				// this will need to be modified if we configure which Requests to send
 				self.resp_attributes.as_ref().and_then(|attrs| {
 					eval_to_struct(exec, attrs)
 						.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
@@ -1081,13 +1078,7 @@ fn eval_to_struct(
 			.filter_map(|(key, expr)| match eval_expression(exec, expr) {
 				Ok(result) => Some((key.clone(), result)),
 				Err(error) => {
-					// TODO(mk): Add Expression::expression_str() accessor to avoid Debug formatting
-					warn!(
-						%key,
-						expression = ?expr,
-						%error,
-						"failed to evaluate CEL expression for ext_proc metadata"
-					);
+					warn!(%key, %error, "failed to evaluate metadata_context CEL expression");
 					None
 				},
 			})
