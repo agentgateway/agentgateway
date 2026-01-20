@@ -11,3 +11,15 @@ binds:
               schema:
                 file: ./examples/openapi/openapi.json
               host: localhost:8080
+      policies:
+        cors:
+          allowOrigins:
+          - "*"
+          allowHeaders:
+          - content-type
+          - mcp-protocol-version
+          - mcp-session-id
+          exposeHeaders:
+          - mcp-session-id
+          - mcp-protocol-version
+          maxAge: 5m
