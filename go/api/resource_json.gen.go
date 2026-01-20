@@ -886,6 +886,17 @@ func (this *TrafficPolicySpec_ExtProc) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_ExtProc_NamespacedMetadataContext
+func (this *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ExtProc_NamespacedMetadataContext
+func (this *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_HostRewrite
 func (this *TrafficPolicySpec_HostRewrite) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

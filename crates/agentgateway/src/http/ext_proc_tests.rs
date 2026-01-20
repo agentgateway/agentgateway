@@ -182,7 +182,7 @@ pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	TestBind,
 	Client<MemoryConnector, Body>,
 ) {
-	setup_ext_proc_mock_with_meta(mock, failure_mode, mock_ext_proc, config, None, None).await
+	setup_ext_proc_mock_with_meta(mock, failure_mode, mock_ext_proc, config, None, None, None).await
 }
 
 pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
@@ -190,6 +190,7 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 	failure_mode: ext_proc::FailureMode,
 	mock_ext_proc: ExtProcMock<T>,
 	config: &str,
+	metadata_context: Option<HashMap<String, HashMap<String, Arc<Expression>>>>,
 	request_attributes: Option<HashMap<String, Arc<Expression>>>,
 	response_attributes: Option<HashMap<String, Arc<Expression>>>,
 ) -> (
@@ -220,6 +221,7 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 					ext_proc.address
 				))),
 				failure_mode,
+				metadata_context,
 				request_attributes,
 				response_attributes,
 			})
@@ -1596,6 +1598,65 @@ async fn test_dynamic_metadata_response() {
 }
 
 #[tokio::test]
+async fn test_cel_metadata_context_evaluation() {
+	let mock = simple_mock().await;
+	let tracker = MetadataTracker::new();
+	let requests = tracker.requests.clone();
+
+	let meta = HashMap::from([(
+		"envoy.filters.http.ext_proc".to_string(),
+		[
+			(
+				"path".to_string(),
+				Arc::new(Expression::new_strict("request.path").unwrap()),
+			),
+			(
+				"static".to_string(),
+				Arc::new(Expression::new_strict("'value'").unwrap()),
+			),
+		]
+		.into(),
+	)]);
+
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(move || tracker.clone()),
+		"{}",
+		Some(meta),
+		None,
+		None,
+	)
+	.await;
+
+	let res = send_request(io, Method::GET, "http://lo/test-path").await;
+	assert_eq!(res.status(), 200);
+
+	let reqs = requests.lock().unwrap();
+	assert!(!reqs.is_empty());
+
+	let req = &reqs[0];
+	let meta_ctx = req
+		.metadata_context
+		.as_ref()
+		.expect("should have metadata_context");
+	let filter_meta = meta_ctx
+		.filter_metadata
+		.get("envoy.filters.http.ext_proc")
+		.expect("should have namespace");
+
+	let fields = &filter_meta.fields;
+	match &fields.get("path").unwrap().kind {
+		Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "/test-path"),
+		invalid => panic!("exepected a string 'path' got {:?}", invalid),
+	}
+	match &fields.get("static").unwrap().kind {
+		Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "value"),
+		invalid => panic!("exepected a string 'static' field got {:?}", invalid),
+	}
+}
+
+#[tokio::test]
 async fn test_cel_req_attributes() {
 	let mock = simple_mock().await;
 	let tracker = MetadataTracker::new();
@@ -1606,6 +1667,7 @@ async fn test_cel_req_attributes() {
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(move || tracker.clone()),
 		"{}",
+		None,
 		Some(
 			[(
 				"method".to_string(),
@@ -1653,6 +1715,7 @@ async fn test_cel_resp_attributes() {
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(move || tracker.clone()),
 		"{}",
+		None,
 		None,
 		Some(
 			[(
