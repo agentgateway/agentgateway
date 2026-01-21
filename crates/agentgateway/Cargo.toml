@@ -86,6 +86,7 @@ opentelemetry-http.workspace = true
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 parking_lot.workspace = true
+percent-encoding.workspace = true
 phonenumber.workspace = true
 pin-project-lite.workspace = true
 ppp.workspace = true
@@ -167,6 +168,7 @@ prost-wkt-build.workspace = true
 assert_matches.workspace = true
 divan.workspace = true
 insta.workspace = true
+rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true

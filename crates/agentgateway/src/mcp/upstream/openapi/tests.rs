@@ -5,6 +5,7 @@ use agent_core::{metrics, strng};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use prometheus_client::registry::Registry;
 use rmcp::model::Tool;
+use rstest::rstest;
 use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -576,9 +577,97 @@ async fn test_normalize_url_path_path_without_leading_slash() {
 	assert_eq!(result, "/api/v3/pet");
 }
 
+#[rstest]
+#[case::empty_prefix("", "/mqtt/healthcheck", "/mqtt/healthcheck")]
+#[case::with_prefix("/api/v3/", "/pet", "/api/v3/pet")]
+#[case::prefix_no_trailing_slash("/api/v3", "/pet", "/api/v3/pet")]
+#[case::without_leading_slash("/api/v3", "pet", "/api/v3/pet")]
+#[case::empty_prefix_path_without_slash("", "pet", "/pet")]
+fn test_normalize_url_path(#[case] prefix: &str, #[case] path: &str, #[case] expected: &str) {
+	let result = super::normalize_url_path(prefix, path);
+	assert_eq!(result, expected);
+}
+
+#[rstest]
+#[case::simple_id("123", "/users/123")]
+#[case::numeric_id("456", "/users/456")]
+#[case::spaces("user name", "/users/user%20name")]
+#[case::unicode("user\u{00e9}", "/users/user%C3%A9")]
+#[case::path_traversal("../admin", "/users/..%2Fadmin")]
+#[case::embedded_slashes("user-1/o/er-1001", "/users/user-1%2Fo%2Fer-1001")]
+#[case::query_injection("123?admin=true", "/users/123%3Fadmin%3Dtrue")]
+#[case::query_with_ampersand("123?a=1&b=2", "/users/123%3Fa%3D1%26b%3D2")]
+#[case::hash_fragment("user#section", "/users/user%23section")]
+#[case::ampersand_in_path("user&admin=true", "/users/user%26admin%3Dtrue")]
 #[tokio::test]
-async fn test_normalize_url_path_empty_prefix_path_without_slash() {
-	// Test edge case: empty prefix and path without leading slash
-	let result = super::normalize_url_path("", "pet");
-	assert_eq!(result, "/pet");
+async fn test_path_param_encoding(#[case] user_id: &str, #[case] expected_path: &str) {
+	let (server, handler) = setup().await;
+
+	Mock::given(method("GET"))
+		.and(path(expected_path))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": user_id })))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": user_id } });
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
+	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+}
+
+#[rstest]
+#[case::empty_string(json!({"verbose": ""}), vec![("verbose", "")])]
+#[case::string_value(json!({"verbose": "true"}), vec![("verbose", "true")])]
+#[case::boolean_true(json!({"verbose": true}), vec![("verbose", "true")])]
+#[case::boolean_false(json!({"verbose": false}), vec![("verbose", "false")])]
+#[case::integer_value(json!({"verbose": "123"}), vec![("verbose", "123")])]
+#[case::special_chars(json!({"verbose": "hello world"}), vec![("verbose", "hello world")])]
+#[case::array_values(json!({"verbose": ["a", "b", "c"]}), vec![("verbose", "a"), ("verbose", "b"), ("verbose", "c")])]
+#[case::ampersand_in_value(json!({"verbose": "foo&admin=true"}), vec![("verbose", "foo&admin=true")])]
+#[case::equals_in_value(json!({"verbose": "foo=bar"}), vec![("verbose", "foo=bar")])]
+#[case::question_mark_in_value(json!({"verbose": "foo?bar"}), vec![("verbose", "foo?bar")])]
+#[case::combined_injection(json!({"verbose": "x&evil=1&admin=true"}), vec![("verbose", "x&evil=1&admin=true")])]
+#[tokio::test]
+async fn test_query_param_types(
+	#[case] query_args: serde_json::Value,
+	#[case] expected_params: Vec<(&str, &str)>,
+) {
+	let (server, handler) = setup().await;
+
+	let user_id = "test-user";
+
+	let mut mock = Mock::given(method("GET")).and(path(format!("/users/{user_id}")));
+	for (key, value) in &expected_params {
+		mock = mock.and(query_param(*key, *value));
+	}
+	mock
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": user_id })))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let args = json!({
+		"path": { "user_id": user_id },
+		"query": query_args
+	});
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
+	assert_eq!(result.unwrap(), json!({ "id": user_id }));
 }

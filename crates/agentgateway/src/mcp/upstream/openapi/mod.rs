@@ -1,12 +1,16 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::warn;
 
 use ::http::header::{HeaderName, HeaderValue};
 use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_TYPE};
+use once_cell::sync::Lazy;
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
+use percent_encoding::{AsciiSet, utf8_percent_encode};
+use regex::{Captures, Regex, Replacer};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -477,6 +481,39 @@ impl Default for JsonSchema {
 	}
 }
 
+/// Regex to match path template parameters like `{param_name}`.
+static PATH_PARAM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{([^}]+)\}").unwrap());
+
+/// Characters that are safe in path segments (RFC 3986 unreserved characters).
+/// All other characters will be percent-encoded to prevent path traversal/injection.
+const PATH_SEGMENT_SAFE: &AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+	.remove(b'-')
+	.remove(b'.')
+	.remove(b'_')
+	.remove(b'~');
+
+/// Replaces path template parameters.
+struct PathParamReplacer(serde_json::Map<String, Value>);
+
+impl Replacer for PathParamReplacer {
+	fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+		let param = &caps[1];
+		match self.0.get(param) {
+			Some(Value::Number(n_val)) => return dst.push_str(&n_val.to_string()),
+			Some(Value::String(s_val)) => {
+				return dst.extend(utf8_percent_encode(s_val, PATH_SEGMENT_SAFE));
+			},
+			Some(unexpected) => warn!(
+				"Unexpected parameter '{param}' (value: {:?}), leaving path param",
+				unexpected
+			),
+			_ => {},
+		};
+		// fallback to use path parm
+		dst.push_str(&caps[0]);
+	}
+}
+
 /// Normalizes URL path construction to avoid double slashes
 /// Ensures exactly one slash between prefix and path components
 fn normalize_url_path(prefix: &str, path: &str) -> String {
@@ -493,6 +530,13 @@ fn normalize_url_path(prefix: &str, path: &str) -> String {
 	} else {
 		format!("{prefix}{path}")
 	}
+}
+
+fn encode_query_value(value: &str) -> Cow<'_, str> {
+	Cow::from(utf8_percent_encode(
+		value,
+		percent_encoding::NON_ALPHANUMERIC,
+	))
 }
 
 #[derive(Debug)]
@@ -643,26 +687,8 @@ impl Handler {
 		let body_value = args.get(&*BODY_NAME).cloned();
 
 		// --- URL Construction ---
-		let mut path = info.path.clone();
-		// Substitute path parameters into the path template
-		for (key, value) in &path_params {
-			match value {
-				Value::String(s_val) => {
-					path = path.replace(&format!("{{{key}}}"), s_val);
-				},
-				Value::Number(n_val) => {
-					path = path.replace(&format!("{{{key}}}"), n_val.to_string().as_str());
-				},
-				_ => {
-					tracing::warn!(
-						"Path parameter '{}' for tool '{}' is not a string (value: {:?}), skipping substitution",
-						key,
-						name,
-						value
-					);
-				},
-			}
-		}
+		// Substitute path parameters into the path template in a single pass
+		let path = PATH_PARAM_RE.replace_all(&info.path, PathParamReplacer(path_params));
 
 		// Use normalize_url_path to avoid double slashes
 		let normalized_path = normalize_url_path(&self.prefix, &path);
@@ -684,27 +710,41 @@ impl Handler {
 		})?;
 
 		// Build query string
-		let query_string = if !query_params.is_empty() {
-			let mut pairs = Vec::new();
-			for (k, v) in query_params.iter() {
-				if let Some(s) = v.as_str() {
-					pairs.push(format!("{k}={s}"));
-				} else {
-					tracing::warn!(
-						"Query parameter '{}' for tool '{}' is not a string (value: {:?}), skipping",
-						k,
-						name,
-						v
-					);
-				}
-			}
-			if !pairs.is_empty() {
-				format!("?{}", pairs.join("&"))
-			} else {
-				String::new()
-			}
-		} else {
+		let query_string = if query_params.is_empty() {
 			String::new()
+		} else {
+			let format_pair = |param_name: &str, key: &str, v: &Value| -> Option<String> {
+				match v {
+					Value::Null => Some(key.to_string()),
+					Value::Bool(b) => Some(format!("{key}={b}")),
+					Value::Number(n) => Some(format!("{key}={n}")),
+					Value::String(s) => Some(format!("{key}={}", encode_query_value(s))),
+					_ => {
+						warn!(
+							"Query parameter '{}' for tool '{}' unsupported (value: {:?}), skipping",
+							param_name, name, v
+						);
+						None
+					},
+				}
+			};
+			query_params
+				.iter()
+				.flat_map(|(k, v)| {
+					let key = encode_query_value(k);
+					match v {
+						Value::Array(a) => a
+							.iter()
+							.filter_map(|v| format_pair(k, &key, v))
+							.collect::<Vec<_>>(),
+						_ => format_pair(k, &key, v).into_iter().collect(),
+					}
+				})
+				.fold(String::new(), |mut acc, pair| {
+					acc.push(if acc.is_empty() { '?' } else { '&' });
+					acc.push_str(&pair);
+					acc
+				})
 		};
 
 		let uri = format!("{base_url}{query_string}");
@@ -720,24 +760,19 @@ impl Handler {
 					(Ok(h_name), Ok(h_value)) => {
 						rb = rb.header(h_name, h_value);
 					},
-					(Err(_), _) => tracing::warn!(
+					(Err(_), _) => warn!(
 						"Invalid header name '{}' for tool '{}', skipping",
-						key,
-						name
+						key, name
 					),
-					(_, Err(_)) => tracing::warn!(
+					(_, Err(_)) => warn!(
 						"Invalid header value '{}' for header '{}' in tool '{}', skipping",
-						s_val,
-						key,
-						name
+						s_val, key, name
 					),
 				}
 			} else {
-				tracing::warn!(
+				warn!(
 					"Header parameter '{}' for tool '{}' is not a string (value: {:?}), skipping",
-					key,
-					name,
-					value
+					key, name, value
 				);
 			}
 		}
