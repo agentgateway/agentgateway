@@ -29,6 +29,8 @@ use crate::types::agent::{
 };
 use crate::types::frontend;
 use crate::{ProxyInputs, client};
+use hickory_resolver::TokioResolver;
+use hickory_resolver::name_server::TokioConnectionProvider;
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
@@ -754,15 +756,108 @@ impl Gateway {
 		ext: Arc<Extension>,
 		drain: DrainWatcher,
 	) {
-		debug!(?req, "received request");
+		let uri_str = req.uri().to_string();
+		debug!(
+			bind=?bind_name,
+			uri=%uri_str,
+			"serve_waypoint_connect: received CONNECT request"
+		);
 
-		let hbone_addr = req
-			.uri()
-			.to_string()
-			.as_str()
-			.parse::<SocketAddr>()
-			.map_err(|_| InboundError(anyhow::anyhow!("bad request"), StatusCode::BAD_REQUEST))
-			.unwrap();
+		let hbone_addr = match uri_str.parse::<SocketAddr>() {
+			Ok(addr) => addr,
+			Err(_) => {
+				let Some((hostname, port_str)) = uri_str.split_once(':') else {
+					warn!(
+						bind=?bind_name,
+						uri=%uri_str,
+						"serve_waypoint_connect: invalid URI format, expected 'IP:PORT' or 'HOSTNAME:PORT'"
+					);
+					let _ = req
+						.send_response(build_response(StatusCode::BAD_REQUEST))
+						.await;
+					return;
+				};
+
+				let Ok(port) = port_str.parse::<u16>() else {
+					warn!(
+						bind=?bind_name,
+						uri=%uri_str,
+						port=%port_str,
+						"serve_waypoint_connect: invalid port in URI"
+					);
+					let _ = req
+						.send_response(build_response(StatusCode::BAD_REQUEST))
+						.await;
+					return;
+				};
+
+				// Try service registry lookup first
+				// Format: <service>.<namespace>.<...>
+				let namespace = hostname.split('.').nth(1);
+				let svc = if let Some(ns) = namespace {
+					let stores = pi.stores.read_discovery();
+					stores
+						.services
+						.get_by_namespaced_host(&crate::types::discovery::NamespacedHostname {
+							namespace: ns.into(),
+							hostname: hostname.into(),
+						})
+				} else {
+					None
+				};
+
+				let ip = if let Some(svc) = svc {
+					// Found in service registry, get VIP for current network
+					// This is critical: we must use the VIP, not a workload IP, because
+					// the route lookup in get_route() uses get_by_vip() which requires a VIP
+					let network = &pi.cfg.network;
+					if let Some(vip) = svc
+						.vips
+						.iter()
+						.find(|vip| vip.network == *network)
+						.or_else(|| svc.vips.first())
+					{
+						vip.address
+					} else {
+						// Service found but no VIPs, fall back to DNS
+						drop(svc); // Release lock before await
+						match Self::resolve_via_dns(hostname, &uri_str, &pi.cfg.dns).await {
+							Ok(ip) => ip,
+							Err(_) => {
+								warn!(
+									bind=?bind_name,
+									hostname=%hostname,
+									"serve_waypoint_connect: DNS resolution failed"
+								);
+								let _ = req
+									.send_response(build_response(StatusCode::BAD_REQUEST))
+									.await;
+								return;
+							},
+						}
+					}
+				} else {
+					// Not found in service registry, try DNS
+					// WARNING: DNS may resolve to a workload IP instead of VIP, which will cause route lookup to fail
+					match Self::resolve_via_dns(hostname, &uri_str, &pi.cfg.dns).await {
+						Ok(ip) => ip,
+						Err(_) => {
+							warn!(
+								bind=?bind_name,
+								hostname=%hostname,
+								"serve_waypoint_connect: DNS resolution failed"
+							);
+							let _ = req
+								.send_response(build_response(StatusCode::BAD_REQUEST))
+								.await;
+							return;
+						},
+					}
+				};
+				SocketAddr::from((ip, port))
+			},
+		};
+
 		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
 			warn!("failed to send response");
 			return;
@@ -785,6 +880,42 @@ impl Gateway {
 			drain,
 		)
 		.await;
+	}
+
+	/// Helper function to resolve hostname via DNS (fallback when service registry lookup fails)
+	async fn resolve_via_dns(
+		hostname: &str,
+		uri_str: &str,
+		dns_cfg: &client::Config,
+	) -> Result<std::net::IpAddr, ()> {
+		let mut resolver_builder = TokioResolver::builder_with_config(
+			dns_cfg.resolver_cfg.clone(),
+			TokioConnectionProvider::default(),
+		);
+		*resolver_builder.options_mut() = dns_cfg.resolver_opts.clone();
+		let resolver = resolver_builder.build();
+		match resolver.lookup_ip(hostname).await {
+			Ok(lookup) => match lookup.iter().next() {
+				Some(ip) => Ok(ip),
+				None => {
+					warn!(
+						uri = %uri_str,
+						hostname = %hostname,
+						"no IP addresses found for hostname"
+					);
+					Err(())
+				},
+			},
+			Err(e) => {
+				warn!(
+					uri = %uri_str,
+					hostname = %hostname,
+					error = %e,
+					"failed to resolve hostname via DNS"
+				);
+				Err(())
+			},
+		}
 	}
 
 	/// serve_gateway_connect handles a single connection from a client.
