@@ -788,7 +788,7 @@ impl HTTPProxy {
 			Self::apply_request_to_cel(log, req).await;
 		}
 
-		let trace_parent = trc::TraceParent::from_request(&req);
+		let trace_parent = trc::TraceParent::from_request(req);
 		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
 
 		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
