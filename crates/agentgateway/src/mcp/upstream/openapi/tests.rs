@@ -8,7 +8,7 @@ use rmcp::model::Tool;
 use rstest::rstest;
 use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path, query_param};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Match, Mock, MockServer, Request, ResponseTemplate};
 
 use super::*;
 use crate::client::Client;
@@ -548,7 +548,6 @@ async fn test_call_tool_response_wrapping() {
 		assert_eq!(result.unwrap(), expected);
 	}
 }
-
 #[tokio::test]
 async fn test_normalize_url_path_empty_prefix() {
 	// Test the fix for double slash issue when prefix is empty (host/port config)
@@ -586,42 +585,6 @@ async fn test_normalize_url_path_path_without_leading_slash() {
 fn test_normalize_url_path(#[case] prefix: &str, #[case] path: &str, #[case] expected: &str) {
 	let result = super::normalize_url_path(prefix, path);
 	assert_eq!(result, expected);
-}
-
-#[rstest]
-#[case::simple_id("123", "/users/123")]
-#[case::numeric_id("456", "/users/456")]
-#[case::spaces("user name", "/users/user%20name")]
-#[case::unicode("user\u{00e9}", "/users/user%C3%A9")]
-#[case::path_traversal("../admin", "/users/..%2Fadmin")]
-#[case::embedded_slashes("user-1/o/er-1001", "/users/user-1%2Fo%2Fer-1001")]
-#[case::query_injection("123?admin=true", "/users/123%3Fadmin%3Dtrue")]
-#[case::query_with_ampersand("123?a=1&b=2", "/users/123%3Fa%3D1%26b%3D2")]
-#[case::hash_fragment("user#section", "/users/user%23section")]
-#[case::ampersand_in_path("user&admin=true", "/users/user%26admin%3Dtrue")]
-#[tokio::test]
-async fn test_path_param_encoding(#[case] user_id: &str, #[case] expected_path: &str) {
-	let (server, handler) = setup().await;
-
-	Mock::given(method("GET"))
-		.and(path(expected_path))
-		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": user_id })))
-		.expect(1)
-		.mount(&server)
-		.await;
-
-	let args = json!({ "path": { "user_id": user_id } });
-
-	let result = handler
-		.call_tool(
-			"get_user",
-			Some(args.as_object().unwrap().clone()),
-			&IncomingRequestContext::empty(),
-		)
-		.await;
-
-	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
 }
 
 #[rstest]
@@ -670,4 +633,139 @@ async fn test_query_param_types(
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
 	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+}
+
+#[rstest]
+#[case::simple_id("123", "/users/123")]
+#[case::numeric_id("456", "/users/456")]
+#[case::spaces("user name", "/users/user%20name")]
+#[case::unicode("user\u{00e9}", "/users/user%C3%A9")]
+#[case::path_traversal("../admin", "/users/..%2Fadmin")]
+#[case::embedded_slashes("user-1/o/er-1001", "/users/user-1%2Fo%2Fer-1001")]
+#[case::query_injection("123?admin=true", "/users/123%3Fadmin%3Dtrue")]
+#[case::query_with_ampersand("123?a=1&b=2", "/users/123%3Fa%3D1%26b%3D2")]
+#[case::hash_fragment("user#section", "/users/user%23section")]
+#[case::ampersand_in_path("user&admin=true", "/users/user%26admin%3Dtrue")]
+#[tokio::test]
+async fn test_path_param_encoding(#[case] user_id: &str, #[case] expected_path: &str) {
+	let (server, handler) = setup().await;
+
+	Mock::given(method("GET"))
+		.and(path(expected_path))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": user_id })))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": user_id } });
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
+	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+}
+
+#[tokio::test]
+async fn test_allowed_custom_headers_still_work() {
+	let (server, handler) = setup().await;
+
+	let user_id = "custom-header-test";
+	let expected_response = json!({ "id": user_id });
+
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.and(header("X-Request-ID", "my-request-123"))
+		.and(header("X-Custom-Header", "custom-value"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let args = json!({
+		"path": { "user_id": user_id },
+		"header": {
+			"X-Request-ID": "my-request-123",
+			"X-Custom-Header": "custom-value"
+		}
+	});
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(
+		result.is_ok(),
+		"Custom headers should work: {:?}",
+		result.err()
+	);
+	assert_eq!(result.unwrap(), expected_response);
+}
+
+// Custom matcher to verify a header is NOT present
+struct HeaderNotPresent {
+	header_name: String,
+}
+
+impl HeaderNotPresent {
+	fn new(header_name: impl Into<String>) -> Self {
+		Self {
+			header_name: header_name.into(),
+		}
+	}
+}
+
+impl Match for HeaderNotPresent {
+	fn matches(&self, request: &Request) -> bool {
+		!request.headers.contains_key(self.header_name.as_str())
+	}
+}
+
+#[tokio::test]
+async fn test_header_overrides() {
+	let (server, handler) = setup().await;
+
+	let request_body = json!({ "name": "Test User", "email": "test@example.com" });
+	let expected_response = json!({ "id": "new-user", "name": "Test User" });
+
+	Mock::given(method("POST"))
+		.and(path("/users"))
+		.and(header("content-length", "47")) // length of request_body
+		.and(header("content-type", "application/json"))
+		.and(HeaderNotPresent::new("transfer-encoding"))
+		.and(body_json(&request_body))
+		.respond_with(ResponseTemplate::new(201).set_body_json(&expected_response))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let args = json!({
+		"body": request_body,
+		"header": {
+			"content-length": "999999999",
+			"content-type": "text/plain",
+			"transfer-encoding": "text/plain",
+		}
+	});
+
+	let result = handler
+		.call_tool(
+			"create_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	// The request should succeed with the correct headers
+	assert!(result.is_ok(), "Request should succeed: {:?}", result.err());
+	assert_eq!(result.unwrap(), expected_response);
 }

@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::warn;
+use tracing::{trace, warn};
 
 use ::http::header::{HeaderName, HeaderValue};
 use headers::HeaderMapExt;
 use http::Method;
-use http::header::{ACCEPT, CONTENT_TYPE};
+use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, TRANSFER_ENCODING};
 use once_cell::sync::Lazy;
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
@@ -748,17 +748,46 @@ impl Handler {
 		};
 
 		let uri = format!("{base_url}{query_string}");
-		let mut rb = http::Request::builder().method(method).uri(uri);
 
-		rb = rb.header(ACCEPT, HeaderValue::from_static("application/json"));
+		let mut rb = http::Request::builder()
+			.method(method)
+			.uri(uri)
+			.header(ACCEPT, HeaderValue::from_static("application/json"));
+
+		// Build request body
+		let body = if let Some(body_val) = body_value {
+			rb = rb.header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+			serde_json::to_vec(&body_val)?
+		} else {
+			Vec::new()
+		};
+
+		// Build the initial request with method, uri, and body
+		let mut request = rb
+			.body(body.into())
+			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
+
+		ctx.apply(&mut request);
+
+		// Only set headers if not already set
 		for (key, value) in &header_params {
 			if let Some(s_val) = value.as_str() {
 				match (
 					HeaderName::from_bytes(key.as_bytes()),
 					HeaderValue::from_str(s_val),
 				) {
-					(Ok(h_name), Ok(h_value)) => {
-						rb = rb.header(h_name, h_value);
+					(Ok(k), Ok(value)) => {
+						if k == CONTENT_LENGTH || k == TRANSFER_ENCODING {
+							continue;
+						}
+
+						// Only insert if header doesn't already exist (ctx.apply or AgentGateway set it)
+						if !request.headers_mut().entry(k).or_insert(value).is_empty() {
+							trace!(
+								"Header '{}' for tool '{}' already set, user value ignored",
+								key, name
+							);
+						}
 					},
 					(Err(_), _) => warn!(
 						"Invalid header name '{}' for tool '{}', skipping",
@@ -776,20 +805,6 @@ impl Handler {
 				);
 			}
 		}
-		// Build request body
-		let body = if let Some(body_val) = body_value {
-			rb = rb.header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-			serde_json::to_vec(&body_val)?
-		} else {
-			Vec::new()
-		};
-
-		// Build the final request
-		let mut request = rb
-			.body(body.into())
-			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
-
-		ctx.apply(&mut request);
 
 		let response = self.http_client.call(request).await?;
 
