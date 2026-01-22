@@ -309,16 +309,19 @@ impl LocalBackend {
 				let mut backends = vec![];
 				for (idx, t) in tgt.targets.iter().enumerate() {
 					let name = strng::format!("mcp/{}/{}", name.clone(), idx);
-					let mut make_backend = |b: Backend, tls: bool| {
+					let mut make_backend = |b: Backend, policies: Option<LocalBackendPolicies>, tls: bool| {
+						let mut inline_policies = policies
+							.map(LocalBackendPolicies::translate)
+							.transpose()?
+							.unwrap_or_default();
+						if tls {
+							inline_policies.push(BackendPolicy::BackendTLS(
+								LocalBackendTLS::default().try_into()?,
+							));
+						}
 						let bb = BackendWithPolicies {
 							backend: b,
-							inline_policies: if tls {
-								vec![BackendPolicy::BackendTLS(
-									LocalBackendTLS::default().try_into()?,
-								)]
-							} else {
-								vec![]
-							},
+							inline_policies,
 						};
 						backends.push(bb);
 						Ok::<_, anyhow::Error>(())
@@ -328,7 +331,7 @@ impl LocalBackend {
 							let (backend, path, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								make_backend(b, tls)?;
+								make_backend(b, t.policies.clone(), tls)?;
 							}
 							McpTargetSpec::Sse(SseTargetSpec {
 								backend: bref,
@@ -339,7 +342,7 @@ impl LocalBackend {
 							let (backend, path, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								make_backend(b, tls)?;
+								make_backend(b, t.policies.clone(), tls)?;
 							}
 							McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 								backend: bref,
@@ -351,7 +354,7 @@ impl LocalBackend {
 							let (backend, _, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								make_backend(b, tls)?;
+								make_backend(b, t.policies.clone(), tls)?;
 							}
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
@@ -437,6 +440,8 @@ pub struct LocalMcpTarget {
 	pub name: McpTargetName,
 	#[serde(flatten)]
 	pub spec: LocalMcpTargetSpec,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub policies: Option<LocalBackendPolicies>,
 }
 
 #[apply(schema_de!)]
