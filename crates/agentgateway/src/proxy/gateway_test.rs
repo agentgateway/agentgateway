@@ -816,6 +816,120 @@ crypt_test:bGVh02xkuGli2"
 	assert_eq!(res.status(), 401);
 }
 
+#[tokio::test]
+async fn test_hbone_address_parsing() {
+	// Test parsing IP:port
+	let uri = "127.0.0.1:8080".parse::<http::Uri>().unwrap();
+	let addr = super::HboneAddress::try_from(&uri).unwrap();
+	assert_matches!(addr, super::HboneAddress::SocketAddr(_));
+
+	// Test parsing hostname:port
+	let uri = "example.com:443".parse::<http::Uri>().unwrap();
+	let addr = super::HboneAddress::try_from(&uri).unwrap();
+	assert_matches!(addr, super::HboneAddress::SvcHostname(host, port) => {
+		assert_eq!(host.as_ref(), "example.com");
+		assert_eq!(port, 443);
+	});
+
+	// Test parsing invalid URI (this will panic on parse, so we skip it)
+	// let uri = "invalid-uri".parse::<http::Uri>().unwrap(); // This would panic
+
+	// Test URI with no host
+	let uri_no_host = "/path".parse::<http::Uri>().unwrap();
+	let result_no_host = super::HboneAddress::try_from(&uri_no_host);
+	assert!(result_no_host.is_err());
+
+	// Test URI with host but no port (should fail for CONNECT)
+	let uri_no_port = "http://example.com".parse::<http::Uri>().unwrap();
+	let result_no_port = super::HboneAddress::try_from(&uri_no_port);
+	assert!(result_no_port.is_err());
+}
+
+#[tokio::test]
+async fn test_hostname_resolution_logic() {
+	use crate::types::discovery::{NetworkAddress, Service};
+
+	// Create a mock service store with a service that has a hostname
+	let mut stores = crate::store::DiscoveryStore::new();
+
+	let service = Service {
+		name: strng::new("waypoint-service"),
+		namespace: strng::new("default"),
+		hostname: strng::new("my-app.example.com"),
+		vips: vec![NetworkAddress {
+			network: strng::new("default"),
+			address: "10.0.0.100".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, 8080)]),
+		app_protocols: Default::default(),
+		endpoints: Default::default(),
+		subject_alt_names: Default::default(),
+		waypoint: Some(crate::types::discovery::GatewayAddress {
+			destination: crate::types::discovery::gatewayaddress::Destination::Hostname(
+				crate::types::discovery::NamespacedHostname {
+					namespace: strng::new("istio-system"),
+					hostname: strng::new("waypoint"),
+				},
+			),
+			hbone_mtls_port: 15008,
+		}),
+		load_balancer: None,
+		ip_families: None,
+	};
+
+	stores.insert_service_internal(service);
+
+	// Test URI parsing for hostname:port
+	let uri = "my-app.example.com:80".parse::<http::Uri>().unwrap();
+	let parsed_addr = super::HboneAddress::try_from(&uri).unwrap();
+
+	// Should parse as SvcHostname
+	assert_matches!(parsed_addr, super::HboneAddress::SvcHostname(host, port) => {
+		assert_eq!(host.as_ref(), "my-app.example.com");
+		assert_eq!(port, 80);
+	});
+
+	// Test service lookup by hostname
+	let hostname_str = "my-app.example.com";
+	let found_service = super::find_service_by_hostname(&stores, hostname_str);
+	assert!(found_service.is_some());
+
+	let svc = found_service.unwrap();
+	assert_eq!(svc.hostname.as_str(), "my-app.example.com");
+	assert_eq!(svc.namespace.as_str(), "default");
+	assert!(!svc.vips.is_empty());
+
+	// Verify we can get the VIP
+	let network = strng::new("default");
+	let vip = svc.vips.iter().find(|v| v.network == network);
+	assert!(vip.is_some());
+	assert_eq!(vip.unwrap().address.to_string(), "10.0.0.100");
+
+	// Test hostname that doesn't exist as a service
+	let nonexistent_hostname = "nonexistent.example.com";
+	let not_found = super::find_service_by_hostname(&stores, nonexistent_hostname);
+	assert!(not_found.is_none());
+
+	// Test service exists but has no VIPs
+	let service_no_vips = Service {
+		name: strng::new("service-no-vips"),
+		namespace: strng::new("default"),
+		hostname: strng::new("no-vips.example.com"),
+		vips: vec![], // No VIPs
+		ports: Default::default(),
+		app_protocols: Default::default(),
+		endpoints: Default::default(),
+		subject_alt_names: Default::default(),
+		waypoint: None,
+		load_balancer: None,
+		ip_families: None,
+	};
+	stores.insert_service_internal(service_no_vips);
+
+	let no_vips_found = super::find_service_by_hostname(&stores, "no-vips.example.com");
+	assert!(no_vips_found.is_none()); // Should return None because service has no VIPs
+}
+
 async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value) {
 	let r = rand::rng().random::<u128>();
 	let res = send_request_body(io.clone(), Method::POST, &format!("http://lo/{r}"), body).await;
