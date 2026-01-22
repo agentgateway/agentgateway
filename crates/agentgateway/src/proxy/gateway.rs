@@ -453,15 +453,8 @@ impl Gateway {
 			hyper::service::service_fn(move |mut req| {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
-				let policies = policies.clone();
-
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				async move {
-					proxy
-						.proxy(connection, &policies, req)
-						.map(Ok::<_, Infallible>)
-						.await
-				}
+				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
 			}),
 		);
 		// Wrap it in the graceful watcher, will ensure GOAWAY/Connect:clone when we shutdown

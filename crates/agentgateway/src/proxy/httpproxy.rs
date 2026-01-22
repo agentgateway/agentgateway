@@ -370,7 +370,6 @@ impl HTTPProxy {
 	pub async fn proxy(
 		&self,
 		connection: Arc<Extension>,
-		policies: &FrontendPolices,
 		mut req: ::http::Request<Incoming>,
 	) -> Response {
 		let start = Instant::now();
@@ -383,7 +382,7 @@ impl HTTPProxy {
 		let tcp = connection
 			.get::<TCPConnectionInfo>()
 			.expect("tcp connection must be set");
-		let mut log = RequestLog::new(
+		let log = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
 				self.inputs.cfg.tracing.clone(),
@@ -393,10 +392,6 @@ impl HTTPProxy {
 			start_time,
 			tcp.clone(),
 		);
-		policies.register_cel_expressions(log.cel.ctx());
-		if let Some(lp) = &policies.access_log {
-			apply_logging_policy_to_log(&mut log, lp);
-		}
 		let mut log: DropOnLog = log.into();
 
 		// Setup ResponsePolicies outside of proxy_internal, so we have can unconditionally run them even on errors
@@ -509,85 +504,33 @@ impl HTTPProxy {
 		// Now check if we actually have a listener - fail after tracing is set up
 		let selected_listener = selected_listener
 			.or_else(|| bind.listeners.best_match(&host))
-			.ok_or(ProxyError::ListenerNotFound)?;
+			.ok_or(ProxyError::ListenerNotFound);
+		let selected_listener = match selected_listener {
+			Ok(l) => {
+				debug!(bind=%bind_name, listener=%l.key, "selected listener");
+				let frontend_policies = inputs
+					.stores
+					.read_binds()
+					.listener_frontend_policies(&l.name);
+
+				self
+					.handle_frontend_policies(&frontend_policies, log, &mut req)
+					.await;
+				l
+			},
+			Err(e) => {
+				let frontend_policies = inputs
+					.stores
+					.read_binds()
+					.frontend_policies(self.inputs.cfg.gateway_ref());
+				self
+					.handle_frontend_policies(&frontend_policies, log, &mut req)
+					.await;
+				return Err(e.into());
+			},
+		};
 		log.bind_name = Some(bind_name.clone());
 		log.listener_name = Some(selected_listener.name.clone());
-		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
-
-		// Check for per-frontend sampling overrides first, before we decide sampling
-		let frontend_policies = inputs
-			.stores
-			.read_binds()
-			.listener_frontend_policies(&selected_listener.name);
-
-		frontend_policies.register_cel_expressions(log.cel.ctx());
-
-		if let Some(lp) = &frontend_policies.access_log {
-			apply_logging_policy_to_log(log, lp);
-		}
-		// Record request now. We may do it later as well, after we have more expressions registered.
-		Self::apply_request_to_cel(log, &mut req).await;
-
-		if let Some(tp) = frontend_policies.tracing.as_deref() {
-			// Apply sampling overrides if present
-			if let Some(rs) = &tp.config.random_sampling {
-				log.cel.tracing_sampler.random_sampling = Some(rs.clone());
-				log.cel.cel_context.register_expression(rs.as_ref());
-			}
-			if let Some(cs) = &tp.config.client_sampling {
-				log.cel.tracing_sampler.client_sampling = Some(cs.clone());
-				log.cel.cel_context.register_expression(cs.as_ref());
-			}
-			// Re-apply request so any newly required attributes are captured before sampling
-			Self::apply_request_to_cel(log, &mut req).await;
-		}
-
-		let trace_parent = trc::TraceParent::from_request(&req);
-		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
-
-		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
-		if trace_sampled {
-			log.tracer = if let Some(tp) = frontend_policies.tracing.as_deref() {
-				debug!(
-					resources_count=%tp.config.resources.len(),
-					attrs_count=%tp.config.attributes.len(),
-					"Using dynamic tracer from frontend policy"
-				);
-
-				tp.get_or_init(self.policy_client())
-					.map(|t| Some(t.clone()))
-					.unwrap_or_else(|e| {
-						debug!("failed to initialize dynamic tracer, falling back to static tracer: {e:?}");
-						self.inputs.tracer.clone()
-					})
-			} else {
-				debug!("No frontend tracing policy found, using static tracer");
-				self.inputs.tracer.clone()
-			};
-			// Register CEL expressions from the tracer
-			if let Some(tracer) = &log.tracer {
-				log.cel.register(tracer.fields.as_ref());
-			}
-
-			// Now create outgoing span with the correct tracer already set
-			let ns = match trace_parent {
-				Some(tp) => {
-					// Build a new span off the existing trace
-					let ns = tp.new_span();
-					log.incoming_span = Some(tp);
-					ns
-				},
-				None => {
-					// Build an entirely new trace
-					let mut ns = TraceParent::new();
-					ns.flags = 1;
-					ns
-				},
-			};
-			ns.insert_header(&mut req);
-			req.extensions_mut().insert(ns.clone());
-			log.outgoing_span = Some(ns);
-		}
 
 		let mut gateway_policies = inputs
 			.stores
@@ -815,6 +758,82 @@ impl HTTPProxy {
 			}
 		}
 		unreachable!()
+	}
+
+	async fn handle_frontend_policies(
+		&self,
+		frontend_policies: &FrontendPolices,
+		log: &mut RequestLog,
+		req: &mut Request,
+	) {
+		frontend_policies.register_cel_expressions(log.cel.ctx());
+
+		if let Some(lp) = &frontend_policies.access_log {
+			apply_logging_policy_to_log(log, lp);
+		}
+		// Record request now. We may do it later as well, after we have more expressions registered.
+		Self::apply_request_to_cel(log, req).await;
+
+		if let Some(tp) = frontend_policies.tracing.as_deref() {
+			// Apply sampling overrides if present
+			if let Some(rs) = &tp.config.random_sampling {
+				log.cel.tracing_sampler.random_sampling = Some(rs.clone());
+				log.cel.cel_context.register_expression(rs.as_ref());
+			}
+			if let Some(cs) = &tp.config.client_sampling {
+				log.cel.tracing_sampler.client_sampling = Some(cs.clone());
+				log.cel.cel_context.register_expression(cs.as_ref());
+			}
+			// Re-apply request so any newly required attributes are captured before sampling
+			Self::apply_request_to_cel(log, req).await;
+		}
+
+		let trace_parent = trc::TraceParent::from_request(&req);
+		let trace_sampled = log.trace_sampled(trace_parent.as_ref());
+
+		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
+		if trace_sampled {
+			log.tracer = if let Some(tp) = frontend_policies.tracing.as_deref() {
+				debug!(
+					resources_count=%tp.config.resources.len(),
+					attrs_count=%tp.config.attributes.len(),
+					"Using dynamic tracer from frontend policy"
+				);
+
+				tp.get_or_init(self.policy_client())
+					.map(|t| Some(t.clone()))
+					.unwrap_or_else(|e| {
+						debug!("failed to initialize dynamic tracer, falling back to static tracer: {e:?}");
+						self.inputs.tracer.clone()
+					})
+			} else {
+				debug!("No frontend tracing policy found, using static tracer");
+				self.inputs.tracer.clone()
+			};
+			// Register CEL expressions from the tracer
+			if let Some(tracer) = &log.tracer {
+				log.cel.register(tracer.fields.as_ref());
+			}
+
+			// Now create outgoing span with the correct tracer already set
+			let ns = match trace_parent {
+				Some(tp) => {
+					// Build a new span off the existing trace
+					let ns = tp.new_span();
+					log.incoming_span = Some(tp);
+					ns
+				},
+				None => {
+					// Build an entirely new trace
+					let mut ns = TraceParent::new();
+					ns.flags = 1;
+					ns
+				},
+			};
+			ns.insert_header(req);
+			req.extensions_mut().insert(ns.clone());
+			log.outgoing_span = Some(ns);
+		}
 	}
 
 	fn detect_misdirected(
