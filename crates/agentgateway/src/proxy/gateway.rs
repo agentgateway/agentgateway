@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -29,12 +29,95 @@ use crate::types::agent::{
 };
 use crate::types::frontend;
 use crate::{ProxyInputs, client};
-use hickory_resolver::TokioResolver;
-use hickory_resolver::name_server::TokioConnectionProvider;
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
 mod tests;
+
+#[derive(Debug, Clone, PartialEq)]
+
+pub enum HboneAddress {
+	SocketAddr(SocketAddr),
+	SvcHostname(Arc<str>, u16),
+}
+
+#[allow(dead_code)]
+impl HboneAddress {
+	pub fn port(&self) -> u16 {
+		match self {
+			HboneAddress::SocketAddr(s) => s.port(),
+			HboneAddress::SvcHostname(_, p) => *p,
+		}
+	}
+
+	pub fn ip(&self) -> Option<IpAddr> {
+		match self {
+			HboneAddress::SocketAddr(s) => Some(s.ip()),
+			HboneAddress::SvcHostname(_, _) => None,
+		}
+	}
+
+	pub fn svc_hostname(&self) -> Option<Arc<str>> {
+		match self {
+			HboneAddress::SocketAddr(_) => None,
+			HboneAddress::SvcHostname(s, _) => Some(s.clone()),
+		}
+	}
+
+	pub fn hostname_addr(&self) -> Option<Arc<str>> {
+		match self {
+			HboneAddress::SocketAddr(_) => None,
+			HboneAddress::SvcHostname(_, _) => Some(Arc::from(self.to_string())),
+		}
+	}
+
+	pub fn socket_addr(&self) -> Option<SocketAddr> {
+		match self {
+			HboneAddress::SocketAddr(addr) => Some(*addr),
+			HboneAddress::SvcHostname(_, _) => None,
+		}
+	}
+}
+
+impl std::fmt::Display for HboneAddress {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			HboneAddress::SocketAddr(addr) => write!(f, "{addr}"),
+			HboneAddress::SvcHostname(host, port) => write!(f, "{host}:{port}"),
+		}
+	}
+}
+
+impl From<SocketAddr> for HboneAddress {
+	fn from(socket_addr: SocketAddr) -> Self {
+		HboneAddress::SocketAddr(socket_addr)
+	}
+}
+
+impl From<(Arc<str>, u16)> for HboneAddress {
+	fn from(svc_hostname: (Arc<str>, u16)) -> Self {
+		HboneAddress::SvcHostname(svc_hostname.0, svc_hostname.1)
+	}
+}
+
+impl TryFrom<&http::Uri> for HboneAddress {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &http::Uri) -> Result<Self, Self::Error> {
+		match value.to_string().parse::<SocketAddr>() {
+			Ok(addr) => Ok(HboneAddress::SocketAddr(addr)),
+			Err(_) => {
+				let host = value
+					.host()
+					.ok_or_else(|| anyhow::anyhow!("No valid authority"))?;
+				let port = value
+					.port_u16()
+					.ok_or_else(|| anyhow::anyhow!("No valid authority"))?;
+				Ok(HboneAddress::SvcHostname(host.into(), port))
+			},
+		}
+	}
+}
 
 pub struct Gateway {
 	pi: Arc<ProxyInputs>,
@@ -756,60 +839,31 @@ impl Gateway {
 		ext: Arc<Extension>,
 		drain: DrainWatcher,
 	) {
-		let uri_str = req.uri().to_string();
-		debug!(
-			bind=?bind_name,
-			uri=%uri_str,
-			"serve_waypoint_connect: received CONNECT request"
-		);
-
-		let hbone_addr = match uri_str.parse::<SocketAddr>() {
+		let uri = req.uri();
+		let parsed_addr = match HboneAddress::try_from(uri) {
 			Ok(addr) => addr,
 			Err(_) => {
-				let Some((hostname, port_str)) = uri_str.split_once(':') else {
-					warn!(
-						bind=?bind_name,
-						uri=%uri_str,
-						"serve_waypoint_connect: invalid URI format, expected 'IP:PORT' or 'HOSTNAME:PORT'"
-					);
-					let _ = req
-						.send_response(build_response(StatusCode::BAD_REQUEST))
-						.await;
-					return;
-				};
+				warn!(
+					bind=?bind_name,
+					uri=%uri,
+					"serve_waypoint_connect: invalid URI format"
+				);
+				let _ = req
+					.send_response(build_response(StatusCode::BAD_REQUEST))
+					.await;
+				return;
+			},
+		};
 
-				let Ok(port) = port_str.parse::<u16>() else {
-					warn!(
-						bind=?bind_name,
-						uri=%uri_str,
-						port=%port_str,
-						"serve_waypoint_connect: invalid port in URI"
-					);
-					let _ = req
-						.send_response(build_response(StatusCode::BAD_REQUEST))
-						.await;
-					return;
-				};
+		let hbone_addr = match parsed_addr {
+			HboneAddress::SocketAddr(addr) => HboneAddress::from(addr),
+			HboneAddress::SvcHostname(hostname, port) => {
+				// Try service registry lookup
+				let hostname_str = hostname.to_string();
+				let svc = find_service_by_hostname(&pi.stores.read_discovery(), &hostname_str);
 
-				// Try service registry lookup first
-				// Format: <service>.<namespace>.<...>
-				let namespace = hostname.split('.').nth(1);
-				let svc = if let Some(ns) = namespace {
-					let stores = pi.stores.read_discovery();
-					stores
-						.services
-						.get_by_namespaced_host(&crate::types::discovery::NamespacedHostname {
-							namespace: ns.into(),
-							hostname: hostname.into(),
-						})
-				} else {
-					None
-				};
-
-				let ip = if let Some(svc) = svc {
+				let vip = if let Some(svc) = svc {
 					// Found in service registry, get VIP for current network
-					// This is critical: we must use the VIP, not a workload IP, because
-					// the route lookup in get_route() uses get_by_vip() which requires a VIP
 					let network = &pi.cfg.network;
 					if let Some(vip) = svc
 						.vips
@@ -819,42 +873,22 @@ impl Gateway {
 					{
 						vip.address
 					} else {
-						// Service found but no VIPs, fall back to DNS
-						drop(svc); // Release lock before await
-						match Self::resolve_via_dns(hostname, &uri_str, &pi.cfg.dns).await {
-							Ok(ip) => ip,
-							Err(_) => {
-								warn!(
-									bind=?bind_name,
-									hostname=%hostname,
-									"serve_waypoint_connect: DNS resolution failed"
-								);
-								let _ = req
-									.send_response(build_response(StatusCode::BAD_REQUEST))
-									.await;
-								return;
-							},
-						}
+						warn!(
+							bind=?bind_name,
+							hostname=%hostname_str,
+							"serve_waypoint_connect: no VIP found for service"
+						);
+						return;
 					}
 				} else {
-					// Not found in service registry, try DNS
-					// WARNING: DNS may resolve to a workload IP instead of VIP, which will cause route lookup to fail
-					match Self::resolve_via_dns(hostname, &uri_str, &pi.cfg.dns).await {
-						Ok(ip) => ip,
-						Err(_) => {
-							warn!(
-								bind=?bind_name,
-								hostname=%hostname,
-								"serve_waypoint_connect: DNS resolution failed"
-							);
-							let _ = req
-								.send_response(build_response(StatusCode::BAD_REQUEST))
-								.await;
-							return;
-						},
-					}
+					warn!(
+						bind=?bind_name,
+						hostname=%hostname_str,
+						"serve_waypoint_connect: no service found for hostname"
+					);
+					return;
 				};
-				SocketAddr::from((ip, port))
+				HboneAddress::from(SocketAddr::from((vip, port)))
 			},
 		};
 
@@ -871,51 +905,19 @@ impl Gateway {
 		// TODO: for now, we only handle HTTP for waypoints. In the future, we should support other protocols.
 		// This could be done by sniffing at this layer, but is probably better handled by doing service-selection here
 		// and only falling back to sniffing when there is not an explicit protocol declaration
+		let socket_addr = hbone_addr
+			.socket_addr()
+			.ok_or_else(|| anyhow::anyhow!("hbone_addr should be resolved to SocketAddr"))
+			.unwrap();
 		let _ = Self::proxy(
 			bind_name,
 			pi,
 			None,
-			Socket::from_hbone(ext, hbone_addr, con),
+			Socket::from_hbone(ext, socket_addr, con),
 			policies.clone(),
 			drain,
 		)
 		.await;
-	}
-
-	/// Helper function to resolve hostname via DNS (fallback when service registry lookup fails)
-	async fn resolve_via_dns(
-		hostname: &str,
-		uri_str: &str,
-		dns_cfg: &client::Config,
-	) -> Result<std::net::IpAddr, ()> {
-		let mut resolver_builder = TokioResolver::builder_with_config(
-			dns_cfg.resolver_cfg.clone(),
-			TokioConnectionProvider::default(),
-		);
-		*resolver_builder.options_mut() = dns_cfg.resolver_opts.clone();
-		let resolver = resolver_builder.build();
-		match resolver.lookup_ip(hostname).await {
-			Ok(lookup) => match lookup.iter().next() {
-				Some(ip) => Ok(ip),
-				None => {
-					warn!(
-						uri = %uri_str,
-						hostname = %hostname,
-						"no IP addresses found for hostname"
-					);
-					Err(())
-				},
-			},
-			Err(e) => {
-				warn!(
-					uri = %uri_str,
-					hostname = %hostname,
-					error = %e,
-					"failed to resolve hostname via DNS"
-				);
-				Err(())
-			},
-		}
 	}
 
 	/// serve_gateway_connect handles a single connection from a client.
@@ -928,14 +930,20 @@ impl Gateway {
 	) {
 		debug!(?req, "received request");
 
-		let hbone_addr = req
-			.uri()
-			.to_string()
-			.as_str()
-			.parse::<SocketAddr>()
+		let uri = req.uri();
+		let hbone_addr = HboneAddress::try_from(uri)
 			.map_err(|_| InboundError(anyhow::anyhow!("bad request"), StatusCode::BAD_REQUEST))
 			.unwrap();
-		let Some(bind) = pi.stores.read_binds().find_bind(hbone_addr) else {
+		let socket_addr = hbone_addr
+			.socket_addr()
+			.ok_or_else(|| {
+				InboundError(
+					anyhow::anyhow!("hostname resolution not supported"),
+					StatusCode::BAD_REQUEST,
+				)
+			})
+			.unwrap();
+		let Some(bind) = pi.stores.read_binds().find_bind(socket_addr) else {
 			warn!("no bind for {hbone_addr}");
 			let Ok(_) = req
 				.send_response(build_response(StatusCode::NOT_FOUND))
@@ -959,7 +967,7 @@ impl Gateway {
 		Self::proxy_bind(
 			bind.key.clone(),
 			bind.protocol,
-			Socket::from_hbone(ext, hbone_addr, con),
+			Socket::from_hbone(ext, socket_addr, con),
 			pi,
 			drain,
 		)
@@ -1025,6 +1033,19 @@ fn build_response(status: StatusCode) -> ::http::Response<()> {
 		.status(status)
 		.body(())
 		.expect("builder with known status code should not fail")
+}
+
+fn find_service_by_hostname(
+	stores: &crate::store::DiscoveryStore,
+	hostname: &str,
+) -> Option<Arc<crate::types::discovery::Service>> {
+	stores
+		.services
+		.get_by_hostname(hostname)
+		.and_then(|services| {
+			// If multiple services have the same hostname, pick the first one that has VIPs
+			services.into_iter().find(|s| !s.vips.is_empty())
+		})
 }
 
 /// InboundError represents an error with an associated status code.

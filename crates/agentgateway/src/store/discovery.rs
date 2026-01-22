@@ -431,6 +431,11 @@ impl ServiceStore {
 			},
 		}
 	}
+
+	/// Returns all services matching the given hostname.
+	pub fn get_by_hostname(&self, hostname: &str) -> Option<Vec<Arc<Service>>> {
+		self.by_host.get(hostname).map(|v| v.to_vec())
+	}
 }
 
 #[derive(Debug)]
