@@ -772,8 +772,13 @@ impl Handler {
 			.await?
 			.1;
 
-			let body = serde_json::from_slice::<serde_json::Value>(&body_bytes)?;
-			Ok(body)
+			// Wrap responses that are not structuredContent compliant in object
+			Ok(json!({ "data":
+				match serde_json::from_slice::<serde_json::Value>(&body_bytes)? {
+					Value::Object(obj) => return Ok(Value::Object(obj)),
+					Value::Null => return Ok(Value::Null),
+					data => data,
+			}}))
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(

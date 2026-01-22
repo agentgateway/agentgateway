@@ -501,6 +501,54 @@ async fn test_call_tool_with_compressed_response() {
 }
 
 #[tokio::test]
+async fn test_call_tool_response_wrapping() {
+	let (server, handler) = setup().await;
+
+	let test_cases = vec![
+		(false, Value::Null),
+		(
+			false,
+			json!({ "id": "123", "name": "Test User", "email": "test@example.com" }),
+		),
+		(
+			true,
+			json!([ { "id": 1, "name": "1" }, { "id": 2, "name": "2" }, { "id": 3, "name": "3" }]),
+		),
+		(true, json!("plain text response")),
+		(true, json!(42)),
+		(true, json!(true)),
+	];
+
+	for (i, (wrapped, response)) in test_cases.iter().enumerate() {
+		let user_id = format!("{}", i);
+		Mock::given(method("GET"))
+			.and(path(format!("/users/{}", user_id)))
+			.respond_with(ResponseTemplate::new(200).set_body_json(response))
+			.expect(1)
+			.mount(&server)
+			.await;
+
+		let args = json!({ "path": { "user_id": user_id } });
+		let result = handler
+			.call_tool(
+				"get_user",
+				Some(args.as_object().unwrap().clone()),
+				&IncomingRequestContext::empty(),
+			)
+			.await;
+		assert!(result.is_ok());
+
+		// Spec requires an object https://modelcontextprotocol.io/specification/2025-06-18/schema#calltoolresult
+		let expected = if *wrapped {
+			json!({ "data": response })
+		} else {
+			response.clone()
+		};
+		assert_eq!(result.unwrap(), expected);
+	}
+}
+
+#[tokio::test]
 async fn test_normalize_url_path_empty_prefix() {
 	// Test the fix for double slash issue when prefix is empty (host/port config)
 	let result = super::normalize_url_path("", "/mqtt/healthcheck");
