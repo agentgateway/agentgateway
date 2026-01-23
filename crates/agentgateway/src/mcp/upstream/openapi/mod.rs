@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{trace, warn};
+use tracing::warn;
 
-use ::http::header::{HeaderName, HeaderValue};
+use ::http::header::HeaderValue;
 use headers::HeaderMapExt;
 use http::Method;
-use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, TRANSFER_ENCODING};
+use http::header::{ACCEPT, CONTENT_TYPE};
 use once_cell::sync::Lazy;
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
@@ -36,7 +36,7 @@ pub enum ParseError {
 	MissingReference(String),
 	#[error("unsupported reference")]
 	UnsupportedReference(String),
-	#[error("information required: {0}")] // Corrected typo from "requireds"
+	#[error("information required: {0}")]
 	InformationRequired(String),
 	#[error("serde error: {0}")]
 	SerdeError(#[from] serde_json::Error),
@@ -240,10 +240,9 @@ fn resolve_request_body<'a>(
 /// We need to rework this and I don't want to forget.
 ///
 /// We need to be able to handle data which can end up in multiple destinations:
-/// 1. Headers
-/// 2. Body
-/// 3. Query Params
-/// 4. Templated Path Params
+/// 1. Body
+/// 2. Query Params
+/// 3. Templated Path Params
 ///
 /// To support this we should create a nested JSON schema which has each of them.
 /// That way the client code can properly separate the objects passed by the client.
@@ -310,13 +309,6 @@ pub(crate) fn parse_openapi_schema(
 									let item = resolve_parameter(p, open_api)?;
 									let (name, schema, required) = build_schema_property(open_api, item)?;
 									match item {
-										Parameter::Header { .. } => {
-											param_schemas
-												.entry(ParameterType::Header)
-												.or_insert_with(Vec::new)
-												.push((name, schema, required));
-											Ok(())
-										},
 										Parameter::Query { .. } => {
 											param_schemas
 												.entry(ParameterType::Query)
@@ -330,6 +322,12 @@ pub(crate) fn parse_openapi_schema(
 												.or_insert_with(Vec::new)
 												.push((name, schema, required));
 											Ok(())
+										},
+										Parameter::Header { .. } => {
+											warn!("Header parameters are not supported, skipping '{}'", name);
+											Err(ParseError::UnsupportedReference(
+												"Header parameters are not supported".to_string(),
+											))
 										},
 										_ => Err(ParseError::UnsupportedReference(
 											"parameter type COOKIE is not supported".to_string(),
@@ -407,14 +405,12 @@ pub(crate) fn parse_openapi_schema(
 // Used to index the parameter types for the schema
 lazy_static::lazy_static! {
 	pub static ref BODY_NAME: String = "body".to_string();
-	pub static ref HEADER_NAME: String = "header".to_string();
 	pub static ref QUERY_NAME: String = "query".to_string();
 	pub static ref PATH_NAME: String = "path".to_string();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ParameterType {
-	Header,
 	Query,
 	Path,
 }
@@ -425,7 +421,6 @@ impl std::fmt::Display for ParameterType {
 			f,
 			"{}",
 			match self {
-				ParameterType::Header => "header",
 				ParameterType::Query => "query",
 				ParameterType::Path => "path",
 			}
@@ -646,12 +641,10 @@ impl Handler {
 	/// We need to use the parse the schema to get the correct args.
 	/// They are in the json schema under the "properties" key.
 	/// Body is under the "body" key.
-	/// Headers are under the "header" key.
 	/// Query params are under the "query" key.
 	/// Path params are under the "path" key.
 	///
 	/// Query params need to be added to the url as query params.
-	/// Headers need to be added to the request headers.
 	/// Body needs to be added to the request body.
 	/// Path params need to be added to the template params in the path.
 	pub async fn call_tool(
@@ -676,11 +669,6 @@ impl Handler {
 			.unwrap_or_default();
 		let query_params = args
 			.get(&*QUERY_NAME)
-			.and_then(Value::as_object)
-			.cloned()
-			.unwrap_or_default();
-		let header_params = args
-			.get(&*HEADER_NAME)
 			.and_then(Value::as_object)
 			.cloned()
 			.unwrap_or_default();
@@ -762,49 +750,12 @@ impl Handler {
 			Vec::new()
 		};
 
-		// Build the initial request with method, uri, and body
+		// Build the final request
 		let mut request = rb
 			.body(body.into())
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
 
 		ctx.apply(&mut request);
-
-		// Only set headers if not already set
-		for (key, value) in &header_params {
-			if let Some(s_val) = value.as_str() {
-				match (
-					HeaderName::from_bytes(key.as_bytes()),
-					HeaderValue::from_str(s_val),
-				) {
-					(Ok(k), Ok(value)) => {
-						if k == CONTENT_LENGTH || k == TRANSFER_ENCODING {
-							continue;
-						}
-
-						// Only insert if header doesn't already exist (ctx.apply or AgentGateway set it)
-						if !request.headers_mut().entry(k).or_insert(value).is_empty() {
-							trace!(
-								"Header '{}' for tool '{}' already set, user value ignored",
-								key, name
-							);
-						}
-					},
-					(Err(_), _) => warn!(
-						"Invalid header name '{}' for tool '{}', skipping",
-						key, name
-					),
-					(_, Err(_)) => warn!(
-						"Invalid header value '{}' for header '{}' in tool '{}', skipping",
-						s_val, key, name
-					),
-				}
-			} else {
-				warn!(
-					"Header parameter '{}' for tool '{}' is not a string (value: {:?}), skipping",
-					key, name, value
-				);
-			}
-		}
 
 		let response = self.http_client.call(request).await?;
 

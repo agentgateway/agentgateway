@@ -7,8 +7,8 @@ use prometheus_client::registry::Registry;
 use rmcp::model::Tool;
 use rstest::rstest;
 use serde_json::json;
-use wiremock::matchers::{body_json, header, method, path, query_param};
-use wiremock::{Match, Mock, MockServer, Request, ResponseTemplate};
+use wiremock::matchers::{body_json, method, path, query_param};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 use crate::client::Client;
@@ -73,12 +73,6 @@ async fn setup() -> (MockServer, Handler) {
 											"verbose": {"type": "string"}
 									}
 							},
-							"header": {
-									"type": "object",
-									"properties": {
-											"X-Request-ID": {"type": "string"}
-									}
-							}
 					},
 					"required": ["path"] // Only path is required for this tool
 			})
@@ -118,12 +112,6 @@ async fn setup() -> (MockServer, Handler) {
 							"source": {"type": "string"}
 						}
 					},
-					"header": {
-						"type": "object",
-						"properties": {
-							"X-API-Key": {"type": "string"}
-						}
-					}
 				},
 				"required": ["body"]
 			})
@@ -216,34 +204,6 @@ async fn test_call_tool_get_with_query() {
 }
 
 #[tokio::test]
-async fn test_call_tool_get_with_header() {
-	let (server, handler) = setup().await;
-
-	let user_id = "789";
-	let request_id = "req-abc";
-	let expected_response = json!({ "id": user_id, "name": "Another User" });
-
-	Mock::given(method("GET"))
-		.and(path(format!("/users/{user_id}")))
-		.and(header("X-Request-ID", request_id))
-		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
-		.mount(&server)
-		.await;
-
-	let args = json!({ "path": { "user_id": user_id }, "header": { "X-Request-ID": request_id } });
-	let result = handler
-		.call_tool(
-			"get_user",
-			Some(args.as_object().unwrap().clone()),
-			&IncomingRequestContext::empty(),
-		)
-		.await;
-
-	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
-}
-
-#[tokio::test]
 async fn test_call_tool_post_with_body() {
 	let (server, handler) = setup().await;
 
@@ -275,14 +235,12 @@ async fn test_call_tool_post_all_params() {
 	let (server, handler) = setup().await;
 
 	let request_body = json!({ "name": "Complete User", "email": "complete@example.com" });
-	let api_key = "secret-key";
 	let source = "test-suite";
 	let expected_response = json!({ "id": "comp-123", "name": "Complete User" });
 
 	Mock::given(method("POST"))
 		.and(path("/users"))
 		.and(query_param("source", source))
-		.and(header("X-API-Key", api_key))
 		.and(body_json(&request_body))
 		.respond_with(ResponseTemplate::new(201).set_body_json(&expected_response))
 		.mount(&server)
@@ -291,7 +249,6 @@ async fn test_call_tool_post_all_params() {
 	let args = json!({
 			"body": request_body,
 			"query": { "source": source },
-			"header": { "X-API-Key": api_key }
 	});
 	let result = handler
 		.call_tool(
@@ -353,38 +310,6 @@ async fn test_call_tool_upstream_error() {
 	let err = result.unwrap_err();
 	assert!(err.to_string().contains("failed with status 404 Not Found"));
 	assert!(err.to_string().contains(&error_response.to_string()));
-}
-
-#[tokio::test]
-async fn test_call_tool_invalid_header_value() {
-	let (server, handler) = setup().await;
-
-	let user_id = "header-issue";
-	// Mock is set up but won't be hit because header construction fails client-side
-	Mock::given(method("GET"))
-		.and(path(format!("/users/{user_id}")))
-		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": user_id })))
-		.mount(&server)
-		.await;
-
-	// Intentionally provide a non-string header value
-	let args = json!({
-			"path": { "user_id": user_id },
-			"header": { "X-Request-ID": 12345 } // Invalid header value (not a string)
-	});
-
-	// We expect the call to succeed, but the invalid header should be skipped (and logged)
-	// The mock doesn't expect the header, so if the request goes through without it, it passes.
-	let result = handler
-		.call_tool(
-			"get_user",
-			Some(args.as_object().unwrap().clone()),
-			&IncomingRequestContext::empty(),
-		)
-		.await;
-	assert!(result.is_ok()); // Check that the call still succeeds despite the bad header
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
-	// We can't easily assert the log message here, but manual inspection of logs would show the warning.
 }
 
 #[tokio::test]
@@ -669,103 +594,4 @@ async fn test_path_param_encoding(#[case] user_id: &str, #[case] expected_path: 
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
 	assert_eq!(result.unwrap(), json!({ "id": user_id }));
-}
-
-#[tokio::test]
-async fn test_allowed_custom_headers_still_work() {
-	let (server, handler) = setup().await;
-
-	let user_id = "custom-header-test";
-	let expected_response = json!({ "id": user_id });
-
-	Mock::given(method("GET"))
-		.and(path(format!("/users/{user_id}")))
-		.and(header("X-Request-ID", "my-request-123"))
-		.and(header("X-Custom-Header", "custom-value"))
-		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
-		.expect(1)
-		.mount(&server)
-		.await;
-
-	let args = json!({
-		"path": { "user_id": user_id },
-		"header": {
-			"X-Request-ID": "my-request-123",
-			"X-Custom-Header": "custom-value"
-		}
-	});
-
-	let result = handler
-		.call_tool(
-			"get_user",
-			Some(args.as_object().unwrap().clone()),
-			&IncomingRequestContext::empty(),
-		)
-		.await;
-
-	assert!(
-		result.is_ok(),
-		"Custom headers should work: {:?}",
-		result.err()
-	);
-	assert_eq!(result.unwrap(), expected_response);
-}
-
-// Custom matcher to verify a header is NOT present
-struct HeaderNotPresent {
-	header_name: String,
-}
-
-impl HeaderNotPresent {
-	fn new(header_name: impl Into<String>) -> Self {
-		Self {
-			header_name: header_name.into(),
-		}
-	}
-}
-
-impl Match for HeaderNotPresent {
-	fn matches(&self, request: &Request) -> bool {
-		!request.headers.contains_key(self.header_name.as_str())
-	}
-}
-
-#[tokio::test]
-async fn test_header_overrides() {
-	let (server, handler) = setup().await;
-
-	let request_body = json!({ "name": "Test User", "email": "test@example.com" });
-	let expected_response = json!({ "id": "new-user", "name": "Test User" });
-
-	Mock::given(method("POST"))
-		.and(path("/users"))
-		.and(header("content-length", "47")) // length of request_body
-		.and(header("content-type", "application/json"))
-		.and(HeaderNotPresent::new("transfer-encoding"))
-		.and(body_json(&request_body))
-		.respond_with(ResponseTemplate::new(201).set_body_json(&expected_response))
-		.expect(1)
-		.mount(&server)
-		.await;
-
-	let args = json!({
-		"body": request_body,
-		"header": {
-			"content-length": "999999999",
-			"content-type": "text/plain",
-			"transfer-encoding": "text/plain",
-		}
-	});
-
-	let result = handler
-		.call_tool(
-			"create_user",
-			Some(args.as_object().unwrap().clone()),
-			&IncomingRequestContext::empty(),
-		)
-		.await;
-
-	// The request should succeed with the correct headers
-	assert!(result.is_ok(), "Request should succeed: {:?}", result.err());
-	assert_eq!(result.unwrap(), expected_response);
 }
