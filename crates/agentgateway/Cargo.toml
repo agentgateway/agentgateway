@@ -96,7 +96,10 @@ prost.workspace = true
 rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
-rmcp.workspace = true
+rmcp = { version = "0.12", features = [
+    "client",
+    "transport-child-process",
+] }
 rustls-native-certs.workspace = true
 rustls-pemfile.workspace = true
 rustls-pki-types.workspace = true
@@ -167,10 +170,11 @@ insta.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-agentgateway = { version = "0.7.0", path = ".", default-features = false, features = [
-    "testing",
-] }
-rmcp = { workspace = true, features = [
+rmcp = { version = "0.12", features = [
+    "client",
+    "server",
+    "base64",
+    "transport-child-process",
     "transport-streamable-http-client-reqwest",
     "transport-streamable-http-client",
     "transport-streamable-http-server",

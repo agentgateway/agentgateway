@@ -5,7 +5,6 @@ use http::header::{Entry, OccupiedEntry};
 use http::request::Parts;
 use http::{Extensions, Request as HttpRequest, Version};
 use hyper_util::client::legacy::connect::Connect;
-use reqwest::IntoUrl;
 use serde::Serialize;
 use serde_json;
 use url::Url;
@@ -109,10 +108,9 @@ impl Request {
 }
 
 impl RequestBuilder {
-	pub fn new<U: IntoUrl>(method: Method, url: U) -> Self {
+	pub fn new(method: Method, url: &str) -> Self {
 		RequestBuilder {
-			request: url
-				.into_url()
+			request: Url::parse(url)
 				.map(|u| Request::new(method, u))
 				.map_err(crate::http::Error::new),
 		}

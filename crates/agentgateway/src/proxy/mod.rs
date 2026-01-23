@@ -1,7 +1,6 @@
 mod gateway;
 pub mod httpproxy;
 pub mod proxy_protocol;
-#[cfg(any(test, feature = "testing"))]
 pub mod request_builder;
 pub mod tcpproxy;
 

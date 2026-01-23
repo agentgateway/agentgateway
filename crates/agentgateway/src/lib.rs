@@ -441,8 +441,6 @@ pub struct XDSConfig {
 pub enum ConfigSource {
 	File(PathBuf),
 	Static(Bytes),
-	// #[cfg(any(test, feature = "testing"))]
-	// Dynamic(Arc<tokio::sync::Mutex<MpscAckReceiver<LocalConfig>>>),
 }
 
 impl Serialize for ConfigSource {
@@ -462,16 +460,12 @@ impl ConfigSource {
 		Ok(match self {
 			ConfigSource::File(path) => fs_err::tokio::read_to_string(path).await?,
 			ConfigSource::Static(data) => std::str::from_utf8(data).map(|s| s.to_string())?,
-			// #[cfg(any(test, feature = "testing"))]
-			// _ => "{}".to_string(),
 		})
 	}
 	pub fn read_to_string_sync(&self) -> anyhow::Result<String> {
 		Ok(match self {
 			ConfigSource::File(path) => fs_err::read_to_string(path)?,
 			ConfigSource::Static(data) => std::str::from_utf8(data).map(|s| s.to_string())?,
-			// #[cfg(any(test, feature = "testing"))]
-			// _ => "{}".to_string(),
 		})
 	}
 }

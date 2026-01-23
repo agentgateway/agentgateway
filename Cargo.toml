@@ -127,17 +127,13 @@ prost-types = "0.14"
 prost-wkt-types = { version = "0.7.0", features = ["vendored-protox"] }
 prost-wkt-build = "0.7.0"
 rand = "0.9"
-rcgen = { version = "0.14", features = ["pem"] }
+rcgen = { version = "0.14", features = ["pem", "x509-parser"] }
 regex = "1.11"
 reqwest = { version = "0.12", default-features = false, features = [
     "http2",
     "charset",
     "macos-system-configuration",
     "rustls-tls",
-] }
-rmcp = { version = "0.12", features = [
-    "client",
-    "transport-child-process",
 ] }
 rustc_version = "0.4"
 rustls = { version = "0.23", features = ["tls12", "ring"] }

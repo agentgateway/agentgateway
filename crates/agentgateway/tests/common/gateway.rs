@@ -115,7 +115,7 @@ impl AgentGateway {
 	pub async fn send_request(&self, method: Method, url: &str) -> Response {
 		let mut url = Url::parse(url).unwrap();
 		url.set_port(Some(self.port)).unwrap();
-		RequestBuilder::new(method, url)
+		RequestBuilder::new(method, url.as_str())
 			.header("x-test-id", self.test_id.clone())
 			.send(self.client.clone())
 			.await
@@ -126,7 +126,7 @@ impl AgentGateway {
 		let mut url = Url::parse(url).unwrap();
 		url.set_port(Some(self.port)).unwrap();
 		let body = serde_json::to_vec_pretty(&body).unwrap();
-		RequestBuilder::new(Method::POST, url)
+		RequestBuilder::new(Method::POST, url.as_str())
 			.header("x-test-id", self.test_id.clone())
 			.header("Content-Type", "application/json")
 			.body(body)
