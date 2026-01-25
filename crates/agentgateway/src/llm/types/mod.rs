@@ -56,6 +56,12 @@ pub trait RequestType: Send + Sync {
 			"bedrock token count"
 		)))
 	}
+
+	fn to_vertex_token_count(&self, _headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
+		Err(AIError::UnsupportedConversion(strng::literal!(
+			"vertex token count"
+		)))
+	}
 }
 
 /// SimpleChatCompletionMessage is a simplified chat message

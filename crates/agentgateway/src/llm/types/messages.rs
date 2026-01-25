@@ -709,8 +709,9 @@ pub mod typed {
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 	pub struct MessageDeltaUsage {
-		/// Cumulative input tokens
-		pub input_tokens: usize,
+		/// Cumulative input tokens (optional for Vertex AI compatibility)
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub input_tokens: Option<usize>,
 		/// Cumulative output tokens
 		pub output_tokens: usize,
 		/// Cumulative cache creation tokens

@@ -256,7 +256,8 @@ async fn test_vertex_messages() {
 
 	let request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
 		let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
-		provider.prepare_anthropic_request_body(anthropic_body)
+		let headers = crate::http::HeaderMap::new();
+		provider.prepare_anthropic_request_body(anthropic_body, &headers)
 	};
 
 	for r in MESSAGES_REQUESTS {
@@ -370,5 +371,80 @@ fn test_prompt_enrichment() {
 		"openai",
 		"request_openai_with_messages",
 		apply_test_prompts,
+	);
+}
+
+#[test]
+fn test_vertex_get_host() {
+	// No region specified - should use default host
+	let provider = vertex::Provider {
+		model: None,
+		region: None,
+		project_id: strng::new("test-project"),
+	};
+	assert_eq!(provider.get_host(), "aiplatform.googleapis.com");
+
+	// Global region - should use default host (not global-aiplatform.googleapis.com)
+	// See: https://github.com/anthropics/anthropic-sdk-typescript/issues/800
+	let provider = vertex::Provider {
+		model: None,
+		region: Some(strng::new("global")),
+		project_id: strng::new("test-project"),
+	};
+	assert_eq!(provider.get_host(), "aiplatform.googleapis.com");
+
+	// Regional endpoint - should use region-prefixed host
+	let provider = vertex::Provider {
+		model: None,
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project"),
+	};
+	assert_eq!(provider.get_host(), "us-central1-aiplatform.googleapis.com");
+}
+
+#[test]
+fn test_extract_model_from_vertex_path() {
+	use super::extract_model_from_vertex_path;
+
+	// Standard Vertex AI path with rawPredict
+	assert_eq!(
+		extract_model_from_vertex_path(
+			"/projects/my-project/locations/global/publishers/anthropic/models/claude-opus-4-5@20251101:rawPredict"
+		),
+		Some("claude-opus-4-5@20251101".to_string())
+	);
+
+	// Vertex AI path with streamRawPredict
+	assert_eq!(
+		extract_model_from_vertex_path(
+			"/projects/my-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-5@20250929:streamRawPredict"
+		),
+		Some("claude-sonnet-4-5@20250929".to_string())
+	);
+
+	// Model with anthropic/ prefix
+	assert_eq!(
+		extract_model_from_vertex_path(
+			"/projects/my-project/locations/global/publishers/anthropic/models/anthropic/claude-haiku-4-5@20251001:rawPredict"
+		),
+		Some("anthropic/claude-haiku-4-5@20251001".to_string())
+	);
+
+	// Path without /models/ should return None
+	assert_eq!(
+		extract_model_from_vertex_path("/v1/messages"),
+		None
+	);
+
+	// Path with /models/ but no colon should return None
+	assert_eq!(
+		extract_model_from_vertex_path("/projects/my-project/models/claude-opus-4-5@20251101"),
+		None
+	);
+
+	// Empty model name should return None
+	assert_eq!(
+		extract_model_from_vertex_path("/projects/my-project/models/:rawPredict"),
+		None
 	);
 }
