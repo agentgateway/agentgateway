@@ -21,6 +21,8 @@ impl Provider {
 	pub fn get_path_for_model(&self, route: RouteType, model: &str) -> Strng {
 		let t = if route == RouteType::Embeddings {
 			strng::literal!("embeddings")
+		} else if route == RouteType::Responses {
+			strng::literal!("responses")
 		} else {
 			strng::literal!("chat/completions")
 		};

@@ -102,7 +102,6 @@ mod openai {
 	}
 
 	#[tokio::test]
-	#[ignore] // This is not currently supported! It really ought to be!
 	async fn responses_stream() {
 		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
 			return;
@@ -351,6 +350,22 @@ mod azureopenai {
 			return;
 		};
 		send_completions(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn responses() {
+		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
+			return;
+		};
+		send_responses(&gw, false).await;
+	}
+
+	#[tokio::test]
+	async fn responses_stream() {
+		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
+			return;
+		};
+		send_responses(&gw, true).await;
 	}
 
 	#[tokio::test]

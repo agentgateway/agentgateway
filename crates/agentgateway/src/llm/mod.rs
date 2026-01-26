@@ -571,7 +571,7 @@ impl AIProvider {
 			) => {
 				// Anthropic supports messages input (Bedrock & Vertex support assuming serving Anthropic models)
 			},
-			(InputFormat::Responses, AIProvider::OpenAI(_)) => {
+			(InputFormat::Responses, AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_)) => {
 				// OpenAI supports responses input
 			},
 			(InputFormat::Responses, AIProvider::Bedrock(_)) => {
