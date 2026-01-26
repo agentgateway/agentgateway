@@ -56,7 +56,7 @@ impl RequestType for Request {
 
 	fn to_vertex_token_count(&self, _headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
 		// Vertex count-tokens uses the same format as Anthropic count-tokens
-		// Just serialize the request as-is (model will be removed by prepare_anthropic_request_body)
+		// Just serialize the request as-is (the model field is kept in the body for count-tokens requests)
 		serde_json::to_vec(self).map_err(AIError::RequestMarshal)
 	}
 }
