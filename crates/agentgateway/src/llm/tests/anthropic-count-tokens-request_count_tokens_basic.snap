@@ -1,0 +1,18 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "anthropic-count-tokens: request_count_tokens_basic"
+info:
+  model: claude-3-5-sonnet-20241022
+  messages:
+    - role: user
+      content: "Hello, how are you?"
+---
+{
+  "model": "claude-3-5-sonnet-20241022",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello, how are you?"
+    }
+  ]
+}

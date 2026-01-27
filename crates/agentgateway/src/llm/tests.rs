@@ -120,6 +120,10 @@ const COMPLETION_REQUESTS: &[&str] = &[
 ];
 const MESSAGES_REQUESTS: &[&str] = &["request_anthropic_basic", "request_anthropic_tools"];
 const RESPONSES_REQUESTS: &[&str] = &["request_responses_basic", "request_responses_instructions"];
+const COUNT_TOKENS_REQUESTS: &[&str] = &[
+	"request_count_tokens_basic",
+	"request_count_tokens_with_system",
+];
 
 #[tokio::test]
 async fn test_bedrock_completions() {
@@ -371,4 +375,73 @@ fn test_prompt_enrichment() {
 		"request_openai_with_messages",
 		apply_test_prompts,
 	);
+}
+
+#[tokio::test]
+async fn test_anthropic_count_tokens() {
+	let request = |i: types::count_tokens::Request| i.to_anthropic();
+	for r in COUNT_TOKENS_REQUESTS {
+		test_request("anthropic-count-tokens", r, request);
+	}
+
+	// test count_tokens response
+	let test_dir = Path::new("src/llm/tests");
+	let input_path = test_dir.join("response_anthropic_count_tokens.json");
+	let response_str = &fs::read_to_string(&input_path).expect("Failed to read response file");
+	let bytes = Bytes::copy_from_slice(response_str.as_bytes());
+	let provider_value = serde_json::from_str::<Value>(response_str).unwrap();
+
+	let (returned_bytes, count) = types::count_tokens::Response::translate_response(bytes.clone())
+		.expect("Failed to translate count_tokens response");
+
+	assert_eq!(
+		returned_bytes, bytes,
+		"Response bytes should be returned unchanged"
+	);
+
+	let resp: types::count_tokens::Response =
+		serde_json::from_slice(&returned_bytes).expect("Failed to deserialize response");
+
+	insta::with_settings!({
+			info => &provider_value,
+			description => input_path.to_string_lossy().to_string(),
+			omit_expression => true,
+			prepend_module_to_snapshot => false,
+			snapshot_path => "tests",
+	}, {
+			 insta::assert_json_snapshot!("anthropic_response_count_tokens.json", serde_json::json!({
+				"input_tokens": resp.input_tokens,
+				"token_count": count,
+			}));
+	});
+}
+
+#[tokio::test]
+async fn test_bedrock_count_tokens() {
+	let mut headers = http::HeaderMap::new();
+	headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
+
+	let request = |input: types::count_tokens::Request| input.to_bedrock_token_count(&headers);
+
+	for r in COUNT_TOKENS_REQUESTS {
+		test_request("bedrock-count-tokens", r, request);
+	}
+}
+
+#[tokio::test]
+async fn test_vertex_count_tokens() {
+	let provider = vertex::Provider {
+		model: Some(strng::new("anthropic/claude-sonnet-4-5")),
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project-123"),
+	};
+
+	let request = |input: types::count_tokens::Request| -> Result<Vec<u8>, AIError> {
+		let anthropic_body = input.to_anthropic()?;
+		provider.prepare_anthropic_request_body(anthropic_body)
+	};
+
+	for r in COUNT_TOKENS_REQUESTS {
+		test_request("vertex-count-tokens", r, request);
+	}
 }

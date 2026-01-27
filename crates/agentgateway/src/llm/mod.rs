@@ -324,7 +324,7 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path {
-						Self::set_path_and_query(uri, anthropic::DEFAULT_PATH)?;
+						Self::set_path_and_query(uri, anthropic::path(route_type))?;
 					}
 					uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
 					Ok(())
@@ -561,29 +561,32 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		match (original_format, self) {
-			(InputFormat::Completions, _) => {
+		match (self, original_format) {
+			(_, InputFormat::Completions) => {
 				// All providers support completions input
 			},
 			(
-				InputFormat::Messages,
+				AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_) | AIProvider::Bedrock(_),
+				InputFormat::Responses,
+			) => {
+				// OpenAI supports responses input (Bedrock supports responses input via translation)
+			},
+			(
 				AIProvider::Anthropic(_) | AIProvider::Bedrock(_) | AIProvider::Vertex(_),
+				InputFormat::Messages,
 			) => {
 				// Anthropic supports messages input (Bedrock & Vertex support assuming serving Anthropic models)
 			},
-			(InputFormat::Responses, AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_)) => {
-				// OpenAI supports responses input
+			(
+				AIProvider::Anthropic(_) | AIProvider::Bedrock(_) | AIProvider::Vertex(_),
+				InputFormat::CountTokens,
+			) => {
+				// Anthropic supports count_tokens natively (Bedrock & Vertex assumes its serving Anthropic models)
 			},
-			(InputFormat::Responses, AIProvider::Bedrock(_)) => {
-				// Bedrock supports responses input via translation
-			},
-			(InputFormat::CountTokens, AIProvider::Bedrock(_)) => {
-				// Bedrock supports count_tokens input via translation
-			},
-			(InputFormat::Embeddings, AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_)) => {
+			(AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_), InputFormat::Embeddings) => {
 				// passthrough
 			},
-			(m, p) => {
+			(p, m) => {
 				// Messages with OpenAI compatible: currently only supports translating the request
 				return Err(AIError::UnsupportedConversion(strng::format!(
 					"{m:?} from provider {}",
@@ -625,8 +628,19 @@ impl AIProvider {
 
 		let request_model = llm_info.request_model.as_str();
 		let new_request = if original_format == InputFormat::CountTokens {
-			// Currently only bedrock is supported so no problems here.
-			req.to_bedrock_token_count(parts.headers())?
+			match self {
+				AIProvider::Anthropic(_) => req.to_anthropic()?,
+				AIProvider::Bedrock(_) => req.to_bedrock_token_count(parts.headers())?,
+				AIProvider::Vertex(provider) => {
+					let body = req.to_anthropic()?;
+					provider.prepare_anthropic_request_body(body)?
+				},
+				_ => {
+					return Err(AIError::UnsupportedConversion(strng::literal!(
+						"count_tokens not supported for this provider"
+					)));
+				},
+			}
 		} else {
 			match self {
 				AIProvider::Vertex(provider) if provider.is_anthropic_model(Some(request_model)) => {
@@ -665,6 +679,7 @@ impl AIProvider {
 				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
 				.await;
 		}
+
 		// Buffer the body
 		let buffer_limit = http::response_buffer_limit(&resp);
 		let (mut parts, body) = resp.into_parts();
@@ -677,9 +692,16 @@ impl AIProvider {
 
 		// count_tokens has simplified response handling (just format translation)
 		if req.input_format == InputFormat::CountTokens {
-			// Currently only bedrock is supported so we have no match needed here
-			let (bytes, count) =
-				conversion::bedrock::from_anthropic_token_count::translate_response(bytes.clone())?;
+			let (bytes, count) = match self {
+				AIProvider::Anthropic(_) | AIProvider::Vertex(_) | AIProvider::Bedrock(_) => {
+					types::count_tokens::Response::translate_response(bytes)?
+				},
+				_ => {
+					return Err(AIError::UnsupportedConversion(strng::literal!(
+						"count_tokens response not supported for this provider"
+					)));
+				},
+			};
 
 			parts.headers.remove(header::CONTENT_LENGTH);
 			let resp = Response::from_parts(parts, bytes.into());
@@ -691,6 +713,7 @@ impl AIProvider {
 			log.store(Some(llm_info));
 			return Ok(resp);
 		}
+
 		// embeddings has simplified response handling (currently nothing; no translation needed)
 		if req.input_format == InputFormat::Embeddings {
 			let resp = Response::from_parts(parts, bytes.into());

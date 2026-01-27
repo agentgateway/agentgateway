@@ -98,70 +98,11 @@ impl RequestType for Request {
 	}
 
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
-		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = prompts
-			.into_iter()
-			.partition(|p| p.role.as_str() == "system");
-
-		if !system_prompts.is_empty() {
-			let mut items: Vec<ContentPart> = match std::mem::take(&mut self.system) {
-				Some(RequestContent::Text(text)) => vec![ContentPart {
-					r#type: "text".to_string(),
-					text: Some(text),
-					rest: Default::default(),
-				}],
-				Some(RequestContent::Array(existing)) => existing,
-				None => Vec::new(),
-			};
-
-			items.splice(
-				0..0,
-				system_prompts.into_iter().map(|p| ContentPart {
-					r#type: "text".to_string(),
-					text: Some(p.content.to_string()),
-					rest: Default::default(),
-				}),
-			);
-
-			self.system = Some(RequestContent::Array(items));
-		}
-
-		if !message_prompts.is_empty() {
-			self
-				.messages
-				.splice(..0, message_prompts.into_iter().map(Into::into));
-		}
+		prepend_prompts_helper(&mut self.messages, &mut self.system, prompts);
 	}
 
 	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
-		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = prompts
-			.into_iter()
-			.partition(|p| p.role.as_str() == "system");
-
-		if !system_prompts.is_empty() {
-			let mut items: Vec<ContentPart> = match std::mem::take(&mut self.system) {
-				Some(RequestContent::Text(text)) => vec![ContentPart {
-					r#type: "text".to_string(),
-					text: Some(text),
-					rest: Default::default(),
-				}],
-				Some(RequestContent::Array(existing)) => existing,
-				None => Vec::new(),
-			};
-
-			items.extend(system_prompts.into_iter().map(|p| ContentPart {
-				r#type: "text".to_string(),
-				text: Some(p.content.to_string()),
-				rest: Default::default(),
-			}));
-
-			self.system = Some(RequestContent::Array(items));
-		}
-
-		if !message_prompts.is_empty() {
-			self
-				.messages
-				.extend(message_prompts.into_iter().map(Into::into));
-		}
+		append_prompts_helper(&mut self.messages, &mut self.system, prompts);
 	}
 
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
@@ -234,6 +175,77 @@ impl RequestType for Request {
 		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> Result<Vec<u8>, AIError> {
 		conversion::bedrock::from_messages::translate(self, provider, headers)
+	}
+}
+
+pub fn prepend_prompts_helper(
+	messages: &mut Vec<RequestMessage>,
+	system: &mut Option<RequestContent>,
+	prompts: Vec<SimpleChatCompletionMessage>,
+) {
+	let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = prompts
+		.into_iter()
+		.partition(|p| p.role.as_str() == "system");
+
+	if !system_prompts.is_empty() {
+		let mut items: Vec<ContentPart> = match std::mem::take(system) {
+			Some(RequestContent::Text(text)) => vec![ContentPart {
+				r#type: "text".to_string(),
+				text: Some(text),
+				rest: Default::default(),
+			}],
+			Some(RequestContent::Array(existing)) => existing,
+			None => Vec::new(),
+		};
+
+		items.splice(
+			0..0,
+			system_prompts.into_iter().map(|p| ContentPart {
+				r#type: "text".to_string(),
+				text: Some(p.content.to_string()),
+				rest: Default::default(),
+			}),
+		);
+
+		*system = Some(RequestContent::Array(items));
+	}
+
+	if !message_prompts.is_empty() {
+		messages.splice(..0, message_prompts.into_iter().map(Into::into));
+	}
+}
+
+pub fn append_prompts_helper(
+	messages: &mut Vec<RequestMessage>,
+	system: &mut Option<RequestContent>,
+	prompts: Vec<SimpleChatCompletionMessage>,
+) {
+	let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = prompts
+		.into_iter()
+		.partition(|p| p.role.as_str() == "system");
+
+	if !system_prompts.is_empty() {
+		let mut items: Vec<ContentPart> = match std::mem::take(system) {
+			Some(RequestContent::Text(text)) => vec![ContentPart {
+				r#type: "text".to_string(),
+				text: Some(text),
+				rest: Default::default(),
+			}],
+			Some(RequestContent::Array(existing)) => existing,
+			None => Vec::new(),
+		};
+
+		items.extend(system_prompts.into_iter().map(|p| ContentPart {
+			r#type: "text".to_string(),
+			text: Some(p.content.to_string()),
+			rest: Default::default(),
+		}));
+
+		*system = Some(RequestContent::Array(items));
+	}
+
+	if !message_prompts.is_empty() {
+		messages.extend(message_prompts.into_iter().map(Into::into));
 	}
 }
 

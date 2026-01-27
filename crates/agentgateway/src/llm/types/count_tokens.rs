@@ -1,13 +1,20 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::types::RequestType;
+use crate::llm::types::{RequestType, messages};
 use crate::llm::{AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, conversion};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Request {
 	pub model: Option<String>,
+
+	pub messages: Vec<messages::RequestMessage>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub system: Option<messages::RequestContent>,
+
 	#[serde(flatten)]
 	pub rest: serde_json::Map<String, serde_json::Value>,
 }
@@ -17,12 +24,12 @@ impl RequestType for Request {
 		&mut self.model
 	}
 
-	fn prepend_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
-		// TODO: this would help since we can then count the pre-pending
+	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
+		messages::prepend_prompts_helper(&mut self.messages, &mut self.system, prompts);
 	}
 
-	fn append_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
-		// TODO: this would help since we can then count the appending
+	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
+		messages::append_prompts_helper(&mut self.messages, &mut self.system, prompts);
 	}
 
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
@@ -50,7 +57,24 @@ impl RequestType for Request {
 		)
 	}
 
+	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
+		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
+	}
+
 	fn to_bedrock_token_count(&self, headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
 		conversion::bedrock::from_anthropic_token_count::translate(self, headers)
+	}
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Response {
+	#[serde(alias = "inputTokens")]
+	pub input_tokens: u64,
+}
+
+impl Response {
+	pub fn translate_response(bytes: Bytes) -> Result<(Bytes, u64), AIError> {
+		let resp: Self = serde_json::from_slice(&bytes).map_err(AIError::ResponseParsing)?;
+		Ok((bytes, resp.input_tokens))
 	}
 }

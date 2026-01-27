@@ -59,7 +59,7 @@ frontendPolicies:
   accessLog:
     add:
       streaming: llm.streaming
-      #body: string(response.body)
+      # body: string(response.body)
       req.id: request.headers["x-test-id"]
       token.count: llm.countTokens
       embeddings: json(response.body).data[0].embedding.size()
@@ -79,8 +79,8 @@ binds:
               routes:
                 /v1/chat/completions: completions
                 /v1/messages: messages
+                /v1/messages/count_tokens: anthropicTokenCount
                 /v1/responses: responses
-                /v1/count: anthropicTokenCount
                 /v1/embeddings: embeddings
                 "*": passthrough
           provider:
@@ -264,6 +264,14 @@ mod anthropic {
 		};
 		send_messages(&gw, true).await;
 	}
+
+	#[tokio::test]
+	async fn token_count() {
+		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
+			return;
+		};
+		send_anthropic_token_count(&gw).await;
+	}
 }
 
 mod gemini {
@@ -330,6 +338,14 @@ mod vertex {
 			return;
 		};
 		send_embeddings(&gw).await;
+	}
+
+	#[tokio::test]
+	async fn token_count() {
+		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+			return;
+		};
+		send_anthropic_token_count(&gw).await;
 	}
 }
 
@@ -426,7 +442,7 @@ fn assert_count_log(path: &str, test_id: &str) {
 	]);
 	assert_eq!(logs.len(), 1, "{logs:?}");
 	let log = logs.first().unwrap();
-	let count = log.get("token.count").unwrap().as_i64().unwrap();
+	let count = log.get("token.count").unwrap().as_u64().unwrap();
 	assert!(count > 1 && count < 100, "unexpected count tokens: {count}");
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
 	assert!(!stream, "unexpected streaming value: {stream}");
@@ -525,9 +541,8 @@ async fn send_messages(gw: &AgentGateway, stream: bool) {
 async fn send_anthropic_token_count(gw: &AgentGateway) {
 	let resp = gw
 		.send_request_json(
-			"http://localhost/v1/count",
+			"http://localhost/v1/messages/count_tokens",
 			json!({
-				"max_tokens": 16,
 				"messages": [
 					{"role": "user", "content": "give me a 1 word answer"}
 				],
@@ -536,7 +551,7 @@ async fn send_anthropic_token_count(gw: &AgentGateway) {
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_count_log("/v1/count", &gw.test_id);
+	assert_count_log("/v1/messages/count_tokens", &gw.test_id);
 }
 
 async fn send_embeddings(gw: &AgentGateway) {

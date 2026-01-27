@@ -1,6 +1,7 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
 
+use crate::llm::RouteType;
 use crate::*;
 
 #[apply(schema!)]
@@ -14,4 +15,10 @@ impl super::Provider for Provider {
 }
 pub const DEFAULT_HOST_STR: &str = "api.anthropic.com";
 pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
-pub const DEFAULT_PATH: &str = "/v1/messages";
+
+pub fn path(route: RouteType) -> &'static str {
+	match route {
+		RouteType::AnthropicTokenCount => "/v1/messages/count_tokens",
+		_ => "/v1/messages",
+	}
+}

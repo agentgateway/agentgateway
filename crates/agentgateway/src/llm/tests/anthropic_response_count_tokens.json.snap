@@ -1,0 +1,10 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response_anthropic_count_tokens.json
+info:
+  input_tokens: 42
+---
+{
+  "input_tokens": 42,
+  "token_count": 42
+}

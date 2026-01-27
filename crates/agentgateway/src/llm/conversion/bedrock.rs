@@ -1923,8 +1923,6 @@ pub mod from_responses {
 }
 
 pub mod from_anthropic_token_count {
-	use bytes::Bytes;
-
 	use crate::llm::{AIError, types};
 
 	pub fn translate(
@@ -1957,13 +1955,6 @@ pub mod from_anthropic_token_count {
 			},
 		};
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
-	}
-
-	pub fn translate_response(bytes: Bytes) -> Result<(Bytes, u64), AIError> {
-		let resp: types::bedrock::CountTokensResponse =
-			serde_json::from_slice(&bytes).map_err(AIError::ResponseParsing)?;
-		// Right now the bedrock response is identical to the anthropic response; no translation needed
-		Ok((bytes, resp.input_tokens as u64))
 	}
 }
 

@@ -184,12 +184,6 @@ pub struct CountTokensRequest {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CountTokensResponse {
-	#[serde(alias = "inputTokens")]
-	pub input_tokens: i32,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CountTokensInputInvokeModel {
 	pub invoke_model: InvokeModelBody,

@@ -1,0 +1,7 @@
+{
+  "model": "claude-3-5-sonnet-20241022",
+  "system": "You are a helpful assistant.",
+  "messages": [
+    {"role": "user", "content": "What is the weather today?"}
+  ]
+}

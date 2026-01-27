@@ -1,0 +1,16 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "bedrock-count-tokens: request_count_tokens_basic"
+info:
+  model: claude-3-5-sonnet-20241022
+  messages:
+    - role: user
+      content: "Hello, how are you?"
+---
+{
+  "input": {
+    "invokeModel": {
+      "body": "eyJtYXhfdG9rZW5zIjoxLCJhbnRocm9waWNfdmVyc2lvbiI6IjIwMjMtMDYtMDEifQ=="
+    }
+  }
+}
