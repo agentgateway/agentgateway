@@ -7,8 +7,8 @@ use prometheus_client::registry::Registry;
 use rmcp::model::Tool;
 use rstest::rstest;
 use serde_json::json;
-use wiremock::matchers::{body_json, method, path, query_param};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::matchers::{body_json, header, method, path, query_param};
+use wiremock::{Match, Mock, MockServer, Request, ResponseTemplate};
 
 use super::*;
 use crate::client::Client;
@@ -73,6 +73,12 @@ async fn setup() -> (MockServer, Handler) {
 											"verbose": {"type": "string"}
 									}
 							},
+							"header": {
+									"type": "object",
+									"properties": {
+											"X-Request-ID": {"type": "string"}
+									}
+							}
 					},
 					"required": ["path"] // Only path is required for this tool
 			})
@@ -86,6 +92,7 @@ async fn setup() -> (MockServer, Handler) {
 	let upstream_call_get = UpstreamOpenAPICall {
 		method: "GET".to_string(),
 		path: "/users/{user_id}".to_string(),
+		allowed_headers: HashSet::from(["X-Request-ID".to_string()]),
 	};
 
 	let test_tool_post = Tool {
@@ -112,6 +119,12 @@ async fn setup() -> (MockServer, Handler) {
 							"source": {"type": "string"}
 						}
 					},
+					"header": {
+						"type": "object",
+						"properties": {
+							"X-API-Key": {"type": "string"}
+						}
+					}
 				},
 				"required": ["body"]
 			})
@@ -125,6 +138,7 @@ async fn setup() -> (MockServer, Handler) {
 	let upstream_call_post = UpstreamOpenAPICall {
 		method: "POST".to_string(),
 		path: "/users".to_string(),
+		allowed_headers: HashSet::from(["X-API-Key".to_string()]),
 	};
 
 	let backend = SimpleBackend::Opaque(
@@ -204,6 +218,34 @@ async fn test_call_tool_get_with_query() {
 }
 
 #[tokio::test]
+async fn test_call_tool_get_with_header() {
+	let (server, handler) = setup().await;
+
+	let user_id = "789";
+	let request_id = "req-abc";
+	let expected_response = json!({ "id": user_id, "name": "Another User" });
+
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.and(header("X-Request-ID", request_id))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": user_id }, "header": { "X-Request-ID": request_id } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(result.is_ok());
+	assert_eq!(result.unwrap(), expected_response);
+}
+
+#[tokio::test]
 async fn test_call_tool_post_with_body() {
 	let (server, handler) = setup().await;
 
@@ -235,12 +277,14 @@ async fn test_call_tool_post_all_params() {
 	let (server, handler) = setup().await;
 
 	let request_body = json!({ "name": "Complete User", "email": "complete@example.com" });
+	let api_key = "secret-key";
 	let source = "test-suite";
 	let expected_response = json!({ "id": "comp-123", "name": "Complete User" });
 
 	Mock::given(method("POST"))
 		.and(path("/users"))
 		.and(query_param("source", source))
+		.and(header("X-API-Key", api_key))
 		.and(body_json(&request_body))
 		.respond_with(ResponseTemplate::new(201).set_body_json(&expected_response))
 		.mount(&server)
@@ -249,6 +293,7 @@ async fn test_call_tool_post_all_params() {
 	let args = json!({
 			"body": request_body,
 			"query": { "source": source },
+			"header": { "X-API-Key": api_key }
 	});
 	let result = handler
 		.call_tool(
@@ -310,6 +355,34 @@ async fn test_call_tool_upstream_error() {
 	let err = result.unwrap_err();
 	assert!(err.to_string().contains("failed with status 404 Not Found"));
 	assert!(err.to_string().contains(&error_response.to_string()));
+}
+
+#[tokio::test]
+async fn test_call_tool_invalid_header_value() {
+	let (server, handler) = setup().await;
+
+	let user_id = "header-issue";
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": user_id })))
+		.mount(&server)
+		.await;
+
+	// Intentionally provide a non-string header value
+	let args = json!({
+			"path": { "user_id": user_id },
+			"header": { "X-Request-ID": 12345 }
+	});
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+	assert!(result.is_ok());
+	assert_eq!(result.unwrap(), json!({ "id": user_id }));
 }
 
 #[tokio::test]
@@ -594,4 +667,144 @@ async fn test_path_param_encoding(#[case] user_id: &str, #[case] expected_path: 
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
 	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+}
+
+#[tokio::test]
+async fn test_schema_defined_headers_work() {
+	let (server, handler) = setup().await;
+
+	let user_id = "custom-header-test";
+	let expected_response = json!({ "id": user_id });
+
+	// Only X-Request-ID is defined in the schema for get_user tool
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.and(header("X-Request-ID", "my-request-123"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let args = json!({
+		"path": { "user_id": user_id },
+		"header": {
+			"X-Request-ID": "my-request-123"
+		}
+	});
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(
+		result.is_ok(),
+		"Schema-defined headers should work: {:?}",
+		result.err()
+	);
+	assert_eq!(result.unwrap(), expected_response);
+}
+
+// Custom matcher to verify a header is NOT present
+struct HeaderNotPresent {
+	header_name: String,
+}
+
+impl HeaderNotPresent {
+	fn new(header_name: impl Into<String>) -> Self {
+		Self {
+			header_name: header_name.into(),
+		}
+	}
+}
+
+impl Match for HeaderNotPresent {
+	fn matches(&self, request: &Request) -> bool {
+		!request.headers.contains_key(self.header_name.as_str())
+	}
+}
+
+#[tokio::test]
+async fn test_blocked_headers_are_ignored() {
+	let (server, handler) = setup().await;
+
+	let request_body = json!({ "name": "Test User", "email": "test@example.com" });
+	let expected_response = json!({ "id": "new-user", "name": "Test User" });
+
+	Mock::given(method("POST"))
+		.and(path("/users"))
+		.and(header("content-length", "47")) // length of request_body
+		.and(header("content-type", "application/json"))
+		.and(HeaderNotPresent::new("transfer-encoding"))
+		.and(body_json(&request_body))
+		.respond_with(ResponseTemplate::new(201).set_body_json(&expected_response))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let args = json!({
+		"body": request_body,
+		"header": {
+			"content-length": "999999999",
+			"content-type": "text/plain",
+			"transfer-encoding": "chunked",
+			"host": "evil.com"
+		}
+	});
+
+	let result = handler
+		.call_tool(
+			"create_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	// The request should succeed with the correct headers (blocked headers ignored)
+	assert!(result.is_ok(), "Request should succeed: {:?}", result.err());
+	assert_eq!(result.unwrap(), expected_response);
+}
+
+#[tokio::test]
+async fn test_headers_not_in_schema_are_ignored() {
+	let (server, handler) = setup().await;
+
+	let user_id = "schema-header-test";
+	let expected_response = json!({ "id": user_id });
+
+	// Only expect X-Request-ID (defined in schema), NOT X-Malicious-Header
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.and(header("X-Request-ID", "valid-request"))
+		.and(HeaderNotPresent::new("X-Malicious-Header"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let args = json!({
+		"path": { "user_id": user_id },
+		"header": {
+			"X-Request-ID": "valid-request",
+			"X-Malicious-Header": "should-be-ignored"
+		}
+	});
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(
+		result.is_ok(),
+		"Request should succeed with schema-defined headers: {:?}",
+		result.err()
+	);
+	assert_eq!(result.unwrap(), expected_response);
 }

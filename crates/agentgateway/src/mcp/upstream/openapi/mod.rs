@@ -1,12 +1,12 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::warn;
+use tracing::{debug, warn};
 
-use ::http::header::HeaderValue;
+use ::http::header::{HeaderName, HeaderValue};
 use headers::HeaderMapExt;
 use http::Method;
-use http::header::{ACCEPT, CONTENT_TYPE};
+use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
 use once_cell::sync::Lazy;
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
@@ -23,6 +23,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 pub struct UpstreamOpenAPICall {
 	pub method: String, /* TODO: Switch to Method, but will require getting rid of Serialize/Deserialize */
 	pub path: String,
+	pub allowed_headers: HashSet<String>,
 	// todo: params
 }
 
@@ -240,9 +241,10 @@ fn resolve_request_body<'a>(
 /// We need to rework this and I don't want to forget.
 ///
 /// We need to be able to handle data which can end up in multiple destinations:
-/// 1. Body
-/// 2. Query Params
-/// 3. Templated Path Params
+/// 1. Headers
+/// 2. Body
+/// 3. Query Params
+/// 4. Templated Path Params
 ///
 /// To support this we should create a nested JSON schema which has each of them.
 /// That way the client code can properly separate the objects passed by the client.
@@ -309,6 +311,13 @@ pub(crate) fn parse_openapi_schema(
 									let item = resolve_parameter(p, open_api)?;
 									let (name, schema, required) = build_schema_property(open_api, item)?;
 									match item {
+										Parameter::Header { .. } => {
+											param_schemas
+												.entry(ParameterType::Header)
+												.or_insert_with(Vec::new)
+												.push((name, schema, required));
+											Ok(())
+										},
 										Parameter::Query { .. } => {
 											param_schemas
 												.entry(ParameterType::Query)
@@ -323,17 +332,17 @@ pub(crate) fn parse_openapi_schema(
 												.push((name, schema, required));
 											Ok(())
 										},
-										Parameter::Header { .. } => {
-											warn!("Header parameters are not supported, skipping '{}'", name);
-											Err(ParseError::UnsupportedReference(
-												"Header parameters are not supported".to_string(),
-											))
-										},
 										_ => Err(ParseError::UnsupportedReference(
 											"parameter type COOKIE is not supported".to_string(),
 										)),
 									}
 								})?;
+
+							// Extract allowed header names before consuming param_schemas
+							let allowed_headers: HashSet<String> = param_schemas
+								.get(&ParameterType::Header)
+								.map(|headers| headers.iter().map(|(name, _, _)| name.clone()).collect())
+								.unwrap_or_default();
 
 							for (param_type, props) in param_schemas {
 								let sub_schema = JsonSchema {
@@ -384,6 +393,7 @@ pub(crate) fn parse_openapi_schema(
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
 								method: method.to_string(),
 								path: path.clone(),
+								allowed_headers,
 							};
 							Ok((tool, upstream))
 						},
@@ -405,12 +415,14 @@ pub(crate) fn parse_openapi_schema(
 // Used to index the parameter types for the schema
 lazy_static::lazy_static! {
 	pub static ref BODY_NAME: String = "body".to_string();
+	pub static ref HEADER_NAME: String = "header".to_string();
 	pub static ref QUERY_NAME: String = "query".to_string();
 	pub static ref PATH_NAME: String = "path".to_string();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ParameterType {
+	Header,
 	Query,
 	Path,
 }
@@ -421,6 +433,7 @@ impl std::fmt::Display for ParameterType {
 			f,
 			"{}",
 			match self {
+				ParameterType::Header => "header",
 				ParameterType::Query => "query",
 				ParameterType::Path => "path",
 			}
@@ -641,10 +654,12 @@ impl Handler {
 	/// We need to use the parse the schema to get the correct args.
 	/// They are in the json schema under the "properties" key.
 	/// Body is under the "body" key.
+	/// Headers are under the "header" key.
 	/// Query params are under the "query" key.
 	/// Path params are under the "path" key.
 	///
 	/// Query params need to be added to the url as query params.
+	/// Headers need to be added to the request headers.
 	/// Body needs to be added to the request body.
 	/// Path params need to be added to the template params in the path.
 	pub async fn call_tool(
@@ -669,6 +684,11 @@ impl Handler {
 			.unwrap_or_default();
 		let query_params = args
 			.get(&*QUERY_NAME)
+			.and_then(Value::as_object)
+			.cloned()
+			.unwrap_or_default();
+		let header_params = args
+			.get(&*HEADER_NAME)
 			.and_then(Value::as_object)
 			.cloned()
 			.unwrap_or_default();
@@ -756,6 +776,58 @@ impl Handler {
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
 
 		ctx.apply(&mut request);
+
+		// First header set wins including headers set by ctx.apply or the gateway
+		for (key, value) in &header_params {
+			// Only allow headers defined in the OpenAPI schema
+			if !info.allowed_headers.contains(key) {
+				debug!(
+					"Ignoring header '{}' for tool '{}' not defined in schema",
+					key, name
+				);
+				continue;
+			}
+
+			if let Some(s_val) = value.as_str() {
+				match (
+					HeaderName::from_bytes(key.as_bytes()),
+					HeaderValue::from_str(s_val),
+				) {
+					(Ok(header_name), Ok(header_value)) => {
+						// Ingore if header is protected
+						if header_name == CONTENT_LENGTH
+							|| header_name == CONTENT_TYPE
+							|| header_name == TRANSFER_ENCODING
+							|| header_name == HOST
+						{
+							debug!("Ignoring protected header '{}' for tool '{}'", key, name);
+							continue;
+						}
+
+						// Don't override existing headers
+						if request.headers().contains_key(&header_name) {
+							debug!("Ingoring header '{}' for tool '{}' already set", key, name);
+							continue;
+						}
+
+						request.headers_mut().insert(header_name, header_value);
+					},
+					(Err(_), _) => warn!(
+						"Invalid header name '{}' for tool '{}', skipping",
+						key, name
+					),
+					(_, Err(_)) => warn!(
+						"Invalid header value '{}' for header '{}' in tool '{}', skipping",
+						s_val, key, name
+					),
+				}
+			} else {
+				warn!(
+					"Header parameter '{}' for tool '{}' is not a string (value: {:?}), skipping",
+					key, name, value
+				);
+			}
+		}
 
 		let response = self.http_client.call(request).await?;
 
