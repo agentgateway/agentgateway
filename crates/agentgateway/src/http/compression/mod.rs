@@ -8,25 +8,72 @@ use headers::ContentEncoding;
 use http_body::Body;
 use http_body_util::BodyExt;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
-use tokio_util::io::StreamReader;
+use tokio_util::io::{ReaderStream, StreamReader};
 
 const GZIP: &str = "gzip";
 const DEFLATE: &str = "deflate";
 const BR: &str = "br";
 const ZSTD: &str = "zstd";
 
+/// Detects which encoding is present in the Content-Encoding header.
+fn detect_encoding(ce: &ContentEncoding) -> Option<&'static str> {
+	if ce.contains(GZIP) {
+		Some(GZIP)
+	} else if ce.contains(DEFLATE) {
+		Some(DEFLATE)
+	} else if ce.contains(BR) {
+		Some(BR)
+	} else if ce.contains(ZSTD) {
+		Some(ZSTD)
+	} else {
+		None
+	}
+}
+
+/// Decompresses an HTTP body stream, returning a new body that yields decompressed chunks.
+///
+/// Use this for streaming responses (SSE, large files) where you can't buffer the entire body.
+/// If encoding is None or unsupported, returns the body unchanged.
+pub fn decompress_body<B>(body: B, encoding: Option<ContentEncoding>) -> axum_core::body::Body
+where
+	B: Body<Data = Bytes> + Send + Unpin + 'static,
+	B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
+	match encoding.as_ref().and_then(detect_encoding) {
+		Some(enc) => decompress_body_with_encoding(body, enc),
+		None => axum_core::body::Body::new(body),
+	}
+}
+
+fn decompress_body_with_encoding<B>(body: B, encoding: &str) -> axum_core::body::Body
+where
+	B: Body + Send + Unpin + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
+	let byte_stream = body.into_data_stream().map_err(std::io::Error::other);
+	let stream_reader = BufReader::new(StreamReader::new(byte_stream));
+
+	let decoder: Box<dyn AsyncRead + Unpin + Send> = match encoding {
+		GZIP => Box::new(GzipDecoder::new(stream_reader)),
+		DEFLATE => Box::new(ZlibDecoder::new(stream_reader)),
+		BR => Box::new(BrotliDecoder::new(stream_reader)),
+		ZSTD => Box::new(ZstdDecoder::new(stream_reader)),
+		unknown => panic!("unknown decoder: {unknown}"),
+	};
+
+	axum_core::body::Body::from_stream(ReaderStream::new(decoder))
+}
+
 pub async fn to_bytes_with_decompression(
 	body: axum_core::body::Body,
 	encoding: Option<ContentEncoding>,
 	limit: usize,
 ) -> Result<(Option<&'static str>, Bytes), axum_core::Error> {
-	match encoding {
-		Some(c) if c.contains(GZIP) => Ok((Some(GZIP), decode_body(body, GZIP, limit).await?)),
-		Some(c) if c.contains(DEFLATE) => Ok((Some(DEFLATE), decode_body(body, DEFLATE, limit).await?)),
-		Some(c) if c.contains(BR) => Ok((Some(BR), decode_body(body, BR, limit).await?)),
-		Some(c) if c.contains(ZSTD) => Ok((Some(ZSTD), decode_body(body, ZSTD, limit).await?)),
+	match encoding.as_ref().and_then(detect_encoding) {
+		Some(enc) => Ok((Some(enc), decode_body(body, enc, limit).await?)),
 		// TODO: explicitly error on Some() that we don't know about?
-		_ => Ok((None, crate::http::read_body_with_limit(body, limit).await?)),
+		None => Ok((None, crate::http::read_body_with_limit(body, limit).await?)),
 	}
 }
 

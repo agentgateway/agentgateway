@@ -832,6 +832,10 @@ impl AIProvider {
 		log.store(Some(llmresp));
 		let buffer = http::response_buffer_limit(&resp);
 
+		// Decompress the body if Content-Encoding is set
+		let content_encoding = resp.headers().typed_get::<ContentEncoding>();
+		let resp = resp.map(|b| http::compression::decompress_body(b, content_encoding));
+
 		Ok(match (self, input_format) {
 			// Completions with OpenAI: just passthrough
 			(

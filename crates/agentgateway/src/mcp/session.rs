@@ -8,6 +8,7 @@ use ::http::request::Parts;
 use agent_core::version::BuildInfo;
 use anyhow::anyhow;
 use futures_util::StreamExt;
+use headers::HeaderMapExt;
 use rmcp::ErrorData;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, ErrorCode,
@@ -120,7 +121,9 @@ impl Session {
 		let sse = match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
 				trace!("forward SSE got SSE stream response");
-				let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
+				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
+				let body = crate::http::compression::decompress_body(resp.into_body(), content_encoding);
+				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
 				Ok(StreamableHttpPostResponse::Sse(event_stream, None))
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
