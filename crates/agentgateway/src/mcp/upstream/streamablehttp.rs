@@ -109,7 +109,9 @@ impl Client {
 
 		match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
-				let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
+				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
+				let body = crate::http::compression::decompress_body(resp.into_body(), content_encoding);
+				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
@@ -184,7 +186,9 @@ impl Client {
 			.map(|s| s.to_string());
 		match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
-				let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
+				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
+				let body = crate::http::compression::decompress_body(resp.into_body(), content_encoding);
+				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
 			},
 			_ => Err(ClientError::new(anyhow!(
