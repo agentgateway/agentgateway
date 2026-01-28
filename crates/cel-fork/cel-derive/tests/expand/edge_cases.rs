@@ -1,6 +1,6 @@
 use cel_derive::DynamicType;
 
-// Mock types for testing
+// Mock types for testing custom helper functions
 pub struct CustomType(String);
 
 fn extract_inner<'a>(c: &'a &'a CustomType) -> &'a String {
