@@ -466,6 +466,150 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.path`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.schema`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].name`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestHeaderModifier.add`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestHeaderModifier.set`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestHeaderModifier.remove`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.responseHeaderModifier.add`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.responseHeaderModifier.set`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.responseHeaderModifier.remove`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.scheme`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.authority`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.authority.(any)(1)full`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.authority.(any)(1)host`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.authority.(any)(1)port`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.path`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.path.(any)(1)full`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.path.(any)(1)prefix`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.mcpAuthorization`|Authorization policies for MCP access.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.mcpAuthorization.rules`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai`|Mark this as LLM traffic to enable LLM processing.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)regex`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)regex.action`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)regex.rules`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)regex.rules[].(any)builtin`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)regex.rules[].(any)pattern`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.target.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].name`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)exact`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection.body`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection.status`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection.headers.add`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection.headers.set`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection.headers.remove`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)regex`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)regex.action`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)regex.rules`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)regex.rules[].(any)builtin`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)regex.rules[].(any)pattern`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.target.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].name`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value.(1)exact`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].rejection`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].rejection.body`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].rejection.status`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].rejection.headers`|Optional headers to add, set, or remove from the rejection response|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].rejection.headers.add`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].rejection.headers.set`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].rejection.headers.remove`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.defaults`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.overrides`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts.append`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts.append[].role`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts.append[].content`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts.prepend`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts.prepend[].role`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts.prepend[].content`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.modelAliases`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptCaching`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptCaching.cacheSystem`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptCaching.cacheMessages`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptCaching.cacheTools`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptCaching.minTokens`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.routes`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS`|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.cert`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.key`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.root`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.insecure`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.insecureHost`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.alpn`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.subjectAltNames`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth`|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)passthrough`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)key`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)key.(any)file`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)aws`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)aws.(any)region`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.http`|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.http.version`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.http.requestTimeout`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp`|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.keepalives`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.keepalives.enabled`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.keepalives.time`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.keepalives.interval`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.keepalives.retries`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.connectTimeout`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.connectTimeout.secs`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.connectTimeout.nanos`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.statefulMode`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.prefixMode`||
 |`binds[].listeners[].routes[].backends[].(1)ai`||
