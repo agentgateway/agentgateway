@@ -520,6 +520,7 @@ impl RequestLog {
 			retry_after: None,
 			jwt_sub: None,
 			retry_attempt: None,
+			retry_exhausted: false,
 			error: None,
 			grpc_status: Default::default(),
 			mcp_status: Default::default(),
@@ -568,6 +569,7 @@ pub struct RequestLog {
 	pub jwt_sub: Option<String>,
 
 	pub retry_attempt: Option<u8>,
+	pub retry_exhausted: bool,
 	pub error: Option<String>,
 
 	pub grpc_status: AsyncLog<u8>,
@@ -722,6 +724,16 @@ impl Drop for DropOnLog {
 			.request_duration
 			.get_or_create(&http_labels)
 			.observe(duration.as_secs_f64());
+
+		// Record retry metrics
+		if let Some(attempt) = log.retry_attempt {
+			for _ in 0..attempt {
+				log.metrics.retry_attempts.get_or_create(&http_labels).inc();
+			}
+		}
+		if log.retry_exhausted {
+			log.metrics.retry_exhausted.get_or_create(&http_labels).inc();
+		}
 
 		Self::add_llm_metrics(
 			&log,
