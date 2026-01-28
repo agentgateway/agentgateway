@@ -512,6 +512,7 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)webhook.forwardHeaderMatches[].value.(1)regex`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration.model`|Model to use. Defaults to `omni-moderation-latest`|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].(1)openAIModeration.policies`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.request[].rejection.status`||
@@ -576,6 +577,9 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)key`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)key.(any)file`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)gcp.(any)type`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)aws`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
