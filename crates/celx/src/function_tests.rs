@@ -262,3 +262,137 @@ fn assert(want: serde_json::Value, expr: &str) {
 fn assert_fails(expr: &str) {
 	assert!(eval(expr).is_err(), "expression: {expr}");
 }
+
+#[test]
+fn format_basic() {
+	let expr = r#""foo/{}/bar".format("value")"#;
+	assert(json!("foo/value/bar"), expr);
+}
+
+#[test]
+fn format_multiple() {
+	let expr = r#""{}/{}/{}".format("a", "b", "c")"#;
+	assert(json!("a/b/c"), expr);
+}
+
+#[test]
+fn format_no_placeholders() {
+	let expr = r#""static".format()"#;
+	assert(json!("static"), expr);
+}
+
+#[test]
+fn format_too_few_args() {
+	let expr = r#""{}/{}".format("a")"#;
+	assert_fails(expr);
+}
+
+#[test]
+fn format_too_many_args() {
+	let expr = r#""{}".format("a", "b")"#;
+	assert_fails(expr);
+}
+
+#[test]
+fn format_type_conversion() {
+	let expr = r#""num: {}".format(42)"#;
+	assert(json!("num: 42"), expr);
+
+	let expr = r#""bool: {}".format(true)"#;
+	assert(json!("bool: true"), expr);
+
+	let expr = r#""float: {}".format(3.14)"#;
+	assert(json!("float: 3.14"), expr);
+}
+
+#[test]
+fn format_escape_braces() {
+	let expr = r#""{{}}".format()"#;
+	assert(json!("{}"), expr);
+
+	let expr = r#""{{{}}}".format("x")"#;
+	assert(json!("{x}"), expr);
+
+	let expr = r#""a{{b}}c".format()"#;
+	assert(json!("a{b}c"), expr);
+}
+
+#[test]
+fn format_invalid_braces() {
+	// Unclosed brace
+	let expr = r#""{".format()"#;
+	assert_fails(expr);
+
+	// Unescaped closing brace
+	let expr = r#""}".format()"#;
+	assert_fails(expr);
+
+	// Content inside braces
+	let expr = r#""{x}".format()"#;
+	assert_fails(expr);
+
+	// Only end brace
+	let expr = r#""x}".format()"#;
+	assert_fails(expr);
+}
+
+#[test]
+fn parse_basic() {
+	let expr = r#""foo/123/bar".parse("foo/{}/bar", _1)"#;
+	assert(json!("123"), expr);
+}
+
+#[test]
+fn parse_multiple_vars() {
+	let expr = r#""a-b".parse("{}-{}", _1 + _2)"#;
+	assert(json!("ab"), expr);
+}
+
+#[test]
+fn parse_concatenation() {
+	let expr = r#""foo/abc/bar/def".parse("foo/{}/bar/{}", _1 + _2)"#;
+	assert(json!("abcdef"), expr);
+}
+
+#[test]
+fn parse_with_conversion() {
+	let expr = r#""num/42".parse("num/{}", int(_1))"#;
+	assert(json!(42), expr);
+
+	let expr = r#""user/john/age/30".parse("user/{}/age/{}", {"name": _1, "age": int(_2)})"#;
+	assert(json!({"name": "john", "age": 30}), expr);
+}
+
+#[test]
+fn parse_mismatch() {
+	// Wrong prefix
+	let expr = r#""foo/bar".parse("baz/{}", _1)"#;
+	assert_fails(expr);
+
+	// Wrong suffix
+	let expr = r#""foo/bar".parse("{}/baz", _1)"#;
+	assert_fails(expr);
+
+	// Missing expected literal at end
+	let expr = r#""foo/bar".parse("foo/{}/baz", _1)"#;
+	assert_fails(expr);
+}
+
+#[test]
+fn parse_ambiguous() {
+	// {}/{} should fail to parse "a/b/c" because it's ambiguous
+	let expr = r#""a/b/c".parse("{}/{}", _1 + _2)"#;
+	assert_fails(expr);
+}
+
+#[test]
+fn parse_escaped_braces() {
+	// {{ }} in the pattern become { } literals
+	// So pattern "{{ {} }}" (written as "{{{}}}") matches input "{x}"
+	let expr = r#""{x}".parse("{{{}}}", _1)"#;
+	assert(json!("x"), expr);
+
+	// Pattern "{{" (written as "{{{{") matches input "{{"
+	let expr = r#""{{".parse("{{{{", "ok")"#;
+	assert(json!("ok"), expr);
+}
