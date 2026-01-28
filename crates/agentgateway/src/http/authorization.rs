@@ -14,7 +14,7 @@ impl HTTPAuthorizationSet {
 	pub fn apply(&self, req: &http::Request) -> anyhow::Result<()> {
 		tracing::debug!(info=?http::DebugExtensions(req), "Checking HTTP request");
 		let exec = cel::Executor::new_request(req);
-		let allowed = self.0.validate(exec);
+		let allowed = self.0.validate(&exec);
 		if !allowed {
 			anyhow::bail!("HTTP authorization denied");
 		}
@@ -133,7 +133,7 @@ impl RuleSets {
 			rule_set.register(ctx);
 		}
 	}
-	pub fn validate(&self, exec: Executor) -> bool {
+	pub fn validate(&self, exec: &Executor) -> bool {
 		let rule_sets = &self.0;
 		let has_rules = rule_sets.iter().any(|r| r.has_rules());
 		// If there are no rule sets, everyone has access

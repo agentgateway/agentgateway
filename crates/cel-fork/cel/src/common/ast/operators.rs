@@ -1,10 +1,10 @@
 pub fn find_operator(input: &str) -> Option<&str> {
-    for (op, operator) in OPERATORS {
-        if op == input {
-            return Some(operator);
-        }
-    }
-    None
+	for (op, operator) in OPERATORS {
+		if op == input {
+			return Some(operator);
+		}
+	}
+	None
 }
 
 pub const CONDITIONAL: &str = "_?_:_";
@@ -38,16 +38,16 @@ pub const NOT_STRICTLY_FALSE: &str = "@not_strictly_false";
 pub const IN: &str = "@in";
 
 const OPERATORS: [(&str, &str); 12] = [
-    ("-", SUBSTRACT),
-    ("+", ADD),
-    ("*", MULTIPLY),
-    ("/", DIVIDE),
-    ("%", MODULO),
-    ("==", EQUALS),
-    ("!=", NOT_EQUALS),
-    (">=", GREATER_EQUALS),
-    ("<=", LESS_EQUALS),
-    (">", GREATER),
-    ("<", LESS),
-    ("in", IN),
+	("-", SUBSTRACT),
+	("+", ADD),
+	("*", MULTIPLY),
+	("/", DIVIDE),
+	("%", MODULO),
+	("==", EQUALS),
+	("!=", NOT_EQUALS),
+	(">=", GREATER_EQUALS),
+	("<=", LESS_EQUALS),
+	(">", GREATER),
+	("<", LESS),
+	("in", IN),
 ];

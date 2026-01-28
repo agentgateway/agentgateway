@@ -1,14 +1,14 @@
-use ::http::{HeaderMap, Method, Request};
-
-use crate::cel::Expression;
-use hyper_util::client::legacy::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use ::http::{HeaderMap, Method, Request};
+use hyper_util::client::legacy::Client;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tonic::Status;
 use wiremock::MockServer;
 
+use crate::cel::Expression;
 use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
 use crate::http::ext_proc::proto::{
 	BodyMutation, CommonResponse, HeaderMutation, HeaderValue, HeaderValueOption, HttpHeaders,
@@ -1258,11 +1258,14 @@ fn test_dynamic_metadata_extraction() {
 }
 
 mod extract_dynamic_metadata_tests {
-	use super::*;
-	use crate::http::ext_proc::ExtProcInstance;
-	use prost_wkt_types::{Struct, Value, value::Kind};
 	use std::collections::HashMap;
 	use std::sync::Arc;
+
+	use prost_wkt_types::value::Kind;
+	use prost_wkt_types::{Struct, Value};
+
+	use super::*;
+	use crate::http::ext_proc::ExtProcInstance;
 
 	#[test]
 	fn test_extract_creates_extension() {
@@ -1554,8 +1557,10 @@ impl Handler for DynamicMetadataResponder {
 		_headers: &HttpHeaders,
 		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
 	) -> Result<(), Status> {
+		use prost_wkt_types::value::Kind;
+		use prost_wkt_types::{Struct, Value};
+
 		use crate::test_helpers::extprocmock::request_header_response_with_dynamic_metadata;
-		use prost_wkt_types::{Struct, Value, value::Kind};
 
 		let metadata = Struct {
 			fields: [

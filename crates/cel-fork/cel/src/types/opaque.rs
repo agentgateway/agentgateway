@@ -16,27 +16,27 @@ use crate::objects::ResolveResult;
 /// [`Opaque::runtime_type_name`], and only then attempt a downcast and call
 /// `Eq::eq`.
 pub trait OpaqueEq {
-    /// Compare with another [`Opaque`] erased value.
-    ///
-    /// Implementations should return `false` if `other` does not have the same
-    /// runtime type, or if it cannot be downcast to the concrete type of `self`.
-    fn opaque_eq(&self, other: &dyn Opaque) -> bool;
+	/// Compare with another [`Opaque`] erased value.
+	///
+	/// Implementations should return `false` if `other` does not have the same
+	/// runtime type, or if it cannot be downcast to the concrete type of `self`.
+	fn opaque_eq(&self, other: &dyn Opaque) -> bool;
 }
 
 impl<T> OpaqueEq for T
 where
-    T: Eq + PartialEq + Any + Opaque,
+	T: Eq + PartialEq + Any + Opaque,
 {
-    fn opaque_eq(&self, other: &dyn Opaque) -> bool {
-        if self.type_name() != other.type_name() {
-            return false;
-        }
-        if let Some(other) = other.downcast_ref::<T>() {
-            self.eq(other)
-        } else {
-            false
-        }
-    }
+	fn opaque_eq(&self, other: &dyn Opaque) -> bool {
+		if self.type_name() != other.type_name() {
+			return false;
+		}
+		if let Some(other) = other.downcast_ref::<T>() {
+			self.eq(other)
+		} else {
+			false
+		}
+	}
 }
 
 /// Helper trait to obtain a `&dyn Debug` view.
@@ -44,46 +44,46 @@ where
 /// This is auto-implemented for any `T: Debug` and is used by the runtime to
 /// format [`Opaque`] values without knowing their concrete type.
 pub trait AsDebug {
-    /// Returns `self` as a `&dyn Debug` trait object.
-    fn as_debug(&self) -> &dyn Debug;
+	/// Returns `self` as a `&dyn Debug` trait object.
+	fn as_debug(&self) -> &dyn Debug;
 }
 
 impl<T> AsDebug for T
 where
-    T: Debug,
+	T: Debug,
 {
-    fn as_debug(&self) -> &dyn Debug {
-        self
-    }
+	fn as_debug(&self) -> &dyn Debug {
+		self
+	}
 }
 
 pub trait Opaque: Any + OpaqueEq + AsDebug + Send + Sync + erased_serde::Serialize {
-    /// Returns a stable, fully-qualified type name for this value's runtime type.
-    ///
-    /// This name is used to check type compatibility before attempting downcasts
-    /// during equality checks and other operations. It should be stable across
-    /// versions and unique within your application or library (e.g., a package
-    /// qualified name like `my.pkg.Type`).
-    #[inline]
-    fn type_name(&self) -> &'static str {
-        std::any::type_name::<Self>()
-    }
+	/// Returns a stable, fully-qualified type name for this value's runtime type.
+	///
+	/// This name is used to check type compatibility before attempting downcasts
+	/// during equality checks and other operations. It should be stable across
+	/// versions and unique within your application or library (e.g., a package
+	/// qualified name like `my.pkg.Type`).
+	#[inline]
+	fn type_name(&self) -> &'static str {
+		std::any::type_name::<Self>()
+	}
 
-    /// Resolves a method function by name.
-    fn call_function<'a, 'rf>(
-        &self,
-        _name: &str,
-        _ftx: &mut FunctionContext<'a, 'rf>,
-    ) -> Option<ResolveResult<'a>> {
-        None
-    }
+	/// Resolves a method function by name.
+	fn call_function<'a, 'rf>(
+		&self,
+		_name: &str,
+		_ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<ResolveResult<'a>> {
+		None
+	}
 }
 
 impl dyn Opaque {
-    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
-        let any: &dyn Any = self;
-        any.downcast_ref()
-    }
+	pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+		let any: &dyn Any = self;
+		any.downcast_ref()
+	}
 }
 
 /// A covariant Arc-based container for user-defined object values.
@@ -112,47 +112,47 @@ impl dyn Opaque {
 pub struct OpaqueValue(Arc<dyn Opaque>);
 
 impl Debug for OpaqueValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.0.as_debug().fmt(f)
-    }
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		self.0.as_debug().fmt(f)
+	}
 }
 impl PartialEq for OpaqueValue {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.opaque_eq(other.0.as_ref())
-    }
+	fn eq(&self, other: &Self) -> bool {
+		self.0.opaque_eq(other.0.as_ref())
+	}
 }
 
 impl OpaqueValue {
-    /// Create a new Object from a value implementing ObjectValue
-    pub fn new<T>(value: T) -> Self
-    where
-        T: Opaque,
-    {
-        let arc = Arc::new(value);
-        OpaqueValue(arc)
-    }
+	/// Create a new Object from a value implementing ObjectValue
+	pub fn new<T>(value: T) -> Self
+	where
+		T: Opaque,
+	{
+		let arc = Arc::new(value);
+		OpaqueValue(arc)
+	}
 
-    /// Returns the type name of the contained value.
-    pub fn type_name(&self) -> &'static str {
-        self.0.type_name()
-    }
+	/// Returns the type name of the contained value.
+	pub fn type_name(&self) -> &'static str {
+		self.0.type_name()
+	}
 
-    /// Resolves a method function by name.
-    pub fn call_function<'a, 'rf>(
-        &self,
-        name: &str,
-        ftx: &mut FunctionContext<'a, 'rf>,
-    ) -> Option<ResolveResult<'a>> {
-        self.0.call_function(name, ftx)
-    }
+	/// Resolves a method function by name.
+	pub fn call_function<'a, 'rf>(
+		&self,
+		name: &str,
+		ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<ResolveResult<'a>> {
+		self.0.call_function(name, ftx)
+	}
 
-    /// Attempts to downcast to a concrete type.
-    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
-        self.0.downcast_ref::<T>()
-    }
+	/// Attempts to downcast to a concrete type.
+	pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+		self.0.downcast_ref::<T>()
+	}
 
-    /// Returns the JSON representation if available.
-    pub fn json(&self) -> Option<serde_json::Value> {
-        erased_serde::serialize(&*self.0, serde_json::value::Serializer).ok()
-    }
+	/// Returns the JSON representation if available.
+	pub fn json(&self) -> Option<serde_json::Value> {
+		erased_serde::serialize(&*self.0, serde_json::value::Serializer).ok()
+	}
 }
