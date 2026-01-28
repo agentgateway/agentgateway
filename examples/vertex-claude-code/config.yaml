@@ -1,0 +1,57 @@
+# Vertex AI configuration for Claude Code
+# Usage:
+#   1. Build: cargo build --release
+#   2. Run: ./target/release/agentgateway -f examples/vertex-claude-code/config.yaml
+#   3. Set: export ANTHROPIC_BASE_URL=http://localhost:3000
+#   4. Run claude code as normal
+#
+# Note: Claude Code telemetry (/api/event_logging) is silently discarded (returns 204)
+
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - name: claude-telemetry
+      matches:
+      - path:
+          pathPrefix: /api/event_logging
+      policies:
+        directResponse:
+          status: 204
+          body: ""
+    - backends:
+      - ai:
+          name: vertex-anthropic
+          provider:
+            vertex:
+              projectId: $ANTHROPIC_VERTEX_PROJECT_ID
+      policies:
+        ai:
+          # Map Anthropic Messages API paths to route types
+          # Note: Claude Code configured for Vertex AI sends requests to Vertex-style paths
+          # like /projects/.../models/{model}:streamRawPredict
+          routes:
+            /v1/messages: messages
+            /count_tokens: anthropicTokenCount
+            # Vertex AI path suffixes (for Claude Code in Vertex mode)
+            ":rawPredict": messages
+            ":streamRawPredict": messages
+          # Map Claude Code model names to Vertex AI format
+          # Claude Code sends: "claude-opus-4-5-20251101" (note: @ becomes - in some contexts)
+          # Vertex needs: "anthropic/claude-opus-4-5@20251101"
+          modelAliases:
+            # Claude Code default models (as of Jan 2026)
+            # Primary model: claude-sonnet-4-5@20250929
+            # Small/fast model: claude-haiku-4-5@20251001
+            "claude-sonnet-4-5@20250929": "anthropic/claude-sonnet-4-5@20250929"
+            "claude-haiku-4-5@20251001": "anthropic/claude-haiku-4-5@20251001"
+            # Opus models (if user sets ANTHROPIC_MODEL)
+            "claude-opus-4-5@20251101": "anthropic/claude-opus-4-5@20251101"
+            # Wildcards map any version to a known working version
+            # (Vertex requires specific model versions)
+            "claude-opus-4-5@*": "anthropic/claude-opus-4-5@20251101"
+            "claude-opus-4-5-*": "anthropic/claude-opus-4-5@20251101"
+            "claude-sonnet-4-5@*": "anthropic/claude-sonnet-4-5@20250929"
+            "claude-sonnet-4-5-*": "anthropic/claude-sonnet-4-5@20250929"
+            "claude-haiku-4-5@*": "anthropic/claude-haiku-4-5@20251001"
+            "claude-haiku-4-5-*": "anthropic/claude-haiku-4-5@20251001"

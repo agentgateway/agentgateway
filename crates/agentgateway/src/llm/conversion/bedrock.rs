@@ -1118,7 +1118,7 @@ pub mod from_messages {
 
 	fn to_anthropic_message_delta_usage(usage: bedrock::TokenUsage) -> messages::MessageDeltaUsage {
 		messages::MessageDeltaUsage {
-			input_tokens: usage.input_tokens,
+			input_tokens: Some(usage.input_tokens),
 			output_tokens: usage.output_tokens,
 			cache_creation_input_tokens: usage.cache_write_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
@@ -1967,7 +1967,7 @@ pub mod from_anthropic_token_count {
 	}
 }
 
-mod helpers {
+pub(crate) mod helpers {
 	use std::collections::HashMap;
 
 	use crate::llm::AIError;

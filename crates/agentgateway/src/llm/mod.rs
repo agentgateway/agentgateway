@@ -42,6 +42,32 @@ pub use types::SimpleChatCompletionMessage;
 #[cfg(test)]
 mod tests;
 
+/// Extracts the model name from a Vertex AI-style URL path.
+///
+/// Vertex AI paths follow the format:
+/// `/projects/{project}/locations/{location}/publishers/anthropic/models/{model}:rawPredict`
+/// or `:streamRawPredict`
+///
+/// Clients like Claude Code configured for Vertex AI send the model in the URL path
+/// rather than in the request body.
+fn extract_model_from_vertex_path(path: &str) -> Option<String> {
+	// Look for the pattern /models/{model}:{action}
+	const MODELS_PREFIX: &str = "/models/";
+	let models_idx = path.find(MODELS_PREFIX)?;
+	let model_start = models_idx + MODELS_PREFIX.len();
+	let remaining = &path[model_start..];
+
+	// The model ends at the colon before rawPredict/streamRawPredict
+	let colon_idx = remaining.find(':')?;
+	let model = &remaining[..colon_idx];
+
+	if model.is_empty() {
+		return None;
+	}
+
+	Some(model.to_string())
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AIBackend {
@@ -577,8 +603,8 @@ impl AIProvider {
 			(InputFormat::Responses, AIProvider::Bedrock(_)) => {
 				// Bedrock supports responses input via translation
 			},
-			(InputFormat::CountTokens, AIProvider::Bedrock(_)) => {
-				// Bedrock supports count_tokens input via translation
+			(InputFormat::CountTokens, AIProvider::Bedrock(_) | AIProvider::Vertex(_)) => {
+				// Bedrock and Vertex support count_tokens input via translation
 			},
 			(InputFormat::Embeddings, AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_)) => {
 				// passthrough
@@ -625,13 +651,35 @@ impl AIProvider {
 
 		let request_model = llm_info.request_model.as_str();
 		let new_request = if original_format == InputFormat::CountTokens {
-			// Currently only bedrock is supported so no problems here.
-			req.to_bedrock_token_count(parts.headers())?
+			match self {
+				AIProvider::Vertex(provider) => {
+					// Vertex count-tokens uses Anthropic format with Vertex transformations
+					// Unlike regular messages, count-tokens needs the model in the body
+					let body = req.to_vertex_token_count(parts.headers())?;
+					let result = provider.prepare_count_tokens_request_body(body, &parts.headers)?;
+					// Remove anthropic-beta header - it's been converted to body field
+					parts.headers.remove("anthropic-beta");
+					result
+				},
+				AIProvider::Bedrock(_) => {
+					// Bedrock uses its own count_tokens format
+					req.to_bedrock_token_count(parts.headers())?
+				},
+				_ => unreachable!("CountTokens only supported for Bedrock and Vertex"),
+			}
 		} else {
 			match self {
 				AIProvider::Vertex(provider) if provider.is_anthropic_model(Some(request_model)) => {
 					let body = req.to_anthropic()?;
-					provider.prepare_anthropic_request_body(body)?
+					let result = provider.prepare_anthropic_request_body(body, &parts.headers)?;
+					// Remove anthropic-beta header - it's been converted to body field
+					parts.headers.remove("anthropic-beta");
+					// Disable compression for Vertex AI streaming requests
+					parts.headers.insert(
+						header::ACCEPT_ENCODING,
+						HeaderValue::from_static("identity"),
+					);
+					result
 				},
 				AIProvider::OpenAI(_)
 				| AIProvider::Gemini(_)
@@ -677,9 +725,42 @@ impl AIProvider {
 
 		// count_tokens has simplified response handling (just format translation)
 		if req.input_format == InputFormat::CountTokens {
-			// Currently only bedrock is supported so we have no match needed here
-			let (bytes, count) =
-				conversion::bedrock::from_anthropic_token_count::translate_response(bytes.clone())?;
+			// Check for error status before trying to parse as success
+			if !parts.status.is_success() {
+				tracing::warn!(
+					"count_tokens request failed with status {}: {}",
+					parts.status,
+					String::from_utf8_lossy(&bytes)
+				);
+				// Return the error response as-is (don't try to parse it)
+				let resp = Response::from_parts(parts, bytes.into());
+				return Ok(resp);
+			}
+
+			let (bytes, count) = match self {
+				AIProvider::Vertex(_) => {
+					let resp = serde_json::from_slice::<types::messages::Response>(&bytes)
+						.map_err(AIError::ResponseParsing)?;
+					let count = resp.usage.input_tokens as u64;
+					let body = serde_json::to_vec(&serde_json::json!({
+						"input_tokens": resp.usage.input_tokens
+					}))
+					.map_err(AIError::ResponseParsing)?;
+					(Bytes::from(body), count)
+				},
+				_ => match conversion::bedrock::from_anthropic_token_count::translate_response(bytes.clone())
+				{
+					Ok(result) => result,
+					Err(e) => {
+						tracing::error!(
+							"count_tokens parse error: {:?}, response was: {}",
+							e,
+							String::from_utf8_lossy(&bytes)
+						);
+						return Err(e);
+					}
+				},
+			};
 
 			parts.headers.remove(header::CONTENT_LENGTH);
 			let resp = Response::from_parts(parts, bytes.into());
@@ -923,7 +1004,13 @@ impl AIProvider {
 		if let Some(provider_model) = &self.override_model() {
 			*req.model() = Some(provider_model.to_string());
 		} else if req.model().is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
+			// Try extracting model from Vertex-style URL path (e.g., /projects/.../models/<model>:rawPredict)
+			// This supports clients like Claude Code that send requests with model in the URL path
+			if let Some(model) = extract_model_from_vertex_path(parts.uri.path()) {
+				*req.model() = Some(model);
+			} else {
+				return Err(AIError::MissingField("model not specified".into()));
+			}
 		}
 		Ok((parts, req))
 	}
