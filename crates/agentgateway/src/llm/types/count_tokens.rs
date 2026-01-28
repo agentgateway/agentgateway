@@ -13,7 +13,7 @@ pub struct Request {
 	pub messages: Vec<messages::RequestMessage>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub system: Option<messages::RequestContent>,
+	pub system: Option<messages::TextBlock>,
 
 	#[serde(flatten)]
 	pub rest: serde_json::Map<String, serde_json::Value>,

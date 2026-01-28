@@ -445,3 +445,38 @@ async fn test_vertex_count_tokens() {
 		test_request("vertex-count-tokens", r, request);
 	}
 }
+
+#[test]
+fn test_messages_get_messages() {
+	use crate::llm::types::RequestType;
+
+	let test_dir = Path::new("src/llm/tests");
+	let input_path = test_dir.join("request_full.json");
+	let input_str = &fs::read_to_string(&input_path).expect("Failed to read input file");
+	let input_raw: Value = serde_json::from_str(input_str).expect("Failed to parse input json");
+	let request: types::completions::Request =
+		serde_json::from_str(input_str).expect("Failed to parse json");
+
+	let messages = request.get_messages();
+
+	// Convert to JSON value for snapshot comparison
+	let messages_json: Vec<Value> = messages
+		.iter()
+		.map(|m| {
+			serde_json::json!({
+				"role": m.role.as_str(),
+				"content": m.content.as_str(),
+			})
+		})
+		.collect();
+
+	insta::with_settings!({
+		info => &input_raw,
+		description => input_path.to_string_lossy().to_string(),
+		omit_expression => true,
+		prepend_module_to_snapshot => false,
+		snapshot_path => "tests",
+	}, {
+		insta::assert_json_snapshot!("get_messages", messages_json);
+	});
+}

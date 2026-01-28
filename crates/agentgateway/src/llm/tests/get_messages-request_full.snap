@@ -1,0 +1,93 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/request_full.json
+info:
+  model: gpt-4-turbo-preview
+  messages:
+    - role: system
+      content: You are a helpful assistant that specializes in technical documentation and code analysis.
+      name: system_assistant
+    - role: user
+      content: "Please analyze this code snippet and explain what it does: function fibonacci(n) { return n <= 1 ? n : fibonacci(n-1) + fibonacci(n-2); }"
+      name: user_1
+    - role: assistant
+      content: This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers.
+      name: assistant_1
+    - role: user
+      content:
+        - type: text
+          text: "What's in this image?"
+        - type: image_url
+          image_url:
+            url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+  max_tokens: 1000
+  temperature: 0.7
+  top_p: 0.9
+  n: 3
+  stream: false
+  stop:
+    - "\n\n"
+    - END
+  presence_penalty: 0.1
+  frequency_penalty: 0.2
+  logit_bias:
+    "50256": -100
+  user: user_12345
+  response_format:
+    type: json_object
+  seed: 42
+  tool_choice:
+    type: function
+    function:
+      name: my_function
+  tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Get the current weather in a given location
+        parameters:
+          type: object
+          properties:
+            location:
+              type: string
+              description: "The city and state, e.g. San Francisco, CA"
+            unit:
+              type: string
+              enum:
+                - celsius
+                - fahrenheit
+          required:
+            - location
+  functions:
+    - name: calculate_fibonacci
+      description: Calculate the nth Fibonacci number using an optimized algorithm
+      parameters:
+        type: object
+        properties:
+          n:
+            type: integer
+            description: The position in the Fibonacci sequence (0-indexed)
+            minimum: 0
+            maximum: 100
+        required:
+          - n
+  function_call: auto
+---
+[
+  {
+    "role": "system",
+    "content": "You are a helpful assistant that specializes in technical documentation and code analysis."
+  },
+  {
+    "role": "user",
+    "content": "Please analyze this code snippet and explain what it does: function fibonacci(n) { return n <= 1 ? n : fibonacci(n-1) + fibonacci(n-2); }"
+  },
+  {
+    "role": "assistant",
+    "content": "This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers."
+  },
+  {
+    "role": "user",
+    "content": ""
+  }
+]

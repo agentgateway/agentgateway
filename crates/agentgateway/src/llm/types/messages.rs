@@ -10,15 +10,13 @@ use crate::llm::{
 	num_tokens_from_anthropic_messages,
 };
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize, Default)]
 pub struct Request {
+	pub messages: Vec<RequestMessage>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub model: Option<String>,
-	pub messages: Vec<RequestMessage>,
-
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub system: Option<RequestContent>,
-
+	pub system: Option<TextBlock>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub top_p: Option<f32>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -27,16 +25,15 @@ pub struct Request {
 	pub stream: Option<bool>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_tokens: Option<u64>,
-
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize, Default)]
 pub struct RequestMessage {
 	pub role: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub content: Option<RequestContent>,
+	pub content: Option<ContentBlock>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -44,27 +41,49 @@ pub struct RequestMessage {
 impl RequestMessage {
 	pub fn message_text(&self) -> Option<&str> {
 		self.content.as_ref().and_then(|c| match c {
-			RequestContent::Text(t) => Some(t.as_str()),
+			ContentBlock::Text(t) => Some(t.as_str()),
 			// TODO?
-			RequestContent::Array(_) => None,
+			ContentBlock::Array(_) => None,
 		})
 	}
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 #[serde(untagged)]
-pub enum RequestContent {
+pub enum ContentBlock {
 	Text(String),
 	Array(Vec<ContentPart>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ContentPart {
-	pub r#type: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub text: Option<String>,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentPart {
+	Text {
+		text: String,
+		#[serde(flatten, default)]
+		rest: serde_json::Value,
+	},
+	#[serde(untagged)]
+	Unknown(serde_json::Value),
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(untagged)]
+pub enum TextBlock {
+	Text(String),
+	Array(Vec<TextPart>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TextPart {
+	Text {
+		text: String,
+		#[serde(flatten, default)]
+		rest: serde_json::Value,
+	},
+	#[serde(untagged)]
+	Unknown(serde_json::Value),
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -76,7 +95,7 @@ pub struct Response {
 	pub rest: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize, Default)]
 pub struct Content {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub text: Option<String>,
@@ -144,9 +163,24 @@ impl RequestType for Request {
 					.content
 					.as_ref()
 					.and_then(|c| match c {
-						RequestContent::Text(t) => Some(strng::new(t)),
-						// TODO?
-						RequestContent::Array(_) => None,
+						ContentBlock::Text(t) => Some(strng::new(t)),
+						ContentBlock::Array(parts) if !parts.is_empty() => {
+							let text = parts
+								.iter()
+								.filter_map(|part| match part {
+									ContentPart::Text { text, .. } => Some(text.as_str()),
+									_ => None,
+								})
+								.fold(String::new(), |mut acc, s| {
+									if !acc.is_empty() {
+										acc.push(' ');
+									}
+									acc.push_str(s);
+									acc
+								});
+							Some(strng::new(&text))
+						},
+						_ => None,
 					})
 					.unwrap_or_default();
 				SimpleChatCompletionMessage {
@@ -181,7 +215,7 @@ impl RequestType for Request {
 
 pub fn prepend_prompts_helper(
 	messages: &mut Vec<RequestMessage>,
-	system: &mut Option<RequestContent>,
+	system: &mut Option<TextBlock>,
 	prompts: Vec<SimpleChatCompletionMessage>,
 ) {
 	let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = prompts
@@ -189,26 +223,24 @@ pub fn prepend_prompts_helper(
 		.partition(|p| p.role.as_str() == "system");
 
 	if !system_prompts.is_empty() {
-		let mut items: Vec<ContentPart> = match std::mem::take(system) {
-			Some(RequestContent::Text(text)) => vec![ContentPart {
-				r#type: "text".to_string(),
-				text: Some(text),
+		let mut items: Vec<TextPart> = match std::mem::take(system) {
+			Some(TextBlock::Array(existing)) => existing,
+			Some(TextBlock::Text(text)) => vec![TextPart::Text {
+				text,
 				rest: Default::default(),
 			}],
-			Some(RequestContent::Array(existing)) => existing,
 			None => Vec::new(),
 		};
 
 		items.splice(
 			0..0,
-			system_prompts.into_iter().map(|p| ContentPart {
-				r#type: "text".to_string(),
-				text: Some(p.content.to_string()),
+			system_prompts.into_iter().map(|p| TextPart::Text {
+				text: p.content.to_string(),
 				rest: Default::default(),
 			}),
 		);
 
-		*system = Some(RequestContent::Array(items));
+		*system = Some(TextBlock::Array(items));
 	}
 
 	if !message_prompts.is_empty() {
@@ -218,7 +250,7 @@ pub fn prepend_prompts_helper(
 
 pub fn append_prompts_helper(
 	messages: &mut Vec<RequestMessage>,
-	system: &mut Option<RequestContent>,
+	system: &mut Option<TextBlock>,
 	prompts: Vec<SimpleChatCompletionMessage>,
 ) {
 	let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = prompts
@@ -226,23 +258,21 @@ pub fn append_prompts_helper(
 		.partition(|p| p.role.as_str() == "system");
 
 	if !system_prompts.is_empty() {
-		let mut items: Vec<ContentPart> = match std::mem::take(system) {
-			Some(RequestContent::Text(text)) => vec![ContentPart {
-				r#type: "text".to_string(),
-				text: Some(text),
+		let mut items: Vec<TextPart> = match std::mem::take(system) {
+			Some(TextBlock::Text(text)) => vec![TextPart::Text {
+				text,
 				rest: Default::default(),
 			}],
-			Some(RequestContent::Array(existing)) => existing,
+			Some(TextBlock::Array(existing)) => existing,
 			None => Vec::new(),
 		};
 
-		items.extend(system_prompts.into_iter().map(|p| ContentPart {
-			r#type: "text".to_string(),
-			text: Some(p.content.to_string()),
+		items.extend(system_prompts.into_iter().map(|p| TextPart::Text {
+			text: p.content.to_string(),
 			rest: Default::default(),
 		}));
 
-		*system = Some(RequestContent::Array(items));
+		*system = Some(TextBlock::Array(items));
 	}
 
 	if !message_prompts.is_empty() {
@@ -254,7 +284,7 @@ impl From<SimpleChatCompletionMessage> for RequestMessage {
 	fn from(r: SimpleChatCompletionMessage) -> Self {
 		RequestMessage {
 			role: r.role.to_string(),
-			content: Some(RequestContent::Text(r.content.to_string())),
+			content: Some(ContentBlock::Text(r.content.to_string())),
 			rest: Default::default(),
 		}
 	}
@@ -328,6 +358,7 @@ pub mod typed {
 		User,
 		Assistant,
 	}
+
 	#[derive(Clone, Deserialize, Serialize, Debug)]
 	#[serde(rename_all = "snake_case")]
 	pub struct ContentTextBlock {

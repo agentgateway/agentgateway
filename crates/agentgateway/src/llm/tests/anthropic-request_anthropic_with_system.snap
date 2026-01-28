@@ -10,7 +10,6 @@ info:
       content: "Hello, world"
 ---
 {
-  "model": "claude-sonnet-4-20250514",
   "messages": [
     {
       "role": "user",
@@ -33,6 +32,7 @@ info:
       "content": "append assistant prompt"
     }
   ],
+  "model": "claude-sonnet-4-20250514",
   "system": [
     {
       "type": "text",
