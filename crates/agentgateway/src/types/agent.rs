@@ -7,17 +7,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
 
-use crate::http::auth::BackendAuth;
-use crate::http::authorization::RuleSet;
-use crate::http::{
-	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
-};
-use crate::mcp::McpAuthorization;
-use crate::telemetry::log::OrderedStringMap;
-use crate::types::discovery::{NamespacedHostname, Service};
-use crate::types::local::SimpleLocalBackend;
-use crate::types::{agent, backend, frontend};
-use crate::*;
 use anyhow::anyhow;
 use hashbrown::Equivalent;
 use heck::ToSnakeCase;
@@ -30,6 +19,18 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls_pemfile::Item;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
+
+use crate::http::auth::BackendAuth;
+use crate::http::authorization::RuleSet;
+use crate::http::{
+	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
+};
+use crate::mcp::McpAuthorization;
+use crate::telemetry::log::OrderedStringMap;
+use crate::types::discovery::{NamespacedHostname, Service};
+use crate::types::local::SimpleLocalBackend;
+use crate::types::{agent, backend, frontend};
+use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -442,7 +443,7 @@ pub type RouteRuleName = Strng;
 
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
-#[cfg_attr(test, derive(Default))]
+#[cfg_attr(any(test, feature = "internal_benches"), derive(Default))]
 pub struct RouteName {
 	pub name: Strng,
 	pub namespace: Strng,
@@ -476,7 +477,7 @@ impl RouteName {
 
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
-#[cfg_attr(test, derive(Default))]
+#[cfg_attr(any(test, feature = "internal_benches"), derive(Default))]
 pub struct ListenerName {
 	pub gateway_name: Strng,
 	pub gateway_namespace: Strng,

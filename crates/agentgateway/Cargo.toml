@@ -140,6 +140,8 @@ uuid.workspace = true
 x509-parser.workspace = true
 reqwest = { optional = true, workspace = true }
 websocket-sans-io.workspace = true
+vector-map.workspace = true
+flagset.workspace = true
 
 
 # Linux only dependencies

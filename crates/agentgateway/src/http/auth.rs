@@ -1,10 +1,11 @@
+use secrecy::{ExposeSecret, SecretString};
+
 use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::proxy::ProxyError;
 use crate::serdes::deser_key_from_file;
 use crate::types::agent::{BackendTarget, Target};
 use crate::*;
-use secrecy::{ExposeSecret, SecretString};
 
 #[apply(schema!)]
 #[serde(untagged)]
@@ -214,13 +215,14 @@ mod gcp {
 	use std::collections::HashMap;
 	use std::sync::{Arc, Mutex};
 
-	use crate::http::auth::GcpAuth;
-	use crate::types::agent::Target;
 	use google_cloud_auth::credentials;
 	use headers::HeaderMapExt;
 	use http::HeaderMap;
 	use once_cell::sync::Lazy;
 	use tracing::trace;
+
+	use crate::http::auth::GcpAuth;
+	use crate::types::agent::Target;
 
 	static CREDS: Lazy<anyhow::Result<credentials::AccessTokenCredentials>> = Lazy::new(|| {
 		credentials::Builder::default()
@@ -320,9 +322,10 @@ mod gcp {
 	// The SDK doesn't make it easy to use idtokens with user ADC. See https://github.com/googleapis/google-cloud-rust/issues/4215
 	// To allow this (for development use cases primarily), we copy-paste some of their code.
 	mod adc {
+		use std::path::PathBuf;
+
 		use anyhow::anyhow;
 		use serde_json::Value;
-		use std::path::PathBuf;
 
 		fn adc_path() -> Option<PathBuf> {
 			if let Ok(path) = std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {

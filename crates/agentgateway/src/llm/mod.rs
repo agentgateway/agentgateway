@@ -18,7 +18,7 @@ use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
-use crate::llm::types::{RequestType, ResponseType};
+pub use crate::llm::types::{RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
@@ -139,6 +139,7 @@ pub struct LLMRequest {
 	pub provider: Strng,
 	pub streaming: bool,
 	pub params: LLMRequestParams,
+	pub prompt: Option<Arc<Vec<SimpleChatCompletionMessage>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -164,7 +165,7 @@ impl InputFormat {
 	}
 }
 
-#[derive(Default, Clone, Debug, Serialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize, ::cel::DynamicType)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct LLMRequestParams {
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -185,6 +186,13 @@ pub struct LLMRequestParams {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub dimensions: Option<u64>,
 }
+impl PartialEq for LLMRequestParams {
+	fn eq(&self, _: &Self) -> bool {
+		// ignore for now since we have f64
+		false
+	}
+}
+impl Eq for LLMRequestParams {}
 
 #[derive(Debug, Clone)]
 pub struct LLMInfo {
@@ -615,13 +623,13 @@ impl AIProvider {
 			}
 		}
 
-		let llm_info = req.to_llm_request(self.provider(), tokenize)?;
-		if let Some(log) = log {
-			let needs_prompt = log.cel.cel_context.with_llm_request(&llm_info);
-			if needs_prompt {
-				log.cel.cel_context.with_llm_prompt(req.get_messages())
-			}
+		let mut llm_info = req.to_llm_request(self.provider(), tokenize)?;
+		if let Some(log) = log
+			&& log.cel.cel_context.needs_llm_prompt()
+		{
+			llm_info.prompt = Some(req.get_messages().into());
 		}
+		parts.extensions.insert(llm_info.clone());
 
 		let request_model = llm_info.request_model.as_str();
 		let new_request = if original_format == InputFormat::CountTokens {

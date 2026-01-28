@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use http::Method;
 
 use super::*;
@@ -7,25 +9,18 @@ fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 	let mut cb = ContextBuilder::new();
 	let exp = Expression::new_strict(expr)?;
 	cb.register_expression(&exp);
-	cb.with_request(&req, "".to_string());
-	let exec = cb.build()?;
-	exec.eval(&exp)
+	let exec = crate::cel::Executor::new_request(&req);
+	Ok(exec.eval(&exp)?.as_static())
 }
 
 #[test]
 fn test_eval() {
-	let expr = Arc::new(Expression::new_strict(r#"request.method"#).unwrap());
 	let req = ::http::Request::builder()
 		.method(Method::GET)
 		.header("x-example", "value")
 		.body(Body::empty())
 		.unwrap();
-	let mut cb = ContextBuilder::new();
-	cb.register_expression(&expr);
-	cb.with_request(&req, "".to_string());
-	let exec = cb.build().unwrap();
-
-	exec.eval(&expr).unwrap();
+	eval_request("request.method", req).unwrap();
 }
 
 #[test]
@@ -45,7 +40,7 @@ fn test_properties() {
 	let test = |e: &str, want: &[&str]| {
 		let p = Program::compile(e).unwrap();
 		let mut props = Vec::with_capacity(5);
-		properties(&p.expression().expr, &mut props, &mut Vec::default());
+		crate::cel::properties::properties(&p.expression().expr, &mut props, &mut Vec::default());
 		let want = HashSet::from_iter(want.iter().map(|s| s.to_string()));
 		let got = props
 			.into_iter()

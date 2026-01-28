@@ -7,10 +7,9 @@ use std::sync::Arc;
 use agent_core::strng;
 use agent_core::strng::Strng;
 use futures_util::TryFutureExt;
-use rustls::ServerConfig;
-use rustls::SupportedCipherSuite;
 use rustls::crypto::CryptoProvider;
 use rustls::server::ParsedCertificate;
+use rustls::{ServerConfig, SupportedCipherSuite};
 use rustls_pki_types::{CertificateDer, InvalidDnsNameError, ServerName};
 use tracing::warn;
 use x509_parser::certificate::X509Certificate;
@@ -692,6 +691,7 @@ pub mod identity {
 }
 
 #[apply(schema_ser!)]
+#[derive(cel::DynamicType)]
 pub struct TlsInfo {
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
 	pub identity: Option<IstioIdentity>,
@@ -706,6 +706,7 @@ pub struct TlsInfo {
 }
 
 #[apply(schema_ser!)]
+#[derive(cel::DynamicType)]
 pub struct IstioIdentity {
 	/// The trust domain of the identity.
 	trust_domain: Strng,

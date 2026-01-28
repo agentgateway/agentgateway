@@ -9,6 +9,8 @@ members = [
     "crates/a2a-sdk",
     "crates/agentgateway",
     "crates/agentgateway-app",
+    "crates/cel-fork/cel",
+    "crates/cel-fork/cel-derive",
     "crates/celx",
     "crates/core",
     "crates/hbone",
@@ -17,12 +19,14 @@ members = [
 ]
 default-members = [
     "crates/a2a-sdk",
-    "crates/celx",
-    "crates/core",
-    "crates/xds",
-    "crates/hbone",
     "crates/agentgateway",
     "crates/agentgateway-app",
+    "crates/cel-fork/cel",
+    "crates/cel-fork/cel-derive",
+    "crates/celx",
+    "crates/core",
+    "crates/hbone",
+    "crates/xds",
 ]
 
 [workspace.package]
@@ -39,6 +43,8 @@ agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
 agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }
+cel = { path = "crates/cel-fork/cel" }
+cel-derive = { path = "crates/cel-fork/cel-derive" }
 atomic_float = { version = "1.1.0", features = ["serde"] }
 anyhow = "1.0"
 arc-swap = "1.7.1"
@@ -76,7 +82,7 @@ futures = "0.3"
 futures-channel = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-google-cloud-auth = { git = "https://github.com/googleapis/google-cloud-rust", rev = "18f8434cb598ae9f9835b7d77b2a8774fec1d2ea", default-features = false, features = ["idtoken"]}
+google-cloud-auth = { git = "https://github.com/googleapis/google-cloud-rust", rev = "18f8434cb598ae9f9835b7d77b2a8774fec1d2ea", default-features = false, features = ["idtoken"] }
 hashbrown = "0.16"
 h2 = "0.4"
 headers = "0.4"
@@ -197,11 +203,8 @@ wiremock = { version = "0.6", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
 which = "8.0"
 websocket-sans-io = '0.1'
-cel = { git = "https://github.com/cel-rust/cel-rust", rev = "5d2e19934db441ad7dd2eeca62da1b5b238f41f8", features = [
-    "json",
-    "regex",
-    "chrono",
-] }
+vector-map = "1.0.2"
+flagset = "0.4.7"
 crossbeam-channel = "0.5"
 http-serde = "2.1"
 itoa = "1.0"
@@ -237,6 +240,7 @@ inherits = "release"
 codegen-units = 16
 lto = false
 incremental = true
+debug = "full"
 
 [profile.release]
 codegen-units = 1

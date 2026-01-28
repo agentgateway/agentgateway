@@ -1,0 +1,18 @@
+[package]
+name = "cel-derive"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.86.0"
+license = "MIT"
+description = "Derive macros for cel-rust"
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "parsing"] }
+
+[lib]
+proc-macro = true
+
+[dev-dependencies]
+macrotest = "1"

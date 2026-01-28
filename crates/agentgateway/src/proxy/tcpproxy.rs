@@ -127,9 +127,6 @@ impl TCPProxy {
 		};
 
 		let bi = selected_backend.backend.backend.backend_info();
-		if let Some(bp) = log.backend_protocol {
-			log.cel.ctx().with_backend(&bi, bp)
-		}
 		log.endpoint = Some(backend_call.target.clone());
 		log.backend_info = Some(bi);
 

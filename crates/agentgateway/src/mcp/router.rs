@@ -27,7 +27,6 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
-use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
 	BackendTargetRef, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, ResourceName,
 	SimpleBackend, SimpleBackendReference,
@@ -78,7 +77,6 @@ impl App {
 		backend_policies: BackendPolicies,
 		mut req: Request,
 		log: AsyncLog<MCPInfo>,
-		start_time: String,
 	) -> Response {
 		let backends = {
 			let binds = self.state.read_binds();
@@ -137,24 +135,7 @@ impl App {
 		// so we don't know to register the MCP policies
 		let mut ctx = ContextBuilder::new();
 		authorization_policies.register(&mut ctx);
-		let needs_body = ctx.with_request(&req, start_time);
-		if needs_body && let Ok(body) = crate::http::inspect_body(&mut req).await {
-			ctx.with_request_body(body);
-		}
-		if let Some(jwt) = req.extensions().get::<jwt::Claims>() {
-			ctx.with_jwt(jwt);
-		}
-		if let Some(apikey) = req.extensions().get::<apikey::Claims>() {
-			ctx.with_api_key(apikey);
-		}
-		if let Some(apikey) = req.extensions().get::<basicauth::Claims>() {
-			ctx.with_basic_auth(apikey);
-		}
-		ctx.with_source(
-			req.extensions().get::<TCPConnectionInfo>().unwrap(),
-			req.extensions().get::<TLSConnectionInfo>(),
-		);
-		ctx.with_extauthz(&req);
+		ctx.maybe_buffer_request_body(&mut req).await;
 
 		// `response` is not valid here, since we run authz first
 		// MCP context is added later. The context is inserted after
@@ -181,7 +162,6 @@ impl App {
 								Ok(claims) => {
 									debug!("JWT validation succeeded; inserting verified claims into context");
 									// Populate context with verified JWT claims before continuing
-									ctx.with_jwt(&claims);
 									req.headers_mut().remove(http::header::AUTHORIZATION);
 									req.extensions_mut().insert(claims);
 								},

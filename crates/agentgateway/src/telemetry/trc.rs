@@ -78,11 +78,11 @@ impl Tracer {
 			"service.version",
 			agent_core::version::BuildInfo::new().version,
 		));
-		let executor = cel::ContextBuilder::new().build()?;
+		let exec = cel::Executor::new_empty();
 		let mut tracer_name: Option<String> = None;
 		for (name, expr) in config.resources.iter() {
 			let name: &str = name.as_ref();
-			if let Ok(value) = executor.eval(expr.as_ref()) {
+			if let Ok(value) = exec.eval(expr.as_ref()) {
 				use opentelemetry::Value;
 				let otel_value = match value {
 					cel::Value::String(s) => {

@@ -3,11 +3,21 @@ use serde_json::json;
 
 use crate::insert_all;
 
-fn eval(expr: &str) -> anyhow::Result<Value> {
+fn eval(expr: &str) -> anyhow::Result<Value<'static>> {
+	eval_with_optimizations_check(expr, true)
+}
+fn eval_with_optimizations_check(expr: &str, check: bool) -> anyhow::Result<Value<'static>> {
 	let prog = Program::compile(expr)?;
+	let optimized = Program::compile_with_optimizer(expr, crate::DefaultOptimizer)?;
 	let mut c = Context::default();
 	insert_all(&mut c);
-	Ok(prog.execute(&c)?)
+	let a = prog.execute(&c)?.as_static();
+	let b = optimized.execute(&c)?.as_static();
+	if check {
+		assert_eq!(a, b, "optimizations changed behavior ({expr})");
+	}
+
+	Ok(a)
 }
 
 #[test]
@@ -20,20 +30,35 @@ fn with() {
 fn json() {
 	let expr = r#"json('{"hi":1}').hi"#;
 	assert(json!(1), expr);
+	let expr = r#"json('{"hi":1}').unknown"#;
+	assert_fails(expr);
+}
+
+#[test]
+fn json_field() {
+	let expr = r#"jsonField('{"hi":1}', "hi")"#;
+	assert(json!(1), expr);
+	let expr = r#"jsonField('{"hi":1}', "unknown")"#;
+	assert_fails(expr);
 }
 
 #[test]
 fn random() {
 	let expr = r#"int(random() * 10.0)"#;
-	let v = eval(expr).unwrap().json().unwrap().as_i64().unwrap();
+	let v = eval_with_optimizations_check(expr, false)
+		.unwrap()
+		.json()
+		.unwrap()
+		.as_i64()
+		.unwrap();
 	assert!((0..=10).contains(&v));
 }
 
 #[test]
 fn base64() {
-	let expr = r#""hello".base64Encode()"#;
+	let expr = r#"base64.encode('hello')"#;
 	assert(json!("aGVsbG8="), expr);
-	let expr = r#"string("hello".base64Encode().base64Decode())"#;
+	let expr = r#"string(base64.decode(base64.encode("hello")))"#;
 	assert(json!("hello"), expr);
 }
 
@@ -81,6 +106,9 @@ fn ip() {
 	assert(json!("192.168.0.1"), expr);
 	let expr = r#"ip('192.168.0.1.0')"#;
 	assert_fails(expr);
+
+	let expr = r#"ip("192.168.0.1").family()"#;
+	assert(json!(4), expr);
 
 	let expr = r#"isIP('192.168.0.1')"#;
 	assert(json!(true), expr);
@@ -221,7 +249,10 @@ fn cidr() {
 fn uuid() {
 	// Test that uuid() returns a string
 	let expr = r#"uuid()"#;
-	let result = eval(expr).unwrap().json().unwrap();
+	let result = eval_with_optimizations_check(expr, false)
+		.unwrap()
+		.json()
+		.unwrap();
 	assert!(result.is_string(), "uuid() should return a string");
 	// Test that it's formatted like a UUID (8-4-4-4-12 hex digits)
 	let uuid_str = result.as_str().unwrap();
@@ -245,7 +276,10 @@ fn uuid() {
 		variant_char
 	);
 	// Test that multiple calls return different UUIDs
-	let result2 = eval(expr).unwrap().json().unwrap();
+	let result2 = eval_with_optimizations_check(expr, false)
+		.unwrap()
+		.json()
+		.unwrap();
 	assert_ne!(
 		result, result2,
 		"Multiple uuid() calls should return different values"
@@ -254,7 +288,7 @@ fn uuid() {
 fn assert(want: serde_json::Value, expr: &str) {
 	assert_eq!(
 		want,
-		eval(expr).unwrap().json().unwrap(),
+		eval(expr).expect(&format!("{expr}")).json().unwrap(),
 		"expression: {expr}"
 	);
 }

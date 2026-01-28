@@ -15,7 +15,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::cel::{Executor, Expression};
+use crate::cel::{Executor, Expression, RequestSnapshot};
 use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, HeaderMutation, HeaderValueOption, HeadersResponse, HttpBody,
 	HttpHeaders, HttpTrailers, ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse,
@@ -110,7 +110,7 @@ impl InferencePoolRouter {
 			return Ok((None, Default::default()));
 		};
 		let r = std::mem::take(req);
-		let (new_req, pr) = ext_proc.mutate_request(r, None).await?;
+		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		*req = new_req;
 		let dest = req
 			.headers()
@@ -201,13 +201,12 @@ impl ExtProcRequest {
 	pub async fn mutate_request(
 		&mut self,
 		req: &mut http::Request,
-		exec: Option<&Executor<'_>>,
 	) -> Result<PolicyResponse, ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
 			return Ok(PolicyResponse::default());
 		};
 		let r = std::mem::take(req);
-		let (new_req, pr) = ext_proc.mutate_request(r, exec).await?;
+		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		*req = new_req;
 		Ok(pr.unwrap_or_default())
 	}
@@ -215,13 +214,13 @@ impl ExtProcRequest {
 	pub async fn mutate_response(
 		&mut self,
 		resp: &mut http::Response,
-		exec: Option<&Executor<'_>>,
+		request: Option<&RequestSnapshot>,
 	) -> Result<PolicyResponse, ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
 			return Ok(PolicyResponse::default());
 		};
 		let r = std::mem::take(resp);
-		let (new_resp, pr) = ext_proc.mutate_response(r, exec).await?;
+		let (new_resp, pr) = ext_proc.mutate_response(r, request).await?;
 		*resp = new_resp;
 		Ok(pr.unwrap_or_default())
 	}
@@ -321,10 +320,34 @@ impl ExtProcInstance {
 	pub async fn mutate_request(
 		&mut self,
 		req: http::Request,
-		exec: Option<&Executor<'_>>,
 	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
 		let headers = req_to_header_map(&req);
 		let buffer = http::buffer_limit(&req);
+
+		let exec = cel::Executor::new_request(&req);
+		// request_attributes should only be sent on first ProcessingRequest
+		// this will need to be modified if we configure which Requests to send
+		// Wrap metadata_context in Arc for cheap cloning across body chunks
+		let metadata_context = self.metadata_context.as_ref().map(|meta| {
+			Arc::new(Metadata {
+				filter_metadata: meta
+					.iter()
+					.filter_map(|(n, e)| {
+						eval_to_struct(&exec, e).map(|v| (n.clone(), v)).ok() // TODO(mk): where best to log convertion issues
+					})
+					.collect(),
+			})
+		});
+		let attributes = self
+			.req_attributes
+			.as_ref()
+			.and_then(|attrs| {
+				eval_to_struct(&exec, attrs)
+					.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
+					.ok()
+			})
+			.unwrap_or_default();
+
 		let (parts, body) = req.into_parts();
 
 		// For fail open we need a copy of the body. There is definitely a better way to do this, but for
@@ -340,31 +363,6 @@ impl ExtProcInstance {
 		let end_of_stream = body.is_end_stream();
 		let had_body = !end_of_stream;
 
-		// request_attributes should only be sent on first ProcessingRequest
-		// this will need to be modified if we configure which Requests to send
-		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let (metadata_context, mut attributes) = if let Some(exec) = exec {
-			(
-				self.metadata_context.as_ref().map(|meta| {
-					Arc::new(Metadata {
-						filter_metadata: meta
-							.iter()
-							.filter_map(|(n, e)| {
-								eval_to_struct(exec, e).map(|v| (n.clone(), v)).ok() // TODO(mk): where best to log convertion issues
-							})
-							.collect(),
-					})
-				}),
-				self.req_attributes.as_ref().and_then(|attrs| {
-					eval_to_struct(exec, attrs)
-						.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
-						.ok()
-				}),
-			)
-		} else {
-			(None, None)
-		};
-
 		// Send the request headers to ext_proc.
 		self
 			.send_request(ProcessingRequest {
@@ -373,7 +371,7 @@ impl ExtProcInstance {
 					end_of_stream,
 				})),
 				metadata_context: metadata_context.as_deref().cloned(),
-				attributes: attributes.take().unwrap_or_default(),
+				attributes,
 				protocol_config: Default::default(),
 				observability_mode: false,
 			})
@@ -516,39 +514,37 @@ impl ExtProcInstance {
 	pub async fn mutate_response(
 		&mut self,
 		req: http::Response,
-		exec: Option<&Executor<'_>>,
+		request: Option<&RequestSnapshot>,
 	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
 		if self.skipped.load(Ordering::SeqCst) {
 			return Ok((req, None));
 		}
 		let headers = resp_to_header_map(&req);
-		let (parts, body) = req.into_parts();
 
+		let exec = cel::Executor::new_response(request, &req);
+		// Wrap metadata_context in Arc for cheap cloning across body chunks
+		let metadata_context = self.metadata_context.as_ref().map(|meta| {
+			Arc::new(Metadata {
+				filter_metadata: meta
+					.iter()
+					.filter_map(|(n, e)| eval_to_struct(&exec, e).map(|v| (n.clone(), v)).ok())
+					.collect(),
+			})
+		});
+		// response_attributes should only be sent on first ProcessingRequest
+		// this will need to be modified if we configure which Requests to send
+		let attributes = self
+			.resp_attributes
+			.as_ref()
+			.and_then(|attrs| {
+				eval_to_struct(&exec, attrs)
+					.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
+					.ok()
+			})
+			.unwrap_or_default();
+		let (parts, body) = req.into_parts();
 		let end_of_stream = body.is_end_stream();
 		let had_body = !end_of_stream;
-
-		let (metadata_context, mut attributes) = if let Some(exec) = exec {
-			(
-				// Wrap metadata_context in Arc for cheap cloning across body chunks
-				self.metadata_context.as_ref().map(|meta| {
-					Arc::new(Metadata {
-						filter_metadata: meta
-							.iter()
-							.filter_map(|(n, e)| eval_to_struct(exec, e).map(|v| (n.clone(), v)).ok())
-							.collect(),
-					})
-				}),
-				// response_attributes should only be sent on first ProcessingRequest
-				// this will need to be modified if we configure which Requests to send
-				self.resp_attributes.as_ref().and_then(|attrs| {
-					eval_to_struct(exec, attrs)
-						.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
-						.ok()
-				}),
-			)
-		} else {
-			(None, None)
-		};
 
 		// Send the response headers to ext_proc.
 		self
@@ -558,7 +554,7 @@ impl ExtProcInstance {
 					end_of_stream,
 				})),
 				metadata_context: metadata_context.as_deref().cloned(),
-				attributes: attributes.take().unwrap_or_default(),
+				attributes,
 				protocol_config: Default::default(),
 				observability_mode: false,
 			})

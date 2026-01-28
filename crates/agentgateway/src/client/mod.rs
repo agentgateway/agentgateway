@@ -146,7 +146,7 @@ impl From<Option<VersionedBackendTLS>> for Transport {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-struct PoolKey(Target, SocketAddr, Transport, ::http::Version);
+pub struct PoolKey(Target, SocketAddr, Transport, ::http::Version);
 
 #[derive(Debug, Clone, Copy)]
 pub struct ResolvedDestination(pub SocketAddr);
@@ -497,7 +497,8 @@ impl Client {
 			parent: None,
 			tracing::Level::TRACE,
 
-			request =?req
+			request =? req,
+			extensions =? crate::http::DebugExtensions(&req)
 		);
 		let buffer_limit = http::buffer_limit(&req);
 		let to = req.extensions().get::<BackendRequestTimeout>().cloned();

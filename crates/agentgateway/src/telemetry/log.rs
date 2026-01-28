@@ -22,8 +22,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use tracing::{Level, trace};
 
-use crate::cel::{ContextBuilder, Expression};
-use crate::llm::{InputFormat, LLMInfo};
+use crate::cel::{ContextBuilder, Expression, LLMContext};
+use crate::http::Request;
+use crate::llm::InputFormat;
 use crate::proxy::ProxyResponseReason;
 use crate::telemetry::metrics::{
 	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
@@ -223,25 +224,6 @@ impl<'a> CelLoggingExecutor<'a> {
 		}
 	}
 
-	/// eval_rng evaluates a float (0.0-1.0) or a bool and evaluates to a bool. If a float is returned,
-	/// it represents the likelihood true is returned.
-	fn eval_rng(&self, x: &Expression) -> bool {
-		match self.executor.eval(x) {
-			Ok(cel::Value::Bool(b)) => b,
-			Ok(cel::Value::Float(f)) => {
-				// Clamp this down to 0-1 rang; random_bool can panic
-				let f = f.clamp(0.0, 1.0);
-				rand::random_bool(f)
-			},
-			Ok(cel::Value::Int(f)) => {
-				// Clamp this down to 0-1 rang; random_bool can panic
-				let f = f.clamp(0, 1);
-				rand::random_bool(f as f64)
-			},
-			_ => false,
-		}
-	}
-
 	pub fn eval(
 		&self,
 		fields: &'a OrderedStringMap<Arc<Expression>>,
@@ -298,21 +280,22 @@ impl<'a> CelLoggingExecutor<'a> {
 				return;
 			},
 			Some(agent_celx::FlattenSignal::Map(m)) => {
-				raws.reserve(m.map.len());
-				for (mk, mv) in m.map.as_ref() {
+				raws.reserve(m.len());
+				for (mk, mv) in m.iter() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{mk}")), mv, false);
 				}
 				return;
 			},
 			Some(agent_celx::FlattenSignal::MapRecursive(m)) => {
-				raws.reserve(m.map.len());
-				for (mk, mv) in m.map.as_ref() {
+				raws.reserve(m.len());
+				for (mk, mv) in m.iter() {
 					Self::resolve_value(raws, Cow::Owned(format!("{k}.{mk}")), mv, true);
 				}
 				return;
 			},
 			None => {},
 		}
+
 		if always_flatten {
 			match celv {
 				cel::Value::List(li) => {
@@ -323,8 +306,8 @@ impl<'a> CelLoggingExecutor<'a> {
 					}
 				},
 				cel::Value::Map(m) => {
-					raws.reserve(m.map.len());
-					for (mk, mv) in m.map.as_ref() {
+					raws.reserve(m.len());
+					for (mk, mv) in m.iter() {
 						let nk = Cow::Owned(format!("{k}.{mk}"));
 						Self::resolve_value(raws, nk, mv, true);
 					}
@@ -376,19 +359,20 @@ impl CelLogging {
 		&mut self.cel_context
 	}
 
-	pub fn ctx_borrow(&self) -> &ContextBuilder {
-		&self.cel_context
-	}
-
-	pub fn build(&self) -> Result<CelLoggingExecutor, cel::Error> {
+	pub fn build<'a>(
+		&'a self,
+		req: Option<&'a cel::RequestSnapshot>,
+		resp: Option<&'a cel::ResponseSnapshot>,
+		llm_response: Option<&'a LLMContext>,
+	) -> Result<CelLoggingExecutor<'a>, cel::Error> {
 		let CelLogging {
-			cel_context,
+			cel_context: _,
 			filter,
 			fields,
 			metric_fields,
 			tracing_sampler: _,
 		} = self;
-		let executor = cel_context.build()?;
+		let executor = cel::Executor::new_logger(req, resp, llm_response);
 		Ok(CelLoggingExecutor {
 			executor,
 			filter,
@@ -421,19 +405,19 @@ impl DropOnLog {
 		route_identifier: &RouteIdentifier,
 		end_time: Instant,
 		duration: Duration,
-		llm_response: &Option<LLMInfo>,
+		llm_response: Option<&LLMContext>,
 		custom_metric_fields: &CustomField,
 	) {
-		if let Some(llm_response) = &llm_response {
+		if let Some(llm_response) = llm_response {
 			let gen_ai_labels = Arc::new(GenAILabels {
 				gen_ai_operation_name: strng::literal!("chat").into(),
-				gen_ai_system: llm_response.request.provider.clone().into(),
-				gen_ai_request_model: llm_response.request.request_model.clone().into(),
-				gen_ai_response_model: llm_response.response.provider_model.clone().into(),
+				gen_ai_system: llm_response.provider.clone().into(),
+				gen_ai_request_model: llm_response.request_model.clone().into(),
+				gen_ai_response_model: llm_response.response_model.clone().into(),
 				custom: custom_metric_fields.clone(),
 				route: route_identifier.clone(),
 			});
-			if let Some(it) = llm_response.input_tokens() {
+			if let Some(it) = llm_response.input_tokens {
 				log
 					.metrics
 					.gen_ai_token_usage
@@ -443,7 +427,7 @@ impl DropOnLog {
 					})
 					.observe(it as f64)
 			}
-			if let Some(ot) = llm_response.response.output_tokens {
+			if let Some(ot) = llm_response.output_tokens {
 				log
 					.metrics
 					.gen_ai_token_usage
@@ -458,7 +442,7 @@ impl DropOnLog {
 				.gen_ai_request_duration
 				.get_or_create(&gen_ai_labels)
 				.observe(duration.as_secs_f64());
-			if let Some(ft) = llm_response.response.first_token {
+			if let Some(ft) = llm_response.first_token {
 				let ttft = ft - log.start;
 				// Duration from start of request to first token
 				// This is the start of when WE got the request, but it should probably be when we SENT the upstream.
@@ -468,7 +452,7 @@ impl DropOnLog {
 					.get_or_create(&gen_ai_labels)
 					.observe(ttft.as_secs_f64());
 
-				if let Some(ot) = llm_response.response.output_tokens {
+				if let Some(ot) = llm_response.output_tokens {
 					let first_to_last = end_time - ft;
 					let throughput = first_to_last.as_secs_f64() / (ot as f64);
 					log
@@ -530,10 +514,13 @@ impl RequestLog {
 			a2a_method: None,
 			inference_pool: None,
 			request_handle: None,
+			request_snapshot: None,
+			response_snapshot: None,
 			response_bytes: 0,
 		}
 	}
 }
+
 #[derive(Debug)]
 pub struct RequestLog {
 	pub cel: CelLogging,
@@ -584,12 +571,14 @@ pub struct RequestLog {
 	pub inference_pool: Option<SocketAddr>,
 
 	pub request_handle: Option<ActiveHandle>,
+	pub request_snapshot: Option<cel::RequestSnapshot>,
+	pub response_snapshot: Option<cel::ResponseSnapshot>,
 
 	pub response_bytes: u64,
 }
 
 impl RequestLog {
-	pub fn trace_sampled(&self, tp: Option<&TraceParent>) -> bool {
+	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> bool {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
@@ -607,9 +596,7 @@ impl RequestLog {
 			};
 			rs
 		};
-		let Ok(exec) = self.cel.build() else {
-			return false;
-		};
+		let exec = cel::Executor::new_request(req);
 		exec.eval_rng(expr.as_ref())
 	}
 }
@@ -666,10 +653,11 @@ impl Drop for DropOnLog {
 		}
 
 		let end_time = Instant::now();
-		log
-			.cel
-			.cel_context
-			.with_request_completion(agent_core::telemetry::render_current_time());
+		// TODO!
+		// log
+		// 	.cel
+		// 	.cel_context
+		// 	.with_request_completion(agent_core::telemetry::render_current_time());
 		let duration = end_time - log.start;
 		if let Some(rh) = log.request_handle.take() {
 			let status = log
@@ -679,13 +667,13 @@ impl Drop for DropOnLog {
 			rh.finish_request(health, duration, log.retry_after);
 		}
 
-		let llm_response = log.llm_response.take();
-		if let Some(llm_response) = &llm_response {
-			// Since this is async, we add it to the context here. A bit awkward but gets the job done.
-			log.cel.cel_context.with_llm_response(llm_response);
-		}
+		let llm_response = log.llm_response.take().map(Into::into);
 
-		let Ok(cel_exec) = log.cel.build() else {
+		let Ok(cel_exec) = log.cel.build(
+			log.request_snapshot.as_ref(),
+			log.response_snapshot.as_ref(),
+			llm_response.as_ref(),
+		) else {
 			tracing::warn!("failed to build CEL context");
 			return;
 		};
@@ -728,7 +716,7 @@ impl Drop for DropOnLog {
 			&route_identifier,
 			end_time,
 			duration,
-			&llm_response,
+			llm_response.as_ref(),
 			&custom_metric_fields,
 		);
 		let mcp = log.mcp_status.take();
@@ -759,7 +747,7 @@ impl Drop for DropOnLog {
 		let dur = format!("{}ms", duration.as_millis());
 		let grpc = log.grpc_status.load();
 
-		let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens());
+		let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
 
 		let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
 		let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
@@ -861,14 +849,14 @@ impl Drop for DropOnLog {
 				"gen_ai.response.model",
 				llm_response
 					.as_ref()
-					.and_then(|l| l.response.provider_model.display()),
+					.and_then(|l| l.response_model.display()),
 			),
 			("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 			(
 				"gen_ai.usage.output_tokens",
 				llm_response
 					.as_ref()
-					.and_then(|l| l.response.output_tokens)
+					.and_then(|l| l.output_tokens)
 					.map(Into::into),
 			),
 			(
