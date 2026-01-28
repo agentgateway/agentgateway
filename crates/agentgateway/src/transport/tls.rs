@@ -15,7 +15,7 @@ use tracing::warn;
 use x509_parser::certificate::X509Certificate;
 
 use crate::apply;
-use crate::serdes::{schema};
+use crate::serdes::schema;
 use crate::transport::stream::Socket;
 use crate::types::discovery::Identity;
 
@@ -691,22 +691,27 @@ pub mod identity {
 }
 
 #[apply(schema!)]
-#[derive(cel::DynamicType)]
+#[derive(cel::DynamicType, Default, Eq, PartialEq)]
 pub struct TlsInfo {
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
+	#[serde(default)]
 	pub identity: Option<IstioIdentity>,
 	/// The subject alt names from the downstream certificate, if available.
+	#[serde(default)]
 	pub subject_alt_names: Vec<Strng>,
 	/// The issuer from the downstream certificate, if available.
+	#[serde(default)]
 	pub issuer: Strng,
 	/// The subject from the downstream certificate, if available.
+	#[serde(default)]
 	pub subject: Strng,
 	/// The CN of the subject from the downstream certificate, if available.
+	#[serde(default)]
 	pub subject_cn: Option<Strng>,
 }
 
 #[apply(schema!)]
-#[derive(cel::DynamicType)]
+#[derive(cel::DynamicType, Eq, PartialEq)]
 pub struct IstioIdentity {
 	/// The trust domain of the identity.
 	trust_domain: Strng,

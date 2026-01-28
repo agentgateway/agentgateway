@@ -118,6 +118,8 @@ fn test_executor_serde_complete() {
 		request: Some(RequestRefSerde {
 			method: Method::GET,
 			uri: "http://example.com/api/test".parse::<Uri>().unwrap(),
+			host: Some("example.com".parse().unwrap()),
+			scheme: Some(::http::uri::Scheme::HTTP),
 			path: "/api/test".to_string(),
 			version: Version::HTTP_11,
 			headers: req_headers,
@@ -215,6 +217,8 @@ fn test_executor_snapshot_json_to_cel() {
 			"method": "GET",
 			"uri": "http://example.com/test",
 			"path": "/test",
+			"host": "example.com",
+			"scheme": "http",
 			"version": "HTTP/1.1",
 			"headers": {
 				"x-test": "value"
@@ -255,6 +259,25 @@ fn test_executor_snapshot_json_to_cel() {
 	assert_eq!(cel_json["jwt"]["sub"], "test-user");
 }
 
+#[test]
+fn test_executor_minimal_json() {
+	// Create a JSON representation manually
+	let json = json!({
+		"request": {
+		},
+		"response": {
+		},
+		"source": {
+		},
+		"backend": {
+		},
+		"jwt": {
+		}
+	});
+
+	// Deserialize into ExecutorSerde
+	let _: ExecutorSerde = serde_json::from_value(json.clone()).expect("failed to deserialize");
+}
 #[test]
 fn test_buffered_body_serialization() {
 	let body_data = b"Hello, World!";

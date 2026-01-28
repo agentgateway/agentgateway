@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -24,6 +24,7 @@ use crate::http::{apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::ResourceType;
 use crate::serdes::schema;
+use crate::transport::tls::TlsInfo;
 use crate::{apply, llm};
 
 #[derive(Debug, Default, cel::DynamicType)]
@@ -73,29 +74,51 @@ fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct SourceContext {
+	#[serde(default = "dummy_address")]
 	/// The IP address of the downstream connection.
 	pub address: IpAddr,
+	#[serde(default)]
 	/// The port of the downstream connection.
 	pub port: u16,
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
-	#[serde(flatten)]
+	#[serde(flatten, default, deserialize_with = "none_if_empty")]
+	#[dynamic(flatten)]
 	pub tls: Option<crate::transport::tls::TlsInfo>,
+}
+fn none_if_empty<'de, D>(deserializer: D) -> Result<Option<TlsInfo>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let tls = TlsInfo::deserialize(deserializer)?;
+	Ok(if tls == TlsInfo::default() {
+		None
+	} else {
+		Some(tls)
+	})
+}
+
+fn dummy_address() -> IpAddr {
+	IpAddr::V4(Ipv4Addr::UNSPECIFIED)
 }
 
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct BackendContext {
 	/// The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.
+	#[serde(default)]
 	pub name: Strng,
 	/// The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.
-	#[dynamic(rename = "type")]
 	#[serde(rename = "type")]
+	#[serde(default)]
 	pub backend_type: BackendType,
 	/// The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.
+	#[serde(default)]
 	pub protocol: BackendProtocol,
 }
 
-#[derive(Copy, PartialEq, Eq, Hash, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Default, Copy, PartialEq, Eq, Hash, Debug, Clone, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[derive(cel::DynamicType)]
@@ -111,16 +134,27 @@ pub enum BackendType {
 	#[dynamic(rename = "service")]
 	Service,
 	#[dynamic(rename = "unknown")]
+	#[default]
 	Unknown,
 }
 
 #[derive(
-	Copy, PartialEq, Eq, Hash, EncodeLabelValue, Debug, Clone, serde::Serialize, serde::Deserialize,
+	Default,
+	Copy,
+	PartialEq,
+	Eq,
+	Hash,
+	EncodeLabelValue,
+	Debug,
+	Clone,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[allow(non_camel_case_types)]
 #[derive(cel::DynamicType)]
 pub enum BackendProtocol {
+	#[default]
 	http,
 	tcp,
 	a2a,
@@ -305,6 +339,8 @@ pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
 	RequestSnapshot {
 		method: req.method().clone(),
 		path: req.uri().clone(),
+		host: req.uri().authority().cloned(),
+		scheme: req.uri().scheme().cloned(),
 		version: req.version(),
 		headers: req.headers().clone(),
 		body: req.extensions_mut().remove::<BufferedBody>(),
@@ -337,6 +373,10 @@ pub struct RequestSnapshot {
 
 	/// The request's URI
 	pub path: http::Uri,
+
+	pub host: Option<::http::uri::Authority>,
+
+	pub scheme: Option<::http::uri::Scheme>,
 
 	/// The request's version
 	pub version: http::Version,
@@ -378,6 +418,23 @@ pub struct RequestRef<'a> {
 	#[dynamic(with_value = "to_value_owned_string")]
 	pub uri: &'a http::Uri,
 	pub path: &'a str,
+	/// The hostname of the request. For example, `example.com`.
+	#[serde(
+		deserialize_with = "http_serde::option::authority",
+		serialize_with = "crate::serde_authority_opt"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[dynamic(with_value = "to_value_str_opt")]
+	pub host: Option<&'a ::http::uri::Authority>,
+
+	/// The scheme of the request. For example, `https`.
+	#[serde(
+		deserialize_with = "http_serde::option::scheme",
+		serialize_with = "crate::serde_scheme_opt"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[dynamic(with_value = "to_value_str_opt")]
+	pub scheme: Option<&'a ::http::uri::Scheme>,
 
 	/// The request's version
 	#[serde(with = "http_serde::version")]
@@ -435,35 +492,36 @@ impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
 #[apply(schema!)]
 pub struct RequestRefSerde {
 	/// The HTTP method of the request. For example, `GET`
-	#[serde(with = "http_serde::method")]
+	#[serde(default, with = "http_serde::method")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub method: http::Method,
 
 	/// The complete URI of the request. For example, `http://example.com/path`.
-	#[serde(with = "http_serde::uri")]
+	#[serde(default, with = "http_serde::uri")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub uri: http::Uri,
 
 	/// The hostname of the request. For example, `example.com`.
-	#[serde(with = "http_serde::option::authority")]
+	#[serde(default, with = "http_serde::option::authority")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub host: Option<::http::uri::Authority>,
 
 	/// The scheme of the request. For example, `https`.
-	#[serde(with = "http_serde::option::scheme")]
+	#[serde(default, with = "http_serde::option::scheme")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub scheme: Option<::http::uri::Scheme>,
 
 	/// The path of the request URI. For example, `/path`.
+	#[serde(default)]
 	pub path: String,
 
 	/// The version of the request. For example, `HTTP/1.1`.
-	#[serde(with = "http_serde::version")]
+	#[serde(default, with = "http_serde::version")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub version: http::Version,
 
 	/// The headers of the request.
-	#[serde(with = "http_serde::header_map")]
+	#[serde(default, with = "http_serde::header_map")]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "std::collections::HashMap<String, String>")
@@ -485,10 +543,11 @@ pub struct RequestRefSerde {
 #[apply(schema!)]
 pub struct ResponseRefSerde {
 	/// The HTTP status code of the response.
+	#[serde(default)]
 	pub code: u16,
 
 	/// The headers of the response.
-	#[serde(with = "http_serde::header_map")]
+	#[serde(default, with = "http_serde::header_map")]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "std::collections::HashMap<String, String>")
@@ -506,6 +565,8 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 			method: &value.method,
 			uri: &value.path,
 			path: value.path.path(),
+			host: value.host.as_ref(),
+			scheme: value.scheme.as_ref(),
 			version: value.version,
 			headers: &value.headers,
 			body: value.body.as_ref().into(),
@@ -520,6 +581,8 @@ impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
 			method: req.method(),
 			uri: req.uri(),
 			path: req.uri().path(),
+			host: req.uri().authority(),
+			scheme: req.uri().scheme(),
 			version: req.version(),
 			headers: req.headers(),
 			body: req.extensions().into(),
@@ -696,6 +759,12 @@ impl From<llm::LLMRequest> for LLMContext {
 
 fn to_value_str<'a, T: AsRef<str>>(c: &'a &'a T) -> Value<'a> {
 	Value::String(c.as_ref().into())
+}
+fn to_value_str_opt<'a, T: AsRef<str>>(c: &'a Option<&'a T>) -> Value<'a> {
+	match c {
+		None => Value::Null,
+		Some(c) => Value::String(c.as_ref().into()),
+	}
 }
 pub fn to_value_redacted<'a>(c: &'a SecretString) -> Value<'a> {
 	Value::String(c.expose_secret().into())
@@ -885,6 +954,8 @@ impl ExecutorSerde {
 				method: &req.method,
 				uri: &req.uri,
 				path: &req.path,
+				host: req.host.as_ref(),
+				scheme: req.scheme.as_ref(),
 				version: req.version,
 				headers: &req.headers,
 				body: ExtensionOrDirect::Direct(req.body.as_ref()),
