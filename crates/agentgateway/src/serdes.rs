@@ -144,7 +144,7 @@ pub fn serde_scheme_opt<S: Serializer>(
 ) -> Result<S::Ok, S::Error> {
 	match t {
 		None => serializer.serialize_none(),
-		Some(t) => serializer.serialize_str(&t.as_str()),
+		Some(t) => serializer.serialize_str(t.as_str()),
 	}
 }
 
@@ -154,7 +154,7 @@ pub fn serde_authority_opt<S: Serializer>(
 ) -> Result<S::Ok, S::Error> {
 	match t {
 		None => serializer.serialize_none(),
-		Some(t) => serializer.serialize_str(&t.as_str()),
+		Some(t) => serializer.serialize_str(t.as_str()),
 	}
 }
 

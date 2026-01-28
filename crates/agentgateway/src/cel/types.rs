@@ -10,19 +10,20 @@ use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
 use cel::objects::BytesValue;
 use cel::types::dynamic::DynamicType;
-use http::Extensions;
+use http::{Extensions, HeaderMap, Method, Uri, Version};
 use prometheus_client::encoding::EncodeLabelValue;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::json;
 
 use crate::cel::{Error, Expression, ROOT_CONTEXT};
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
 use crate::http::{apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
-use crate::mcp::ResourceType;
+use crate::mcp::{ResourceId, ResourceType};
 use crate::serdes::schema;
 use crate::transport::tls::TlsInfo;
 use crate::{apply, llm};
@@ -419,20 +420,12 @@ pub struct RequestRef<'a> {
 	pub uri: &'a http::Uri,
 	pub path: &'a str,
 	/// The hostname of the request. For example, `example.com`.
-	#[serde(
-		deserialize_with = "http_serde::option::authority",
-		serialize_with = "crate::serde_authority_opt"
-	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[serde(serialize_with = "crate::serde_authority_opt")]
 	#[dynamic(with_value = "to_value_str_opt")]
 	pub host: Option<&'a ::http::uri::Authority>,
 
 	/// The scheme of the request. For example, `https`.
-	#[serde(
-		deserialize_with = "http_serde::option::scheme",
-		serialize_with = "crate::serde_scheme_opt"
-	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[serde(serialize_with = "crate::serde_scheme_opt")]
 	#[dynamic(with_value = "to_value_str_opt")]
 	pub scheme: Option<&'a ::http::uri::Scheme>,
 
@@ -985,6 +978,95 @@ impl ExecutorSerde {
 		exec.mcp = self.mcp.as_ref();
 
 		exec
+	}
+}
+
+pub fn full_example_executor() -> ExecutorSerde {
+	let mut req_headers = HeaderMap::new();
+	req_headers.insert("foo", "bar".parse().unwrap());
+	req_headers.insert("user-agent", "example".parse().unwrap());
+	req_headers.insert("accept", "application/json".parse().unwrap());
+	let mut resp_headers = HeaderMap::new();
+	resp_headers.insert("content-type", "application/json".parse().unwrap());
+
+	ExecutorSerde {
+		request: Some(RequestRefSerde {
+			method: Method::GET,
+			uri: "http://example.com/api/test".parse::<Uri>().unwrap(),
+			host: Some("example.com".parse().unwrap()),
+			scheme: Some(::http::uri::Scheme::HTTP),
+			path: "/api/test".to_string(),
+			version: Version::HTTP_11,
+			headers: req_headers,
+			body: Some(BufferedBody(Bytes::from(r#"{"model": "fast"}"#))),
+			start_time: Some(RequestStartTime("2000-01-01T12:00:00Z".to_string())),
+			end_time: Some("2000-01-01T12:00:01Z".to_string()),
+		}),
+		response: Some(ResponseRefSerde {
+			code: 200,
+			headers: resp_headers,
+			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+		}),
+		source: Some(SourceContext {
+			address: "127.0.0.1".parse().unwrap(),
+			port: 12345,
+			tls: Some(TlsInfo {
+				identity: None,
+				subject_alt_names: vec![],
+				issuer: Default::default(),
+				subject: Default::default(),
+				subject_cn: Some("cn".into()),
+			}),
+		}),
+		jwt: Some(jwt::Claims {
+			inner: serde_json::Map::from_iter(vec![
+				("sub".to_string(), json!("test-user")),
+				("iss".to_string(), json!("agentgateway.dev")),
+				("exp".to_string(), json!(1900650294)),
+			]),
+			jwt: SecretString::new("fake.jwt.token".into()),
+		}),
+		api_key: Some(apikey::Claims {
+			key: apikey::APIKey::new("test-api-key-id"),
+			metadata: json!({"role": "admin"}),
+		}),
+		basic_auth: Some(basicauth::Claims {
+			username: "alice".into(),
+		}),
+		llm: Some(LLMContext {
+			streaming: false,
+			request_model: "gpt-4".into(),
+			response_model: Some("gpt-4-turbo".into()),
+			provider: "fake-ai".into(),
+			input_tokens: Some(100),
+			output_tokens: Some(50),
+			total_tokens: Some(150),
+			first_token: None,
+			count_tokens: Some(10),
+			prompt: None,
+			completion: Some(vec!["Hello".to_string()]),
+			params: llm::LLMRequestParams {
+				temperature: Some(0.7),
+				top_p: Some(1.0),
+				frequency_penalty: Some(0.0),
+				presence_penalty: Some(0.0),
+				seed: Some(42),
+				max_tokens: Some(1024),
+				encoding_format: None,
+				dimensions: None,
+			},
+		}),
+		mcp: Some(ResourceType::Tool(ResourceId::new(
+			"my-mcp-server".to_string(),
+			"get_weather".to_string(),
+		))),
+		backend: Some(BackendContext {
+			name: "my-backend".into(),
+			backend_type: BackendType::Service,
+			protocol: BackendProtocol::http,
+		}),
+		extauthz: Some(ExtAuthzDynamicMetadata::default()),
+		extproc: Some(ExtProcDynamicMetadata::default()),
 	}
 }
 
