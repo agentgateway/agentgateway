@@ -1,6 +1,5 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 config: {}
-
 frontendPolicies:
   accessLog:
     add:

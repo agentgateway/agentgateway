@@ -2,10 +2,9 @@ syntax = "proto3";
 
 package envoy.service.ext_proc.v3;
 
-
+import "google/protobuf/duration.proto";
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
-import "google/protobuf/duration.proto";
 
 option go_package = "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3;ext_procv3";
 
@@ -41,8 +40,7 @@ service ExternalProcessor {
   // give the server control over what the filter does. The actual
   // protocol is described by the ProcessingRequest and ProcessingResponse
   // messages below.
-  rpc Process(stream ProcessingRequest) returns (stream ProcessingResponse) {
-  }
+  rpc Process(stream ProcessingRequest) returns (stream ProcessingResponse) {}
 }
 
 // This message specifies the filter protocol configurations which will be sent to the ext_proc
@@ -77,7 +75,6 @@ message ProcessingRequest {
   // ones are set for a particular HTTP request/response depend on the
   // processing mode.
   oneof request {
-
     // Information about the HTTP request headers, as well as peer info and additional
     // properties. Unless ``observability_mode`` is ``true``, the server must send back a
     // HeaderResponse message, an ImmediateResponse message, or close the stream.
@@ -112,7 +109,7 @@ message ProcessingRequest {
   }
 
   // Dynamic metadata associated with the request.
-//  Metadata metadata_context = 8;
+  Metadata metadata_context = 8;
 
   // The values of properties selected by the ``request_attributes``
   // or ``response_attributes`` list in the configuration. Each entry
@@ -230,13 +227,9 @@ message HttpHeaders {
   // lower-cased, because HTTP header keys are case-insensitive.
   HeaderMap headers = 1;
 
-  // [#not-implemented-hide:]
-  // The values of properties selected by the ``request_attributes``
-  // or ``response_attributes`` list in the configuration. Each entry
-  // in the list is populated
-  // from the standard :ref:`attributes <arch_overview_attributes>`
-  // supported across Envoy.
-  map<string, google.protobuf.Struct> attributes = 2;
+  // HttpHeaders.attributes removed in favour of ProcessingRequest attributes
+  reserved 2;
+  reserved "attributes";
 
   // If true, then there is no message body associated with this
   // request or response.
@@ -401,17 +394,18 @@ message StreamedBodyResponse {
 message HeaderMap {
   repeated HeaderValue headers = 1;
 }
+
 // Header name/value pair.
 message HeaderValue {
   // Header name.
   string key = 1;
 
+  string value = 2;
   // Header value.
   //
   // The same :ref:`format specifier <config_access_log_format>` as used for
   // :ref:`HTTP access logging <config_access_log>` applies here, however
   // unknown header values are replaced with the empty string instead of ``-``.
-//  string value = 2;
   bytes raw_value = 3;
 }
 enum StatusCode {
@@ -476,20 +470,51 @@ enum StatusCode {
   NetworkAuthenticationRequired = 511;
 }
 
-
 message HttpStatus {
   // Supplies HTTP response code.
   StatusCode code = 1;
 }
+
 // Header name/value pair plus option to control append behavior.
 message HeaderValueOption {
+  // Describes the supported actions types for header append action.
+  enum HeaderAppendAction {
+    // If the header already exists, this action will result in:
+    //
+    // - Comma-concatenated for predefined inline headers.
+    // - Duplicate header added in the ``HeaderMap`` for other headers.
+    //
+    // If the header doesn't exist then this will add new header with specified key and value.
+    APPEND_IF_EXISTS_OR_ADD = 0;
+
+    // This action will add the header if it doesn't already exist. If the header
+    // already exists then this will be a no-op.
+    ADD_IF_ABSENT = 1;
+
+    // This action will overwrite the specified value by discarding any existing values if
+    // the header already exists. If the header doesn't exist then this will add the header
+    // with specified key and value.
+    OVERWRITE_IF_EXISTS_OR_ADD = 2;
+
+    // This action will overwrite the specified value by discarding any existing values if
+    // the header already exists. If the header doesn't exist then this will be no-op.
+    OVERWRITE_IF_EXISTS = 3;
+  }
+
   // Header name/value pair that this option applies to.
   HeaderValue header = 1;
 
   // Should the value be appended? If true (default), the value is appended to
   // existing values.
+  // This field is deprecated and please use append_action as replacement.
   google.protobuf.BoolValue append = 2;
+
+  // Describes the action taken to append/overwrite the given value for an existing header
+  // or to only add this header if it's absent.
+  // Value defaults to APPEND_IF_EXISTS_OR_ADD.
+  HeaderAppendAction append_action = 3;
 }
+
 enum BodySendMode {
   // Do not send the body at all. This is the default.
   NONE = 0;
@@ -650,4 +675,22 @@ message ProcessingMode {
 
   // How to handle the response trailers. Default is "SKIP".
   HeaderSendMode response_trailer_mode = 6;
+}
+
+message Metadata {
+  // Key is the reverse DNS filter name, e.g. com.acme.widget. The ``envoy.*``
+  // namespace is reserved for Envoy's built-in filters.
+  // If both ``filter_metadata`` and
+  // :ref:`typed_filter_metadata <envoy_v3_api_field_config.core.v3.Metadata.typed_filter_metadata>`
+  // fields are present in the metadata with same keys,
+  // only ``typed_filter_metadata`` field will be parsed.
+  map<string, google.protobuf.Struct> filter_metadata = 1;
+
+  // Key is the reverse DNS filter name, e.g. com.acme.widget. The ``envoy.*``
+  // namespace is reserved for Envoy's built-in filters.
+  // The value is encoded as google.protobuf.Any.
+  // If both :ref:`filter_metadata <envoy_v3_api_field_config.core.v3.Metadata.filter_metadata>`
+  // and ``typed_filter_metadata`` fields are present in the metadata with same keys,
+  // only ``typed_filter_metadata`` field will be parsed.
+  //  map<string, google.protobuf.Any> typed_filter_metadata = 2;
 }

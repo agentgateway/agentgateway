@@ -69,6 +69,7 @@ async fn local_ratelimit() {
 			name: "route".into(),
 			namespace: "".into(),
 			rule_name: None,
+			kind: None,
 		}),
 		policy: TrafficPolicy::LocalRateLimit(vec![
 			http::localratelimit::RateLimitSpec {
@@ -197,6 +198,7 @@ async fn direct_response() {
 			name: "route2".into(),
 			namespace: Default::default(),
 			rule_name: None,
+			kind: None,
 		},
 		hostnames: Default::default(),
 		matches: vec![RouteMatch {
@@ -252,6 +254,9 @@ async fn tls_termination() {
 					cert: "../../examples/tls/certs/cert.pem".into(),
 					key: "../../examples/tls/certs/key.pem".into(),
 					root: None,
+					cipher_suites: None,
+					min_tls_version: None,
+					max_tls_version: None,
 				}
 				.try_into()
 				.unwrap(),
@@ -269,7 +274,7 @@ async fn tls_termination() {
 		.with_bind(bind);
 
 	let io = t.serve_https(strng::new("bind"), Some("a.example.com"));
-	let res = RequestBuilder::new(Method::GET, "http://lo")
+	let res = RequestBuilder::new(Method::GET, "http://a.example.com")
 		.send(io)
 		.await
 		.unwrap();
@@ -495,6 +500,7 @@ async fn header_manipulation() {
 			name: "route2".into(),
 			namespace: Default::default(),
 			rule_name: None,
+			kind: None,
 		},
 		hostnames: Default::default(),
 		matches: vec![RouteMatch {
@@ -559,6 +565,7 @@ async fn inline_backend_policies() {
 				name: "route2".into(),
 				namespace: Default::default(),
 				rule_name: None,
+				kind: None,
 			},
 			hostnames: Default::default(),
 			matches: vec![RouteMatch {
@@ -646,6 +653,7 @@ async fn api_key() {
 				name: "route".into(),
 				namespace: "".into(),
 				rule_name: None,
+				kind: None,
 			}),
 			policy: TrafficPolicy::APIKey(
 				http::apikey::LocalAPIKeys {
@@ -672,6 +680,7 @@ async fn api_key() {
 				name: "route".into(),
 				namespace: "".into(),
 				rule_name: None,
+				kind: None,
 			}),
 			policy: TrafficPolicy::Authorization(deser(json!({
 				"rules": ["apiKey.group == 'eng'"]
@@ -721,6 +730,7 @@ async fn basic_auth() {
 				name: "route".into(),
 				namespace: "".into(),
 				rule_name: None,
+				kind: None,
 			}),
 			policy: TrafficPolicy::BasicAuth(
 				http::basicauth::LocalBasicAuth {
@@ -746,6 +756,7 @@ crypt_test:bGVh02xkuGli2"
 				name: "route".into(),
 				namespace: "".into(),
 				rule_name: None,
+				kind: None,
 			}),
 			policy: TrafficPolicy::Authorization(deser(json!({
 				"rules": ["basicAuth.username == 'user'"]

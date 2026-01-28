@@ -1,14 +1,25 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 use std::io::Cursor;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
+use crate::http::auth::BackendAuth;
+use crate::http::authorization::RuleSet;
+use crate::http::{
+	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
+};
+use crate::mcp::McpAuthorization;
+use crate::telemetry::log::OrderedStringMap;
+use crate::types::discovery::{NamespacedHostname, Service};
+use crate::types::local::SimpleLocalBackend;
+use crate::types::{agent, backend, frontend};
+use crate::*;
 use anyhow::anyhow;
+use hashbrown::Equivalent;
 use heck::ToSnakeCase;
 use itertools::Itertools;
 use macro_rules_attribute::apply;
@@ -19,17 +30,6 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls_pemfile::Item;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
-
-use crate::http::auth::BackendAuth;
-use crate::http::authorization::RuleSet;
-use crate::http::{
-	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
-};
-use crate::mcp::McpAuthorization;
-use crate::types::discovery::{NamespacedHostname, Service};
-use crate::types::local::SimpleLocalBackend;
-use crate::types::{agent, backend, frontend};
-use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,52 +58,270 @@ pub struct Listener {
 	pub tcp_routes: TCPRouteSet,
 }
 
+impl Listener {
+	pub fn matches(&self, hostname: &str) -> bool {
+		self.hostname == hostname
+			|| self.hostname.is_empty()
+			|| (self.hostname.starts_with("*") && hostname.ends_with(&self.hostname[1..]))
+	}
+}
+
 type Alpns = Vec<Vec<u8>>;
 
 #[derive(Debug, Clone)]
+struct ServerTlsInputs {
+	cert_pem: Vec<u8>,
+	key_pem: Vec<u8>,
+	// If present, require and verify client certificates using these roots.
+	root_pem: Option<Vec<u8>>,
+	// Default ALPNs configured at creation time.
+	default_alpns: Alpns,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ServerTlsProfileKey {
+	alpns: Alpns,
+	min_version: Option<TLSVersion>,
+	max_version: Option<TLSVersion>,
+	// Order-sensitive: we intentionally preserve user-provided cipher suite ordering.
+	cipher_suites: Vec<crate::transport::tls::CipherSuite>,
+}
+
+impl frontend::TLS {
+	/// Fast path: no overrides
+	fn is_fast_path(&self) -> bool {
+		// empty list is the same as no overrides
+		let no_cipher_suite_override = self
+			.cipher_suites
+			.as_deref()
+			.is_none_or(|suites| suites.is_empty());
+
+		self.alpn.is_none()
+			&& self.min_version.is_none()
+			&& self.max_version.is_none()
+			&& no_cipher_suite_override
+	}
+
+	fn server_tls_profile_key(&self, default_alpns: &Alpns) -> ServerTlsProfileKey {
+		let alpns = self.alpn.clone().unwrap_or_else(|| default_alpns.clone());
+		let min_version = self.min_version.map(Into::into);
+		let max_version = self.max_version.map(Into::into);
+		let cipher_suites = self.cipher_suites.clone().unwrap_or_default();
+		ServerTlsProfileKey {
+			alpns,
+			min_version,
+			max_version,
+			cipher_suites,
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
 pub struct ServerTLSConfig {
-	config: Option<Arc<ServerConfig>>,
-	per_alpn_config: Arc<RwLock<HashMap<Alpns, Arc<ServerConfig>>>>,
+	/// Cached base config (built from `inputs` using defaults). Kept for fast path when no overrides
+	/// are requested.
+	base_config: Option<Arc<ServerConfig>>,
+	/// Original inputs required to rebuild a fresh `ServerConfig` for a given profile.
+	inputs: Option<Arc<ServerTlsInputs>>,
+	per_profile_config: Arc<RwLock<HashMap<ServerTlsProfileKey, Arc<ServerConfig>>>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EncodeLabelValue)]
+#[allow(non_camel_case_types)]
+pub enum TLSVersion {
+	TLS_V1_0,
+	TLS_V1_1,
+	TLS_V1_2,
+	TLS_V1_3,
 }
 
 impl ServerTLSConfig {
 	pub fn new(config: Arc<ServerConfig>) -> Self {
 		Self {
-			config: Some(config),
-			per_alpn_config: Arc::new(Default::default()),
+			base_config: Some(config),
+			inputs: None,
+			per_profile_config: Arc::new(Default::default()),
 		}
 	}
+
+	pub fn from_pem(
+		cert_pem: Vec<u8>,
+		key_pem: Vec<u8>,
+		root_pem: Option<Vec<u8>>,
+		default_alpns: Alpns,
+	) -> anyhow::Result<Self> {
+		Self::from_pem_with_profile(cert_pem, key_pem, root_pem, default_alpns, None, None, None)
+	}
+
+	pub fn from_pem_with_profile(
+		cert_pem: Vec<u8>,
+		key_pem: Vec<u8>,
+		root_pem: Option<Vec<u8>>,
+		default_alpns: Alpns,
+		min_version: Option<TLSVersion>,
+		max_version: Option<TLSVersion>,
+		cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+	) -> anyhow::Result<Self> {
+		let inputs = Arc::new(ServerTlsInputs {
+			cert_pem,
+			key_pem,
+			root_pem,
+			default_alpns,
+		});
+		let suites = cipher_suites.as_deref().filter(|s| !s.is_empty());
+		let base = Arc::new(Self::build_server_config(
+			&inputs,
+			None,
+			min_version,
+			max_version,
+			suites.unwrap_or(&[]),
+		)?);
+		Ok(Self {
+			base_config: Some(base),
+			inputs: Some(inputs),
+			per_profile_config: Arc::new(Default::default()),
+		})
+	}
+
 	/// new_invalid returns a ServerTLSConfig that always rejects connections
 	pub fn new_invalid() -> Self {
 		Self {
-			config: None,
-			per_alpn_config: Arc::new(Default::default()),
+			base_config: None,
+			inputs: None,
+			per_profile_config: Arc::new(Default::default()),
 		}
 	}
 	/// config_for returns the appropriate config for the requested ALPN
 	/// If none is return, it means the certificates were invalid.
-	pub fn config_for(&self, alpns: Option<&[Vec<u8>]>) -> Option<Arc<ServerConfig>> {
-		let config = self.config.clone()?;
-		let Some(alpn) = alpns else {
-			return Some(config);
+	pub fn config_for(&self, tls: Option<&frontend::TLS>) -> anyhow::Result<Arc<ServerConfig>> {
+		let inputs = match self.inputs.as_ref() {
+			Some(i) => Arc::clone(i),
+			None => {
+				return self
+					.base_config
+					.clone()
+					.ok_or_else(|| anyhow!("TLS config invalid"));
+			},
 		};
-		{
-			let reader = self.per_alpn_config.read().unwrap();
-			if let Some(cached_config) = reader.get(alpn) {
-				return Some(Arc::clone(cached_config));
-			};
-		}
-		let mut writer = self.per_alpn_config.write().unwrap();
-		if let Some(cached_config) = writer.get(alpn) {
-			return Some(Arc::clone(cached_config));
-		}
-		let mut new_config = Arc::unwrap_or_clone(config);
-		new_config.alpn_protocols = alpn.to_vec();
-		let arc_config = Arc::new(new_config);
 
-		writer.insert(alpn.to_vec(), Arc::clone(&arc_config));
-		Some(arc_config)
+		// Fast path: no overrides
+		if tls.is_none_or(|t| t.is_fast_path())
+			&& let Some(c) = self.base_config.clone()
+		{
+			return Ok(c);
+		}
+
+		let key = match tls {
+			Some(tls) => tls.server_tls_profile_key(&inputs.default_alpns),
+			None => ServerTlsProfileKey {
+				alpns: inputs.default_alpns.clone(),
+				min_version: None,
+				max_version: None,
+				cipher_suites: vec![],
+			},
+		};
+
+		{
+			let reader = self.per_profile_config.read().unwrap();
+			if let Some(cached_config) = reader.get(&key) {
+				return Ok(Arc::clone(cached_config));
+			}
+		}
+		let mut writer = self.per_profile_config.write().unwrap();
+		if let Some(cached_config) = writer.get(&key) {
+			return Ok(Arc::clone(cached_config));
+		}
+
+		let built = Arc::new(Self::build_server_config(
+			&inputs,
+			Some(&key.alpns),
+			key.min_version,
+			key.max_version,
+			&key.cipher_suites,
+		)?);
+		writer.insert(key, Arc::clone(&built));
+		Ok(built)
 	}
+
+	fn build_server_config(
+		inputs: &ServerTlsInputs,
+		alpns: Option<&[Vec<u8>]>,
+		min_version: Option<TLSVersion>,
+		max_version: Option<TLSVersion>,
+		cipher_suites: &[crate::transport::tls::CipherSuite],
+	) -> anyhow::Result<ServerConfig> {
+		let provider = if cipher_suites.is_empty() {
+			crate::transport::tls::provider()
+		} else {
+			crate::transport::tls::provider_with_cipher_suites(cipher_suites)?
+		};
+
+		let versions = tls_versions_for_range(min_version, max_version)?;
+		let scb = ServerConfig::builder_with_provider(provider.clone())
+			.with_protocol_versions(&versions)
+			.expect("server config must be valid");
+
+		let scb = if let Some(root) = &inputs.root_pem {
+			let mut roots_store = rustls::RootCertStore::empty();
+			let mut reader = std::io::BufReader::new(Cursor::new(root.as_slice()));
+			let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+			roots_store.add_parsable_certificates(certs);
+			let verify = rustls::server::WebPkiClientVerifier::builder_with_provider(
+				Arc::new(roots_store),
+				provider,
+			)
+			.build()?;
+			scb.with_client_cert_verifier(verify)
+		} else {
+			scb.with_no_client_auth()
+		};
+
+		let cert_chain = parse_cert(&inputs.cert_pem)?;
+		let private_key = parse_key(&inputs.key_pem)?;
+		let mut sc = scb.with_single_cert(cert_chain, private_key)?;
+		sc.alpn_protocols = alpns
+			.map(|a| a.to_vec())
+			.unwrap_or_else(|| inputs.default_alpns.clone());
+		Ok(sc)
+	}
+}
+
+fn tls_versions_for_range(
+	min_version: Option<TLSVersion>,
+	max_version: Option<TLSVersion>,
+) -> anyhow::Result<Vec<&'static rustls::SupportedProtocolVersion>> {
+	// rustls currently supports TLS1.2 and TLS1.3 in this repo (see `transport::tls::ALL_TLS_VERSIONS`).
+	// If older versions are requested, reject early.
+	fn ord(v: TLSVersion) -> anyhow::Result<u8> {
+		match v {
+			TLSVersion::TLS_V1_2 => Ok(12),
+			TLSVersion::TLS_V1_3 => Ok(13),
+			_ => Err(anyhow!("unsupported TLS version: {v:?}")),
+		}
+	}
+
+	let min = min_version.map(ord).transpose()?;
+	let max = max_version.map(ord).transpose()?;
+	if let (Some(min), Some(max)) = (min, max)
+		&& min > max
+	{
+		return Err(anyhow!("invalid TLS version range"));
+	}
+
+	let min = min.unwrap_or(12);
+	let max = max.unwrap_or(13);
+
+	let mut out = Vec::new();
+	if min <= 12 && max >= 12 {
+		out.push(&rustls::version::TLS12);
+	}
+	if min <= 13 && max >= 13 {
+		out.push(&rustls::version::TLS13);
+	}
+	if out.is_empty() {
+		return Err(anyhow!("invalid TLS version range"));
+	}
+	Ok(out)
 }
 
 impl serde::Serialize for ServerTLSConfig {
@@ -157,17 +375,11 @@ pub enum ListenerProtocol {
 impl ListenerProtocol {
 	pub fn tls(
 		&self,
-		alpns: Option<&[Vec<u8>]>,
+		tls: Option<&frontend::TLS>,
 	) -> Option<anyhow::Result<Arc<rustls::ServerConfig>>> {
 		match self {
-			ListenerProtocol::HTTPS(t) => Some(
-				t.config_for(alpns)
-					.ok_or_else(|| anyhow!("TLS certificate invalid")),
-			),
-			ListenerProtocol::TLS(t) => t.as_ref().map(|t| {
-				t.config_for(alpns)
-					.ok_or_else(|| anyhow!("TLS certificate invalid"))
-			}),
+			ListenerProtocol::HTTPS(t) => Some(t.config_for(tls)),
+			ListenerProtocol::TLS(t) => t.as_ref().map(|t| t.config_for(tls)),
 			_ => None,
 		}
 	}
@@ -236,17 +448,28 @@ pub struct RouteName {
 	pub namespace: Strng,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub rule_name: Option<Strng>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub kind: Option<Strng>,
 }
 
 impl RouteName {
 	pub fn as_route_name(&self) -> Strng {
 		strng::format!("{}/{}", self.namespace, self.name)
 	}
-	pub fn strip_route_rule_field(&self) -> RouteName {
-		Self {
-			name: self.name.clone(),
-			namespace: self.namespace.clone(),
+	pub fn as_route_target_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Route {
+			name: self.name.as_ref(),
+			namespace: self.namespace.as_ref(),
 			rule_name: None,
+			kind: self.kind.as_deref(),
+		}
+	}
+	pub fn as_route_rule_target_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Route {
+			name: self.name.as_ref(),
+			namespace: self.namespace.as_ref(),
+			rule_name: self.rule_name.as_deref(),
+			kind: self.kind.as_deref(),
 		}
 	}
 }
@@ -265,6 +488,20 @@ pub struct ListenerName {
 impl ListenerName {
 	pub fn as_gateway_name(&self) -> Strng {
 		strng::format!("{}/{}", self.gateway_namespace, self.gateway_name)
+	}
+	pub fn as_gateway_target_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Gateway {
+			gateway_name: self.gateway_name.as_ref(),
+			gateway_namespace: self.gateway_namespace.as_ref(),
+			listener_name: None,
+		}
+	}
+	pub fn as_listener_target_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Gateway {
+			gateway_name: self.gateway_name.as_ref(),
+			gateway_namespace: self.gateway_namespace.as_ref(),
+			listener_name: Some(self.listener_name.as_ref()),
+		}
 	}
 }
 
@@ -347,26 +584,67 @@ pub enum BackendTarget {
 	Invalid,
 }
 
-impl BackendTarget {
-	pub fn strip_section(&self) -> BackendTarget {
-		match self.clone() {
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub enum BackendTargetRef<'a> {
+	Backend {
+		name: &'a str,
+		namespace: &'a str,
+		section: Option<&'a str>,
+	},
+	Service {
+		hostname: &'a str,
+		namespace: &'a str,
+		port: Option<u16>,
+	},
+	Invalid,
+}
+
+impl<'a> From<&'a BackendTarget> for BackendTargetRef<'a> {
+	fn from(value: &'a BackendTarget) -> Self {
+		match value {
 			BackendTarget::Backend {
+				name,
+				namespace,
+				section,
+			} => BackendTargetRef::Backend {
+				name,
+				namespace,
+				section: section.as_deref(),
+			},
+			BackendTarget::Service {
+				hostname,
+				namespace,
+				port,
+			} => BackendTargetRef::Service {
+				hostname,
+				namespace,
+				port: *port,
+			},
+			BackendTarget::Invalid => BackendTargetRef::Invalid,
+		}
+	}
+}
+
+impl BackendTargetRef<'_> {
+	pub fn strip_section(&self) -> BackendTargetRef {
+		match self {
+			BackendTargetRef::Backend {
 				name, namespace, ..
-			} => BackendTarget::Backend {
+			} => BackendTargetRef::Backend {
 				name,
 				namespace,
 				section: None,
 			},
-			BackendTarget::Service {
+			BackendTargetRef::Service {
 				namespace,
 				hostname,
 				..
-			} => BackendTarget::Service {
+			} => BackendTargetRef::Service {
 				namespace,
 				hostname,
 				port: None,
 			},
-			BackendTarget::Invalid => BackendTarget::Invalid,
+			BackendTargetRef::Invalid => BackendTargetRef::Invalid,
 		}
 	}
 }
@@ -679,19 +957,6 @@ impl<'de> serde::Deserialize<'de> for SimpleBackendReference {
 	}
 }
 
-impl SimpleBackendReference {
-	// pub fn name(&self) -> BackendName {
-	// 	match self {
-	// 		SimpleBackendReference::Service { name, port } => {
-	// 			strng::format!("service/{}/{}:{port}", name.namespace, name.hostname)
-	// 		},
-	// 		SimpleBackendReference::Backend(name) => name.clone(),
-	// 		SimpleBackendReference::InlineBackend(t) => t.to_string().into(),
-	// 		SimpleBackendReference::Invalid => strng::format!("invalid"),
-	// 	}
-	// }
-}
-
 impl SimpleBackend {
 	pub fn hostport(&self) -> String {
 		match self {
@@ -703,19 +968,19 @@ impl SimpleBackend {
 		}
 	}
 
-	pub fn target(&self) -> BackendTarget {
+	pub fn target(&self) -> BackendTargetRef {
 		match self {
-			SimpleBackend::Service(svc, port) => BackendTarget::Service {
-				hostname: svc.hostname.clone(),
-				namespace: svc.namespace.clone(),
+			SimpleBackend::Service(svc, port) => BackendTargetRef::Service {
+				hostname: svc.hostname.as_ref(),
+				namespace: svc.namespace.as_ref(),
 				port: Some(*port),
 			},
-			SimpleBackend::Opaque(name, _) => BackendTarget::Backend {
-				name: name.name.clone(),
-				namespace: name.namespace.clone(),
+			SimpleBackend::Opaque(name, _) => BackendTargetRef::Backend {
+				name: name.name.as_ref(),
+				namespace: name.namespace.as_ref(),
 				section: None,
 			},
-			SimpleBackend::Invalid => BackendTarget::Invalid,
+			SimpleBackend::Invalid => BackendTargetRef::Invalid,
 		}
 	}
 
@@ -752,6 +1017,25 @@ impl Backend {
 				section: None,
 			},
 			Backend::Invalid => BackendTarget::Invalid,
+		}
+	}
+
+	pub fn target_ref(&self) -> BackendTargetRef {
+		match self {
+			Backend::Service(svc, port) => BackendTargetRef::Service {
+				hostname: svc.hostname.as_ref(),
+				namespace: svc.namespace.as_ref(),
+				port: Some(*port),
+			},
+			Backend::Opaque(name, _)
+			| Backend::MCP(name, _)
+			| Backend::AI(name, _)
+			| Backend::Dynamic(name, _) => BackendTargetRef::Backend {
+				name: name.name.as_ref(),
+				namespace: name.namespace.as_ref(),
+				section: None,
+			},
+			Backend::Invalid => BackendTargetRef::Invalid,
 		}
 	}
 
@@ -996,6 +1280,29 @@ pub enum HostnameMatch {
 	None,
 }
 
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
+pub enum HostnameMatchRef<'a> {
+	Exact(&'a str),
+	// *.example.com -> Wildcard(example.com)
+	Wildcard(&'a str),
+	None,
+}
+impl Equivalent<HostnameMatch> for HostnameMatchRef<'_> {
+	fn equivalent(&self, key: &HostnameMatch) -> bool {
+		self == &HostnameMatchRef::from(key)
+	}
+}
+
+impl<'a> From<&'a HostnameMatch> for HostnameMatchRef<'a> {
+	fn from(value: &'a HostnameMatch) -> Self {
+		match value {
+			HostnameMatch::Exact(e) => HostnameMatchRef::Exact(e.as_str()),
+			HostnameMatch::Wildcard(w) => HostnameMatchRef::Wildcard(w.as_str()),
+			HostnameMatch::None => HostnameMatchRef::None,
+		}
+	}
+}
+
 impl From<Strng> for HostnameMatch {
 	fn from(s: Strng) -> Self {
 		if let Some(s) = s.strip_prefix("*.") {
@@ -1007,30 +1314,35 @@ impl From<Strng> for HostnameMatch {
 }
 
 impl HostnameMatch {
-	pub fn all_matches_or_none(
-		hostname: Option<&str>,
-	) -> Box<dyn Iterator<Item = HostnameMatch> + '_> {
+	pub fn all_matches_or_none<'a>(
+		hostname: Option<&'a str>,
+	) -> Box<dyn Iterator<Item = HostnameMatchRef<'a>> + '_> {
 		match hostname {
-			None => Box::new(std::iter::once(HostnameMatch::None)),
+			None => Box::new(std::iter::once(HostnameMatchRef::None)),
 			Some(h) => Box::new(Self::all_matches(h)),
 		}
 	}
-	pub fn all_matches(hostname: &str) -> impl Iterator<Item = HostnameMatch> + '_ {
-		Self::all_actual_matches(hostname).chain(std::iter::once(HostnameMatch::None))
+	pub fn all_matches<'a>(hostname: &'a str) -> impl Iterator<Item = HostnameMatchRef<'a>> + '_ {
+		Self::all_actual_matches(hostname).chain(std::iter::once(HostnameMatchRef::None))
 	}
-	fn all_actual_matches(hostname: &str) -> impl Iterator<Item = HostnameMatch> + '_ {
-		let start = if hostname.starts_with("*.") {
+	fn all_actual_matches<'a>(hostname: &'a str) -> impl Iterator<Item = HostnameMatchRef<'a>> + '_ {
+		let has_wildcard_prefix = hostname.starts_with("*.");
+
+		let exact_match = if has_wildcard_prefix {
 			None
 		} else {
-			Some(HostnameMatch::Exact(hostname.into()))
+			Some(HostnameMatchRef::Exact(hostname))
 		};
-		// Build wildcards in reverse order by collecting parts and building from longest to shortest
-		let parts: Vec<_> = hostname.split('.').skip(1).collect();
-		let wildcards = (0..parts.len()).map(move |i| {
-			let suffix = parts[i..].join(".");
-			HostnameMatch::Wildcard(suffix.into())
+
+		let wildcards = hostname.char_indices().filter_map(move |(i, c)| {
+			if c == '.' {
+				Some(HostnameMatchRef::Wildcard(&hostname[i + 1..]))
+			} else {
+				None
+			}
 		});
-		start.into_iter().chain(wildcards)
+
+		exact_match.into_iter().chain(wildcards)
 	}
 }
 
@@ -1043,7 +1355,7 @@ pub struct SingleRouteMatch {
 #[derive(Debug, Clone, Default)]
 pub struct RouteSet {
 	// Hostname -> []routes, sorted so that route matching can do a linear traversal
-	inner: HashMap<HostnameMatch, Vec<SingleRouteMatch>>,
+	inner: hashbrown::HashMap<HostnameMatch, Vec<SingleRouteMatch>>,
 	// All routes
 	all: HashMap<RouteKey, Arc<Route>>,
 }
@@ -1068,7 +1380,7 @@ impl RouteSet {
 
 	pub fn get_hostname(
 		&self,
-		hnm: &HostnameMatch,
+		hnm: &HostnameMatchRef,
 	) -> impl Iterator<Item = (Arc<Route>, &RouteMatch)> {
 		self.inner.get(hnm).into_iter().flatten().flat_map(|rl| {
 			self
@@ -1161,12 +1473,12 @@ impl RouteSet {
 				.entry(hostname_match)
 				.and_modify(|v| v.retain(|r| &r.key != key));
 			match entry {
-				Entry::Occupied(v) => {
+				hashbrown::hash_map::Entry::Occupied(v) => {
 					if v.get().is_empty() {
 						v.remove();
 					}
 				},
-				Entry::Vacant(_) => {},
+				hashbrown::hash_map::Entry::Vacant(_) => {},
 			}
 		}
 	}
@@ -1190,7 +1502,7 @@ impl RouteSet {
 #[derive(Debug, Clone, Default)]
 pub struct TCPRouteSet {
 	// Hostname -> []routes, sorted so that route matching can do a linear traversal
-	inner: HashMap<HostnameMatch, Vec<RouteKey>>,
+	inner: hashbrown::HashMap<HostnameMatch, Vec<RouteKey>>,
 	// All routes
 	all: HashMap<RouteKey, TCPRoute>,
 }
@@ -1213,7 +1525,7 @@ impl TCPRouteSet {
 		rs
 	}
 
-	pub fn get_hostname(&self, hnm: &HostnameMatch) -> Option<&TCPRoute> {
+	pub fn get_hostname(&self, hnm: &HostnameMatchRef) -> Option<&TCPRoute> {
 		self
 			.inner
 			.get(hnm)
@@ -1253,12 +1565,12 @@ impl TCPRouteSet {
 				.entry(hostname_match)
 				.and_modify(|v| v.retain(|r| r != key));
 			match entry {
-				Entry::Occupied(v) => {
+				hashbrown::hash_map::Entry::Occupied(v) => {
 					if v.get().is_empty() {
 						v.remove();
 					}
 				},
-				Entry::Vacant(_) => {},
+				hashbrown::hash_map::Entry::Vacant(_) => {},
 			}
 		}
 	}
@@ -1315,6 +1627,103 @@ pub struct TargetedPolicy {
 	pub name: Option<TypedResourceName>,
 	pub target: PolicyTarget,
 	pub policy: PolicyType,
+}
+
+/// Configuration for dynamic tracing policy
+#[apply(schema!)]
+pub struct TracingConfig {
+	#[serde(flatten)]
+	pub provider_backend: SimpleBackendReference,
+	/// Span attributes to add, keyed by attribute name.
+	#[serde(default)]
+	pub attributes: OrderedStringMap<Arc<cel::Expression>>,
+	/// Resource attributes to add to the tracer provider (OTel `Resource`).
+	/// This can be used to set things like `service.name` dynamically.
+	#[serde(default)]
+	pub resources: OrderedStringMap<Arc<cel::Expression>>,
+	/// Attribute keys to remove from the emitted span attributes.
+	///
+	/// This is applied before `attributes` are evaluated/added, so it can be used to drop
+	/// default attributes or avoid duplication.
+	#[serde(default)]
+	pub remove: Vec<String>,
+	/// Optional per-policy override for random sampling. If set, overrides global config for
+	/// requests that use this frontend policy.
+	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
+	pub random_sampling: Option<Arc<cel::Expression>>,
+	/// Optional per-policy override for client sampling. If set, overrides global config for
+	/// requests that use this frontend policy.
+	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
+	pub client_sampling: Option<Arc<cel::Expression>>,
+	// OTLP path. Default is /v1/traces
+	#[serde(default = "default_otlp_path")]
+	pub path: String,
+	// protocol specifies the OTLP protocol variant to use. Default is HTTP
+	#[serde(default)]
+	pub protocol: TracingProtocol,
+}
+
+fn default_otlp_path() -> String {
+	"/v1/traces".to_string()
+}
+
+fn deserialize_sampling_expr_opt<'de, D>(
+	deserializer: D,
+) -> Result<Option<Arc<cel::Expression>>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let v = Option::<crate::StringBoolFloat>::deserialize(deserializer)?;
+	v.map(|v| cel::Expression::new_strict(&v.0))
+		.transpose()
+		.map(|o| o.map(Arc::new))
+		.map_err(|e| serde::de::Error::custom(e.to_string()))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Copy, Eq, PartialEq, Clone, Debug)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
+pub enum TracingProtocol {
+	#[default]
+	Http,
+	Grpc,
+}
+
+/// TracingPolicy holds both the configuration and the compiled OpenTelemetry tracer
+#[derive(Clone, Debug)]
+pub struct TracingPolicy {
+	pub config: TracingConfig,
+	/// CEL fields used by the tracer for span attributes. Stored so we can lazily
+	/// create the tracer at first use with the correct attribute set.
+	pub fields: Arc<crate::telemetry::log::LoggingFields>,
+	/// Lazily initialized tracer. Created on first access in the dataplane
+	/// using a PolicyClient so that backend routing and auth can be applied.
+	pub tracer: once_cell::sync::OnceCell<Arc<crate::telemetry::trc::Tracer>>,
+}
+
+impl serde::Serialize for TracingPolicy {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.config.serialize(serializer)
+	}
+}
+
+impl TracingPolicy {
+	pub fn get_or_init(
+		&self,
+		policy_client: crate::proxy::httpproxy::PolicyClient,
+	) -> anyhow::Result<&Arc<crate::telemetry::trc::Tracer>> {
+		self.tracer.get_or_try_init(|| {
+			let tracer = crate::telemetry::trc::Tracer::create_tracer_from_config_with_client(
+				&self.config,
+				self.fields.clone(),
+				policy_client,
+			)?;
+			Ok(Arc::new(tracer))
+		})
+	}
 }
 
 impl From<BackendPolicy> for PolicyType {
@@ -1402,6 +1811,47 @@ pub enum PolicyTarget {
 	Backend(BackendTarget),
 }
 
+impl Equivalent<PolicyTarget> for PolicyTargetRef<'_> {
+	fn equivalent(&self, key: &PolicyTarget) -> bool {
+		self == &PolicyTargetRef::from(key)
+	}
+}
+
+#[derive(Hash, Eq, PartialEq)]
+pub enum PolicyTargetRef<'a> {
+	Gateway {
+		gateway_name: &'a str,
+		gateway_namespace: &'a str,
+		listener_name: Option<&'a str>,
+	},
+	Route {
+		name: &'a str,
+		namespace: &'a str,
+		rule_name: Option<&'a str>,
+		kind: Option<&'a str>,
+	},
+	Backend(BackendTargetRef<'a>),
+}
+
+impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
+	fn from(value: &'a PolicyTarget) -> Self {
+		match value {
+			PolicyTarget::Gateway(v) => PolicyTargetRef::Gateway {
+				gateway_name: &v.gateway_name,
+				gateway_namespace: v.gateway_namespace.as_ref(),
+				listener_name: v.listener_name.as_deref(),
+			},
+			PolicyTarget::Route(v) => PolicyTargetRef::Route {
+				name: &v.name,
+				namespace: v.namespace.as_ref(),
+				rule_name: v.rule_name.as_deref(),
+				kind: v.kind.as_deref(),
+			},
+			PolicyTarget::Backend(v) => PolicyTargetRef::Backend(v.into()),
+		}
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FrontendPolicy {
@@ -1409,7 +1859,7 @@ pub enum FrontendPolicy {
 	TLS(frontend::TLS),
 	TCP(frontend::TCP),
 	AccessLog(frontend::LoggingPolicy),
-	Tracing(()),
+	Tracing(Arc<TracingPolicy>),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1456,6 +1906,7 @@ pub enum BackendPolicy {
 	BackendAuth(BackendAuth),
 	InferenceRouting(ext_proc::InferenceRouting),
 	AI(Arc<llm::Policy>),
+	SessionPersistence(http::sessionpersistence::Policy),
 
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(filters::HeaderModifier),
@@ -1852,5 +2303,29 @@ InvalidKeyData
 		// Ensure hostname:port still works
 		let target = Target::try_from("example.com:443").unwrap();
 		assert!(matches!(target, Target::Hostname(h, 443) if h.as_str() == "example.com"));
+	}
+
+	#[test]
+	fn test_all_matches_subdomain() {
+		let matches: Vec<_> = HostnameMatch::all_matches("api.example.com").collect();
+
+		assert_eq!(matches.len(), 4);
+		assert_eq!(matches[0], HostnameMatchRef::Exact("api.example.com"));
+		assert_eq!(matches[1], HostnameMatchRef::Wildcard("example.com"));
+		assert_eq!(matches[2], HostnameMatchRef::Wildcard("com"));
+		assert_eq!(matches[3], HostnameMatchRef::None);
+
+		let matches: Vec<_> = HostnameMatch::all_matches("*.example.com").collect();
+
+		assert_eq!(matches.len(), 3);
+		assert_eq!(matches[0], HostnameMatchRef::Wildcard("example.com"));
+		assert_eq!(matches[1], HostnameMatchRef::Wildcard("com"));
+		assert_eq!(matches[2], HostnameMatchRef::None);
+
+		let matches: Vec<_> = HostnameMatch::all_matches("localhost").collect();
+
+		assert_eq!(matches.len(), 2);
+		assert_eq!(matches[0], HostnameMatchRef::Exact("localhost"));
+		assert_eq!(matches[1], HostnameMatchRef::None);
 	}
 }

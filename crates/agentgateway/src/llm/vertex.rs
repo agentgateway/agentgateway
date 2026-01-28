@@ -7,9 +7,7 @@ use crate::*;
 
 const ANTHROPIC_VERSION: &str = "vertex-2023-10-16";
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
@@ -61,17 +59,24 @@ impl Provider {
 			.clone()
 			.unwrap_or_else(|| strng::literal!("global"));
 		if let Some(model) = self.anthropic_model(request_model) {
-			return strng::format!(
-				"/v1/projects/{}/locations/{}/publishers/anthropic/models/{}:{}",
-				self.project_id,
-				location,
-				model,
-				if streaming {
-					"streamRawPredict"
-				} else {
-					"rawPredict"
-				}
-			);
+			return match route {
+				RouteType::AnthropicTokenCount => strng::format!(
+					"/v1/projects/{}/locations/{}/publishers/anthropic/models/count-tokens:rawPredict",
+					self.project_id,
+					location
+				),
+				_ => strng::format!(
+					"/v1/projects/{}/locations/{}/publishers/anthropic/models/{}:{}",
+					self.project_id,
+					location,
+					model,
+					if streaming {
+						"streamRawPredict"
+					} else {
+						"rawPredict"
+					}
+				),
+			};
 		}
 		let t = if route == RouteType::Embeddings {
 			strng::literal!("embeddings")
@@ -79,7 +84,7 @@ impl Provider {
 			strng::literal!("chat/completions")
 		};
 		strng::format!(
-			"/v1beta1/projects/{}/locations/{}/endpoints/openapi/{t}",
+			"/v1/projects/{}/locations/{}/endpoints/openapi/{t}",
 			self.project_id,
 			location
 		)

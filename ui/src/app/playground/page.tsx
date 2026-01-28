@@ -50,6 +50,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getBackendName } from "@/lib/backend-utils";
 import { v4 as uuidv4 } from "uuid";
 
 import { CapabilitiesList } from "@/components/playground/CapabilitiesList";
@@ -808,7 +809,7 @@ export default function PlaygroundPage() {
 
   const getBackendInfo = (backend: Backend) => {
     if (backend.mcp) {
-      return { type: "MCP", name: backend.mcp.name, icon: Server };
+      return { type: "MCP", name: getBackendName(backend), icon: Server };
     } else if (backend.host) {
       return {
         type: "Host",

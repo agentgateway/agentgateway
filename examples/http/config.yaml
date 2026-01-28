@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 binds:
 - port: 3000
   listeners:
@@ -20,7 +20,6 @@ binds:
             regex: "test-[0-9]"
       backends:
       - host: 127.0.0.1:8080
-
     - name: policy-example
       policies:
         # CORS headers to set
@@ -37,7 +36,7 @@ binds:
           add:
             x-req-added: value
           remove:
-            - x-illegal-header
+          - x-illegal-header
         # Modify response headers
         responseHeaderModifier:
           set:
@@ -65,7 +64,6 @@ binds:
           requestTimeout: 1s
       backends:
       - host: 127.0.0.1:8080
-
     - name: direct-response
       matches:
       - path:
@@ -74,7 +72,6 @@ binds:
         directResponse:
           body: "hello!"
           status: 200
-
     - name: ip-rules
       matches:
       - path:
@@ -82,8 +79,8 @@ binds:
       policies:
         authorization:
           rules:
-            - |
-              cidr("127.0.0.1/8").containsIP(source.address)
+          - |
+            cidr("127.0.0.1/8").containsIP(source.address)
         directResponse:
           body: "hello!"
           status: 200

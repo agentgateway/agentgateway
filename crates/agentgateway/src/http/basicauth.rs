@@ -2,7 +2,7 @@ use axum_core::RequestExt;
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Basic;
-use htpasswd_verify::Htpasswd;
+use htpasswd_verify_fork::Htpasswd;
 use macro_rules_attribute::apply;
 
 use crate::http::Request;
@@ -65,7 +65,7 @@ fn default_realm() -> String {
 impl BasicAuthentication {
 	/// Create a new BasicAuthentication from a file path
 	pub fn new(htpasswd: &str, realm: Option<String>, mode: Mode) -> Self {
-		let htpasswd = Htpasswd::new_owned(htpasswd);
+		let htpasswd = Htpasswd::new(htpasswd);
 
 		Self {
 			htpasswd: Arc::new(htpasswd),

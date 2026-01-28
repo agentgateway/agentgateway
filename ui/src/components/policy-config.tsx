@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -79,7 +79,6 @@ interface PolicyDialogState {
 
 export function PolicyConfig() {
   const { refreshListeners } = useServer();
-  const [binds, setBinds] = useState<Bind[]>([]);
   const [expandedBinds, setExpandedBinds] = useState<Set<number>>(new Set());
   const [routes, setRoutes] = useState<RouteWithContext[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteWithContext | null>(null);
@@ -94,11 +93,10 @@ export function PolicyConfig() {
     data: null,
   });
 
-  const loadRoutes = async () => {
+  const loadRoutes = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedBinds = await fetchBinds();
-      setBinds(fetchedBinds);
 
       // Extract all routes with context
       const allRoutes: RouteWithContext[] = [];
@@ -146,18 +144,17 @@ export function PolicyConfig() {
 
       setRoutes(allRoutes);
 
-      if (selectedRoute) {
+      setSelectedRoute((prev) => {
+        if (!prev) return prev;
         const updatedSelectedRoute = allRoutes.find(
           (r) =>
-            r.bind.port === selectedRoute.bind.port &&
-            r.listener.name === selectedRoute.listener.name &&
-            r.routeIndex === selectedRoute.routeIndex &&
-            r.routeType === selectedRoute.routeType
+            r.bind.port === prev.bind.port &&
+            r.listener.name === prev.listener.name &&
+            r.routeIndex === prev.routeIndex &&
+            r.routeType === prev.routeType
         );
-        if (updatedSelectedRoute) {
-          setSelectedRoute(updatedSelectedRoute);
-        }
-      }
+        return updatedSelectedRoute || prev;
+      });
 
       // Auto-expand binds with routes
       const bindsWithRoutes = new Set<number>();
@@ -169,11 +166,11 @@ export function PolicyConfig() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadRoutes();
-  }, []);
+  }, [loadRoutes]);
 
   const getAvailablePolicyTypes = (routeType: "http" | "tcp") => {
     return Object.entries(POLICY_TYPES)

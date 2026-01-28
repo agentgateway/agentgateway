@@ -1,7 +1,6 @@
 mod gateway;
 pub mod httpproxy;
 pub mod proxy_protocol;
-#[cfg(any(test, feature = "testing"))]
 pub mod request_builder;
 pub mod tcpproxy;
 
@@ -32,6 +31,7 @@ impl ProxyResponse {
 			ProxyError::BindNotFound
 			| ProxyError::ListenerNotFound
 			| ProxyError::RouteNotFound
+			| ProxyError::MisdirectedRequest
 			| ProxyError::ServiceNotFound => ProxyResponseReason::NotFound,
 			ProxyError::NoHealthyEndpoints
 			| ProxyError::InvalidBackendType
@@ -118,6 +118,8 @@ pub enum ProxyError {
 	ListenerNotFound,
 	#[error("route not found")]
 	RouteNotFound,
+	#[error("misdirected request")]
+	MisdirectedRequest,
 	#[error("no valid backends")]
 	NoValidBackends,
 	#[error("backends does not exist")]
@@ -193,6 +195,7 @@ impl ProxyError {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
 			ProxyError::ListenerNotFound => StatusCode::NOT_FOUND,
 			ProxyError::RouteNotFound => StatusCode::NOT_FOUND,
+			ProxyError::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
 			ProxyError::NoValidBackends => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendDoesNotExist => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendUnsupportedMirror => StatusCode::INTERNAL_SERVER_ERROR,
@@ -217,7 +220,7 @@ impl ProxyError {
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoHealthyEndpoints => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::UpstreamCallFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
-			ProxyError::UpstreamCallTimeout => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::UpstreamCallTimeout => StatusCode::GATEWAY_TIMEOUT,
 
 			ProxyError::RequestTimeout => StatusCode::GATEWAY_TIMEOUT,
 			ProxyError::Processing(_) => StatusCode::SERVICE_UNAVAILABLE,

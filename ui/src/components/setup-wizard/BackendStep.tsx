@@ -26,7 +26,6 @@ interface BackendStepProps {
 
 export function BackendStep({ onNext, onPrevious, config, onConfigChange }: BackendStepProps) {
   const [backendType, setBackendType] = useState<"mcp" | "host" | "service">("mcp");
-  const [mcpName, setMcpName] = useState("default-mcp");
   const [mcpStateful, setMcpStateful] = useState(true); // Default to stateful
   const [targetType, setTargetType] = useState<"mcp" | "stdio" | "sse" | "openapi">("mcp");
   const [targetName, setTargetName] = useState("default-target");
@@ -53,10 +52,6 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
 
   const handleNext = async () => {
     if (backendType === "mcp") {
-      if (!mcpName.trim()) {
-        toast.error("MCP backend name is required.");
-        return;
-      }
       if (!targetName.trim()) {
         toast.error("Target name is required.");
         return;
@@ -102,7 +97,7 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
               },
             };
             break;
-          case "openapi":
+          case "openapi": {
             let schema;
             try {
               schema = JSON.parse(openApiSchema);
@@ -110,21 +105,22 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
               toast.error("Invalid OpenAPI schema JSON");
               return;
             }
+            const openApiPortValue = openApiPort.trim() ? parseInt(openApiPort, 10) : undefined;
             target = {
               name: targetName,
               openapi: {
                 host: openApiHost,
-                port: parseInt(openApiPort),
+                port: Number.isFinite(openApiPortValue) ? openApiPortValue : undefined,
                 schema,
               },
             };
             break;
+          }
           default:
             throw new Error("Invalid target type");
         }
 
         const mcpBackend: McpBackend = {
-          name: mcpName,
           targets: [target],
           statefulMode: mcpStateful ? McpStatefulMode.STATEFUL : McpStatefulMode.STATELESS,
         };
@@ -175,16 +171,6 @@ export function BackendStep({ onNext, onPrevious, config, onConfigChange }: Back
     if (backendType === "mcp") {
       return (
         <div className="space-y-4">
-          <div className="space-y-3">
-            <Label htmlFor="mcpName">MCP Backend Name</Label>
-            <Input
-              id="mcpName"
-              value={mcpName}
-              onChange={(e) => setMcpName(e.target.value)}
-              placeholder="e.g., default-mcp"
-            />
-          </div>
-
           <div className="space-y-3">
             <Label>Target Type</Label>
             <RadioGroup

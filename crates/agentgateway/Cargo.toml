@@ -15,7 +15,7 @@ ui = []
 schema = ["schemars"]
 tls-ring = ["rustls/ring", "tokio-rustls/ring"]
 internal_benches = ["divan"]
-testing = []
+testing = ["dep:reqwest"]
 
 [dependencies]
 a2a-sdk.workspace = true
@@ -32,6 +32,7 @@ atomic_float.workspace = true
 aws-config.workspace = true
 aws-credential-types.workspace = true
 aws-sigv4.workspace = true
+aws-lc-rs.workspace = true
 aws_event_stream_parser.workspace = true
 axum-core.workspace = true
 axum-extra.workspace = true
@@ -51,19 +52,18 @@ fs-err = { workspace = true }
 futures-core.workspace = true
 futures-util.workspace = true
 futures.workspace = true
-go-parse-duration.workspace = true
 google-cloud-auth.workspace = true
+hashbrown.workspace = true
 headers.workspace = true
 heck.workspace = true
 hex.workspace = true
 hickory-resolver.workspace = true
-htpasswd-verify.workspace = true
+htpasswd-verify-fork.workspace = true
 http-body-util.workspace = true
 http-body.workspace = true
 http-serde.workspace = true
 http.workspace = true
 httpdate.workspace = true
-hyper-rustls.workspace = true
 hyper-util-fork.workspace = true
 hyper-util.workspace = true
 hyper.workspace = true
@@ -81,6 +81,8 @@ num_cpus.workspace = true
 once_cell.workspace = true
 openapiv3.workspace = true
 opentelemetry-otlp.workspace = true
+opentelemetry-proto.workspace = true
+opentelemetry-http.workspace = true
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 parking_lot.workspace = true
@@ -95,8 +97,10 @@ prost.workspace = true
 rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
-reqwest.workspace = true
-rmcp.workspace = true
+rmcp = { version = "0.12", features = [
+    "client",
+    "transport-child-process",
+] }
 rustls-native-certs.workspace = true
 rustls-pemfile.workspace = true
 rustls-pki-types.workspace = true
@@ -132,8 +136,11 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 typespec_client_core.workspace = true
 url.workspace = true
-value-bag.workspace = true
+uuid.workspace = true
 x509-parser.workspace = true
+reqwest = { optional = true, workspace = true }
+websocket-sans-io.workspace = true
+
 
 # Linux only dependencies
 [target.'cfg(target_family = "unix")'.dependencies]
@@ -161,17 +168,31 @@ prost-wkt-build.workspace = true
 assert_matches.workspace = true
 divan.workspace = true
 insta.workspace = true
+rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-agentgateway = { version = "0.7.0", path = ".", default-features = false, features = [
-    "testing",
-] }
-rmcp = { workspace = true, features = [
+rmcp = { version = "0.12", features = [
+    "client",
+    "server",
+    "base64",
+    "transport-child-process",
     "transport-streamable-http-client-reqwest",
+    "transport-streamable-http-client",
+    "transport-streamable-http-server",
+    "reqwest",
+    "auth",
+] }
+# We need SSE client for testing but they removed it for some reason :-(
+# https://github.com/modelcontextprotocol/rust-sdk/pull/562
+legacy-rmcp = { package = "rmcp", version = "0.10.0", features = ["transport-sse-server",
+    "transport-sse-client",
     "transport-sse-client-reqwest",
+    "client",
+    "reqwest"
 ] }
 wiremock.workspace = true
+reqwest.workspace = true
 
 [lints.clippy]
 # This rule makes code more confusing

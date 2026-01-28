@@ -29,26 +29,26 @@ pub const ADP_TYPE: Strng =
 
 impl StateManager {
 	pub async fn new(
-		config: &crate::XDSConfig,
+		config: Arc<crate::Config>,
 		client: client::Client,
 		xds_metrics: agent_xds::Metrics,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
+		let xds = &config.xds;
 		let stores = Stores::new();
-
-		let xds_client = if config.address.is_some() {
+		let xds_client = if xds.address.is_some() {
 			let connector = control::grpc_connector(
 				client.clone(),
-				config.address.as_ref().unwrap().clone(),
-				config.auth.clone(),
-				config.ca_cert.clone(),
+				xds.address.as_ref().unwrap().clone(),
+				xds.auth.clone(),
+				xds.ca_cert.clone(),
 			)
 			.await?;
 			Some(
 				agent_xds::Config::new(
 					agent_xds::GrpcClient::new(connector),
-					config.gateway.clone(),
-					config.namespace.clone(),
+					xds.gateway.clone(),
+					xds.namespace.clone(),
 				)
 				.with_watched_handler::<XdsAddress>(ADDRESS_TYPE, stores.clone().discovery.clone())
 				.with_watched_handler::<ADPResource>(ADP_TYPE, stores.clone().binds.clone())
@@ -58,14 +58,15 @@ impl StateManager {
 		} else {
 			None
 		};
-		if let Some(cfg) = &config.local_config {
+		if let Some(cfg) = &xds.local_config {
 			let local_client = LocalClient {
+				config: config.clone(),
 				stores: stores.clone(),
 				cfg: cfg.clone(),
 				client,
 				gateway: ListenerTarget {
-					gateway_name: config.gateway.clone(),
-					gateway_namespace: config.namespace.clone(),
+					gateway_name: xds.gateway.clone(),
+					gateway_namespace: xds.namespace.clone(),
 					listener_name: None,
 				},
 			};
@@ -89,6 +90,7 @@ impl StateManager {
 /// LocalClient serves as a local file reader alternative for XDS. This is intended for testing.
 #[derive(Debug, Clone)]
 pub struct LocalClient {
+	config: Arc<crate::Config>,
 	pub cfg: ConfigSource,
 	pub stores: Stores,
 	pub client: Client,
@@ -185,6 +187,7 @@ impl LocalClient {
 	async fn reload_config(&self, prev: PreviousState) -> anyhow::Result<PreviousState> {
 		let config_content = self.cfg.read_to_string().await?;
 		let config = crate::types::local::NormalizedLocalConfig::from(
+			&self.config,
 			self.client.clone(),
 			self.gateway.clone(),
 			config_content.as_str(),

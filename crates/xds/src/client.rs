@@ -27,7 +27,7 @@ const INSTANCE_IP: &str = "INSTANCE_IP";
 const INSTANCE_IPS: &str = "INSTANCE_IPS";
 const DEFAULT_IP: &str = "1.1.1.1";
 const POD_NAME: &str = "POD_NAME";
-const POD_NAMESPACE: &str = "POD_NAMESPACE";
+const POD_NAMESPACE: &str = "NAMESPACE";
 const NODE_NAME: &str = "NODE_NAME";
 const NAME: &str = "NAME";
 const NAMESPACE: &str = "NAMESPACE";
@@ -686,7 +686,7 @@ impl AdsClient {
 		let type_url = response.type_url.clone();
 		let nonce = response.nonce.clone();
 		self.metrics.record(&response, ());
-		info!(
+		debug!(
 			type_url = type_url, // this is a borrow, it's OK
 			size = response.resources.len(),
 			removes = response.removed_resources.len(),

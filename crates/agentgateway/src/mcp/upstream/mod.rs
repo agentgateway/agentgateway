@@ -9,13 +9,13 @@ use std::io;
 pub(crate) use client::McpHttpClient;
 use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use thiserror::Error;
 use tokio::process::Command;
 
 use crate::http::jwt::Claims;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
+use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
@@ -60,8 +60,11 @@ impl IncomingRequestContext {
 
 #[derive(Debug, Error)]
 pub enum UpstreamError {
-	#[error("unauthorized tool call")]
-	Authorization,
+	#[error("unknown {resource_type}: {resource_name}")]
+	Authorization {
+		resource_type: String,
+		resource_name: String,
+	},
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]
@@ -92,6 +95,22 @@ pub(crate) enum Upstream {
 }
 
 impl Upstream {
+	pub fn get_session_state(&self) -> Option<http::sessionpersistence::MCPSession> {
+		match self {
+			Upstream::McpStreamable(c) => c.get_session_state(),
+			_ => None,
+		}
+	}
+
+	pub fn set_session_id(&self, id: &str, pinned: SocketAddr) {
+		match self {
+			Upstream::McpStreamable(c) => c.set_session_id(id, Some(pinned)),
+			Upstream::McpSSE(_) => {},
+			Upstream::McpStdio(_) => {},
+			Upstream::OpenAPI(_) => {},
+		}
+	}
+
 	pub(crate) async fn delete(&self, ctx: &IncomingRequestContext) -> Result<(), UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => {
@@ -146,7 +165,7 @@ impl Upstream {
 						StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
 					};
 					if let Some(sid) = sid {
-						c.set_session_id(sid.clone())
+						c.set_session_id(sid.as_ref(), None)
 					}
 				}
 				res.try_into().map_err(Into::into)
@@ -184,6 +203,10 @@ pub(crate) struct UpstreamGroup {
 }
 
 impl UpstreamGroup {
+	pub fn size(&self) -> usize {
+		self.backend.targets.len()
+	}
+
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> anyhow::Result<Self> {
 		let mut s = Self {
 			backend,

@@ -1,0 +1,44 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "openai: request_openai_with_messages"
+info:
+  model: gpt-4o
+  max_tokens: 1024
+  messages:
+    - role: user
+      content: "Hello, world"
+---
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "prepend system prompt"
+    },
+    {
+      "role": "user",
+      "content": "prepend user message"
+    },
+    {
+      "role": "assistant",
+      "content": "prepend assistant message"
+    },
+    {
+      "role": "user",
+      "content": "Hello, world"
+    },
+    {
+      "role": "user",
+      "content": "append user message"
+    },
+    {
+      "role": "system",
+      "content": "append system prompt"
+    },
+    {
+      "role": "assistant",
+      "content": "append assistant prompt"
+    }
+  ],
+  "model": "gpt-4o",
+  "max_tokens": 1024
+}

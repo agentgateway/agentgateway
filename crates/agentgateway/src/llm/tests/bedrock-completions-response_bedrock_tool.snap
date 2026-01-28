@@ -1,7 +1,23 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 38
 description: src/llm/tests/response_bedrock_tool.json
-info: "{\n  \"output\": {\n    \"message\": {\n      \"role\": \"assistant\",\n      \"content\": [\n        {\n          \"toolUse\": {\n            \"toolUseId\": \"tooluse_kZJMlvQmRJ6eAyJE5GIl7Q\",\n            \"name\": \"top_song\",\n            \"input\": {\n              \"sign\": \"WZPZ\"\n            }\n          }\n        },\n        {\n          \"toolUse\": {\n            \"toolUseId\": \"tooluse_kZJMlvQmRJ6eAyxxx\",\n            \"name\": \"hello\",\n            \"input\": {\n              \"sign\": \"world\"\n            }\n          }\n        }\n      ]\n    }\n  },\n  \"stopReason\": \"tool_use\"\n}"
+info:
+  output:
+    message:
+      role: assistant
+      content:
+        - toolUse:
+            toolUseId: tooluse_kZJMlvQmRJ6eAyJE5GIl7Q
+            name: top_song
+            input:
+              sign: WZPZ
+        - toolUse:
+            toolUseId: tooluse_kZJMlvQmRJ6eAyxxx
+            name: hello
+            input:
+              sign: world
+  stopReason: tool_use
 ---
 {
   "model": "fake-model",
@@ -16,16 +32,16 @@ info: "{\n  \"output\": {\n    \"message\": {\n      \"role\": \"assistant\",\n 
         "role": "assistant",
         "tool_calls": [
           {
-            "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
             "type": "function",
+            "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
             "function": {
               "name": "top_song",
               "arguments": "{\"sign\":\"WZPZ\"}"
             }
           },
           {
-            "id": "tooluse_kZJMlvQmRJ6eAyxxx",
             "type": "function",
+            "id": "tooluse_kZJMlvQmRJ6eAyxxx",
             "function": {
               "name": "hello",
               "arguments": "{\"sign\":\"world\"}"

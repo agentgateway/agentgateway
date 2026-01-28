@@ -21,6 +21,10 @@ impl RequestType for Request {
 		// TODO: this would help since we can then count the pre-pending
 	}
 
+	fn append_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
+		// TODO: this would help since we can then count the appending
+	}
+
 	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		Ok(LLMRequest {

@@ -231,7 +231,7 @@ fn test_resolve_route() {
 	routes.insert(strng::literal!("*"), crate::llm::RouteType::Passthrough);
 
 	let policy = Policy {
-		routes,
+		routes: SortedRoutes::from_iter(routes.into_iter().map(|(k, v)| (strng::new(k), v))),
 		..Default::default()
 	};
 

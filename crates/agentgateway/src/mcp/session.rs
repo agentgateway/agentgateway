@@ -14,20 +14,20 @@ use rmcp::model::{
 	Implementation, JsonRpcError, ProtocolVersion, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
-use rmcp::transport::common::server_side_http::{ServerSseMessage, session_id};
-use rmcp::transport::streamable_http_client::StreamableHttpPostResponse;
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::http::Response;
 use crate::mcp::handler::Relay;
 use crate::mcp::mergestream::Messages;
+use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPOperation, rbac};
 use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
 pub struct Session {
+	encoder: http::sessionpersistence::Encoder,
 	relay: Arc<Relay>,
 	pub id: Arc<str>,
 	tx: Option<Sender<ServerJsonRpcMessage>>,
@@ -35,7 +35,7 @@ pub struct Session {
 
 impl Session {
 	/// send a message to upstream server(s)
-	pub async fn send(&self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
+	pub async fn send(&mut self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
 		let req_id = match &message {
 			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
 			_ => None,
@@ -50,7 +50,7 @@ impl Session {
 	/// This ensures servers that require an InitializeRequest behave correctly.
 	/// In the future, we may have a mode where we know the downstream is stateless as well, and can just forward as-is.
 	pub async fn stateless_send_and_initialize(
-		&self,
+		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
 	) -> Response {
@@ -91,6 +91,12 @@ impl Session {
 
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Response {
+		let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, "delete_session");
+		let session_id = self.id.to_string();
+		log.non_atomic_mutate(|l| {
+			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
+			l.session_id = Some(session_id);
+		});
 		let ctx = IncomingRequestContext::new(parts);
 		self
 			.relay
@@ -142,6 +148,12 @@ impl Session {
 
 	/// get_stream establishes a stream for server-sent messages
 	pub async fn get_stream(&self, parts: Parts) -> Response {
+		let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, "get_stream");
+		let session_id = self.id.to_string();
+		log.non_atomic_mutate(|l| {
+			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
+			l.session_id = Some(session_id);
+		});
 		let ctx = IncomingRequestContext::new(parts);
 		self
 			.relay
@@ -155,6 +167,24 @@ impl Session {
 			if let UpstreamError::Http(ClientError::Status(resp)) = e {
 				// Forward response as-is
 				return *resp;
+			}
+			// Handle authorization errors specially - return "Unknown" error
+			// to avoid leaking information about resource existence
+			if let UpstreamError::Authorization {
+				resource_type,
+				resource_name,
+			} = &e
+				&& let Some(ref req_id) = req_id
+				&& let Ok(body) = serde_json::to_string(&JsonRpcError {
+					jsonrpc: Default::default(),
+					id: req_id.clone(),
+					error: ErrorData {
+						code: ErrorCode::INVALID_PARAMS,
+						message: format!("Unknown {resource_type}: {resource_name}").into(),
+						data: None,
+					},
+				}) {
+				return http_json_error(StatusCode::OK, body);
 			}
 			let err = if let Some(req_id) = req_id {
 				serde_json::to_string(&JsonRpcError {
@@ -178,7 +208,7 @@ impl Session {
 	}
 
 	async fn send_internal(
-		&self,
+		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
 	) -> Result<Response, UpstreamError> {
@@ -193,17 +223,28 @@ impl Session {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method();
 				let (_span, log, cel) = mcp::handler::setup_request_log(&parts, method);
+				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.to_string());
+					l.session_id = Some(session_id);
 				});
 				let ctx = IncomingRequestContext::new(parts);
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
 						let pv = ir.params.protocol_version.clone();
-						self
+						let res = self
 							.relay
 							.send_fanout(r, ctx, self.relay.merge_initialize(pv))
-							.await
+							.await;
+						if let Some(sessions) = self.relay.get_sessions() {
+							let s = http::sessionpersistence::SessionState::MCP(
+								http::sessionpersistence::MCPSessionState { sessions },
+							);
+							if let Ok(id) = s.encode(&self.encoder) {
+								self.id = id.into();
+							}
+						}
+						res
 					},
 					ClientRequest::ListToolsRequest(_) => {
 						log.non_atomic_mutate(|l| {
@@ -278,7 +319,10 @@ impl Session {
 							)),
 							cel.as_ref(),
 						) {
-							return Err(UpstreamError::Authorization);
+							return Err(UpstreamError::Authorization {
+								resource_type: "tool".to_string(),
+								resource_name: name.to_string(),
+							});
 						}
 
 						let tn = tool.to_string();
@@ -300,7 +344,10 @@ impl Session {
 							)),
 							cel.as_ref(),
 						) {
-							return Err(UpstreamError::Authorization);
+							return Err(UpstreamError::Authorization {
+								resource_type: "prompt".to_string(),
+								resource_name: name.to_string(),
+							});
 						}
 						gpr.params.name = prompt.to_string();
 						self.relay.send_single(r, ctx, service_name).await
@@ -320,7 +367,10 @@ impl Session {
 								)),
 								cel.as_ref(),
 							) {
-								return Err(UpstreamError::Authorization);
+								return Err(UpstreamError::Authorization {
+									resource_type: "resource".to_string(),
+									resource_name: uri.to_string(),
+								});
 							}
 							self.relay.send_single_without_multiplexing(r, ctx).await
 						} else {
@@ -331,7 +381,9 @@ impl Session {
 							))
 						}
 					},
-					ClientRequest::SubscribeRequest(_) | ClientRequest::UnsubscribeRequest(_) => {
+					ClientRequest::SubscribeRequest(_)
+					| ClientRequest::UnsubscribeRequest(_)
+					| ClientRequest::CustomRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
 					},
@@ -348,10 +400,13 @@ impl Session {
 					ClientNotification::ProgressNotification(r) => r.method.as_str(),
 					ClientNotification::InitializedNotification(r) => r.method.as_str(),
 					ClientNotification::RootsListChangedNotification(r) => r.method.as_str(),
+					ClientNotification::CustomNotification(r) => r.method.as_str(),
 				};
 				let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, method);
+				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.to_string());
+					l.session_id = Some(session_id);
 				});
 				let ctx = IncomingRequestContext::new(parts);
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
@@ -366,27 +421,79 @@ impl Session {
 	}
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct SessionManager {
+	encoder: http::sessionpersistence::Encoder,
 	sessions: RwLock<HashMap<String, Session>>,
 }
 
+fn session_id() -> Arc<str> {
+	uuid::Uuid::new_v4().to_string().into()
+}
+
 impl SessionManager {
+	pub fn new(encoder: http::sessionpersistence::Encoder) -> Self {
+		Self {
+			encoder,
+			sessions: Default::default(),
+		}
+	}
+
 	pub fn get_session(&self, id: &str) -> Option<Session> {
 		self.sessions.read().ok()?.get(id).cloned()
 	}
 
-	/// create_session establishes an MCP session and registers it in the session manager.
-	pub fn create_session(&self, relay: Relay) -> Session {
-		let id = session_id();
+	pub fn get_or_resume_session(
+		&self,
+		id: &str,
+		builder: Arc<dyn Fn() -> Result<Relay, http::Error> + Send + Sync>,
+	) -> Option<Session> {
+		if let Some(s) = self.sessions.read().ok()?.get(id).cloned() {
+			return Some(s);
+		}
+		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder).ok()?;
+		let http::sessionpersistence::SessionState::MCP(state) = d else {
+			return None;
+		};
+		let relay = builder().ok()?;
+		let n = relay.count();
+		if state.sessions.len() != n {
+			warn!(
+				"failed to resume session: sessions {} did not match config {}",
+				state.sessions.len(),
+				n
+			);
+			return None;
+		}
+		relay.set_sessions(state.sessions);
+
 		let sess = Session {
-			id: id.clone(),
+			id: id.into(),
 			relay: Arc::new(relay),
 			tx: None,
+			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
-		sess
+		Some(sess)
+	}
+
+	/// create_session establishes an MCP session.
+	pub fn create_session(&self, relay: Relay) -> Session {
+		let id = session_id();
+
+		// Do NOT insert yet
+		Session {
+			id: id.clone(),
+			relay: Arc::new(relay),
+			tx: None,
+			encoder: self.encoder.clone(),
+		}
+	}
+
+	pub fn insert_session(&self, sess: Session) {
+		let mut sm = self.sessions.write().expect("write lock");
+		sm.insert(sess.id.to_string(), sess);
 	}
 
 	/// create_stateless_session creates a session for stateless mode.
@@ -399,6 +506,7 @@ impl SessionManager {
 			id,
 			relay: Arc::new(relay),
 			tx: None,
+			encoder: self.encoder.clone(),
 		}
 	}
 
@@ -411,6 +519,7 @@ impl SessionManager {
 			id: id.clone(),
 			relay: Arc::new(relay),
 			tx: Some(tx),
+			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
@@ -455,6 +564,14 @@ impl Drop for SessionDropper {
 fn http_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
 	::http::Response::builder()
 		.status(status)
+		.body(body.into())
+		.expect("valid response")
+}
+
+fn http_json_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
+	::http::Response::builder()
+		.status(status)
+		.header(http::header::CONTENT_TYPE, "application/json")
 		.body(body.into())
 		.expect("valid response")
 }

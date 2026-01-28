@@ -1,0 +1,51 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "anthropic: request_anthropic_with_system"
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 1024
+  system: system prompt
+  messages:
+    - role: user
+      content: "Hello, world"
+---
+{
+  "model": "claude-sonnet-4-20250514",
+  "messages": [
+    {
+      "role": "user",
+      "content": "prepend user message"
+    },
+    {
+      "role": "assistant",
+      "content": "prepend assistant message"
+    },
+    {
+      "role": "user",
+      "content": "Hello, world"
+    },
+    {
+      "role": "user",
+      "content": "append user message"
+    },
+    {
+      "role": "assistant",
+      "content": "append assistant prompt"
+    }
+  ],
+  "system": [
+    {
+      "type": "text",
+      "text": "prepend system prompt"
+    },
+    {
+      "type": "text",
+      "text": "system prompt"
+    },
+    {
+      "type": "text",
+      "text": "append system prompt"
+    }
+  ],
+  "max_tokens": 1024
+}

@@ -137,10 +137,45 @@ message Backend {
 }
 
 message TLSConfig {
+  enum TLSVersion {
+    TLS_VERSION_UNSPECIFIED = 0;
+
+    // TLS 1.0/1.1 are not currently supported
+    // Keep the old number/name reserved for future support
+    reserved "TLS_V1_0";
+    reserved 1;
+    reserved "TLS_V1_1";
+    reserved 2;
+    TLS_V1_2 = 3;
+    TLS_V1_3 = 4;
+  }
+
+  // Cipher suites supported by agentgateway
+  // Keep in sync with `crates/agentgateway/src/transport/tls.rs` (`ALL_CIPHER_SUITES`).
+  enum CipherSuite {
+    CIPHER_SUITE_UNSPECIFIED = 0;
+
+    // TLS 1.3 cipher suites
+    TLS_AES_256_GCM_SHA384 = 1;
+    TLS_AES_128_GCM_SHA256 = 2;
+    TLS_CHACHA20_POLY1305_SHA256 = 3;
+
+    // TLS 1.2 cipher suites
+    TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 = 4;
+    TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 = 5;
+    TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 = 6;
+    TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 = 7;
+    TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 = 8;
+    TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 = 9;
+  }
+
   bytes cert = 1;
   bytes private_key = 2;
   // Root to verify client certificates. If not set, mTLS will not be used
   optional bytes root = 3;
+  repeated CipherSuite cipher_suites = 4;
+  optional TLSVersion min_version = 5;
+  optional TLSVersion max_version = 6;
 }
 
 enum Protocol {
@@ -182,7 +217,20 @@ message Key {
 }
 
 // GCP-specific backend authentication.
-message Gcp {}
+message Gcp {
+  message AccessToken {}
+
+  message IdToken {
+    // Optional; else will use the backend hostname
+    optional string audience = 1;
+  }
+
+  oneof token_type {
+    // Default if unset
+    AccessToken access_token = 1;
+    IdToken id_token = 2;
+  }
+}
 
 // AWS-specific backend authentication.
 message Aws {
@@ -372,6 +420,7 @@ message PolicyTarget {
     string name = 1;
     string namespace = 2;
     optional string route_rule = 3;
+    string kind = 4;
   }
   oneof kind {
     GatewayTarget gateway = 1;
@@ -405,12 +454,21 @@ message FrontendPolicySpec {
   }
   message TLS {
     // TLS handshake timeout
-    google.protobuf.Duration tls_handshake_timeout = 1;
+    google.protobuf.Duration handshake_timeout = 1;
 
     // Unset: use defaults (h2,http/1.1)
     // Set but empty: send none
     // Set with values: send those values
     Alpn alpn = 2;
+
+    // Cipher suites allowed for negotiating TLS.
+    // If empty, defaults are used.
+    repeated TLSConfig.CipherSuite cipher_suites = 3;
+
+    // TLS version range allowed for negotiating TLS.
+    // If unset, defaults are used.
+    optional TLSConfig.TLSVersion min_version = 4;
+    optional TLSConfig.TLSVersion max_version = 5;
 
     // TODO: allow setting mTLS things as well
   }
@@ -441,7 +499,44 @@ message FrontendPolicySpec {
     Fields fields = 2;
   }
 
-  message Tracing {}
+  message Tracing {
+    BackendReference provider_backend = 1;
+    repeated TracingAttribute attributes = 2;
+    repeated TracingAttribute resources = 3;
+
+    // remove is a list of attribute keys to remove from emitted spans.
+    // This is applied before `attributes` are evaluated/added, so it can drop defaults
+    // or avoid duplicates.
+    repeated string remove = 8;
+
+    // random_sampling is a CEL expression to determine the amount of random sampling.
+    // Random sampling will initiate a new trace span if the incoming request does not
+    // have a trace initiated already. This should evaluate to a float between 0.0-1.0,
+    // or a boolean (true/false). If unspecified, random sampling is disabled.
+    optional string random_sampling = 4;
+
+    // client_sampling is a CEL expression to determine the amount of client sampling.
+    // Client sampling determines whether to initiate a new trace span if the incoming
+    // request already has a trace. This should evaluate to a float between 0.0-1.0,
+    // or a boolean (true/false). If unspecified, client sampling is 100% enabled.
+    optional string client_sampling = 5;
+
+    // OTLP path. Default is /v1/traces
+    optional string path = 6;
+
+    // protocol specifies the OTLP protocol variant to use. Default is HTTP
+    Protocol protocol = 7;
+
+    enum Protocol {
+      HTTP = 0;
+      GRPC = 1;
+    }
+  }
+
+  message TracingAttribute {
+    string name = 1;
+    string value = 2; // CEL expression
+  }
 
   oneof kind {
     TCP tcp = 1;
@@ -458,7 +553,10 @@ message TrafficPolicySpec {
     repeated Descriptor descriptors = 2;
     BackendReference target = 3;
 
-    enum Type {REQUESTS = 0; TOKENS = 1;}
+    enum Type {
+      REQUESTS = 0;
+      TOKENS = 1;
+    }
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
@@ -615,14 +713,22 @@ message TrafficPolicySpec {
   }
 
   message ExtProc {
-    enum FailureMode{
+    enum FailureMode {
       FAIL_CLOSED = 0;
       FAIL_OPEN = 1;
     }
     BackendReference target = 1;
     FailureMode failure_mode = 2;
+
+    map<string, string> request_attributes = 3;
+    map<string, string> response_attributes = 4;
+
+    message NamespacedMetadataContext {
+      map<string, string> context = 1;
+    }
+    map<string, NamespacedMetadataContext> metadata_context = 5;
   }
-  enum PolicyPhase{
+  enum PolicyPhase {
     ROUTE = 0;
     GATEWAY = 1;
   }
@@ -780,6 +886,8 @@ message BackendPolicySpec {
       ANTHROPIC_TOKEN_COUNT = 6;
       // Processes OpenAI /v1/embeddings format requests
       EMBEDDINGS = 7;
+      // OpenAI /v1/realtime
+      REALTIME = 8;
     }
 
     // Routes defines how to identify the type of LLM request to handle.
@@ -788,8 +896,7 @@ message BackendPolicySpec {
     // If empty or no route matches, the implementation defaults to COMPLETIONS behavior.
     map<string, RouteType> routes = 7;
   }
-  message A2a {
-  }
+  message A2a {}
   message InferenceRouting {
     enum FailureMode {
       UNKNOWN = 0;
@@ -891,8 +998,7 @@ message StaticBackend {
   int32 port = 2;
 }
 
-message DynamicForwardProxy {
-}
+message DynamicForwardProxy {}
 
 message AIBackend {
   message HostOverride {

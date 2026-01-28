@@ -167,6 +167,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 			name: "route".into(),
 			namespace: Default::default(),
 			rule_name: None,
+			kind: None,
 		},
 		hostnames: Default::default(),
 		matches: vec![RouteMatch {
@@ -191,6 +192,7 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 			name: "route".into(),
 			namespace: Default::default(),
 			rule_name: None,
+			kind: None,
 		},
 		hostnames: Default::default(),
 		backends: vec![TCPRouteBackendReference {
@@ -544,7 +546,7 @@ impl TestBind {
 				raw_peer_addr: None,
 			},
 		);
-		let bind = self.pi.stores.read_binds().bind(bind_name.clone()).unwrap();
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
 		let bind = Gateway::proxy_bind(
 			bind_name,
 			bind.protocol,
@@ -599,6 +601,7 @@ impl TestBind {
 pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 	agent_core::telemetry::testing::setup_test_logging();
 	let config = crate::config::parse_config(cfg.to_string(), None)?;
+	let encoder = config.session_encoder.clone();
 	let stores = Stores::new();
 	let client = client::Client::new(&config.dns, None, Default::default(), None);
 	let (drain_tx, drain_rx) = drain::new();
@@ -613,7 +616,7 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 		upstream: client.clone(),
 		ca: None,
 
-		mcp_state: mcp::App::new(stores.clone()),
+		mcp_state: mcp::App::new(stores.clone(), encoder),
 	});
 	Ok(TestBind {
 		pi,

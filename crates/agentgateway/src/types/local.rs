@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::Cursor;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -9,7 +8,6 @@ use anyhow::{Error, anyhow, bail};
 use itertools::Itertools;
 use macro_rules_attribute::apply;
 use openapiv3::OpenAPI;
-use rustls::ServerConfig;
 
 use crate::client::Client;
 use crate::http::auth::BackendAuth;
@@ -21,14 +19,13 @@ use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindKey, BindProtocol, FrontendPolicy, Listener, ListenerKey,
-	ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy, TunnelProtocol,
-	TypedResourceName,
+	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, Listener, ListenerKey, ListenerName,
+	ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication, McpAuthentication,
+	McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase,
+	PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
+	RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies,
+	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
+	TargetedPolicy, TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -36,6 +33,7 @@ use crate::*;
 
 impl NormalizedLocalConfig {
 	pub async fn from(
+		config: &crate::Config,
 		client: client::Client,
 		gateway_name: ListenerTarget,
 		s: &str,
@@ -43,8 +41,8 @@ impl NormalizedLocalConfig {
 		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
 		let s = s.replace("# yaml-language-server: $schema", "#");
 		let s = shellexpand::full(&s)?;
-		let config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
-		let t = convert(client, gateway_name, config).await?;
+		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
+		let t = convert(client, gateway_name, config, local_config).await?;
 		Ok(t)
 	}
 }
@@ -65,7 +63,7 @@ pub struct LocalConfig {
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "RawConfig"))]
 	#[allow(unused)]
-	config: Arc<Option<serde_json::value::Value>>,
+	config: Arc<Option<serde_json::Value>>,
 	#[serde(default)]
 	binds: Vec<LocalBind>,
 	#[serde(default)]
@@ -99,9 +97,6 @@ pub struct LocalListenerName {
 	pub name: Option<Strng>,
 	#[serde(default)]
 	pub namespace: Option<Strng>,
-	// User facing name of the Gateway. Option, one will be set if not.
-	#[serde(default)]
-	pub gateway_name: Option<Strng>,
 }
 
 #[apply(schema_de!)]
@@ -139,6 +134,26 @@ pub struct LocalTLSServerConfig {
 	pub cert: PathBuf,
 	pub key: PathBuf,
 	pub root: Option<PathBuf>,
+	/// Optional cipher suite allowlist (order is preserved).
+	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+	/// Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		rename = "minTLSVersion",
+		alias = "minTlsVersion"
+	)]
+	pub min_tls_version: Option<frontend::TLSVersion>,
+	/// Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		rename = "maxTLSVersion",
+		alias = "maxTlsVersion"
+	)]
+	pub max_tls_version: Option<frontend::TLSVersion>,
 }
 
 #[apply(schema_de!)]
@@ -242,6 +257,7 @@ impl<'de> Deserialize<'de> for LocalAIBackend {
 			.deserialize(deserializer)
 	}
 }
+
 #[apply(schema_de!)]
 pub struct LocalAIProviders {
 	providers: Vec<LocalNamedAIProvider>,
@@ -785,7 +801,7 @@ struct LocalFrontendPolicies {
 	#[serde(default)]
 	pub access_log: Option<frontend::LoggingPolicy>,
 	#[serde(default)]
-	pub tracing: Option<()>,
+	pub tracing: Option<TracingConfig>,
 }
 
 #[apply(schema_de!)]
@@ -895,6 +911,7 @@ struct TCPFilterOrPolicy {
 async fn convert(
 	client: client::Client,
 	gateway: ListenerTarget,
+	config: &crate::Config,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
 	let LocalConfig {
@@ -913,12 +930,19 @@ async fn convert(
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) = convert_listener(client.clone(), bind_name.clone(), idx, l).await?;
+			let (l, pol, backends) = convert_listener(
+				client.clone(),
+				idx,
+				l,
+				Some(frontend_policies.clone()),
+				gateway.clone(),
+			)
+			.await?;
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
 		}
-		let sockaddr = if cfg!(target_family = "unix") {
+		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
 			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), b.port)
 		} else {
 			// Windows and IPv6 don't mix well apparently?
@@ -957,8 +981,6 @@ async fn convert(
 		all_policies.push(tgt_policy);
 	}
 
-	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
-
 	for b in backends {
 		let policies = b
 			.policies
@@ -974,7 +996,6 @@ async fn convert(
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
-		// TODO: use inline policies!
 		backends: all_backends.into_iter().collect(),
 		workloads,
 		services,
@@ -1005,9 +1026,10 @@ fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
 
 async fn convert_listener(
 	client: client::Client,
-	bind_name: BindKey,
 	idx: usize,
 	l: LocalListener,
+	frontend_policies: Option<LocalFrontendPolicies>,
+	gateway: ListenerTarget,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalListener {
 		name,
@@ -1055,15 +1077,25 @@ async fn convert_listener(
 		bail!("only 'routes' or 'tcpRoutes' may be set");
 	}
 
-	let namespace = name.namespace.unwrap_or_else(|| strng::new("default"));
 	let listener_name = name
 		.name
 		.unwrap_or_else(|| strng::format!("listener{}", idx));
-	let gateway_name = name.gateway_name.unwrap_or(bind_name);
-	let key: ListenerKey = strng::format!("{namespace}/{gateway_name}/{listener_name}");
+	let gateway_name = gateway.gateway_name.clone();
+	let gateway_namespace = gateway.gateway_namespace.clone();
+	let key: ListenerKey = strng::format!("{gateway_namespace}/{gateway_name}/{listener_name}");
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
+
+	// Add frontend policies targeted to this listener
+	if let Some(frontend_pols) = frontend_policies {
+		let listener_target = ListenerTarget {
+			gateway_name: gateway_name.clone(),
+			gateway_namespace: gateway_namespace.clone(),
+			listener_name: None,
+		};
+		all_policies.extend_from_slice(&split_frontend_policies(listener_target, frontend_pols).await?);
+	}
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
@@ -1083,7 +1115,7 @@ async fn convert_listener(
 
 	let name = ListenerName {
 		gateway_name,
-		gateway_namespace: namespace,
+		gateway_namespace,
 		listener_name,
 		listener_set: None,
 	};
@@ -1147,6 +1179,7 @@ async fn convert_route(
 				port: *port,
 			},
 			LocalBackend::Invalid => BackendReference::Invalid,
+			LocalBackend::Dynamic {} => BackendReference::Backend("dynamic".into()),
 			_ => BackendReference::Backend(strng::format!("/{}", backend_key)),
 		};
 		let backends = b.backend.as_backends(be_name.clone())?;
@@ -1173,6 +1206,7 @@ async fn convert_route(
 			name: route_name,
 			namespace,
 			rule_name: None,
+			kind: None,
 		},
 		hostnames,
 		matches,
@@ -1222,8 +1256,21 @@ async fn split_frontend_policies(
 	if let Some(p) = access_log {
 		add(FrontendPolicy::AccessLog(p), "accessLog");
 	}
-	if let Some(p) = tracing {
-		add(FrontendPolicy::Tracing(p), "tracing");
+	if let Some(tracing_config) = tracing {
+		// Build logging fields from attributes for lazy tracer creation
+		let logging_fields = Arc::new(crate::telemetry::log::LoggingFields {
+			remove: Arc::new(tracing_config.remove.iter().cloned().collect()),
+			add: Arc::new(tracing_config.attributes.clone()),
+		});
+
+		add(
+			FrontendPolicy::Tracing(Arc::new(crate::types::agent::TracingPolicy {
+				config: tracing_config,
+				fields: logging_fields,
+				tracer: once_cell::sync::OnceCell::new(),
+			})),
+			"tracing",
+		);
 	}
 	Ok(pols)
 }
@@ -1416,6 +1463,7 @@ async fn convert_tcp_route(
 			name: route_name,
 			namespace,
 			rule_name: None,
+			kind: None,
 		},
 		hostnames,
 		backends: backend_refs,
@@ -1438,33 +1486,18 @@ impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 	type Error = anyhow::Error;
 
 	fn try_into(self) -> Result<ServerTLSConfig, Self::Error> {
-		let cert = fs_err::read(self.cert)?;
-		let cert_chain = crate::types::agent::parse_cert(&cert)?;
-		let key = fs_err::read(self.key)?;
-		let private_key = crate::types::agent::parse_key(&key)?;
-
-		let ccb = ServerConfig::builder_with_provider(transport::tls::provider())
-			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-			.expect("server config must be valid");
-
-		let ccb = if let Some(root) = self.root {
-			let root = fs_err::read(root)?;
-			let mut roots_store = rustls::RootCertStore::empty();
-			let mut reader = std::io::BufReader::new(Cursor::new(root));
-			let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
-			roots_store.add_parsable_certificates(certs);
-			let verify = rustls::server::WebPkiClientVerifier::builder_with_provider(
-				Arc::new(roots_store),
-				transport::tls::provider(),
-			)
-			.build()?;
-			ccb.with_client_cert_verifier(verify)
-		} else {
-			ccb.with_no_client_auth()
-		};
-		let mut ccb = ccb.with_single_cert(cert_chain, private_key)?;
-		ccb.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-		Ok(ServerTLSConfig::new(Arc::new(ccb)))
+		let cert_pem = fs_err::read(self.cert)?;
+		let key_pem = fs_err::read(self.key)?;
+		let root_pem = self.root.map(fs_err::read).transpose()?;
+		ServerTLSConfig::from_pem_with_profile(
+			cert_pem,
+			key_pem,
+			root_pem,
+			vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+			self.min_tls_version.map(Into::into),
+			self.max_tls_version.map(Into::into),
+			self.cipher_suites,
+		)
 	}
 }
 

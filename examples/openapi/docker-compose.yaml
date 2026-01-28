@@ -1,0 +1,5 @@
+services:
+  openapi-petstore:
+    image: swaggerapi/petstore3:1.0.27
+    ports:
+    - "8080:8080"

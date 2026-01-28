@@ -20,6 +20,7 @@ pub mod ext_proc;
 pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
+pub mod sessionpersistence;
 #[cfg(any(test, feature = "internal_benches"))]
 pub mod tests_common;
 pub mod transformation_cel;
@@ -322,6 +323,10 @@ pub fn modify_uri(
 	Ok(())
 }
 
+pub fn as_url(uri: &Uri) -> anyhow::Result<Url> {
+	Ok(Url::parse(&uri.to_string())?)
+}
+
 pub fn modify_url(
 	uri: &mut Uri,
 	f: impl FnOnce(&mut Url) -> anyhow::Result<()>,
@@ -384,7 +389,17 @@ pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 	// We expect a normalized request, so this will always be in the URI
 	// TODO: handle absolute HTTP/1.1 form
 	let host = req.uri().host().ok_or(ProxyError::InvalidRequest)?;
-	let host = strip_port(host);
+	Ok(host)
+}
+
+pub fn get_host_with_port(req: &Request) -> Result<&str, ProxyError> {
+	// We expect a normalized request, so this will always be in the URI
+	// TODO: handle absolute HTTP/1.1 form
+	let host = req
+		.uri()
+		.authority()
+		.map(|a| a.as_str())
+		.ok_or(ProxyError::InvalidRequest)?;
 	Ok(host)
 }
 
@@ -425,27 +440,6 @@ pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<Bytes>
 
 pub async fn inspect_body_with_limit(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {
 	peekbody::inspect_body(body, limit).await
-}
-
-// copied from private `http` method
-fn strip_port(auth: &str) -> &str {
-	let host_port = auth
-		.rsplit('@')
-		.next()
-		.expect("split always has at least 1 item");
-
-	if host_port.as_bytes()[0] == b'[' {
-		let i = host_port
-			.find(']')
-			.expect("parsing should validate brackets");
-		// ..= ranges aren't available in 1.20, our minimum Rust version...
-		&host_port[0..i + 1]
-	} else {
-		host_port
-			.split(':')
-			.next()
-			.expect("split always has at least 1 item")
-	}
 }
 
 #[derive(Debug, Default)]

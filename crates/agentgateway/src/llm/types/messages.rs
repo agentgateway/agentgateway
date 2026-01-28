@@ -17,6 +17,9 @@ pub struct Request {
 	pub messages: Vec<RequestMessage>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub system: Option<RequestContent>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub top_p: Option<f32>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub temperature: Option<f32>,
@@ -93,10 +96,72 @@ impl RequestType for Request {
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}
+
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
-		self
-			.messages
-			.splice(..0, prompts.into_iter().map(Into::into));
+		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = prompts
+			.into_iter()
+			.partition(|p| p.role.as_str() == "system");
+
+		if !system_prompts.is_empty() {
+			let mut items: Vec<ContentPart> = match std::mem::take(&mut self.system) {
+				Some(RequestContent::Text(text)) => vec![ContentPart {
+					r#type: "text".to_string(),
+					text: Some(text),
+					rest: Default::default(),
+				}],
+				Some(RequestContent::Array(existing)) => existing,
+				None => Vec::new(),
+			};
+
+			items.splice(
+				0..0,
+				system_prompts.into_iter().map(|p| ContentPart {
+					r#type: "text".to_string(),
+					text: Some(p.content.to_string()),
+					rest: Default::default(),
+				}),
+			);
+
+			self.system = Some(RequestContent::Array(items));
+		}
+
+		if !message_prompts.is_empty() {
+			self
+				.messages
+				.splice(..0, message_prompts.into_iter().map(Into::into));
+		}
+	}
+
+	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
+		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = prompts
+			.into_iter()
+			.partition(|p| p.role.as_str() == "system");
+
+		if !system_prompts.is_empty() {
+			let mut items: Vec<ContentPart> = match std::mem::take(&mut self.system) {
+				Some(RequestContent::Text(text)) => vec![ContentPart {
+					r#type: "text".to_string(),
+					text: Some(text),
+					rest: Default::default(),
+				}],
+				Some(RequestContent::Array(existing)) => existing,
+				None => Vec::new(),
+			};
+
+			items.extend(system_prompts.into_iter().map(|p| ContentPart {
+				r#type: "text".to_string(),
+				text: Some(p.content.to_string()),
+				rest: Default::default(),
+			}));
+
+			self.system = Some(RequestContent::Array(items));
+		}
+
+		if !message_prompts.is_empty() {
+			self
+				.messages
+				.extend(message_prompts.into_iter().map(Into::into));
+		}
 	}
 
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
@@ -121,8 +186,8 @@ impl RequestType for Request {
 				presence_penalty: None,
 				seed: None,
 				max_tokens: self.max_tokens,
-				dimensions: None,
 				encoding_format: None,
+				dimensions: None,
 			},
 		};
 		Ok(llm)

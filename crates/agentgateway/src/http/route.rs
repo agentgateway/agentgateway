@@ -24,7 +24,7 @@ pub fn select_best_route(
 	network: Strng,
 	self_addr: Option<Strng>,
 	dst: SocketAddr,
-	listener: Arc<Listener>,
+	listener: &Listener,
 	request: &Request,
 ) -> Option<(Arc<Route>, PathMatch)> {
 	// Order:
@@ -52,6 +52,7 @@ pub fn select_best_route(
 			return None;
 		};
 		// We are going to get a VIP request. Look up the Service
+		// TODO: add a mode to fallback to a DFP backend
 		let svc = stores
 			.read_discovery()
 			.services
@@ -100,6 +101,7 @@ pub fn select_best_route(
 				name: strng::literal!("_waypoint-default"),
 				namespace: svc.namespace.clone(),
 				rule_name: None,
+				kind: None,
 			},
 			hostnames: vec![],
 			matches: vec![],

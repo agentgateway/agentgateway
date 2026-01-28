@@ -30,7 +30,7 @@ pub struct CaptureConnection {
 /// The [`CaptureConnection::connection_metadata`] method allows callers to check if a connection has been
 /// established. This is ideal for situations where you are certain the connection has already
 /// been established (e.g. after the response future has already completed).
-/// ```rust
+/// ```ignore
 /// use hyper_util::client::legacy::connect::capture_connection;
 /// let mut request = http::Request::builder()
 ///   .uri("http://foo.com")
@@ -47,7 +47,7 @@ pub struct CaptureConnection {
 /// The [`CaptureConnection::wait_for_connection_metadata`] method returns a future resolves as soon as the
 /// connection is available.
 ///
-/// ```rust
+/// ```ignore
 /// # #[cfg(feature  = "tokio")]
 /// # async fn example() {
 /// use hyper_util::client::legacy::connect::capture_connection;

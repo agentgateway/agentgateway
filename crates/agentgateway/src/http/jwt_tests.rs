@@ -379,6 +379,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 		fields: LoggingFields::default(),
 		random_sampling: None,
 		client_sampling: None,
+		path: "/v1/traces".to_string(),
 	};
 	let cel = log::CelLogging::new(log_cfg, tracing_cfg);
 	let mut prom = Registry::default();

@@ -1,4 +1,3 @@
-use std::io::Cursor;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
@@ -7,12 +6,12 @@ use ::http::{HeaderName, StatusCode};
 use frozen_collections::FzHashSet;
 use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
-use rustls::ServerConfig;
+use std::collections::HashMap;
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth};
+use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
-use crate::http::{HeaderOrPseudo, Scheme, authorization};
+use crate::http::{HeaderOrPseudo, Scheme, auth, authorization};
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
@@ -25,36 +24,94 @@ use crate::types::proto::agent::traffic_policy_spec::host_rewrite::Mode;
 use crate::types::{agent, backend, proto};
 use crate::*;
 
+impl TryFrom<proto::agent::tls_config::CipherSuite> for crate::transport::tls::CipherSuite {
+	type Error = anyhow::Error;
+
+	fn try_from(value: proto::agent::tls_config::CipherSuite) -> Result<Self, Self::Error> {
+		use crate::transport::tls::CipherSuite as Cs;
+		match value {
+			proto::agent::tls_config::CipherSuite::Unspecified => Err(anyhow::anyhow!(
+				"unsupported cipher suite: CIPHER_SUITE_UNSPECIFIED"
+			)),
+			proto::agent::tls_config::CipherSuite::TlsAes256GcmSha384 => Ok(Cs::TLS_AES_256_GCM_SHA384),
+			proto::agent::tls_config::CipherSuite::TlsAes128GcmSha256 => Ok(Cs::TLS_AES_128_GCM_SHA256),
+			proto::agent::tls_config::CipherSuite::TlsChacha20Poly1305Sha256 => {
+				Ok(Cs::TLS_CHACHA20_POLY1305_SHA256)
+			},
+			proto::agent::tls_config::CipherSuite::TlsEcdheEcdsaWithAes256GcmSha384 => {
+				Ok(Cs::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384)
+			},
+			proto::agent::tls_config::CipherSuite::TlsEcdheEcdsaWithAes128GcmSha256 => {
+				Ok(Cs::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256)
+			},
+			proto::agent::tls_config::CipherSuite::TlsEcdheEcdsaWithChacha20Poly1305Sha256 => {
+				Ok(Cs::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256)
+			},
+			proto::agent::tls_config::CipherSuite::TlsEcdheRsaWithAes256GcmSha384 => {
+				Ok(Cs::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384)
+			},
+			proto::agent::tls_config::CipherSuite::TlsEcdheRsaWithAes128GcmSha256 => {
+				Ok(Cs::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256)
+			},
+			proto::agent::tls_config::CipherSuite::TlsEcdheRsaWithChacha20Poly1305Sha256 => {
+				Ok(Cs::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256)
+			},
+		}
+	}
+}
+
 impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 	fn from(value: &proto::agent::TlsConfig) -> Self {
-		fn build(value: &proto::agent::TlsConfig) -> anyhow::Result<ServerConfig> {
-			let cert_chain = parse_cert(&value.cert)?;
-			let private_key = parse_key(&value.private_key)?;
-			let scb = ServerConfig::builder_with_provider(transport::tls::provider())
-				.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-				.expect("server config must be valid");
-			let scb = if let Some(root) = &value.root {
-				let mut roots_store = rustls::RootCertStore::empty();
-				let mut reader = std::io::BufReader::new(Cursor::new(root));
-				let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
-				roots_store.add_parsable_certificates(certs);
-				let verify = rustls::server::WebPkiClientVerifier::builder_with_provider(
-					Arc::new(roots_store),
-					transport::tls::provider(),
-				)
-				.build()?;
-				scb.with_client_cert_verifier(verify)
+		// Defaults set here. These can be overridden by Frontend policy
+		// TODO: this default only makes sense for HTTPS, distinguish from TLS
+		let default_alpns = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+		// These are optional, so treat unknown/unsupported values as "unset".
+		// rustls in this repo only supports TLS1.2/1.3.
+		let map_tls_version = |raw: Option<i32>| {
+			raw.and_then(
+				|raw| match proto::agent::tls_config::TlsVersion::try_from(raw).ok() {
+					Some(proto::agent::tls_config::TlsVersion::TlsV12) => Some(TLSVersion::TLS_V1_2),
+					Some(proto::agent::tls_config::TlsVersion::TlsV13) => Some(TLSVersion::TLS_V1_3),
+					_ => None,
+				},
+			)
+		};
+		let min_version = map_tls_version(value.min_version);
+		let max_version = map_tls_version(value.max_version);
+		// Convert proto enum values into the enums that our TLS provider expects.
+		let cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>> = {
+			if value.cipher_suites.is_empty() {
+				None
 			} else {
-				scb.with_no_client_auth()
-			};
-			let mut sc = scb.with_single_cert(cert_chain, private_key)?;
-			// Defaults set here. These can be overridden by Frontend policy
-			// TODO: this default only makes sense for HTTPS, distinguish from TLS
-			sc.alpn_protocols = vec![b"h2".into(), b"http/1.1".into()];
-			Ok(sc)
-		}
-		match build(value) {
-			Ok(sc) => ServerTLSConfig::new(Arc::new(sc)),
+				let mut out = Vec::with_capacity(value.cipher_suites.len());
+				for &raw in &value.cipher_suites {
+					if raw == 0 {
+						// CIPHER_SUITE_UNSPECIFIED
+						continue;
+					}
+					match proto::agent::tls_config::CipherSuite::try_from(raw) {
+						Ok(suite) => match crate::transport::tls::CipherSuite::try_from(suite) {
+							Ok(suite) => out.push(suite),
+							Err(e) => warn!("unknown/unsupported TLS cipher suite {raw}: {e}"),
+						},
+						Err(e) => warn!("unknown TLS cipher suite enum value {raw}: {e}"),
+					}
+				}
+				if out.is_empty() { None } else { Some(out) }
+			}
+		};
+
+		match ServerTLSConfig::from_pem_with_profile(
+			value.cert.clone(),
+			value.private_key.clone(),
+			value.root.clone(),
+			default_alpns,
+			min_version,
+			max_version,
+			cipher_suites,
+		) {
+			Ok(sc) => sc,
 			Err(e) => {
 				warn!("TLS certificate is invalid: {}", e);
 				ServerTLSConfig::new_invalid()
@@ -201,6 +258,7 @@ fn convert_route_type(proto_rt: i32) -> llm::RouteType {
 		Ok(ProtoRT::Responses) => llm::RouteType::Responses,
 		Ok(ProtoRT::AnthropicTokenCount) => llm::RouteType::AnthropicTokenCount,
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
+		Ok(ProtoRT::Realtime) => llm::RouteType::Realtime,
 		Err(_) => {
 			warn!(
 				"Unknown proto RouteType value {}, defaulting to Completions",
@@ -326,10 +384,21 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 	type Error = ProtoError;
 
 	fn try_from(s: proto::agent::BackendAuthPolicy) -> Result<Self, Self::Error> {
+		use proto::agent::gcp;
 		Ok(match s.kind {
 			Some(proto::agent::backend_auth_policy::Kind::Passthrough(_)) => BackendAuth::Passthrough {},
 			Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key(k.secret.into()),
-			Some(proto::agent::backend_auth_policy::Kind::Gcp(_)) => BackendAuth::Gcp {},
+			Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
+				BackendAuth::Gcp(match g.token_type {
+					None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
+						r#type: Some(auth::AccessToken),
+					},
+					Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
+						r#type: auth::IdToken,
+						audience,
+					},
+				})
+			},
 			Some(proto::agent::backend_auth_policy::Kind::Aws(a)) => {
 				let aws_auth = match a.kind {
 					Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
@@ -433,7 +502,7 @@ impl TryFrom<&proto::agent::Bind> for Bind {
 	fn try_from(s: &proto::agent::Bind) -> Result<Self, Self::Error> {
 		Ok(Self {
 			key: s.key.clone().into(),
-			address: SocketAddr::from((IpAddr::from([0, 0, 0, 0]), s.port as u16)),
+			address: SocketAddr::from((IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]), s.port as u16)),
 			listeners: Default::default(),
 			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,
@@ -505,13 +574,14 @@ impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::Route) -> Result<Self, Self::Error> {
+		let name: RouteName = s
+			.name
+			.as_ref()
+			.ok_or(ProtoError::MissingRequiredField)?
+			.into();
 		let r = Route {
 			key: strng::new(&s.key),
-			name: s
-				.name
-				.as_ref()
-				.ok_or(ProtoError::MissingRequiredField)?
-				.into(),
+			name,
 			hostnames: s.hostnames.iter().map(strng::new).collect(),
 			matches: s
 				.matches
@@ -1247,9 +1317,44 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					Ok(tps::ext_proc::FailureMode::FailOpen) => http::ext_proc::FailureMode::FailOpen,
 					_ => http::ext_proc::FailureMode::FailClosed,
 				};
+				fn to_cel_attrs(
+					attrs: &HashMap<String, String>,
+				) -> Option<HashMap<String, Arc<cel::Expression>>> {
+					if attrs.is_empty() {
+						None
+					} else {
+						Some(
+							attrs
+								.iter()
+								.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+								.collect(),
+						)
+					}
+				}
 				TrafficPolicy::ExtProc(http::ext_proc::ExtProc {
 					target: Arc::new(target),
 					failure_mode,
+					request_attributes: to_cel_attrs(&ep.request_attributes),
+					response_attributes: to_cel_attrs(&ep.response_attributes),
+					metadata_context: if ep.metadata_context.is_empty() {
+						None
+					} else {
+						Some(
+							ep.metadata_context
+								.iter()
+								.fold(HashMap::new(), |mut meta, (namespace, data)| {
+									meta.insert(
+										namespace.to_string(),
+										data
+											.context
+											.iter()
+											.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+											.collect(),
+									);
+									meta
+								}),
+						)
+					},
 				})
 			},
 			Some(tps::Kind::RequestHeaderModifier(rhm)) => {
@@ -1411,6 +1516,20 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 		use crate::types::frontend;
 		use crate::types::proto::agent::frontend_policy_spec as fps;
 
+		let map_tls_version = |raw: Option<i32>| {
+			raw.and_then(
+				|raw| match proto::agent::tls_config::TlsVersion::try_from(raw).ok() {
+					Some(proto::agent::tls_config::TlsVersion::TlsV12) => {
+						Some(frontend::TLSVersion::TLS_V1_2)
+					},
+					Some(proto::agent::tls_config::TlsVersion::TlsV13) => {
+						Some(frontend::TLSVersion::TLS_V1_3)
+					},
+					_ => None,
+				},
+			)
+		};
+
 		Ok(match &spec.kind {
 			Some(fps::Kind::Http(h)) => FrontendPolicy::HTTP(frontend::HTTP {
 				max_buffer_size: h
@@ -1429,14 +1548,37 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 				http2_keepalive_timeout: h.http2_keepalive_timeout.map(convert_duration),
 			}),
 			Some(fps::Kind::Tls(t)) => FrontendPolicy::TLS(frontend::TLS {
-				tls_handshake_timeout: t
-					.tls_handshake_timeout
+				handshake_timeout: t
+					.handshake_timeout
 					.map(convert_duration)
 					.unwrap_or_else(crate::defaults::tls_handshake_timeout),
 				alpn: t
 					.alpn
 					.as_ref()
 					.map(|t| t.protocols.iter().map(|s| s.as_bytes().to_vec()).collect()),
+				min_version: map_tls_version(t.min_version),
+				max_version: map_tls_version(t.max_version),
+				cipher_suites: {
+					if t.cipher_suites.is_empty() {
+						None
+					} else {
+						let mut out = Vec::with_capacity(t.cipher_suites.len());
+						for &raw in &t.cipher_suites {
+							if raw == 0 {
+								// CIPHER_SUITE_UNSPECIFIED
+								continue;
+							}
+							match proto::agent::tls_config::CipherSuite::try_from(raw) {
+								Ok(suite) => match crate::transport::tls::CipherSuite::try_from(suite) {
+									Ok(suite) => out.push(suite),
+									Err(e) => warn!("unknown/unsupported TLS cipher suite {raw}: {e}"),
+								},
+								Err(e) => warn!("unknown TLS cipher suite enum value {raw}: {e}"),
+							}
+						}
+						if out.is_empty() { None } else { Some(out) }
+					}
+				},
 			}),
 			Some(fps::Kind::Tcp(t)) => FrontendPolicy::TCP(frontend::TCP {
 				keepalives: t
@@ -1474,8 +1616,82 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					remove: Arc::new(FzHashSet::new(rm)),
 				})
 			},
-			Some(fps::Kind::Tracing(_)) => FrontendPolicy::Tracing(()),
+			Some(fps::Kind::Tracing(t)) => {
+				// Convert protobuf to TracingConfig
+				let tracing_config = types::agent::TracingConfig::try_from(t)?;
+
+				// Prepare LoggingFields with the CEL attributes from TracingConfig
+				let logging_fields = Arc::new(crate::telemetry::log::LoggingFields {
+					remove: Arc::new(tracing_config.remove.iter().cloned().collect()),
+					add: Arc::new(tracing_config.attributes.clone()),
+				});
+
+				FrontendPolicy::Tracing(Arc::new(types::agent::TracingPolicy {
+					config: tracing_config,
+					fields: logging_fields,
+					tracer: once_cell::sync::OnceCell::new(),
+				}))
+			},
 			None => return Err(ProtoError::MissingRequiredField),
+		})
+	}
+}
+
+impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::TracingConfig {
+	type Error = ProtoError;
+
+	fn try_from(t: &proto::agent::frontend_policy_spec::Tracing) -> Result<Self, Self::Error> {
+		let provider_backend = resolve_simple_reference(t.provider_backend.as_ref())?;
+
+		let attributes: OrderedStringMap<Arc<cel::Expression>> = t
+			.attributes
+			.iter()
+			.map(|a| {
+				let expr = cel::Expression::new_permissive(&a.value);
+				(a.name.clone(), Arc::new(expr))
+			})
+			.collect();
+
+		let resources: OrderedStringMap<Arc<cel::Expression>> = t
+			.resources
+			.iter()
+			.map(|a| {
+				let expr = cel::Expression::new_permissive(&a.value);
+				(a.name.clone(), Arc::new(expr))
+			})
+			.collect();
+
+		// Optional per-policy sampling overrides
+		let random_sampling = t
+			.random_sampling
+			.as_ref()
+			.map(|s| Arc::new(cel::Expression::new_permissive(s)));
+		let client_sampling = t
+			.client_sampling
+			.as_ref()
+			.map(|s| Arc::new(cel::Expression::new_permissive(s)));
+
+		let path = t.path.clone().unwrap_or_else(|| "/v1/traces".to_string());
+
+		let protocol =
+			match crate::types::proto::agent::frontend_policy_spec::tracing::Protocol::try_from(
+				t.protocol,
+			) {
+				Ok(crate::types::proto::agent::frontend_policy_spec::tracing::Protocol::Grpc) => {
+					types::agent::TracingProtocol::Grpc
+				},
+				_ => types::agent::TracingProtocol::Http,
+			};
+
+		Ok(types::agent::TracingConfig {
+			provider_backend,
+			attributes,
+			resources,
+			remove: t.remove.clone(),
+			random_sampling,
+			client_sampling,
+			path,
+			protocol,
 		})
 	}
 }
@@ -1516,6 +1732,7 @@ impl TryFrom<&proto::agent::PolicyTarget> for PolicyTarget {
 				name: strng::new(&r.name),
 				namespace: strng::new(&r.namespace),
 				rule_name: r.route_rule.as_ref().map(Into::into),
+				kind: (!r.kind.is_empty()).then(|| strng::new(&r.kind)),
 			})),
 			Some(tgt::Kind::Backend(b)) => Ok(PolicyTarget::Backend(BackendTarget::Backend {
 				name: strng::new(&b.name),
@@ -1585,6 +1802,7 @@ impl From<&proto::agent::RouteName> for RouteName {
 			name: strng::new(&value.name),
 			namespace: strng::new(&value.namespace),
 			rule_name: value.rule_name.as_ref().map(Into::into),
+			kind: (!value.kind.is_empty()).then(|| strng::new(&value.kind)),
 		}
 	}
 }

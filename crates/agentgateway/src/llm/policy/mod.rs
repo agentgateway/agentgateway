@@ -1,6 +1,7 @@
 use ::http::HeaderMap;
 use bytes::Bytes;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::http::filters::HeaderModifier;
 use crate::http::jwt::Claims;
@@ -9,6 +10,7 @@ use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction}
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
+use crate::types::local::LocalBackendPolicies;
 use crate::*;
 
 pub mod webhook;
@@ -18,6 +20,84 @@ mod pii;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+/// Routes stored in a deterministic order: **longest key to shortest key**, with `"*"` always last.
+///
+/// This lets us iterate and match more-specific suffixes first.
+#[derive(Debug, Clone, Default)]
+pub struct SortedRoutes {
+	inner: IndexMap<Strng, crate::llm::RouteType>,
+}
+
+impl SortedRoutes {
+	pub fn is_empty(&self) -> bool {
+		self.inner.is_empty()
+	}
+
+	pub fn insert(&mut self, k: Strng, v: crate::llm::RouteType) -> Option<crate::llm::RouteType> {
+		let prev = self.inner.insert(k, v);
+		self.sort();
+		prev
+	}
+
+	fn sort(&mut self) {
+		// Sort by:
+		// - wildcard last
+		// - longer keys first
+		// - stable tie-breaker (lexicographic) for deterministic output
+		let mut entries: Vec<(Strng, crate::llm::RouteType)> =
+			std::mem::take(&mut self.inner).into_iter().collect();
+		entries.sort_by(|(a, _), (b, _)| {
+			let a = a.as_str();
+			let b = b.as_str();
+			(a == "*", std::cmp::Reverse(a.len()), a).cmp(&(b == "*", std::cmp::Reverse(b.len()), b))
+		});
+		self.inner = entries.into_iter().collect();
+	}
+}
+
+impl std::ops::Deref for SortedRoutes {
+	type Target = IndexMap<Strng, crate::llm::RouteType>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl<'a> IntoIterator for &'a SortedRoutes {
+	type Item = (&'a Strng, &'a crate::llm::RouteType);
+	type IntoIter = indexmap::map::Iter<'a, Strng, crate::llm::RouteType>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.inner.iter()
+	}
+}
+
+impl FromIterator<(Strng, crate::llm::RouteType)> for SortedRoutes {
+	fn from_iter<T: IntoIterator<Item = (Strng, crate::llm::RouteType)>>(iter: T) -> Self {
+		let mut routes = Self {
+			inner: iter.into_iter().collect(),
+		};
+		routes.sort();
+		routes
+	}
+}
+
+impl Serialize for SortedRoutes {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		self.inner.serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for SortedRoutes {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let mut routes = Self {
+			inner: IndexMap::<Strng, crate::llm::RouteType>::deserialize(deserializer)?,
+		};
+		routes.sort();
+		Ok(routes)
+	}
+}
 
 #[apply(schema!)]
 #[derive(Default)]
@@ -43,12 +123,12 @@ pub struct Policy {
 	pub wildcard_patterns: Arc<Vec<(ModelAliasPattern, Strng)>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_caching: Option<PromptCachingConfig>,
-	#[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+	#[serde(default, skip_serializing_if = "SortedRoutes::is_empty")]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "std::collections::HashMap<String, String>")
+		schemars(with = "std::collections::HashMap<String, crate::llm::RouteType>")
 	)]
-	pub routes: IndexMap<Strng, crate::llm::RouteType>,
+	pub routes: SortedRoutes,
 }
 
 /// Wildcard pattern converted to regex for model name matching.
@@ -117,9 +197,11 @@ impl Default for PromptCachingConfig {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(extend("minProperties" = 1)))]
 pub struct PromptEnrichment {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub append: Vec<crate::llm::SimpleChatCompletionMessage>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub prepend: Vec<crate::llm::SimpleChatCompletionMessage>,
 }
 
@@ -197,17 +279,30 @@ impl Policy {
 
 	pub fn apply_prompt_enrichment(&self, chat: &mut dyn RequestType) {
 		if let Some(prompts) = &self.prompts {
-			chat.prepend_prompts(prompts.prepend.clone());
+			if !prompts.prepend.is_empty() {
+				chat.prepend_prompts(prompts.prepend.clone());
+			}
+			if !prompts.append.is_empty() {
+				chat.append_prompts(prompts.append.clone());
+			}
 		}
 	}
 
 	pub fn resolve_route(&self, path: &str) -> crate::llm::RouteType {
-		for (path_suffix, rt) in &self.routes {
-			if path_suffix == "*" || path.ends_with(path_suffix.as_str()) {
+		let mut wildcard: Option<crate::llm::RouteType> = None;
+
+		// `self.routes` is stored longest->shortest, with "*" last, so the first match wins.
+		for (path_suffix, rt) in self.routes.iter() {
+			if path_suffix.as_str() == "*" {
+				wildcard = Some(*rt);
+				continue;
+			}
+			if path.ends_with(path_suffix.as_str()) {
 				return *rt;
 			}
 		}
-		crate::llm::RouteType::Completions
+
+		wildcard.unwrap_or(crate::llm::RouteType::Completions)
 	}
 
 	pub fn unmarshal_request<T: DeserializeOwned>(&self, bytes: &Bytes) -> Result<T, AIError> {
@@ -773,9 +868,19 @@ pub struct Moderation {
 	/// Model to use. Defaults to `omni-moderation-latest`
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
-	#[serde(skip_deserializing)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
+	#[serde(deserialize_with = "de_from_local_backend_policy")]
+	#[cfg_attr(feature = "schema", schemars(with = "LocalBackendPolicies"))]
 	pub policies: Vec<BackendPolicy>,
+}
+
+pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(
+	deserializer: D,
+) -> Result<Vec<BackendPolicy>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let s = LocalBackendPolicies::deserialize(deserializer)?;
+	s.translate().map_err(serde::de::Error::custom)
 }
 
 #[apply(schema!)]
@@ -905,7 +1010,7 @@ fn test_prompt_caching_explicit_disable() {
 
 #[test]
 fn test_resolve_route() {
-	let mut routes = IndexMap::new();
+	let mut routes = SortedRoutes::default();
 	routes.insert(
 		strng::literal!("/completions"),
 		crate::llm::RouteType::Completions,

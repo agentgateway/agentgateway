@@ -150,6 +150,12 @@ impl super::RequestType for Request {
 			.splice(..0, prompts.into_iter().map(convert_message));
 	}
 
+	fn append_prompts(&mut self, prompts: Vec<llm::types::SimpleChatCompletionMessage>) {
+		self
+			.messages
+			.extend(prompts.into_iter().map(convert_message));
+	}
+
 	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
 		conversion::messages::from_completions::translate(self)
 	}
@@ -170,7 +176,8 @@ impl super::RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let tokens = crate::llm::num_tokens_from_messages(&model, &self.messages)?;
+			let messages = self.get_messages();
+			let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
 			Some(tokens)
 		} else {
 			None
@@ -229,8 +236,8 @@ impl super::RequestType for Request {
 fn convert_message(r: SimpleChatCompletionMessage) -> RequestMessage {
 	RequestMessage {
 		role: r.role.to_string(),
-		content: Some(Content::Text(r.content.to_string())),
 		name: None,
+		content: Some(Content::Text(r.content.to_string())),
 		rest: Default::default(),
 	}
 }
@@ -286,16 +293,15 @@ pub mod typed {
 
 	use std::collections::HashMap;
 
+	use async_openai::types::chat::{
+		ChatChoiceLogprobs, ChatCompletionResponseMessageAudio, CompletionUsage,
+	};
 	#[allow(deprecated)]
 	#[allow(deprecated_in_future)]
-	pub use async_openai::types::ChatCompletionFunctions;
-	use async_openai::types::{
-		ChatChoiceLogprobs, ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
-		ChatCompletionResponseMessageAudio, CompletionUsage, FunctionCallStream, ServiceTierResponse,
-	};
-	pub use async_openai::types::{
-		ChatCompletionAudio, ChatCompletionFunctionCall,
-		ChatCompletionMessageToolCall as MessageToolCall, ChatCompletionModalities,
+	pub use async_openai::types::chat::{
+		ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
+		ChatCompletionMessageToolCall as MessageToolCall, ChatCompletionMessageToolCallChunk,
+		ChatCompletionMessageToolCalls as MessageToolCalls,
 		ChatCompletionNamedToolChoice as NamedToolChoice,
 		ChatCompletionRequestAssistantMessage as RequestAssistantMessage,
 		ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
@@ -306,13 +312,15 @@ pub mod typed {
 		ChatCompletionRequestSystemMessageContent as RequestSystemMessageContent,
 		ChatCompletionRequestToolMessage as RequestToolMessage,
 		ChatCompletionRequestToolMessageContent as RequestToolMessageContent,
+		ChatCompletionRequestToolMessageContentPart as RequestToolMessageContentPart,
 		ChatCompletionRequestUserMessage as RequestUserMessage,
 		ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
-		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool, ChatCompletionTool as Tool,
+		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool as FunctionTool,
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
-		ChatCompletionToolType as ToolType, CompletionUsage as Usage, FinishReason, FunctionCall,
-		FunctionName, FunctionObject, PredictionContent, ReasoningEffort, ResponseFormat, Role,
-		ServiceTier, Stop, WebSearchOptions,
+		ChatCompletionTools as Tool, CompletionUsage as Usage, FinishReason, FunctionCall,
+		FunctionCallStream, FunctionName, FunctionObject, FunctionType, PredictionContent,
+		ReasoningEffort, ResponseFormat, ResponseModalities as ChatCompletionModalities, Role,
+		ServiceTier, StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
 
@@ -329,7 +337,7 @@ pub mod typed {
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
-		pub service_tier: Option<ServiceTierResponse>,
+		pub service_tier: Option<ServiceTier>,
 		/// This fingerprint represents the backend configuration that the model runs with.
 		///
 		/// Can be used in conjunction with the `seed` request parameter to understand when backend changes have been made that might impact determinism.
@@ -354,7 +362,7 @@ pub mod typed {
 		/// The model to generate the completion.
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
-		pub service_tier: Option<ServiceTierResponse>,
+		pub service_tier: Option<ServiceTier>,
 		/// This fingerprint represents the backend configuration that the model runs with.
 		/// Can be used in conjunction with the `seed` request parameter to understand when backend changes have been made that might impact determinism.
 		pub system_fingerprint: Option<String>,
@@ -443,7 +451,7 @@ pub mod typed {
 		pub refusal: Option<String>,
 		/// The tool calls generated by the model, such as function calls.
 		#[serde(skip_serializing_if = "Option::is_none")]
-		pub tool_calls: Option<Vec<ChatCompletionMessageToolCall>>,
+		pub tool_calls: Option<Vec<MessageToolCalls>>,
 
 		/// The role of the author of this message.
 		pub role: Role,
@@ -620,7 +628,7 @@ pub mod typed {
 		/// A list of tools the model may call. Currently, only functions are supported as a tool.
 		/// Use this to provide a list of functions the model may generate JSON inputs for. A max of 128 functions are supported.
 		#[serde(skip_serializing_if = "Option::is_none")]
-		pub tools: Option<Vec<ChatCompletionTool>>,
+		pub tools: Option<Vec<Tool>>,
 
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub tool_choice: Option<ChatCompletionToolChoiceOption>,

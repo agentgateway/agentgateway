@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 binds:
 - port: 3000
   listeners:

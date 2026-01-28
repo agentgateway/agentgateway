@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 frontendPolicies:
   accessLog:
     add:
@@ -24,7 +24,6 @@ binds:
       backends:
       # In this example, we run oauth2-proxy over localhost. Adjust accordingly.
       - host: localhost:4180
-
     # All other traffic goes to our application
     - name: application
       backends:
@@ -33,9 +32,9 @@ binds:
         extAuthz:
           host: localhost:4180
           includeRequestHeaders:
-            # By default, only the Authorization header is included.
-            # Oauth2 proxy uses the 'cookie' header for tokens, so include that
-            - cookie
+          # By default, only the Authorization header is included.
+          # Oauth2 proxy uses the 'cookie' header for tokens, so include that
+          - cookie
           protocol:
             http:
               # For all requests, we send to /oauth2/auth.

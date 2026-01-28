@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../schema/local.json
+# yaml-language-server: $schema=../../schema/config.json
 config:
   logging:
     format: json
@@ -11,6 +11,12 @@ binds:
   listeners:
   - routes:
     - policies:
+        cors:
+          allowOrigins:
+          - "*"
+          allowHeaders:
+          - content-type
+          - cache-control
         # Mark this route as a2a traffic
         a2a: {}
       backends:

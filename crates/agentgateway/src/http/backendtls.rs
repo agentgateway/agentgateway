@@ -142,7 +142,7 @@ pub struct LocalBackendTLS {
 	pub subject_alt_names: Option<Vec<String>>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ResolvedBackendTLS {
 	pub cert: Option<Vec<u8>>,
 	pub key: Option<Vec<u8>>,
@@ -197,7 +197,7 @@ impl ResolvedBackendTLS {
 		} else if let Some(alt_sans) = self.subject_alt_names {
 			let sans = alt_sans
 				.into_iter()
-				.map(ServerName::try_from)
+				.map(tls::ExtendedServerName::try_from)
 				.collect::<Result<Box<_>, _>>()?;
 			cc.dangerous()
 				.set_certificate_verifier(Arc::new(tls::insecure::AltHostnameVerifier::new(

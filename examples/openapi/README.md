@@ -8,6 +8,8 @@ This example will show you how to proxy the [Swagger Petstore](https://petstore3
 
 ### Running the example
 
+Start agentgateway.
+
 ```bash
 cargo run -- -f examples/openapi/config.yaml
 ```
@@ -24,8 +26,13 @@ openapi:
 
 This will expose each method in the openapi specification as MCP tools, and proxy them to the petstore application (on `localhost:8080`).
 
+Start the Petstore OpenAPI 3 demo app.
 
-Now that we have the gateway running, we can use the [mcpinspector](https://github.com/modelcontextprotocol/inspector) to try it out.
+```bash
+docker compose up
+```
+
+Now that we have the gateway and the demo petstore running, we can use the [mcpinspector](https://github.com/modelcontextprotocol/inspector) to try it out.
 ```bash
 npx @modelcontextprotocol/inspector
 ```
@@ -41,4 +48,3 @@ Once you're connected, you can navigate to the tools tab and see the available t
 Let's try out one of the tools, like `placeOrder`.
 
 ![Petstore](./img/call.png)
-

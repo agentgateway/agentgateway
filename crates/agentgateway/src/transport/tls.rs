@@ -8,7 +8,10 @@ use agent_core::strng;
 use agent_core::strng::Strng;
 use futures_util::TryFutureExt;
 use rustls::ServerConfig;
+use rustls::SupportedCipherSuite;
 use rustls::crypto::CryptoProvider;
+use rustls::server::ParsedCertificate;
+use rustls_pki_types::{CertificateDer, InvalidDnsNameError, ServerName};
 use tracing::warn;
 use x509_parser::certificate::X509Certificate;
 
@@ -20,21 +23,139 @@ use crate::types::discovery::Identity;
 pub static ALL_TLS_VERSIONS: &[&rustls::SupportedProtocolVersion] =
 	&[&rustls::version::TLS12, &rustls::version::TLS13];
 
+/// All currently supported cipher suites.
+pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
+	// TLS 1.3 cipher suites
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_CHACHA20_POLY1305_SHA256,
+	// TLS 1.2 cipher suites
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+];
+
+// Default cipher suites to use if user does not specify cipher suites
+pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[allow(non_camel_case_types)]
+pub enum CipherSuite {
+	// TLS 1.3
+	#[serde(alias = "TLS13_AES_256_GCM_SHA384")]
+	TLS_AES_256_GCM_SHA384,
+	#[serde(alias = "TLS13_AES_128_GCM_SHA256")]
+	TLS_AES_128_GCM_SHA256,
+	#[serde(alias = "TLS13_CHACHA20_POLY1305_SHA256")]
+	TLS_CHACHA20_POLY1305_SHA256,
+
+	// TLS 1.2
+	#[serde(alias = "ECDHE-ECDSA-AES256-GCM-SHA384")]
+	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	#[serde(alias = "ECDHE-ECDSA-AES128-GCM-SHA256")]
+	TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	#[serde(alias = "ECDHE-ECDSA-CHACHA20-POLY1305")]
+	TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+	#[serde(alias = "ECDHE-RSA-AES256-GCM-SHA384")]
+	TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	#[serde(alias = "ECDHE-RSA-AES128-GCM-SHA256")]
+	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	#[serde(alias = "ECDHE-RSA-CHACHA20-POLY1305")]
+	TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+}
+
+impl CipherSuite {
+	pub const fn as_str_name(&self) -> &'static str {
+		match self {
+			// TLS 1.3
+			CipherSuite::TLS_AES_256_GCM_SHA384 => "TLS_AES_256_GCM_SHA384",
+			CipherSuite::TLS_AES_128_GCM_SHA256 => "TLS_AES_128_GCM_SHA256",
+			CipherSuite::TLS_CHACHA20_POLY1305_SHA256 => "TLS_CHACHA20_POLY1305_SHA256",
+
+			// TLS 1.2
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 => {
+				"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+			},
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => {
+				"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+			},
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 => {
+				"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 => "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+			CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 => "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+			CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 => {
+				"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+			},
+		}
+	}
+
+	pub const fn to_supported_cipher_suite(&self) -> SupportedCipherSuite {
+		match self {
+			// TLS 1.3 cipher suites
+			CipherSuite::TLS_AES_256_GCM_SHA384 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384
+			},
+			CipherSuite::TLS_AES_128_GCM_SHA256 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_CHACHA20_POLY1305_SHA256 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS13_CHACHA20_POLY1305_SHA256
+			},
+
+			// TLS 1.2 cipher suites
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+			},
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 => {
+				rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+			},
+		}
+	}
+}
+
 pub fn provider() -> Arc<CryptoProvider> {
 	Arc::new(CryptoProvider {
-		// Limit to only the subset of ciphers that are FIPS compatible
-		cipher_suites: vec![
-			// TLS 1.3 cipher suites
-			rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
-			rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256,
-			// TLS 1.2 cipher suites
-			rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		],
+		// Restrict negotiation to our allowlist.
+		cipher_suites: DEFAULT_CIPHER_SUITES.to_vec(),
 		..rustls::crypto::aws_lc_rs::default_provider()
 	})
+}
+
+pub fn provider_with_cipher_suites(
+	cipher_suites: &[CipherSuite],
+) -> anyhow::Result<Arc<CryptoProvider>> {
+	let mut out = Vec::with_capacity(cipher_suites.len());
+	for suite in cipher_suites {
+		out.push(suite.to_supported_cipher_suite());
+	}
+	Ok(Arc::new(CryptoProvider {
+		cipher_suites: out,
+		..rustls::crypto::aws_lc_rs::default_provider()
+	}))
 }
 
 // pub fn provider() -> Arc<CryptoProvider> {
@@ -64,6 +185,64 @@ pub async fn accept(conn: Socket, cfg: Arc<ServerConfig>) -> Result<Socket, Erro
 		.map_err(Error::Handshake)
 		.await?;
 	Ok(Socket::from_tls(ext, counter, stream.into())?)
+}
+
+#[derive(Debug)]
+pub enum ExtendedServerName {
+	Native(ServerName<'static>),
+
+	// A URI SAN
+	URI(String),
+}
+
+impl TryFrom<String> for ExtendedServerName {
+	type Error = InvalidDnsNameError;
+
+	fn try_from(value: String) -> Result<Self, Self::Error> {
+		if let Ok(v) = ServerName::try_from(value.clone()) {
+			Ok(Self::Native(v))
+		} else if value.contains("://") {
+			Ok(Self::URI(value))
+		} else {
+			Err(InvalidDnsNameError)
+		}
+	}
+}
+
+impl ExtendedServerName {
+	pub fn verify_server_name(
+		&self,
+		cert: &ParsedCertificate,
+		der: &CertificateDer,
+	) -> Result<(), rustls::Error> {
+		match self {
+			ExtendedServerName::Native(d) => rustls::client::verify_server_name(cert, d),
+			ExtendedServerName::URI(want) => {
+				use x509_parser::prelude::*;
+
+				let (_, c) = X509Certificate::from_der(der)
+					.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
+				let names = c
+					.subject_alternative_name()
+					.map_err(|_e| {
+						rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidForName)
+					})?
+					.map(|x| &x.value.general_names);
+				names
+					.into_iter()
+					.flatten()
+					.filter_map(|n| match n {
+						GeneralName::URI(uri) => Some(uri),
+						_ => None,
+					})
+					.find(|cert_uri| **cert_uri == want.as_str())
+					.ok_or_else(|| {
+						rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidForName)
+					})
+					.map(|_| ())
+			},
+		}
+	}
 }
 
 pub mod insecure {
@@ -194,13 +373,13 @@ pub mod insecure {
 	#[derive(Debug)]
 	pub struct AltHostnameVerifier {
 		roots: Arc<rustls::RootCertStore>,
-		alt_server_names: Box<[ServerName<'static>]>,
+		alt_server_names: Box<[super::ExtendedServerName]>,
 	}
 
 	impl AltHostnameVerifier {
 		pub fn new(
 			roots: Arc<rustls::RootCertStore>,
-			alt_server_names: Box<[ServerName<'static>]>,
+			alt_server_names: Box<[super::ExtendedServerName]>,
 		) -> Self {
 			Self {
 				roots,
@@ -241,7 +420,7 @@ pub mod insecure {
 			// First attempt to verify the original server name...
 			let mut last_error = None;
 			for option in &self.alt_server_names {
-				match rustls::client::verify_server_name(&cert, option) {
+				match option.verify_server_name(&cert, end_entity) {
 					Ok(_) => return Ok(ServerCertVerified::assertion()),
 					Err(e) => {
 						tracing::debug!("failed to verify alt hostname {option:?} ({e})",);

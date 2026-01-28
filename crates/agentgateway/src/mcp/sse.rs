@@ -7,7 +7,6 @@ use axum::response::sse::Event;
 use axum_core::response::IntoResponse;
 use futures_util::StreamExt;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
-use rmcp::transport::sse_server::PostEventQuery;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::http::{DropBody, Request, Response, filters};
@@ -19,6 +18,12 @@ use crate::*;
 pub struct LegacySSEService {
 	session_manager: Arc<SessionManager>,
 	service_factory: Arc<dyn Fn() -> Result<Relay, http::Error> + Send + Sync>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostEventQuery {
+	pub session_id: String,
 }
 
 impl LegacySSEService {
@@ -65,7 +70,7 @@ impl LegacySSEService {
 			},
 		};
 
-		let Some(session) = self.session_manager.get_session(&session_id) else {
+		let Some(mut session) = self.session_manager.get_session(&session_id) else {
 			return http_error(http::StatusCode::NOT_FOUND, "Session not found");
 		};
 

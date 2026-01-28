@@ -1,12 +1,12 @@
+use agent_core::durfmt;
+use agent_core::prelude::*;
+use secrecy::ExposeSecret;
+use serde::de::DeserializeOwned;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, env};
-
-use agent_core::durfmt;
-use agent_core::prelude::*;
-use serde::de::DeserializeOwned;
 
 use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields};
@@ -224,7 +224,13 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		ThreadingMode::default()
 	};
 
+	let session_encoder = match raw.session {
+		None => crate::http::sessionpersistence::Encoder::base64(),
+		Some(s) => crate::http::sessionpersistence::Encoder::aes(s.key.expose_secret())?,
+	};
+
 	Ok(crate::Config {
+		ipv6_enabled,
 		network: network.into(),
 		admin_addr,
 		stats_addr,
@@ -236,6 +242,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		termination_min_deadline,
 		threading_mode,
 		backend: raw.backend,
+		admin_runtime_handle: None,
 		termination_max_deadline: match termination_max_deadline {
 			Some(period) => period,
 			None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
@@ -293,6 +300,11 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.map(cel::Expression::new_strict)
 				.transpose()?
 				.map(Arc::new),
+			path: raw
+				.tracing
+				.as_ref()
+				.and_then(|t| t.path.clone())
+				.unwrap_or_else(|| "/v1/traces".to_string()),
 		},
 		logging: telemetry::log::Config {
 			filter: raw
@@ -364,20 +376,21 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		proxy_metadata: crate::ProxyMetadata {
 			instance_ip: std::env::var("INSTANCE_IP").unwrap_or_else(|_| "1.1.1.1".to_string()),
 			pod_name: std::env::var("POD_NAME").unwrap_or_else(|_| "".to_string()),
-			pod_namespace: std::env::var("POD_NAMESPACE").unwrap_or_else(|_| "".to_string()),
+			pod_namespace: std::env::var("NAMESPACE").unwrap_or_else(|_| "".to_string()),
 			node_name: std::env::var("NODE_NAME").unwrap_or_else(|_| "".to_string()),
 			role: format!(
 				"{ns}~{name}",
-				ns = std::env::var("POD_NAMESPACE").unwrap_or_else(|_| "".to_string()),
+				ns = std::env::var("NAMESPACE").unwrap_or_else(|_| "".to_string()),
 				name = std::env::var("GATEWAY").unwrap_or_else(|_| "".to_string())
 			),
 			node_id: format!(
 				"agentgateway~{ip}~{pod_name}.{ns}~{ns}.svc.cluster.local",
 				ip = std::env::var("INSTANCE_IP").unwrap_or_else(|_| "1.1.1.1".to_string()),
 				pod_name = std::env::var("POD_NAME").unwrap_or_else(|_| "".to_string()),
-				ns = std::env::var("POD_NAMESPACE").unwrap_or_else(|_| "".to_string())
+				ns = std::env::var("NAMESPACE").unwrap_or_else(|_| "".to_string())
 			),
 		},
+		session_encoder,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?

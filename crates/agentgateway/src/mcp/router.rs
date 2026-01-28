@@ -10,18 +10,18 @@ use axum_extra::headers::authorization::Bearer;
 use bytes::Bytes;
 use http::Method;
 use http::uri::PathAndQuery;
-use rmcp::transport::StreamableHttpServerConfig;
 use tracing::{debug, warn};
 
 use crate::cel::ContextBuilder;
 use crate::http::authorization::RuleSets;
 use crate::http::jwt::Claims;
+use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
 use crate::json::from_body_with_limit;
 use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
-use crate::mcp::streamablehttp::StreamableHttpService;
+use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
 use crate::mcp::{MCPInfo, McpAuthorizationSet};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
@@ -29,8 +29,8 @@ use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::AsyncLog;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{
-	BackendTarget, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, ResourceName, SimpleBackend,
-	SimpleBackendReference,
+	BackendTargetRef, McpAuthentication, McpBackend, McpIDP, McpTargetSpec, ResourceName,
+	SimpleBackend, SimpleBackendReference,
 };
 use crate::{ProxyInputs, json};
 
@@ -41,8 +41,8 @@ pub struct App {
 }
 
 impl App {
-	pub fn new(state: Stores) -> Self {
-		let session: Arc<SessionManager> = Arc::new(Default::default());
+	pub fn new(state: Stores, encoder: Encoder) -> Self {
+		let session: Arc<SessionManager> = Arc::new(crate::mcp::session::SessionManager::new(encoder));
 		Self { state, session }
 	}
 
@@ -92,10 +92,10 @@ impl App {
 						.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, &pi))
 						.transpose()?;
 					let inline_pols = be.as_ref().map(|pol| pol.inline_policies.as_slice());
-					let sub_backend_target = BackendTarget::Backend {
-						name: backend_group_name.name.clone(),
-						namespace: backend_group_name.namespace.clone(),
-						section: Some(t.name.clone()),
+					let sub_backend_target = BackendTargetRef::Backend {
+						name: backend_group_name.name.as_ref(),
+						namespace: backend_group_name.namespace.as_ref(),
+						section: Some(t.name.as_ref()),
 					};
 					let backend_policies = backend_policies
 						.clone()
@@ -274,7 +274,6 @@ impl App {
 					sm,
 					StreamableHttpServerConfig {
 						stateful_mode: backend.stateful,
-						..Default::default()
 					},
 				);
 				streamable.handle(req).await

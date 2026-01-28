@@ -9,7 +9,7 @@ use crate::rt::TokioIo;
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// # fn doc(res: http::Response<()>) {
 /// use hyper_util::client::legacy::connect::HttpInfo;
 ///

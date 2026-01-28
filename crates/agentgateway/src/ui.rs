@@ -107,6 +107,7 @@ async fn write_config(
 		yamlviajson::to_string(&config_json).map_err(|e| ErrorResponse::Anyhow(e.into()))?;
 
 	if let Err(e) = crate::types::local::NormalizedLocalConfig::from(
+		&app.state,
 		app.client.clone(),
 		app.state.gateway(),
 		yaml_content.as_str(),

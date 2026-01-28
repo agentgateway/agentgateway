@@ -67,6 +67,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/setup-go@v6
+      with:
+        go-version: '1.25'
     - name: Install jq on Windows
       if: runner.os == 'Windows'
       run: choco install jq -y
@@ -91,6 +94,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/setup-go@v6
+      with:
+        go-version: '1.25'
     - uses: actions/setup-node@v4
       with:
         node-version: 23

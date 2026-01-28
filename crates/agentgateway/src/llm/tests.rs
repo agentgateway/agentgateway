@@ -230,6 +230,41 @@ async fn test_bedrock_responses() {
 }
 
 #[tokio::test]
+async fn test_vertex_messages() {
+	let provider = vertex::Provider {
+		model: Some(strng::new("anthropic/claude-sonnet-4-5")),
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project-123"),
+	};
+
+	let response = |bytes: Bytes| -> Result<Box<dyn ResponseType>, AIError> {
+		Ok(Box::new(
+			serde_json::from_slice::<types::messages::Response>(&bytes)
+				.map_err(AIError::ResponseParsing)?,
+		))
+	};
+	test_response("vertex-messages", "response_anthropic_basic", response);
+	test_response("vertex-messages", "response_anthropic_tool", response);
+
+	let stream_response = |body, log| Ok(conversion::messages::passthrough_stream(body, 1024, log));
+	test_streaming(
+		"vertex-messages",
+		"response_stream-anthropic_basic.json",
+		stream_response,
+	)
+	.await;
+
+	let request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
+		let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
+		provider.prepare_anthropic_request_body(anthropic_body)
+	};
+
+	for r in MESSAGES_REQUESTS {
+		test_request("vertex-messages", r, request);
+	}
+}
+
+#[tokio::test]
 async fn test_passthrough() {
 	let test_dir = Path::new("src/llm/tests");
 
@@ -285,4 +320,55 @@ async fn test_completions_to_messages() {
 	for r in COMPLETION_REQUESTS {
 		test_request("anthropic", r, request);
 	}
+}
+
+fn apply_test_prompts<R: RequestType + Serialize>(mut r: R) -> Result<Vec<u8>, AIError> {
+	r.prepend_prompts(vec![
+		SimpleChatCompletionMessage {
+			role: strng::new("system"),
+			content: strng::new("prepend system prompt"),
+		},
+		SimpleChatCompletionMessage {
+			role: strng::new("user"),
+			content: strng::new("prepend user message"),
+		},
+		SimpleChatCompletionMessage {
+			role: strng::new("assistant"),
+			content: strng::new("prepend assistant message"),
+		},
+	]);
+	r.append_prompts(vec![
+		SimpleChatCompletionMessage {
+			role: strng::new("user"),
+			content: strng::new("append user message"),
+		},
+		SimpleChatCompletionMessage {
+			role: strng::new("system"),
+			content: strng::new("append system prompt"),
+		},
+		SimpleChatCompletionMessage {
+			role: strng::new("assistant"),
+			content: strng::new("append assistant prompt"),
+		},
+	]);
+	serde_json::to_vec(&r).map_err(AIError::RequestMarshal)
+}
+
+#[test]
+fn test_prompt_enrichment() {
+	test_request::<types::messages::Request>(
+		"anthropic",
+		"request_anthropic_with_system",
+		apply_test_prompts,
+	);
+	test_request::<types::responses::Request>(
+		"openai",
+		"request_openai_with_inputs",
+		apply_test_prompts,
+	);
+	test_request::<types::completions::Request>(
+		"openai",
+		"request_openai_with_messages",
+		apply_test_prompts,
+	);
 }

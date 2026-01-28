@@ -644,10 +644,10 @@ impl ExtAuthz {
 		};
 		if resp.status().is_success() {
 			for k in include_response_headers {
-				resp.headers().get_all(k).iter().for_each(|h| {
-					// TODO: append or insert?
-					req.headers_mut().append(k.clone(), h.clone());
-				});
+				if let Some(h) = resp.headers().get(k) {
+					// TODO: today we always insert. We should consider adding a mode to append.
+					req.headers_mut().insert(k.clone(), h.clone());
+				}
 			}
 			if !metadata.is_empty() {
 				let mut ctx = ctx_builder.expensive_clone();
@@ -831,8 +831,16 @@ fn process_headers(
 		// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
 		let action = if header.append_action != 0 || header.append.is_none() {
 			// Use append_action if it's explicitly set (non-zero) or if append is not set
-			HeaderAppendAction::try_from(header.append_action)
-				.unwrap_or(HeaderAppendAction::AppendIfExistsOrAdd)
+			match HeaderAppendAction::try_from(header.append_action) {
+				Ok(action) => action,
+				Err(_) => {
+					warn!(
+						"Unexpected header append_action `{:?}` falling back to APPEND_IF_EXISTS_OR_ADD",
+						header.append_action
+					);
+					HeaderAppendAction::AppendIfExistsOrAdd
+				},
+			}
 		} else {
 			// Fall back to deprecated append field for backwards compatibility
 			if header.append.unwrap_or(false) {

@@ -30,3 +30,7 @@ The `a2a` example shows how to use agentgateway to serve an [A2A](https://a2apro
 ### [HTTP](http/README.md)
 
 The `http` example shows how to use agentgateway to serve generic HTTP traffic.
+
+### [Prompt Enrichment](prompt-enrichment/README.md)
+
+The `prompt-enrichment` example shows how to append or preprend prompts to agentgateway AI requests.

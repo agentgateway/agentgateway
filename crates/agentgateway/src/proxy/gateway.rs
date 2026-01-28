@@ -266,7 +266,7 @@ impl Gateway {
 		let policies = inputs
 			.stores
 			.read_binds()
-			.frontend_policies(inputs.cfg.gateway());
+			.frontend_policies(inputs.cfg.gateway_ref());
 		if let Some(tcp) = policies.tcp.as_ref() {
 			raw_stream.apply_tcp_settings(tcp)
 		}
@@ -358,7 +358,7 @@ impl Gateway {
 		let policies = inputs
 			.stores
 			.read_binds()
-			.frontend_policies(inputs.cfg.gateway());
+			.frontend_policies(inputs.cfg.gateway_ref());
 		if let Some(tcp) = policies.tcp.as_ref() {
 			raw_stream.apply_tcp_settings(tcp)
 		}
@@ -453,15 +453,8 @@ impl Gateway {
 			hyper::service::service_fn(move |mut req| {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
-				let policies = policies.clone();
-
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				async move {
-					proxy
-						.proxy(connection, &policies, req)
-						.map(Ok::<_, Infallible>)
-						.await
-				}
+				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
 			}),
 		);
 		// Wrap it in the graceful watcher, will ensure GOAWAY/Connect:clone when we shutdown
@@ -491,7 +484,7 @@ impl Gateway {
 		let selected_listener = match selected_listener {
 			Some(l) => l,
 			None => {
-				let Some(bind) = inputs.stores.read_binds().bind(bind_name.clone()) else {
+				let Some(bind) = inputs.stores.read_binds().bind(&bind_name) else {
 					error!("no bind found for {bind_name}");
 					return;
 				};
@@ -522,10 +515,10 @@ impl Gateway {
 		is_https: bool,
 	) -> anyhow::Result<(Arc<Listener>, Socket)> {
 		let def = frontend::TLS::default();
-		let to = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
-		let alpn = policies.tls.as_ref().and_then(|t| t.alpn.as_deref());
+		let tls_pol = policies.tls.as_ref();
+		let to = tls_pol.unwrap_or(&def).handshake_timeout;
 		let handshake = async move {
-			let Some(bind) = inp.stores.read_binds().bind(bind_key.clone()) else {
+			let Some(bind) = inp.stores.read_binds().bind(&bind_key) else {
 				return Err(ProxyError::BindNotFound.into());
 			};
 			let listeners = &bind.listeners;
@@ -556,7 +549,7 @@ impl Gateway {
 			let best = listeners
 				.best_match(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
-			match best.protocol.tls(alpn) {
+			match best.protocol.tls(tls_pol) {
 				Some(Err(e)) => {
 					// There is a TLS config for this listener, but its invalid. Reject the connection
 					Err(e)
@@ -674,7 +667,7 @@ impl Gateway {
 		};
 
 		let def = frontend::TLS::default();
-		let to = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
+		let to = policies.tls.as_ref().unwrap_or(&def).handshake_timeout;
 
 		let cert = ca.get_identity().await?;
 		let sc = Arc::new(cert.hbone_termination()?);
@@ -719,7 +712,7 @@ impl Gateway {
 		};
 
 		let def = frontend::TLS::default();
-		let to = policies.tls.as_ref().unwrap_or(&def).tls_handshake_timeout;
+		let to = policies.tls.as_ref().unwrap_or(&def).handshake_timeout;
 
 		let cert = ca.get_identity().await?;
 		let sc = Arc::new(cert.hbone_termination()?);
