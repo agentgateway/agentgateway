@@ -9,11 +9,10 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [features]
-default = ["tls-ring"]
+default = []
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 ui = []
 schema = ["schemars"]
-tls-ring = ["rustls/ring", "tokio-rustls/ring"]
 internal_benches = ["divan"]
 
 [dependencies]

@@ -36,10 +36,8 @@ impl IstioCertificateService for MockCaService {
 		&self,
 		req: Request<IstioCertificateRequest>,
 	) -> Result<Response<IstioCertificateResponse>, Status> {
-		// We ignore the CSR since rcgen doesn't support parsing it
-		// Instead, generate a certificate with a static key
-		// Parse the CSR to get the public key and subject info
-		let csr_pem = req.into_inner().csr;
+		// Ignore the incoming CSR - we'll generate a new certificate
+		let _csr_pem = req.into_inner().csr;
 
 		// Generate random serial number (159 bits)
 		let serial_number = {
@@ -49,11 +47,17 @@ impl IstioCertificateService for MockCaService {
 			data
 		};
 
-		// Set up certificate parameters from CSR
-		let csr = rcgen::CertificateSigningRequestParams::from_pem(csr_pem.as_str())
-			.map_err(|e| Status::internal(format!("Failed to parse CSR: {}", e)))?;
-		let mut params = csr.params;
+		// Create CA issuer for signing workload certificates
+		let ca_kp = &*self.ca_key;
+		let ca_params = rcgen::CertificateParams::default();
+		let issuer = Issuer::new(ca_params, ca_kp);
 
+		// Generate a new key pair for the workload
+		let workload_kp = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)
+			.map_err(|e| Status::internal(format!("Failed to generate key pair: {}", e)))?;
+
+		// Create new certificate parameters for the workload
+		let mut params = rcgen::CertificateParams::default();
 		params.not_before = SystemTime::now().into();
 		params.not_after = (SystemTime::now() + Duration::from_secs(365 * 24 * 60 * 60)).into();
 		params.serial_number = Some(SerialNumber::from_slice(&serial_number));
@@ -67,25 +71,21 @@ impl IstioCertificateService for MockCaService {
 			ExtendedKeyUsagePurpose::ClientAuth,
 		];
 
-		// Set SPIFFE ID as SAN (you may want to extract this from the CSR instead)
+		// Set SPIFFE ID as SAN
 		let spiffe_id = "spiffe://cluster.local/ns/default/sa/default";
 		params.subject_alt_names =
 			vec![SanType::URI(spiffe_id.try_into().map_err(|e| {
 				Status::internal(format!("Failed to create SAN: {}", e))
 			})?)];
 
-		// Use the CA key to sign
-		let ca_kp = &*self.ca_key;
-		let issuer = Issuer::from_ca_cert_pem(&self.ca_cert_pem, ca_kp)
-			.map_err(|e| Status::internal(format!("Failed to load CA cert: {}", e)))?;
-
-		// Sign the certificate with CA using the public key from the CSR
+		// Sign the workload certificate with the CA using signed_by
 		let cert = params
-			.signed_by(&csr.public_key, &issuer)
+			.signed_by(&workload_kp, &issuer)
 			.map_err(|e| Status::internal(format!("Failed to sign certificate: {}", e)))?;
 		let cert_pem = cert.pem();
+		let key_pem = workload_kp.serialize_pem();
 
-		let cert_chain = vec![cert_pem, self.ca_cert_pem.to_string()];
+		let cert_chain = vec![cert_pem, key_pem, self.ca_cert_pem.to_string()];
 
 		Ok(Response::new(IstioCertificateResponse { cert_chain }))
 	}
