@@ -56,6 +56,59 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	})
 }
 
+pub enum SseJsonEvent<I> {
+	Data(anyhow::Result<I>),
+	Done,
+}
+
+pub fn json_transform_multi<I: DeserializeOwned, O: Serialize, It>(
+	b: http::Body,
+	buffer_limit: usize,
+	mut f: impl FnMut(SseJsonEvent<I>) -> It + Send + 'static,
+) -> http::Body
+where
+	It: IntoIterator<Item = (&'static str, O)>,
+	It::IntoIter: Send,
+{
+	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
+	let encoder = SseEncoder::new();
+
+	transform_parser(b, decoder, encoder, move |o| {
+		let data = unwrap_sse_data(o);
+		if let Some(data) = &data
+			&& data.as_ref() == b"[DONE]"
+		{
+			return f(SseJsonEvent::Done)
+				.into_iter()
+				.filter_map(|(event_name, item)| {
+					let json_bytes = serde_json::to_vec(&item).ok()?;
+					Some(Frame::Event(Event::<Bytes> {
+						data: Bytes::from(json_bytes),
+						name: std::borrow::Cow::Borrowed(event_name),
+						id: None,
+					}))
+				})
+				.collect();
+		}
+		let Some(data) = data else {
+			return vec![];
+		};
+
+		let obj = serde_json::from_slice::<I>(&data);
+		f(SseJsonEvent::Data(obj.map_err(anyhow::Error::from)))
+			.into_iter()
+			.filter_map(|(event_name, item)| {
+				let json_bytes = serde_json::to_vec(&item).ok()?;
+				Some(Frame::Event(Event::<Bytes> {
+					data: Bytes::from(json_bytes),
+					name: std::borrow::Cow::Borrowed(event_name),
+					id: None,
+				}))
+			})
+			.collect()
+	})
+}
+
 fn unwrap_sse_data(frame: Frame<Bytes>) -> Option<Bytes> {
 	let Frame::Event(Event::<Bytes> { data, .. }) = frame else {
 		return None;

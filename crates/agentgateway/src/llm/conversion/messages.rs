@@ -357,9 +357,8 @@ pub mod from_completions {
 						};
 						mk(vec![choice], None)
 					},
-					messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
-						// TODO
-						// finish_reason = delta.stop_reason.as_ref().map(translate_stop_reason);
+					messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+						let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
 						log.non_atomic_mutate(|r| {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							if let Some(inp) = r.response.input_tokens {
@@ -367,7 +366,12 @@ pub mod from_completions {
 							}
 						});
 						mk(
-							vec![],
+							vec![completions::ChatChoiceStream {
+								index: 0,
+								logprobs: None,
+								delta: Default::default(),
+								finish_reason,
+							}],
 							Some(completions::Usage {
 								prompt_tokens: input_tokens as u32,
 								completion_tokens: usage.output_tokens as u32,

@@ -404,6 +404,11 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::Vertex(_) => http::modify_req(req, |req| {
+				req.headers.remove("anthropic-version");
+				req.headers.remove("x-api-key");
+				Ok(())
+			}),
 			_ => Ok(()),
 		}
 	}
@@ -577,8 +582,8 @@ impl AIProvider {
 			(InputFormat::Responses, AIProvider::Bedrock(_)) => {
 				// Bedrock supports responses input via translation
 			},
-			(InputFormat::CountTokens, AIProvider::Bedrock(_)) => {
-				// Bedrock supports count_tokens input via translation
+			(InputFormat::CountTokens, AIProvider::Bedrock(_) | AIProvider::Anthropic(_)) => {
+				// Bedrock supports count_tokens via translation; Anthropic supports direct
 			},
 			(InputFormat::Embeddings, AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_)) => {
 				// passthrough
@@ -625,20 +630,39 @@ impl AIProvider {
 
 		let request_model = llm_info.request_model.as_str();
 		let new_request = if original_format == InputFormat::CountTokens {
-			// Currently only bedrock is supported so no problems here.
-			req.to_bedrock_token_count(parts.headers())?
-		} else {
 			match self {
-				AIProvider::Vertex(provider) if provider.is_anthropic_model(Some(request_model)) => {
+				AIProvider::Bedrock(_) => req.to_bedrock_token_count(parts.headers())?,
+				AIProvider::Anthropic(_) => req.to_anthropic()?,
+				_ => unreachable!("CountTokens only supported for Bedrock and Anthropic"),
+			}
+		} else {
+			match (self, original_format) {
+				(AIProvider::Vertex(provider), InputFormat::Messages)
+					if provider.is_anthropic_model(Some(request_model)) =>
+				{
 					let body = req.to_anthropic()?;
 					provider.prepare_anthropic_request_body(body)?
 				},
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::Vertex(_)
-				| AIProvider::AzureOpenAI(_) => req.to_openai()?,
-				AIProvider::Anthropic(_) => req.to_anthropic()?,
-				AIProvider::Bedrock(p) => req.to_bedrock(
+				(AIProvider::Vertex(_), InputFormat::Messages) => {
+					// Translate Messages -> OpenAI for generic Vertex/Gemini
+					req.to_openai()?
+				},
+				(AIProvider::Vertex(provider), InputFormat::Completions)
+					if provider.is_anthropic_model(Some(request_model)) =>
+				{
+					// Convert to Anthropic first (as done for messages/completions translation)
+					let body = req.to_anthropic()?;
+					provider.prepare_anthropic_request_body(body)?
+				},
+				(
+					AIProvider::OpenAI(_)
+					| AIProvider::Gemini(_)
+					| AIProvider::Vertex(_)
+					| AIProvider::AzureOpenAI(_),
+					_,
+				) => req.to_openai()?,
+				(AIProvider::Anthropic(_), _) => req.to_anthropic()?,
+				(AIProvider::Bedrock(p), _) => req.to_bedrock(
 					p,
 					Some(&parts.headers),
 					policies.and_then(|p| p.prompt_caching.as_ref()),
@@ -677,20 +701,25 @@ impl AIProvider {
 
 		// count_tokens has simplified response handling (just format translation)
 		if req.input_format == InputFormat::CountTokens {
-			// Currently only bedrock is supported so we have no match needed here
-			let (bytes, count) =
-				conversion::bedrock::from_anthropic_token_count::translate_response(bytes.clone())?;
+			let resp_obj = match self {
+				AIProvider::Anthropic(_) => serde_json::from_slice::<types::count_tokens::Response>(&bytes)
+					.map_err(AIError::ResponseParsing)?,
+				_ => conversion::bedrock::from_anthropic_token_count::translate_response(bytes.clone())?,
+			};
+			let body =
+				llm::types::ResponseType::serialize(&resp_obj).map_err(AIError::ResponseParsing)?;
 
 			parts.headers.remove(header::CONTENT_LENGTH);
-			let resp = Response::from_parts(parts, bytes.into());
+			let resp = Response::from_parts(parts, body.into());
 			let llm_resp = LLMResponse {
-				count_tokens: Some(count),
+				count_tokens: Some(resp_obj.input_tokens),
 				..Default::default()
 			};
 			let llm_info = LLMInfo::new(req, llm_resp);
 			log.store(Some(llm_info));
 			return Ok(resp);
 		}
+
 		// embeddings has simplified response handling (currently nothing; no translation needed)
 		if req.input_format == InputFormat::Embeddings {
 			let resp = Response::from_parts(parts, bytes.into());
@@ -752,9 +781,30 @@ impl AIProvider {
 		bytes: &Bytes,
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		match (self, req.input_format) {
+			// Vertex Anthropic:
+			(AIProvider::Vertex(p), InputFormat::Messages)
+				if p.is_anthropic_model(Some(&req.request_model)) =>
+			{
+				Ok(Box::new(
+					serde_json::from_slice::<types::messages::Response>(bytes)
+						.map_err(AIError::ResponseParsing)?,
+				))
+			},
+			(AIProvider::Vertex(_), InputFormat::Messages) => {
+				// Translate OpenAI Response -> Messages Response
+				conversion::completions::from_messages::translate_response(bytes)
+			},
+			(AIProvider::Vertex(p), InputFormat::Completions)
+				if p.is_anthropic_model(Some(&req.request_model)) =>
+			{
+				conversion::messages::from_completions::translate_response(bytes)
+			},
 			// Completions with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::AzureOpenAI(_)
+				| AIProvider::Vertex(_),
 				InputFormat::Completions,
 			) => Ok(Box::new(
 				serde_json::from_slice::<types::completions::Response>(bytes)
@@ -769,7 +819,7 @@ impl AIProvider {
 					.map_err(AIError::ResponseParsing)?,
 			)),
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => Ok(Box::new(
+			(AIProvider::Anthropic(_), InputFormat::Messages) => Ok(Box::new(
 				serde_json::from_slice::<types::messages::Response>(bytes)
 					.map_err(AIError::ResponseParsing)?,
 			)),
@@ -785,16 +835,6 @@ impl AIProvider {
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses) => {
 				conversion::bedrock::from_responses::translate_response(bytes, &req.request_model)
-			},
-			(AIProvider::Vertex(p), InputFormat::Completions) => {
-				if p.is_anthropic_model(Some(&req.request_model)) {
-					conversion::messages::from_completions::translate_response(bytes)
-				} else {
-					Ok(Box::new(
-						serde_json::from_slice::<types::completions::Response>(bytes)
-							.map_err(AIError::ResponseParsing)?,
-					))
-				}
 			},
 			(_, InputFormat::Messages) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider does not support Messages"
@@ -822,6 +862,11 @@ impl AIProvider {
 		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		let is_anthropic_model = if let AIProvider::Vertex(p) = self {
+			p.is_anthropic_model(Some(&req.request_model))
+		} else {
+			false
+		};
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
 		// Store an empty response, as we stream in info we will parse into it
@@ -833,6 +878,16 @@ impl AIProvider {
 		let buffer = http::response_buffer_limit(&resp);
 
 		Ok(match (self, input_format) {
+			// Vertex Anthropic:
+			(AIProvider::Vertex(_), InputFormat::Messages) if is_anthropic_model => {
+				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, log))
+			},
+			(AIProvider::Vertex(_), InputFormat::Messages) => {
+				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, log))
+			},
+			(AIProvider::Vertex(_), InputFormat::Completions) if is_anthropic_model => {
+				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, log))
+			},
 			// Completions with OpenAI: just passthrough
 			(
 				AIProvider::OpenAI(_)
@@ -855,7 +910,7 @@ impl AIProvider {
 				InputFormat::Responses,
 			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, log)),
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => {
+			(AIProvider::Anthropic(_), InputFormat::Messages) => {
 				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, log))
 			},
 			// Supported paths with conversion...
@@ -930,6 +985,20 @@ impl AIProvider {
 
 	fn process_error(&self, req: &LLMRequest, bytes: &Bytes) -> Result<Bytes, AIError> {
 		match (self, req.input_format) {
+			(AIProvider::Vertex(p), InputFormat::Messages)
+				if p.is_anthropic_model(Some(&req.request_model)) =>
+			{
+				// Passthrough; nothing needed
+				Ok(bytes.clone())
+			},
+			(AIProvider::Vertex(_), InputFormat::Messages) => {
+				conversion::completions::from_messages::translate_error(bytes)
+			},
+			(AIProvider::Vertex(p), InputFormat::Completions)
+				if p.is_anthropic_model(Some(&req.request_model)) =>
+			{
+				conversion::messages::from_completions::translate_error(bytes)
+			},
 			(
 				AIProvider::OpenAI(_)
 				| AIProvider::Gemini(_)
@@ -940,7 +1009,7 @@ impl AIProvider {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
-			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => {
+			(AIProvider::Anthropic(_), InputFormat::Messages) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
