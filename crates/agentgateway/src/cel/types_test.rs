@@ -1,9 +1,13 @@
 use bytes::Bytes;
-use http::Method;
+use http::{HeaderMap, Method, Uri, Version};
+use secrecy::SecretString;
 use serde_json::json;
 
 use super::*;
 use crate::http::Body;
+use crate::http::ext_authz::ExtAuthzDynamicMetadata;
+use crate::mcp::{ResourceId, ResourceType};
+use crate::transport::tls::TlsInfo;
 
 /// Helper to build a test request with various fields populated
 fn build_test_request() -> crate::http::Request {
@@ -41,6 +45,9 @@ fn build_test_request() -> crate::http::Request {
 		protocol: BackendProtocol::http,
 	};
 	req.extensions_mut().insert(backend);
+	req
+		.extensions_mut()
+		.insert(RequestStartTime("now".to_string()));
 
 	// Add LLM context
 	let llm = LLMContext {
@@ -63,75 +70,6 @@ fn build_test_request() -> crate::http::Request {
 }
 
 #[test]
-fn test_executor_serialize() {
-	let req = build_test_request();
-	let executor = Executor::new_request(&req);
-
-	// Serialize the executor
-	let v = serde_json::to_value(&executor).expect("failed to serialize executor");
-
-	assert_eq!(
-		v,
-		json!({
-			"request": {
-				"method": "POST",
-				"uri": "http://example.com/api/test",
-				"path": "/api/test",
-				"version": "HTTP/1.1",
-				"headers": {
-					"x-custom-header": "test-value",
-					"content-type": "application/json"
-				}
-			},
-			"source": {
-				"address": "127.0.0.1",
-				"port": 54321
-			},
-			"jwt": {
-				"sub": "user123",
-				"iss": "agentgateway.dev",
-				"exp": 1900650294
-			},
-			"llm": {
-				"streaming": false,
-				"requestModel": "gpt-4",
-				"responseModel": "gpt-4-turbo",
-				"provider": "openai",
-				"inputTokens": 100,
-				"outputTokens": 50,
-				"totalTokens": 150,
-				"completion": [
-					"Hello world"
-				],
-				"params": {}
-			},
-			"backend": {
-				"name": "test-backend",
-				"type": "service",
-				"protocol": "http"
-			}
-		})
-	);
-}
-
-#[test]
-fn test_executor_cel_variables_matches_serde() {
-	let req = build_test_request();
-	let executor = Executor::new_request(&req);
-
-	// Get serde JSON
-	let serde_val = serde_json::to_value(&executor).expect("failed to serialize executor");
-
-	// Get CEL variables JSON
-	let expr = Expression::new_strict("variables()").expect("failed to compile expression");
-	let cel_value = executor
-		.eval(&expr)
-		.expect("failed to evaluate variables()");
-	let cel_val = cel_value.json().expect("failed to convert to JSON");
-	assert_eq!(cel_val, serde_val);
-}
-
-#[test]
 fn test_snapshot_matches_ref() {
 	let mut req = build_test_request();
 	let snapshot = snapshot_request(&mut req);
@@ -140,10 +78,7 @@ fn test_snapshot_matches_ref() {
 		Executor::new_logger(Some(&snapshot), None, snapshot.llm.as_ref(), None, None);
 	let ref_executor = Executor::new_request(&req);
 
-	// Serialize the executor
-	let rr = serde_json::to_value(&ref_executor).expect("failed to serialize executor");
-	let ss = serde_json::to_value(&snapshot_exec).expect("failed to serialize executor");
-	assert_eq!(ss, rr);
+	assert_eq!(exec_to_json(&ref_executor), exec_to_json(&snapshot_exec));
 }
 
 #[test]
@@ -155,7 +90,7 @@ fn test_executor_snapshot_round_trip() {
 	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None);
 
 	// Serialize to JSON
-	let json = serde_json::to_value(&executor1).expect("failed to serialize executor");
+	let json = exec_to_json(&executor1);
 
 	// Deserialize into ExecutorSerde
 	let exec_snapshot: ExecutorSerde =
@@ -165,10 +100,111 @@ fn test_executor_snapshot_round_trip() {
 	let executor2 = exec_snapshot.as_executor();
 
 	// Serialize again
-	let json2 = serde_json::to_value(&executor2).expect("failed to serialize executor2");
+	let json2 = exec_to_json(&executor2);
 
 	// They should be identical
 	assert_eq!(json, json2, "Round-trip serialization mismatch");
+}
+
+#[test]
+fn test_executor_serde_complete() {
+	// Build a full serde, with every field set
+	let mut req_headers = HeaderMap::new();
+	req_headers.insert("x-custom-header", "test-value".parse().unwrap());
+	let mut resp_headers = HeaderMap::new();
+	resp_headers.insert("content-type", "application/json".parse().unwrap());
+
+	let exec: ExecutorSerde = ExecutorSerde {
+		request: Some(RequestRefSerde {
+			method: Method::GET,
+			uri: "http://example.com/api/test".parse::<Uri>().unwrap(),
+			path: "/api/test".to_string(),
+			version: Version::HTTP_11,
+			headers: req_headers,
+			body: Some(BufferedBody(Bytes::from(r#"{"key": "value"}"#))),
+			start_time: Some(RequestStartTime("2025-01-28T12:00:00Z".to_string())),
+			end_time: Some("2025-01-28T12:00:01Z".to_string()),
+		}),
+		response: Some(ResponseRefSerde {
+			code: 200,
+			headers: resp_headers,
+			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+		}),
+		source: Some(SourceContext {
+			address: "10.0.0.1".parse().unwrap(),
+			port: 12345,
+			tls: Some(TlsInfo {
+				identity: None,
+				subject_alt_names: vec![],
+				issuer: Default::default(),
+				subject: Default::default(),
+				subject_cn: Some("cn".into()),
+			}),
+		}),
+		jwt: Some(jwt::Claims {
+			inner: serde_json::Map::from_iter(vec![
+				("sub".to_string(), json!("test-user")),
+				("iss".to_string(), json!("agentgateway.dev")),
+				("exp".to_string(), json!(1900650294)),
+			]),
+			jwt: SecretString::new("fake.jwt.token".into()),
+		}),
+		api_key: Some(apikey::Claims {
+			key: apikey::APIKey::new("test-api-key-id"),
+			metadata: json!({"role": "admin"}),
+		}),
+		basic_auth: Some(basicauth::Claims {
+			username: "alice".into(),
+		}),
+		llm: Some(LLMContext {
+			streaming: false,
+			request_model: "gpt-4".into(),
+			response_model: Some("gpt-4-turbo".into()),
+			provider: "openai".into(),
+			input_tokens: Some(100),
+			output_tokens: Some(50),
+			total_tokens: Some(150),
+			first_token: None,
+			count_tokens: Some(10),
+			prompt: None,
+			completion: Some(vec!["Hello".to_string()]),
+			params: llm::LLMRequestParams {
+				temperature: Some(0.7),
+				top_p: Some(1.0),
+				frequency_penalty: Some(0.0),
+				presence_penalty: Some(0.0),
+				seed: Some(42),
+				max_tokens: Some(1024),
+				encoding_format: None,
+				dimensions: None,
+			},
+		}),
+		mcp: Some(ResourceType::Tool(ResourceId::new(
+			"my-mcp-server".to_string(),
+			"get_weather".to_string(),
+		))),
+		backend: Some(BackendContext {
+			name: "my-backend".into(),
+			backend_type: BackendType::Service,
+			protocol: BackendProtocol::http,
+		}),
+		extauthz: Some(ExtAuthzDynamicMetadata::default()),
+		extproc: Some(ExtProcDynamicMetadata::default()),
+	};
+	let json1 = serde_json::to_value(&exec).expect("failed to serialize executor2");
+
+	// Build executor from ExecutorSerde
+	let executor2 = exec.as_executor();
+
+	let json3 = exec_to_json(&executor2);
+	assert_eq!(json1, json3, "Round-trip serialization mismatch");
+}
+
+fn exec_to_json(exec: &Executor) -> serde_json::Value {
+	let expr = Expression::new_strict("variables()").expect("failed to compile");
+	let cel_value = exec.eval(&expr).expect("failed to evaluate");
+	let j = cel_value.json().expect("failed to convert to JSON");
+	j
 }
 
 #[test]

@@ -34,7 +34,8 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.auth.v3");
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, ::cel::DynamicType)]
+#[apply(schema!)]
+#[derive(Default, ::cel::DynamicType)]
 pub struct ExtAuthzDynamicMetadata(serde_json::Map<String, JsonValue>);
 
 #[apply(schema!)]

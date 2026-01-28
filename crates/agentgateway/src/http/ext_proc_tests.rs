@@ -1248,13 +1248,13 @@ fn test_dynamic_metadata_extraction() {
 	let mut metadata = ExtProcDynamicMetadata::default();
 
 	metadata
-		.metadata
+		.0
 		.insert("user_id".to_string(), serde_json::json!("12345"));
 	metadata
-		.metadata
+		.0
 		.insert("role".to_string(), serde_json::json!("admin"));
-	assert_eq!(metadata.metadata.get("user_id").unwrap(), "12345");
-	assert_eq!(metadata.metadata.get("role").unwrap(), "admin");
+	assert_eq!(metadata.0.get("user_id").unwrap(), "12345");
+	assert_eq!(metadata.0.get("role").unwrap(), "admin");
 }
 
 mod extract_dynamic_metadata_tests {
@@ -1290,7 +1290,7 @@ mod extract_dynamic_metadata_tests {
 			.get::<Arc<ExtProcDynamicMetadata>>()
 			.expect("metadata should be in extensions");
 		assert_eq!(
-			extracted.metadata.get("user_id"),
+			extracted.0.get("user_id"),
 			Some(&serde_json::json!("12345"))
 		);
 	}
@@ -1302,9 +1302,11 @@ mod extract_dynamic_metadata_tests {
 			.body(Body::empty())
 			.unwrap();
 
-		let existing = ExtProcDynamicMetadata {
-			metadata: [("existing".to_string(), serde_json::json!("value"))].into(),
-		};
+		let existing = ExtProcDynamicMetadata(
+			[("existing".to_string(), serde_json::json!("value"))]
+				.into_iter()
+				.collect(),
+		);
 		req.extensions_mut().insert(Arc::new(existing));
 
 		let metadata = Struct {
@@ -1322,13 +1324,13 @@ mod extract_dynamic_metadata_tests {
 			.extensions()
 			.get::<Arc<ExtProcDynamicMetadata>>()
 			.unwrap();
-		assert_eq!(extracted.metadata.len(), 2);
+		assert_eq!(extracted.0.len(), 2);
 		assert_eq!(
-			extracted.metadata.get("existing"),
+			extracted.0.get("existing"),
 			Some(&serde_json::json!("value"))
 		);
 		assert_eq!(
-			extracted.metadata.get("new_key"),
+			extracted.0.get("new_key"),
 			Some(&serde_json::json!("new_value"))
 		);
 	}
@@ -1340,9 +1342,11 @@ mod extract_dynamic_metadata_tests {
 			.body(Body::empty())
 			.unwrap();
 
-		let existing = ExtProcDynamicMetadata {
-			metadata: [("key".to_string(), serde_json::json!("old_value"))].into(),
-		};
+		let existing = ExtProcDynamicMetadata(
+			[("key".to_string(), serde_json::json!("old_value"))]
+				.into_iter()
+				.collect(),
+		);
 		req.extensions_mut().insert(Arc::new(existing));
 
 		let metadata = Struct {
@@ -1360,9 +1364,9 @@ mod extract_dynamic_metadata_tests {
 			.extensions()
 			.get::<Arc<ExtProcDynamicMetadata>>()
 			.unwrap();
-		assert_eq!(extracted.metadata.len(), 1);
+		assert_eq!(extracted.0.len(), 1);
 		assert_eq!(
-			extracted.metadata.get("key"),
+			extracted.0.get("key"),
 			Some(&serde_json::json!("new_value"))
 		);
 	}
@@ -1440,17 +1444,14 @@ mod extract_dynamic_metadata_tests {
 			.get::<Arc<ExtProcDynamicMetadata>>()
 			.unwrap();
 
-		assert_eq!(extracted.metadata.len(), 3);
+		assert_eq!(extracted.0.len(), 3);
 		assert_eq!(
-			extracted.metadata.get("string_val"),
+			extracted.0.get("string_val"),
 			Some(&serde_json::json!("hello"))
 		);
+		assert_eq!(extracted.0.get("bool_true"), Some(&serde_json::json!(true)));
 		assert_eq!(
-			extracted.metadata.get("bool_true"),
-			Some(&serde_json::json!(true))
-		);
-		assert_eq!(
-			extracted.metadata.get("bool_false"),
+			extracted.0.get("bool_false"),
 			Some(&serde_json::json!(false))
 		);
 	}
@@ -1488,15 +1489,9 @@ mod extract_dynamic_metadata_tests {
 			.extensions()
 			.get::<Arc<ExtProcDynamicMetadata>>()
 			.unwrap();
-		assert_eq!(extracted.metadata.len(), 2);
-		assert_eq!(
-			extracted.metadata.get("key1"),
-			Some(&serde_json::json!("value1"))
-		);
-		assert_eq!(
-			extracted.metadata.get("key2"),
-			Some(&serde_json::json!(true))
-		);
+		assert_eq!(extracted.0.len(), 2);
+		assert_eq!(extracted.0.get("key1"), Some(&serde_json::json!("value1")));
+		assert_eq!(extracted.0.get("key2"), Some(&serde_json::json!(true)));
 	}
 }
 

@@ -16,7 +16,7 @@ pub fn generate_schema() -> Result<()> {
 		(
 			"CEL context",
 			"cel.md",
-			make::<cel::ExpressionContext>()?,
+			make::<cel::ExecutorSerde>()?,
 			"cel.json",
 		),
 	];

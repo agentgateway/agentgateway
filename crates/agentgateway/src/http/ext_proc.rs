@@ -54,11 +54,9 @@ pub enum Error {
 	InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct ExtProcDynamicMetadata {
-	/// Flat key-value metadata for direct extproc.field access in CEL
-	pub metadata: HashMap<String, JsonValue>,
-}
+#[apply(schema!)]
+#[derive(Default, ::cel::DynamicType)]
+pub struct ExtProcDynamicMetadata(serde_json::Map<String, JsonValue>);
 
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -705,10 +703,10 @@ impl ExtProcInstance {
 			let json_val = serde_json::to_value(value).map_err(|e| {
 				Error::MetadataConversion(format!("failed to convert key '{}': {}", key, e))
 			})?;
-			dynamic_metadata.metadata.insert(key.clone(), json_val);
+			dynamic_metadata.0.insert(key.clone(), json_val);
 		}
 
-		if !dynamic_metadata.metadata.is_empty() {
+		if !dynamic_metadata.0.is_empty() {
 			req.extensions_mut().insert(Arc::new(dynamic_metadata));
 		}
 

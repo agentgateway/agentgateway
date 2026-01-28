@@ -37,7 +37,7 @@ pub enum Mode {
 #[apply(schema!)]
 #[derive(::cel::DynamicType)]
 pub struct Claims {
-	#[dynamic(with_value = "expose_key")]
+	#[dynamic(with_value = "redact_key")]
 	pub key: APIKey,
 	#[serde(flatten)]
 	#[dynamic(flatten)]
@@ -50,8 +50,8 @@ pub struct APIKey(
 	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
 	SecretString,
 );
-pub fn expose_key<'a>(c: &'a APIKey) -> Value<'a> {
-	Value::String(c.0.expose_secret().into())
+pub fn redact_key<'a>(_: &'a APIKey) -> Value<'a> {
+	Value::String("<redacted>".into())
 }
 
 impl APIKey {

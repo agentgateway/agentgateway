@@ -5,16 +5,17 @@
 |`request`|`request` contains attributes about the incoming HTTP request|
 |`request.method`|The HTTP method of the request. For example, `GET`|
 |`request.uri`|The complete URI of the request. For example, `http://example.com/path`.|
-|`request.host`||
-|`request.scheme`||
+|`request.host`|The hostname of the request. For example, `example.com`.|
+|`request.scheme`|The scheme of the request. For example, `https`.|
 |`request.path`|The path of the request URI. For example, `/path`.|
+|`request.version`|The version of the request. For example, `HTTP/1.1`.|
 |`request.headers`|The headers of the request.|
 |`request.body`|The body of the request. Warning: accessing the body will cause the body to be buffered.|
-|`request.startTime`|The (pre-rendered) time the request started|
-|`request.endTime`|The (pre-rendered) time the request completed|
+|`request.startTime`|The time the request started|
+|`request.endTime`|The time the request completed|
 |`response`|`response` contains attributes about the HTTP response|
 |`response.code`|The HTTP status code of the response.|
-|`response.headers`|The headers of the request.|
+|`response.headers`|The headers of the response.|
 |`response.body`|The body of the response. Warning: accessing the body will cause the body to be buffered.|
 |`jwt`|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
 |`apiKey`|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|
