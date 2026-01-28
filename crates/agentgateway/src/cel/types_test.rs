@@ -136,7 +136,8 @@ fn test_snapshot_matches_ref() {
 	let mut req = build_test_request();
 	let snapshot = snapshot_request(&mut req);
 	let req = build_test_request();
-	let snapshot_exec = Executor::new_logger(Some(&snapshot), None, snapshot.llm.as_ref(), None);
+	let snapshot_exec =
+		Executor::new_logger(Some(&snapshot), None, snapshot.llm.as_ref(), None, None);
 	let ref_executor = Executor::new_request(&req);
 
 	// Serialize the executor
@@ -151,7 +152,7 @@ fn test_executor_snapshot_round_trip() {
 	let req_snapshot = snapshot_request(&mut req);
 
 	// Create executor from snapshot
-	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None);
+	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None);
 
 	// Serialize to JSON
 	let json = serde_json::to_value(&executor1).expect("failed to serialize executor");

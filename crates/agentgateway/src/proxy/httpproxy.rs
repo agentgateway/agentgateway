@@ -17,7 +17,7 @@ use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
 
-use crate::cel::BackendContext;
+use crate::cel::{BackendContext, RequestStartTime};
 use crate::client::{ApplicationTransport, Transport};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::ExtProcRequest;
@@ -391,6 +391,9 @@ impl HTTPProxy {
 			tls: tls.and_then(|t| t.src_identity.clone()),
 		};
 		req.extensions_mut().insert(src);
+		req
+			.extensions_mut()
+			.insert(RequestStartTime(start_time.clone()));
 		let log = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
@@ -398,7 +401,6 @@ impl HTTPProxy {
 			),
 			self.inputs.metrics.clone(),
 			start,
-			start_time,
 			tcp.clone(),
 		);
 		let mut log: DropOnLog = log.into();

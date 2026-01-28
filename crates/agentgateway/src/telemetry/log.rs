@@ -366,6 +366,7 @@ impl CelLogging {
 		resp: Option<&'a cel::ResponseSnapshot>,
 		llm_response: Option<&'a LLMContext>,
 		mcp: Option<&'a ResourceType>,
+		end_time: Option<&'a str>,
 	) -> Result<CelLoggingExecutor<'a>, cel::Error> {
 		let CelLogging {
 			cel_context: _,
@@ -374,7 +375,7 @@ impl CelLogging {
 			metric_fields,
 			tracing_sampler: _,
 		} = self;
-		let executor = cel::Executor::new_logger(req, resp, llm_response, mcp);
+		let executor = cel::Executor::new_logger(req, resp, llm_response, mcp, end_time);
 		Ok(CelLoggingExecutor {
 			executor,
 			filter,
@@ -479,14 +480,12 @@ impl RequestLog {
 		cel: CelLogging,
 		metrics: Arc<Metrics>,
 		start: Instant,
-		start_time: String,
 		tcp_info: TCPConnectionInfo,
 	) -> Self {
 		RequestLog {
 			cel,
 			metrics,
 			start,
-			start_time,
 			tcp_info,
 			tls_info: None,
 			tracer: None,
@@ -528,7 +527,6 @@ pub struct RequestLog {
 	pub cel: CelLogging,
 	pub metrics: Arc<Metrics>,
 	pub start: Instant,
-	pub start_time: String,
 	pub tcp_info: TCPConnectionInfo,
 
 	// Set only for TLS traffic
@@ -684,11 +682,13 @@ impl Drop for DropOnLog {
 				_ => None,
 			}
 		});
+		let end_time_str = agent_core::telemetry::render_current_time();
 		let Ok(cel_exec) = log.cel.build(
 			log.request_snapshot.as_ref(),
 			log.response_snapshot.as_ref(),
 			llm_response.as_ref(),
 			mcp_cel.as_ref(),
+			Some(&end_time_str),
 		) else {
 			tracing::warn!("failed to build CEL context");
 			return;

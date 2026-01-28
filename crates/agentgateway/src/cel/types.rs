@@ -223,6 +223,7 @@ impl<'a> Executor<'a> {
 		resp: Option<&'a ResponseSnapshot>,
 		llm: Option<&'a LLMContext>,
 		mcp: Option<&'a ResourceType>,
+		end_time: Option<&'a str>,
 	) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
@@ -233,6 +234,9 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
+		if let Some(f) = this.request.as_mut() {
+			f.end_time = end_time;
+		}
 		this
 	}
 	pub fn new_request(req: &'a crate::http::Request) -> Self {
@@ -318,6 +322,7 @@ pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
 		source: req.extensions_mut().remove::<SourceContext>(),
 		extauthz: req.extensions_mut().remove::<ExtAuthzDynamicMetadata>(),
 		llm: req.extensions_mut().remove::<LLMContext>(),
+		start_time: req.extensions_mut().remove::<RequestStartTime>(),
 	}
 }
 
@@ -331,51 +336,42 @@ pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct RequestSnapshot {
 	/// The request's method
-	#[serde(with = "http_serde::method")]
 	pub method: http::Method,
 
 	/// The request's URI
-	#[serde(with = "http_serde::uri", rename = "uri")]
 	pub path: http::Uri,
 
 	/// The request's version
-	#[serde(with = "http_serde::version")]
 	pub version: http::Version,
 
 	// TODO: do not use header_map, which will make multi-headers a list
-	#[serde(with = "http_serde::header_map")]
 	/// The request's headers
 	pub headers: http::HeaderMap,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<BufferedBody>,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub jwt: Option<jwt::Claims>,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub api_key: Option<apikey::Claims>,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub basic_auth: Option<basicauth::Claims>,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub backend: Option<BackendContext>,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub source: Option<SourceContext>,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub start_time: Option<RequestStartTime>,
+
 	pub extauthz: Option<ExtAuthzDynamicMetadata>,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub llm: Option<LLMContext>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
+#[serde(rename_all = "camelCase")]
 pub struct RequestRef<'a> {
 	/// The request's method
 	#[serde(with = "http_serde::method")]
@@ -399,6 +395,12 @@ pub struct RequestRef<'a> {
 
 	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
 	pub body: ExtensionOrDirect<'a, BufferedBody>,
+
+	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
+	pub start_time: ExtensionOrDirect<'a, RequestStartTime>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub end_time: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -471,6 +473,11 @@ pub struct RequestRefSerde {
 
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<BufferedBody>,
+
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub start_time: Option<RequestStartTime>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub end_time: Option<String>,
 }
 
 /// Owned version of ResponseRef for JSON serialization/deserialization.
@@ -505,6 +512,8 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 			version: value.version,
 			headers: &value.headers,
 			body: value.body.as_ref().into(),
+			start_time: value.start_time.as_ref().into(),
+			end_time: None,
 		}
 	}
 }
@@ -517,6 +526,9 @@ impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
 			version: req.version(),
 			headers: req.headers(),
 			body: req.extensions().into(),
+			start_time: req.extensions().into(),
+			// Only known in snapshot phase...
+			end_time: None,
 		}
 	}
 }
@@ -587,6 +599,19 @@ impl DynamicType for BufferedBody {
 	}
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestStartTime(pub String);
+impl DynamicType for RequestStartTime {
+	fn auto_materialize(&self) -> bool {
+		self.0.auto_materialize()
+	}
+	fn materialize(&self) -> Value<'_> {
+		self.0.materialize()
+	}
+	fn field(&self, field: &str) -> Option<Value<'_>> {
+		self.0.field(field)
+	}
+}
 impl PartialEq for RequestRef<'_> {
 	fn eq(&self, _: &Self) -> bool {
 		// Currently do not allow comparisons
@@ -916,6 +941,8 @@ impl ExecutorSerde {
 				version: req.version,
 				headers: &req.headers,
 				body: ExtensionOrDirect::Direct(req.body.as_ref()),
+				start_time: ExtensionOrDirect::Direct(req.start_time.as_ref()),
+				end_time: req.end_time.as_deref(),
 			});
 		}
 
