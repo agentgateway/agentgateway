@@ -87,9 +87,7 @@ impl PartialEq for MapValue<'_> {
 			return false;
 		}
 		// Compare all key-value pairs regardless of Owned/Borrow variant
-		self
-			.iter()
-			.all(|(k, v)| other.get(&k).map_or(false, |other_v| v == other_v))
+		self.iter().all(|(k, v)| other.get(&k) == Some(v))
 	}
 }
 

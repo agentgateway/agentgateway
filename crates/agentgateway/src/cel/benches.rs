@@ -177,7 +177,7 @@ fn test_benchmark_cases_snapshot() {
 			.unwrap_or_else(|e| panic!("Failed to compile expression '{}': {}", tc.expression, e));
 		let mut req = (tc.request_builder)();
 		let ss = crate::cel::snapshot_request(&mut req);
-		let exec = crate::cel::Executor::new_logger(Some(&ss), None, None);
+		let exec = crate::cel::Executor::new_logger(Some(&ss), None, None, None);
 		let result = exec
 			.eval(&expr)
 			.unwrap_or_else(|e| panic!("Failed to eval expression '{}': {}", tc.expression, e));
@@ -220,7 +220,7 @@ fn bench_execute_snapshot(b: Bencher, case_name: &str) {
 	let expr = Expression::new_strict(tc.expression).unwrap();
 	let mut req = (tc.request_builder)();
 	let ss = crate::cel::snapshot_request(&mut req);
-	let exec = crate::cel::Executor::new_logger(Some(&ss), None, None);
+	let exec = crate::cel::Executor::new_logger(Some(&ss), None, None, None);
 
 	b.bench(|| {
 		let _ = divan::black_box(exec.eval(&expr).unwrap());

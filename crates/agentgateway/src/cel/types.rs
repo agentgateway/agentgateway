@@ -222,6 +222,7 @@ impl<'a> Executor<'a> {
 		req: Option<&'a RequestSnapshot>,
 		resp: Option<&'a ResponseSnapshot>,
 		llm: Option<&'a LLMContext>,
+		mcp: Option<&'a ResourceType>,
 	) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
@@ -231,8 +232,7 @@ impl<'a> Executor<'a> {
 			this.set_response_snapshot(resp);
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
-		// TODO: MCP
-		// this.mcp = Some(McpContextRef::Ref(mcp));
+		this.mcp = mcp;
 		this
 	}
 	pub fn new_request(req: &'a crate::http::Request) -> Self {

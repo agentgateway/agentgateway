@@ -141,11 +141,11 @@ impl RuleSets {
 			return true;
 		}
 		// If there are any DENY, deny
-		if rule_sets.iter().any(|r| r.denies(&exec)) {
+		if rule_sets.iter().any(|r| r.denies(exec)) {
 			return false;
 		}
 		// If there are any ALLOW, allow
-		if rule_sets.iter().any(|r| r.allows(&exec)) {
+		if rule_sets.iter().any(|r| r.allows(exec)) {
 			return true;
 		}
 		// Else deny

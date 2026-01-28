@@ -25,6 +25,7 @@ use tracing::{Level, trace};
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::Request;
 use crate::llm::InputFormat;
+use crate::mcp::{MCPOperation, ResourceId, ResourceType};
 use crate::proxy::ProxyResponseReason;
 use crate::telemetry::metrics::{
 	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
@@ -364,6 +365,7 @@ impl CelLogging {
 		req: Option<&'a cel::RequestSnapshot>,
 		resp: Option<&'a cel::ResponseSnapshot>,
 		llm_response: Option<&'a LLMContext>,
+		mcp: Option<&'a ResourceType>,
 	) -> Result<CelLoggingExecutor<'a>, cel::Error> {
 		let CelLogging {
 			cel_context: _,
@@ -372,7 +374,7 @@ impl CelLogging {
 			metric_fields,
 			tracing_sampler: _,
 		} = self;
-		let executor = cel::Executor::new_logger(req, resp, llm_response);
+		let executor = cel::Executor::new_logger(req, resp, llm_response, mcp);
 		Ok(CelLoggingExecutor {
 			executor,
 			filter,
@@ -669,10 +671,24 @@ impl Drop for DropOnLog {
 
 		let llm_response = log.llm_response.take().map(Into::into);
 
+		let mcp = log.mcp_status.take();
+		let mcp_cel = mcp.as_ref().and_then(|m| {
+			let resource = ResourceId::new(
+				m.target_name.as_deref()?.to_string(),
+				m.resource_name.as_deref()?.to_string(),
+			);
+			match m.resource {
+				Some(MCPOperation::Prompt) => Some(ResourceType::Prompt(resource)),
+				Some(MCPOperation::Tool) => Some(ResourceType::Tool(resource)),
+				Some(MCPOperation::Resource) => Some(ResourceType::Resource(resource)),
+				_ => None,
+			}
+		});
 		let Ok(cel_exec) = log.cel.build(
 			log.request_snapshot.as_ref(),
 			log.response_snapshot.as_ref(),
 			llm_response.as_ref(),
+			mcp_cel.as_ref(),
 		) else {
 			tracing::warn!("failed to build CEL context");
 			return;
@@ -719,7 +735,6 @@ impl Drop for DropOnLog {
 			llm_response.as_ref(),
 			&custom_metric_fields,
 		);
-		let mcp = log.mcp_status.take();
 		if let Some(mcp) = &mcp
 			&& mcp.method_name.is_some()
 		{

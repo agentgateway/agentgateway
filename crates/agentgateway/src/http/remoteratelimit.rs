@@ -121,7 +121,6 @@ impl RemoteRateLimit {
 			.iter()
 			.filter(|e| e.limit_type == limit_type)
 		{
-			// TODO: get LLM extension here
 			if let Some(rl_entries) = Self::eval_descriptor(req, &desc_entry.entries) {
 				// Trace evaluated descriptor key/value pairs for visibility
 				let kv_pairs: Vec<String> = rl_entries
