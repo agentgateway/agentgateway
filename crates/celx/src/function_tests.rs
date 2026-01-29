@@ -1,8 +1,9 @@
-use crate::insert_all;
 use assert_matches::assert_matches;
 use cel::types::dynamic::DynamicValue;
 use cel::{Context, Program, Value, context};
 use serde_json::json;
+
+use crate::insert_all;
 
 fn eval(expr: &str) -> anyhow::Result<Value<'static>> {
 	eval_with_optimizations_check(expr, true)
@@ -23,7 +24,7 @@ fn eval_with_optimizations_check(expr: &str, check: bool) -> anyhow::Result<Valu
 		Value::Dynamic(DynamicValue::new(&vars)),
 	);
 
-	let a = Value::resolve(&prog.expression(), &c, &resolver)?.as_static();
+	let a = Value::resolve(prog.expression(), &c, &resolver)?.as_static();
 	let b = Value::resolve(optimized.expression(), &c, &resolver)?.as_static();
 	if check {
 		assert_eq!(a, b, "optimizations changed behavior ({expr})");
@@ -47,7 +48,7 @@ fn eval_non_static(expr: &str, f: impl FnOnce(Value<'_>)) -> anyhow::Result<()> 
 		Value::Dynamic(DynamicValue::new(&vars)),
 	);
 
-	let a = Value::resolve(&prog.expression(), &c, &resolver)?;
+	let a = Value::resolve(prog.expression(), &c, &resolver)?;
 	f(a);
 	Ok(())
 }
@@ -59,7 +60,7 @@ fn with() {
 
 	// with() should not materialize
 	eval_non_static("vars.with(v, v)", |r| {
-		assert_matches!(r, Value::Dynamic(v));
+		assert_matches!(r, Value::Dynamic(_));
 	})
 	.unwrap();
 }
@@ -121,7 +122,7 @@ fn default() {
 
 	// default() should not materialize
 	eval_non_static("default(a.b, vars)", |r| {
-		assert_matches!(r, Value::Dynamic(v));
+		assert_matches!(r, Value::Dynamic(_));
 	})
 	.unwrap();
 }

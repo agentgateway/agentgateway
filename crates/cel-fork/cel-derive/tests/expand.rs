@@ -1,7 +1,6 @@
 #[test]
 fn expand() {
-	use std::env;
-	use std::fs;
+	use std::{env, fs};
 
 	let path_var = env::var_os("PATH").unwrap_or_default();
 	let mut paths = env::split_paths(&path_var);
