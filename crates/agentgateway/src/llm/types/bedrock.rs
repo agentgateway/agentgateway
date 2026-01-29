@@ -418,39 +418,50 @@ pub enum ConverseStreamOutput {
 }
 
 impl ConverseStreamOutput {
-	pub fn deserialize(m: aws_event_stream_parser::Message) -> anyhow::Result<Self> {
-		let Some(v) = m
-			.headers
-			.headers
-			.iter()
-			.find(|h| h.key.as_str() == ":event-type")
-			.and_then(|v| match &v.value {
-				aws_event_stream_parser::HeaderValue::String(s) => Some(s.to_string()),
-				_ => None,
-			})
-		else {
+	pub fn deserialize(m: crate::parse::aws_sse::Message) -> anyhow::Result<Self> {
+		// Helper to extract a string header value by name
+		let get_header = |name: &str| -> Option<String> {
+			m.headers()
+				.iter()
+				.find(|h| h.name().as_str() == name)
+				.and_then(|h| h.value().as_string().ok())
+				.map(|s| s.as_str().to_owned())
+		};
+
+		// Check for exception messages first - AWS EventStream uses :message-type header
+		// to distinguish between normal events and exceptions
+		let message_type = get_header(":message-type");
+		if message_type.as_deref() == Some("exception") {
+			let exception_type = get_header(":exception-type").unwrap_or_else(|| "unknown".to_owned());
+			let error_message = String::from_utf8_lossy(m.payload()).to_string();
+			anyhow::bail!("{exception_type}: {error_message}");
+		}
+
+		let Some(event_type) = get_header(":event-type") else {
 			anyhow::bail!("no event type header")
 		};
-		Ok(match v.as_str() {
+
+		let payload = m.payload();
+		Ok(match event_type.as_str() {
 			"contentBlockDelta" => ConverseStreamOutput::ContentBlockDelta(serde_json::from_slice::<
 				ContentBlockDeltaEvent,
-			>(&m.body)?),
+			>(payload)?),
 			"contentBlockStart" => ConverseStreamOutput::ContentBlockStart(serde_json::from_slice::<
 				ContentBlockStartEvent,
-			>(&m.body)?),
+			>(payload)?),
 			"contentBlockStop" => ConverseStreamOutput::ContentBlockStop(serde_json::from_slice::<
 				ContentBlockStopEvent,
-			>(&m.body)?),
+			>(payload)?),
 			"messageStart" => {
-				ConverseStreamOutput::MessageStart(serde_json::from_slice::<MessageStartEvent>(&m.body)?)
+				ConverseStreamOutput::MessageStart(serde_json::from_slice::<MessageStartEvent>(payload)?)
 			},
 			"messageStop" => {
-				ConverseStreamOutput::MessageStop(serde_json::from_slice::<MessageStopEvent>(&m.body)?)
+				ConverseStreamOutput::MessageStop(serde_json::from_slice::<MessageStopEvent>(payload)?)
 			},
 			"metadata" => ConverseStreamOutput::Metadata(serde_json::from_slice::<
 				ConverseStreamMetadataEvent,
-			>(&m.body)?),
-			m => anyhow::bail!("unexpected event type: {m}"),
+			>(payload)?),
+			other => anyhow::bail!("unexpected event type: {other}"),
 		})
 	}
 }

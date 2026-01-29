@@ -1632,8 +1632,8 @@ pub mod from_responses {
 		};
 
 		parse::aws_sse::transform_multi(b, move |aws_event| {
-			tracing::debug!("Raw AWS event - headers: {:?}", aws_event.headers);
-			if let Ok(body_str) = std::str::from_utf8(&aws_event.body) {
+			tracing::debug!("Raw AWS event - headers: {:?}", aws_event.headers());
+			if let Ok(body_str) = std::str::from_utf8(aws_event.payload()) {
 				tracing::debug!("AWS event body: {}", body_str);
 			}
 
