@@ -31,7 +31,7 @@ mod optimizer {
 		fn specialize_call(&self, c: &CallExpr) -> Option<Expr> {
 			match c.func_name.as_str() {
 				"ip" if c.args.len() == 1 && c.target.is_none() => {
-					let arg = c.args.iter().next()?.clone();
+					let arg = c.args.first()?.clone();
 					let Value::String(arg) = expr_as_value(arg)? else {
 						return None;
 					};
@@ -141,7 +141,7 @@ mod data {
 	impl<'a> DynResolver<'a> {
 		pub fn eval(&'a self, ctx: &'a Context, expr: &'a Expression) -> Value<'a> {
 			let resolver = DynResolverRef { rf: self };
-			Value::resolve(expr, &ctx, &resolver).unwrap()
+			Value::resolve(expr, ctx, &resolver).unwrap()
 		}
 	}
 	impl<'a> VariableResolver<'a> for DynResolverRef<'a> {
@@ -282,8 +282,6 @@ mod alloc {
 		let local_guard = local_token.enter();
 		let res = f();
 		drop(local_guard);
-		drop(local_token);
-		// AllocationRegistry::disable_tracking();
 		let amt = {
 			let mut m = c.0.lock().unwrap_or_else(|e| e.into_inner());
 			m.remove(&id).unwrap()
@@ -305,7 +303,9 @@ mod alloc {
 		) {
 			{
 				let mut m = self.0.lock().unwrap_or_else(|e| e.into_inner());
-				m.get_mut(&group_id).map(|m| *m += 1);
+				if let Some(m) = m.get_mut(&group_id) {
+					*m += 1;
+				}
 			};
 			// eprintln!(
 			//     "allocation -> addr=0x{:0x} object_size={} wrapped_size={} group_id={:?}",

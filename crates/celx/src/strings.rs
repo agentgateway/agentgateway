@@ -281,10 +281,14 @@ mod tests {
 	use crate::insert_all;
 
 	fn eval(expr: &str) -> serde_json::Value {
-		let prog = Program::compile(expr).expect(format!("failed to compile: {}", expr).as_str());
+		let prog = Program::compile(expr).unwrap_or_else(|_| panic!("failed to compile: {}", expr));
 		let mut c = Context::default();
 		insert_all(&mut c);
-		prog.execute(&c).expect(&format!("{expr}")).json().unwrap()
+		prog
+			.execute(&c)
+			.unwrap_or_else(|_| panic!("{expr}"))
+			.json()
+			.unwrap()
 	}
 
 	#[test]

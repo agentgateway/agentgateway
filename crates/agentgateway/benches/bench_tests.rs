@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::Write;
 
-use agentgateway::cel::Expression;
 use divan::Bencher;
 // #[global_allocator]
 // static ALLOC: divan::AllocProfiler = divan::AllocProfiler::system();

@@ -1186,8 +1186,6 @@ impl<'a> ops::Rem<Value<'a>> for Value<'a> {
 	}
 }
 
-/// Op represents a binary arithmetic operation supported on a timestamp
-
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;

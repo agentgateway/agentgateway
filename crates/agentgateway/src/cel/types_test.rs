@@ -117,8 +117,7 @@ fn test_executor_serde_complete() {
 fn exec_to_json(exec: &Executor) -> serde_json::Value {
 	let expr = Expression::new_strict("variables()").expect("failed to compile");
 	let cel_value = exec.eval(&expr).expect("failed to evaluate");
-	let j = cel_value.json().expect("failed to convert to JSON");
-	j
+	cel_value.json().expect("failed to convert to JSON")
 }
 
 #[test]

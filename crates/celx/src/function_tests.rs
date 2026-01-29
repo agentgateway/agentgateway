@@ -288,7 +288,10 @@ fn uuid() {
 fn assert(want: serde_json::Value, expr: &str) {
 	assert_eq!(
 		want,
-		eval(expr).expect(&format!("{expr}")).json().unwrap(),
+		eval(expr)
+			.unwrap_or_else(|_| panic!("{expr}"))
+			.json()
+			.unwrap(),
 		"expression: {expr}"
 	);
 }

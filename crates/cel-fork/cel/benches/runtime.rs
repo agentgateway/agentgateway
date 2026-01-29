@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::hint::black_box;
-use std::marker::PhantomData;
 use std::time::Duration;
 
 use cel::context::{Context, MapResolver, VariableResolver};
 use cel::{Program, Value};
 use criterion::{BenchmarkId, Criterion, criterion_group};
 use pprof::criterion::Output;
-use serde::Serialize;
 
 const EXPRESSIONS: [(&str, &str); 34] = [
 	("ternary_1", "(false || true) ? 1 : 2"),
@@ -49,7 +47,10 @@ const EXPRESSIONS: [(&str, &str); 34] = [
 	("regex", "'abc'.matches('^[a-z]*$')"),
 ];
 
-struct Resolver<'a>(PhantomData<&'a ()>);
+struct Resolver<'a> {
+	foo: Value<'a>,
+	a: Value<'a>,
+}
 
 impl<'a> VariableResolver<'a> for Resolver<'a> {
 	fn resolve(&self, expr: &str) -> Option<Value<'a>> {
@@ -60,26 +61,14 @@ impl<'a> VariableResolver<'a> for Resolver<'a> {
 			"carrot" => Some(NOT_V),
 			"orange" => Some(NOT_V),
 			"banana" => Some(V),
+			"apple" => Some(V),
+			"foo" => Some(self.foo.clone()),
+			"a" => Some(self.a.clone()),
 			_ => None,
 		}
 	}
 }
 
-struct CompositeResolver<'a, 'rf> {
-	base: &'rf dyn VariableResolver<'a>,
-	name: &'a str,
-	val: Value<'a>,
-}
-
-impl<'a, 'rf> VariableResolver<'a> for CompositeResolver<'a, 'rf> {
-	fn resolve(&self, expr: &str) -> Option<Value<'a>> {
-		if expr == self.name {
-			Some(self.val.clone())
-		} else {
-			self.base.resolve(expr)
-		}
-	}
-}
 pub fn criterion_benchmark(c: &mut Criterion) {
 	// https://gist.github.com/rhnvrm/db4567fcd87b2cb8e997999e1366d406
 	let mut execution_group = c.benchmark_group("execute");
@@ -88,7 +77,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 			let program = Program::compile(expr).expect("Parsing failed");
 			// eprintln!("{program:#?}");
 			let ctx = Context::default();
-			let rv = Resolver(PhantomData);
+			let rv = Resolver {
+				foo: Value::Map(HashMap::from([("bar", 1)]).into()),
+				a: Value::Int(1),
+			};
 			b.iter(|| Value::resolve(program.expression(), &ctx, &rv).expect("Eval failed!"))
 		});
 	}
@@ -128,17 +120,6 @@ criterion_group! {
 			.with_profiler(pprof::criterion::PProfProfiler::new(100, Output::Protobuf));
 		targets = criterion_benchmark, criterion_benchmark_parsing, map_macro_benchmark
 }
-
-const REALISTIC_EXPRESSIONS: &[(&str, &str)] = &[];
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct HttpRequest {
-	method: String,
-	path: String,
-	headers: HashMap<String, String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct RequestOpaque<'a>(&'a HttpRequest);
 
 #[cfg(feature = "dhat-heap")]
 #[global_allocator]
