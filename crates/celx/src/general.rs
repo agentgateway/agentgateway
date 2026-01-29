@@ -61,14 +61,14 @@ fn with<'a, 'rf, 'b>(
 	ident: Argument,
 	expr: Argument,
 ) -> ResolveResult<'a> {
-	let this: Value<'a> = this.load_value(ftx)?;
+	let this: Value<'a> = this.load_unmaterialized(ftx)?;
 	let ident = ident.load_identifier(ftx)?;
 	let expr = expr.load_expression(ftx)?;
 	let x: &'rf dyn VariableResolver<'a> = ftx.vars();
 	let resolver = SingleVarResolver::<'a, 'rf>::new(x, ident, this);
 	let v = Value::resolve(expr, ftx.ptx, &resolver)?;
 	drop(resolver);
-	Ok(v.as_static())
+	Ok(v)
 }
 pub fn variables<'a, 'rf>(ftx: &mut FunctionContext<'a, 'rf>) -> ResolveResult<'a> {
 	// Not ideal; we should find a way to dynamically expose
@@ -196,7 +196,6 @@ fn default<'a>(ftx: &mut FunctionContext<'a, '_>, exp: Argument, d: Argument) ->
 	// We determine if a type has a property by attempting to resolve it.
 	// If we get a NoSuchKey error, then we know the property does not exist
 	let exp = exp.load_expression(ftx)?;
-	let d: Value = d.load_value(ftx)?;
 	let resolved = match Value::resolve(exp, ftx.ptx, ftx.vars()) {
 		Ok(Value::Null) => None,
 		Ok(v) => Some(v),
@@ -206,7 +205,10 @@ fn default<'a>(ftx: &mut FunctionContext<'a, '_>, exp: Argument, d: Argument) ->
 			_ => return Err(err),
 		},
 	};
-	Ok(resolved.unwrap_or(d))
+	match resolved {
+		Some(v) => Ok(v),
+		None => Ok(d.load_unmaterialized(ftx)?)
+	}
 }
 
 mod json_field {

@@ -36,6 +36,13 @@ impl<'a, 'vars: 'a, 'rf> FunctionContext<'vars, 'rf> {
 			Err(ExecutionError::missing_argument_or_target())
 		}
 	}
+	pub fn this_unmaterialized(&self) -> Result<Value<'a>> {
+		if let Some(ref this) = self.this {
+			Ok(this.clone())
+		} else {
+			Err(ExecutionError::missing_argument_or_target())
+		}
+	}
 	pub fn this_or_arg<T: FromValue<'a>>(&self) -> Result<T> {
 		match self.this() {
 			Ok(val) => Ok(val),
@@ -51,6 +58,9 @@ impl<'a, 'vars: 'a, 'rf> FunctionContext<'vars, 'rf> {
 			.map(|v| v.always_materialize_owned())
 	}
 	pub fn value(&self, index: usize) -> Result<Value<'a>> {
+		self.value_unmaterialized(index).map(|v| v.always_materialize_owned())
+	}
+	pub fn value_unmaterialized(&self, index: usize) -> Result<Value<'a>> {
 		let arg = self
 			.args
 			.get(index)
@@ -58,7 +68,7 @@ impl<'a, 'vars: 'a, 'rf> FunctionContext<'vars, 'rf> {
 				index + 1,
 				self.args.len(),
 			))?;
-		Value::resolve(arg, self.ptx, self.variables).map(|v| v.always_materialize_owned())
+		Value::resolve(arg, self.ptx, self.variables)
 	}
 
 	pub fn arg<T: FromValue<'a>>(&self, index: usize) -> Result<T> {

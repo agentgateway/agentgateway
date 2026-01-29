@@ -1,7 +1,8 @@
-use cel::{Context, Program, Value};
-use serde_json::json;
-
 use crate::insert_all;
+use assert_matches::assert_matches;
+use cel::types::dynamic::DynamicValue;
+use cel::{Context, Program, Value, context};
+use serde_json::json;
 
 fn eval(expr: &str) -> anyhow::Result<Value<'static>> {
 	eval_with_optimizations_check(expr, true)
@@ -11,19 +12,56 @@ fn eval_with_optimizations_check(expr: &str, check: bool) -> anyhow::Result<Valu
 	let optimized = Program::compile_with_optimizer(expr, crate::DefaultOptimizer)?;
 	let mut c = Context::default();
 	insert_all(&mut c);
-	let a = prog.execute(&c)?.as_static();
-	let b = optimized.execute(&c)?.as_static();
+
+	let vars = Vars {
+		foo: "hello",
+		bar: "world",
+	};
+	let resolver = context::SingleVarResolver::new(
+		&context::DefaultVariableResolver,
+		"vars",
+		Value::Dynamic(DynamicValue::new(&vars)),
+	);
+
+	let a = Value::resolve(&prog.expression(), &c, &resolver)?.as_static();
+	let b = Value::resolve(optimized.expression(), &c, &resolver)?.as_static();
 	if check {
 		assert_eq!(a, b, "optimizations changed behavior ({expr})");
 	}
 
 	Ok(a)
 }
+fn eval_non_static(expr: &str, f: impl FnOnce(Value<'_>)) -> anyhow::Result<()> {
+	let expr = expr.to_string();
+	let prog = Program::compile_with_optimizer(&expr, crate::DefaultOptimizer)?;
+	let mut c = Context::default();
+	insert_all(&mut c);
+
+	let vars = Vars {
+		foo: "hello",
+		bar: "world",
+	};
+	let resolver = context::SingleVarResolver::new(
+		&context::DefaultVariableResolver,
+		"vars",
+		Value::Dynamic(DynamicValue::new(&vars)),
+	);
+
+	let a = Value::resolve(&prog.expression(), &c, &resolver)?;
+	f(a);
+	Ok(())
+}
 
 #[test]
 fn with() {
 	let expr = r#"[1,2].with(a, a + a)"#;
 	assert(json!([1, 2, 1, 2]), expr);
+
+	// with() should not materialize
+	eval_non_static("vars.with(v, v)", |r| {
+		assert_matches!(r, Value::Dynamic(v));
+	})
+	.unwrap();
 }
 
 #[test]
@@ -66,6 +104,8 @@ fn base64() {
 fn map_values() {
 	let expr = r#"{"a": 1, "b": 2}.mapValues(v, v * 2)"#;
 	assert(json!({"a": 2, "b": 4}), expr);
+	let expr = r#"vars.mapValues(v, v +  ' hi')"#;
+	assert(json!({"bar": "world hi", "foo": "hello hi"}), expr);
 }
 
 #[test]
@@ -78,6 +118,12 @@ fn default() {
 	assert(json!(2), expr);
 	let expr = r#"default(a.b, "b")"#;
 	assert(json!("b"), expr);
+
+	// default() should not materialize
+	eval_non_static("default(a.b, vars)", |r| {
+		assert_matches!(r, Value::Dynamic(v));
+	})
+	.unwrap();
 }
 
 #[test]
@@ -298,4 +344,10 @@ fn assert(want: serde_json::Value, expr: &str) {
 
 fn assert_fails(expr: &str) {
 	assert!(eval(expr).is_err(), "expression: {expr}");
+}
+
+#[derive(Debug, Clone, cel::DynamicType)]
+struct Vars<'a> {
+	foo: &'a str,
+	bar: &'a str,
 }

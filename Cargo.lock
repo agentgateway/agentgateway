@@ -31,6 +31,7 @@ name = "agent-celx"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "base64",
  "cel",
  "hashbrown 0.16.1",

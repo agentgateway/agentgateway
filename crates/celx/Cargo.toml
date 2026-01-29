@@ -24,3 +24,4 @@ vector-map.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
+assert_matches.workspace = true

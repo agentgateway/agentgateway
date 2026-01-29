@@ -1467,7 +1467,7 @@ mod tests {
 				val: this.clone(),
 			};
 			let v = Value::resolve(expr, ftx.ptx, &resolver)?;
-			Ok(v.as_static())
+			Ok(v)
 		}
 		let mut context = Context::default();
 		context.add_function("with", with);

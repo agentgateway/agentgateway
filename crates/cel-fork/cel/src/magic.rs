@@ -83,6 +83,9 @@ impl This {
 	pub fn load<'a>(self, ftx: &FunctionContext<'a, '_>) -> Result<Value<'a>, ExecutionError> {
 		ftx.this()
 	}
+	pub fn load_unmaterialized<'a>(self, ftx: &FunctionContext<'a, '_>) -> Result<Value<'a>, ExecutionError> {
+		ftx.this_unmaterialized()
+	}
 	pub fn load_value<'a, T: FromValue<'a>>(
 		self,
 		ftx: &FunctionContext<'a, '_>,
@@ -115,6 +118,13 @@ impl Argument {
 	) -> Result<T, ExecutionError> {
 		let index = self.0;
 		ftx.arg(index)
+	}
+	pub fn load_unmaterialized<'a>(
+		self,
+		ftx: &FunctionContext<'a, '_>,
+	) -> Result<Value<'a>, ExecutionError> {
+		let index = self.0;
+		ftx.value_unmaterialized(index)
 	}
 	pub fn load_expression<'a>(
 		self,
