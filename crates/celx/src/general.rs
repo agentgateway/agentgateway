@@ -207,7 +207,7 @@ fn default<'a>(ftx: &mut FunctionContext<'a, '_>, exp: Argument, d: Argument) ->
 	};
 	match resolved {
 		Some(v) => Ok(v),
-		None => Ok(d.load_unmaterialized(ftx)?)
+		None => Ok(d.load_unmaterialized(ftx)?),
 	}
 }
 

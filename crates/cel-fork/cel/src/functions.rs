@@ -58,7 +58,9 @@ impl<'a, 'vars: 'a, 'rf> FunctionContext<'vars, 'rf> {
 			.map(|v| v.always_materialize_owned())
 	}
 	pub fn value(&self, index: usize) -> Result<Value<'a>> {
-		self.value_unmaterialized(index).map(|v| v.always_materialize_owned())
+		self
+			.value_unmaterialized(index)
+			.map(|v| v.always_materialize_owned())
 	}
 	pub fn value_unmaterialized(&self, index: usize) -> Result<Value<'a>> {
 		let arg = self
