@@ -3,13 +3,13 @@ use std::hint::black_box;
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use cel::context::{CompositeResolver, Context, MapResolver, VariableResolver};
+use cel::context::{Context, MapResolver, VariableResolver};
 use cel::{Program, Value};
 use criterion::{BenchmarkId, Criterion, criterion_group};
 use pprof::criterion::Output;
 use serde::Serialize;
 
-const EXPRESSIONS: [(&str, &str); 35] = [
+const EXPRESSIONS: [(&str, &str); 34] = [
 	("ternary_1", "(false || true) ? 1 : 2"),
 	("ternary_2", "(true ? false : true) ? 1 : 2"),
 	("or_1", "false || true"),
@@ -42,7 +42,6 @@ const EXPRESSIONS: [(&str, &str); 35] = [
 	("duration", "duration('1s')"),
 	("timestamp", "timestamp('2023-05-28T00:00:00Z')"), /* ("complex", "Account{user_id: 123}.user_id == 123"), */
 	("variable resolver", "banana"),
-	("variable hashmap", "apple"),
 	(
 		"stress",
 		"true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true && true",
@@ -66,6 +65,21 @@ impl<'a> VariableResolver<'a> for Resolver<'a> {
 	}
 }
 
+struct CompositeResolver<'a, 'rf> {
+	base: &'rf dyn VariableResolver<'a>,
+	name: &'a str,
+	val: Value<'a>,
+}
+
+impl<'a, 'rf> VariableResolver<'a> for CompositeResolver<'a, 'rf> {
+	fn resolve(&self, expr: &str) -> Option<Value<'a>> {
+		if expr == self.name {
+			Some(self.val.clone())
+		} else {
+			self.base.resolve(expr)
+		}
+	}
+}
 pub fn criterion_benchmark(c: &mut Criterion) {
 	// https://gist.github.com/rhnvrm/db4567fcd87b2cb8e997999e1366d406
 	let mut execution_group = c.benchmark_group("execute");
@@ -74,11 +88,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 			let program = Program::compile(expr).expect("Parsing failed");
 			// eprintln!("{program:#?}");
 			let ctx = Context::default();
-			let mut vars = MapResolver::new();
-			vars.add_variable_from_value("foo", HashMap::from([("bar", 1)]));
-			vars.add_variable_from_value("apple", true);
-			vars.add_variable_from_value("a", 1);
-			let rv = CompositeResolver::new(&vars, &Resolver(PhantomData));
+			let rv = Resolver(PhantomData);
 			b.iter(|| Value::resolve(program.expression(), &ctx, &rv).expect("Eval failed!"))
 		});
 	}

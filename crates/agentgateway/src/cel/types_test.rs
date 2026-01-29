@@ -1,13 +1,9 @@
 use bytes::Bytes;
-use http::{HeaderMap, Method, Uri, Version};
-use secrecy::SecretString;
+use http::Method;
 use serde_json::json;
 
 use super::*;
 use crate::http::Body;
-use crate::http::ext_authz::ExtAuthzDynamicMetadata;
-use crate::mcp::{ResourceId, ResourceType};
-use crate::transport::tls::TlsInfo;
 
 /// Helper to build a test request with various fields populated
 fn build_test_request() -> crate::http::Request {
