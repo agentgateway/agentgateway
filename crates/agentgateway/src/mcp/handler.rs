@@ -160,15 +160,17 @@ impl Relay {
 		})
 	}
 
-	pub fn merge_initialize(&self, pv: ProtocolVersion) -> Box<MergeFn> {
+	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
 		Box::new(move |s| {
-			if s.len() == 1 {
+			if !multiplexing {
+				// Happy case: we can forward everything
 				let (_, ServerResult::InitializeResult(ir)) = s.into_iter().next().unwrap() else {
-					return Ok(Self::get_info(pv).into());
+					return Ok(Self::get_info(pv, multiplexing).into());
 				};
 				return Ok(ir.clone().into());
 			}
 
+			// Multiplexing is more complex. We need to find the lowest protocol version that all servers support.
 			let lowest_version = s
 				.into_iter()
 				.flat_map(|(_, v)| match v {
@@ -178,7 +180,7 @@ impl Relay {
 				.min_by_key(|i| i.to_string())
 				.unwrap_or(pv);
 			// For now, we just send our own info. In the future, we should merge the results from each upstream.
-			Ok(Self::get_info(lowest_version).into())
+			Ok(Self::get_info(lowest_version, multiplexing).into())
 		})
 	}
 
@@ -377,22 +379,38 @@ impl Relay {
 
 		Ok(accepted_response())
 	}
-	fn get_info(pv: ProtocolVersion) -> ServerInfo {
+	fn get_info(pv: ProtocolVersion, multiplexing: bool) -> ServerInfo {
+		let capabilities = if multiplexing {
+			ServerCapabilities {
+				completions: None,
+				experimental: None,
+				logging: None,
+				tasks: None,
+				tools: Some(ToolsCapability::default()),
+				// These are not supported when multiplexing.
+				prompts: None,
+				resources: None,
+			}
+		} else {
+			ServerCapabilities {
+				completions: None,
+				experimental: None,
+				logging: None,
+				tasks: None,
+				tools: Some(ToolsCapability::default()),
+				prompts: Some(PromptsCapability::default()),
+				resources: Some(ResourcesCapability::default()),
+			}
+		};
+		let instructions = Some(
+			"This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
+		);
 		ServerInfo {
-            protocol_version: pv,
-            capabilities: ServerCapabilities {
-                completions: None,
-                experimental: None,
-                logging: None,
-                prompts: Some(PromptsCapability::default()),
-                resources: Some(ResourcesCapability::default()),
-                tools: Some(ToolsCapability::default()),
-            },
-            server_info: Implementation::from_build_env(),
-            instructions: Some(
-                "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
-            ),
-        }
+			protocol_version: pv,
+			capabilities,
+			server_info: Implementation::from_build_env(),
+			instructions,
+		}
 	}
 }
 

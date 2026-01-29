@@ -231,10 +231,23 @@ impl Session {
 				});
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
+						if self.relay.is_multiplexing() {
+							// Currently, we cannot support roots until we have a mapping of downstream and upstream ID.
+							// However, the clients can tell the server they support roots.
+							// Instead, we hijack this to tell them not to so they do not send requests that we cannot
+							// actually support
+							ir.params.capabilities.roots = None
+						}
 						let pv = ir.params.protocol_version.clone();
 						let res = self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_initialize(pv))
+							.send_fanout(
+								r,
+								ctx,
+								self
+									.relay
+									.merge_initialize(pv, self.relay.is_multiplexing()),
+							)
 							.await;
 						if let Some(sessions) = self.relay.get_sessions() {
 							let s = http::sessionpersistence::SessionState::MCP(
@@ -381,7 +394,12 @@ impl Session {
 							))
 						}
 					},
-					ClientRequest::SubscribeRequest(_)
+
+					ClientRequest::ListTasksRequest(_)
+					| ClientRequest::GetTaskInfoRequest(_)
+					| ClientRequest::GetTaskResultRequest(_)
+					| ClientRequest::CancelTaskRequest(_)
+					| ClientRequest::SubscribeRequest(_)
 					| ClientRequest::UnsubscribeRequest(_)
 					| ClientRequest::CustomRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
@@ -633,12 +651,14 @@ impl sse_stream::Timer for TokioSseTimer {
 
 fn get_client_info() -> ClientInfo {
 	ClientInfo {
+		meta: None,
 		protocol_version: ProtocolVersion::V_2025_06_18,
 		capabilities: rmcp::model::ClientCapabilities {
 			experimental: None,
 			roots: None,
 			sampling: None,
 			elicitation: None,
+			tasks: None,
 		},
 		client_info: Implementation {
 			name: "agentgateway".to_string(),

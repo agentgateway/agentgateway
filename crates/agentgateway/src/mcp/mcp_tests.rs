@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use agent_core::strng;
 use itertools::Itertools;
 use rmcp::RoleClient;
-use rmcp::model::InitializeRequestParam;
+use rmcp::model::InitializeRequestParams;
 use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpServerConfig;
 use secrecy::SecretString;
@@ -87,7 +87,9 @@ async fn stream_to_multiplex() {
 	);
 
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParam {
+		.call_tool(rmcp::model::CallToolRequestParams {
+			meta: None,
+			task: None,
 			name: "mcp_echo".into(),
 			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
 		})
@@ -99,7 +101,9 @@ async fn stream_to_multiplex() {
 	);
 
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParam {
+		.call_tool(rmcp::model::CallToolRequestParams {
+			meta: None,
+			task: None,
 			name: "sse_echo".into(),
 			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
 		})
@@ -113,7 +117,9 @@ async fn stream_to_multiplex() {
 	// No target set...
 	assert!(
 		client
-			.call_tool(rmcp::model::CallToolRequestParam {
+			.call_tool(rmcp::model::CallToolRequestParams {
+				meta: None,
+				task: None,
 				name: "echo".into(),
 				arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
 			})
@@ -152,7 +158,9 @@ async fn stream_to_stream_single_tls() {
 	.await;
 	let client = mcp_streamable_client(io).await;
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParam {
+		.call_tool(rmcp::model::CallToolRequestParams {
+			meta: None,
+			task: None,
 			name: "echo_http".into(),
 			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
 		})
@@ -189,7 +197,9 @@ async fn authorization_denied_returns_unknown_tool_error() {
 
 	// Attempt to call a tool - should fail with "Unknown tool" error
 	let result = client
-		.call_tool(rmcp::model::CallToolRequestParam {
+		.call_tool(rmcp::model::CallToolRequestParams {
+			meta: None,
+			task: None,
 			name: "echo".into(),
 			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
 		})
@@ -246,7 +256,8 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 
 	// Attempt to get a prompt - should fail with "Unknown prompt" error
 	let result = client
-		.get_prompt(rmcp::model::GetPromptRequestParam {
+		.get_prompt(rmcp::model::GetPromptRequestParams {
+			meta: None,
 			name: "example_prompt".into(),
 			arguments: None,
 		})
@@ -303,7 +314,8 @@ async fn authorization_denied_returns_unknown_resource_error() {
 
 	// Attempt to read a resource - should fail with "Unknown resource" error
 	let result = client
-		.read_resource(rmcp::model::ReadResourceRequestParam {
+		.read_resource(rmcp::model::ReadResourceRequestParams {
+			meta: None,
 			uri: "memo://insights".into(),
 		})
 		.await;
@@ -335,7 +347,7 @@ async fn authorization_denied_returns_unknown_resource_error() {
 	}
 }
 
-async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParam>) {
+async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParams>) {
 	let tools = client.list_tools(None).await.unwrap();
 	let t = tools
 		.tools
@@ -346,7 +358,9 @@ async fn standard_assertions(client: RunningService<RoleClient, InitializeReques
 		.collect_vec();
 	assert_eq!(t, vec!["decrement".to_string(), "echo".to_string()]);
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParam {
+		.call_tool(rmcp::model::CallToolRequestParams {
+			meta: None,
+			task: None,
 			name: "echo".into(),
 			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
 		})
@@ -405,13 +419,14 @@ async fn setup_proxy_policies(
 
 pub async fn mcp_streamable_client(
 	s: SocketAddr,
-) -> RunningService<RoleClient, InitializeRequestParam> {
+) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
 	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
 	let client_info = ClientInfo {
+		meta: None,
 		protocol_version: Default::default(),
 		capabilities: ClientCapabilities::default(),
 		client_info: Implementation {
@@ -474,6 +489,7 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 		|| Ok(Counter::new()),
 		LocalSessionManager::default().into(),
 		StreamableHttpServerConfig {
+			sse_retry: None,
 			sse_keep_alive: None,
 			stateful_mode: stateful,
 			cancellation_token: Default::default(),
@@ -716,7 +732,7 @@ mod mockserver {
 
 		async fn list_resources(
 			&self,
-			_request: Option<PaginatedRequestParam>,
+			_request: Option<PaginatedRequestParams>,
 			_: RequestContext<RoleServer>,
 		) -> Result<ListResourcesResult, McpError> {
 			Ok(ListResourcesResult {
@@ -731,7 +747,7 @@ mod mockserver {
 
 		async fn read_resource(
 			&self,
-			ReadResourceRequestParam { uri }: ReadResourceRequestParam,
+			ReadResourceRequestParams { uri, .. }: ReadResourceRequestParams,
 			_: RequestContext<RoleServer>,
 		) -> Result<ReadResourceResult, McpError> {
 			match uri.as_str() {
@@ -758,7 +774,7 @@ mod mockserver {
 
 		async fn list_resource_templates(
 			&self,
-			_request: Option<PaginatedRequestParam>,
+			_request: Option<PaginatedRequestParams>,
 			_: RequestContext<RoleServer>,
 		) -> Result<ListResourceTemplatesResult, McpError> {
 			Ok(ListResourceTemplatesResult {
@@ -770,7 +786,7 @@ mod mockserver {
 
 		async fn initialize(
 			&self,
-			_request: InitializeRequestParam,
+			_request: InitializeRequestParams,
 			_: RequestContext<RoleServer>,
 		) -> Result<InitializeResult, McpError> {
 			Ok(self.get_info())
