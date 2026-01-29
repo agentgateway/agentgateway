@@ -30,6 +30,32 @@ pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
 
+// SendDirectResponse is a Response that has been buffered so that it is Send.
+pub struct SendDirectResponse(pub ::http::Response<Bytes>);
+
+impl Debug for SendDirectResponse {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("SendDirectResponse")
+			.field("status", &self.0.status())
+			.finish()
+	}
+}
+
+impl Deref for SendDirectResponse {
+	type Target = ::http::Response<Bytes>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl SendDirectResponse {
+	pub async fn new(response: Response) -> Result<Self, Error> {
+		let (head, bytes) = read_response_body(response).await?;
+		Ok(SendDirectResponse(::http::Response::from_parts(head, bytes)))
+	}
+}
+
 pub fn version_str(v: &http::Version) -> &'static str {
 	match *v {
 		http::Version::HTTP_09 => "HTTP/0.9",
@@ -136,6 +162,7 @@ impl RequestOrResponse<'_> {
 }
 
 use std::fmt::{Debug, Formatter};
+use std::ops::Deref;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::task::{Context, Poll};
@@ -148,6 +175,7 @@ use bytes::Bytes;
 use cel::Value;
 use http::uri::PathAndQuery;
 use http_body::{Frame, SizeHint};
+use http_body_util::BodyExt;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::Url;
@@ -575,6 +603,12 @@ pub fn response_buffer_limit(resp: &Response) -> usize {
 pub async fn read_body(req: Request) -> Result<Bytes, axum_core::Error> {
 	let lim = buffer_limit(&req);
 	read_body_with_limit(req.into_body(), lim).await
+}
+
+pub async fn read_response_body(resp: Response) -> Result<(::http::response::Parts, Bytes), axum_core::Error> {
+	let lim = response_buffer_limit(&resp);
+	let (h, b) = resp.into_parts();
+	read_body_with_limit(b, lim).await.map(|b| (h, b))
 }
 
 pub async fn read_body_with_limit(body: Body, limit: usize) -> Result<Bytes, axum_core::Error> {

@@ -45,12 +45,12 @@ fn parse_index(s: &str) -> Option<usize> {
 	s.parse().ok()
 }
 
-pub async fn from_request_body<T: DeserializeOwned>(req: Request) -> anyhow::Result<T> {
+pub async fn from_request_body<T: DeserializeOwned>(req: Request) -> Result<T, http::Error>  {
 	let lim = http::buffer_limit(&req);
 	from_body_with_limit(req.into_body(), lim).await
 }
 
-pub async fn from_response_body<T: DeserializeOwned>(resp: Response) -> anyhow::Result<T> {
+pub async fn from_response_body<T: DeserializeOwned>(resp: Response) -> Result<T, http::Error>  {
 	let lim = http::response_buffer_limit(&resp);
 	from_body_with_limit(resp.into_body(), lim).await
 }
@@ -58,10 +58,10 @@ pub async fn from_response_body<T: DeserializeOwned>(resp: Response) -> anyhow::
 pub async fn from_body_with_limit<T: DeserializeOwned>(
 	body: http::Body,
 	limit: usize,
-) -> anyhow::Result<T> {
+) -> Result<T, http::Error> {
 	let bytes = http::read_body_with_limit(body, limit).await?;
 	// Try to parse the response body as JSON
-	let t = serde_json::from_slice::<T>(bytes.as_ref())?;
+	let t = serde_json::from_slice::<T>(bytes.as_ref()).map_err(http::Error::new)?;
 	Ok(t)
 }
 

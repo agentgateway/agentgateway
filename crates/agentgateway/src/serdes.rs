@@ -344,7 +344,7 @@ impl FileInlineOrRemote {
 					)
 					.await
 					.context(format!("fetch {url}"))?;
-				return crate::json::from_response_body::<T>(resp).await;
+				return crate::json::from_response_body::<T>(resp).await.map_err(Into::into);
 			},
 		};
 		serde_json::from_str(&s).map_err(Into::into)

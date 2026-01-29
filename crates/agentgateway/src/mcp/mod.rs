@@ -14,8 +14,11 @@ use crate::proxy::ProxyError;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
+use rmcp::model::RequestId;
 pub use router::App;
 use thiserror::Error;
+use crate::http::SendDirectResponse;
+use crate::mcp::upstream::UpstreamError;
 
 #[cfg(test)]
 #[path = "mcp_tests.rs"]
@@ -30,7 +33,7 @@ pub enum Error {
 	#[error("client must send application/json")]
 	InvalidContentType,
 	#[error("fail to deserialize request body: {0}")]
-	Deserialize(anyhow::Error),
+	Deserialize(crate::http::Error),
 	#[error("fail to create session: {0}")]
 	StartSession(crate::http::Error),
 	#[error("session not found")]
@@ -41,6 +44,21 @@ pub enum Error {
 	SessionIdRequired,
 	#[error("invalid session ID header")]
 	InvalidSessionIdHeader,
+	#[error("upstream error: {}", .0.status())]
+	UpstreamError(Box<SendDirectResponse>),
+	#[error("send error: {}", .1)]
+	SendError(Option<RequestId>, String),
+	// Intentionally do NOT say its not authorized; we hide the existence of the tool
+	#[error("Unknown {0}: {1}")]
+	Authorization(RequestId, String, String),
+	#[error("failed to process session_id query parameter")]
+	InvalidSessionIdQuery,
+	#[error("failed to establish get stream: {0}")]
+	EstablishGetStream(String),
+	#[error("failed to forward message to legacy SSE: {0}")]
+	ForwardLegacySse(String),
+	#[error("failed to create SSE url: {0}")]
+	CreateSseUrl(String),
 }
 
 impl From<Error> for ProxyError {
@@ -60,6 +78,8 @@ pub enum ClientError {
 	Status(Box<crate::http::Response>),
 	#[error("http request failed: {0}")]
 	General(Arc<crate::http::Error>),
+	#[error("http request failed: {0}")]
+	Proxy(#[from] ProxyError),
 }
 
 impl ClientError {

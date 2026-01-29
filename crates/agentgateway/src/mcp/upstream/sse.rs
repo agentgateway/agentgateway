@@ -113,7 +113,7 @@ impl ClientCore {
 
 		ctx.apply(&mut req);
 
-		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await?;
 
 		if resp.status() == http::StatusCode::ACCEPTED {
 			return Err(ClientError::new(anyhow!("expected an SSE stream")));

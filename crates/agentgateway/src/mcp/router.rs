@@ -189,7 +189,7 @@ impl App {
 					},
 					sm,
 				);
-				Ok(sse.handle(req).await)
+				sse.handle(req).await
 			},
 			// TODO: indicate this is a DirectResponse
 			(path, _, Some(auth)) if path.ends_with("client-registration") => Ok(
@@ -359,7 +359,7 @@ impl App {
 		req: Request,
 		auth: McpAuthentication,
 		client: PolicyClient,
-	) -> anyhow::Result<Response> {
+	) -> Result<Response, ProxyError> {
 		// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
 		let issuer = auth.issuer.trim_end_matches('/');
 		let ureq = ::http::Request::builder()
@@ -367,14 +367,18 @@ impl App {
 			.body(Body::empty())?;
 		let upstream = client.simple_call(ureq).await?;
 		let limit = crate::http::response_buffer_limit(&upstream);
-		let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit).await?;
+		let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
+			.await
+			.map_err(ProxyError::Body)?;
 		match &auth.provider {
 			Some(McpIDP::Auth0 {}) => {
 				// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
 				let Some(serde_json::Value::String(ae)) =
 					json::traverse_mut(&mut resp, &["authorization_endpoint"])
 				else {
-					anyhow::bail!("authorization_endpoint missing");
+					return Err(ProxyError::ProcessingString(
+						"authorization_endpoint missing".to_string(),
+					));
 				};
 				// If the user provided multiple audiences with auth0, just prepend the first one
 				if let Some(aud) = auth.audiences.first() {
@@ -399,7 +403,9 @@ impl App {
 				let Some(serde_json::Value::String(re)) =
 					json::traverse_mut(&mut resp, &["registration_endpoint"])
 				else {
-					anyhow::bail!("registration_endpoint missing");
+					return Err(ProxyError::ProcessingString(
+						"registration_endpoint missing".to_string(),
+					));
 				};
 				*re = format!("{current_uri}/client-registration");
 			},
@@ -412,10 +418,9 @@ impl App {
 			.header("access-control-allow-origin", "*")
 			.header("access-control-allow-methods", "GET, OPTIONS")
 			.header("access-control-allow-headers", "content-type")
-			.body(axum::body::Body::from(Bytes::from(serde_json::to_string(
-				&resp,
-			)?)))
-			.map_err(|e| anyhow::anyhow!("Failed to build response: {e}"))?;
+			.body(axum::body::Body::from(Bytes::from(
+				serde_json::to_string(&resp).map_err(|e| ProxyError::Body(crate::http::Error::new(e)))?,
+			)))?;
 
 		Ok(response)
 	}
@@ -425,7 +430,7 @@ impl App {
 		req: Request,
 		auth: McpAuthentication,
 		client: PolicyClient,
-	) -> anyhow::Result<Response> {
+	) -> Result<Response, ProxyError> {
 		// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
 		let issuer = auth.issuer.trim_end_matches('/');
 		let ureq = ::http::Request::builder()

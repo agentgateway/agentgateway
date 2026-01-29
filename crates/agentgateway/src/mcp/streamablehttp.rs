@@ -118,7 +118,7 @@ impl StreamableHttpService {
 
 			// Clean up upstream resources (e.g., stdio processes)
 			let _ = session.delete_session(part).await;
-			return Ok(response);
+			return response;
 		}
 
 		let session_id = part
@@ -134,8 +134,7 @@ impl StreamableHttpService {
 				return mcp::Error::UnknownSession.into();
 			};
 
-			let resp = session.send(part, message).await;
-			return Ok(resp);
+			return session.send(part, message).await;
 		}
 
 		// No session header... we need to create one, if it is an initialize
@@ -146,7 +145,7 @@ impl StreamableHttpService {
 		}
 		let relay = (self.service_factory)().map_err(mcp::Error::StartSession)?;
 		let mut session = self.session_manager.create_session(relay);
-		let mut resp = session.send(part, message).await;
+		let mut resp = session.send(part, message).await?;
 
 		let Ok(sid) = session.id.parse() else {
 			return mcp::Error::InvalidSessionIdHeader.into();
@@ -180,7 +179,7 @@ impl StreamableHttpService {
 		};
 
 		let (parts, _) = request.into_parts();
-		Ok(session.get_stream(parts).await)
+		session.get_stream(parts).await
 	}
 
 	pub async fn handle_delete(&self, request: Request) -> Result<Response, ProxyError> {

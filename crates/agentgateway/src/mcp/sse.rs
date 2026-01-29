@@ -13,6 +13,7 @@ use crate::http::{DropBody, Request, Response, filters};
 use crate::mcp::handler::Relay;
 use crate::mcp::session;
 use crate::mcp::session::SessionManager;
+use crate::proxy::ProxyError;
 use crate::*;
 
 pub struct LegacySSEService {
@@ -37,41 +38,31 @@ impl LegacySSEService {
 		}
 	}
 
-	pub async fn handle(&self, request: Request) -> Response {
+	pub async fn handle(&self, request: Request) -> Result<Response, ProxyError> {
 		let method = request.method().clone();
 
 		match method {
 			http::Method::POST => self.handle_post(request).await,
 			http::Method::GET => self.handle_get(request).await,
-			_ => ::http::Response::builder()
-				.status(http::StatusCode::METHOD_NOT_ALLOWED)
-				.header(http::header::ALLOW, "GET, POST")
-				.body(http::Body::from("Method Not Allowed"))
-				.expect("valid response"),
+			_ => Err(ProxyError::MCP(mcp::Error::MethodNotAllowed)),
 		}
 	}
 
-	pub async fn handle_post(&self, request: Request) -> Response {
+	pub async fn handle_post(&self, request: Request) -> Result<Response, ProxyError> {
 		// Extract query parameters
 		let Ok(Query(PostEventQuery { session_id })) =
 			Query::<PostEventQuery>::try_from_uri(request.uri())
 		else {
-			return http_error(StatusCode::BAD_REQUEST, "failed to process session_id");
+			return mcp::Error::InvalidSessionIdQuery.into();
 		};
 		let limit = http::buffer_limit(&request);
 		let (part, body) = request.into_parts();
-		let message = match json::from_body_with_limit::<ClientJsonRpcMessage>(body, limit).await {
-			Ok(b) => b,
-			Err(e) => {
-				return http_error(
-					StatusCode::BAD_REQUEST,
-					format!("fail to deserialize request body: {e}"),
-				);
-			},
-		};
+		let message = json::from_body_with_limit::<ClientJsonRpcMessage>(body, limit)
+			.await
+			.map_err(mcp::Error::Deserialize)?;
 
 		let Some(mut session) = self.session_manager.get_session(&session_id) else {
-			return http_error(http::StatusCode::NOT_FOUND, "Session not found");
+			return mcp::Error::UnknownSession.into();
 		};
 
 		// To proxy SSE to streamable HTTP, we need to establish a GET stream for notifications.
@@ -79,36 +70,22 @@ impl LegacySSEService {
 		// Here, we wait until the InitializeRequest is sent, and then establish the GET stream once it is.
 		let is_init = matches!(&message, ClientJsonRpcMessage::Request(r) if matches!(&r.request, &ClientRequest::InitializeRequest(_)));
 		let init_parts = if is_init { Some(part.clone()) } else { None };
-		let resp = session.send(part, message).await;
+		let resp = session.send(part, message).await?;
 		if is_init {
 			trace!("received initialize request, establishing get stream");
-			let get_stream = session.get_stream(init_parts.unwrap()).await;
+			let get_stream = session.get_stream(init_parts.unwrap()).await?;
 			if let Err(e) = session.forward_legacy_sse(get_stream).await {
-				return http_error(
-					StatusCode::INTERNAL_SERVER_ERROR,
-					format!("fail to establish get stream: {e}"),
-				);
+				return mcp::Error::EstablishGetStream(e.to_string()).into();
 			}
 		}
 		if let Err(e) = session.forward_legacy_sse(resp).await {
-			return http_error(
-				StatusCode::INTERNAL_SERVER_ERROR,
-				format!("fail to send message: {e}"),
-			);
+			return mcp::Error::ForwardLegacySse(e.to_string()).into();
 		}
-		accepted_response()
+		Ok(accepted_response())
 	}
 
-	pub async fn handle_get(&self, request: Request) -> Response {
-		let relay = match (self.service_factory)() {
-			Ok(r) => r,
-			Err(e) => {
-				return http_error(
-					StatusCode::INTERNAL_SERVER_ERROR,
-					format!("fail to create relay: {e}"),
-				);
-			},
-		};
+	pub async fn handle_get(&self, request: Request) -> Result<Response, ProxyError> {
+		let relay = (self.service_factory)().map_err(mcp::Error::StartSession)?;
 
 		// GET requests establish an SSE stream.
 		// We will return the sessionId, and all future responses will get sent on the rx channel to send to this channel.
@@ -122,10 +99,7 @@ impl LegacySSEService {
 			url.query_pairs_mut().append_pair("sessionId", &session.id);
 			Ok(())
 		}) {
-			return http_error(
-				StatusCode::INTERNAL_SERVER_ERROR,
-				format!("fail to create SSE url: {e}"),
-			);
+			return mcp::Error::CreateSseUrl(e.to_string()).into();
 		}
 		let stream = futures::stream::once(futures::future::ok(
 			Event::default().event("endpoint").data(
@@ -142,20 +116,13 @@ impl LegacySSEService {
 			}),
 		);
 		let (parts, _) = request.into_parts();
-		Sse::new(stream).into_response().map(|b| {
+		Ok(Sse::new(stream).into_response().map(|b| {
 			http::Body::new(DropBody::new(
 				b,
 				session::dropper(self.session_manager.clone(), session, parts),
 			))
-		})
+		}))
 	}
-}
-
-fn http_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
-	::http::Response::builder()
-		.status(status)
-		.body(body.into())
-		.expect("valid response")
 }
 
 fn accepted_response() -> Response {

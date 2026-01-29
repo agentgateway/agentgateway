@@ -20,6 +20,7 @@ use crate::mcp::{mergestream, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
+use crate::proxy::ProxyError;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
@@ -77,6 +78,8 @@ pub enum UpstreamError {
 	Http(#[from] mcp::ClientError),
 	#[error("openapi upstream error: {0}")]
 	OpenAPIError(#[from] anyhow::Error),
+	#[error("{0}")]
+	Proxy(#[from] ProxyError),
 	#[error("stdio upstream error: {0}")]
 	Stdio(#[from] io::Error),
 	#[error("upstream closed on send")]

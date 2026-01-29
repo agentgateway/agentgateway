@@ -23,6 +23,7 @@ use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPOperation, rbac};
+use crate::proxy::ProxyError;
 use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
@@ -35,15 +36,16 @@ pub struct Session {
 
 impl Session {
 	/// send a message to upstream server(s)
-	pub async fn send(&mut self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
+	pub async fn send(
+		&mut self,
+		parts: Parts,
+		message: ClientJsonRpcMessage,
+	) -> Result<Response, ProxyError> {
 		let req_id = match &message {
 			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
 			_ => None,
 		};
-		self
-			.send_internal(parts, message)
-			.await
-			.unwrap_or_else(Self::handle_error(req_id))
+		Self::handle_error(req_id, self.send_internal(parts, message).await).await
 	}
 	/// send a message to upstream server(s), when using stateless mode. In stateless mode, every message
 	/// is wrapped in an InitializeRequest (except the actual InitializeRequest from the downstream).
@@ -53,7 +55,7 @@ impl Session {
 		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
-	) -> Response {
+	) -> Result<Response, ProxyError> {
 		let is_init = matches!(&message, ClientJsonRpcMessage::Request(r) if matches!(&r.request, &ClientRequest::InitializeRequest(_)));
 		if !is_init {
 			// first, send the initialize
@@ -62,15 +64,12 @@ impl Session {
 				params: get_client_info(),
 				extensions: Default::default(),
 			};
-			let res = self
+			let _ = self
 				.send(
 					parts.clone(),
 					ClientJsonRpcMessage::request(init_request.into(), RequestId::Number(0)),
 				)
-				.await;
-			if !res.status().is_success() {
-				return res;
-			}
+				.await?;
 
 			// And we need to notify as well.
 			let notification = ClientJsonRpcMessage::notification(
@@ -80,17 +79,14 @@ impl Session {
 				}
 				.into(),
 			);
-			let res = self.send(parts.clone(), notification).await;
-			if !res.status().is_success() {
-				return res;
-			}
+			let _ = self.send(parts.clone(), notification).await?;
 		}
 		// Now we can send the message like normal
 		self.send(parts, message).await
 	}
 
 	/// delete any active sessions
-	pub async fn delete_session(&self, parts: Parts) -> Response {
+	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
 		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "delete_session");
 		let session_id = self.id.to_string();
@@ -98,11 +94,7 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		self
-			.relay
-			.send_fanout_deletion(ctx)
-			.await
-			.unwrap_or_else(Self::handle_error(None))
+		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await).await
 	}
 
 	/// forward_legacy_sse takes an upstream Response and forwards all messages to the SSE data stream.
@@ -121,20 +113,20 @@ impl Session {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
 				trace!("forward SSE got SSE stream response");
 				let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
-				Ok(StreamableHttpPostResponse::Sse(event_stream, None))
+				StreamableHttpPostResponse::Sse(event_stream, None)
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
 				trace!("forward SSE got single JSON response");
 				let message = json::from_response_body::<ServerJsonRpcMessage>(resp)
 					.await
 					.map_err(ClientError::new)?;
-				Ok(StreamableHttpPostResponse::Json(message, None))
+				StreamableHttpPostResponse::Json(message, None)
 			},
 			_ => {
 				trace!("forward SSE got accepted, no action needed");
 				return Ok(());
 			},
-		}?;
+		};
 		let mut ms: Messages = sse.try_into()?;
 		tokio::spawn(async move {
 			while let Some(Ok(msg)) = ms.next().await {
@@ -147,7 +139,7 @@ impl Session {
 	}
 
 	/// get_stream establishes a stream for server-sent messages
-	pub async fn get_stream(&self, parts: Parts) -> Response {
+	pub async fn get_stream(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
 		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "get_stream");
 		let session_id = self.id.to_string();
@@ -155,55 +147,29 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		self
-			.relay
-			.send_fanout_get(ctx)
-			.await
-			.unwrap_or_else(Self::handle_error(None))
+		Self::handle_error(None, self.relay.send_fanout_get(ctx).await).await
 	}
 
-	fn handle_error(req_id: Option<RequestId>) -> impl FnOnce(UpstreamError) -> Response {
-		move |e| {
-			if let UpstreamError::Http(ClientError::Status(resp)) = e {
-				// Forward response as-is
-				return *resp;
-			}
-			// Handle authorization errors specially - return "Unknown" error
-			// to avoid leaking information about resource existence
-			if let UpstreamError::Authorization {
+	async fn handle_error(
+		req_id: Option<RequestId>,
+		d: Result<Response, UpstreamError>,
+	) -> Result<Response, ProxyError> {
+		match d {
+			Ok(r) => Ok(r),
+			Err(UpstreamError::Http(ClientError::Status(resp))) => {
+				let resp = http::SendDirectResponse::new(*resp)
+					.await
+					.map_err(ProxyError::Body)?;
+				Err(mcp::Error::UpstreamError(Box::new(resp)).into())
+			},
+			Err(UpstreamError::Authorization {
 				resource_type,
 				resource_name,
-			} = &e
-				&& let Some(ref req_id) = req_id
-				&& let Ok(body) = serde_json::to_string(&JsonRpcError {
-					jsonrpc: Default::default(),
-					id: req_id.clone(),
-					error: ErrorData {
-						code: ErrorCode::INVALID_PARAMS,
-						message: format!("Unknown {resource_type}: {resource_name}").into(),
-						data: None,
-					},
-				}) {
-				return http_json_error(StatusCode::OK, body);
-			}
-			let err = if let Some(req_id) = req_id {
-				serde_json::to_string(&JsonRpcError {
-					jsonrpc: Default::default(),
-					id: req_id,
-					error: ErrorData {
-						code: ErrorCode::INTERNAL_ERROR,
-						message: format!("failed to send message: {e}",).into(),
-						data: None,
-					},
-				})
-				.ok()
-			} else {
-				None
-			};
-			http_error(
-				StatusCode::INTERNAL_SERVER_ERROR,
-				err.unwrap_or_else(|| format!("failed to send message: {e}")),
-			)
+			}) if req_id.is_some() => Err(
+				mcp::Error::Authorization(req_id.unwrap(), resource_type.into(), resource_name.into())
+					.into(),
+			),
+			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
 		}
 	}
 
@@ -549,7 +515,8 @@ impl SessionManager {
 			let mut sm = self.sessions.write().expect("write lock");
 			sm.remove(id)?
 		};
-		Some(sess.delete_session(parts).await)
+		// Swallow the error
+		Some(sess.delete_session(parts).await.ok()?)
 	}
 }
 

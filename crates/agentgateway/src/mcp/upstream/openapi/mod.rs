@@ -682,7 +682,7 @@ impl Handler {
 		name: &str,
 		args: Option<JsonObject>,
 		ctx: &IncomingRequestContext,
-	) -> Result<serde_json::Value, anyhow::Error> {
+	) -> Result<serde_json::Value, UpstreamError> {
 		let (_tool, info) = self
 			.tools
 			.iter()
@@ -780,7 +780,7 @@ impl Handler {
 		// Build request body
 		let body = if let Some(body_val) = body_value {
 			rb = rb.header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-			serde_json::to_vec(&body_val)?
+			serde_json::to_vec(&body_val).map_err(|e| UpstreamError::OpenAPIError(e.into()))?
 		} else {
 			Vec::new()
 		};
@@ -857,12 +857,13 @@ impl Handler {
 				content_encoding,
 				lim,
 			)
-			.await?
+			.await
+			.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
 			.1;
 
 			// Wrap responses that are not structuredContent compliant in object
 			Ok(json!({ "data":
-				match serde_json::from_slice::<serde_json::Value>(&body_bytes)? {
+				match serde_json::from_slice::<serde_json::Value>(&body_bytes).map_err(|e| UpstreamError::OpenAPIError(e.into()))? {
 					Value::Object(obj) => return Ok(Value::Object(obj)),
 					Value::Null => return Ok(Value::Null),
 					data => data,
@@ -871,15 +872,17 @@ impl Handler {
 			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(
 				crate::http::read_body_with_limit(response.into_body(), lim)
-					.await?
+					.await
+					.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
 					.to_vec(),
-			)?;
-			Err(anyhow::anyhow!(
+			)
+			.map_err(|e| UpstreamError::OpenAPIError(e.into()))?;
+			Err(UpstreamError::OpenAPIError(anyhow::anyhow!(
 				"Upstream API call for tool '{}' failed with status {}: {}",
 				name,
 				status,
 				body
-			))
+			)))
 		}
 	}
 

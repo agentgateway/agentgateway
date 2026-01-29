@@ -42,6 +42,8 @@ impl ProxyResponse {
 			| ProxyError::InvalidRequest
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
+			| ProxyError::Body(_)
+			| ProxyError::Http(_)
 			| ProxyError::BackendUnsupportedMirror
 			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
@@ -156,6 +158,8 @@ pub enum ProxyError {
 	AuthorizationFailed,
 	#[error("backend authentication failed: {0}")]
 	BackendAuthenticationFailed(anyhow::Error),
+	#[error("parsing body: {0}")]
+	Body(http::Error),
 	#[error("upstream call failed: {0}")]
 	UpstreamCallFailed(HyperError),
 	#[error("upstream call timeout")]
@@ -168,6 +172,8 @@ pub enum ProxyError {
 	RequestTimeout,
 	#[error("processing failed: {0}")]
 	Processing(anyhow::Error),
+	#[error("invalid http: {0}")]
+	Http(#[from] ::http::Error),
 	#[error("ext_proc failed: {0}")]
 	ExtProc(#[from] ext_proc::Error),
 	#[error("processing failed: {0}")]
@@ -233,6 +239,8 @@ impl ProxyError {
 
 			ProxyError::RequestTimeout => StatusCode::GATEWAY_TIMEOUT,
 			ProxyError::Processing(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::Http(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::Body(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			ProxyError::RateLimitFailed => StatusCode::TOO_MANY_REQUESTS,
@@ -248,7 +256,14 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::UnknownSession) => StatusCode::NOT_FOUND,
 			ProxyError::MCP(mcp::Error::MissingSessionHeader) => StatusCode::UNPROCESSABLE_ENTITY,
 			ProxyError::MCP(mcp::Error::SessionIdRequired) => StatusCode::UNPROCESSABLE_ENTITY,
+			ProxyError::MCP(mcp::Error::InvalidSessionIdQuery) =>  StatusCode::UNPROCESSABLE_ENTITY,
 			ProxyError::MCP(mcp::Error::InvalidSessionIdHeader) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::CreateSseUrl(_)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::EstablishGetStream(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::MCP(mcp::Error::ForwardLegacySse(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::MCP(mcp::Error::UpstreamError(_)) => todo!(),
+			ProxyError::MCP(mcp::Error::SendError(_, _)) => todo!(),
+			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => todo!(),
 		};
 		let msg = self.to_string();
 		let mut rb = ::http::Response::builder()
