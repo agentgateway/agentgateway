@@ -350,7 +350,7 @@ impl LocalBackend {
 							let (backend, path, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								Self::make_backend(b, t.policies.clone(), tls)?;
+								backends.push(Self::make_backend(b, t.policies.clone(), tls)?);
 							}
 							McpTargetSpec::Sse(SseTargetSpec {
 								backend: bref,
@@ -361,7 +361,7 @@ impl LocalBackend {
 							let (backend, path, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								Self::make_backend(b, t.policies.clone(), tls)?;
+								backends.push(Self::make_backend(b, t.policies.clone(), tls)?);
 							}
 							McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 								backend: bref,
@@ -373,7 +373,7 @@ impl LocalBackend {
 							let (backend, _, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								Self::make_backend(b, t.policies.clone(), tls)?;
+								backends.push(Self::make_backend(b, t.policies.clone(), tls)?);
 							}
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
