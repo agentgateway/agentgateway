@@ -21,7 +21,7 @@ use crate::json::from_body_with_limit;
 use crate::mcp::handler::Relay;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
-use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
+use crate::mcp::streamablehttp::{GatewayStreamableHttpServerConfig, StreamableHttpService};
 use crate::mcp::{MCPInfo, McpAuthorizationSet};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
@@ -272,7 +272,7 @@ impl App {
 						.map_err(|e| Error::new(e.to_string()))
 					},
 					sm,
-					StreamableHttpServerConfig {
+					GatewayStreamableHttpServerConfig {
 						stateful_mode: backend.stateful,
 					},
 				);

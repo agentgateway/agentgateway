@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use ::http::StatusCode;
 use ::http::header::CONTENT_TYPE;
@@ -31,9 +31,21 @@ pub struct Session {
 	relay: Arc<Relay>,
 	pub id: Arc<str>,
 	tx: Option<Sender<ServerJsonRpcMessage>>,
+	client_info: Arc<RwLock<Option<ClientInfo>>>,
 }
 
 impl Session {
+	fn update_client_info(&self, info: ClientInfo) {
+		if let Ok(mut guard) = self.client_info.write() {
+			*guard = Some(info);
+		}
+	}
+
+	fn resolve_client_info(&self) -> ClientInfo {
+		let downstream = self.client_info.read().ok().and_then(|guard| guard.clone());
+		get_client_info(downstream.as_ref())
+	}
+
 	/// send a message to upstream server(s)
 	pub async fn send(&mut self, parts: Parts, message: ClientJsonRpcMessage) -> Response {
 		let req_id = match &message {
@@ -59,7 +71,7 @@ impl Session {
 			// first, send the initialize
 			let init_request = rmcp::model::InitializeRequest {
 				method: Default::default(),
-				params: get_client_info(),
+				params: self.resolve_client_info(),
 				extensions: Default::default(),
 			};
 			let res = self
@@ -165,8 +177,40 @@ impl Session {
 	fn handle_error(req_id: Option<RequestId>) -> impl FnOnce(UpstreamError) -> Response {
 		move |e| {
 			if let UpstreamError::Http(ClientError::Status(resp)) = e {
-				// Forward response as-is
+				if let Some(req_id) = req_id.clone() {
+					let status = resp.status();
+					let code = if status.is_client_error() {
+						ErrorCode::INVALID_REQUEST
+					} else {
+						ErrorCode::INTERNAL_ERROR
+					};
+					let data = serde_json::json!({
+						"http_status": status.as_u16(),
+						"reason": status.canonical_reason(),
+					});
+					if let Ok(body) = serde_json::to_string(&JsonRpcError {
+						jsonrpc: Default::default(),
+						id: req_id,
+						error: ErrorData {
+							code,
+							message: format!("upstream HTTP error: {status}").into(),
+							data: Some(data),
+						},
+					}) {
+						return http_json_error(StatusCode::OK, body);
+					}
+				}
+				// Forward response as-is when we cannot build a JSON-RPC error
 				return *resp;
+			}
+			if let UpstreamError::ServiceError(rmcp::ServiceError::McpError(err)) = &e
+				&& let Some(req_id) = req_id.clone()
+				&& let Ok(body) = serde_json::to_string(&JsonRpcError {
+					jsonrpc: Default::default(),
+					id: req_id,
+					error: err.clone(),
+				}) {
+				return http_json_error(StatusCode::OK, body);
 			}
 			// Handle authorization errors specially - return "Unknown" error
 			// to avoid leaking information about resource existence
@@ -231,6 +275,7 @@ impl Session {
 				let ctx = IncomingRequestContext::new(parts);
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
+						self.update_client_info(ir.params.clone());
 						let pv = ir.params.protocol_version.clone();
 						let res = self
 							.relay
@@ -381,6 +426,46 @@ impl Session {
 							))
 						}
 					},
+					ClientRequest::ListTasksRequest(_) => {
+						if self.relay.is_multiplexing() {
+							self
+								.relay
+								.send_fanout(r, ctx, self.relay.merge_tasks())
+								.await
+						} else {
+							self.relay.send_single_without_multiplexing(r, ctx).await
+						}
+					},
+					ClientRequest::GetTaskInfoRequest(gti) => {
+						let task_id = gti.params.task_id.clone();
+						let (service_name, task) = self.relay.parse_resource_name(&task_id)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(task.to_string());
+						});
+						gti.params.task_id = task.to_string();
+						self.relay.send_single(r, ctx, service_name).await
+					},
+					ClientRequest::GetTaskResultRequest(gtr) => {
+						let task_id = gtr.params.task_id.clone();
+						let (service_name, task) = self.relay.parse_resource_name(&task_id)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(task.to_string());
+						});
+						gtr.params.task_id = task.to_string();
+						self.relay.send_single(r, ctx, service_name).await
+					},
+					ClientRequest::CancelTaskRequest(ctr) => {
+						let task_id = ctr.params.task_id.clone();
+						let (service_name, task) = self.relay.parse_resource_name(&task_id)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(task.to_string());
+						});
+						ctr.params.task_id = task.to_string();
+						self.relay.send_single(r, ctx, service_name).await
+					},
 					ClientRequest::SubscribeRequest(_)
 					| ClientRequest::UnsubscribeRequest(_)
 					| ClientRequest::CustomRequest(_) => {
@@ -413,10 +498,24 @@ impl Session {
 				// however, we don't have a way to map to the correct service yet
 				self.relay.send_notification(r, ctx).await
 			},
-
-			_ => Err(UpstreamError::InvalidRequest(
-				"unsupported message type".to_string(),
-			)),
+			ClientJsonRpcMessage::Response(mut r) => {
+				let ctx = IncomingRequestContext::new(parts);
+				let (service_name, id) = self.relay.decode_upstream_request_id(&r.id)?;
+				r.id = id;
+				self
+					.relay
+					.send_client_message(service_name, ClientJsonRpcMessage::Response(r), ctx)
+					.await
+			},
+			ClientJsonRpcMessage::Error(mut r) => {
+				let ctx = IncomingRequestContext::new(parts);
+				let (service_name, id) = self.relay.decode_upstream_request_id(&r.id)?;
+				r.id = id;
+				self
+					.relay
+					.send_client_message(service_name, ClientJsonRpcMessage::Error(r), ctx)
+					.await
+			},
 		}
 	}
 }
@@ -425,6 +524,7 @@ impl Session {
 pub struct SessionManager {
 	encoder: http::sessionpersistence::Encoder,
 	sessions: RwLock<HashMap<String, Session>>,
+	client_info: Arc<RwLock<Option<ClientInfo>>>,
 }
 
 fn session_id() -> Arc<str> {
@@ -436,6 +536,7 @@ impl SessionManager {
 		Self {
 			encoder,
 			sessions: Default::default(),
+			client_info: Arc::new(RwLock::new(None)),
 		}
 	}
 
@@ -472,6 +573,7 @@ impl SessionManager {
 			relay: Arc::new(relay),
 			tx: None,
 			encoder: self.encoder.clone(),
+			client_info: self.client_info.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
@@ -488,6 +590,7 @@ impl SessionManager {
 			relay: Arc::new(relay),
 			tx: None,
 			encoder: self.encoder.clone(),
+			client_info: self.client_info.clone(),
 		}
 	}
 
@@ -507,6 +610,7 @@ impl SessionManager {
 			relay: Arc::new(relay),
 			tx: None,
 			encoder: self.encoder.clone(),
+			client_info: self.client_info.clone(),
 		}
 	}
 
@@ -520,6 +624,7 @@ impl SessionManager {
 			relay: Arc::new(relay),
 			tx: Some(tx),
 			encoder: self.encoder.clone(),
+			client_info: self.client_info.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
@@ -631,15 +736,14 @@ impl sse_stream::Timer for TokioSseTimer {
 	}
 }
 
-fn get_client_info() -> ClientInfo {
+fn get_client_info(downstream: Option<&ClientInfo>) -> ClientInfo {
+	if let Some(info) = downstream {
+		return info.clone();
+	}
 	ClientInfo {
+		meta: None,
 		protocol_version: ProtocolVersion::V_2025_06_18,
-		capabilities: rmcp::model::ClientCapabilities {
-			experimental: None,
-			roots: None,
-			sampling: None,
-			elicitation: None,
-		},
+		capabilities: rmcp::model::ClientCapabilities::default(),
 		client_info: Implementation {
 			name: "agentgateway".to_string(),
 			version: BuildInfo::new().version.to_string(),
