@@ -42,7 +42,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_regex",
- "uuid 1.19.0",
+ "uuid",
  "vector-map",
 ]
 
@@ -262,7 +262,7 @@ dependencies = [
  "tracing-subscriber",
  "typespec_client_core",
  "url",
- "uuid 1.19.0",
+ "uuid",
  "vector-map",
  "websocket-sans-io",
  "which 8.0.0",
