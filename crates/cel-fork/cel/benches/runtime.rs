@@ -5,7 +5,6 @@ use std::time::Duration;
 use cel::context::{Context, MapResolver, VariableResolver};
 use cel::{Program, Value};
 use criterion::{BenchmarkId, Criterion, criterion_group};
-use pprof::criterion::Output;
 
 const EXPRESSIONS: [(&str, &str); 34] = [
 	("ternary_1", "(false || true) ? 1 : 2"),
@@ -112,12 +111,27 @@ pub fn map_macro_benchmark(c: &mut Criterion) {
 	group.finish();
 }
 
+#[cfg(target_os = "linux")]
+fn config() -> Criterion {
+	Criterion::default()
+		.warm_up_time(Duration::from_millis(10))
+		.measurement_time(Duration::from_millis(100))
+		.with_profiler(pprof::criterion::PProfProfiler::new(
+			100,
+			pprof::criterion::Output::Protobuf,
+		))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn config() -> Criterion {
+	Criterion::default()
+		.warm_up_time(Duration::from_millis(10))
+		.measurement_time(Duration::from_millis(100))
+}
+
 criterion_group! {
 		name = benches;
-		config = Criterion::default()
-			.warm_up_time(Duration::from_millis(10))
-			.measurement_time(Duration::from_millis(100))
-			.with_profiler(pprof::criterion::PProfProfiler::new(100, Output::Protobuf));
+		config = config();
 		targets = criterion_benchmark, criterion_benchmark_parsing, map_macro_benchmark
 }
 

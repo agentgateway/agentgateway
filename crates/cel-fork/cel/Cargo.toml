@@ -30,8 +30,9 @@ http = "1.4.0"
 cel-derive = { path = "../cel-derive" }
 arcstr = "1.2.0"
 
-[dev-dependencies]
+[target.'cfg(target_os = "linux")'.dev-dependencies]
 pprof = { version = "0.15", features = ["protobuf", "protobuf-codec", "criterion"] }
+[dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 serde_bytes = "0.11.14"
 dhat = { version = "0.3.3" }
