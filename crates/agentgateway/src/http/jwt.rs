@@ -323,7 +323,11 @@ impl<'de> Deserialize<'de> for Claims {
 }
 
 impl Jwt {
-	pub async fn apply(&self, log: &mut RequestLog, req: &mut Request) -> Result<(), TokenError> {
+	pub async fn apply(
+		&self,
+		log: Option<&mut RequestLog>,
+		req: &mut Request,
+	) -> Result<(), TokenError> {
 		let Ok(TypedHeader(Authorization(bearer))) = req
 			.extract_parts::<TypedHeader<Authorization<Bearer>>>()
 			.await
@@ -343,7 +347,9 @@ impl Jwt {
 			},
 			Err(e) => return Err(e),
 		};
-		if let Some(serde_json::Value::String(sub)) = claims.inner.get("sub") {
+		if let Some(serde_json::Value::String(sub)) = claims.inner.get("sub")
+			&& let Some(log) = log
+		{
 			log.jwt_sub = Some(sub.to_string());
 		};
 		// Remove the token.

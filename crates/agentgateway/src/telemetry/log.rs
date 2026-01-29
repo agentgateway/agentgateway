@@ -768,6 +768,10 @@ impl Drop for DropOnLog {
 		let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
 
 		let fields = cel_exec.fields;
+		let reason = log.reason.and_then(|r| match r {
+			ProxyResponseReason::Upstream => None,
+			_ => Some(r),
+		});
 
 		let mut kv = vec![
 			("gateway", route_identifier.gateway.as_deref().map(display)),
@@ -939,6 +943,7 @@ impl Drop for DropOnLog {
 			),
 			("retry.attempt", log.retry_attempt.display()),
 			("error", log.error.quoted()),
+			("reason", reason.display()),
 			("duration", Some(dur.as_str().into())),
 		];
 		if enable_trace && let Some(t) = &log.tracer {

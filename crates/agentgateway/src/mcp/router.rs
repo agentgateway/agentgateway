@@ -3,10 +3,6 @@ use std::sync::Arc;
 use agent_core::prelude::Strng;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum_core::RequestExt;
-use axum_extra::TypedHeader;
-use axum_extra::headers::Authorization;
-use axum_extra::headers::authorization::Bearer;
 use bytes::Bytes;
 use http::Method;
 use http::uri::PathAndQuery;
@@ -77,7 +73,7 @@ impl App {
 		backend_policies: BackendPolicies,
 		mut req: Request,
 		log: AsyncLog<MCPInfo>,
-	) -> Response {
+	) -> Result<Response, ProxyError> {
 		let backends = {
 			let binds = self.state.read_binds();
 			let nt = backend
@@ -106,13 +102,7 @@ impl App {
 						always_use_prefix: backend.always_use_prefix,
 					}))
 				})
-				.collect::<Result<Vec<_>, _>>();
-			let Ok(nt) = nt else {
-				return ::http::Response::builder()
-					.status(StatusCode::INTERNAL_SERVER_ERROR)
-					.body(axum::body::Body::from("failed to resolve MCP backend"))
-					.unwrap();
-			};
+				.collect::<Result<Vec<_>, _>>()?;
 
 			McpBackendGroup {
 				targets: nt,
@@ -152,45 +142,26 @@ impl App {
 						"MCP auth configured; validating Authorization header (mode={:?})",
 						auth.mode
 					);
-					match req
-						.extract_parts::<TypedHeader<Authorization<Bearer>>>()
+					auth
+						.jwt_validator
+						.apply(None, &mut req)
 						.await
-					{
-						Ok(TypedHeader(Authorization(bearer))) => {
-							debug!("Authorization header present; validating JWT token");
-							match auth.jwt_validator.validate_claims(bearer.token()) {
-								Ok(claims) => {
-									debug!("JWT validation succeeded; inserting verified claims into context");
-									// Populate context with verified JWT claims before continuing
-									req.headers_mut().remove(http::header::AUTHORIZATION);
-									req.extensions_mut().insert(claims);
-								},
-								Err(_e) => {
-									warn!("JWT validation failed; returning 401 (error: {:?})", _e);
-									return Self::create_auth_required_response(&req, auth).into_response();
-								},
-							}
-						},
-						Err(_missing_header) => {
-							// Enforce strict mode when Authorization header is missing
-							if matches!(auth.mode, jwt::Mode::Strict) {
-								debug!("Missing Authorization header and MCP auth is STRICT; returning 401");
-								return Self::create_auth_required_response(&req, auth).into_response();
-							}
-							// Optional/Permissive: continue without JWT
-							debug!(
-								"Missing Authorization header but MCP auth not STRICT; continuing without JWT"
-							);
-						},
-					}
+						.map_err(|e| {
+							Self::create_auth_required_response(
+								ProxyError::JwtAuthenticationFailure(e),
+								&req,
+								auth,
+							)
+						})?;
 				},
 				// if mcp authn is configured but JWT already validated (claims exist from previous layer),
 				// reject because we cannot validate MCP-specific auth requirements
 				(Some(auth), true) => {
-					warn!(
-						"MCP backend authentication configured but JWT token already validated and stripped by Gateway or Route level policy"
-					);
-					return Self::create_auth_required_response(&req, auth).into_response();
+					return Err(Self::create_auth_required_response(
+						ProxyError::ProcessingString("MCP backend authentication configured but JWT token already validated and stripped by Gateway or Route level policy".to_string()),
+						&req,
+						auth
+					));
 				},
 				// if no mcp authn is configured, do nothing
 				(None, _) => {
@@ -218,28 +189,35 @@ impl App {
 					},
 					sm,
 				);
-				sse.handle(req).await
+				Ok(sse.handle(req).await)
 			},
-			(path, _, Some(auth)) if path.ends_with("client-registration") => self
-				.client_registration(req, auth, client.clone())
-				.await
-				.map_err(|e| {
-					warn!("client_registration error: {}", e);
-					StatusCode::INTERNAL_SERVER_ERROR
-				})
-				.into_response(),
-			(path, _, Some(auth)) if path.starts_with("/.well-known/oauth-protected-resource") => self
-				.protected_resource_metadata(req, auth)
-				.await
-				.into_response(),
-			(path, _, Some(auth)) if path.starts_with("/.well-known/oauth-authorization-server") => self
-				.authorization_server_metadata(req, auth, client.clone())
-				.await
-				.map_err(|e| {
-					warn!("authorization_server_metadata error: {}", e);
-					StatusCode::INTERNAL_SERVER_ERROR
-				})
-				.into_response(),
+			// TODO: indicate this is a DirectResponse
+			(path, _, Some(auth)) if path.ends_with("client-registration") => Ok(
+				self
+					.client_registration(req, auth, client.clone())
+					.await
+					.map_err(|e| {
+						warn!("client_registration error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response(),
+			),
+			(path, _, Some(auth)) if path.starts_with("/.well-known/oauth-protected-resource") => Ok(
+				self
+					.protected_resource_metadata(req, auth)
+					.await
+					.into_response(),
+			),
+			(path, _, Some(auth)) if path.starts_with("/.well-known/oauth-authorization-server") => Ok(
+				self
+					.authorization_server_metadata(req, auth, client.clone())
+					.await
+					.map_err(|e| {
+						warn!("authorization_server_metadata error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response(),
+			),
 			_ => {
 				// Assume this is streamable HTTP otherwise
 				let streamable = StreamableHttpService::new(
@@ -283,7 +261,11 @@ pub struct McpTarget {
 }
 
 impl App {
-	fn create_auth_required_response(req: &Request, auth: &McpAuthentication) -> Response {
+	fn create_auth_required_response(
+		inner: ProxyError,
+		req: &Request,
+		auth: &McpAuthentication,
+	) -> ProxyError {
 		let request_path = req.uri().path();
 		// If the `resource` is explicitly configured, use that as the base. otherwise, derive it from the
 		// the request URL
@@ -304,19 +286,7 @@ impl App {
 			"Bearer resource_metadata=\"{proxy_url}/.well-known/oauth-protected-resource{request_path}\""
 		);
 
-		::http::Response::builder()
-			.status(StatusCode::UNAUTHORIZED)
-			.header("www-authenticate", www_authenticate_value)
-			.header("content-type", "application/json")
-			.body(axum::body::Body::from(Bytes::from(
-				r#"{"error":"unauthorized","error_description":"JWT token required"}"#,
-			)))
-			.unwrap_or_else(|_| {
-				::http::Response::builder()
-					.status(StatusCode::INTERNAL_SERVER_ERROR)
-					.body(axum::body::Body::empty())
-					.unwrap()
-			})
+		ProxyError::McpJwtAuthenticationFailure(Box::new(inner), www_authenticate_value)
 	}
 
 	async fn protected_resource_metadata(&self, req: Request, auth: McpAuthentication) -> Response {

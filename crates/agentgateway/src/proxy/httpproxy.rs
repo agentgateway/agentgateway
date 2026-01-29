@@ -72,7 +72,7 @@ async fn apply_request_policies(
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
 	if let Some(j) = &policies.jwt {
-		j.apply(log, req)
+		j.apply(Some(log), req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
@@ -243,7 +243,7 @@ async fn apply_gateway_policies(
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
 	if let Some(j) = &policies.jwt {
-		j.apply(log, req)
+		j.apply(Some(log), req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
@@ -1323,7 +1323,6 @@ async fn make_backend_call(
 					.clone()
 					.mcp_state
 					.serve(inputs, name, backend, policies, req, mcp_response_log)
-					.map(Ok)
 					.await
 			}));
 		},
