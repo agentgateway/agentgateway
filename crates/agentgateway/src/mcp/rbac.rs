@@ -1,4 +1,8 @@
+use ::cel::Value;
+use ::cel::objects::{KeyRef, MapValue};
+use ::http::request::Parts;
 use serde::{Deserialize, Serialize};
+use vector_map::VecMap;
 
 use crate::cel::ContextBuilder;
 use crate::http::authorization::{RuleSet, RuleSets};
@@ -18,6 +22,14 @@ impl McpAuthorization {
 	}
 }
 
+pub struct CelExecWrapper(::http::Request<Bytes>);
+
+impl CelExecWrapper {
+	pub fn new(parts: Parts) -> CelExecWrapper {
+		let dummy = ::http::Request::from_parts(parts, bytes::Bytes::new());
+		CelExecWrapper(dummy)
+	}
+}
 #[derive(Clone, Debug)]
 pub struct McpAuthorizationSet(RuleSets);
 
@@ -25,14 +37,10 @@ impl McpAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
 		Self(rs)
 	}
-	pub fn validate(&self, res: &ResourceType, cel: &ContextBuilder) -> bool {
+	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
 		tracing::debug!("Checking RBAC for resource: {:?}", res);
-		self.0.validate(|| {
-			cel
-				.build_with_mcp(Some(res))
-				.map(agent_core::bow::OwnedOrBorrowed::Owned)
-				.map_err(Into::into)
-		})
+		let exec = crate::cel::Executor::new_mcp(&cel.0, res);
+		self.0.validate(&exec)
 	}
 
 	pub fn register(&self, cel: &mut ContextBuilder) {
@@ -52,7 +60,30 @@ pub enum ResourceType {
 	Resource(ResourceId),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+impl cel::DynamicType for ResourceType {
+	fn materialize(&self) -> Value<'_> {
+		let (n, t) = match self {
+			ResourceType::Tool(t) => ("tool", t),
+			ResourceType::Prompt(t) => ("prompt", t),
+			ResourceType::Resource(t) => ("resource", t),
+		};
+		Value::Map(MapValue::Borrow(VecMap::from_iter([(
+			KeyRef::String(n.into()),
+			t.materialize(),
+		)])))
+	}
+
+	fn field(&self, field: &str) -> Option<Value<'_>> {
+		match (self, field) {
+			(ResourceType::Tool(t), "tool") => Some(t.materialize()),
+			(ResourceType::Prompt(t), "prompt") => Some(t.materialize()),
+			(ResourceType::Resource(t), "resource") => Some(t.materialize()),
+			_ => None,
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, ::cel::DynamicType)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct ResourceId {

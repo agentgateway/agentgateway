@@ -1,191 +1,155 @@
-use std::collections::HashMap;
-use std::string::ToString;
 use std::sync::Arc;
 
-use ::cel::extractors::{Identifier, This};
-use ::cel::objects::{Map, ValueType};
-use ::cel::parser::Expression;
+use ::cel::extractors::{Argument, This};
+use ::cel::objects::{MapValue, StringValue, ValueType};
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
+use cel::ExecutionError;
+use cel::context::{SingleVarResolver, VariableResolver};
+use cel::objects::KeyRef;
 use rand::random_range;
-use serde::ser::Error;
-use serde::{Serialize, Serializer};
+use serde::Deserializer;
 use uuid::Uuid;
 
-pub fn insert_all(ctx: &mut Context<'_>) {
+pub fn insert_all(ctx: &mut Context) {
 	// Custom to agentgateway
 	ctx.add_function("json", json_parse);
+	ctx.add_function("jsonField", json_parse_field);
 	ctx.add_function("to_json", to_json);
 	// Keep old and new name for compatibility
 	ctx.add_function("toJson", to_json);
 	ctx.add_function("with", with);
-	ctx.add_function("flatten", flatten);
-	ctx.add_function("flatten_recursive", flatten_recursive);
-	// Keep old and new name for compatibility
-	ctx.add_function("flattenRecursive", flatten_recursive);
 	ctx.add_function("mapValues", map_values);
 	ctx.add_function("merge", map_merge);
 	ctx.add_function("variables", variables);
-	ctx.add_function("random", || random_range(0.0..=1.0));
+	ctx.add_function("random", random);
 	ctx.add_function("default", default);
 	ctx.add_function("regexReplace", regex_replace);
 	ctx.add_function("fail", fail);
 	ctx.add_function("uuid", uuid_generate);
 
-	// Using the go name, base64.encode is blocked by https://github.com/cel-rust/cel-rust/issues/103 (namespacing)
+	// Support legacy and modern name
 	ctx.add_function("base64Encode", base64_encode);
 	ctx.add_function("base64Decode", base64_decode);
+	ctx.add_qualified_function("base64", "encode", base64_encode);
+	ctx.add_qualified_function("base64", "decode", base64_decode);
 }
 
-pub fn base64_encode(This(this): This<Arc<String>>) -> String {
+pub fn base64_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	// The Go library requires bytes, but we accept strings too.
+	let v = v.load(ftx)?;
 	use base64::Engine;
-	base64::prelude::BASE64_STANDARD.encode(this.as_bytes())
+	Ok(
+		base64::prelude::BASE64_STANDARD
+			.encode(v.as_bytes()?)
+			.into(),
+	)
 }
 
-pub fn base64_decode(ftx: &FunctionContext, This(this): This<Arc<String>>) -> ResolveResult {
+pub fn base64_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	// The Go library requires strings, but we accept bytes too.
+	let v = v.load(ftx)?;
 	use base64::Engine;
 	base64::prelude::BASE64_STANDARD
-		.decode(this.as_ref())
-		.map(|v| Value::Bytes(Arc::new(v)))
+		.decode(v.as_bytes()?)
+		.map(|v| v.into())
 		.map_err(|e| ftx.error(e))
 }
 
-fn with(
-	ftx: &FunctionContext,
-	This(this): This<Value>,
-	ident: Identifier,
-	expr: Expression,
-) -> ResolveResult {
-	let mut ptx = ftx.ptx.new_inner_scope();
-	ptx.add_variable_from_value(&ident, this);
-	ptx.resolve(&expr)
+fn with<'a, 'rf, 'b>(
+	ftx: &'b mut FunctionContext<'a, 'rf>,
+	this: This,
+	ident: Argument,
+	expr: Argument,
+) -> ResolveResult<'a> {
+	let this: Value<'a> = this.load_unmaterialized(ftx)?;
+	let ident = ident.load_identifier(ftx)?;
+	let expr = expr.load_expression(ftx)?;
+	let x: &'rf dyn VariableResolver<'a> = ftx.vars();
+	let resolver = SingleVarResolver::<'a, 'rf>::new(x, ident, this);
+	let v = Value::resolve(expr, ftx.ptx, &resolver)?;
+	drop(resolver);
+	Ok(v)
 }
-
-#[derive(Clone, Debug)]
-pub enum FlattenSignal {
-	Map(Map),
-	MapRecursive(Map),
-	List(Arc<Vec<Value>>),
-	ListRecursive(Arc<Vec<Value>>),
-}
-impl Serialize for FlattenSignal {
-	fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		Err(S::Error::custom("cannot serialize FlattenSignal"))
-	}
-}
-impl Eq for FlattenSignal {}
-impl PartialEq for FlattenSignal {
-	fn eq(&self, _: &Self) -> bool {
-		false
-	}
-}
-crate::impl_opaque!(FlattenSignal, "flatten_signal");
-impl FlattenSignal {
-	pub fn from_value(v: &Value) -> Option<FlattenSignal> {
-		let Value::Opaque(s) = v else {
-			return None;
-		};
-		Some(crate::helpers::cast::<Self>(s).ok()?.clone())
-	}
-}
-
-fn flatten(ftx: &FunctionContext, v: Value) -> ResolveResult {
-	let res = match v {
-		Value::List(l) => Value::Opaque(Arc::new(FlattenSignal::List(l))),
-		Value::Map(m) => Value::Opaque(Arc::new(FlattenSignal::Map(m))),
-		_ => {
-			return ftx.error("flatten only works on Map or List").into();
-		},
-	};
-	res.into()
-}
-
-fn flatten_recursive(ftx: &FunctionContext, v: Value) -> ResolveResult {
-	let res = match v {
-		Value::List(l) => Value::Opaque(Arc::new(FlattenSignal::ListRecursive(l))),
-		Value::Map(m) => Value::Opaque(Arc::new(FlattenSignal::MapRecursive(m))),
-		_ => {
-			return ftx.error("flatten only works on Map or List").into();
-		},
-	};
-	res.into()
-}
-
-fn variables(ftx: &FunctionContext) -> ResolveResult {
-	fn variables_inner<'context>(
-		ctx: &'context Context<'context>,
-	) -> HashMap<cel::objects::Key, Value> {
-		match ctx {
-			Context::Root { variables, .. } => variables
-				.clone()
-				.iter()
-				.map(|(k, v)| (cel::objects::Key::from(k.as_str()), v.clone()))
-				.collect(),
-			Context::Child {
-				parent, variables, ..
-			} => {
-				let mut base = variables_inner(parent);
-				base.extend(
-					variables
-						.iter()
-						.map(|(k, v)| (cel::objects::Key::from(k.as_str()), v.clone())),
-				);
-				base
-			},
+pub fn variables<'a, 'rf>(ftx: &mut FunctionContext<'a, 'rf>) -> ResolveResult<'a> {
+	// Not ideal; we should find a way to dynamically expose
+	let keys = [
+		"request",
+		"response",
+		"jwt",
+		"apiKey",
+		"basicAuth",
+		"llm",
+		"source",
+		"mcp",
+		"backend",
+		"extauthz",
+		"extproc",
+	];
+	let mut res = vector_map::VecMap::with_capacity(keys.len());
+	for k in keys {
+		if let Some(v) = ftx.variables.resolve(k) {
+			res.insert(KeyRef::String((*k).into()), v);
 		}
 	}
-	Value::Map(Map {
-		map: Arc::new(variables_inner(ftx.ptx)),
-	})
-	.into()
+	Value::Map(MapValue::Borrow(res)).into()
 }
 
-pub fn map_values(
-	ftx: &FunctionContext,
-	This(this): This<Value>,
-	ident: Identifier,
-	expr: Expression,
-) -> ResolveResult {
+fn map_values<'a, 'rf, 'b>(
+	ftx: &'b mut FunctionContext<'a, 'rf>,
+	this: This,
+	ident: Argument,
+	expr: Argument,
+) -> ResolveResult<'a> {
+	let this: Value<'a> = this.load_value(ftx)?;
+	let ident = ident.load_identifier(ftx)?;
+	let expr = expr.load_expression(ftx)?;
+	let x: &'rf dyn VariableResolver<'a> = ftx.vars();
 	match this {
 		Value::Map(map) => {
-			let mut res = HashMap::with_capacity(map.map.len());
-			let mut ptx = ftx.ptx.new_inner_scope();
-			for (key, val) in map.map.as_ref() {
-				ptx.add_variable_from_value(ident.clone(), val.clone());
-				let value = ptx.resolve(&expr)?;
-				res.insert(key.clone(), value);
+			let mut res = vector_map::VecMap::with_capacity(map.len());
+			for k in map.iter_keys() {
+				let v = map.get(&k).unwrap().clone();
+				let resolver = SingleVarResolver::<'a, 'rf>::new(x, ident, v);
+				let value = Value::resolve(expr, ftx.ptx, &resolver)?;
+				res.insert(k.clone(), value.as_static());
 			}
-			Value::Map(Map { map: Arc::new(res) })
+
+			Value::Map(MapValue::Borrow(res))
 		},
 		_ => return Err(this.error_expected_type(ValueType::Map)),
 	}
 	.into()
 }
 
-pub fn map_merge(This(this): This<Value>, other: Value) -> ResolveResult {
+pub fn map_merge<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	other: Argument,
+) -> ResolveResult<'a> {
+	let this: Value = this.load_value(ftx)?;
+	let other: Value = other.load_value(ftx)?;
 	let this = must_map(this)?;
 	let other = must_map(other)?;
-	let mut nv = Arc::unwrap_or_clone(this.map);
-	nv.extend(Arc::unwrap_or_clone(other.map));
-	Value::Map(Map { map: Arc::new(nv) }).into()
+	let nv = this.iter_owned().chain(other.iter_owned()).collect();
+	Value::Map(MapValue::Owned(Arc::new(nv))).into()
 }
 
-fn must_map(v: Value) -> Result<Map, cel::ExecutionError> {
+fn must_map(v: Value) -> Result<MapValue, cel::ExecutionError> {
 	match v {
 		Value::Map(map) => Ok(map),
 		_ => Err(v.error_expected_type(ValueType::Map)),
 	}
 }
 
-fn fail(ftx: &FunctionContext, v: Arc<String>) -> ResolveResult {
-	Err(ftx.error(format!("fail() called: {v}")))
+fn fail<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	let v: StringValue = v.load_value(ftx)?;
+	Err(ftx.error(format!("fail() called: {}", v.as_ref())))
 }
 
-fn json_parse(ftx: &FunctionContext, v: Value) -> ResolveResult {
+fn json_parse<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	let v: Value = v.load_value(ftx)?;
 	let sv = match v {
-		Value::String(b) => serde_json::from_str(b.as_str()),
+		Value::String(b) => serde_json::from_str(b.as_ref()),
 		Value::Bytes(b) => serde_json::from_slice(b.as_ref()),
 		_ => return Err(ftx.error(format!("invalid type {}", v.type_of()))),
 	};
@@ -193,44 +157,121 @@ fn json_parse(ftx: &FunctionContext, v: Value) -> ResolveResult {
 	cel::to_value(sv).map_err(|e| ftx.error(e))
 }
 
-fn to_json(ftx: &FunctionContext, v: Value) -> ResolveResult {
+fn to_json<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	let v: Value = v.load_value(ftx)?;
 	let pj = v.json().map_err(|e| ftx.error(e))?;
-	Ok(Value::String(Arc::new(
-		serde_json::to_string(&pj).map_err(|e| ftx.error(e))?,
-	)))
+	Ok(Value::String(
+		serde_json::to_string(&pj).map_err(|e| ftx.error(e))?.into(),
+	))
 }
 
-pub fn regex_replace(
-	ftx: &FunctionContext,
-	This(this): This<Arc<String>>,
-	regex: Arc<String>,
-	replacement: Arc<String>,
-) -> Result<Arc<String>, cel::ExecutionError> {
-	match regex::Regex::new(&regex) {
-		Ok(re) => Ok(Arc::new(
-			re.replace(&this, replacement.as_str()).to_string(),
-		)),
-		Err(err) => Err(ftx.error(format!("'{regex}' not a valid regex:\n{err}"))),
+pub fn regex_replace<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	regex: Argument,
+	replacement: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let regex: StringValue = regex.load_value(ftx)?;
+	let replacement: StringValue = replacement.load_value(ftx)?;
+	match regex::Regex::new(regex.as_ref()) {
+		Ok(re) => Ok(
+			re.replace(this.as_ref(), replacement.as_ref())
+				.to_string()
+				.into(),
+		),
+		Err(err) => Err(ftx.error(format!("'{}' not a valid regex:\n{err}", regex.as_ref()))),
 	}
 }
 
-fn uuid_generate() -> Arc<String> {
-	Arc::new(Uuid::new_v4().to_string())
+fn uuid_generate<'a>(_: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
+	Ok(Uuid::new_v4().to_string().into())
 }
 
-fn default(ftx: &FunctionContext, exp: Expression, d: Value) -> ResolveResult {
-	fn has(ftx: &FunctionContext, exp: Expression) -> Result<Option<Value>, cel::ExecutionError> {
-		// We determine if a type has a property by attempting to resolve it.
-		// If we get a NoSuchKey error, then we know the property does not exist
-		Ok(match ftx.resolve(exp) {
-			Ok(Value::Null) => None,
-			Ok(v) => Some(v),
-			Err(err) => match err {
-				cel::ExecutionError::NoSuchKey(_) => None,
-				cel::ExecutionError::UndeclaredReference(_) => None,
-				_ => return Err(err),
-			},
-		})
+fn random<'a>(_: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
+	Ok(random_range(0.0..=1.0).into())
+}
+
+fn default<'a>(ftx: &mut FunctionContext<'a, '_>, exp: Argument, d: Argument) -> ResolveResult<'a> {
+	// We determine if a type has a property by attempting to resolve it.
+	// If we get a NoSuchKey error, then we know the property does not exist
+	let exp = exp.load_expression(ftx)?;
+	let resolved = match Value::resolve(exp, ftx.ptx, ftx.vars()) {
+		Ok(Value::Null) => None,
+		Ok(v) => Some(v),
+		Err(err) => match err {
+			cel::ExecutionError::NoSuchKey(_) => None,
+			cel::ExecutionError::UndeclaredReference(_) => None,
+			_ => return Err(err),
+		},
+	};
+	match resolved {
+		Some(v) => Ok(v),
+		None => Ok(d.load_unmaterialized(ftx)?),
 	}
-	Ok(has(ftx, exp)?.unwrap_or(d))
+}
+
+mod json_field {
+	use std::fmt;
+
+	use serde::de::{Error, IgnoredAny, MapAccess, Visitor};
+
+	impl FieldExtractor {
+		pub fn new(field_name: &str) -> FieldExtractor {
+			FieldExtractor(field_name.to_string())
+		}
+	}
+
+	pub struct FieldExtractor(String);
+
+	impl<'de> Visitor<'de> for FieldExtractor {
+		type Value = Option<cel::Value<'static>>;
+
+		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+			formatter.write_str("a map")
+		}
+
+		fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+		where
+			A: MapAccess<'de>,
+		{
+			let mut val = None;
+			while let Some(key) = map.next_key::<String>()? {
+				if key == self.0 {
+					let value = map.next_value::<serde_json::Value>()?;
+					let value = cel::to_value(value).map_err(A::Error::custom)?;
+					val = Some(value);
+				} else {
+					map.next_value::<IgnoredAny>()?;
+				}
+				// Do not recurse into the values, we only allow top level access right now
+			}
+
+			Ok(val)
+		}
+	}
+}
+fn json_parse_field<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	v: Argument,
+	k: Argument,
+) -> ResolveResult<'a> {
+	let v = v.load_value(ftx)?;
+	let k: StringValue = k.load_value(ftx)?;
+	let pv = match v {
+		Value::String(b) => {
+			let mut d = serde_json::de::Deserializer::from_str(b.as_ref());
+			d.deserialize_map(json_field::FieldExtractor::new(&k))
+				.map_err(|e| ftx.error(e))?
+		},
+		Value::Bytes(b) => {
+			let mut d = serde_json::de::Deserializer::from_slice(b.as_ref());
+			d.deserialize_map(json_field::FieldExtractor::new(&k))
+				.map_err(|e| ftx.error(e))?
+		},
+		_ => return Err(ftx.error(format!("invalid type {}", v.type_of()))),
+	};
+
+	let pv = pv.ok_or_else(|| ExecutionError::NoSuchKey(Arc::from(k.as_ref())))?;
+	Ok(pv)
 }

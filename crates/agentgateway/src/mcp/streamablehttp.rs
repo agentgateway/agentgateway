@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use crate::http::{Request, Response};
-use crate::mcp::handler::Relay;
-use crate::mcp::session::SessionManager;
-use crate::*;
 use ::http::StatusCode;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ServerJsonRpcMessage};
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
+
+use crate::http::{Request, Response};
+use crate::mcp::handler::Relay;
+use crate::mcp::session::SessionManager;
+use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct StreamableHttpServerConfig {

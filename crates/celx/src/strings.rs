@@ -2,13 +2,12 @@
 // under Apache 2.0 license (https://github.com/Kuadrant/wasm-shim/blob/main/LICENSE)
 // TODO: https://github.com/cel-rust/cel-rust/issues/103, have this upstreamed
 
-use std::sync::Arc;
-
-use ::cel::extractors::{Arguments, This};
-use ::cel::{ExecutionError, ResolveResult, Value};
+use ::cel::extractors::{Argument, This};
+use ::cel::{ExecutionError, FunctionContext, ResolveResult, Value};
 use cel::Context;
+use cel::objects::StringValue;
 
-pub fn insert_all(ctx: &mut Context<'_>) {
+pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("charAt", char_at);
 	ctx.add_function("indexOf", index_of);
 	ctx.add_function("join", join);
@@ -21,104 +20,110 @@ pub fn insert_all(ctx: &mut Context<'_>) {
 	ctx.add_function("substring", substring);
 }
 
-pub fn char_at(This(this): This<Arc<String>>, arg: i64) -> ResolveResult {
-	match this.chars().nth(arg as usize) {
+pub fn char_at<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	arg: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let index = arg.load(ftx)?.as_unsigned()?;
+	match this.as_ref().chars().nth(index) {
 		None => Err(ExecutionError::FunctionError {
 			function: "String.charAt".to_owned(),
-			message: format!("No index {arg} on `{this}`"),
+			message: format!("No index {index} on `{}`", this.as_ref()),
 		}),
 		Some(c) => Ok(c.to_string().into()),
 	}
 }
 
-pub fn index_of(
-	This(this): This<Arc<String>>,
-	arg: Arc<String>,
-	Arguments(args): Arguments,
-) -> ResolveResult {
-	match args.len() {
-		1 => match this.find(&*arg) {
+pub fn index_of<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	arg: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let arg: StringValue = arg.load_value(ftx)?;
+	match ftx.args.len() {
+		1 => match this.as_ref().find(arg.as_ref()) {
 			None => Ok((-1).into()),
 			Some(idx) => Ok((idx as u64).into()),
 		},
 		2 => {
-			let base = match args[1] {
-				Value::Int(i) => i as usize,
-				Value::UInt(u) => u as usize,
-				_ => {
-					return Err(ExecutionError::FunctionError {
-						function: "String.indexOf".to_owned(),
-						message: format!("Expects 2nd argument to be an Integer, got `{:?}`", args[1]),
-					});
-				},
-			};
-			if base >= this.len() {
+			let base_value: Value = ftx.arg(1)?;
+			let base = base_value.as_unsigned()?;
+			let this_str = this.as_ref();
+			if base >= this_str.len() {
 				return Ok((-1).into());
 			}
-			match this[base..].find(&*arg) {
+			match this_str[base..].find(arg.as_ref()) {
 				None => Ok((-1).into()),
 				Some(idx) => Ok(Value::UInt((base + idx) as u64)),
 			}
 		},
 		_ => Err(ExecutionError::FunctionError {
 			function: "String.indexOf".to_owned(),
-			message: format!("Expects 2 arguments at most, got `{args:?}`!"),
+			message: format!("Expects 2 arguments at most, got `{}`!", ftx.args.len()),
 		}),
 	}
 }
 
-pub fn last_index_of(
-	This(this): This<Arc<String>>,
-	arg: Arc<String>,
-	Arguments(args): Arguments,
-) -> ResolveResult {
-	match args.len() {
-		1 => match this.rfind(&*arg) {
+pub fn last_index_of<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	arg: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let arg: StringValue = arg.load_value(ftx)?;
+	match ftx.args.len() {
+		1 => match this.as_ref().rfind(arg.as_ref()) {
 			None => Ok((-1).into()),
 			Some(idx) => Ok((idx as u64).into()),
 		},
 		2 => {
-			let base = match args[1] {
-				Value::Int(i) => i as usize,
-				Value::UInt(u) => u as usize,
-				_ => {
-					return Err(ExecutionError::FunctionError {
-						function: "String.lastIndexOf".to_owned(),
-						message: format!("Expects 2nd argument to be an Integer, got `{:?}`", args[1]),
-					});
-				},
-			};
-			if base >= this.len() {
+			let base_value: Value = ftx.arg(1)?;
+			let base = base_value.as_unsigned()?;
+			let this_str = this.as_ref();
+			if base >= this_str.len() {
 				return Ok((-1).into());
 			}
-			match this[base..].rfind(&*arg) {
+			match this_str[base..].rfind(arg.as_ref()) {
 				None => Ok((-1).into()),
 				Some(idx) => Ok(Value::UInt(idx as u64)),
 			}
 		},
 		_ => Err(ExecutionError::FunctionError {
 			function: "String.lastIndexOf".to_owned(),
-			message: format!("Expects 2 arguments at most, got `{args:?}`!"),
+			message: format!("Expects 2 arguments at most, got `{}`!", ftx.args.len()),
 		}),
 	}
 }
 
-pub fn join(This(this): This<Arc<Vec<Value>>>, Arguments(args): Arguments) -> ResolveResult {
-	let separator = args
-		.first()
-		.map(|v| match v {
-			Value::String(s) => Ok(s.as_str()),
-			_ => Err(ExecutionError::FunctionError {
+pub fn join<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
+	let this = this.load_value(ftx)?;
+	let this = match this {
+		Value::List(list) => list,
+		other => {
+			return Err(ExecutionError::FunctionError {
 				function: "List.join".to_owned(),
-				message: format!("Expects seperator to be a String, got `{v:?}`!"),
-			}),
-		})
-		.unwrap_or(Ok(""))?;
+				message: format!("Expects receiver to be a List, got `{:?}`", other),
+			});
+		},
+	};
+	let separator_value = if ftx.args.is_empty() {
+		None
+	} else {
+		Some(ftx.arg(0)?)
+	};
+	let separator = separator_value
+		.as_ref()
+		.map(|sep: &StringValue| sep.as_ref())
+		.unwrap_or("");
 	Ok(
 		this
+			.as_ref()
 			.iter()
 			.map(|v| match v {
-				Value::String(s) => Ok(s.as_str().to_string()),
+				Value::String(s) => Ok(s.as_ref().to_string()),
 				_ => Err(ExecutionError::FunctionError {
 					function: "List.join".to_owned(),
 					message: "Expects a list of String values!".to_owned(),
@@ -130,148 +135,131 @@ pub fn join(This(this): This<Arc<Vec<Value>>>, Arguments(args): Arguments) -> Re
 	)
 }
 
-pub fn lower_ascii(This(this): This<Arc<String>>) -> ResolveResult {
-	Ok(this.to_ascii_lowercase().into())
+pub fn lower_ascii<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	Ok(this.as_ref().to_ascii_lowercase().into())
 }
 
-pub fn upper_ascii(This(this): This<Arc<String>>) -> ResolveResult {
-	Ok(this.to_ascii_uppercase().into())
+pub fn upper_ascii<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	Ok(this.as_ref().to_ascii_uppercase().into())
 }
 
-pub fn trim(This(this): This<Arc<String>>) -> ResolveResult {
-	Ok(this.trim().into())
+pub fn trim<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	Ok(this.as_ref().trim().to_string().into())
 }
 
-pub fn replace(This(this): This<Arc<String>>, Arguments(args): Arguments) -> ResolveResult {
-	match args.len() {
-		count @ 2..=3 => {
-			let from = match &args[0] {
-				Value::String(s) => s.as_str(),
-				_ => Err(ExecutionError::FunctionError {
-					function: "String.replace".to_owned(),
-					message: format!(
-						"First argument of type String expected, got `{:?}`",
-						args[0]
-					),
-				})?,
-			};
-			let to = match &args[1] {
-				Value::String(s) => s.as_str(),
-				_ => Err(ExecutionError::FunctionError {
-					function: "String.replace".to_owned(),
-					message: format!(
-						"Second argument of type String expected, got `{:?}`",
-						args[1]
-					),
-				})?,
-			};
-			if count == 3 {
-				let n = match &args[2] {
-					Value::Int(i) => *i as usize,
-					Value::UInt(u) => *u as usize,
-					_ => Err(ExecutionError::FunctionError {
-						function: "String.replace".to_owned(),
-						message: format!(
-							"Third argument of type Integer expected, got `{:?}`",
-							args[2]
-						),
-					})?,
-				};
-				Ok(this.replacen(from, to, n).into())
+pub fn replace<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	from: Argument,
+	to: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let from: StringValue = from.load_value(ftx)?;
+	let to: StringValue = to.load_value(ftx)?;
+	match ftx.args.len() {
+		2 => Ok(this.as_ref().replace(from.as_ref(), to.as_ref()).into()),
+		3 => {
+			let n_value: Value = ftx.arg(2)?;
+			let n = n_value.as_signed()?;
+			if n < 0 {
+				Ok(this.as_ref().replace(from.as_ref(), to.as_ref()).into())
 			} else {
-				Ok(this.replace(from, to).into())
+				Ok(
+					this
+						.as_ref()
+						.replacen(from.as_ref(), to.as_ref(), n as usize)
+						.into(),
+				)
 			}
 		},
 		_ => Err(ExecutionError::FunctionError {
 			function: "String.replace".to_owned(),
-			message: format!("Expects 2 or 3 arguments, got {args:?}"),
+			message: format!("Expects 2 or 3 arguments, got {}!", ftx.args.len()),
 		}),
 	}
 }
 
-pub fn split(This(this): This<Arc<String>>, Arguments(args): Arguments) -> ResolveResult {
-	match args.len() {
-		count @ 1..=2 => {
-			let sep = match &args[0] {
-				Value::String(sep) => sep.as_str(),
-				_ => {
-					return Err(ExecutionError::FunctionError {
-						function: "String.split".to_string(),
-						message: format!(
-							"Expects a first argument of type String, got `{:?}`",
-							args[0]
-						),
-					});
-				},
-			};
-			let list = if count == 2 {
-				let pos = match &args[1] {
-					Value::UInt(u) => *u as usize,
-					Value::Int(i) => *i as usize,
-					_ => Err(ExecutionError::FunctionError {
-						function: "String.split".to_string(),
-						message: format!(
-							"Expects a second argument of type Integer, got `{:?}`",
-							args[1]
-						),
-					})?,
-				};
+pub fn split<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	sep: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let sep: StringValue = sep.load_value(ftx)?;
+	match ftx.args.len() {
+		1 => Ok(
+			this
+				.as_ref()
+				.split(sep.as_ref())
+				.map(|s| Value::String(s.to_owned().into()))
+				.collect::<Vec<Value>>()
+				.into(),
+		),
+		2 => {
+			let pos_value: Value = ftx.arg(1)?;
+			let pos = pos_value.as_signed()?;
+			let split = if pos < 0 {
 				this
-					.splitn(pos, sep)
+					.as_ref()
+					.split(sep.as_ref())
 					.map(|s| Value::String(s.to_owned().into()))
 					.collect::<Vec<Value>>()
 			} else {
 				this
-					.split(sep)
+					.as_ref()
+					.splitn(pos as usize, sep.as_ref())
 					.map(|s| Value::String(s.to_owned().into()))
 					.collect::<Vec<Value>>()
 			};
-			Ok(list.into())
+			Ok(split.into())
 		},
 		_ => Err(ExecutionError::FunctionError {
 			function: "String.split".to_owned(),
-			message: format!("Expects at most 2 arguments, got {args:?}"),
+			message: format!("Expects at most 2 arguments, got {}!", ftx.args.len()),
 		}),
 	}
 }
 
-pub fn substring(This(this): This<Arc<String>>, Arguments(args): Arguments) -> ResolveResult {
-	match args.len() {
-		count @ 1..=2 => {
-			let start = match &args[0] {
-				Value::Int(i) => *i as usize,
-				Value::UInt(u) => *u as usize,
-				_ => Err(ExecutionError::FunctionError {
-					function: "String.substring".to_string(),
-					message: format!(
-						"Expects a first argument of type Integer, got `{:?}`",
-						args[0]
-					),
-				})?,
-			};
-			let end = if count == 2 {
-				match &args[1] {
-					Value::Int(i) => *i as usize,
-					Value::UInt(u) => *u as usize,
-					_ => Err(ExecutionError::FunctionError {
-						function: "String.substring".to_string(),
-						message: format!(
-							"Expects a second argument of type Integer, got `{:?}`",
-							args[0]
-						),
-					})?,
-				}
-			} else {
-				this.chars().count()
-			};
+pub fn substring<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	start: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let start = start.load(ftx)?.as_unsigned()?;
+	match ftx.args.len() {
+		1 => {
+			let end = this.as_ref().chars().count();
 			if end < start {
-				Err(ExecutionError::FunctionError {
+				return Err(ExecutionError::FunctionError {
 					function: "String.substring".to_string(),
 					message: format!("Can't have end be before the start: `{end} < {start}"),
-				})?
+				});
 			}
 			Ok(
 				this
+					.as_ref()
+					.chars()
+					.skip(start)
+					.take(end - start)
+					.collect::<String>()
+					.into(),
+			)
+		},
+		2 => {
+			let end = ftx.value(1)?.as_unsigned()?;
+			if end < start {
+				return Err(ExecutionError::FunctionError {
+					function: "String.substring".to_string(),
+					message: format!("Can't have end be before the start: `{end} < {start}"),
+				});
+			}
+			Ok(
+				this
+					.as_ref()
 					.chars()
 					.skip(start)
 					.take(end - start)
@@ -281,7 +269,101 @@ pub fn substring(This(this): This<Arc<String>>, Arguments(args): Arguments) -> R
 		},
 		_ => Err(ExecutionError::FunctionError {
 			function: "String.substring".to_owned(),
-			message: format!("Expects at most 2 arguments, got {args:?}"),
+			message: format!("Expects at most 2 arguments, got {}!", ftx.args.len()),
 		}),
+	}
+}
+#[cfg(test)]
+mod tests {
+	use cel::{Context, Program};
+	use serde_json::json;
+
+	use crate::insert_all;
+
+	fn eval(expr: &str) -> serde_json::Value {
+		let prog = Program::compile(expr).unwrap_or_else(|_| panic!("failed to compile: {}", expr));
+		let mut c = Context::default();
+		insert_all(&mut c);
+		prog
+			.execute(&c)
+			.unwrap_or_else(|_| panic!("{expr}"))
+			.json()
+			.unwrap()
+	}
+
+	#[test]
+	fn extended_string_fn() {
+		assert_eq!(eval("'abc'.charAt(1)"), json!("b"));
+
+		assert_eq!(eval("'hello mellow'.indexOf('')"), json!(0));
+		assert_eq!(eval("'hello mellow'.indexOf('ello')"), json!(1));
+		assert_eq!(eval("'hello mellow'.indexOf('jello')"), json!((-1)));
+		assert_eq!(eval("'hello mellow'.indexOf('', 2)"), json!(2));
+		assert_eq!(eval("'hello mellow'.indexOf('ello', 20)"), json!((-1)));
+
+		assert_eq!(eval("'hello mellow'.lastIndexOf('')"), json!(12));
+		assert_eq!(eval("'hello mellow'.lastIndexOf('ello')"), json!(7));
+		assert_eq!(eval("'hello mellow'.lastIndexOf('jello')"), json!((-1)));
+		assert_eq!(eval("'hello mellow'.lastIndexOf('ello', 6)"), json!(1));
+		assert_eq!(eval("'hello mellow'.lastIndexOf('ello', 20)"), json!((-1)));
+
+		assert_eq!(eval("['hello', 'mellow'].join()"), json!("hellomellow"));
+		assert_eq!(eval("[].join()"), json!(""));
+		assert_eq!(eval("['hello', 'mellow'].join(' ')"), json!("hello mellow"));
+
+		assert_eq!(eval("'TacoCat'.lowerAscii()"), json!("tacocat"));
+		assert_eq!(eval("'TacoCÆt Xii'.lowerAscii()"), json!("tacocÆt xii"));
+
+		assert_eq!(eval("'TacoCat'.upperAscii()"), json!("TACOCAT"));
+		assert_eq!(eval("'TacoCÆt Xii'.upperAscii()"), json!("TACOCÆT XII"));
+
+		assert_eq!(eval("'  trim\\n    '.trim()"), json!("trim"));
+
+		assert_eq!(
+			eval("'hello hello'.replace('he', 'we')"),
+			json!("wello wello")
+		);
+		assert_eq!(
+			eval("'hello hello'.replace('he', 'we', -1)"),
+			json!("wello wello")
+		);
+		assert_eq!(
+			eval("'hello hello'.replace('he', 'we', 1)"),
+			json!("wello hello")
+		);
+		assert_eq!(
+			eval("'hello hello'.replace('he', 'we', 0)"),
+			json!("hello hello")
+		);
+		assert_eq!(
+			eval("'hello hello'.replace('', '_')"),
+			json!("_h_e_l_l_o_ _h_e_l_l_o_")
+		);
+		assert_eq!(eval("'hello hello'.replace('h', '')"), json!("ello ello"));
+
+		assert_eq!(
+			eval("'hello hello hello'.split(' ')"),
+			json!(vec!["hello", "hello", "hello"])
+		);
+		assert_eq!(
+			eval("'hello hello hello'.split(' ', 0)"),
+			json!(Vec::<String>::new())
+		);
+		assert_eq!(
+			eval("'hello hello hello'.split(' ', 1)"),
+			json!(vec!["hello hello hello"])
+		);
+		assert_eq!(
+			eval("'hello hello hello'.split(' ', 2)"),
+			json!(vec!["hello", "hello hello"])
+		);
+		assert_eq!(
+			eval("'hello hello hello'.split(' ', -1)"),
+			json!(vec!["hello", "hello", "hello"])
+		);
+
+		assert_eq!(eval("'tacocat'.substring(4)"), json!("cat"));
+		assert_eq!(eval("'tacocat'.substring(0, 4)"), json!("taco"));
+		assert_eq!(eval("'ta©o©αT'.substring(2, 6)"), json!("©o©α"));
 	}
 }

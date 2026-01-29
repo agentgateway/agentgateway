@@ -604,10 +604,11 @@ impl Gateway {
 		mut raw_stream: Socket,
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
+		use std::time::Instant;
+
 		use super::proxy_protocol::parse_proxy_protocol;
 		use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 		use crate::transport::tls::TlsInfo;
-		use std::time::Instant;
 
 		// PROXY protocol header is small (~232 bytes max), should arrive quickly.
 		// Use a relatively short timeout to detect misbehaving or slow clients.

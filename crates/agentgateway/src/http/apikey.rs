@@ -1,5 +1,6 @@
 use std::hash::Hash;
 
+use ::cel::Value;
 use axum_core::RequestExt;
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
@@ -9,7 +10,6 @@ use secrecy::{ExposeSecret, SecretString};
 
 use crate::http::Request;
 use crate::proxy::ProxyError;
-use crate::telemetry::log::RequestLog;
 use crate::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -34,10 +34,13 @@ pub enum Mode {
 	Optional,
 }
 
-#[apply(schema_ser!)]
+#[apply(schema!)]
+#[derive(::cel::DynamicType)]
 pub struct Claims {
+	#[dynamic(with_value = "redact_key")]
 	pub key: APIKey,
 	#[serde(flatten)]
+	#[dynamic(flatten)]
 	pub metadata: UserMetadata,
 }
 
@@ -47,6 +50,9 @@ pub struct APIKey(
 	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
 	SecretString,
 );
+pub fn redact_key<'a>(_: &'a APIKey) -> Value<'a> {
+	Value::String("<redacted>".into())
+}
 
 impl APIKey {
 	pub fn new(s: impl Into<Box<str>>) -> Self {
@@ -118,10 +124,9 @@ impl APIKeyAuthentication {
 		}
 	}
 
-	pub async fn apply(&self, log: &mut RequestLog, req: &mut Request) -> Result<(), ProxyError> {
+	pub async fn apply(&self, req: &mut Request) -> Result<(), ProxyError> {
 		let res = self.verify(req).await?;
 		if let Some(claims) = res {
-			log.cel.ctx().with_api_key(&claims);
 			req.headers_mut().remove(http::header::AUTHORIZATION);
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(claims);

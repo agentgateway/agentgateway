@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ExpressionContext",
+  "title": "ExecutorSerde",
+  "description": "Owned version of Executor for JSON serialization/deserialization.\n\n`ExecutorSerde` is a fully-owned representation that can be deserialized from JSON,\nstored, and later converted to an `Executor<'_>` for use with CEL expressions.\n\nJSON -> ExecutorSerde -> Executor<'_> -> CEL -> JSON should be consistent.",
   "type": "object",
   "properties": {
     "request": {
@@ -12,69 +13,71 @@
       "properties": {
         "method": {
           "description": "The HTTP method of the request. For example, `GET`",
-          "type": "string"
+          "type": "string",
+          "default": "GET"
         },
         "uri": {
           "description": "The complete URI of the request. For example, `http://example.com/path`.",
-          "type": "string"
+          "type": "string",
+          "default": "/"
         },
         "host": {
+          "description": "The hostname of the request. For example, `example.com`.",
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         },
         "scheme": {
+          "description": "The scheme of the request. For example, `https`.",
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         },
         "path": {
           "description": "The path of the request URI. For example, `/path`.",
-          "type": "string"
+          "type": "string",
+          "default": ""
+        },
+        "version": {
+          "description": "The version of the request. For example, `HTTP/1.1`.",
+          "type": "string",
+          "default": "HTTP/1.1"
         },
         "headers": {
           "description": "The headers of the request.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "default": {}
         },
         "body": {
           "description": "The body of the request. Warning: accessing the body will cause the body to be buffered.",
           "type": [
-            "array",
             "string",
             "null"
-          ],
-          "items": {
-            "type": "integer",
-            "format": "uint8",
-            "minimum": 0,
-            "maximum": 255
-          }
+          ]
         },
         "startTime": {
-          "description": "The (pre-rendered) time the request started",
-          "type": "string"
+          "description": "The time the request started",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "endTime": {
-          "description": "The (pre-rendered) time the request completed",
+          "description": "The time the request completed",
           "type": [
             "string",
             "null"
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "method",
-        "uri",
-        "path",
-        "headers",
-        "startTime"
-      ]
+      "additionalProperties": false
     },
     "response": {
       "description": "`response` contains attributes about the HTTP response",
@@ -88,35 +91,26 @@
           "type": "integer",
           "format": "uint16",
           "minimum": 0,
-          "maximum": 65535
+          "maximum": 65535,
+          "default": 0
         },
         "headers": {
-          "description": "The headers of the request.",
+          "description": "The headers of the response.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "default": {}
         },
         "body": {
           "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
           "type": [
-            "array",
             "string",
             "null"
-          ],
-          "items": {
-            "type": "integer",
-            "format": "uint8",
-            "minimum": 0,
-            "maximum": 255
-          }
+          ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "code",
-        "headers"
-      ]
+      "additionalProperties": false
     },
     "jwt": {
       "description": "`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.",
@@ -336,14 +330,16 @@
         "address": {
           "description": "The IP address of the downstream connection.",
           "type": "string",
-          "format": "ip"
+          "format": "ip",
+          "default": "0.0.0.0"
         },
         "port": {
           "description": "The port of the downstream connection.",
           "type": "integer",
           "format": "uint16",
           "minimum": 0,
-          "maximum": 65535
+          "maximum": 65535,
+          "default": 0
         },
         "identity": {
           "description": "The (Istio SPIFFE) identity of the downstream connection, if available.",
@@ -370,36 +366,37 @@
             "trustDomain",
             "namespace",
             "serviceAccount"
-          ]
+          ],
+          "default": null
         },
         "subjectAltNames": {
           "description": "The subject alt names from the downstream certificate, if available.",
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "default": []
         },
         "issuer": {
           "description": "The issuer from the downstream certificate, if available.",
-          "type": "string"
+          "type": "string",
+          "default": ""
         },
         "subject": {
           "description": "The subject from the downstream certificate, if available.",
-          "type": "string"
+          "type": "string",
+          "default": ""
         },
         "subjectCn": {
           "description": "The CN of the subject from the downstream certificate, if available.",
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "address",
-        "port"
-      ]
+      "additionalProperties": false
     },
     "mcp": {
       "description": "`mcp` contains attributes about the MCP request.",
@@ -497,7 +494,8 @@
       "properties": {
         "name": {
           "description": "The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.",
-          "type": "string"
+          "type": "string",
+          "default": ""
         },
         "type": {
           "description": "The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.",
@@ -509,7 +507,8 @@
             "dynamic",
             "service",
             "unknown"
-          ]
+          ],
+          "default": "unknown"
         },
         "protocol": {
           "description": "The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.",
@@ -520,15 +519,11 @@
             "a2a",
             "mcp",
             "llm"
-          ]
+          ],
+          "default": "http"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "name",
-        "type",
-        "protocol"
-      ]
+      "additionalProperties": false
     },
     "extauthz": {
       "description": "`extauthz` contains dynamic metadata from ext_authz filters",

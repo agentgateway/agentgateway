@@ -1,10 +1,11 @@
-use crate::http::backendtls::VersionedBackendTLS;
-use crate::transport::stream::Socket;
-use crate::types::agent::Target;
 use itertools::Itertools;
 use rustls_pki_types::{DnsName, ServerName};
 use tokio_rustls::TlsConnector;
 use tracing::debug;
+
+use crate::http::backendtls::VersionedBackendTLS;
+use crate::transport::stream::Socket;
+use crate::types::agent::Target;
 
 pub async fn handshake(
 	tcp: Socket,

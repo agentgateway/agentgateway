@@ -60,6 +60,7 @@ pub trait RequestType: Send + Sync {
 
 /// SimpleChatCompletionMessage is a simplified chat message
 #[apply(schema!)]
+#[derive(Eq, PartialEq, cel::DynamicType)]
 pub struct SimpleChatCompletionMessage {
 	pub role: Strng,
 	pub content: Strng,

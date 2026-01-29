@@ -1,5 +1,13 @@
 use std::net::SocketAddr;
 
+use agent_core::strng;
+use itertools::Itertools;
+use rmcp::RoleClient;
+use rmcp::model::InitializeRequestParam;
+use rmcp::service::RunningService;
+use rmcp::transport::StreamableHttpServerConfig;
+use secrecy::SecretString;
+
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::mcp::McpAuthorization;
@@ -8,13 +16,6 @@ use crate::test_helpers::proxymock::{
 };
 use crate::types::agent::BackendPolicy;
 use crate::*;
-use agent_core::strng;
-use itertools::Itertools;
-use rmcp::RoleClient;
-use rmcp::model::InitializeRequestParam;
-use rmcp::service::RunningService;
-use rmcp::transport::StreamableHttpServerConfig;
-use secrecy::SecretString;
 
 #[tokio::test]
 async fn stream_to_stream_single() {

@@ -1,39 +1,103 @@
-use cel::{Context, Program, Value};
+use assert_matches::assert_matches;
+use cel::types::dynamic::DynamicValue;
+use cel::{Context, Program, Value, context};
 use serde_json::json;
 
 use crate::insert_all;
 
-fn eval(expr: &str) -> anyhow::Result<Value> {
+fn eval(expr: &str) -> anyhow::Result<Value<'static>> {
+	eval_with_optimizations_check(expr, true)
+}
+fn eval_with_optimizations_check(expr: &str, check: bool) -> anyhow::Result<Value<'static>> {
 	let prog = Program::compile(expr)?;
+	let optimized = Program::compile_with_optimizer(expr, crate::DefaultOptimizer)?;
 	let mut c = Context::default();
 	insert_all(&mut c);
-	Ok(prog.execute(&c)?)
+
+	let vars = Vars {
+		foo: "hello",
+		bar: "world",
+	};
+	let resolver = context::SingleVarResolver::new(
+		&context::DefaultVariableResolver,
+		"vars",
+		Value::Dynamic(DynamicValue::new(&vars)),
+	);
+
+	let a = Value::resolve(prog.expression(), &c, &resolver)?.as_static();
+	let b = Value::resolve(optimized.expression(), &c, &resolver)?.as_static();
+	if check {
+		assert_eq!(a, b, "optimizations changed behavior ({expr})");
+	}
+
+	Ok(a)
+}
+fn eval_non_static(expr: &str, f: impl FnOnce(Value<'_>)) -> anyhow::Result<()> {
+	let expr = expr.to_string();
+	let prog = Program::compile_with_optimizer(&expr, crate::DefaultOptimizer)?;
+	let mut c = Context::default();
+	insert_all(&mut c);
+
+	let vars = Vars {
+		foo: "hello",
+		bar: "world",
+	};
+	let resolver = context::SingleVarResolver::new(
+		&context::DefaultVariableResolver,
+		"vars",
+		Value::Dynamic(DynamicValue::new(&vars)),
+	);
+
+	let a = Value::resolve(prog.expression(), &c, &resolver)?;
+	f(a);
+	Ok(())
 }
 
 #[test]
 fn with() {
 	let expr = r#"[1,2].with(a, a + a)"#;
 	assert(json!([1, 2, 1, 2]), expr);
+
+	// with() should not materialize
+	eval_non_static("vars.with(v, v)", |r| {
+		assert_matches!(r, Value::Dynamic(_));
+	})
+	.unwrap();
 }
 
 #[test]
 fn json() {
 	let expr = r#"json('{"hi":1}').hi"#;
 	assert(json!(1), expr);
+	let expr = r#"json('{"hi":1}').unknown"#;
+	assert_fails(expr);
+}
+
+#[test]
+fn json_field() {
+	let expr = r#"jsonField('{"hi":1}', "hi")"#;
+	assert(json!(1), expr);
+	let expr = r#"jsonField('{"hi":1}', "unknown")"#;
+	assert_fails(expr);
 }
 
 #[test]
 fn random() {
 	let expr = r#"int(random() * 10.0)"#;
-	let v = eval(expr).unwrap().json().unwrap().as_i64().unwrap();
+	let v = eval_with_optimizations_check(expr, false)
+		.unwrap()
+		.json()
+		.unwrap()
+		.as_i64()
+		.unwrap();
 	assert!((0..=10).contains(&v));
 }
 
 #[test]
 fn base64() {
-	let expr = r#""hello".base64Encode()"#;
+	let expr = r#"base64.encode('hello')"#;
 	assert(json!("aGVsbG8="), expr);
-	let expr = r#"string("hello".base64Encode().base64Decode())"#;
+	let expr = r#"string(base64.decode(base64.encode("hello")))"#;
 	assert(json!("hello"), expr);
 }
 
@@ -41,6 +105,8 @@ fn base64() {
 fn map_values() {
 	let expr = r#"{"a": 1, "b": 2}.mapValues(v, v * 2)"#;
 	assert(json!({"a": 2, "b": 4}), expr);
+	let expr = r#"vars.mapValues(v, v +  ' hi')"#;
+	assert(json!({"bar": "world hi", "foo": "hello hi"}), expr);
 }
 
 #[test]
@@ -53,6 +119,12 @@ fn default() {
 	assert(json!(2), expr);
 	let expr = r#"default(a.b, "b")"#;
 	assert(json!("b"), expr);
+
+	// default() should not materialize
+	eval_non_static("default(a.b, vars)", |r| {
+		assert_matches!(r, Value::Dynamic(_));
+	})
+	.unwrap();
 }
 
 #[test]
@@ -81,6 +153,9 @@ fn ip() {
 	assert(json!("192.168.0.1"), expr);
 	let expr = r#"ip('192.168.0.1.0')"#;
 	assert_fails(expr);
+
+	let expr = r#"ip("192.168.0.1").family()"#;
+	assert(json!(4), expr);
 
 	let expr = r#"isIP('192.168.0.1')"#;
 	assert(json!(true), expr);
@@ -221,7 +296,10 @@ fn cidr() {
 fn uuid() {
 	// Test that uuid() returns a string
 	let expr = r#"uuid()"#;
-	let result = eval(expr).unwrap().json().unwrap();
+	let result = eval_with_optimizations_check(expr, false)
+		.unwrap()
+		.json()
+		.unwrap();
 	assert!(result.is_string(), "uuid() should return a string");
 	// Test that it's formatted like a UUID (8-4-4-4-12 hex digits)
 	let uuid_str = result.as_str().unwrap();
@@ -245,7 +323,10 @@ fn uuid() {
 		variant_char
 	);
 	// Test that multiple calls return different UUIDs
-	let result2 = eval(expr).unwrap().json().unwrap();
+	let result2 = eval_with_optimizations_check(expr, false)
+		.unwrap()
+		.json()
+		.unwrap();
 	assert_ne!(
 		result, result2,
 		"Multiple uuid() calls should return different values"
@@ -254,11 +335,20 @@ fn uuid() {
 fn assert(want: serde_json::Value, expr: &str) {
 	assert_eq!(
 		want,
-		eval(expr).unwrap().json().unwrap(),
+		eval(expr)
+			.unwrap_or_else(|_| panic!("{expr}"))
+			.json()
+			.unwrap(),
 		"expression: {expr}"
 	);
 }
 
 fn assert_fails(expr: &str) {
 	assert!(eval(expr).is_err(), "expression: {expr}");
+}
+
+#[derive(Debug, Clone, cel::DynamicType)]
+struct Vars<'a> {
+	foo: &'a str,
+	bar: &'a str,
 }

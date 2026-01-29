@@ -1,13 +1,15 @@
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use http::Uri;
+use http::uri::Scheme;
+
 use crate::http::Error;
 use crate::transport::hbone::WorkloadKey;
 use crate::transport::stream::Socket;
 use crate::transport::{hbone, stream};
 use crate::types::agent::Target;
 use crate::types::discovery::Identity;
-use http::Uri;
-use http::uri::Scheme;
-use std::net::SocketAddr;
-use std::sync::Arc;
 
 pub async fn handshake(
 	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,

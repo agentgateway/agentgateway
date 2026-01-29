@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use ::cel::types::dynamic::DynamicType;
 use axum_core::RequestExt;
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
@@ -289,12 +290,35 @@ pub struct Claims {
 	pub jwt: SecretString,
 }
 
+impl DynamicType for Claims {
+	fn materialize(&self) -> cel::Value<'_> {
+		self.inner.materialize()
+	}
+
+	fn field(&self, field: &str) -> Option<cel::Value<'_>> {
+		self.inner.field(field)
+	}
+}
+
 impl Serialize for Claims {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
 		self.inner.serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for Claims {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let inner = Map::deserialize(deserializer)?;
+		Ok(Claims {
+			inner,
+			jwt: SecretString::new("".into()),
+		})
 	}
 }
 
@@ -322,7 +346,6 @@ impl Jwt {
 		if let Some(serde_json::Value::String(sub)) = claims.inner.get("sub") {
 			log.jwt_sub = Some(sub.to_string());
 		};
-		log.cel.ctx().with_jwt(&claims);
 		// Remove the token.
 		req.headers_mut().remove(http::header::AUTHORIZATION);
 		// Insert the claims into extensions so we can reference it later

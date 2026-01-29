@@ -6,29 +6,29 @@ use std::collections::HashMap;
 use agent_core::strng;
 use agent_core::strng::Strng;
 pub use async_openai::types::chat::{
-	ChatChoiceLogprobs, ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
-	ChatCompletionMessageToolCall, ChatCompletionMessageToolCall as MessageToolCall,
-	ChatCompletionMessageToolCallChunk, ChatCompletionMessageToolCalls as MessageToolCalls,
-	ChatCompletionNamedToolChoice as NamedToolChoice,
-	ChatCompletionRequestAssistantMessage as RequestAssistantMessage,
-	ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
-	ChatCompletionRequestDeveloperMessage as RequestDeveloperMessage,
-	ChatCompletionRequestDeveloperMessageContent as RequestDeveloperMessageContent,
-	ChatCompletionRequestFunctionMessage as RequestFunctionMessage,
-	ChatCompletionRequestMessage as RequestMessage,
-	ChatCompletionRequestSystemMessage as RequestSystemMessage,
-	ChatCompletionRequestSystemMessageContent as RequestSystemMessageContent,
-	ChatCompletionRequestToolMessage as RequestToolMessage,
-	ChatCompletionRequestToolMessageContent as RequestToolMessageContent,
-	ChatCompletionRequestUserMessage as RequestUserMessage,
-	ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
-	ChatCompletionResponseMessageAudio, ChatCompletionStreamOptions as StreamOptions,
-	ChatCompletionTool, ChatCompletionTool as Tool,
-	ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
-	ChatCompletionTools as Tools, CompletionUsage, CompletionUsage as Usage,
-	CreateChatCompletionRequest, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
-	FunctionObject, FunctionType, PredictionContent, ReasoningEffort, ResponseFormat,
-	ResponseModalities, Role, ServiceTier, StopConfiguration, ToolChoiceOptions, WebSearchOptions,
+    ChatChoiceLogprobs, ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
+    ChatCompletionMessageToolCall, ChatCompletionMessageToolCall as MessageToolCall,
+    ChatCompletionMessageToolCallChunk, ChatCompletionMessageToolCalls as MessageToolCalls,
+    ChatCompletionNamedToolChoice as NamedToolChoice,
+    ChatCompletionRequestAssistantMessage as RequestAssistantMessage,
+    ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
+    ChatCompletionRequestDeveloperMessage as RequestDeveloperMessage,
+    ChatCompletionRequestDeveloperMessageContent as RequestDeveloperMessageContent,
+    ChatCompletionRequestFunctionMessage as RequestFunctionMessage,
+    ChatCompletionRequestMessage as RequestMessage,
+    ChatCompletionRequestSystemMessage as RequestSystemMessage,
+    ChatCompletionRequestSystemMessageContent as RequestSystemMessageContent,
+    ChatCompletionRequestToolMessage as RequestToolMessage,
+    ChatCompletionRequestToolMessageContent as RequestToolMessageContent,
+    ChatCompletionRequestUserMessage as RequestUserMessage,
+    ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
+    ChatCompletionResponseMessageAudio, ChatCompletionStreamOptions as StreamOptions,
+    ChatCompletionTool, ChatCompletionTool as Tool,
+    ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
+    ChatCompletionTools as Tools, CompletionUsage, CompletionUsage as Usage,
+    CreateChatCompletionRequest, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
+    FunctionObject, FunctionType, PredictionContent, ReasoningEffort, ResponseFormat,
+    ResponseModalities, Role, ServiceTier, StopConfiguration, ToolChoiceOptions, WebSearchOptions,
 };
 use serde::{Deserialize, Serialize};
 
@@ -71,22 +71,22 @@ pub trait RequestType: Send + Sync {
 }
 
 pub mod passthrough {
-	use agent_core::strng;
-	use agent_core::strng::Strng;
-	use bytes::Bytes;
-	use itertools::Itertools;
-	use serde::{Deserialize, Serialize};
+    use agent_core::strng;
+    use agent_core::strng::Strng;
+    use bytes::Bytes;
+    use itertools::Itertools;
+    use serde::{Deserialize, Serialize};
 
-	use crate::llm::bedrock::Provider;
-	use crate::llm::policy::webhook::{Message, ResponseChoice};
-	use crate::llm::universal::ResponseType;
-	use crate::llm::{
-		anthropic, universal, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse,
-		SimpleChatCompletionMessage,
-	};
-	use crate::{json, llm};
+    use crate::llm::bedrock::Provider;
+    use crate::llm::policy::webhook::{Message, ResponseChoice};
+    use crate::llm::universal::ResponseType;
+    use crate::llm::{
+        anthropic, universal, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse,
+        SimpleChatCompletionMessage,
+    };
+    use crate::{json, llm};
 
-	pub fn process_response(
+    pub fn process_response(
 		bytes: &Bytes,
 		input_format: InputFormat,
 	) -> Result<Box<dyn ResponseType>, AIError> {

@@ -156,9 +156,11 @@ fn parse_spiffe_identity(data: &[u8]) -> Option<IstioIdentity> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use ppp::v2::{Builder, Command, Protocol, Version};
 	use std::net::SocketAddrV4;
+
+	use ppp::v2::{Builder, Command, Protocol, Version};
+
+	use super::*;
 
 	fn build_proxy_header(src: &str, dst: &str, identity: Option<&[u8]>) -> Vec<u8> {
 		let src: SocketAddrV4 = src.parse().unwrap();

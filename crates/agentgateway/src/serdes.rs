@@ -138,6 +138,26 @@ pub fn ser_display_option<S: Serializer, T: Display>(
 	}
 }
 
+pub fn serde_scheme_opt<S: Serializer>(
+	t: &Option<&http::uri::Scheme>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	match t {
+		None => serializer.serialize_none(),
+		Some(t) => serializer.serialize_str(t.as_str()),
+	}
+}
+
+pub fn serde_authority_opt<S: Serializer>(
+	t: &Option<&http::uri::Authority>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	match t {
+		None => serializer.serialize_none(),
+		Some(t) => serializer.serialize_str(t.as_str()),
+	}
+}
+
 pub fn ser_display_iter<S: Serializer, T, TI: Display>(
 	t: &T,
 	serializer: S,

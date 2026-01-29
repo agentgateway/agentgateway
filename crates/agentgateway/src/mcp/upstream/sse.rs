@@ -1,6 +1,5 @@
 use ::http::Uri;
-use ::http::header::ACCEPT;
-use ::http::header::CONTENT_TYPE;
+use ::http::header::{ACCEPT, CONTENT_TYPE};
 use anyhow::anyhow;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};

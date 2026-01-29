@@ -1,10 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use self::typed::{
 	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputParam as Input,
 	InputRole, InputTextContent, Item, MessageItem, OutputItem, OutputMessageContent as Content,
 	OutputTextContent as OutputText, Role,
 };
-use serde::{Deserialize, Serialize};
-
 use super::*;
 use crate::llm::{
 	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType, ResponseType,
@@ -252,6 +252,7 @@ impl RequestType for Request {
 				encoding_format: None,
 				dimensions: None,
 			},
+			prompt: Default::default(),
 		})
 	}
 
@@ -451,8 +452,6 @@ impl ResponseType for Response {
 
 pub mod typed {
 	use async_openai::types::responses as openai_responses;
-	use serde::{Deserialize, Serialize};
-
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
 		AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
@@ -467,6 +466,7 @@ pub mod typed {
 		ResponseTextDeltaEvent, ResponseUsage, Role, Status, Tool, ToolChoiceFunction,
 		ToolChoiceOptions, ToolChoiceParam,
 	};
+	use serde::{Deserialize, Serialize};
 
 	/// Event types for streaming responses from the Responses API (minimal strict subset).
 	#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
