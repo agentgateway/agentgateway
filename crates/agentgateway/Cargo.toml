@@ -97,7 +97,7 @@ prost.workspace = true
 rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
-rmcp = { version = "0.12", features = [
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk.git", rev = "ac4146ec8da167b92b6a3fde66c92edb44ad8fe8", features = [
     "client",
     "transport-child-process",
 ] }
@@ -172,7 +172,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "0.12", features = [
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk.git", rev = "ac4146ec8da167b92b6a3fde66c92edb44ad8fe8", features = [
     "client",
     "server",
     "base64",
@@ -182,14 +182,6 @@ rmcp = { version = "0.12", features = [
     "transport-streamable-http-server",
     "reqwest",
     "auth",
-] }
-# We need SSE client for testing but they removed it for some reason :-(
-# https://github.com/modelcontextprotocol/rust-sdk/pull/562
-legacy-rmcp = { package = "rmcp", version = "0.10.0", features = ["transport-sse-server",
-    "transport-sse-client",
-    "transport-sse-client-reqwest",
-    "client",
-    "reqwest"
 ] }
 wiremock.workspace = true
 reqwest.workspace = true

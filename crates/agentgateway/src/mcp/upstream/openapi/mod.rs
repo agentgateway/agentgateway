@@ -614,6 +614,21 @@ impl Handler {
 					resource_templates: vec![],
 				},
 			),
+			ClientRequest::ListTasksRequest(_) => Messages::from_result(
+				id,
+				ListTasksResult {
+					next_cursor: None,
+					tasks: vec![],
+					total: None,
+				},
+			),
+			ClientRequest::GetTaskInfoRequest(_) => {
+				Messages::from_result(id, GetTaskInfoResult { task: None })
+			},
+			ClientRequest::GetTaskResultRequest(_) => {
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			},
+			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult { contents: vec![] })
 			},

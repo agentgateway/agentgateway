@@ -1,5 +1,7 @@
+use agent_core::strng::Strng;
 use agent_core::trcng;
 use futures_core::Stream;
+use futures_util::StreamExt;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
@@ -8,11 +10,13 @@ use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
 use opentelemetry::{Context, TraceFlags};
 use rmcp::ErrorData;
 use rmcp::model::{
-	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
-	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Prompt,
-	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
-	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, Implementation, JsonRpcNotification,
+	JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+	ListTasksResult, ListToolsResult, Meta, Prompt, PromptsCapability, ProtocolVersion, RequestId,
+	ResourcesCapability, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerResult, Tool,
+	ToolsCapability,
 };
+use serde_json::{Map, Value};
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -20,7 +24,8 @@ use crate::cel::ContextBuilder;
 use crate::http::Response;
 use crate::http::jwt::Claims;
 use crate::http::sessionpersistence::MCPSession;
-use crate::mcp::mergestream::MergeFn;
+use crate::mcp::elicitation;
+use crate::mcp::mergestream::{MergeFn, MessageMapper};
 use crate::mcp::rbac::{Identity, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::ServerSseMessage;
@@ -31,12 +36,37 @@ use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
 
 const DELIMITER: &str = "_";
+const UPSTREAM_REQUEST_ID_PREFIX: &str = "agw";
+const UPSTREAM_REQUEST_ID_SEPARATOR: &str = "::";
+const UPSTREAM_REQUEST_ID_KIND_SEPARATOR: &str = ":";
 
 fn resource_name(default_target_name: Option<&String>, target: &str, name: &str) -> String {
 	if default_target_name.is_none() {
 		format!("{target}{DELIMITER}{name}")
 	} else {
 		name.to_string()
+	}
+}
+
+fn merge_meta(entries: impl IntoIterator<Item = (Strng, Option<Meta>)>) -> Option<Meta> {
+	let mut items = Vec::new();
+	for (server_name, meta) in entries {
+		if let Some(meta) = meta {
+			items.push((server_name, meta));
+		}
+	}
+	match items.len() {
+		0 => None,
+		1 => Some(items.pop().expect("len checked").1),
+		_ => {
+			let mut per_upstream = Map::new();
+			for (server_name, meta) in items {
+				per_upstream.insert(server_name.to_string(), Value::Object(meta.0));
+			}
+			let mut root = Map::new();
+			root.insert("upstreams".to_string(), Value::Object(per_upstream));
+			Some(Meta(root))
+		},
 	}
 }
 
@@ -87,6 +117,134 @@ impl Relay {
 				))
 		}
 	}
+
+	fn should_prefix_identifiers(&self) -> bool {
+		self.default_target_name.is_none()
+	}
+
+	fn encode_upstream_request_id(&self, server_name: &str, id: &RequestId) -> RequestId {
+		if !self.should_prefix_identifiers() {
+			return id.clone();
+		}
+		let (kind, value) = match id {
+			RequestId::Number(n) => ("n", n.to_string()),
+			RequestId::String(s) => ("s", s.to_string()),
+		};
+		RequestId::String(
+			format!(
+				"{UPSTREAM_REQUEST_ID_PREFIX}{UPSTREAM_REQUEST_ID_SEPARATOR}{server_name}{UPSTREAM_REQUEST_ID_SEPARATOR}{kind}{UPSTREAM_REQUEST_ID_KIND_SEPARATOR}{value}"
+			)
+			.into(),
+		)
+	}
+
+	pub fn decode_upstream_request_id(
+		&self,
+		id: &RequestId,
+	) -> Result<(String, RequestId), UpstreamError> {
+		if let Some(default) = self.default_target_name.as_deref() {
+			return Ok((default.to_string(), id.clone()));
+		}
+		let RequestId::String(raw) = id else {
+			return Err(UpstreamError::InvalidRequest(
+				"upstream request id must be a string when multiplexing".to_string(),
+			));
+		};
+		let raw = raw.as_ref();
+		let Some((prefix, rest)) = raw.split_once(UPSTREAM_REQUEST_ID_SEPARATOR) else {
+			return Err(UpstreamError::InvalidRequest(
+				"upstream request id missing gateway prefix".to_string(),
+			));
+		};
+		if prefix != UPSTREAM_REQUEST_ID_PREFIX {
+			return Err(UpstreamError::InvalidRequest(
+				"upstream request id missing gateway prefix".to_string(),
+			));
+		}
+		let Some((server_name, rest)) = rest.split_once(UPSTREAM_REQUEST_ID_SEPARATOR) else {
+			return Err(UpstreamError::InvalidRequest(
+				"upstream request id missing server name".to_string(),
+			));
+		};
+		let Some((kind, value)) = rest.split_once(UPSTREAM_REQUEST_ID_KIND_SEPARATOR) else {
+			return Err(UpstreamError::InvalidRequest(
+				"upstream request id missing kind".to_string(),
+			));
+		};
+		let orig_id = match kind {
+			"n" => value
+				.parse::<i64>()
+				.ok()
+				.map(RequestId::Number)
+				.ok_or_else(|| {
+					UpstreamError::InvalidRequest("upstream request id number parse failed".to_string())
+				})?,
+			"s" => RequestId::String(value.into()),
+			_ => {
+				return Err(UpstreamError::InvalidRequest(
+					"upstream request id kind unknown".to_string(),
+				));
+			},
+		};
+		Ok((server_name.to_string(), orig_id))
+	}
+
+	fn map_server_message(
+		&self,
+		server_name: &str,
+		mut message: ServerJsonRpcMessage,
+	) -> ServerJsonRpcMessage {
+		match &mut message {
+			ServerJsonRpcMessage::Request(req) => {
+				req.id = self.encode_upstream_request_id(server_name, &req.id);
+				if let Some(params) = elicitation::extract_url_elicitation(&req.request) {
+					tracing::debug!(
+						elicitation_id = %params.elicitation_id,
+						"received url elicitation request"
+					);
+				}
+			},
+			ServerJsonRpcMessage::Response(resp) => {
+				self.map_server_result(server_name, &mut resp.result);
+			},
+			_ => {},
+		}
+		message
+	}
+
+	fn map_server_result(&self, server_name: &str, result: &mut ServerResult) {
+		if !self.should_prefix_identifiers() {
+			return;
+		}
+		match result {
+			ServerResult::CreateTaskResult(r) => {
+				r.task.task_id = resource_name(
+					self.default_target_name.as_ref(),
+					server_name,
+					&r.task.task_id,
+				);
+			},
+			ServerResult::ListTasksResult(r) => {
+				for task in &mut r.tasks {
+					task.task_id = resource_name(
+						self.default_target_name.as_ref(),
+						server_name,
+						&task.task_id,
+					);
+				}
+			},
+			ServerResult::GetTaskInfoResult(r) => {
+				if let Some(task) = &mut r.task {
+					task.task_id = resource_name(
+						self.default_target_name.as_ref(),
+						server_name,
+						&task.task_id,
+					);
+				}
+			},
+			_ => {},
+		}
+	}
 }
 
 impl Relay {
@@ -118,13 +276,15 @@ impl Relay {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();
 		Box::new(move |streams| {
+			let mut meta_entries = Vec::new();
 			let tools = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
-					let tools = match s {
-						ServerResult::ListToolsResult(ltr) => ltr.tools,
-						_ => vec![],
+					let (tools, meta) = match s {
+						ServerResult::ListToolsResult(ltr) => (ltr.tools, ltr.meta),
+						_ => (vec![], None),
 					};
+					meta_entries.push((server_name.clone(), meta));
 					tools
 						.into_iter()
 						// Apply authorization policies, filtering tools that are not allowed.
@@ -149,11 +309,12 @@ impl Relay {
 						.collect_vec()
 				})
 				.collect_vec();
+			let meta = merge_meta(meta_entries);
 			Ok(
 				ListToolsResult {
 					tools,
 					next_cursor: None,
-					meta: None,
+					meta,
 				}
 				.into(),
 			)
@@ -186,13 +347,15 @@ impl Relay {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();
 		Box::new(move |streams| {
+			let mut meta_entries = Vec::new();
 			let prompts = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
-					let prompts = match s {
-						ServerResult::ListPromptsResult(lpr) => lpr.prompts,
-						_ => vec![],
+					let (prompts, meta) = match s {
+						ServerResult::ListPromptsResult(lpr) => (lpr.prompts, lpr.meta),
+						_ => (vec![], None),
 					};
+					meta_entries.push((server_name.clone(), meta));
 					prompts
 						.into_iter()
 						.filter(|p| {
@@ -211,11 +374,12 @@ impl Relay {
 						.collect_vec()
 				})
 				.collect_vec();
+			let meta = merge_meta(meta_entries);
 			Ok(
 				ListPromptsResult {
 					prompts,
 					next_cursor: None,
-					meta: None,
+					meta,
 				}
 				.into(),
 			)
@@ -224,13 +388,15 @@ impl Relay {
 	pub fn merge_resources(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		Box::new(move |streams| {
+			let mut meta_entries = Vec::new();
 			let resources = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
-					let resources = match s {
-						ServerResult::ListResourcesResult(lrr) => lrr.resources,
-						_ => vec![],
+					let (resources, meta) = match s {
+						ServerResult::ListResourcesResult(lrr) => (lrr.resources, lrr.meta),
+						_ => (vec![], None),
 					};
+					meta_entries.push((server_name.clone(), meta));
 					resources
 						.into_iter()
 						.filter(|r| {
@@ -247,11 +413,12 @@ impl Relay {
 						.collect_vec()
 				})
 				.collect_vec();
+			let meta = merge_meta(meta_entries);
 			Ok(
 				ListResourcesResult {
 					resources,
 					next_cursor: None,
-					meta: None,
+					meta,
 				}
 				.into(),
 			)
@@ -260,13 +427,15 @@ impl Relay {
 	pub fn merge_resource_templates(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		Box::new(move |streams| {
+			let mut meta_entries = Vec::new();
 			let resource_templates = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
-					let resource_templates = match s {
-						ServerResult::ListResourceTemplatesResult(lrr) => lrr.resource_templates,
-						_ => vec![],
+					let (resource_templates, meta) = match s {
+						ServerResult::ListResourceTemplatesResult(lrr) => (lrr.resource_templates, lrr.meta),
+						_ => (vec![], None),
 					};
+					meta_entries.push((server_name.clone(), meta));
 					resource_templates
 						.into_iter()
 						.filter(|rt| {
@@ -283,11 +452,45 @@ impl Relay {
 						.collect_vec()
 				})
 				.collect_vec();
+			let meta = merge_meta(meta_entries);
 			Ok(
 				ListResourceTemplatesResult {
 					resource_templates,
 					next_cursor: None,
-					meta: None,
+					meta,
+				}
+				.into(),
+			)
+		})
+	}
+	pub fn merge_tasks(&self) -> Box<MergeFn> {
+		let default_target_name = self.default_target_name.clone();
+		Box::new(move |streams| {
+			let tasks = streams
+				.into_iter()
+				.flat_map(|(server_name, s)| {
+					let tasks = match s {
+						ServerResult::ListTasksResult(ltr) => ltr.tasks,
+						_ => vec![],
+					};
+					tasks
+						.into_iter()
+						.map(|mut task| {
+							task.task_id = resource_name(
+								default_target_name.as_ref(),
+								server_name.as_str(),
+								&task.task_id,
+							);
+							task
+						})
+						.collect_vec()
+				})
+				.collect_vec();
+			Ok(
+				ListTasksResult {
+					tasks,
+					next_cursor: None,
+					total: None,
 				}
 				.into(),
 			)
@@ -308,7 +511,12 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let stream = us.generic_stream(r, &ctx).await?;
+		let relay = self.clone();
+		let server_name = service_name.to_string();
+		let stream = us
+			.generic_stream(r, &ctx)
+			.await?
+			.map(move |msg| msg.map(|msg| relay.map_server_message(&server_name, msg)));
 
 		messages_to_response(id, stream)
 	}
@@ -342,7 +550,15 @@ impl Relay {
 			streams.push((name, con.get_event_stream(&ctx).await?));
 		}
 
-		let ms = mergestream::MergeStream::new_without_merge(streams);
+		let message_mapper: Option<MessageMapper> = if self.should_prefix_identifiers() {
+			let relay = self.clone();
+			Some(Arc::new(move |server_name: &str, message| {
+				relay.map_server_message(server_name, message)
+			}))
+		} else {
+			None
+		};
+		let ms = mergestream::MergeStream::new_without_merge(streams, message_mapper);
 		messages_to_response(RequestId::Number(0), ms)
 	}
 	pub async fn send_fanout(
@@ -357,7 +573,15 @@ impl Relay {
 			streams.push((name, con.generic_stream(r.clone(), &ctx).await?));
 		}
 
-		let ms = mergestream::MergeStream::new(streams, id.clone(), merge);
+		let message_mapper: Option<MessageMapper> = if self.should_prefix_identifiers() {
+			let relay = self.clone();
+			Some(Arc::new(move |server_name: &str, message| {
+				relay.map_server_message(server_name, message)
+			}))
+		} else {
+			None
+		};
+		let ms = mergestream::MergeStream::new(streams, id.clone(), merge, message_mapper);
 		messages_to_response(id, ms)
 	}
 	pub async fn send_notification(
@@ -377,6 +601,20 @@ impl Relay {
 
 		Ok(accepted_response())
 	}
+	pub async fn send_client_message(
+		&self,
+		service_name: String,
+		message: ClientJsonRpcMessage,
+		ctx: IncomingRequestContext,
+	) -> Result<Response, UpstreamError> {
+		let Ok(us) = self.upstreams.get(&service_name) else {
+			return Err(UpstreamError::InvalidRequest(format!(
+				"unknown service {service_name}"
+			)));
+		};
+		us.send_client_message(message, &ctx).await?;
+		Ok(accepted_response())
+	}
 	fn get_info(pv: ProtocolVersion) -> ServerInfo {
 		ServerInfo {
             protocol_version: pv,
@@ -387,6 +625,7 @@ impl Relay {
                 prompts: Some(PromptsCapability::default()),
                 resources: Some(ResourcesCapability::default()),
                 tools: Some(ToolsCapability::default()),
+                tasks: None,
             },
             server_info: Implementation::from_build_env(),
             instructions: Some(
@@ -459,4 +698,31 @@ fn accepted_response() -> Response {
 		.status(StatusCode::ACCEPTED)
 		.body(crate::http::Body::empty())
 		.expect("valid response")
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use agent_core::strng;
+	use serde_json::json;
+
+	#[test]
+	fn merge_meta_includes_upstreams() {
+		let mut meta_a = Meta::new();
+		meta_a.0.insert("a".to_string(), json!(1));
+		let mut meta_b = Meta::new();
+		meta_b.0.insert("b".to_string(), json!(2));
+		let merged = merge_meta(vec![
+			(strng::new("a"), Some(meta_a)),
+			(strng::new("b"), Some(meta_b)),
+		])
+		.expect("merged meta");
+		let upstreams = merged
+			.0
+			.get("upstreams")
+			.and_then(|v| v.as_object())
+			.expect("meta.upstreams");
+		assert!(upstreams.contains_key("a"));
+		assert!(upstreams.contains_key("b"));
+	}
 }
