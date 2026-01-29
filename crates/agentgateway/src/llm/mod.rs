@@ -909,9 +909,9 @@ impl AIProvider {
 		policies: Option<&Policy>,
 		req: Request,
 	) -> Result<(Parts, T), AIError> {
-		// Buffer the body, max 2mb
+		let buffer = http::buffer_limit(&req);
 		let (parts, body) = req.into_parts();
-		let Ok(bytes) = axum::body::to_bytes(body, 2_097_152).await else {
+		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
 			return Err(AIError::RequestTooLarge);
 		};
 		let mut req: T = if let Some(p) = policies {
