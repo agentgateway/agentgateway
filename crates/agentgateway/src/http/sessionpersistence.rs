@@ -109,7 +109,8 @@ impl Encoder {
 }
 
 mod base64 {
-	use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+	use base64::Engine;
+	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
 	#[derive(Debug, Clone)]
 	pub struct Encoder;
@@ -126,7 +127,8 @@ mod base64 {
 
 mod aes {
 	use aws_lc_rs::aead::{AES_256_GCM, Aad, Nonce, RandomizedNonceKey};
-	use base64::{Engine, engine::general_purpose::STANDARD};
+	use base64::Engine;
+	use base64::engine::general_purpose::STANDARD;
 
 	#[derive(Debug)]
 	pub struct Encoder {

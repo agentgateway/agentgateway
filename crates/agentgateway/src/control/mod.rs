@@ -298,7 +298,6 @@ fn get_target(raw: &str, ca: BackendTLS) -> anyhow::Result<(Target, Transport)> 
 
 #[cfg(test)]
 mod tests {
-
 	use std::fs::File;
 	use std::io::Write;
 

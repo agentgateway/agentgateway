@@ -61,6 +61,7 @@ impl RequestType for Request {
 				}),
 				dimensions: self.dimensions,
 			},
+			prompt: Default::default(),
 		})
 	}
 

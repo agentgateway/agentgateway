@@ -1,12 +1,13 @@
-use agent_core::durfmt;
-use agent_core::prelude::*;
-use secrecy::ExposeSecret;
-use serde::de::DeserializeOwned;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, env};
+
+use agent_core::durfmt;
+use agent_core::prelude::*;
+use secrecy::ExposeSecret;
+use serde::de::DeserializeOwned;
 
 use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields};

@@ -202,6 +202,7 @@ impl super::RequestType for Request {
 				encoding_format: None,
 				dimensions: None,
 			},
+			prompt: Default::default(),
 		};
 		Ok(llm)
 	}

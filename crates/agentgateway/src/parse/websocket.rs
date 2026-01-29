@@ -1,13 +1,15 @@
-use crate::llm::{LLMInfo, LLMResponse};
-use crate::telemetry::log::AsyncLog;
-use async_openai::types::realtime::RealtimeResponseUsage;
-use bytes::{Bytes, BytesMut};
-use serde::{Deserialize, Serialize};
 use std::io::{Error, IoSlice};
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
+
+use async_openai::types::realtime::RealtimeResponseUsage;
+use bytes::{Bytes, BytesMut};
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use websocket_sans_io::{FrameInfo, Opcode, WebsocketFrameEvent};
+
+use crate::llm::{LLMInfo, LLMResponse};
+use crate::telemetry::log::AsyncLog;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ResponseDoneEvent {

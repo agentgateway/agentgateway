@@ -30,6 +30,17 @@ pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
 
+pub fn version_str(v: &http::Version) -> &'static str {
+	match *v {
+		http::Version::HTTP_09 => "HTTP/0.9",
+		http::Version::HTTP_10 => "HTTP/1.0",
+		http::Version::HTTP_11 => "HTTP/1.1",
+		http::Version::HTTP_2 => "HTTP/2",
+		http::Version::HTTP_3 => "HTTP/3",
+		_ => "unknown",
+	}
+}
+
 /// A mutable handle that can represent either a request or a response
 #[derive(Debug)]
 pub enum RequestOrResponse<'a> {
@@ -37,7 +48,94 @@ pub enum RequestOrResponse<'a> {
 	Response(&'a mut Response),
 }
 
-use std::fmt::Debug;
+impl<'a> From<&'a mut Request> for RequestOrResponse<'a> {
+	fn from(req: &'a mut Request) -> Self {
+		RequestOrResponse::Request(req)
+	}
+}
+
+impl<'a> From<&'a mut Response> for RequestOrResponse<'a> {
+	fn from(req: &'a mut Response) -> RequestOrResponse<'a> {
+		RequestOrResponse::Response(req)
+	}
+}
+
+impl RequestOrResponse<'_> {
+	pub fn headers(&mut self) -> &mut http::HeaderMap {
+		match self {
+			RequestOrResponse::Request(r) => r.headers_mut(),
+			RequestOrResponse::Response(r) => r.headers_mut(),
+		}
+	}
+	pub fn body(&mut self) -> &mut Body {
+		match self {
+			RequestOrResponse::Request(r) => r.body_mut(),
+			RequestOrResponse::Response(r) => r.body_mut(),
+		}
+	}
+	pub fn apply_header(&mut self, k: &HeaderOrPseudo, v: Option<HeaderOrPseudoValue>, append: bool) {
+		match (k, v) {
+			(HeaderOrPseudo::Header(k), Some(HeaderOrPseudoValue::Header(v))) => {
+				if append {
+					self.headers().append(k.clone(), v);
+				} else {
+					self.headers().insert(k.clone(), v);
+				}
+			},
+			(HeaderOrPseudo::Header(k), None) => {
+				// Need to sanitize it, so a failed execution cannot mean the user can set arbitrary headers.
+				self.headers().remove(k);
+			},
+			(_, Some(HeaderOrPseudoValue::Method(v))) => {
+				if let RequestOrResponse::Request(r) = self {
+					*r.method_mut() = v;
+				}
+			},
+			(_, Some(HeaderOrPseudoValue::Scheme(v))) => {
+				if let RequestOrResponse::Request(r) = self {
+					let _ = modify_req_uri(r, |uri| {
+						uri.scheme = Some(v);
+						Ok(())
+					});
+				}
+			},
+			(_, Some(HeaderOrPseudoValue::Authority(v))) => {
+				if let RequestOrResponse::Request(r) = self {
+					let _ = modify_req_uri(r, |uri| {
+						uri.authority = Some(v);
+						if uri.scheme.is_none() {
+							// When authority is set, scheme must also be set
+							// TODO: do the same for HeaderOrPseudo::Scheme
+							uri.scheme = Some(Scheme::HTTP);
+						}
+						Ok(())
+					});
+				}
+			},
+			(_, Some(HeaderOrPseudoValue::Path(v))) => {
+				if let RequestOrResponse::Request(r) = self {
+					let _ = modify_req_uri(r, |uri| {
+						uri.path_and_query = Some(v);
+						Ok(())
+					});
+				}
+			},
+			(_, Some(HeaderOrPseudoValue::Status(v))) => {
+				if let RequestOrResponse::Response(r) = self {
+					*r.status_mut() = v;
+				}
+			},
+			(_, None) => {
+				// Invalid, do nothing
+			},
+			(_, _) => {
+				unreachable!("invalid k/v pair")
+			},
+		}
+	}
+}
+
+use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::task::{Context, Poll};
@@ -47,13 +145,19 @@ pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
 };
 use bytes::Bytes;
+use cel::Value;
+use http::uri::PathAndQuery;
 use http_body::{Frame, SizeHint};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::Url;
 
+use crate::cel::{BackendContext, LLMContext, RequestStartTime, SourceContext};
+use crate::client::PoolKey;
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::BufferLimit;
+use crate::transport::stream::TCPConnectionInfo;
+use crate::types::agent::PathMatch;
 
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -64,6 +168,55 @@ pub enum HeaderOrPseudo {
 	Authority,
 	Path,
 	Status,
+}
+
+/// Represents a value for an HTTP header or an HTTP/2 pseudo-header
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum HeaderOrPseudoValue {
+	Header(HeaderValue),
+	Method(Method),
+	Scheme(Scheme),
+	Authority(Authority),
+	Path(PathAndQuery),
+	Status(StatusCode),
+}
+
+impl HeaderOrPseudoValue {
+	pub fn from_cel_result(k: &HeaderOrPseudo, res: Option<Value>) -> Option<HeaderOrPseudoValue> {
+		match (res?, k) {
+			(v, HeaderOrPseudo::Header(_)) => v
+				.as_bytes()
+				.ok()
+				.and_then(|b| HeaderValue::from_bytes(b).ok())
+				.map(HeaderOrPseudoValue::Header),
+			(v, HeaderOrPseudo::Status) => v
+				.as_unsigned()
+				.ok()
+				.and_then(|v| u16::try_from(v).ok())
+				.and_then(|v| StatusCode::from_u16(v).ok())
+				.map(HeaderOrPseudoValue::Status),
+			(v, HeaderOrPseudo::Method) => v
+				.as_bytes()
+				.ok()
+				.and_then(|b| ::http::Method::from_bytes(b).ok())
+				.map(HeaderOrPseudoValue::Method),
+			(v, HeaderOrPseudo::Scheme) => v
+				.as_bytes()
+				.ok()
+				.and_then(|b| ::http::uri::Scheme::try_from(b).ok())
+				.map(HeaderOrPseudoValue::Scheme),
+			(v, HeaderOrPseudo::Authority) => v
+				.as_bytes()
+				.ok()
+				.and_then(|b| ::http::uri::Authority::try_from(b).ok())
+				.map(HeaderOrPseudoValue::Authority),
+			(v, HeaderOrPseudo::Path) => v
+				.as_bytes()
+				.ok()
+				.and_then(|b| ::http::uri::PathAndQuery::try_from(b).ok())
+				.map(HeaderOrPseudoValue::Path),
+		}
+	}
 }
 
 impl TryFrom<&str> for HeaderOrPseudo {
@@ -535,5 +688,74 @@ where
 
 	fn size_hint(&self) -> SizeHint {
 		self.body.size_hint()
+	}
+}
+
+// DebugExtensions is a wrapper that logs a requests known-extensions in the Debug implementation.
+// Note: there is no compile time guarantees we did not miss a given extension.
+pub struct DebugExtensions<'a>(pub &'a Request);
+
+impl Debug for DebugExtensions<'_> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		let mut d = f.debug_struct("Extensions");
+		let ext = self.0.extensions();
+		if let Some(e) = ext.get::<jwt::Claims>() {
+			d.field("jwt::Claims", e);
+		}
+		if let Some(e) = ext.get::<apikey::Claims>() {
+			d.field("apikey::Claims", e);
+		}
+		if let Some(e) = ext.get::<basicauth::Claims>() {
+			d.field("basicauth::Claims", e);
+		}
+		if let Some(e) = ext.get::<crate::http::filters::BackendRequestTimeout>() {
+			d.field("BackendRequestTimeout", e);
+		}
+		if let Some(e) = ext.get::<crate::http::filters::OriginalUrl>() {
+			d.field("OriginalUrl", e);
+		}
+		if let Some(e) = ext.get::<crate::llm::bedrock::AwsRegion>() {
+			d.field("AwsRegion", e);
+		}
+		if let Some(e) = ext.get::<crate::client::ResolvedDestination>() {
+			d.field("ResolvedDestination", e);
+		}
+		if let Some(e) = ext.get::<crate::http::ext_authz::ExtAuthzDynamicMetadata>() {
+			d.field("ExtAuthzDynamicMetadata", e);
+		}
+		if let Some(e) = ext.get::<PathMatch>() {
+			d.field("PathMatch", e);
+		}
+		if let Some(e) = ext.get::<crate::telemetry::trc::TraceParent>() {
+			d.field("TraceParent", e);
+		}
+		if let Some(e) = ext.get::<crate::transport::stream::TLSConnectionInfo>() {
+			d.field("TLSConnectionInfo", e);
+		}
+		if let Some(e) = ext.get::<TCPConnectionInfo>() {
+			d.field("TCPConnectionInfo", e);
+		}
+		if let Some(e) = ext.get::<crate::transport::stream::HBONEConnectionInfo>() {
+			d.field("HBONEConnectionInfo", e);
+		}
+		if let Some(e) = ext.get::<BufferLimit>() {
+			d.field("BufferLimit", e);
+		}
+		if let Some(e) = ext.get::<PoolKey>() {
+			d.field("PoolKey", e);
+		}
+		if let Some(e) = ext.get::<LLMContext>() {
+			d.field("LLMContext", e);
+		}
+		if let Some(e) = ext.get::<BackendContext>() {
+			d.field("BackendContext", e);
+		}
+		if let Some(e) = ext.get::<SourceContext>() {
+			d.field("SourceContext", e);
+		}
+		if let Some(e) = ext.get::<RequestStartTime>() {
+			d.field("RequestStartTime", e);
+		}
+		d.finish()
 	}
 }

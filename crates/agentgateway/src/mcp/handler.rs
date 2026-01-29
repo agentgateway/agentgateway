@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::sync::Arc;
+
 use agent_core::trcng;
 use futures_core::Stream;
 use http::StatusCode;
@@ -13,15 +16,12 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
-use std::borrow::Cow;
-use std::sync::Arc;
 
-use crate::cel::ContextBuilder;
 use crate::http::Response;
 use crate::http::jwt::Claims;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::mergestream::MergeFn;
-use crate::mcp::rbac::{Identity, McpAuthorizationSet};
+use crate::mcp::rbac::{CelExecWrapper, Identity, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::ServerSseMessage;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
@@ -114,7 +114,7 @@ impl Relay {
 		self.default_target_name.clone()
 	}
 
-	pub fn merge_tools(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
+	pub fn merge_tools(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();
 		Box::new(move |streams| {
@@ -182,7 +182,7 @@ impl Relay {
 		})
 	}
 
-	pub fn merge_prompts(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
+	pub fn merge_prompts(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.default_target_name.clone();
 		Box::new(move |streams| {
@@ -221,7 +221,7 @@ impl Relay {
 			)
 		})
 	}
-	pub fn merge_resources(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
+	pub fn merge_resources(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		Box::new(move |streams| {
 			let resources = streams
@@ -257,7 +257,7 @@ impl Relay {
 			)
 		})
 	}
-	pub fn merge_resource_templates(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
+	pub fn merge_resource_templates(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		Box::new(move |streams| {
 			let resource_templates = streams
@@ -397,9 +397,9 @@ impl Relay {
 }
 
 pub fn setup_request_log(
-	http: &Parts,
+	http: Parts,
 	span_name: &str,
-) -> (BoxedSpan, AsyncLog<MCPInfo>, Arc<ContextBuilder>) {
+) -> (BoxedSpan, AsyncLog<MCPInfo>, CelExecWrapper) {
 	let traceparent = http.extensions.get::<TraceParent>();
 	let mut ctx = Context::new();
 	if let Some(tp) = traceparent {
@@ -411,7 +411,7 @@ pub fn setup_request_log(
 			TraceState::default(),
 		));
 	}
-	let claims = http.extensions.get::<Claims>();
+	let claims = http.extensions.get::<Claims>().cloned();
 
 	let log = http
 		.extensions
@@ -419,14 +419,10 @@ pub fn setup_request_log(
 		.cloned()
 		.unwrap_or_default();
 
-	let cel = http
-		.extensions
-		.get::<Arc<ContextBuilder>>()
-		.cloned()
-		.expect("CelContextBuilder must be set");
+	let cel = CelExecWrapper::new(http);
 
 	let tracer = trcng::get_tracer();
-	let _span = trcng::start_span(span_name.to_string(), &Identity::new(claims.cloned()))
+	let _span = trcng::start_span(span_name.to_string(), &Identity::new(claims))
 		.with_kind(SpanKind::Server)
 		.start_with_context(tracer, &ctx);
 	(_span, log, cel)

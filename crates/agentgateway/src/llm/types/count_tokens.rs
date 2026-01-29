@@ -35,6 +35,7 @@ impl RequestType for Request {
 			provider,
 			streaming: false,
 			params: Default::default(),
+			prompt: Default::default(),
 		})
 	}
 

@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::{debug, warn};
 
 use ::http::header::{HeaderName, HeaderValue};
 use headers::HeaderMapExt;
@@ -14,6 +13,7 @@ use regex::{Captures, Regex, Replacer};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use tracing::{debug, warn};
 
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;

@@ -1,8 +1,9 @@
-use crate::common::gateway::AgentGateway;
 use agent_core::telemetry::testing;
 use http::StatusCode;
 use serde_json::json;
 use tracing::warn;
+
+use crate::common::gateway::AgentGateway;
 
 // This module provides real LLM integration tests. These require API keys!
 // Example running all tests:

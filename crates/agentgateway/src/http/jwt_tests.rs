@@ -385,14 +385,13 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	let mut prom = Registry::default();
 	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
 	let start = Instant::now();
-	let start_time = agent_core::telemetry::render_current_time();
 	let tcp_info = TCPConnectionInfo {
 		peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),
 		local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
 		start,
 		raw_peer_addr: None,
 	};
-	RequestLog::new(cel, metrics, start, start_time, tcp_info)
+	RequestLog::new(cel, metrics, start, tcp_info)
 }
 
 fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {

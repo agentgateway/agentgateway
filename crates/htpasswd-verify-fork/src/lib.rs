@@ -5,7 +5,8 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use sha1::{Digest, Sha1};
 
 use crate::md5::APR1_ID;
@@ -92,7 +93,7 @@ impl<'a> Hash<'a> {
 		} else if hash.starts_with("{SHA}") {
 			Hash::SHA1(Cow::Borrowed(&hash[SHA1_ID.len()..]))
 		} else {
-			//Ignore plaintext, assume crypt
+			// Ignore plaintext, assume crypt
 			Hash::Crypt(Cow::Borrowed(hash))
 		}
 	}

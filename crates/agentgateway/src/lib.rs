@@ -119,8 +119,9 @@ pub struct RawConfig {
 }
 
 mod removed {
-	use crate::serdes;
 	use serde::Deserializer;
+
+	use crate::serdes;
 
 	pub fn rename_listener<'de, D: Deserializer<'de>>(
 		d: D,

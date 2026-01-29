@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use ::http::{HeaderMap, StatusCode, Version, header};
+use ::http::{HeaderMap, StatusCode, Uri, header};
 use prost_types::Timestamp;
 use serde_json::Value as JsonValue;
 
-use crate::cel::{ContextBuilder, Executor, Expression, Value};
+use crate::cel::{BufferedBody, Expression, Value};
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
 use crate::http::ext_authz::proto::check_response::HttpResponse;
@@ -16,13 +16,14 @@ use crate::http::ext_authz::proto::{
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::transformation_cel::SerAsStr;
-use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse, Request, jwt};
+use crate::http::{
+	HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse, Request, Response, jwt,
+};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReference;
 use crate::{serde_dur_option, *};
-
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
 mod tests;
@@ -33,11 +34,9 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.auth.v3");
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct ExtAuthzDynamicMetadata {
-	/// Flat key-value metadata for direct extauthz.field access in CEL
-	pub metadata: HashMap<String, JsonValue>,
-}
+#[apply(schema!)]
+#[derive(Default, ::cel::DynamicType)]
+pub struct ExtAuthzDynamicMetadata(serde_json::Map<String, JsonValue>);
 
 #[apply(schema!)]
 pub struct BodyOptions {
@@ -217,14 +216,12 @@ impl ExtAuthz {
 
 	pub async fn check(
 		&self,
-		exec: &Executor<'_>,
 		client: PolicyClient,
 		req: &mut Request,
-		ctx_builder: &ContextBuilder,
 	) -> Result<PolicyResponse, ProxyError> {
 		if matches!(self.protocol, Protocol::Http { .. }) {
 			trace!(protocol = "http", "connecting to {:?}", self.target);
-			return self.check_http(exec, client, req, ctx_builder).await;
+			return self.check_http(client, req).await;
 		}
 		trace!(protocol = "grpc", "connecting to {:?}", self.target);
 
@@ -326,14 +323,7 @@ impl ExtAuthz {
 					.scheme()
 					.map(|s| s.to_string())
 					.unwrap_or_else(|| "http".to_string()),
-				protocol: match req.version() {
-					Version::HTTP_09 => "HTTP/0.9".to_string(),
-					Version::HTTP_10 => "HTTP/1.0".to_string(),
-					Version::HTTP_11 => "HTTP/1.1".to_string(),
-					Version::HTTP_2 => "HTTP/2".to_string(),
-					Version::HTTP_3 => "HTTP/3".to_string(),
-					_ => format!("{:?}", req.version()),
-				},
+				protocol: http::version_str(&req.version()).to_string(),
 				// Always empty per spec
 				query: "".to_string(),
 				// Always empty per spec
@@ -406,7 +396,7 @@ impl ExtAuthz {
 				source,
 				destination,
 				request: Some(request),
-				metadata_context: self.build_metadata(metadata, exec, req)?,
+				metadata_context: self.build_metadata(metadata, req)?,
 				context_extensions: context.clone().unwrap_or_default(),
 				tls_session,
 			}),
@@ -431,12 +421,12 @@ impl ExtAuthz {
 
 			for (key, value) in metadata.fields {
 				dynamic_metadata
-					.metadata
+					.0
 					.insert(key, convert_prost_value_to_json(&value)?);
 			}
 
-			if !dynamic_metadata.metadata.is_empty() {
-				req.extensions_mut().insert(Arc::new(dynamic_metadata));
+			if !dynamic_metadata.0.is_empty() {
+				req.extensions_mut().insert(dynamic_metadata);
 			}
 		}
 
@@ -529,10 +519,8 @@ impl ExtAuthz {
 
 	pub async fn check_http(
 		&self,
-		exec: &Executor<'_>,
 		client: PolicyClient,
 		req: &mut Request,
-		ctx_builder: &ContextBuilder,
 	) -> Result<PolicyResponse, ProxyError> {
 		let Protocol::Http {
 			redirect,
@@ -558,8 +546,9 @@ impl ExtAuthz {
 			Bytes::new()
 		};
 
-		let path = match path {
+		let path: Uri = match path {
 			Some(path_expr) => {
+				let exec = cel::Executor::new_request(req);
 				let res = exec
 					.eval(path_expr)
 					.map_err(|e| anyhow::anyhow!("{e}"))
@@ -569,26 +558,25 @@ impl ExtAuthz {
 						} else {
 							Err(anyhow::anyhow!("redirect resolved to a non-string value"))
 						}
+					})
+					.and_then(|v| {
+						Uri::try_from(v.as_ref())
+							.map_err(|e| anyhow::anyhow!("invalid uri {}: {e}", v.as_ref()))
 					});
 				match res {
-					Ok(s) => Some(s),
+					Ok(res) => res,
 					Err(e) => {
 						tracing::warn!("fail to evaluate path: {e}");
 						return Err(ProxyError::ExternalAuthorizationFailed(None));
 					},
 				}
 			},
-			None => None,
+			None => Uri::try_from(req.uri().path()).expect("pre-validated"),
 		};
 
 		// If the user defined their own path expression, use that.
 		// Else, use the original URL path.
-		let rb = ::http::Request::builder().method(req.method()).uri(
-			path
-				.as_ref()
-				.map(|s| s.as_str())
-				.unwrap_or_else(|| req.uri().path()),
-		);
+		let rb = ::http::Request::builder().method(req.method()).uri(path);
 		let mut check_req = rb
 			.body(http::Body::from(body))
 			.map_err(|e| ProxyError::Processing(e.into()))?;
@@ -609,25 +597,12 @@ impl ExtAuthz {
 			}
 		}
 
-		// Insert any headers derived from CEL expresions.
+		// Insert any headers derived from CEL expressions.
 		for (hn, hv) in add_request_headers {
-			let Some(hv) = exec
-				.eval(hv)
-				.ok()
-				.as_ref()
-				.and_then(cel::value_as_header_value)
-			else {
-				// Wipe it out incase it was also included
-				if let HeaderOrPseudo::Header(hn) = hn {
-					check_req.headers_mut().remove(hn);
-				}
-				continue;
-			};
-			let _ = http::apply_header_or_pseudo(
-				&mut http::RequestOrResponse::Request(&mut check_req),
-				hn,
-				hv.as_bytes(),
-			);
+			let exec = cel::Executor::new_request(req);
+			let res = exec.eval(hv).ok();
+			let resv = http::HeaderOrPseudoValue::from_cel_result(hn, res);
+			http::RequestOrResponse::Request(&mut check_req).apply_header(hn, resv, false);
 		}
 		// Set the request timeout. This can be overridden by a timeout on the Backend object itself.
 		let timeout_duration = self.timeout.unwrap_or(Duration::from_millis(200));
@@ -650,33 +625,28 @@ impl ExtAuthz {
 				}
 			}
 			if !metadata.is_empty() {
-				let mut ctx = ctx_builder.expensive_clone();
-				let include_body = ctx.with_response(&resp);
-				if include_body && let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
-					ctx.with_response_body(body);
-				}
-				if let Ok(exec) = ctx.build() {
-					let m = metadata
-						.iter()
-						.filter_map(|(k, v)| match Self::eval_to_json(&exec, v) {
-							Ok(r) => Some((k.to_string(), r)),
-							Err(e) => {
-								trace!("failed to evaluate: {e}");
-								error!("failed to evaluate: {e}");
-								None
-							},
-						})
-						.collect::<HashMap<_, _>>();
-					req
-						.extensions_mut()
-						.insert(Arc::new(ExtAuthzDynamicMetadata { metadata: m }));
-				}
+				if let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
+					resp.extensions_mut().insert(BufferedBody(body));
+				};
+				let m = metadata
+					.iter()
+					.filter_map(|(k, v)| match Self::eval_to_json(req, &resp, v) {
+						Ok(r) => Some((k.to_string(), r)),
+						Err(e) => {
+							trace!("failed to evaluate: {e}");
+							error!("failed to evaluate: {e}");
+							None
+						},
+					})
+					.collect::<serde_json::Map<_, _>>();
+				req.extensions_mut().insert(ExtAuthzDynamicMetadata(m));
 			}
 			return Ok(PolicyResponse::default());
 		}
 		if (resp.status() == StatusCode::FORBIDDEN || resp.status() == StatusCode::UNAUTHORIZED)
 			&& let Some(redir) = &redirect
 		{
+			let exec = cel::Executor::new_request(req);
 			let s = exec
 				.eval(redir)
 				.map_err(|e| anyhow::anyhow!("{e}"))
@@ -696,7 +666,7 @@ impl ExtAuthz {
 					let status = StatusCode::FOUND;
 					let resp = ::http::Response::builder()
 						.status(status)
-						.header(header::LOCATION, redir.as_str())
+						.header(header::LOCATION, redir.as_ref())
 						.body(http::Body::empty())
 						.map_err(|e| ProxyError::Processing(e.into()))?;
 					Ok(PolicyResponse {
@@ -716,14 +686,13 @@ impl ExtAuthz {
 	fn build_metadata(
 		&self,
 		metadata: &Option<HashMap<String, Arc<cel::Expression>>>,
-		exec: &Executor,
 		req: &mut Request,
 	) -> Result<Option<Metadata>, ProxyError> {
 		Ok(match &metadata {
 			Some(meta) => {
 				let m = meta
 					.iter()
-					.filter_map(|(k, v)| match Self::eval_to_pb(exec, v) {
+					.filter_map(|(k, v)| match Self::eval_to_pb(req, v) {
 						Ok(r) => Some((k.to_string(), r)),
 						Err(e) => {
 							trace!("failed to evaluate: {e}");
@@ -748,14 +717,20 @@ impl ExtAuthz {
 		})
 	}
 
-	fn eval_to_pb(exec: &Executor, v: &Expression) -> anyhow::Result<prost_wkt_types::Struct> {
+	fn eval_to_pb(req: &Request, v: &Expression) -> anyhow::Result<prost_wkt_types::Struct> {
+		let exec = cel::Executor::new_request(req);
 		let res = exec.eval(v)?;
 		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
 		let pb = json_to_struct(js)?;
 		Ok(pb)
 	}
 
-	fn eval_to_json(exec: &Executor, v: &Expression) -> anyhow::Result<serde_json::Value> {
+	fn eval_to_json(
+		req: &Request,
+		resp: &Response,
+		v: &Expression,
+	) -> anyhow::Result<serde_json::Value> {
+		let exec = cel::Executor::new_request_and_response(req, resp);
 		let res = exec.eval(v)?;
 		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
 		Ok(js)

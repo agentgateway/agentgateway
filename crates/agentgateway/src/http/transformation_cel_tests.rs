@@ -2,7 +2,6 @@ use agent_core::strng;
 use itertools::Itertools;
 
 use super::*;
-use crate::cel::ContextBuilder;
 
 fn build<const N: usize>(items: [(&str, &str); N]) -> Transformation {
 	let c = super::LocalTransformationConfig {
@@ -27,18 +26,13 @@ fn test_transformation() {
 		.body(crate::http::Body::empty())
 		.unwrap();
 	let xfm = build([("x-insert", r#""hello " + request.headers["x-custom-foo"]"#)]);
-	let mut ctx = ContextBuilder::new();
-	for e in xfm.expressions() {
-		ctx.register_expression(e)
-	}
-	ctx.with_request(&req, "".to_string());
-	xfm.apply_request(&mut req, &ctx.build().unwrap());
+	xfm.apply_request(&mut req);
 	assert_eq!(req.headers().get("x-insert").unwrap(), "hello Bar");
 }
 
 #[tokio::test]
 async fn test_transformation_body() {
-	let req = ::http::Request::builder()
+	let mut req = ::http::Request::builder()
 		.method("GET")
 		.uri("https://www.rust-lang.org/")
 		.body(crate::http::Body::empty())
@@ -51,16 +45,13 @@ async fn test_transformation_body() {
 		}),
 	};
 	let xfm = Transformation::try_from_local_config(c, true).unwrap();
-	let mut ctx = ContextBuilder::new();
-	for e in xfm.expressions() {
-		ctx.register_expression(e)
-	}
-	ctx.with_request(&req, "".to_string());
+
 	let mut resp = ::http::Response::builder()
 		.status(200)
 		.body(crate::http::Body::empty())
 		.unwrap();
-	xfm.apply_response(&mut resp, &ctx.build().unwrap());
+	let snap = cel::snapshot_request(&mut req);
+	xfm.apply_response(&mut resp, Some(&snap));
 	let b = http::read_body_with_limit(resp.into_body(), 1000)
 		.await
 		.unwrap();
@@ -83,12 +74,7 @@ fn test_transformation_pseudoheader() {
 		(":path", r#""/" + request.uri.split("://")[0]"#),
 		(":authority", r#""example.com""#),
 	]);
-	let mut ctx = ContextBuilder::new();
-	for e in xfm.expressions() {
-		ctx.register_expression(e)
-	}
-	ctx.with_request(&req, "".to_string());
-	xfm.apply_request(&mut req, &ctx.build().unwrap());
+	xfm.apply_request(&mut req);
 	assert_eq!(req.method().as_str(), "POST");
 	assert_eq!(req.uri().to_string().as_str(), "https://example.com/https");
 }

@@ -1,6 +1,6 @@
 use ::http::{HeaderMap, StatusCode};
 
-use crate::cel::{Executor, Expression};
+use crate::cel::Expression;
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::localratelimit::RateLimitType;
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
@@ -100,7 +100,7 @@ impl LLMResponseAmend {
 impl RemoteRateLimit {
 	fn build_request(
 		&self,
-		exec: &Executor<'_>,
+		req: &http::Request,
 		limit_type: RateLimitType,
 		cost: Option<u64>,
 	) -> RateLimitRequest {
@@ -121,7 +121,7 @@ impl RemoteRateLimit {
 			.iter()
 			.filter(|e| e.limit_type == limit_type)
 		{
-			if let Some(rl_entries) = Self::eval_descriptor(exec, &desc_entry.entries) {
+			if let Some(rl_entries) = Self::eval_descriptor(req, &desc_entry.entries) {
 				// Trace evaluated descriptor key/value pairs for visibility
 				let kv_pairs: Vec<String> = rl_entries
 					.iter()
@@ -178,7 +178,6 @@ impl RemoteRateLimit {
 		&self,
 		client: PolicyClient,
 		req: &mut Request,
-		exec: &Executor<'_>,
 		cost: u64,
 	) -> Result<(PolicyResponse, Option<LLMResponseAmend>), ProxyError> {
 		if !self
@@ -194,7 +193,7 @@ impl RemoteRateLimit {
 			);
 			return Ok((PolicyResponse::default(), None));
 		}
-		let request = self.build_request(exec, RateLimitType::Tokens, Some(cost));
+		let request = self.build_request(req, RateLimitType::Tokens, Some(cost));
 		let cr = self.check_internal(client.clone(), request.clone()).await;
 		let r = LLMResponseAmend {
 			base: self.clone(),
@@ -209,7 +208,6 @@ impl RemoteRateLimit {
 		&self,
 		client: PolicyClient,
 		req: &mut Request,
-		exec: &Executor<'_>,
 	) -> Result<PolicyResponse, ProxyError> {
 		// This is on the request path
 		if !self
@@ -225,7 +223,7 @@ impl RemoteRateLimit {
 			);
 			return Ok(PolicyResponse::default());
 		}
-		let request = self.build_request(exec, RateLimitType::Requests, None);
+		let request = self.build_request(req, RateLimitType::Requests, None);
 		let cr = self.check_internal(client, request).await?;
 		Self::apply(req, cr)
 	}
@@ -295,8 +293,9 @@ impl RemoteRateLimit {
 		Ok(res)
 	}
 
-	fn eval_descriptor(exec: &Executor, entries: &Vec<Descriptor>) -> Option<Vec<Entry>> {
+	fn eval_descriptor(req: &Request, entries: &Vec<Descriptor>) -> Option<Vec<Entry>> {
 		let mut rl_entries = Vec::with_capacity(entries.len());
+		let exec = cel::Executor::new_request(req);
 		for Descriptor(k, lookup) in entries {
 			// We drop the entire set if we cannot eval one; emit trace to aid debugging
 			match exec.eval(lookup) {

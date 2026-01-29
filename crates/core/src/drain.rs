@@ -332,7 +332,6 @@ mod hyperfork {
 
 #[cfg(test)]
 mod test {
-
 	use std::pin::Pin;
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicUsize, Ordering};

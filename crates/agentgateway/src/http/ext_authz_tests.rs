@@ -401,13 +401,13 @@ fn test_dynamic_metadata_extraction() {
 	let mut metadata = ExtAuthzDynamicMetadata::default();
 
 	metadata
-		.metadata
+		.0
 		.insert("user_id".to_string(), serde_json::json!("12345"));
 	metadata
-		.metadata
+		.0
 		.insert("role".to_string(), serde_json::json!("admin"));
-	assert_eq!(metadata.metadata.get("user_id").unwrap(), "12345");
-	assert_eq!(metadata.metadata.get("role").unwrap(), "admin");
+	assert_eq!(metadata.0.get("user_id").unwrap(), "12345");
+	assert_eq!(metadata.0.get("role").unwrap(), "admin");
 }
 
 #[test]

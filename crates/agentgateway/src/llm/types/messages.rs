@@ -189,6 +189,7 @@ impl RequestType for Request {
 				encoding_format: None,
 				dimensions: None,
 			},
+			prompt: Default::default(),
 		};
 		Ok(llm)
 	}

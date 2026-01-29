@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
@@ -6,7 +7,6 @@ use ::http::{HeaderName, StatusCode};
 use frozen_collections::FzHashSet;
 use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
-use std::collections::HashMap;
 
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};

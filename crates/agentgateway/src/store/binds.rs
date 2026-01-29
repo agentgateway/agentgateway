@@ -1201,12 +1201,13 @@ fn preload_tokenizers() {
 
 #[cfg(test)]
 mod tests {
+	use std::time::Duration;
+
 	use frozen_collections::FzHashSet;
 
-	use crate::{telemetry::log::OrderedStringMap, types::frontend::LoggingPolicy};
-
 	use super::*;
-	use std::time::Duration;
+	use crate::telemetry::log::OrderedStringMap;
+	use crate::types::frontend::LoggingPolicy;
 
 	fn listener() -> ListenerName {
 		ListenerName {

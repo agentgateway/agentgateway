@@ -91,13 +91,13 @@ impl Session {
 
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Response {
-		let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, "delete_session");
+		let ctx = IncomingRequestContext::new(&parts);
+		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "delete_session");
 		let session_id = self.id.to_string();
 		log.non_atomic_mutate(|l| {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		let ctx = IncomingRequestContext::new(parts);
 		self
 			.relay
 			.send_fanout_deletion(ctx)
@@ -148,13 +148,13 @@ impl Session {
 
 	/// get_stream establishes a stream for server-sent messages
 	pub async fn get_stream(&self, parts: Parts) -> Response {
-		let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, "get_stream");
+		let ctx = IncomingRequestContext::new(&parts);
+		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "get_stream");
 		let session_id = self.id.to_string();
 		log.non_atomic_mutate(|l| {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		let ctx = IncomingRequestContext::new(parts);
 		self
 			.relay
 			.send_fanout_get(ctx)
@@ -222,13 +222,13 @@ impl Session {
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method();
-				let (_span, log, cel) = mcp::handler::setup_request_log(&parts, method);
+				let ctx = IncomingRequestContext::new(&parts);
+				let (_span, log, cel) = mcp::handler::setup_request_log(parts, method);
 				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.to_string());
 					l.session_id = Some(session_id);
 				});
-				let ctx = IncomingRequestContext::new(parts);
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
 						let pv = ir.params.protocol_version.clone();
@@ -252,7 +252,7 @@ impl Session {
 						});
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_tools(cel.clone()))
+							.send_fanout(r, ctx, self.relay.merge_tools(cel))
 							.await
 					},
 					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
@@ -267,7 +267,7 @@ impl Session {
 						});
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_prompts(cel.clone()))
+							.send_fanout(r, ctx, self.relay.merge_prompts(cel))
 							.await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
@@ -277,7 +277,7 @@ impl Session {
 							});
 							self
 								.relay
-								.send_fanout(r, ctx, self.relay.merge_resources(cel.clone()))
+								.send_fanout(r, ctx, self.relay.merge_resources(cel))
 								.await
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
@@ -294,7 +294,7 @@ impl Session {
 							});
 							self
 								.relay
-								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel.clone()))
+								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel))
 								.await
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
@@ -317,7 +317,7 @@ impl Session {
 								service_name.to_string(),
 								tool.to_string(),
 							)),
-							cel.as_ref(),
+							&cel,
 						) {
 							return Err(UpstreamError::Authorization {
 								resource_type: "tool".to_string(),
@@ -342,7 +342,7 @@ impl Session {
 								service_name.to_string(),
 								prompt.to_string(),
 							)),
-							cel.as_ref(),
+							&cel,
 						) {
 							return Err(UpstreamError::Authorization {
 								resource_type: "prompt".to_string(),
@@ -365,7 +365,7 @@ impl Session {
 									service_name.to_string(),
 									uri.to_string(),
 								)),
-								cel.as_ref(),
+								&cel,
 							) {
 								return Err(UpstreamError::Authorization {
 									resource_type: "resource".to_string(),
@@ -402,13 +402,13 @@ impl Session {
 					ClientNotification::RootsListChangedNotification(r) => r.method.as_str(),
 					ClientNotification::CustomNotification(r) => r.method.as_str(),
 				};
-				let (_span, log, _cel) = mcp::handler::setup_request_log(&parts, method);
+				let ctx = IncomingRequestContext::new(&parts);
+				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, method);
 				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.to_string());
 					l.session_id = Some(session_id);
 				});
-				let ctx = IncomingRequestContext::new(parts);
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
 				self.relay.send_notification(r, ctx).await

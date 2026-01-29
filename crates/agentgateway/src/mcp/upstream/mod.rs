@@ -35,10 +35,10 @@ impl IncomingRequestContext {
 			claims: None,
 		}
 	}
-	pub fn new(parts: ::http::request::Parts) -> Self {
+	pub fn new(parts: &::http::request::Parts) -> Self {
 		let claims = parts.extensions.get::<Claims>().cloned();
 		Self {
-			headers: parts.headers,
+			headers: parts.headers.clone(),
 			claims,
 		}
 	}

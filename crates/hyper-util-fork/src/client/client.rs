@@ -1,5 +1,5 @@
 use hyper::{Request, Response};
-use tower::{Service, MakeService};
+use tower::{MakeService, Service};
 
 use super::connect::Connect;
 use super::pool;

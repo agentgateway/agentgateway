@@ -1,5 +1,6 @@
-use crate::transport::stream::Socket;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+use crate::transport::stream::Socket;
 
 pub async fn handshake(conn: &mut Socket, dest: &str) -> Result<(), anyhow::Error> {
 	// While the raw HTTP/1 usage here looks pretty sketchy, hyper itself is doing this so its probably sufficient
