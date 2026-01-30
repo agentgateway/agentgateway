@@ -105,9 +105,9 @@ impl Upstream {
 		}
 	}
 
-	pub fn set_session_id(&self, id: &str, pinned: SocketAddr) {
+	pub fn set_session_id(&self, id: &str, pinned: Option<SocketAddr>) {
 		match self {
-			Upstream::McpStreamable(c) => c.set_session_id(id, Some(pinned)),
+			Upstream::McpStreamable(c) => c.set_session_id(id, pinned),
 			Upstream::McpSSE(_) => {},
 			Upstream::McpStdio(_) => {},
 			Upstream::OpenAPI(_) => {},
