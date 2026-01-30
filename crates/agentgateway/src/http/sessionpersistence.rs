@@ -40,8 +40,8 @@ pub struct MCPSessionState {
 pub struct MCPSession {
 	#[serde(rename = "s")]
 	pub session: String,
-	#[serde(rename = "b")]
-	pub backend: SocketAddr,
+	#[serde(default, rename = "b", skip_serializing_if = "Option::is_none")]
+	pub backend: Option<SocketAddr>,
 }
 
 #[derive(Debug, thiserror::Error)]
