@@ -14,6 +14,7 @@ use sse_stream::SseStream;
 use crate::client::ResolvedDestination;
 use crate::http::Request;
 use crate::mcp::ClientError;
+use crate::mcp::elicitation::URL_ELICITATION_REQUIRED_CODE;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::*;
@@ -69,6 +70,14 @@ impl Client {
 		let message = ClientJsonRpcMessage::notification(req);
 		self.send_message(message, ctx).await
 	}
+	pub async fn send_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), ClientError> {
+		let _ = self.send_message(message, ctx).await?;
+		Ok(())
+	}
 	async fn send_message(
 		&self,
 		message: ClientJsonRpcMessage,
@@ -95,16 +104,57 @@ impl Client {
 			return Ok(StreamableHttpPostResponse::Accepted);
 		}
 
-		if !resp.status().is_success() {
-			return Err(ClientError::Status(Box::new(resp)));
-		}
-
-		let content_type = resp.headers().get(CONTENT_TYPE);
 		let session_id = resp
 			.headers()
 			.get(HEADER_SESSION_ID)
 			.and_then(|v| v.to_str().ok())
 			.map(|s| s.to_string());
+		let content_type = resp.headers().get(CONTENT_TYPE);
+		if !resp.status().is_success() {
+			if content_type
+				.and_then(|ct| ct.to_str().ok())
+				.is_some_and(|ct| ct.starts_with(JSON_MIME_TYPE))
+			{
+				let lim = crate::http::response_buffer_limit(&resp);
+				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
+				let (parts, body) = resp.into_parts();
+				let body_bytes =
+					crate::http::compression::to_bytes_with_decompression(body, content_encoding, lim)
+						.await
+						.map_err(ClientError::new)?
+						.1;
+				// Only pass through JSON-RPC errors; a success response on non-success HTTP is invalid.
+				if let Ok(message @ ServerJsonRpcMessage::Error(_)) =
+					serde_json::from_slice::<ServerJsonRpcMessage>(&body_bytes)
+				{
+					tracing::debug!(
+						status = %parts.status,
+						"passing through JSON-RPC error from non-success HTTP response"
+					);
+					return Ok(StreamableHttpPostResponse::Json(message, session_id));
+				}
+				let resp = ::http::Response::from_parts(parts, crate::http::Body::from(body_bytes));
+				return Err(ClientError::Status(Box::new(resp)));
+			}
+
+			let lim = crate::http::response_buffer_limit(&resp);
+			let (parts, body) = resp.into_parts();
+			let body_bytes = crate::http::read_body_with_limit(body, lim)
+				.await
+				.map_err(ClientError::new)?;
+
+			// Temporary URL-elicitation passthrough until rust-sdk PR #605 lands.
+			// See: https://github.com/modelcontextprotocol/rust-sdk/pull/605
+			if let Ok(message) = serde_json::from_slice::<ServerJsonRpcMessage>(&body_bytes)
+				&& let ServerJsonRpcMessage::Error(ref err) = message
+				&& err.error.code.0 == URL_ELICITATION_REQUIRED_CODE
+			{
+				return Ok(StreamableHttpPostResponse::Json(message, session_id));
+			}
+
+			let resp = ::http::Response::from_parts(parts, crate::http::Body::from(body_bytes));
+			return Err(ClientError::Status(Box::new(resp)));
+		}
 
 		match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
