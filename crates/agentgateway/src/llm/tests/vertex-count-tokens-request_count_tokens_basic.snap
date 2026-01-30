@@ -8,11 +8,11 @@ info:
       content: "Hello, how are you?"
 ---
 {
-  "anthropic_version": "vertex-2023-10-16",
   "messages": [
     {
       "role": "user",
       "content": "Hello, how are you?"
     }
-  ]
+  ],
+  "anthropic_version": "vertex-2023-10-16"
 }

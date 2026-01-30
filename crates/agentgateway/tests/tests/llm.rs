@@ -60,8 +60,7 @@ frontendPolicies:
   accessLog:
     add:
       streaming: llm.streaming
-      body_req: string(request.body)
-      body: string(response.body)
+      # body: string(response.body)
       req.id: request.headers["x-test-id"]
       token.count: llm.countTokens
       embeddings: json(response.body).data[0].embedding.size()

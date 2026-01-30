@@ -8,11 +8,11 @@ info:
       content: "Hello, how are you?"
 ---
 {
-  "model": "claude-3-5-sonnet-20241022",
   "messages": [
     {
       "role": "user",
       "content": "Hello, how are you?"
     }
-  ]
+  ],
+  "model": "claude-3-5-sonnet-20241022"
 }

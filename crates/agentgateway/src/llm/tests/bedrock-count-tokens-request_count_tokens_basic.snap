@@ -10,7 +10,7 @@ info:
 {
   "input": {
     "invokeModel": {
-      "body": "eyJtYXhfdG9rZW5zIjoxLCJhbnRocm9waWNfdmVyc2lvbiI6IjIwMjMtMDYtMDEifQ=="
+      "body": "eyJtZXNzYWdlcyI6W3sicm9sZSI6InVzZXIiLCJjb250ZW50IjoiSGVsbG8sIGhvdyBhcmUgeW91PyJ9XSwibWF4X3Rva2VucyI6MSwiYW50aHJvcGljX3ZlcnNpb24iOiIyMDIzLTA2LTAxIn0="
     }
   }
 }

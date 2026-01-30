@@ -1923,6 +1923,7 @@ pub mod from_responses {
 }
 
 pub mod from_anthropic_token_count {
+	use crate::llm::types::RequestType;
 	use crate::llm::{AIError, types};
 
 	pub fn translate(
@@ -1934,7 +1935,13 @@ pub mod from_anthropic_token_count {
 			.get("anthropic-version")
 			.and_then(|v| v.to_str().ok())
 			.unwrap_or("2023-06-01");
-		let mut body = req.rest.clone();
+
+		let body = req.to_anthropic()?;
+		let mut body: serde_json::Map<String, serde_json::Value> =
+			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
+
+		// Remove the model field because its in the URL path not the body
+		body.remove("model");
 
 		// AWS Bedrock's count-tokens endpoint wraps InvokeModel, which requires a valid
 		// Anthropic Messages API request. The `max_tokens` parameter is required by Anthropic's API.

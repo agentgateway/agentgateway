@@ -11,7 +11,7 @@ info:
 {
   "input": {
     "invokeModel": {
-      "body": "eyJtYXhfdG9rZW5zIjoxLCJhbnRocm9waWNfdmVyc2lvbiI6IjIwMjMtMDYtMDEifQ=="
+      "body": "eyJtZXNzYWdlcyI6W3sicm9sZSI6InVzZXIiLCJjb250ZW50IjoiV2hhdCBpcyB0aGUgd2VhdGhlciB0b2RheT8ifV0sInN5c3RlbSI6IllvdSBhcmUgYSBoZWxwZnVsIGFzc2lzdGFudC4iLCJtYXhfdG9rZW5zIjoxLCJhbnRocm9waWNfdmVyc2lvbiI6IjIwMjMtMDYtMDEifQ=="
     }
   }
 }
