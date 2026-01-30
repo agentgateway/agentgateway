@@ -45,12 +45,12 @@ fn parse_index(s: &str) -> Option<usize> {
 	s.parse().ok()
 }
 
-pub async fn from_request_body<T: DeserializeOwned>(req: Request) -> Result<T, http::Error>  {
+pub async fn from_request_body<T: DeserializeOwned>(req: Request) -> Result<T, http::Error> {
 	let lim = http::buffer_limit(&req);
 	from_body_with_limit(req.into_body(), lim).await
 }
 
-pub async fn from_response_body<T: DeserializeOwned>(resp: Response) -> Result<T, http::Error>  {
+pub async fn from_response_body<T: DeserializeOwned>(resp: Response) -> Result<T, http::Error> {
 	let lim = http::response_buffer_limit(&resp);
 	from_body_with_limit(resp.into_body(), lim).await
 }

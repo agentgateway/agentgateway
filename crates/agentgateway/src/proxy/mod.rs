@@ -6,6 +6,8 @@ pub mod tcpproxy;
 
 pub use gateway::Gateway;
 use hyper_util_fork::client::legacy::Error as HyperError;
+use rmcp::ErrorData;
+use rmcp::model::{ErrorCode, JsonRpcError};
 
 use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
 use crate::types::agent::{
@@ -256,19 +258,18 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::UnknownSession) => StatusCode::NOT_FOUND,
 			ProxyError::MCP(mcp::Error::MissingSessionHeader) => StatusCode::UNPROCESSABLE_ENTITY,
 			ProxyError::MCP(mcp::Error::SessionIdRequired) => StatusCode::UNPROCESSABLE_ENTITY,
-			ProxyError::MCP(mcp::Error::InvalidSessionIdQuery) =>  StatusCode::UNPROCESSABLE_ENTITY,
+			ProxyError::MCP(mcp::Error::InvalidSessionIdQuery) => StatusCode::UNPROCESSABLE_ENTITY,
 			ProxyError::MCP(mcp::Error::InvalidSessionIdHeader) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::CreateSseUrl(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::EstablishGetStream(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::ForwardLegacySse(_)) => StatusCode::INTERNAL_SERVER_ERROR,
-			ProxyError::MCP(mcp::Error::UpstreamError(_)) => todo!(),
-			ProxyError::MCP(mcp::Error::SendError(_, _)) => todo!(),
-			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => todo!(),
+			ProxyError::MCP(mcp::Error::UpstreamError(ref e)) => e.0.status(),
+			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
+			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
+			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::INTERNAL_SERVER_ERROR,
 		};
 		let msg = self.to_string();
-		let mut rb = ::http::Response::builder()
-			.status(code)
-			.header(hyper::header::CONTENT_TYPE, "text/plain");
+		let mut rb = ::http::Response::builder().status(code);
 
 		// Apply per-error headers
 		if let ProxyError::RateLimitExceeded {
@@ -301,7 +302,7 @@ impl ProxyError {
 		}
 
 		// Add WWW-Authenticate header for MCP failures
-		if let ProxyError::McpJwtAuthenticationFailure(inner, www) = &self {
+		if let ProxyError::McpJwtAuthenticationFailure(_, www) = &self {
 			if let Ok(hv) = HeaderValue::try_from(www) {
 				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
 			}
@@ -312,8 +313,47 @@ impl ProxyError {
 				)))
 				.unwrap();
 		}
+		if let ProxyError::MCP(ref e @ mcp::Error::SendError(ref id, _)) = self {
+			let err = if let Some(req_id) = id {
+				serde_json::to_string(&JsonRpcError {
+					jsonrpc: Default::default(),
+					id: req_id.clone(),
+					error: ErrorData {
+						code: ErrorCode::INTERNAL_ERROR,
+						message: format!("failed to send message: {e}",).into(),
+						data: None,
+					},
+				})
+				.ok()
+			} else {
+				None
+			};
+			let msg = err.unwrap_or_else(|| format!("failed to send message: {e}"));
+			return rb
+				.header("content-type", "application/json")
+				.body(http::Body::from(msg))
+				.unwrap();
+		}
+		if let ProxyError::MCP(ref e @ mcp::Error::Authorization(ref req_id, _, _)) = self {
+			let msg = serde_json::to_string(&JsonRpcError {
+				jsonrpc: Default::default(),
+				id: req_id.clone(),
+				error: ErrorData {
+					code: ErrorCode::INVALID_PARAMS,
+					message: e.to_string().into(),
+					data: None,
+				},
+			})
+			.unwrap_or_default();
+			return rb
+				.header("content-type", "application/json")
+				.body(http::Body::from(msg))
+				.unwrap();
+		}
 
-		rb.body(http::Body::from(msg)).unwrap()
+		rb.header(hyper::header::CONTENT_TYPE, "text/plain")
+			.body(http::Body::from(msg))
+			.unwrap()
 	}
 }
 

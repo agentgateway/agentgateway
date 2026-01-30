@@ -209,7 +209,7 @@ pub async fn test_apply_strict_missing_token() {
 	// Minimal RequestLog
 	let mut req_log = make_min_req_log();
 
-	let res = jwt.apply(&mut req_log, &mut req).await;
+	let res = jwt.apply(Some(&mut req_log), &mut req).await;
 	assert!(matches!(res, Err(super::TokenError::Missing)));
 }
 
@@ -223,7 +223,7 @@ pub async fn test_apply_permissive_no_token_ok() {
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
-	let res = jwt.apply(&mut log, &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req).await;
 	assert!(res.is_ok());
 	assert!(req.extensions().get::<super::Claims>().is_none());
 }
@@ -242,7 +242,7 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 		crate::http::HeaderValue::from_static("Bearer invalid-token"),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(&mut log, &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req).await;
 	assert!(res.is_ok());
 	// Header should remain present on failure in permissive mode
 	assert!(
@@ -275,7 +275,7 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(&mut log, &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req).await;
 	assert!(res.is_ok());
 	assert!(
 		req
@@ -296,7 +296,7 @@ pub async fn test_apply_optional_no_token_ok() {
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
-	let res = jwt.apply(&mut log, &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req).await;
 	assert!(res.is_ok());
 	assert!(req.extensions().get::<super::Claims>().is_none());
 }
@@ -315,7 +315,7 @@ pub async fn test_apply_optional_invalid_token_err() {
 		crate::http::HeaderValue::from_static("Bearer invalid-token"),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(&mut log, &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req).await;
 	assert!(matches!(res, Err(TokenError::InvalidHeader(_))));
 }
 
@@ -339,7 +339,7 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(&mut log, &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req).await;
 	assert!(res.is_ok());
 	assert!(
 		req

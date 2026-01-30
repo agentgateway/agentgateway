@@ -8,10 +8,9 @@ use ::http::request::Parts;
 use agent_core::version::BuildInfo;
 use anyhow::anyhow;
 use futures_util::StreamExt;
-use rmcp::ErrorData;
 use rmcp::model::{
-	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, ErrorCode,
-	Implementation, JsonRpcError, ProtocolVersion, RequestId, ServerJsonRpcMessage,
+	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
+	ProtocolVersion, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -162,13 +161,14 @@ impl Session {
 					.map_err(ProxyError::Body)?;
 				Err(mcp::Error::UpstreamError(Box::new(resp)).into())
 			},
+			Err(UpstreamError::Proxy(p)) => Err(p),
 			Err(UpstreamError::Authorization {
 				resource_type,
 				resource_name,
-			}) if req_id.is_some() => Err(
-				mcp::Error::Authorization(req_id.unwrap(), resource_type.into(), resource_name.into())
-					.into(),
-			),
+			}) if req_id.is_some() => {
+				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
+			},
+			// TODO: this is too broad. We have a big tangle of errors to untangle though
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
 		}
 	}
@@ -516,7 +516,7 @@ impl SessionManager {
 			sm.remove(id)?
 		};
 		// Swallow the error
-		Some(sess.delete_session(parts).await.ok()?)
+		sess.delete_session(parts).await.ok()
 	}
 }
 
@@ -544,21 +544,6 @@ impl Drop for SessionDropper {
 		sm.remove(s.id.as_ref());
 		tokio::task::spawn(async move { s.delete_session(parts).await });
 	}
-}
-
-fn http_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
-	::http::Response::builder()
-		.status(status)
-		.body(body.into())
-		.expect("valid response")
-}
-
-fn http_json_error(status: StatusCode, body: impl Into<http::Body>) -> Response {
-	::http::Response::builder()
-		.status(status)
-		.header(http::header::CONTENT_TYPE, "application/json")
-		.body(body.into())
-		.expect("valid response")
 }
 
 pub(crate) fn sse_stream_response(

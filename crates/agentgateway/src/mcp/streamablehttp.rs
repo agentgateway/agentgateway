@@ -63,10 +63,6 @@ impl StreamableHttpService {
 
 	pub async fn handle(&self, request: Request) -> Result<Response, ProxyError> {
 		let method = request.method().clone();
-		let allowed_methods = match self.config.stateful_mode {
-			true => "GET, POST, DELETE",
-			false => "POST",
-		};
 
 		match (method, self.config.stateful_mode) {
 			(http::Method::POST, _) => self.handle_post(request).await,

@@ -52,7 +52,9 @@ impl Deref for SendDirectResponse {
 impl SendDirectResponse {
 	pub async fn new(response: Response) -> Result<Self, Error> {
 		let (head, bytes) = read_response_body(response).await?;
-		Ok(SendDirectResponse(::http::Response::from_parts(head, bytes)))
+		Ok(SendDirectResponse(::http::Response::from_parts(
+			head, bytes,
+		)))
 	}
 }
 
@@ -175,7 +177,6 @@ use bytes::Bytes;
 use cel::Value;
 use http::uri::PathAndQuery;
 use http_body::{Frame, SizeHint};
-use http_body_util::BodyExt;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::Url;
@@ -605,7 +606,9 @@ pub async fn read_body(req: Request) -> Result<Bytes, axum_core::Error> {
 	read_body_with_limit(req.into_body(), lim).await
 }
 
-pub async fn read_response_body(resp: Response) -> Result<(::http::response::Parts, Bytes), axum_core::Error> {
+pub async fn read_response_body(
+	resp: Response,
+) -> Result<(::http::response::Parts, Bytes), axum_core::Error> {
 	let lim = response_buffer_limit(&resp);
 	let (h, b) = resp.into_parts();
 	read_body_with_limit(b, lim).await.map(|b| (h, b))

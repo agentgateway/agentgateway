@@ -10,6 +10,7 @@ mod upstream;
 use std::fmt::{Display, Write};
 use std::sync::Arc;
 
+use crate::http::SendDirectResponse;
 use crate::proxy::ProxyError;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
@@ -17,8 +18,6 @@ pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::RequestId;
 pub use router::App;
 use thiserror::Error;
-use crate::http::SendDirectResponse;
-use crate::mcp::upstream::UpstreamError;
 
 #[cfg(test)]
 #[path = "mcp_tests.rs"]
@@ -49,7 +48,7 @@ pub enum Error {
 	#[error("send error: {}", .1)]
 	SendError(Option<RequestId>, String),
 	// Intentionally do NOT say its not authorized; we hide the existence of the tool
-	#[error("Unknown {0}: {1}")]
+	#[error("Unknown {1}: {2}")]
 	Authorization(RequestId, String, String),
 	#[error("failed to process session_id query parameter")]
 	InvalidSessionIdQuery,
