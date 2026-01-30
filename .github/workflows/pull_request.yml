@@ -44,6 +44,11 @@ jobs:
     - uses: Swatinem/rust-cache@v2
       # Github cache is too tiny to handle the full matrix :-(
       if: ${{ matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-latest' }}
+      with:
+        # Github cache will restore from 'main' OR the current branch.
+        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
+        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Build UI
       run: |
@@ -81,6 +86,11 @@ jobs:
     - uses: Swatinem/rust-cache@v2
       # Github cache is too tiny to handle the full matrix :-(
       if: ${{ matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-latest' }}
+      with:
+        # Github cache will restore from 'main' OR the current branch.
+        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
+        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
+        save-if: ${{ github.ref == 'refs/heads/main' }}
     - name: Add Go bin to PATH
       shell: bash
       run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
@@ -103,6 +113,11 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
     - uses: Swatinem/rust-cache@v2
+      with:
+        # Github cache will restore from 'main' OR the current branch.
+        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
+        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
+        save-if: ${{ github.ref == 'refs/heads/main' }}
     - name: Add Go bin to PATH
       run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
     - name: Generation
