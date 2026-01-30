@@ -87,9 +87,7 @@ impl Relay {
 				))
 		}
 	}
-}
 
-impl Relay {
 	pub fn get_sessions(&self) -> Option<Vec<MCPSession>> {
 		let mut sessions = Vec::with_capacity(self.upstreams.size());
 		for (_, us) in self.upstreams.iter_named() {
