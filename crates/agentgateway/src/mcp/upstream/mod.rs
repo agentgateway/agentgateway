@@ -7,6 +7,7 @@ mod streamablehttp;
 use std::io;
 
 pub(crate) use client::McpHttpClient;
+pub use openapi::ParseError as OpenAPIParseError;
 use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use thiserror::Error;
@@ -203,6 +204,11 @@ pub(crate) struct UpstreamGroup {
 	backend: McpBackendGroup,
 	client: PolicyClient,
 	by_name: IndexMap<Strng, Arc<upstream::Upstream>>,
+
+	// If we have 1 target only, we don't prefix everything with 'target_'.
+	// Else this is empty
+	pub default_target_name: Option<String>,
+	pub is_multiplexing: bool,
 }
 
 impl UpstreamGroup {
@@ -210,17 +216,28 @@ impl UpstreamGroup {
 		self.backend.targets.len()
 	}
 
-	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> anyhow::Result<Self> {
+	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
+		let mut is_multiplexing = false;
+		let default_target_name = if backend.targets.len() != 1 {
+			is_multiplexing = true;
+			None
+		} else if backend.targets[0].always_use_prefix {
+			None
+		} else {
+			Some(backend.targets[0].name.to_string())
+		};
 		let mut s = Self {
 			backend,
 			client,
 			by_name: IndexMap::new(),
+			default_target_name,
+			is_multiplexing,
 		};
 		s.setup_connections()?;
 		Ok(s)
 	}
 
-	pub(crate) fn setup_connections(&mut self) -> anyhow::Result<()> {
+	pub(crate) fn setup_connections(&mut self) -> Result<(), mcp::Error> {
 		for tgt in &self.backend.targets {
 			debug!("initializing target: {}", tgt.name);
 			let transport = self.setup_upstream(tgt.as_ref())?;
@@ -240,7 +257,7 @@ impl UpstreamGroup {
 			.ok_or_else(|| anyhow::anyhow!("requested target {name} is not initialized",))
 	}
 
-	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, anyhow::Error> {
+	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {
 		trace!("connecting to target: {}", target.name);
 		let target = match &target.spec {
 			McpTargetSpec::Sse(sse) => {
@@ -260,7 +277,7 @@ impl UpstreamGroup {
 					self.backend.stateful,
 					target.name.to_string(),
 				);
-				let client = sse::Client::new(upstream_client, path.into())?;
+				let client = sse::Client::new(upstream_client, path.into());
 
 				upstream::Upstream::McpSSE(client)
 			},
@@ -284,7 +301,8 @@ impl UpstreamGroup {
 					self.backend.stateful,
 					target.name.to_string(),
 				);
-				let client = streamablehttp::Client::new(http_client, path.into())?;
+				let client = streamablehttp::Client::new(http_client, path.into())
+					.map_err(|_| mcp::Error::InvalidSessionIdHeader)?;
 
 				upstream::Upstream::McpStreamable(client)
 			},
@@ -295,7 +313,7 @@ impl UpstreamGroup {
 				// .exe. The which create will resolve the actual command for us.
 				// See https://github.com/rust-lang/rust/issues/37519#issuecomment-1694507663
 				// for more context.
-				let cmd = which::which(cmd)?;
+				let cmd = which::which(cmd).map_err(|e| mcp::Error::Stdio(io::Error::other(e)))?;
 				#[cfg(target_family = "unix")]
 				let mut c = Command::new(cmd);
 				#[cfg(target_os = "windows")]
@@ -304,29 +322,15 @@ impl UpstreamGroup {
 				for (k, v) in env {
 					c.env(k, v);
 				}
-				let proc =
-					TokioChildProcess::new(c).context(format!("failed to run command '{:?}'", &cmd))?;
+				let proc = TokioChildProcess::new(c).map_err(mcp::Error::Stdio)?;
 				upstream::Upstream::McpStdio(upstream::stdio::Process::new(proc))
 			},
 			McpTargetSpec::OpenAPI(open) => {
 				// Renamed for clarity
 				debug!("starting OpenAPI transport for target: {}", target.name);
 
-				let tools = openapi::parse_openapi_schema(&open.schema).map_err(|e| {
-					anyhow::anyhow!(
-						"Failed to parse tools from OpenAPI schema for target {}: {}",
-						target.name,
-						e
-					)
-				})?;
-
-				let prefix = openapi::get_server_prefix(&open.schema).map_err(|e| {
-					anyhow::anyhow!(
-						"Failed to get server prefix from OpenAPI schema for target {}: {}",
-						target.name,
-						e
-					)
-				})?;
+				let tools = openapi::parse_openapi_schema(&open.schema).map_err(mcp::Error::OpenAPI)?;
+				let prefix = openapi::get_server_prefix(&open.schema).map_err(mcp::Error::OpenAPI)?;
 
 				let http_client = McpHttpClient::new(
 					self.client.clone(),

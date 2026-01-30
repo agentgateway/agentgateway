@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
+use crate::http::{Request, Response};
+use crate::mcp::handler::RelayInputs;
+use crate::mcp::session::SessionManager;
+use crate::*;
 use ::http::StatusCode;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ServerJsonRpcMessage};
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 
-use crate::http::{Request, Response};
-use crate::mcp::handler::Relay;
-use crate::mcp::session::SessionManager;
 use crate::proxy::ProxyError;
-use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct StreamableHttpServerConfig {
@@ -45,35 +45,37 @@ impl std::fmt::Debug for StreamableHttpPostResponse {
 pub struct StreamableHttpService {
 	config: StreamableHttpServerConfig,
 	session_manager: Arc<SessionManager>,
-	service_factory: Arc<dyn Fn() -> Result<Relay, http::Error> + Send + Sync>,
 }
 
 impl StreamableHttpService {
-	pub fn new(
-		service_factory: impl Fn() -> Result<Relay, http::Error> + Send + Sync + 'static,
-		session_manager: Arc<SessionManager>,
-		config: StreamableHttpServerConfig,
-	) -> Self {
+	pub fn new(session_manager: Arc<SessionManager>, config: StreamableHttpServerConfig) -> Self {
 		Self {
 			config,
 			session_manager,
-			service_factory: Arc::new(service_factory),
 		}
 	}
 
-	pub async fn handle(&self, request: Request) -> Result<Response, ProxyError> {
+	pub async fn handle(
+		&self,
+		request: Request,
+		inputs: RelayInputs,
+	) -> Result<Response, ProxyError> {
 		let method = request.method().clone();
 
 		match (method, self.config.stateful_mode) {
-			(http::Method::POST, _) => self.handle_post(request).await,
+			(http::Method::POST, _) => self.handle_post(request, inputs).await,
 			// if we're not in stateful mode, we don't support GET or DELETE because there is no session
-			(http::Method::GET, true) => self.handle_get(request).await,
+			(http::Method::GET, true) => self.handle_get(request, inputs).await,
 			(http::Method::DELETE, true) => self.handle_delete(request).await,
 			_ => Err(ProxyError::MCP(mcp::Error::MethodNotAllowed)),
 		}
 	}
 
-	pub async fn handle_post(&self, request: Request) -> Result<Response, ProxyError> {
+	pub async fn handle_post(
+		&self,
+		request: Request,
+		inputs: RelayInputs,
+	) -> Result<Response, ProxyError> {
 		// check accept header
 		if !request
 			.headers()
@@ -105,7 +107,7 @@ impl StreamableHttpService {
 		};
 
 		if !self.config.stateful_mode {
-			let relay = (self.service_factory)().map_err(mcp::Error::StartSession)?;
+			let relay = inputs.build_new_connections()?;
 			// Use stateless session - not registered in session manager
 			let mut session = self.session_manager.create_stateless_session(relay);
 			let response = session
@@ -125,7 +127,7 @@ impl StreamableHttpService {
 		if let Some(session_id) = session_id {
 			let Some(mut session) = self
 				.session_manager
-				.get_or_resume_session(session_id, self.service_factory.clone())
+				.get_or_resume_session(session_id, inputs)?
 			else {
 				return mcp::Error::UnknownSession.into();
 			};
@@ -139,7 +141,7 @@ impl StreamableHttpService {
 		{
 			return mcp::Error::MissingSessionHeader.into();
 		}
-		let relay = (self.service_factory)().map_err(mcp::Error::StartSession)?;
+		let relay = inputs.build_new_connections()?;
 		let mut session = self.session_manager.create_session(relay);
 		let mut resp = session.send(part, message).await?;
 
@@ -151,7 +153,11 @@ impl StreamableHttpService {
 		Ok(resp)
 	}
 
-	pub async fn handle_get(&self, request: Request) -> Result<Response, ProxyError> {
+	pub async fn handle_get(
+		&self,
+		request: Request,
+		inputs: RelayInputs,
+	) -> Result<Response, ProxyError> {
 		// check accept header
 		if !request
 			.headers()
@@ -170,7 +176,7 @@ impl StreamableHttpService {
 			return mcp::Error::SessionIdRequired.into();
 		};
 
-		let Some(session) = self.session_manager.get_session(session_id) else {
+		let Some(session) = self.session_manager.get_session(session_id, inputs) else {
 			return mcp::Error::UnknownSession.into();
 		};
 

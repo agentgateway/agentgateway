@@ -18,7 +18,7 @@ use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::http::Response;
-use crate::mcp::handler::Relay;
+use crate::mcp::handler::{Relay, RelayInputs};
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
@@ -83,6 +83,11 @@ impl Session {
 		}
 		// Now we can send the message like normal
 		self.send(parts, message).await
+	}
+
+	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
+		self.relay = Arc::new(self.relay.with_policies(inputs.policies));
+		self
 	}
 
 	/// delete any active sessions
@@ -428,23 +433,32 @@ impl SessionManager {
 		}
 	}
 
-	pub fn get_session(&self, id: &str) -> Option<Session> {
-		self.sessions.read().ok()?.get(id).cloned()
+	pub fn get_session(&self, id: &str, builder: RelayInputs) -> Option<Session> {
+		Some(
+			self
+				.sessions
+				.read()
+				.ok()?
+				.get(id)
+				.cloned()?
+				.with_inputs(builder),
+		)
 	}
 
 	pub fn get_or_resume_session(
 		&self,
 		id: &str,
-		builder: Arc<dyn Fn() -> Result<Relay, http::Error> + Send + Sync>,
-	) -> Option<Session> {
-		if let Some(s) = self.sessions.read().ok()?.get(id).cloned() {
-			return Some(s);
+		builder: RelayInputs,
+	) -> Result<Option<Session>, mcp::Error> {
+		if let Some(s) = self.sessions.read().expect("poisoned").get(id).cloned() {
+			return Ok(Some(s.with_inputs(builder)));
 		}
-		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder).ok()?;
+		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder)
+			.map_err(|_| mcp::Error::InvalidSessionIdHeader)?;
 		let http::sessionpersistence::SessionState::MCP(state) = d else {
-			return None;
+			return Ok(None);
 		};
-		let relay = builder().ok()?;
+		let relay = builder.build_new_connections()?;
 		let n = relay.count();
 		if state.sessions.len() != n {
 			warn!(
@@ -452,7 +466,7 @@ impl SessionManager {
 				state.sessions.len(),
 				n
 			);
-			return None;
+			return Ok(None);
 		}
 		relay.set_sessions(state.sessions);
 
@@ -464,7 +478,7 @@ impl SessionManager {
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(id.to_string(), sess.clone());
-		Some(sess)
+		Ok(Some(sess))
 	}
 
 	/// create_session establishes an MCP session.
