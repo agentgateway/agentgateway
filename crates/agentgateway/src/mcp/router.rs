@@ -14,7 +14,7 @@ use crate::http::jwt::Claims;
 use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
 use crate::json::from_body_with_limit;
-use crate::mcp::handler::Relay;
+use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
@@ -179,17 +179,14 @@ impl App {
 			("/sse", _, _) => {
 				// Assume this is streamable HTTP otherwise
 				let sse = LegacySSEService::new(
-					move || {
-						Relay::new(
-							backends.clone(),
-							authorization_policies.clone(),
-							client.clone(),
-						)
-						.map_err(|e| Error::new(e.to_string()))
-					},
 					sm,
 				);
-				sse.handle(req).await
+				sse.handle(req,
+									 RelayInputs {
+										 backend: backends.clone(),
+										 policies: authorization_policies.clone(),
+										 client: client.clone(),
+									 }).await
 			},
 			// TODO: indicate this is a DirectResponse
 			(path, _, Some(auth)) if path.ends_with("client-registration") => Ok(
@@ -221,20 +218,21 @@ impl App {
 			_ => {
 				// Assume this is streamable HTTP otherwise
 				let streamable = StreamableHttpService::new(
-					move || {
-						Relay::new(
-							backends.clone(),
-							authorization_policies.clone(),
-							client.clone(),
-						)
-						.map_err(|e| Error::new(e.to_string()))
-					},
 					sm,
 					StreamableHttpServerConfig {
 						stateful_mode: backend.stateful,
 					},
 				);
-				streamable.handle(req).await
+				streamable
+					.handle(
+						req,
+						RelayInputs {
+							backend: backends.clone(),
+							policies: authorization_policies.clone(),
+							client: client.clone(),
+						},
+					)
+					.await
 			},
 		}
 	}
