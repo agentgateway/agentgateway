@@ -692,11 +692,10 @@ impl AIProvider {
 		let buffer_limit = http::response_buffer_limit(&resp);
 		let (mut parts, body) = resp.into_parts();
 		let ce = parts.headers.typed_get::<ContentEncoding>();
-		let Ok((encoding, bytes)) =
-			http::compression::to_bytes_with_decompression(body, ce, buffer_limit).await
-		else {
-			return Err(AIError::ResponseTooLarge);
-		};
+		let (encoding, bytes) =
+			http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer_limit)
+				.await
+				.map_err(|e| map_compression_error(e, &parts.headers))?;
 
 		// count_tokens has simplified response handling (just format translation)
 		if req.input_format == InputFormat::CountTokens {
@@ -863,6 +862,20 @@ impl AIProvider {
 		log.store(Some(llmresp));
 		let buffer = http::response_buffer_limit(&resp);
 
+		// Decompress the body if Content-Encoding is set
+		let (mut parts, body) = resp.into_parts();
+		let ce = parts.headers.typed_get::<ContentEncoding>();
+		let body = http::compression::decompress_body(body, ce.as_ref())
+			.map_err(|e| map_compression_error(e, &parts.headers))?;
+
+		// Strip encoding headers after successful decompression
+		if ce.is_some() {
+			parts.headers.remove(header::CONTENT_ENCODING);
+			parts.headers.remove(header::CONTENT_LENGTH);
+			parts.headers.remove(header::TRANSFER_ENCODING);
+		}
+		let resp = Response::from_parts(parts, body);
+
 		Ok(match (self, input_format) {
 			// Completions with OpenAI: just passthrough
 			(
@@ -994,6 +1007,20 @@ impl AIProvider {
 	}
 }
 
+fn map_compression_error(e: http::compression::Error, headers: &::http::HeaderMap) -> AIError {
+	match e {
+		http::compression::Error::UnsupportedEncoding => AIError::UnsupportedEncoding(strng::new(
+			headers
+				.get(header::CONTENT_ENCODING)
+				.and_then(|v| v.to_str().ok())
+				.unwrap_or("unknown"),
+		)),
+		http::compression::Error::LimitExceeded => AIError::ResponseTooLarge,
+		http::compression::Error::Io(e) => AIError::Encoding(axum_core::Error::new(e)),
+		http::compression::Error::Body(e) => AIError::Encoding(e),
+	}
+}
+
 fn num_tokens_from_messages(
 	model: &str,
 	messages: &[SimpleChatCompletionMessage],
@@ -1106,6 +1133,8 @@ pub enum AIError {
 	ResponseParsing(serde_json::Error),
 	#[error("failed to marshal response: {0}")]
 	ResponseMarshal(serde_json::Error),
+	#[error("unsupported content encoding: {0}")]
+	UnsupportedEncoding(Strng),
 	#[error("failed to encode response: {0}")]
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]

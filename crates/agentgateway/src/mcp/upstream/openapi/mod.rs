@@ -854,7 +854,7 @@ impl Handler {
 			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
 			let body_bytes = crate::http::compression::to_bytes_with_decompression(
 				response.into_body(),
-				content_encoding,
+				content_encoding.as_ref(),
 				lim,
 			)
 			.await
