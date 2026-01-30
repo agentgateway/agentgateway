@@ -307,6 +307,24 @@ mod vertex {
 	}
 
 	#[tokio::test]
+	async fn completions_to_anthropic() {
+		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+			return;
+		};
+		send_completions(&gw, false).await;
+	}
+
+	#[tokio::test]
+	#[ignore]
+	/// TODO(https://github.com/agentgateway/agentgateway/pull/800) support this
+	async fn completions_streaming_to_anthropic() {
+		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+			return;
+		};
+		send_completions(&gw, true).await;
+	}
+
+	#[tokio::test]
 	async fn completions_streaming() {
 		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
 			return;
