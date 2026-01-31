@@ -129,6 +129,10 @@ pub enum LocalJwtConfig {
 		issuer: String,
 		audiences: Option<Vec<String>>,
 		jwks: serdes::FileInlineOrRemote,
+		/// JWT validation options.
+		/// Default: exp required and validated per RFC 7519. Set allowMissingExp: true to allow tokens without exp.
+		#[serde(default)]
+		validation_options: ValidationOptions,
 	},
 }
 
@@ -139,6 +143,10 @@ pub struct ProviderConfig {
 	pub issuer: String,
 	pub audiences: Option<Vec<String>>,
 	pub jwks: serdes::FileInlineOrRemote,
+	/// JWT validation options.
+	/// Default: exp required and validated per RFC 7519. Set allowMissingExp: true to allow tokens without exp.
+	#[serde(default)]
+	pub validation_options: ValidationOptions,
 }
 
 #[apply(schema_enum!)]
@@ -156,6 +164,37 @@ pub enum Mode {
 	Permissive,
 }
 
+/// JWT validation options.
+///
+/// Some identity providers (especially enterprise IDPs) issue tokens that don't
+/// fully conform to RFC 7519 (e.g., missing `exp` claim). This allows making the
+/// exp claim optional while still validating it if present.
+///
+/// # Default
+/// By default, the `exp` (expiration) claim is required and validated per RFC 7519.
+///
+/// # Example
+/// ```yaml
+/// # Require exp claim (default, RFC 7519 compliant)
+/// validationOptions:
+///   allowMissingExp: false
+///
+/// # Allow tokens without exp (for IDPs that omit exp)
+/// validationOptions:
+///   allowMissingExp: true
+/// ```
+#[derive(Default, Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct ValidationOptions {
+	/// Whether to allow tokens without the exp (expiration) claim.
+	/// Default: false (exp required per RFC 7519).
+	/// When true: exp claim is optional, but if present it is still validated.
+	/// Expired tokens with an exp claim will still be rejected.
+	#[serde(default)]
+	pub allow_missing_exp: bool,
+}
+
 impl LocalJwtConfig {
 	pub async fn try_into(self, client: Client) -> Result<Jwt, JwkError> {
 		let (mode, providers_cfg) = match self {
@@ -165,12 +204,14 @@ impl LocalJwtConfig {
 				issuer,
 				audiences,
 				jwks,
+				validation_options,
 			} => (
 				mode,
 				vec![ProviderConfig {
 					issuer,
 					audiences,
 					jwks,
+					validation_options,
 				}],
 			),
 		};
@@ -182,7 +223,7 @@ impl LocalJwtConfig {
 				.load::<JwkSet>(client.clone())
 				.await
 				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences)?;
+			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.validation_options)?;
 			providers.push(provider);
 		}
 		Ok(Jwt { mode, providers })
@@ -194,6 +235,7 @@ impl Provider {
 		jwks: JwkSet,
 		issuer: String,
 		audiences: Option<Vec<String>>,
+		validation_options: ValidationOptions,
 	) -> Result<Provider, JwkError> {
 		let mut keys = HashMap::new();
 		let to_supported_alg = |key_algorithm: Option<KeyAlgorithm>| match key_algorithm {
@@ -254,6 +296,13 @@ impl Provider {
 				validation.validate_aud = false;
 			}
 			validation.set_issuer(std::slice::from_ref(&issuer));
+
+			// Apply validation options
+			// Make exp optional if configured (but still validate if present)
+			if validation_options.allow_missing_exp {
+				validation.required_spec_claims.remove("exp");
+				// Note: validate_exp remains true, so if exp IS present, it will be validated
+			}
 
 			keys.insert(
 				kid,

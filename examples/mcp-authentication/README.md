@@ -195,6 +195,30 @@ Notes:
 
 ---
 
+### Enterprise IDPs without exp claim
+
+Some enterprise identity providers issue JWT tokens without the standard `exp` (expiration) claim. To support these tokens, add `validationOptions`:
+
+```yaml
+mcpAuthentication:
+  issuer: https://enterprise-idp.example.com
+  audiences:
+    - https://api.mycompany.com/mcp
+  jwks:
+    url: https://enterprise-idp.example.com/.well-known/jwks.json
+  validationOptions:
+    allowMissingExp: true
+```
+
+When `allowMissingExp` is `true`:
+- Tokens without `exp` are accepted
+- Tokens with `exp` are still validated (expired tokens rejected)
+- Signature, issuer, and audience are always validated
+
+> **Note:** Tokens without `exp` remain valid until the signing key is rotated.
+
+---
+
 ### Troubleshooting
 - Ensure `issuer` and `jwksUrl` match your Authorization Server.
 - Ensure `audience` equals the resource URL clients will request.

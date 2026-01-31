@@ -156,6 +156,8 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.(any)url`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.validationOptions`|JWT validation options.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.validationOptions.allowMissingExp`|Allow tokens without the exp claim. Default: false (exp required). When true, exp is optional but still validated if present.|
 |`binds[].listeners[].routes[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`||
@@ -667,6 +669,10 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)validationOptions`|JWT validation options.|
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)validationOptions.allowMissingExp`|Allow tokens without the exp claim. Default: false (exp required). When true, exp is optional but still validated if present.|
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].validationOptions`|JWT validation options per provider.|
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].validationOptions.allowMissingExp`|Allow tokens without the exp claim. Default: false (exp required). When true, exp is optional but still validated if present.|
 |`binds[].listeners[].routes[].policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.(any)file`||
@@ -1526,6 +1532,10 @@
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)validationOptions`|JWT validation options.|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)validationOptions.allowMissingExp`|Allow tokens without the exp claim. Default: false (exp required). When true, exp is optional but still validated if present.|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].validationOptions`|JWT validation options per provider.|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].validationOptions.allowMissingExp`|Allow tokens without the exp claim. Default: false (exp required). When true, exp is optional but still validated if present.|
 |`binds[].listeners[].policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].policies.extAuthz.(any)(1)service`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.name`||
@@ -1713,6 +1723,8 @@
 |`policies[].policy.mcpAuthentication.jwks.(any)file`||
 |`policies[].policy.mcpAuthentication.jwks.(any)url`||
 |`policies[].policy.mcpAuthentication.mode`||
+|`policies[].policy.mcpAuthentication.validationOptions`|JWT validation options.|
+|`policies[].policy.mcpAuthentication.validationOptions.allowMissingExp`|Allow tokens without the exp claim. Default: false (exp required). When true, exp is optional but still validated if present.|
 |`policies[].policy.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`||
@@ -2224,6 +2236,10 @@
 |`policies[].policy.jwtAuth.(any)(any)jwks`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)file`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
+|`policies[].policy.jwtAuth.(any)(any)validationOptions`|JWT validation options.|
+|`policies[].policy.jwtAuth.(any)(any)validationOptions.allowMissingExp`|Allow tokens without the exp claim. Default: false (exp required). When true, exp is optional but still validated if present.|
+|`policies[].policy.jwtAuth.(any)(any)providers[].validationOptions`|JWT validation options per provider.|
+|`policies[].policy.jwtAuth.(any)(any)providers[].validationOptions.allowMissingExp`|Allow tokens without the exp claim. Default: false (exp required). When true, exp is optional but still validated if present.|
 |`policies[].policy.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`policies[].policy.basicAuth.htpasswd.(any)file`||
