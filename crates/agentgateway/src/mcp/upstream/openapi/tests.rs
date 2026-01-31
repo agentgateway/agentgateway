@@ -503,7 +503,7 @@ async fn test_call_tool_with_compressed_response() {
 async fn test_call_tool_response_wrapping() {
 	let (server, handler) = setup().await;
 
-	let test_cases = vec![
+	let test_cases = [
 		(false, Value::Null),
 		(
 			false,

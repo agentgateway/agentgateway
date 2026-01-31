@@ -142,7 +142,7 @@ fn resolve_nested_schema<'a>(
 		SchemaKind::Not { not } => {
 			let temp_ref = (**not).clone();
 			let resolved = resolve_nested_schema(&temp_ref, doc)?;
-			*not = Box::new(ReferenceOr::Item(resolved));
+			**not = ReferenceOr::Item(resolved);
 		},
 		SchemaKind::Any(any_schema) => {
 			// Properties
@@ -181,7 +181,7 @@ fn resolve_nested_schema<'a>(
 			if let Some(not_box) = any_schema.not.as_mut() {
 				let temp_ref = (**not_box).clone();
 				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				*not_box = Box::new(ReferenceOr::Item(resolved));
+				**not_box = ReferenceOr::Item(resolved);
 			}
 		},
 		// Base types (String, Number, Integer, Boolean) - no nested schemas to resolve further

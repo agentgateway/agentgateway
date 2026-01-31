@@ -36,10 +36,10 @@ impl StateManager {
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
 		let stores = Stores::new();
-		let xds_client = if xds.address.is_some() {
+		let xds_client = if let Some(addr) = &xds.address {
 			let connector = control::grpc_connector(
 				client.clone(),
-				xds.address.as_ref().unwrap().clone(),
+				addr.clone(),
 				xds.auth.clone(),
 				xds.ca_cert.clone(),
 			)

@@ -2272,9 +2272,7 @@ InvalidKeyData
 	fn test_target_unix_socket_parse() {
 		// Test parsing a Unix socket path
 		let target = Target::try_from("unix:/var/run/test.sock").unwrap();
-		assert!(
-			matches!(target, Target::UnixSocket(path) if path == PathBuf::from("/var/run/test.sock"))
-		);
+		assert!(matches!(target, Target::UnixSocket(path) if *path == *"/var/run/test.sock"));
 	}
 
 	#[test]
