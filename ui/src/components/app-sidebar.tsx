@@ -26,7 +26,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Home, Shield, Headphones, Server, Code, Settings, Route, Calculator } from "lucide-react";
+import {
+  Loader2,
+  Home,
+  Shield,
+  Headphones,
+  Server,
+  Code,
+  Settings,
+  Route,
+  Calculator,
+} from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useWizard } from "@/lib/wizard-context";
 import { toast } from "sonner";

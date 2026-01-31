@@ -1,12 +1,16 @@
-"use client"
+"use client";
 
-import React, { useEffect, useState } from "react"
-import dynamic from "next/dynamic"
-import { Button, Card, Badge } from "@/components/ui"
-import { Play, RotateCcw } from "lucide-react"
-import { toast } from "sonner"
+import React, { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Play, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 
-type TemplateKey = "empty" | "http" | "llm" | "mcp"
+type TemplateKey = "empty" | "http" | "llm" | "mcp";
 
 const TEMPLATES: Record<TemplateKey, unknown> = {
   empty: {},
@@ -40,7 +44,7 @@ const TEMPLATES: Record<TemplateKey, unknown> = {
       payload: { event: "user.created", user: { id: 42, email: "a@b.com" } },
     },
   },
-}
+};
 
 const EXAMPLES: string[] = [
   // simple boolean check
@@ -51,99 +55,102 @@ const EXAMPLES: string[] = [
   "input.startsWith('Translate')",
   // array/length example
   "response.body.items != null ? response.body.items.length : 0",
-]
+];
 
-export default function CELPlayground(): JSX.Element {
-  const [template, setTemplate] = useState<TemplateKey>("http")
-  const [expression, setExpression] = useState<string>(EXAMPLES[0])
+export default function CELPlayground(): React.JSX.Element {
+  const { theme, systemTheme } = useTheme();
+  const editorTheme =
+    theme === "system"
+      ? systemTheme === "dark"
+        ? "vs-dark"
+        : "vs-light"
+      : theme === "dark"
+        ? "vs-dark"
+        : "vs-light";
+
+  const [template, setTemplate] = useState<TemplateKey>("http");
+  const [expression, setExpression] = useState<string>(EXAMPLES[0]);
   const [inputData, setInputData] = useState<string>(() =>
     JSON.stringify(TEMPLATES["http"], null, 2)
-  )
-  const [loading, setLoading] = useState<boolean>(false)
-  const [result, setResult] = useState<any>(null)
-  const [theme, setTheme] = useState<"vs-light" | "vs-dark">("vs-light")
+  );
+  const [loading, setLoading] = useState<boolean>(false);
+  const [result, setResult] = useState<unknown | null>(null);
 
   // dynamic import of Monaco Editor to avoid SSR issues
-  const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false })
+  const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
   useEffect(() => {
     // when template changes, load example JSON into editor
-    setInputData(JSON.stringify(TEMPLATES[template], null, 2))
-  }, [template])
-
-  useEffect(() => {
-    // detect color scheme preference for editor theme
-    if (typeof window === "undefined" || !window.matchMedia) return
-    const mq = window.matchMedia("(prefers-color-scheme: dark)")
-    const update = () => setTheme(mq.matches ? "vs-dark" : "vs-light")
-    update()
-    try {
-      mq.addEventListener("change", update)
-    } catch (e) {
-      // Safari fallback
-      // @ts-ignore
-      mq.addListener?.(update)
-    }
-    return () => {
-      try {
-        mq.removeEventListener("change", update)
-      } catch (e) {
-        // @ts-ignore
-        mq.removeListener?.(update)
-      }
-    }
-  }, [])
+    setInputData(JSON.stringify(TEMPLATES[template], null, 2));
+  }, [template]);
 
   const handleEvaluate = async () => {
-    let parsed: any = {}
+    let parsed: any = {};
     if (inputData.trim().length > 0) {
       try {
-        parsed = JSON.parse(inputData)
+        parsed = JSON.parse(inputData);
       } catch (err) {
-        toast.error("Input data is not valid JSON")
-        return
+        toast.error("Input data is not valid JSON");
+        return;
       }
     }
 
-    setLoading(true)
-    setResult(null)
+    setLoading(true);
+    setResult(null);
 
     try {
       const res = await fetch("/cel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expression, data: parsed }),
-      })
+      });
 
       if (!res.ok) {
-        const text = await res.text()
-        toast.error("Evaluation failed: " + res.status + " " + text)
-        setResult({ error: text, status: res.status })
-        return
+        const text = await res.text();
+        toast.error("Evaluation failed: " + res.status + " " + text);
+        setResult({ error: text, status: res.status });
+        return;
       }
 
-      const json = await res.json()
-      setResult(json)
-      toast.success("Evaluation complete")
+      const json = await res.json();
+      setResult(json);
+      toast.success("Evaluation complete");
     } catch (err: any) {
-      toast.error("Request error: " + err?.message ?? String(err))
-      setResult({ error: String(err) })
+      const message = err?.message ? String(err.message) : String(err);
+      toast.error("Request error: " + message);
+      setResult({ error: message });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleReset = () => {
-    setExpression(EXAMPLES[0])
-    setTemplate("http")
-    setInputData(JSON.stringify(TEMPLATES["http"], null, 2))
-    setResult(null)
-    toast("Reset to example template")
-  }
+    setExpression(EXAMPLES[0]);
+    setTemplate("http");
+    setInputData(JSON.stringify(TEMPLATES["http"], null, 2));
+    setResult(null);
+    toast("Reset to example template");
+  };
 
-  const applyExample = (ex: string) => {
-    setExpression(ex)
-  }
+  const handleFormat = () => {
+    try {
+      const parsed = JSON.parse(inputData);
+      setInputData(JSON.stringify(parsed, null, 2));
+      toast.success("Formatted JSON");
+    } catch (e) {
+      toast.error("Cannot format: invalid JSON");
+    }
+  };
+
+  const handleCopyResult = async () => {
+    try {
+      const text = result ? JSON.stringify(result, null, 2) : "";
+      await navigator.clipboard.writeText(text);
+      toast.success("Result copied to clipboard");
+    } catch (e) {
+      toast.error("Failed to copy result");
+    }
+  };
 
   return (
     <div className="p-6">
@@ -171,72 +178,117 @@ export default function CELPlayground(): JSX.Element {
             <RotateCcw size={16} />
             Reset
           </Button>
+          <Button variant="secondary" onClick={handleFormat} className="flex items-center gap-2">
+            Format JSON
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-12 gap-4">
         <section className="col-span-6">
           <label className="block text-sm font-medium mb-2">Expression</label>
-          <Card className="p-4">
-            {/* Monaco Editor for CEL expression (use javascript mode) */}
-            <MonacoEditor
-              height="150px"
-              defaultLanguage="javascript"
-              language="javascript"
-              theme={theme}
-              value={expression}
-              onChange={(v) => setExpression(v ?? "")}
-              options={{ minimap: { enabled: false }, lineNumbers: "on" }}
-            />
+          <Card>
+            <CardContent className="p-4">
+              {/* Monaco Editor for CEL expression (use javascript mode) */}
+              <MonacoEditor
+                height="150px"
+                defaultLanguage="javascript"
+                language="javascript"
+                theme={editorTheme}
+                value={expression}
+                onChange={(v) => setExpression(v ?? "")}
+                loading={<Skeleton className="h-32" />}
+                onMount={(editor: any, monaco: any) => {
+                  try {
+                    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+                      handleEvaluate();
+                    });
+                  } catch (e) {
+                    // ignore
+                  }
+                }}
+                options={{ minimap: { enabled: false }, lineNumbers: "on", wordWrap: "on" }}
+              />
 
-            <div className="flex gap-2 mt-3 flex-wrap">
-              {EXAMPLES.map((ex, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => applyExample(ex)}
-                  className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200"
-                  title={ex}
-                >
-                  {ex.length > 30 ? ex.slice(0, 30) + "…" : ex}
-                </button>
-              ))}
-            </div>
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {EXAMPLES.map((ex, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setExpression(ex)}
+                    className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200"
+                    title={ex}
+                  >
+                    {ex.length > 30 ? ex.slice(0, 30) + "…" : ex}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
           </Card>
         </section>
 
         <section className="col-span-6">
           <label className="block text-sm font-medium mb-2">Input Data (JSON)</label>
-          <Card className="p-4">
-            {/* Monaco Editor for JSON input */}
-            <MonacoEditor
-              height="300px"
-              defaultLanguage="json"
-              language="json"
-              theme={theme}
-              value={inputData}
-              onChange={(v) => setInputData(v ?? "")}
-              options={{ minimap: { enabled: false }, lineNumbers: "on" }}
-            />
+          <Card>
+            <CardContent className="p-4">
+              {/* Monaco Editor for JSON input */}
+              <MonacoEditor
+                height="300px"
+                defaultLanguage="json"
+                language="json"
+                theme={editorTheme}
+                value={inputData}
+                onChange={(v) => setInputData(v ?? "")}
+                loading={<Skeleton className="h-48" />}
+                onMount={(editor: any, monaco: any) => {
+                  try {
+                    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+                      handleEvaluate();
+                    });
+                  } catch (e) {
+                    // ignore
+                  }
+                }}
+                options={{ minimap: { enabled: false }, lineNumbers: "on", wordWrap: "on" }}
+              />
+            </CardContent>
           </Card>
         </section>
       </div>
 
       <div className="mt-4">
         <label className="block text-sm font-medium mb-2">Result</label>
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Badge>CEL</Badge>
-              <span className="text-sm text-muted-foreground">/cel POST</span>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Badge>CEL</Badge>
+                <span className="text-sm text-muted-foreground">/cel POST</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-gray-500">{loading ? "Evaluating…" : "Idle"}</div>
+                <Button variant="secondary" onClick={handleCopyResult} className="text-sm">
+                  Copy Result
+                </Button>
+              </div>
             </div>
-            <div className="text-sm text-gray-500">{loading ? "Evaluating…" : "Idle"}</div>
-          </div>
 
-          <pre className="rounded bg-slate-50 p-3 text-sm overflow-auto max-h-72">
-            {result ? JSON.stringify(result, null, 2) : "(no result yet)"}
-          </pre>
+            <MonacoEditor
+              height="260px"
+              defaultLanguage="json"
+              language="json"
+              theme={editorTheme}
+              value={result ? JSON.stringify(result, null, 2) : "(no result yet)"}
+              loading={<Skeleton className="h-48" />}
+              options={{
+                minimap: { enabled: false },
+                lineNumbers: "on",
+                readOnly: true,
+                wordWrap: "on",
+              }}
+            />
+          </CardContent>
         </Card>
       </div>
     </div>
-  )
+  );
 }

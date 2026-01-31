@@ -503,6 +503,15 @@ struct CelResponse {
 	error: Option<String>,
 }
 
+/// Helper to create a JSON response with proper Content-Type
+fn json_response(status: hyper::StatusCode, body: String) -> Response {
+	let mut resp = plaintext_response(status, body);
+	resp
+		.headers_mut()
+		.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+	resp
+}
+
 /// Handle CEL expression evaluation requests
 ///
 /// POST /cel with JSON body: {"expression": "...", "data": {...}}
@@ -510,9 +519,9 @@ struct CelResponse {
 async fn handle_cel(req: Request<Incoming>) -> Response {
 	// Only accept POST requests
 	if *req.method() != hyper::Method::POST {
-		return plaintext_response(
+		return json_response(
 			hyper::StatusCode::METHOD_NOT_ALLOWED,
-			"Only POST method is supported\n".into(),
+			r#"{"error": "Only POST method is supported"}"#.to_string(),
 		);
 	}
 
@@ -521,9 +530,9 @@ async fn handle_cel(req: Request<Incoming>) -> Response {
 	let body_bytes = match req.collect().await {
 		Ok(collected) => collected.to_bytes(),
 		Err(e) => {
-			return plaintext_response(
+			return json_response(
 				hyper::StatusCode::BAD_REQUEST,
-				format!("Failed to read request body: {}\n", e),
+				format!(r#"{{"error": "Failed to read request body: {}"}}"#, e),
 			);
 		},
 	};
@@ -531,9 +540,9 @@ async fn handle_cel(req: Request<Incoming>) -> Response {
 	let request: CelRequest = match serde_json::from_slice(&body_bytes) {
 		Ok(req) => req,
 		Err(e) => {
-			return plaintext_response(
+			return json_response(
 				hyper::StatusCode::BAD_REQUEST,
-				format!("Failed to parse JSON: {}\n", e),
+				format!(r#"{{"error": "Failed to parse JSON: {}"}}"#, e),
 			);
 		},
 	};
@@ -546,15 +555,9 @@ async fn handle_cel(req: Request<Incoming>) -> Response {
 				result: None,
 				error: Some(format!("Failed to compile expression: {}", e)),
 			};
-			let body = match serde_json::to_string(&response) {
-				Ok(json) => json,
-				Err(e) => format!("{{\"error\": \"Failed to serialize: {}\"}}", e),
-			};
-			let mut resp = plaintext_response(hyper::StatusCode::OK, body);
-			resp
-				.headers_mut()
-				.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-			return resp;
+			let body = serde_json::to_string(&response)
+				.unwrap_or_else(|e| format!(r#"{{"error": "Failed to serialize: {}"}}"#, e));
+			return json_response(hyper::StatusCode::BAD_REQUEST, body);
 		},
 	};
 
@@ -567,15 +570,9 @@ async fn handle_cel(req: Request<Incoming>) -> Response {
 					result: None,
 					error: Some(format!("Failed to parse input data: {}", e)),
 				};
-				let body = match serde_json::to_string(&response) {
-					Ok(json) => json,
-					Err(e) => format!("{{\"error\": \"Failed to serialize: {}\"}}", e),
-				};
-				let mut resp = plaintext_response(hyper::StatusCode::OK, body);
-				resp
-					.headers_mut()
-					.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-				return resp;
+				let body = serde_json::to_string(&response)
+					.unwrap_or_else(|e| format!(r#"{{"error": "Failed to serialize: {}"}}"#, e));
+				return json_response(hyper::StatusCode::BAD_REQUEST, body);
 			},
 		},
 		None => ExecutorSerde {
@@ -616,14 +613,7 @@ async fn handle_cel(req: Request<Incoming>) -> Response {
 	};
 
 	// Serialize the response
-	let body = match serde_json::to_string(&result) {
-		Ok(json) => json,
-		Err(e) => format!("{{\"error\": \"Failed to serialize: {}\"}}", e),
-	};
-
-	let mut resp = plaintext_response(hyper::StatusCode::OK, body);
-	resp
-		.headers_mut()
-		.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-	resp
+	let body = serde_json::to_string(&result)
+		.unwrap_or_else(|e| format!(r#"{{"error": "Failed to serialize: {}"}}"#, e));
+	json_response(hyper::StatusCode::OK, body)
 }
