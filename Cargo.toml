@@ -179,7 +179,7 @@ tokio = { version = "1.48", features = ["full", "macros", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-test = "0.4"
-tokio-util = { version = "0.7", features = ["codec"] }
+tokio-util = { version = "0.7", features = ["codec", "io"] }
 tokio_sse_codec = "0.0.2"
 tonic = { version = "0.14", features = ["codegen", "transport"] }
 tonic-prost = { version = "0.14" }
