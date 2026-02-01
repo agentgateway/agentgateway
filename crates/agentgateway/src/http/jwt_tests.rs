@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{Jwt, Mode, Provider, TokenError};
+use super::{Jwt, Mode, Provider, TokenError, ValidationOptions};
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
 
@@ -27,6 +27,7 @@ pub fn test_azure_jwks() {
 		jwks,
 		"https://login.microsoftonline.com/test/v2.0".to_string(),
 		Some(vec!["test-aud".to_string()]),
+		ValidationOptions::default(),
 	)
 	.unwrap();
 	assert_eq!(
@@ -55,6 +56,7 @@ pub fn test_basic_jwks() {
 		jwks,
 		"https://example.com".to_string(),
 		Some(vec!["test-aud".to_string()]),
+		ValidationOptions::default(),
 	)
 	.unwrap();
 	assert_eq!(
@@ -87,6 +89,7 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 		jwks,
 		issuer.to_string(),
 		Some(vec![allowed_aud.to_string()]),
+		ValidationOptions::default(),
 	)
 	.unwrap();
 	// Test-only: allow synthetic tokens without a real signature
@@ -431,8 +434,13 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 	let kid1 = "kid-1";
 	let kid2 = "kid-2";
 
-	let mut provider1 =
-		Provider::from_jwks(jwks1, issuer1.to_string(), Some(vec![aud1.to_string()])).unwrap();
+	let mut provider1 = Provider::from_jwks(
+		jwks1,
+		issuer1.to_string(),
+		Some(vec![aud1.to_string()]),
+		ValidationOptions::default(),
+	)
+	.unwrap();
 	#[allow(deprecated)]
 	{
 		provider1
@@ -443,8 +451,13 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 			.insecure_disable_signature_validation();
 	}
 
-	let mut provider2 =
-		Provider::from_jwks(jwks2, issuer2.to_string(), Some(vec![aud2.to_string()])).unwrap();
+	let mut provider2 = Provider::from_jwks(
+		jwks2,
+		issuer2.to_string(),
+		Some(vec![aud2.to_string()]),
+		ValidationOptions::default(),
+	)
+	.unwrap();
 	#[allow(deprecated)]
 	{
 		provider2
@@ -480,4 +493,209 @@ pub fn test_validate_claims_multi_providers_accepts_both() {
 
 	assert!(jwt.validate_claims(&token1).is_ok());
 	assert!(jwt.validate_claims(&token2).is_ok());
+}
+
+// Helper to build a token without the exp claim
+fn build_unsigned_token_without_exp(kid: &str, iss: &str, aud: &str) -> String {
+	use base64::Engine as _;
+	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+	let header = json!({ "alg": "ES256", "kid": kid });
+	let payload = json!({ "iss": iss, "aud": aud, "sub": "test-user" });
+	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let s = URL_SAFE_NO_PAD.encode(b"sig");
+	format!("{h}.{p}.{s}")
+}
+
+// Helper to build a token with an expired exp claim
+fn build_unsigned_token_with_expired_exp(kid: &str, iss: &str, aud: &str) -> String {
+	use base64::Engine as _;
+	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+	let header = json!({ "alg": "ES256", "kid": kid });
+	// exp = 0 means expired (Unix epoch)
+	let payload = json!({ "iss": iss, "aud": aud, "sub": "test-user", "exp": 0 });
+	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let s = URL_SAFE_NO_PAD.encode(b"sig");
+	format!("{h}.{p}.{s}")
+}
+
+// allow_missing_exp: true accepts tokens without exp claim
+#[test]
+pub fn test_allow_missing_exp_accepts_token_without_exp() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "no-exp-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://no-exp-idp.example.com";
+	let aud = "no-exp-aud";
+	let kid = "no-exp-kid";
+
+	// allow_missing_exp: true = exp claim is optional
+	let validation_options = ValidationOptions {
+		allow_missing_exp: true,
+	};
+
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		validation_options,
+	)
+	.unwrap();
+
+	// Test-only: allow synthetic tokens without a real signature
+	#[allow(deprecated)]
+	{
+		provider
+			.keys
+			.get_mut(kid)
+			.unwrap()
+			.validation
+			.insecure_disable_signature_validation();
+	}
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	// Token without exp claim should be accepted when allow_missing_exp is true
+	let token = build_unsigned_token_without_exp(kid, issuer, aud);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		result.is_ok(),
+		"allow_missing_exp: true should accept tokens without exp claim"
+	);
+
+	// Verify claims are extracted correctly
+	let claims = result.unwrap();
+	assert_eq!(
+		claims.inner.get("sub"),
+		Some(&serde_json::Value::String("test-user".to_string()))
+	);
+}
+
+// Default validation options (exp required): rejects tokens without exp claim
+#[test]
+pub fn test_default_validation_rejects_token_without_exp() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "default-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://default-idp.example.com";
+	let aud = "default-aud";
+	let kid = "default-kid";
+
+	// Default validation options = exp required
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		ValidationOptions::default(),
+	)
+	.unwrap();
+
+	// Test-only: allow synthetic tokens without a real signature
+	#[allow(deprecated)]
+	{
+		provider
+			.keys
+			.get_mut(kid)
+			.unwrap()
+			.validation
+			.insecure_disable_signature_validation();
+	}
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	// Token without exp claim should be rejected when exp is required (default)
+	let token = build_unsigned_token_without_exp(kid, issuer, aud);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		result.is_err(),
+		"Default validation options (exp required) should reject tokens without exp claim"
+	);
+}
+
+// allow_missing_exp: true still rejects expired tokens (exp is validated if present)
+#[test]
+pub fn test_allow_missing_exp_still_rejects_expired_tokens() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "expired-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://expired-idp.example.com";
+	let aud = "expired-aud";
+	let kid = "expired-kid";
+
+	// allow_missing_exp: true = exp is optional, but still validated if present
+	let validation_options = ValidationOptions {
+		allow_missing_exp: true,
+	};
+
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		validation_options,
+	)
+	.unwrap();
+
+	// Test-only: allow synthetic tokens without a real signature
+	#[allow(deprecated)]
+	{
+		provider
+			.keys
+			.get_mut(kid)
+			.unwrap()
+			.validation
+			.insecure_disable_signature_validation();
+	}
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	// Token with expired exp should still be rejected even with allow_missing_exp: true
+	let token = build_unsigned_token_with_expired_exp(kid, issuer, aud);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		result.is_err(),
+		"allow_missing_exp: true should still reject tokens with expired exp claim"
+	);
 }
