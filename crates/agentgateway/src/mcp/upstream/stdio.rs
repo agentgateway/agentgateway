@@ -73,6 +73,19 @@ impl Process {
 			.map_err(|_| UpstreamError::Send)?;
 		Ok(())
 	}
+
+	pub async fn send_raw(
+		&self,
+		msg: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		self
+			.sender
+			.send((msg, ctx.clone()))
+			.await
+			.map_err(|_| UpstreamError::Send)?;
+		Ok(())
+	}
 }
 
 impl Process {

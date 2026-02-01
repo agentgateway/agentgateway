@@ -1,3 +1,4 @@
+mod elicitation;
 mod handler;
 mod mergestream;
 mod rbac;

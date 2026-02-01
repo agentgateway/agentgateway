@@ -244,10 +244,18 @@ impl Session {
 						log.non_atomic_mutate(|l| {
 							l.resource = Some(MCPOperation::Prompt);
 						});
-						self
-							.relay
-							.send_fanout(r, ctx, self.relay.merge_prompts(cel))
-							.await
+						if self.relay.is_multiplexing() {
+							let names = self.relay.upstreams_with_prompts();
+							self
+								.relay
+								.send_fanout_to(r, ctx, self.relay.merge_prompts(cel), names)
+								.await
+						} else {
+							self
+								.relay
+								.send_fanout(r, ctx, self.relay.merge_prompts(cel))
+								.await
+						}
 					},
 					ClientRequest::ListResourcesRequest(_) => {
 						if !self.relay.is_multiplexing() {
@@ -360,12 +368,48 @@ impl Session {
 							))
 						}
 					},
-
-					ClientRequest::ListTasksRequest(_)
-					| ClientRequest::GetTaskInfoRequest(_)
-					| ClientRequest::GetTaskResultRequest(_)
-					| ClientRequest::CancelTaskRequest(_)
-					| ClientRequest::SubscribeRequest(_)
+					ClientRequest::ListTasksRequest(_) => {
+						if self.relay.is_multiplexing() {
+							let names = self.relay.upstreams_with_tasks();
+							self
+								.relay
+								.send_fanout_to(r, ctx, self.relay.merge_tasks(), names)
+								.await
+						} else {
+							self.relay.send_single_without_multiplexing(r, ctx).await
+						}
+					},
+					ClientRequest::GetTaskInfoRequest(gti) => {
+						let task_id = gti.params.task_id.clone();
+						let (service_name, task) = self.relay.parse_resource_name(&task_id)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(task.to_string());
+						});
+						gti.params.task_id = task.to_string();
+						self.relay.send_single(r, ctx, service_name).await
+					},
+					ClientRequest::GetTaskResultRequest(gtr) => {
+						let task_id = gtr.params.task_id.clone();
+						let (service_name, task) = self.relay.parse_resource_name(&task_id)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(task.to_string());
+						});
+						gtr.params.task_id = task.to_string();
+						self.relay.send_single(r, ctx, service_name).await
+					},
+					ClientRequest::CancelTaskRequest(ctr) => {
+						let task_id = ctr.params.task_id.clone();
+						let (service_name, task) = self.relay.parse_resource_name(&task_id)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(task.to_string());
+						});
+						ctr.params.task_id = task.to_string();
+						self.relay.send_single(r, ctx, service_name).await
+					},
+					ClientRequest::SubscribeRequest(_)
 					| ClientRequest::UnsubscribeRequest(_)
 					| ClientRequest::CustomRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
@@ -397,10 +441,24 @@ impl Session {
 				// however, we don't have a way to map to the correct service yet
 				self.relay.send_notification(r, ctx).await
 			},
-
-			_ => Err(UpstreamError::InvalidRequest(
-				"unsupported message type".to_string(),
-			)),
+			ClientJsonRpcMessage::Response(mut r) => {
+				let ctx = IncomingRequestContext::new(&parts);
+				let (service_name, id) = self.relay.decode_upstream_request_id(&r.id)?;
+				r.id = id;
+				self
+					.relay
+					.send_client_message(service_name, ClientJsonRpcMessage::Response(r), ctx)
+					.await
+			},
+			ClientJsonRpcMessage::Error(mut r) => {
+				let ctx = IncomingRequestContext::new(&parts);
+				let (service_name, id) = self.relay.decode_upstream_request_id(&r.id)?;
+				r.id = id;
+				self
+					.relay
+					.send_client_message(service_name, ClientJsonRpcMessage::Error(r), ctx)
+					.await
+			},
 		}
 	}
 }
@@ -605,13 +663,7 @@ fn get_client_info() -> ClientInfo {
 	ClientInfo {
 		meta: None,
 		protocol_version: ProtocolVersion::V_2025_06_18,
-		capabilities: rmcp::model::ClientCapabilities {
-			experimental: None,
-			roots: None,
-			sampling: None,
-			elicitation: None,
-			tasks: None,
-		},
+		capabilities: rmcp::model::ClientCapabilities::default(),
 		client_info: Implementation {
 			name: "agentgateway".to_string(),
 			version: BuildInfo::new().version.to_string(),
