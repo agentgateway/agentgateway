@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::cel::SourceContext;
 use rand::prelude::IndexedRandom;
 
 use crate::proxy::httpproxy::BackendCall;
@@ -33,6 +34,12 @@ impl TCPProxy {
 		let tcp = connection
 			.ext::<TCPConnectionInfo>()
 			.expect("tcp connection must be set");
+		let tls = connection.ext::<TLSConnectionInfo>();
+		let src = SourceContext {
+			address: tcp.peer_addr.ip(),
+			port: tcp.peer_addr.port(),
+			tls: tls.and_then(|t| t.src_identity.clone()),
+		};
 		let mut log: DropOnLog = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
@@ -43,6 +50,8 @@ impl TCPProxy {
 			tcp.clone(),
 		)
 		.into();
+		// Set source context for TCP logging
+		log.with(|l| l.source_context = Some(src));
 		let ret = self.proxy_internal(connection, log.as_mut().unwrap()).await;
 		if let Err(e) = ret {
 			log.with(|l| l.error = Some(e.to_string()));
@@ -54,6 +63,18 @@ impl TCPProxy {
 		connection: Socket,
 		log: &mut RequestLog,
 	) -> Result<(), ProxyError> {
+		let frontend_policies = self
+			.inputs
+			.stores
+			.read_binds()
+			.frontend_policies(self.inputs.cfg.gateway_ref());
+
+		// Apply frontend policies for access logging (skip tracing for TCP)
+		frontend_policies.register_cel_expressions(log.cel.ctx());
+		if let Some(lp) = &frontend_policies.access_log {
+			httpproxy::apply_logging_policy_to_log(log, lp);
+		}
+
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::tcp);
 		let tcp_labels = TCPLabels {
