@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { API_URL } from "@/lib/api";
 
 type TemplateKey = "empty" | "http" | "llm" | "mcp";
 
@@ -99,7 +100,7 @@ export default function CELPlayground(): React.JSX.Element {
     setResult(null);
 
     try {
-      const res = await fetch("/cel", {
+      const res = await fetch(`${API_URL}/cel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expression, data: parsed }),
