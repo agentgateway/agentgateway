@@ -830,10 +830,15 @@ fn apply_header_with_action(
 		return Ok(());
 	};
 
-	// Determine the action to take
-	// If append_action is explicitly set, use it. Otherwise, fall back to the deprecated append field.
-	let action = if hvo.append_action != 0 || hvo.append.is_none() {
-		// Use append_action if it's explicitly set (non-zero) or if append is not set
+	// Determine the action to take.
+	// If append_action is explicitly set (non-zero), use it.
+	// If append_action is default (0), fallback to deprecated append (default=false to overwrite).
+	let action = if hvo.append_action == 0 {
+		match hvo.append {
+			Some(true) => HeaderAppendAction::AppendIfExistsOrAdd,
+			_ => HeaderAppendAction::OverwriteIfExistsOrAdd,
+		}
+	} else {
 		match HeaderAppendAction::try_from(hvo.append_action) {
 			Ok(action) => action,
 			Err(_) => {
@@ -843,13 +848,6 @@ fn apply_header_with_action(
 				);
 				HeaderAppendAction::AppendIfExistsOrAdd
 			},
-		}
-	} else {
-		// Fall back to deprecated append field for backwards compatibility
-		if hvo.append.unwrap_or(false) {
-			HeaderAppendAction::AppendIfExistsOrAdd
-		} else {
-			HeaderAppendAction::OverwriteIfExistsOrAdd
 		}
 	};
 

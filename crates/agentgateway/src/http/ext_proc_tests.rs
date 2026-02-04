@@ -467,6 +467,31 @@ fn test_req_to_header_map() {
 }
 
 #[test]
+fn test_default_append_action_overwrite() {
+	let mut headers = HeaderMap::new();
+	headers.insert("existing", "old".parse().unwrap());
+
+	let mutation = Some(HeaderMutation {
+		remove_headers: vec![],
+		set_headers: vec![HeaderValueOption {
+			header: Some(HeaderValue {
+				key: "existing".to_string(),
+				value: String::new(),
+				raw_value: b"new".to_vec(),
+			}),
+			append: None,
+			append_action: 0, // default
+		}],
+	});
+
+	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+
+	let values: Vec<_> = headers.get_all("existing").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "new");
+}
+
+#[test]
 fn test_append_if_exists_or_add() {
 	let mut headers = HeaderMap::new();
 	headers.insert("existing", "value1".parse().unwrap());
@@ -480,7 +505,7 @@ fn test_append_if_exists_or_add() {
 					value: String::new(),
 					raw_value: b"value2".to_vec(),
 				}),
-				append: None,
+				append: Some(true),
 				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 			},
 			HeaderValueOption {
@@ -489,7 +514,7 @@ fn test_append_if_exists_or_add() {
 					value: String::new(),
 					raw_value: b"added".to_vec(),
 				}),
-				append: None,
+				append: Some(true),
 				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 			},
 		],
@@ -648,7 +673,7 @@ fn test_apply_header_mutations_request() {
 				value: String::new(),
 				raw_value: b"value2".to_vec(),
 			}),
-			append: None,
+			append: Some(true),
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		}],
 	});
@@ -805,7 +830,7 @@ fn test_apply_header_mutations_response() {
 				value: String::new(),
 				raw_value: b"value2".to_vec(),
 			}),
-			append: None,
+			append: Some(true),
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		}],
 	});
@@ -1080,7 +1105,7 @@ fn test_value_field_instead_of_raw_value() {
 					value: "value2".to_string(),
 					raw_value: vec![], // Empty raw_value, should use value field
 				}),
-				append: None,
+				append: Some(true),
 				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 			},
 			HeaderValueOption {
@@ -1089,7 +1114,7 @@ fn test_value_field_instead_of_raw_value() {
 					value: "added".to_string(),
 					raw_value: vec![],
 				}),
-				append: None,
+				append: Some(true),
 				append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 			},
 		],
@@ -1211,7 +1236,7 @@ impl Handler for HeaderAppendActionExtProc {
 					value: String::new(),
 					raw_value: value.clone(),
 				}),
-				append: None,
+				append: Some(true),
 				append_action: (*action).into(),
 			})
 			.collect();
