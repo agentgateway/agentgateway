@@ -6,16 +6,141 @@ use tracing::warn;
 use crate::common::gateway::AgentGateway;
 
 // This module provides real LLM integration tests. These require API keys!
-// Example running all tests:
-//     AZURE_HOST=xxx.azure.com \
-//     VERTEX_PROJECT=octo-386314 \
-//     GEMINI_API_KEY=`cat ~/.secrets/gemini` \
-//     ANTHROPIC_API_KEY=`cat ~/.secrets/anthropic` \
-//     OPENAI_API_KEY=`cat ~/.secrets/openai`
-//     AGENTGATEWAY_E2E=true \
-//     cargo test --test integration tests::llm::
+// Note: AGENTGATEWAY_E2E=true must be set to run any of these tests.
 //
-// Note: AGENTGATEWAY_E2E must be set to run any tests.
+// Required Environment Variables (per provider):
+// - OpenAI: OPENAI_API_KEY
+// - Anthropic: ANTHROPIC_API_KEY
+// - Gemini: GEMINI_API_KEY
+// - Vertex: VERTEX_PROJECT (requires GCP implicit auth)
+// - Bedrock: (requires AWS implicit auth)
+// - Azure OpenAI: AZURE_HOST (requires implicit auth)
+//
+// Examples:
+//
+// 1. Run all E2E tests for all providers:
+//    AGENTGATEWAY_E2E=true ANTHROPIC_API_KEY=... OPENAI_API_KEY=... cargo test --test integration tests::llm::
+//
+// 2. Run all tests for a specific provider (e.g., OpenAI):
+//    AGENTGATEWAY_E2E=true OPENAI_API_KEY=... cargo test --test integration tests::llm::openai::
+//
+// 3. Run a specific targeted test case (e.g., Bedrock messages):
+//    AGENTGATEWAY_E2E=true cargo test --test integration tests::llm::bedrock::messages
+//
+// Note: Some providers (Bedrock, Vertex) use implicit environment auth (AWS/GCP) instead of explicit keys.
+
+macro_rules! send_completions_tests {
+	($provider:expr, $env:expr, $model:expr) => {
+		#[tokio::test]
+		async fn completions() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_completions(&gw, false).await;
+		}
+
+		#[tokio::test]
+		async fn completions_streaming() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_completions(&gw, true).await;
+		}
+	};
+}
+
+macro_rules! send_messages_tests {
+	($provider:expr, $env:expr, $model:expr) => {
+		#[tokio::test]
+		async fn messages() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_messages(&gw, false).await;
+		}
+
+		#[tokio::test]
+		async fn messages_streaming() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_messages(&gw, true).await;
+		}
+	};
+}
+
+macro_rules! send_messages_tool_tests {
+	($provider:expr, $env:expr, $model:expr) => {
+		#[tokio::test]
+		async fn messages_tool_use() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_messages_with_tools(&gw).await;
+		}
+
+		#[tokio::test]
+		async fn messages_parallel_tool_use() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_messages_with_parallel_tools(&gw).await;
+		}
+
+		#[tokio::test]
+		async fn messages_multi_turn_tool_use() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_messages_multi_turn_tool_use(&gw).await;
+		}
+	};
+}
+
+macro_rules! send_completions_tool_tests {
+	($provider:expr, $env:expr, $model:expr) => {
+		#[tokio::test]
+		async fn completions_tool_use() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_completions_with_tools(&gw).await;
+		}
+	};
+}
+
+macro_rules! send_responses_tests {
+	($provider:expr, $env:expr, $model:expr) => {
+		#[tokio::test]
+		async fn responses() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_responses(&gw, false).await;
+		}
+
+		#[tokio::test]
+		async fn responses_stream() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_responses(&gw, true).await;
+		}
+	};
+}
+
+macro_rules! send_embeddings_tests {
+	($(#[$meta:meta])* $name:ident, $provider:expr, $env:expr, $model:expr, $expected_dimensions:expr) => {
+		$(#[$meta])*
+		#[tokio::test]
+		async fn $name() {
+			let Some(gw) = setup($provider, $env, $model).await else {
+				return;
+			};
+			send_embeddings(&gw, $expected_dimensions).await;
+		}
+	};
+}
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
 	let policies = if provider == "azureOpenAI" {
@@ -92,134 +217,46 @@ binds:
 	)
 }
 
+// === Provider-Specific E2E Test Suites ===
+// Each module below instantiates the test macros for a specific backend provider.
+
 mod openai {
 	use super::*;
-	#[tokio::test]
-	async fn responses() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
-		send_responses(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn responses_stream() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
-		send_responses(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn completions() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
-		send_completions(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn completions_streaming() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
-		send_completions(&gw, true).await;
-	}
-
-	#[tokio::test]
-	#[ignore] // TODO
-	async fn messages() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
-		send_messages(&gw, false).await;
-	}
-
-	#[tokio::test]
-	#[ignore] // TODO
-	async fn messages_streaming() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
-		send_messages(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn embeddings() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "text-embedding-3-small").await else {
-			return;
-		};
-		send_embeddings(&gw, None).await;
-	}
+	send_responses_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
+	send_completions_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
+	send_completions_tool_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
+	send_messages_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
+	send_messages_tool_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
+	send_embeddings_tests!(
+		embeddings,
+		"openAI",
+		"OPENAI_API_KEY",
+		"text-embedding-3-small",
+		None
+	);
 }
 
 mod bedrock {
 	use super::*;
-
-	#[tokio::test]
-	async fn completions() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_completions(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn completions_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_completions(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn responses() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_responses(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn responses_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_responses(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn messages() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_messages(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn messages_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_messages(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn embeddings_titan() {
-		let Some(gw) = setup("bedrock", "", "amazon.titan-embed-text-v2:0").await else {
-			return;
-		};
-		send_embeddings(&gw, None).await;
-	}
-
-	#[tokio::test]
-	async fn embeddings_cohere() {
-		let Some(gw) = setup("bedrock", "", "cohere.embed-english-v3").await else {
-			return;
-		};
-		// Cohere does not respect overriding the dimension count
-		send_embeddings(&gw, Some(1024)).await;
-	}
+	send_completions_tests!("bedrock", "", "us.amazon.nova-pro-v1:0");
+	send_responses_tests!("bedrock", "", "us.anthropic.claude-3-5-haiku-20241022-v1:0");
+	send_messages_tests!("bedrock", "", "us.anthropic.claude-3-5-haiku-20241022-v1:0");
+	send_messages_tool_tests!("bedrock", "", "us.anthropic.claude-3-5-haiku-20241022-v1:0");
+	send_embeddings_tests!(
+		embeddings_titan,
+		"bedrock",
+		"",
+		"amazon.titan-embed-text-v2:0",
+		None
+	);
+	// Cohere does not respect overriding the dimension count
+	send_embeddings_tests!(
+		embeddings_cohere,
+		"bedrock",
+		"",
+		"cohere.embed-english-v3",
+		Some(1024)
+	);
 
 	#[tokio::test]
 	async fn token_count() {
@@ -232,22 +269,8 @@ mod bedrock {
 
 mod anthropic {
 	use super::*;
-
-	#[tokio::test]
-	async fn completions() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
-		send_completions(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn completions_streaming() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
-		send_completions(&gw, true).await;
-	}
+	send_completions_tests!("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307");
+	send_messages_tests!("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307");
 
 	#[tokio::test]
 	#[ignore]
@@ -265,22 +288,6 @@ mod anthropic {
 			return;
 		};
 		send_responses(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn messages() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
-		send_messages(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn messages_streaming() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
-		send_messages(&gw, true).await;
 	}
 
 	#[tokio::test]
@@ -294,38 +301,22 @@ mod anthropic {
 
 mod gemini {
 	use super::*;
-
-	#[tokio::test]
-	async fn completions() {
-		let Some(gw) = setup("gemini", "GEMINI_API_KEY", "gemini-2.5-flash").await else {
-			return;
-		};
-		send_completions(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn completions_streaming() {
-		let Some(gw) = setup("gemini", "GEMINI_API_KEY", "gemini-2.5-flash").await else {
-			return;
-		};
-		send_completions(&gw, true).await;
-	}
+	send_completions_tests!("gemini", "GEMINI_API_KEY", "gemini-2.5-flash");
+	send_completions_tool_tests!("gemini", "GEMINI_API_KEY", "gemini-2.5-flash");
+	send_messages_tests!("gemini", "GEMINI_API_KEY", "gemini-2.5-flash");
+	send_messages_tool_tests!("gemini", "GEMINI_API_KEY", "gemini-2.5-flash");
 }
 
 mod vertex {
 	use super::*;
-
-	#[tokio::test]
-	async fn completions() {
-		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
-			return;
-		};
-		send_completions(&gw, false).await;
-	}
+	send_completions_tests!("vertex", "", "google/gemini-2.5-flash-lite");
+	send_completions_tool_tests!("vertex", "", "google/gemini-2.5-flash-lite");
+	send_messages_tests!("vertex", "", "google/gemini-2.5-flash-lite");
+	send_messages_tool_tests!("vertex", "", "google/gemini-2.5-flash-lite");
 
 	#[tokio::test]
 	async fn completions_to_anthropic() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku@20240307").await else {
 			return;
 		};
 		send_completions(&gw, false).await;
@@ -335,47 +326,26 @@ mod vertex {
 	#[ignore]
 	/// TODO(https://github.com/agentgateway/agentgateway/pull/800) support this
 	async fn completions_streaming_to_anthropic() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku@20240307").await else {
 			return;
 		};
 		send_completions(&gw, true).await;
 	}
 
-	#[tokio::test]
-	async fn completions_streaming() {
-		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
-			return;
-		};
-		send_completions(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn messages() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
-		send_messages(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn messages_streaming() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
-		send_messages(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn embeddings() {
-		let Some(gw) = setup("vertex", "", "text-embedding-004").await else {
-			return;
-		};
-		send_embeddings(&gw, None).await;
-	}
+	// During testing I have been unable to make embeddings work at all with Vertex, with or without Agentgateway.
+	// This is plausibly from using the OpenAI compatible endpoint?
+	send_embeddings_tests!(
+		#[ignore]
+		embeddings,
+		"vertex",
+		"",
+		"text-embedding-004",
+		None
+	);
 
 	#[tokio::test]
 	async fn token_count() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku@20240307").await else {
 			return;
 		};
 		send_anthropic_token_count(&gw).await;
@@ -384,54 +354,26 @@ mod vertex {
 
 mod azureopenai {
 	use super::*;
-
-	#[tokio::test]
-	async fn completions() {
-		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
-			return;
-		};
-		send_completions(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn completions_streaming() {
-		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
-			return;
-		};
-		send_completions(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn responses() {
-		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
-			return;
-		};
-		send_responses(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn responses_stream() {
-		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
-			return;
-		};
-		send_responses(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn embeddings() {
-		let Some(gw) = setup("azureOpenAI", "", "text-embedding-3-small").await else {
-			return;
-		};
-		send_embeddings(&gw, None).await;
-	}
+	send_completions_tests!("azureOpenAI", "", "gpt-4o-mini");
+	send_completions_tool_tests!("azureOpenAI", "", "gpt-4o-mini");
+	send_messages_tests!("azureOpenAI", "", "gpt-4o-mini");
+	send_messages_tool_tests!("azureOpenAI", "", "gpt-4o-mini");
+	send_responses_tests!("azureOpenAI", "", "gpt-4o-mini");
+	send_embeddings_tests!(
+		embeddings,
+		"azureOpenAI",
+		"",
+		"text-embedding-3-small",
+		None
+	);
 }
 
-async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
+pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
 	// Explicitly opt in to avoid accidentally using implicit configs
 	if !require_env("AGENTGATEWAY_E2E") {
 		return None;
 	}
-	if !env.is_empty() && !require_env("OPENAI_API_KEY") {
+	if !env.is_empty() && !require_env(env) {
 		return None;
 	}
 	if provider == "vertex" && !require_env("VERTEX_PROJECT") {
@@ -519,7 +461,7 @@ fn require_env(var: &str) -> bool {
 	found
 }
 
-async fn send_completions(gw: &AgentGateway, stream: bool) {
+pub async fn send_completions(gw: &AgentGateway, stream: bool) {
 	let resp = gw
 		.send_request_json(
 			"http://localhost/v1/chat/completions",
@@ -533,8 +475,343 @@ async fn send_completions(gw: &AgentGateway, stream: bool) {
 		)
 		.await;
 
+	let test_id = resp
+		.headers()
+		.get("x-test-id")
+		.unwrap()
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	if resp.status() != StatusCode::OK {
+		let body = resp.into_body();
+		let bytes = http_body_util::BodyExt::collect(body)
+			.await
+			.unwrap()
+			.to_bytes();
+		println!("Error response body: {:?}", String::from_utf8_lossy(&bytes));
+		panic!("Request failed with status {}", StatusCode::BAD_REQUEST);
+	}
+
+	let body = resp.into_body();
+	let bytes = http_body_util::BodyExt::collect(body)
+		.await
+		.unwrap()
+		.to_bytes();
+	let body_str = String::from_utf8_lossy(&bytes);
+	if stream {
+		assert!(
+			body_str.contains("data: "),
+			"Streaming response missing 'data: ' prefix: {}",
+			body_str
+		);
+	} else {
+		assert!(
+			!body_str.contains("data: "),
+			"Non-streaming response contains 'data: ' prefix: {}",
+			body_str
+		);
+	}
+
+	assert_log("/v1/chat/completions", stream, &test_id);
+}
+
+pub async fn send_completions_with_tools(gw: &AgentGateway) {
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/chat/completions",
+			json!({
+				"messages": [{
+					"role": "user",
+					"content": "What is the weather in New York?"
+				}],
+				"tool_choice": "required",
+				"tools": [{
+					"type": "function",
+					"function": {
+						"name": "get_weather",
+						"description": "Get the current weather in a given location",
+						"parameters": {
+							"type": "object",
+							"properties": {
+								"location": {
+									"type": "string",
+									"description": "The city and state, e.g. San Francisco, CA"
+								},
+								"unit": { "type": "string", "enum": ["celsius", "fahrenheit"] }
+							},
+							"required": ["location"]
+						}
+					}
+				}]
+			}),
+		)
+		.await;
+
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/chat/completions", stream, &gw.test_id);
+	let body = resp.into_body();
+	let bytes = http_body_util::BodyExt::collect(body)
+		.await
+		.unwrap()
+		.to_bytes();
+	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+	let choices = body_json
+		.get("choices")
+		.unwrap()
+		.as_array()
+		.expect("choices should be an array");
+	let message = choices[0].get("message").unwrap();
+	let tool_calls = message
+		.get("tool_calls")
+		.unwrap()
+		.as_array()
+		.expect("tool_calls should be an array");
+	assert!(
+		!tool_calls.is_empty(),
+		"Response should contain tool_calls: {}",
+		body_json
+	);
+	assert_eq!(
+		tool_calls[0].get("function").unwrap().get("name").unwrap(),
+		"get_weather"
+	);
+}
+
+pub async fn send_messages_with_tools(gw: &AgentGateway) {
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 1024,
+				"messages": [{
+					"role": "user",
+					"content": "What is the weather in New York?"
+				}],
+				"tool_choice": {"type": "any"},
+				"tools": [{
+					"name": "get_weather",
+					"description": "Get the current weather in a given location",
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"location": {
+								"type": "string",
+								"description": "The city and state, e.g. San Francisco, CA"
+							},
+							"unit": { "type": "string", "enum": ["celsius", "fahrenheit"] }
+						},
+						"required": ["location"]
+					}
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let body = resp.into_body();
+	let bytes = http_body_util::BodyExt::collect(body)
+		.await
+		.unwrap()
+		.to_bytes();
+	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+	// Verify Anthropic Response Schema
+	// Expectation: {"content": [{"type": "tool_use", "name": "get_weather", ...}], ...}
+	let content = body_json
+		.get("content")
+		.expect("Response missing 'content'")
+		.as_array()
+		.expect("content should be array");
+
+	// Find the tool_use block
+	let tool_use = content
+		.iter()
+		.find(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"));
+	assert!(
+		tool_use.is_some(),
+		"Response should contain a tool_use block: {:?}",
+		body_json
+	);
+
+	let tool_use = tool_use.unwrap();
+	assert_eq!(tool_use.get("name").unwrap(), "get_weather");
+	assert!(
+		tool_use.get("input").is_some(),
+		"tool_use should have input"
+	);
+}
+
+pub async fn send_messages_with_parallel_tools(gw: &AgentGateway) {
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 1024,
+				"messages": [{
+					"role": "user",
+					"content": "What is the weather in New York and London? Use the `get_weather` tool for each."
+				}],
+				"tools": [{
+					"name": "get_weather",
+					"description": "Get the current weather in a given location",
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"location": {
+								"type": "string",
+								"description": "The city and state, e.g. San Francisco, CA"
+							}
+						},
+						"required": ["location"]
+					}
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let body = resp.into_body();
+	let bytes = http_body_util::BodyExt::collect(body)
+		.await
+		.unwrap()
+		.to_bytes();
+	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+	// Verify Anthropic Response Schema for Parallel Tools
+	let content = body_json
+		.get("content")
+		.expect("Response missing 'content'")
+		.as_array()
+		.expect("content should be array");
+
+	// Count tool_use blocks
+	let tool_calls: Vec<_> = content
+		.iter()
+		.filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
+		.collect();
+
+	// Most modern models (GPT-4o, Gemini 1.5/2.0) will correctly call the tool twice.
+	assert!(
+		tool_calls.len() >= 2,
+		"Response should contain at least 2 tool_use blocks for parallel request: {}",
+		body_json
+	);
+
+	for tc in tool_calls {
+		assert!(tc.get("name").is_some());
+		assert!(tc.get("input").is_some());
+	}
+}
+
+pub async fn send_messages_multi_turn_tool_use(gw: &AgentGateway) {
+	// Turn 1: Request tool use
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 1024,
+				"messages": [{
+					"role": "user",
+					"content": "What is the weather in New York?"
+				}],
+				"tool_choice": {"type": "any"},
+				"tools": [{
+					"name": "get_weather",
+					"description": "Get the current weather in a given location",
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"location": { "type": "string" }
+						},
+						"required": ["location"]
+					}
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let bytes = http_body_util::BodyExt::collect(resp.into_body())
+		.await
+		.unwrap()
+		.to_bytes();
+	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+	let content = body_json
+		.get("content")
+		.unwrap()
+		.as_array()
+		.expect("content should be array");
+	let tool_use = content
+		.iter()
+		.find(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
+		.expect("Response should contain a tool_use block");
+	let tool_use_id = tool_use.get("id").unwrap().as_str().unwrap().to_string();
+
+	// Turn 2: Send tool result
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 1024,
+				"messages": [
+					{
+						"role": "user",
+						"content": "What is the weather in New York?"
+					},
+					{
+						"role": "assistant",
+						"content": [tool_use]
+					},
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "tool_result",
+								"tool_use_id": tool_use_id,
+								"content": "The weather is sunny and 75 degrees."
+							}
+						]
+					}
+				],
+				"tools": [{
+					"name": "get_weather",
+					"description": "Get the current weather in a given location",
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"location": { "type": "string" }
+						},
+						"required": ["location"]
+					}
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let bytes = http_body_util::BodyExt::collect(resp.into_body())
+		.await
+		.unwrap()
+		.to_bytes();
+	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+	let content = body_json
+		.get("content")
+		.unwrap()
+		.as_array()
+		.expect("content should be array");
+	let text = content
+		.iter()
+		.find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+		.expect("Final response should contain a text block");
+	let text_val = text.get("text").unwrap().as_str().unwrap();
+	assert!(
+		text_val.contains("75") || text_val.to_lowercase().contains("sunny"),
+		"Final response should incorporate tool result: {}",
+		text_val
+	);
 }
 
 async fn send_responses(gw: &AgentGateway, stream: bool) {
@@ -549,11 +826,24 @@ async fn send_responses(gw: &AgentGateway, stream: bool) {
 		)
 		.await;
 
+	let test_id = resp
+		.headers()
+		.get("x-test-id")
+		.unwrap()
+		.to_str()
+		.unwrap()
+		.to_string();
+
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/responses", stream, &gw.test_id);
+
+	// Consume body to ensure request log is emitted
+	let body = resp.into_body();
+	let _ = http_body_util::BodyExt::collect(body).await.unwrap();
+
+	assert_log("/v1/responses", stream, &test_id);
 }
 
-async fn send_messages(gw: &AgentGateway, stream: bool) {
+pub async fn send_messages(gw: &AgentGateway, stream: bool) {
 	let resp = gw
 		.send_request_json(
 			"http://localhost/v1/messages",
@@ -567,8 +857,46 @@ async fn send_messages(gw: &AgentGateway, stream: bool) {
 		)
 		.await;
 
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/messages", stream, &gw.test_id);
+	let test_id = resp
+		.headers()
+		.get("x-test-id")
+		.unwrap()
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	if resp.status() != StatusCode::OK {
+		let status = resp.status();
+		let body = resp.into_body();
+		let bytes = http_body_util::BodyExt::collect(body)
+			.await
+			.unwrap()
+			.to_bytes();
+		println!("Error response body: {:?}", String::from_utf8_lossy(&bytes));
+		panic!("Request failed with status {}", status);
+	}
+
+	let body = resp.into_body();
+	let bytes = http_body_util::BodyExt::collect(body)
+		.await
+		.unwrap()
+		.to_bytes();
+	let body_str = String::from_utf8_lossy(&bytes);
+	if stream {
+		assert!(
+			body_str.contains("event: "),
+			"Anthropic streaming response missing 'event: ' prefix: {}",
+			body_str
+		);
+	} else {
+		assert!(
+			!body_str.contains("event: "),
+			"Anthropic non-streaming response contains 'event: ' prefix: {}",
+			body_str
+		);
+	}
+
+	assert_log("/v1/messages", stream, &test_id);
 }
 
 async fn send_anthropic_token_count(gw: &AgentGateway) {
@@ -583,8 +911,16 @@ async fn send_anthropic_token_count(gw: &AgentGateway) {
 		)
 		.await;
 
+	let test_id = resp
+		.headers()
+		.get("x-test-id")
+		.unwrap()
+		.to_str()
+		.unwrap()
+		.to_string();
+
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_count_log("/v1/messages/count_tokens", &gw.test_id);
+	assert_count_log("/v1/messages/count_tokens", &test_id);
 }
 
 async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) {

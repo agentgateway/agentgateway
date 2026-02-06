@@ -116,23 +116,28 @@ impl AgentGateway {
 		let mut url = Url::parse(url).unwrap();
 		url.set_port(Some(self.port)).unwrap();
 		RequestBuilder::new(method, url.as_str())
-			.header("x-test-id", self.test_id.clone())
+			.header("x-test-id", generate_id())
 			.send(self.client.clone())
 			.await
 			.unwrap()
 	}
 
 	pub async fn send_request_json(&self, url: &str, body: serde_json::Value) -> Response {
+		let id = generate_id();
 		let mut url = Url::parse(url).unwrap();
 		url.set_port(Some(self.port)).unwrap();
 		let body = serde_json::to_vec_pretty(&body).unwrap();
-		RequestBuilder::new(Method::POST, url.as_str())
-			.header("x-test-id", self.test_id.clone())
+		let mut resp = RequestBuilder::new(Method::POST, url.as_str())
+			.header("x-test-id", id.clone())
 			.header("Content-Type", "application/json")
 			.body(body)
 			.send(self.client.clone())
 			.await
-			.unwrap()
+			.unwrap();
+		resp
+			.headers_mut()
+			.insert("x-test-id", http::HeaderValue::from_str(&id).unwrap());
+		resp
 	}
 
 	pub fn port(&self) -> u16 {

@@ -19,7 +19,12 @@ info:
     service_tier: standard
 ---
 {
+  "id": "[id]",
+  "type": "message",
+  "role": "assistant",
   "model": "claude-3-5-haiku-20241022",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
   "usage": {
     "input_tokens": 15,
     "output_tokens": 21,
@@ -32,10 +37,5 @@ info:
       "text": "Hi there! How are you doing today? Is there anything I can help you with?",
       "type": "text"
     }
-  ],
-  "id": "[id]",
-  "type": "message",
-  "role": "assistant",
-  "stop_reason": "end_turn",
-  "stop_sequence": null
+  ]
 }

@@ -23,7 +23,12 @@ info:
   "messages": [
     {
       "role": "user",
-      "content": "What is the weather like in San Francisco?"
+      "content": [
+        {
+          "type": "text",
+          "text": "What is the weather like in San Francisco?"
+        }
+      ]
     }
   ],
   "model": "claude-opus-4-1-20250805",

@@ -269,7 +269,7 @@ impl AIProvider {
 					backend_auth: Some(BackendAuth::Gcp(GcpAuth::default())),
 					..Default::default()
 				};
-				(Target::Hostname(p.get_host(), 443), bp)
+				(Target::Hostname(p.get_host(None), 443), bp)
 			},
 			AIProvider::Anthropic(_) => (Target::Hostname(anthropic::DEFAULT_HOST, 443), btls),
 			AIProvider::Bedrock(p) => {
@@ -356,7 +356,7 @@ impl AIProvider {
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
-						uri.authority = Some(Authority::from_str(&provider.get_host())?);
+						uri.authority = Some(Authority::from_str(&provider.get_host(request_model))?);
 						Ok(())
 					})?;
 					Ok(())
@@ -545,6 +545,27 @@ impl AIProvider {
 			.read_body_and_default_model::<types::count_tokens::Request>(policies, req)
 			.await?;
 
+		let use_local = match self {
+			AIProvider::Anthropic(_) | AIProvider::Bedrock(_) => false,
+			AIProvider::Vertex(p) => !p.is_anthropic_model(req.model.as_deref()),
+			_ => true,
+		};
+		if use_local {
+			let messages = req.get_messages();
+			let model = req.model.as_deref().unwrap_or_default();
+			let count = num_tokens_from_messages(model, &messages)?;
+			let body = serde_json::to_vec(&types::count_tokens::Response {
+				input_tokens: count,
+			})
+			.map_err(AIError::ResponseMarshal)?;
+			let resp = ::http::Response::builder()
+				.status(::http::StatusCode::OK)
+				.header(::http::header::CONTENT_TYPE, "application/json")
+				.body(Body::from(body))
+				.expect("failed to build count_tokens response");
+			return Ok(RequestResult::Rejected(resp));
+		}
+
 		self
 			.process_request(
 				backend_info,
@@ -580,10 +601,16 @@ impl AIProvider {
 				// OpenAI supports responses input (Bedrock supports responses input via translation)
 			},
 			(
-				AIProvider::Anthropic(_) | AIProvider::Bedrock(_) | AIProvider::Vertex(_),
+				AIProvider::Anthropic(_)
+				| AIProvider::Bedrock(_)
+				| AIProvider::Vertex(_)
+				| AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::AzureOpenAI(_),
 				InputFormat::Messages,
 			) => {
 				// Anthropic supports messages input (Bedrock & Vertex support assuming serving Anthropic models)
+				// OpenAI/Gemini/AzureOpenAI support messages via translation to chat completions
 			},
 			(
 				AIProvider::Anthropic(_) | AIProvider::Bedrock(_) | AIProvider::Vertex(_),
@@ -602,7 +629,7 @@ impl AIProvider {
 				// OpenAI compatible, Gemini, Bedrock, or Vertex
 			},
 			(p, m) => {
-				// Messages with OpenAI compatible: currently only supports translating the request
+				// Unsupported provider/format combination.
 				return Err(AIError::UnsupportedConversion(strng::format!(
 					"{m:?} from provider {}",
 					p.provider()
@@ -836,11 +863,27 @@ impl AIProvider {
 				serde_json::from_slice::<types::responses::Response>(bytes)
 					.map_err(AIError::ResponseParsing)?,
 			)),
+			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
+			(AIProvider::Vertex(p), InputFormat::Messages) => {
+				if p.is_anthropic_model(Some(&req.request_model)) {
+					Ok(Box::new(
+						serde_json::from_slice::<types::messages::Response>(bytes)
+							.map_err(AIError::ResponseParsing)?,
+					))
+				} else {
+					conversion::completions::from_messages::translate_response(bytes)
+				}
+			},
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => Ok(Box::new(
+			(AIProvider::Anthropic(_), InputFormat::Messages) => Ok(Box::new(
 				serde_json::from_slice::<types::messages::Response>(bytes)
 					.map_err(AIError::ResponseParsing)?,
 			)),
+			// OpenAI/Gemini/AzureOpenAI messages: translate from chat completions
+			(
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				InputFormat::Messages,
+			) => conversion::completions::from_messages::translate_response(bytes),
 			// Supported paths with conversion...
 			(AIProvider::Anthropic(_), InputFormat::Completions) => {
 				conversion::messages::from_completions::translate_response(bytes)
@@ -864,9 +907,6 @@ impl AIProvider {
 					))
 				}
 			},
-			(_, InputFormat::Messages) => Err(AIError::UnsupportedConversion(strng::literal!(
-				"this provider does not support Messages"
-			))),
 			(_, InputFormat::Responses) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider does not support Responses"
 			))),
@@ -890,6 +930,10 @@ impl AIProvider {
 		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		let is_vertex_anthropic = match self {
+			AIProvider::Vertex(p) => p.is_anthropic_model(Some(&req.request_model)),
+			_ => false,
+		};
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
 		// Store an empty response, as we stream in info we will parse into it
@@ -936,10 +980,22 @@ impl AIProvider {
 				| AIProvider::Vertex(_),
 				InputFormat::Responses,
 			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, log)),
-			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => {
+			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
+			(AIProvider::Vertex(_), InputFormat::Messages) if is_vertex_anthropic => {
 				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, log))
 			},
+			(AIProvider::Vertex(_), InputFormat::Messages) => {
+				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, log))
+			},
+			// Anthropic messages: passthrough
+			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, log))
+			},
+			// OpenAI/Gemini/AzureOpenAI messages: translate from chat completions
+			(
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				InputFormat::Messages,
+			) => resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, log)),
 			// Supported paths with conversion...
 			(AIProvider::Anthropic(_), InputFormat::Completions) => {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, log))
@@ -961,11 +1017,6 @@ impl AIProvider {
 				resp.map(move |b| {
 					conversion::bedrock::from_responses::translate_stream(b, buffer, log, &model, &msg)
 				})
-			},
-			(_, InputFormat::Messages) => {
-				return Err(AIError::UnsupportedConversion(strng::literal!(
-					"this provider does not support Messages for streaming"
-				)));
 			},
 			(_, InputFormat::Realtime) => {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
@@ -1013,16 +1064,44 @@ impl AIProvider {
 	fn process_error(&self, req: &LLMRequest, bytes: &Bytes) -> Result<Bytes, AIError> {
 		match (self, req.input_format) {
 			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::AzureOpenAI(_)
-				| AIProvider::Vertex(_),
+				AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_),
 				InputFormat::Completions | InputFormat::Responses | InputFormat::Embeddings,
 			) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
-			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => {
+			(AIProvider::Gemini(_), InputFormat::Completions | InputFormat::Responses) => {
+				conversion::completions::translate_google_error(bytes)
+			},
+			(AIProvider::Gemini(_), InputFormat::Embeddings) => {
+				// Passthrough; Gemini embeddings endpoint already returns OpenAI-compatible errors.
+				Ok(bytes.clone())
+			},
+			(AIProvider::Vertex(p), InputFormat::Completions | InputFormat::Responses) => {
+				if p.is_anthropic_model(Some(&req.request_model)) {
+					Ok(bytes.clone())
+				} else {
+					conversion::completions::translate_google_error(bytes)
+				}
+			},
+			(AIProvider::Vertex(_), InputFormat::Embeddings) => {
+				// Passthrough; Vertex embeddings endpoint already returns OpenAI-compatible errors.
+				Ok(bytes.clone())
+			},
+			(AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_), InputFormat::Messages) => {
+				conversion::completions::from_messages::translate_error(bytes)
+			},
+			(AIProvider::Gemini(_), InputFormat::Messages) => {
+				conversion::messages::translate_google_error(bytes)
+			},
+			(AIProvider::Vertex(p), InputFormat::Messages) => {
+				if p.is_anthropic_model(Some(&req.request_model)) {
+					Ok(bytes.clone())
+				} else {
+					conversion::messages::translate_google_error(bytes)
+				}
+			},
+			(AIProvider::Anthropic(_), InputFormat::Messages) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
@@ -1091,37 +1170,6 @@ fn num_tokens_from_messages(
 	Ok(num_tokens)
 }
 
-fn num_tokens_from_anthropic_messages(
-	model: &str,
-	messages: &[types::messages::RequestMessage],
-) -> Result<u64, AIError> {
-	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
-	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
-		// Chat completion is only supported chat models
-		return Err(AIError::UnsupportedModel);
-	}
-	let bpe = get_bpe_from_tokenizer(tokenizer);
-
-	let tokens_per_message = 3;
-
-	let mut num_tokens: u64 = 0;
-	for message in messages {
-		num_tokens += tokens_per_message;
-		// Role is always 1 token
-		num_tokens += 1;
-		if let Some(t) = message.message_text() {
-			num_tokens += bpe
-				.encode_with_special_tokens(
-					// We filter non-text previously
-					t,
-				)
-				.len() as u64;
-		}
-	}
-	num_tokens += 3; // every reply is primed with <|start|>assistant<|message|>
-	Ok(num_tokens)
-}
-
 /// Tokenizers take about 200ms to load and are lazy loaded. This loads them on demand, outside the
 /// request path
 pub fn preload_tokenizers() {
@@ -1172,6 +1220,8 @@ pub enum AIError {
 	RequestMarshal(serde_json::Error),
 	#[error("failed to parse response: {0}")]
 	ResponseParsing(serde_json::Error),
+	#[error("invalid response: {0}")]
+	InvalidResponse(Strng),
 	#[error("failed to marshal response: {0}")]
 	ResponseMarshal(serde_json::Error),
 	#[error("unsupported content encoding: {0}")]
