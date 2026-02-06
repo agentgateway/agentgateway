@@ -34,7 +34,10 @@ pub enum Mode {
 	Optional,
 }
 
-#[apply(schema!)]
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")] // Intentionally NOT deny_unknown_fields since we use flatten
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(::cel::DynamicType)]
 pub struct Claims {
 	#[dynamic(with_value = "redact_key")]

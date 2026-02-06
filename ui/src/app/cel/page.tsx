@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -15,7 +14,7 @@ import { API_URL } from "@/lib/api";
 // dynamic import OUTSIDE component to avoid remount on every render
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
-type TemplateKey = "empty" | "http" | "llm" | "mcp";
+type TemplateKey = "empty" | "http";
 
 const TEMPLATES: Record<TemplateKey, string> = {
   empty: "",
@@ -84,29 +83,17 @@ source:
   subjectAltNames: []
   subjectCn: cn
 `,
-  llm: `llm:
-  input: "Translate the following English text to French:\\n\\nHello world"
-  model: gpt-4
-  maxTokens: 256`,
-  mcp: `mcp:
-  envelope:
-    id: msg-1
-    from: service-a
-    to: service-b
-    type: event
-    payload:
-      event: user.created
-      user:
-        id: 42
-        email: a@b.com`,
 };
 
 const EXAMPLES: { name: string; expr: string }[] = [
-  { name: "Method + Status", expr: "request.method == 'GET' && response.code == 200" },
+  {
+    name: "HTTP",
+    expr: "request.method == 'GET' && response.code == 200 && request.path.startsWith('/api/')",
+  },
   { name: "MCP Payload", expr: "mcp.tool.name == 'get_weather'" },
-  { name: "LLM Input", expr: "llm.requestModel == 'gpt-4'" },
+  { name: "Body Based Routing", expr: "json(request.body).model" },
   { name: "JWT Claims", expr: "jwt.iss == 'agentgateway.dev' && jwt.sub == 'test-user'" },
-  { name: "Source IP", expr: "source.address == '127.0.0.1'" },
+  { name: "Source IP", expr: "cidr('127.0.0.1/8').contains(source.address)" },
 ];
 
 export default function CELPlayground(): React.JSX.Element {
@@ -124,7 +111,9 @@ export default function CELPlayground(): React.JSX.Element {
   const [expression, setExpression] = useState<string>(EXAMPLES[0].expr);
   const [inputData, setInputData] = useState<string>(TEMPLATES["http"]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [result, setResult] = useState<unknown | null>(null);
+  const [resultValue, setResultValue] = useState<unknown>(null);
+  const [resultError, setResultError] = useState<string | null>(null);
+  const hasResult = resultValue !== null || resultError !== null;
 
   useEffect(() => {
     setInputData(TEMPLATES[template]);
@@ -155,18 +144,23 @@ export default function CELPlayground(): React.JSX.Element {
 
       if (!res.ok) {
         const text = await res.text();
-        toast.error("Evaluation failed: " + res.status + " " + text);
-        setResult({ error: text, status: res.status });
+        setResultValue(null);
+        setResultError("Evaluation failed: " + res.status + " " + text);
         return;
       }
 
       const json = await res.json();
-      setResult(json);
-      toast.success("Evaluation complete");
+      if (json.error) {
+        setResultValue(null);
+        setResultError(json.error);
+      } else {
+        setResultError(null);
+        setResultValue(json.result);
+      }
     } catch (err: any) {
       const message = err?.message ? String(err.message) : String(err);
-      toast.error("Request error: " + message);
-      setResult({ error: message });
+      setResultValue(null);
+      setResultError("Request error: " + message);
     } finally {
       setLoading(false);
     }
@@ -182,15 +176,20 @@ export default function CELPlayground(): React.JSX.Element {
     setExpression(EXAMPLES[0].expr);
     setTemplate("http");
     setInputData(TEMPLATES["http"]);
-    setResult(null);
+    setResultValue(null);
+    setResultError(null);
     toast("Reset to example template");
   };
 
   const handleCopyResult = async () => {
     try {
-      const text = result ? JSON.stringify(result, null, 2) : "";
+      const text = resultError
+        ? resultError
+        : resultValue !== null
+          ? JSON.stringify(resultValue, null, 2)
+          : "";
       await navigator.clipboard.writeText(text);
-      toast.success("Result copied to clipboard");
+      toast.success("Copied to clipboard");
     } catch (e) {
       toast.error("Failed to copy result");
     }
@@ -200,6 +199,12 @@ export default function CELPlayground(): React.JSX.Element {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       evaluateRef.current();
     });
+    // Mark container so Vimium recognizes the editor as a text input
+    const domNode = editor.getDomNode();
+    if (domNode) {
+      domNode.setAttribute("role", "textbox");
+      domNode.setAttribute("aria-multiline", "true");
+    }
   }, []);
 
   return (
@@ -216,39 +221,89 @@ export default function CELPlayground(): React.JSX.Element {
       </div>
 
       <div className="grid grid-cols-12 gap-4">
-        <section className="col-span-6">
-          <label className="block text-sm font-medium mb-2">Expression</label>
-          <Card>
-            <CardContent className="p-4">
-              <MonacoEditor
-                height="150px"
-                defaultLanguage="javascript"
-                language="javascript"
-                theme={editorTheme}
-                value={expression}
-                onChange={(v) => setExpression(v ?? "")}
-                loading={<Skeleton className="h-32" />}
-                onMount={handleEditorMount}
-                options={{ minimap: { enabled: false }, lineNumbers: "off", wordWrap: "on" }}
-              />
+        {/* Left column: Expression + Result */}
+        <div className="col-span-6 flex flex-col gap-4">
+          <section>
+            <label className="block text-sm font-medium mb-2">Expression</label>
+            <Card>
+              <CardContent className="p-4">
+                <MonacoEditor
+                  height="250px"
+                  defaultLanguage="javascript"
+                  language="javascript"
+                  theme={editorTheme}
+                  value={expression}
+                  onChange={(v) => setExpression(v ?? "")}
+                  loading={<Skeleton className="h-32" />}
+                  onMount={handleEditorMount}
+                  options={{ minimap: { enabled: false }, lineNumbers: "off", wordWrap: "on" }}
+                />
 
-              <div className="flex gap-2 mt-3 flex-wrap">
-                {EXAMPLES.map((ex, idx) => (
-                  <button
-                    type="button"
-                    key={idx}
-                    onClick={() => setExpression(ex.expr)}
-                    className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
-                    title={ex.expr}
-                  >
-                    {ex.name}
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </section>
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  {EXAMPLES.map((ex, idx) => (
+                    <button
+                      type="button"
+                      key={idx}
+                      onClick={() => setExpression(ex.expr)}
+                      className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+                      title={ex.expr}
+                    >
+                      {ex.name}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </section>
 
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium">Result</label>
+              {hasResult && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopyResult}
+                  className="text-xs h-6 px-2"
+                >
+                  Copy
+                </Button>
+              )}
+            </div>
+            <Card>
+              <CardContent className="p-4">
+                {resultError ? (
+                  <div className="rounded-md bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 p-4 h-[250px] overflow-auto">
+                    <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap font-mono">
+                      {resultError}
+                    </pre>
+                  </div>
+                ) : resultValue !== null ? (
+                  <MonacoEditor
+                    height="250px"
+                    defaultLanguage="json"
+                    language="json"
+                    theme={editorTheme}
+                    value={JSON.stringify(resultValue, null, 2)}
+                    loading={<Skeleton className="h-[250px]" />}
+                    options={{
+                      minimap: { enabled: false },
+                      lineNumbers: "off",
+                      readOnly: true,
+                      wordWrap: "on",
+                    }}
+                  />
+                ) : (
+                  <div className="h-[250px] flex items-center justify-center text-sm text-muted-foreground">
+                    Press Evaluate or Ctrl+Enter to run
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+        </div>
+
+        {/* Right column: Input Data */}
         <section className="col-span-6">
           <div className="flex items-center gap-3 mb-2">
             <label className="text-sm font-medium">Input Data (YAML)</label>
@@ -259,14 +314,12 @@ export default function CELPlayground(): React.JSX.Element {
             >
               <option value="empty">Empty</option>
               <option value="http">HTTP</option>
-              <option value="llm">LLM</option>
-              <option value="mcp">MCP</option>
             </select>
           </div>
           <Card>
             <CardContent className="p-4">
               <MonacoEditor
-                height="300px"
+                height="705px"
                 defaultLanguage="yaml"
                 language="yaml"
                 theme={editorTheme}
@@ -279,41 +332,6 @@ export default function CELPlayground(): React.JSX.Element {
             </CardContent>
           </Card>
         </section>
-      </div>
-
-      <div className="mt-4">
-        <label className="block text-sm font-medium mb-2">Result</label>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Badge>CEL</Badge>
-                <span className="text-sm text-muted-foreground">/cel POST</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-sm text-gray-500">{loading ? "Evaluating…" : "Idle"}</div>
-                <Button variant="secondary" onClick={handleCopyResult} className="text-sm">
-                  Copy Result
-                </Button>
-              </div>
-            </div>
-
-            <MonacoEditor
-              height="260px"
-              defaultLanguage="json"
-              language="json"
-              theme={editorTheme}
-              value={result ? JSON.stringify(result, null, 2) : "(no result yet)"}
-              loading={<Skeleton className="h-48" />}
-              options={{
-                minimap: { enabled: false },
-                lineNumbers: "off",
-                readOnly: true,
-                wordWrap: "on",
-              }}
-            />
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
