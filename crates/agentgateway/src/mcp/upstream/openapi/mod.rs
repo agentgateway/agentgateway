@@ -644,10 +644,17 @@ impl Handler {
 				let res = self
 					.call_tool(ctr.params.name.as_ref(), ctr.params.arguments, ctx)
 					.await?;
+
+				// Serialize structured content to JSON string for backwards compatibility
+				// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
+				//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
+				let serialized_content = serde_json::to_string(&res)
+					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
+
 				Messages::from_result(
 					id,
 					CallToolResult {
-						content: vec![],
+						content: vec![Content::text(serialized_content)],
 						structured_content: Some(res),
 						is_error: None,
 						meta: None,
