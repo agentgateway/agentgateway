@@ -131,10 +131,10 @@
           "type": "string"
         }
       },
-      "additionalProperties": false,
       "required": [
         "key"
-      ]
+      ],
+      "additionalProperties": true
     },
     "basicAuth": {
       "description": "`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.",

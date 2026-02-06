@@ -481,4 +481,3 @@ async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Resul
 			.expect("builder with known status code should not fail"),
 	)
 }
-

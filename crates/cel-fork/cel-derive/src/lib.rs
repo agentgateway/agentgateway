@@ -659,9 +659,9 @@ fn derive_for_named_struct(
 fn has_field_attr(attrs: &[Attribute], name: &str) -> bool {
 	attrs.iter().any(|attr| {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(list) = attr.parse_args_with(
-				syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated,
-			) {
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
 				for meta in list {
 					if let Meta::Path(path) = meta {
 						if path.is_ident(name) {
@@ -679,9 +679,9 @@ fn has_field_attr(attrs: &[Attribute], name: &str) -> bool {
 fn get_field_rename(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(list) = attr.parse_args_with(
-				syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated,
-			) {
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
 				for meta in list {
 					if let Meta::NameValue(MetaNameValue {
 						path,
@@ -707,9 +707,9 @@ fn get_field_rename(attrs: &[Attribute]) -> Option<String> {
 fn get_struct_crate_path(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(list) = attr.parse_args_with(
-				syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated,
-			) {
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
 				for meta in list {
 					if let Meta::NameValue(MetaNameValue {
 						path,
@@ -735,9 +735,9 @@ fn get_struct_crate_path(attrs: &[Attribute]) -> Option<String> {
 fn get_field_with_expr(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(list) = attr.parse_args_with(
-				syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated,
-			) {
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
 				for meta in list {
 					if let Meta::NameValue(MetaNameValue {
 						path,
@@ -763,9 +763,9 @@ fn get_field_with_expr(attrs: &[Attribute]) -> Option<String> {
 fn get_field_with_value_expr(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(list) = attr.parse_args_with(
-				syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated,
-			) {
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
 				for meta in list {
 					if let Meta::NameValue(MetaNameValue {
 						path,
@@ -793,9 +793,9 @@ fn get_field_skip_serializing_if(attrs: &[Attribute]) -> Option<String> {
 	// First check dynamic
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(list) = attr.parse_args_with(
-				syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated,
-			) {
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
 				for meta in list {
 					if let Meta::NameValue(MetaNameValue {
 						path,
@@ -847,9 +847,9 @@ fn get_field_skip_serializing_if(attrs: &[Attribute]) -> Option<String> {
 fn get_variant_rename(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(list) = attr.parse_args_with(
-				syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated,
-			) {
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
 				for meta in list {
 					if let Meta::NameValue(MetaNameValue {
 						path,
@@ -878,9 +878,9 @@ fn get_rename_all(attrs: &[Attribute]) -> Option<String> {
 	// First check for dynamic attribute
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(list) = attr.parse_args_with(
-				syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated,
-			) {
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
 				for meta in list {
 					if let Meta::NameValue(MetaNameValue {
 						path,

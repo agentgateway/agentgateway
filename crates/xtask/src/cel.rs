@@ -1,7 +1,6 @@
 use std::env;
 
 use agentgateway::cel;
-use agentgateway::http::apikey;
 
 pub fn evaluate_command() -> anyhow::Result<()> {
 	let args: Vec<String> = env::args().collect();

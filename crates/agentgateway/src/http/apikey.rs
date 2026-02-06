@@ -34,7 +34,6 @@ pub enum Mode {
 	Optional,
 }
 
-
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")] // Intentionally NOT deny_unknown_fields since we use flatten
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
