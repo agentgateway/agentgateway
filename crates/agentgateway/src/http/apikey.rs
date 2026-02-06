@@ -39,7 +39,7 @@ pub enum Mode {
 pub struct Claims {
 	#[dynamic(with_value = "redact_key")]
 	pub key: APIKey,
-	#[serde(flatten)]
+	#[serde(default, flatten)]
 	#[dynamic(flatten)]
 	pub metadata: UserMetadata,
 }

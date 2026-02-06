@@ -19,7 +19,6 @@ use tracing_subscriber::filter;
 
 use super::hyper_helpers::{Server, empty_response, plaintext_response};
 use crate::Config;
-use crate::cel::{self, ExecutorSerde};
 use crate::http::Response;
 
 // Constants for pprof profiling
@@ -153,7 +152,6 @@ impl Service {
 					.await
 				},
 				"/logging" => Ok(handle_logging(req).await),
-				"/cel" => Ok(handle_cel(req).await),
 				_ => {
 					if let Some(h) = &state.admin_fallback {
 						Ok(h.handle(req).await)
@@ -484,136 +482,3 @@ async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Resul
 	)
 }
 
-/// Request body for CEL evaluation endpoint
-#[derive(serde::Deserialize)]
-struct CelRequest {
-	/// The CEL expression to evaluate
-	expression: String,
-	/// Optional input data for the expression (JSON object matching ExecutorSerde structure)
-	#[serde(default)]
-	data: Option<serde_json::Value>,
-}
-
-/// Response body for CEL evaluation endpoint
-#[derive(serde::Serialize)]
-struct CelResponse {
-	/// The result of the evaluation (JSON value)
-	result: Option<serde_json::Value>,
-	/// Error message if evaluation failed
-	error: Option<String>,
-}
-
-/// Helper to create a JSON response with proper Content-Type
-fn json_response(status: hyper::StatusCode, body: String) -> Response {
-	let mut resp = plaintext_response(status, body);
-	resp
-		.headers_mut()
-		.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-	resp
-}
-
-/// Handle CEL expression evaluation requests
-///
-/// POST /cel with JSON body: {"expression": "...", "data": {...}}
-/// Returns: {"result": ...} or {"error": "..."}
-async fn handle_cel(req: Request<Incoming>) -> Response {
-	// Only accept POST requests
-	if *req.method() != hyper::Method::POST {
-		return json_response(
-			hyper::StatusCode::METHOD_NOT_ALLOWED,
-			r#"{"error": "Only POST method is supported"}"#.to_string(),
-		);
-	}
-
-	// Parse the request body using http_body_util
-	use http_body_util::BodyExt;
-	let body_bytes = match req.collect().await {
-		Ok(collected) => collected.to_bytes(),
-		Err(e) => {
-			return json_response(
-				hyper::StatusCode::BAD_REQUEST,
-				format!(r#"{{"error": "Failed to read request body: {}"}}"#, e),
-			);
-		},
-	};
-
-	let request: CelRequest = match serde_json::from_slice(&body_bytes) {
-		Ok(req) => req,
-		Err(e) => {
-			return json_response(
-				hyper::StatusCode::BAD_REQUEST,
-				format!(r#"{{"error": "Failed to parse JSON: {}"}}"#, e),
-			);
-		},
-	};
-
-	// Compile the expression
-	let expression = match cel::Expression::new_strict(&request.expression) {
-		Ok(expr) => expr,
-		Err(e) => {
-			let response = CelResponse {
-				result: None,
-				error: Some(format!("Failed to compile expression: {}", e)),
-			};
-			let body = serde_json::to_string(&response)
-				.unwrap_or_else(|e| format!(r#"{{"error": "Failed to serialize: {}"}}"#, e));
-			return json_response(hyper::StatusCode::BAD_REQUEST, body);
-		},
-	};
-
-	// Deserialize the input data (or use empty data if not provided)
-	let executor_serde: ExecutorSerde = match request.data {
-		Some(data) => match serde_json::from_value(data) {
-			Ok(serde) => serde,
-			Err(e) => {
-				let response = CelResponse {
-					result: None,
-					error: Some(format!("Failed to parse input data: {}", e)),
-				};
-				let body = serde_json::to_string(&response)
-					.unwrap_or_else(|e| format!(r#"{{"error": "Failed to serialize: {}"}}"#, e));
-				return json_response(hyper::StatusCode::BAD_REQUEST, body);
-			},
-		},
-		None => ExecutorSerde {
-			request: None,
-			response: None,
-			jwt: None,
-			api_key: None,
-			basic_auth: None,
-			llm: None,
-			source: None,
-			mcp: None,
-			backend: None,
-			extauthz: None,
-			extproc: None,
-		},
-	};
-
-	// Create the executor and evaluate the expression
-	let executor = executor_serde.as_executor();
-	let result = match executor.eval(&expression) {
-		Ok(value) => {
-			// Convert the CEL value to JSON
-			match value.json() {
-				Ok(json) => CelResponse {
-					result: Some(json),
-					error: None,
-				},
-				Err(e) => CelResponse {
-					result: None,
-					error: Some(format!("Failed to convert result to JSON: {}", e)),
-				},
-			}
-		},
-		Err(e) => CelResponse {
-			result: None,
-			error: Some(format!("Evaluation error: {}", e)),
-		},
-	};
-
-	// Serialize the response
-	let body = serde_json::to_string(&result)
-		.unwrap_or_else(|e| format!(r#"{{"error": "Failed to serialize: {}"}}"#, e));
-	json_response(hyper::StatusCode::OK, body)
-}

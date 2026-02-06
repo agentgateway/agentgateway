@@ -20,6 +20,7 @@ pub fn evaluate_command() -> anyhow::Result<()> {
 	} else {
 		cel::full_example_executor()
 	};
+	dbg!(&v);
 
 	let expr = cel::Expression::new_strict(expression)?;
 	let exec = v.as_executor();
