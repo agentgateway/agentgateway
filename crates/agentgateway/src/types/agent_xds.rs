@@ -1309,7 +1309,11 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 							.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
 					})
 					.collect::<Result<Vec<_>, _>>()?;
-				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
+				let jwt_auth = http::jwt::Jwt::from_providers_with_forward(
+					providers,
+					mode,
+					jwt.forward.unwrap_or(false),
+				);
 				TrafficPolicy::JwtAuth(jwt_auth)
 			},
 			Some(tps::Kind::Transformation(tp)) => {
@@ -1547,6 +1551,26 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					})
 					.collect::<Result<Vec<_>, _>>()?;
 				TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(keys, mode))
+			},
+			Some(tps::Kind::Oauth2(o)) => {
+				let policy = OAuth2Policy {
+					issuer: o.issuer.clone(),
+					client_id: o.client_id.clone(),
+					client_secret: o.client_secret.clone().into(),
+					redirect_uri: o.redirect_uri.clone(),
+					auto_detect_redirect_uri: o.auto_detect_redirect_uri,
+					scopes: o.scopes.clone(),
+					cookie_name: o.cookie_name.clone(),
+					refreshable_cookie_max_age_seconds: o.refreshable_cookie_max_age_seconds,
+					pass_access_token: o.pass_access_token,
+					sign_out_path: o.sign_out_path.clone(),
+					pass_through_matchers: o.pass_through_matchers.clone(),
+					deny_redirect_matchers: o.deny_redirect_matchers.clone(),
+					trusted_proxy_cidrs: o.trusted_proxy_cidrs.clone(),
+				};
+				crate::http::oauth2::OAuth2Filter::validate_policy(&policy)
+					.map_err(|e| ProtoError::Generic(format!("invalid oauth2 policy: {e}")))?;
+				TrafficPolicy::OAuth2(policy)
 			},
 			Some(tps::Kind::HostRewrite(hr)) => {
 				let mode = tps::host_rewrite::Mode::try_from(hr.mode)?;

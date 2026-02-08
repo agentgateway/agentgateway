@@ -487,7 +487,13 @@ impl TestBind {
 	}
 
 	pub fn with_policy(self, p: TargetedPolicy) -> TestBind {
-		self.pi.stores.binds.write().insert_policy(p);
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_policy(p)
+			.expect("test policy should compile");
 		self
 	}
 	pub fn serve_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
@@ -602,8 +608,12 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 	agent_core::telemetry::testing::setup_test_logging();
 	let config = crate::config::parse_config(cfg.to_string(), None)?;
 	let encoder = config.session_encoder.clone();
-	let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
-	let client = client::Client::new(&config.dns, None, Default::default(), None);
+	let oidc = Arc::new(crate::http::oidc::OidcProvider::new());
+	let stores = Stores::from_init(crate::store::StoresInit {
+		ipv6_enabled: config.ipv6_enabled,
+		oidc: oidc.clone(),
+	});
+	let client = client::Client::new(&config.dns, None, Default::default(), None, oidc.clone());
 	let (drain_tx, drain_rx) = drain::new();
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),

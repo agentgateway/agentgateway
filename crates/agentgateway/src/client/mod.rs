@@ -24,6 +24,13 @@ use crate::*;
 pub struct Client {
 	client: hyper_util_fork::client::legacy::Client<Connector, http::Body, PoolKey>,
 	connector: Connector,
+	oidc: Arc<http::oidc::OidcProvider>,
+}
+
+impl Client {
+	pub fn oidc(&self) -> &Arc<http::oidc::OidcProvider> {
+		&self.oidc
+	}
 }
 
 impl Debug for Client {
@@ -343,6 +350,7 @@ impl Client {
 		hbone_pool: Option<agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>>,
 		backend_config: BackendConfig,
 		metrics: Option<Arc<crate::metrics::Metrics>>,
+		oidc: Arc<http::oidc::OidcProvider>,
 	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
 		let mut b =
@@ -361,7 +369,11 @@ impl Client {
 			metrics,
 		};
 		let client = b.build_with_pool_key(connector.clone());
-		Client { client, connector }
+		Client {
+			client,
+			connector,
+			oidc,
+		}
 	}
 
 	pub async fn simple_call(&self, req: http::Request) -> Result<http::Response, ProxyError> {

@@ -70,8 +70,23 @@ async fn apply_request_policies(
 	req: &mut Request,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
-	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
+	if let Some(oauth) = &policies.oauth2 {
+		let resp = oauth
+			.apply(&client.inputs.upstream, req)
+			.await
+			.map_err(ProxyResponse::from)?;
+		if let Some(dr) = resp.direct_response {
+			let mut dr = dr;
+			crate::http::merge_in_headers(resp.response_headers, dr.headers_mut());
+			return Err(ProxyResponse::DirectResponse(Box::new(dr)));
+		}
+		crate::http::merge_in_headers(resp.response_headers, response_policies.headers());
+	}
+
+	if policies.oauth2.is_none()
+		&& let Some(j) = &policies.jwt
+	{
+		j.apply(&client.inputs.upstream, Some(log), req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
@@ -246,8 +261,23 @@ async fn apply_gateway_policies(
 	ext_proc: Option<&mut ExtProcRequest>,
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
-	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
+	if let Some(oauth) = &policies.oauth2 {
+		let resp = oauth
+			.apply(&client.inputs.upstream, req)
+			.await
+			.map_err(ProxyResponse::from)?;
+		if let Some(dr) = resp.direct_response {
+			let mut dr = dr;
+			crate::http::merge_in_headers(resp.response_headers, dr.headers_mut());
+			return Err(ProxyResponse::DirectResponse(Box::new(dr)));
+		}
+		crate::http::merge_in_headers(resp.response_headers, response_headers);
+	}
+
+	if policies.oauth2.is_none()
+		&& let Some(j) = &policies.jwt
+	{
+		j.apply(&client.inputs.upstream, Some(log), req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}

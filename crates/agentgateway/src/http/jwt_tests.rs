@@ -1,9 +1,25 @@
+use std::sync::Arc;
+
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{Jwt, Mode, Provider, TokenError};
+use super::{Jwt, Mode, OidcProvider, Provider, TokenError};
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
+
+fn make_test_client() -> crate::client::Client {
+	let cfg = crate::client::Config {
+		resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+		resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+	};
+	crate::client::Client::new(
+		&cfg,
+		None,
+		Default::default(),
+		None,
+		Arc::new(OidcProvider::new()),
+	)
+}
 
 #[test]
 pub fn test_azure_jwks() {
@@ -103,7 +119,9 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 	(
 		Jwt {
 			mode: Mode::Strict,
+			forward: false,
 			providers: vec![provider],
+			oidc_info: None,
 		},
 		kid,
 		issuer,
@@ -194,13 +212,43 @@ pub fn test_jwt_rejections_table() {
 	assert!(matches!(res, Err(TokenError::UnknownKeyId(_))));
 }
 
+// Regression: callback ID token validation must enforce audience == oauth2.client_id.
+#[test]
+pub fn test_callback_id_token_requires_client_id_audience() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	use jsonwebtoken::errors::ErrorKind;
+
+	let (jwt, kid, issuer, client_id_aud) = setup_test_jwt();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+
+	let valid_token = build_unsigned_token(kid, issuer, client_id_aud, now + 600);
+	assert!(jwt.validate_claims(&valid_token).is_ok());
+
+	let wrong_audience_token = build_unsigned_token(kid, issuer, "other-client-id", now + 600);
+	let err = jwt
+		.validate_claims(&wrong_audience_token)
+		.expect_err("wrong aud must be rejected");
+	match err {
+		TokenError::Invalid(inner) => {
+			assert!(matches!(inner.kind(), ErrorKind::InvalidAudience));
+		},
+		other => panic!("expected Invalid(..), got {other:?}"),
+	}
+}
+
 // Strict mode: reject requests that are missing the Authorization header
 #[tokio::test]
 pub async fn test_apply_strict_missing_token() {
 	// Build a Strict-mode Jwt with no providers (not needed for missing-token path)
 	let jwt = super::Jwt {
 		mode: super::Mode::Strict,
+		forward: false,
 		providers: vec![],
+		oidc_info: None,
 	};
 
 	// Minimal Request without Authorization header
@@ -209,7 +257,9 @@ pub async fn test_apply_strict_missing_token() {
 	// Minimal RequestLog
 	let mut req_log = make_min_req_log();
 
-	let res = jwt.apply(Some(&mut req_log), &mut req).await;
+	let res = jwt
+		.apply(&make_test_client(), Some(&mut req_log), &mut req)
+		.await;
 	assert!(matches!(res, Err(super::TokenError::Missing)));
 }
 
@@ -219,11 +269,15 @@ pub async fn test_apply_permissive_no_token_ok() {
 	let base = setup_test_jwt().0;
 	let jwt = Jwt {
 		mode: Mode::Permissive,
+		forward: false,
 		providers: base.providers.clone(),
+		oidc_info: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt
+		.apply(&make_test_client(), Some(&mut log), &mut req)
+		.await;
 	assert!(res.is_ok());
 	assert!(req.extensions().get::<super::Claims>().is_none());
 }
@@ -234,7 +288,9 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
 	let jwt = Jwt {
 		mode: Mode::Permissive,
+		forward: false,
 		providers: base.providers.clone(),
+		oidc_info: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -242,7 +298,9 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 		crate::http::HeaderValue::from_static("Bearer invalid-token"),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt
+		.apply(&make_test_client(), Some(&mut log), &mut req)
+		.await;
 	assert!(res.is_ok());
 	// Header should remain present on failure in permissive mode
 	assert!(
@@ -262,7 +320,9 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
 	let jwt = Jwt {
 		mode: Mode::Permissive,
+		forward: false,
 		providers: base.providers.clone(),
+		oidc_info: None,
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -275,7 +335,9 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt
+		.apply(&make_test_client(), Some(&mut log), &mut req)
+		.await;
 	assert!(res.is_ok());
 	assert!(
 		req
@@ -292,11 +354,15 @@ pub async fn test_apply_optional_no_token_ok() {
 	let base = setup_test_jwt().0;
 	let jwt = Jwt {
 		mode: Mode::Optional,
+		forward: false,
 		providers: base.providers.clone(),
+		oidc_info: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt
+		.apply(&make_test_client(), Some(&mut log), &mut req)
+		.await;
 	assert!(res.is_ok());
 	assert!(req.extensions().get::<super::Claims>().is_none());
 }
@@ -307,7 +373,9 @@ pub async fn test_apply_optional_invalid_token_err() {
 	let base = setup_test_jwt().0;
 	let jwt = Jwt {
 		mode: Mode::Optional,
+		forward: false,
 		providers: base.providers.clone(),
+		oidc_info: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -315,7 +383,9 @@ pub async fn test_apply_optional_invalid_token_err() {
 		crate::http::HeaderValue::from_static("Bearer invalid-token"),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt
+		.apply(&make_test_client(), Some(&mut log), &mut req)
+		.await;
 	assert!(matches!(res, Err(TokenError::InvalidHeader(_))));
 }
 
@@ -326,7 +396,9 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
 	let jwt = Jwt {
 		mode: Mode::Optional,
+		forward: false,
 		providers: base.providers.clone(),
+		oidc_info: None,
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -339,13 +411,48 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt
+		.apply(&make_test_client(), Some(&mut log), &mut req)
+		.await;
 	assert!(res.is_ok());
 	assert!(
 		req
 			.headers()
 			.get(crate::http::header::AUTHORIZATION)
 			.is_none()
+	);
+	assert!(req.extensions().get::<super::Claims>().is_some());
+}
+
+// Optional mode: valid token attaches claims and preserves Authorization when forward=true
+#[tokio::test]
+pub async fn test_apply_optional_valid_token_preserves_header_when_forward_enabled() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
+	let jwt = Jwt {
+		mode: Mode::Optional,
+		forward: true,
+		providers: base.providers.clone(),
+		oidc_info: None,
+	};
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let authz_value = crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap();
+	req
+		.headers_mut()
+		.insert(crate::http::header::AUTHORIZATION, authz_value.clone());
+	let mut log = make_min_req_log();
+	let res = jwt
+		.apply(&make_test_client(), Some(&mut log), &mut req)
+		.await;
+	assert!(res.is_ok());
+	assert_eq!(
+		req.headers().get(crate::http::header::AUTHORIZATION),
+		Some(&authz_value)
 	);
 	assert!(req.extensions().get::<super::Claims>().is_some());
 }
@@ -458,7 +565,9 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 	(
 		Jwt {
 			mode: Mode::Strict,
+			forward: false,
 			providers: vec![provider1, provider2],
+			oidc_info: None,
 		},
 		(kid1, issuer1, aud1),
 		(kid2, issuer2, aud2),

@@ -5,6 +5,8 @@ mod buflist;
 pub mod cors;
 pub mod jwt;
 pub mod localratelimit;
+pub mod oauth2;
+pub mod oidc;
 pub mod retry;
 pub mod route;
 

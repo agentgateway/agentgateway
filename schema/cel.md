@@ -17,7 +17,7 @@
 |`response.code`|The HTTP status code of the response.|
 |`response.headers`|The headers of the response.|
 |`response.body`|The body of the response. Warning: accessing the body will cause the body to be buffered.|
-|`jwt`|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
+|`jwt`|`jwt` contains claims from a verified JWT token or OAuth2/OIDC `id_token`.<br>This is present when either the JWT or OAuth2 policy injects claims.|
 |`apiKey`|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|
 |`apiKey.key`||
 |`basicAuth`|`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.|
