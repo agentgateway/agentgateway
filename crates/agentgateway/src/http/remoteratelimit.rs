@@ -12,6 +12,10 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
 
+#[cfg(test)]
+#[path = "remoteratelimit_tests.rs"]
+mod tests;
+
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod proto {
@@ -98,12 +102,19 @@ impl LLMResponseAmend {
 }
 
 impl RemoteRateLimit {
+	/// Build a rate-limit request by evaluating all descriptor entries of the
+	/// given `limit_type` against the incoming HTTP request.
+	///
+	/// Returns `None` when any descriptor entry fails to evaluate (CEL
+	/// expression error or non-string result). This follows Envoy's semantics:
+	/// a descriptor is all-or-nothing, and if it cannot be fully resolved the
+	/// rate-limit call is skipped entirely.
 	fn build_request(
 		&self,
 		req: &http::Request,
 		limit_type: RateLimitType,
 		cost: Option<u64>,
-	) -> RateLimitRequest {
+	) -> Option<RateLimitRequest> {
 		let mut descriptors = Vec::with_capacity(self.descriptors.0.len());
 		let candidate_count = self
 			.descriptors
@@ -115,6 +126,7 @@ impl RemoteRateLimit {
 			"ratelimit build_request start: domain={}, type={:?}, cost={:?}, candidates={}",
 			self.domain, limit_type, cost, candidate_count
 		);
+
 		for desc_entry in self
 			.descriptors
 			.0
@@ -145,34 +157,28 @@ impl RemoteRateLimit {
 					.map(|d| format!("{}={:?}", d.0, d.1))
 					.collect();
 				trace!(
-					"ratelimit skipped descriptor set (domain: {}, type: {:?}) due to evaluation failure/non-string values: {}",
+					"ratelimit descriptor evaluation failed for domain={}, type={:?}, skipping rate-limit call: {}",
 					self.domain,
 					limit_type,
 					attempted.join(", ")
 				);
+				return None;
 			}
 		}
 
-		if descriptors.is_empty() {
-			trace!(
-				"ratelimit built empty descriptor list (domain: {}, type: {:?}); candidates={}, cost={:?}",
-				self.domain, limit_type, candidate_count, cost
-			);
-		} else {
-			trace!(
-				"ratelimit built request descriptors (domain: {}, type: {:?}): count={}",
-				self.domain,
-				limit_type,
-				descriptors.len()
-			);
-		}
+		trace!(
+			"ratelimit built request descriptors (domain: {}, type: {:?}): count={}",
+			self.domain,
+			limit_type,
+			descriptors.len()
+		);
 
-		proto::RateLimitRequest {
+		Some(proto::RateLimitRequest {
 			domain: self.domain.clone(),
 			descriptors,
 			// Ignored; we always set the per-descriptor one which allows distinguishing empty vs 0
 			hits_addend: 0,
-		}
+		})
 	}
 	pub async fn check_llm(
 		&self,
@@ -193,7 +199,9 @@ impl RemoteRateLimit {
 			);
 			return Ok((PolicyResponse::default(), None));
 		}
-		let request = self.build_request(req, RateLimitType::Tokens, Some(cost));
+		let Some(request) = self.build_request(req, RateLimitType::Tokens, Some(cost)) else {
+			return Ok((PolicyResponse::default(), None));
+		};
 		let cr = self.check_internal(client.clone(), request.clone()).await;
 		let r = LLMResponseAmend {
 			base: self.clone(),
@@ -223,7 +231,9 @@ impl RemoteRateLimit {
 			);
 			return Ok(PolicyResponse::default());
 		}
-		let request = self.build_request(req, RateLimitType::Requests, None);
+		let Some(request) = self.build_request(req, RateLimitType::Requests, None) else {
+			return Ok(PolicyResponse::default());
+		};
 		let cr = self.check_internal(client, request).await?;
 		Self::apply(req, cr)
 	}
