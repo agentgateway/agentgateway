@@ -15,10 +15,7 @@ fn make_rate_limit(descriptor_entries: Vec<DescriptorEntry>) -> RemoteRateLimit 
 }
 
 /// Helper: build a `DescriptorEntry` from a list of (key, cel_expression) pairs.
-fn make_descriptor_entry(
-	entries: Vec<(&str, &str)>,
-	limit_type: RateLimitType,
-) -> DescriptorEntry {
+fn make_descriptor_entry(entries: Vec<(&str, &str)>, limit_type: RateLimitType) -> DescriptorEntry {
 	let descriptors: Vec<Descriptor> = entries
 		.into_iter()
 		.map(|(key, expr)| {
@@ -53,7 +50,10 @@ fn build_request_all_descriptors_evaluate_returns_some() {
 		.unwrap();
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
-	assert!(result.is_some(), "expected Some when all descriptors evaluate");
+	assert!(
+		result.is_some(),
+		"expected Some when all descriptors evaluate"
+	);
 	let request = result.unwrap();
 	assert_eq!(request.descriptors.len(), 1);
 	assert_eq!(request.descriptors[0].entries.len(), 2);
@@ -104,17 +104,17 @@ fn build_request_missing_header_returns_none() {
 		.unwrap();
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
-	assert!(result.is_none(), "expected None when descriptor evaluation fails");
+	assert!(
+		result.is_none(),
+		"expected None when descriptor evaluation fails"
+	);
 }
 
 /// When there are multiple descriptor entries and the second one fails,
 /// `build_request` should return `None` (fail-fast on first failure).
 #[test]
 fn build_request_second_descriptor_fails_returns_none() {
-	let good_entry = make_descriptor_entry(
-		vec![("user", r#""test-user""#)],
-		RateLimitType::Requests,
-	);
+	let good_entry = make_descriptor_entry(vec![("user", r#""test-user""#)], RateLimitType::Requests);
 	let bad_entry = make_descriptor_entry(
 		vec![("client", r#"request.headers["x-missing"]"#)],
 		RateLimitType::Requests,
@@ -142,10 +142,7 @@ fn build_request_first_descriptor_fails_returns_none() {
 		vec![("client", r#"request.headers["x-missing"]"#)],
 		RateLimitType::Requests,
 	);
-	let good_entry = make_descriptor_entry(
-		vec![("user", r#""test-user""#)],
-		RateLimitType::Requests,
-	);
+	let good_entry = make_descriptor_entry(vec![("user", r#""test-user""#)], RateLimitType::Requests);
 	let rl = make_rate_limit(vec![bad_entry, good_entry]);
 
 	let req = ::http::Request::builder()
@@ -155,7 +152,10 @@ fn build_request_first_descriptor_fails_returns_none() {
 		.unwrap();
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
-	assert!(result.is_none(), "expected None when first descriptor fails");
+	assert!(
+		result.is_none(),
+		"expected None when first descriptor fails"
+	);
 }
 
 /// When no descriptors match the requested `limit_type`,
@@ -164,10 +164,7 @@ fn build_request_first_descriptor_fails_returns_none() {
 #[test]
 fn build_request_no_matching_type_returns_some_empty() {
 	// Configure only Token-type descriptors
-	let entry = make_descriptor_entry(
-		vec![("user", r#""test-user""#)],
-		RateLimitType::Tokens,
-	);
+	let entry = make_descriptor_entry(vec![("user", r#""test-user""#)], RateLimitType::Tokens);
 	let rl = make_rate_limit(vec![entry]);
 
 	let req = ::http::Request::builder()
@@ -178,17 +175,17 @@ fn build_request_no_matching_type_returns_some_empty() {
 
 	// Ask for Requests type -- no candidates
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
-	assert!(result.is_some(), "expected Some with empty descriptors when no candidates match");
+	assert!(
+		result.is_some(),
+		"expected Some with empty descriptors when no candidates match"
+	);
 	assert!(result.unwrap().descriptors.is_empty());
 }
 
 /// The `cost` parameter should be propagated to `hits_addend` on each descriptor.
 #[test]
 fn build_request_cost_propagated_to_hits_addend() {
-	let entry = make_descriptor_entry(
-		vec![("user", r#""test-user""#)],
-		RateLimitType::Tokens,
-	);
+	let entry = make_descriptor_entry(vec![("user", r#""test-user""#)], RateLimitType::Tokens);
 	let rl = make_rate_limit(vec![entry]);
 
 	let req = ::http::Request::builder()
@@ -233,18 +230,9 @@ fn build_request_delete_disconnect_skips_ratelimit() {
 /// all of them should appear in the returned request.
 #[test]
 fn build_request_multiple_entries_all_succeed() {
-	let entry1 = make_descriptor_entry(
-		vec![("user", r#""alice""#)],
-		RateLimitType::Requests,
-	);
-	let entry2 = make_descriptor_entry(
-		vec![("tool", r#""echo""#)],
-		RateLimitType::Requests,
-	);
-	let entry3 = make_descriptor_entry(
-		vec![("env", r#""prod""#)],
-		RateLimitType::Requests,
-	);
+	let entry1 = make_descriptor_entry(vec![("user", r#""alice""#)], RateLimitType::Requests);
+	let entry2 = make_descriptor_entry(vec![("tool", r#""echo""#)], RateLimitType::Requests);
+	let entry3 = make_descriptor_entry(vec![("env", r#""prod""#)], RateLimitType::Requests);
 	let rl = make_rate_limit(vec![entry1, entry2, entry3]);
 
 	let req = ::http::Request::builder()
@@ -279,16 +267,16 @@ fn build_request_tokens_type_missing_header_returns_none() {
 		.unwrap();
 
 	let result = rl.build_request(&req, RateLimitType::Tokens, Some(100));
-	assert!(result.is_none(), "expected None for Tokens type when descriptor fails");
+	assert!(
+		result.is_none(),
+		"expected None for Tokens type when descriptor fails"
+	);
 }
 
 /// The Tokens limit type returns `Some` when all descriptors evaluate.
 #[test]
 fn build_request_tokens_type_all_succeed() {
-	let entry = make_descriptor_entry(
-		vec![("user", r#""test-user""#)],
-		RateLimitType::Tokens,
-	);
+	let entry = make_descriptor_entry(vec![("user", r#""test-user""#)], RateLimitType::Tokens);
 	let rl = make_rate_limit(vec![entry]);
 
 	let req = ::http::Request::builder()
@@ -311,10 +299,7 @@ fn build_request_tokens_type_all_succeed() {
 #[test]
 fn build_request_non_string_cel_result_returns_none() {
 	// `{"a": "b"}` evaluates to a map, which is not convertible to a string
-	let entry = make_descriptor_entry(
-		vec![("data", r#"{"a": "b"}"#)],
-		RateLimitType::Requests,
-	);
+	let entry = make_descriptor_entry(vec![("data", r#"{"a": "b"}"#)], RateLimitType::Requests);
 	let rl = make_rate_limit(vec![entry]);
 
 	let req = ::http::Request::builder()
