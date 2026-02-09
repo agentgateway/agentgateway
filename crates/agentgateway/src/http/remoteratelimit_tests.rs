@@ -111,9 +111,10 @@ fn build_request_missing_header_returns_none() {
 }
 
 /// When there are multiple descriptor entries and the second one fails,
-/// `build_request` should return `None` (fail-fast on first failure).
+/// `build_request` should drop the failed descriptor and return `Some`
+/// with only the successful one (matching Envoy's per-descriptor semantics).
 #[test]
-fn build_request_second_descriptor_fails_returns_none() {
+fn build_request_second_descriptor_fails_sends_successful_only() {
 	let good_entry = make_descriptor_entry(vec![("user", r#""test-user""#)], RateLimitType::Requests);
 	let bad_entry = make_descriptor_entry(
 		vec![("client", r#"request.headers["x-missing"]"#)],
@@ -129,15 +130,24 @@ fn build_request_second_descriptor_fails_returns_none() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_none(),
-		"expected None when any descriptor entry fails evaluation"
+		result.is_some(),
+		"expected Some with the successful descriptor when only one fails"
 	);
+	let request = result.unwrap();
+	assert_eq!(
+		request.descriptors.len(),
+		1,
+		"only the successful descriptor should be sent"
+	);
+	assert_eq!(request.descriptors[0].entries[0].key, "user");
+	assert_eq!(request.descriptors[0].entries[0].value, "test-user");
 }
 
-/// When the first descriptor fails, `build_request` should return `None`
-/// without evaluating the second.
+/// When the first descriptor fails but the second succeeds,
+/// `build_request` should drop the failed one and return `Some`
+/// with only the successful descriptor.
 #[test]
-fn build_request_first_descriptor_fails_returns_none() {
+fn build_request_first_descriptor_fails_sends_successful_only() {
 	let bad_entry = make_descriptor_entry(
 		vec![("client", r#"request.headers["x-missing"]"#)],
 		RateLimitType::Requests,
@@ -153,16 +163,24 @@ fn build_request_first_descriptor_fails_returns_none() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_none(),
-		"expected None when first descriptor fails"
+		result.is_some(),
+		"expected Some with the successful descriptor when only the first fails"
 	);
+	let request = result.unwrap();
+	assert_eq!(
+		request.descriptors.len(),
+		1,
+		"only the successful descriptor should be sent"
+	);
+	assert_eq!(request.descriptors[0].entries[0].key, "user");
+	assert_eq!(request.descriptors[0].entries[0].value, "test-user");
 }
 
 /// When no descriptors match the requested `limit_type`,
-/// `build_request` returns `Some` with an empty descriptors list.
-/// (Callers guard against this before calling `build_request`.)
+/// `build_request` returns `None` since there is nothing to send.
+/// (Callers also guard against this before calling `build_request`.)
 #[test]
-fn build_request_no_matching_type_returns_some_empty() {
+fn build_request_no_matching_type_returns_none() {
 	// Configure only Token-type descriptors
 	let entry = make_descriptor_entry(vec![("user", r#""test-user""#)], RateLimitType::Tokens);
 	let rl = make_rate_limit(vec![entry]);
@@ -176,10 +194,9 @@ fn build_request_no_matching_type_returns_some_empty() {
 	// Ask for Requests type -- no candidates
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_some(),
-		"expected Some with empty descriptors when no candidates match"
+		result.is_none(),
+		"expected None when no candidates match the requested type"
 	);
-	assert!(result.unwrap().descriptors.is_empty());
 }
 
 /// The `cost` parameter should be propagated to `hits_addend` on each descriptor.
@@ -291,6 +308,176 @@ fn build_request_tokens_type_all_succeed() {
 	assert_eq!(request.descriptors.len(), 1);
 	assert_eq!(request.descriptors[0].entries[0].value, "test-user");
 	assert_eq!(request.descriptors[0].hits_addend, Some(50));
+}
+
+/// When ALL descriptor entries fail evaluation, `build_request` returns `None`
+/// since there is nothing to send to the rate-limit service.
+#[test]
+fn build_request_all_descriptors_fail_returns_none() {
+	let bad_entry1 = make_descriptor_entry(
+		vec![("client", r#"request.headers["x-missing-1"]"#)],
+		RateLimitType::Requests,
+	);
+	let bad_entry2 = make_descriptor_entry(
+		vec![("user", r#"request.headers["x-missing-2"]"#)],
+		RateLimitType::Requests,
+	);
+	let rl = make_rate_limit(vec![bad_entry1, bad_entry2]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl.build_request(&req, RateLimitType::Requests, None);
+	assert!(
+		result.is_none(),
+		"expected None when all descriptor entries fail evaluation"
+	);
+}
+
+// --- Multiple descriptors (multiple `- entries:` blocks) with multi-entry keys ---
+
+/// Two descriptors each with multiple entries, all evaluate successfully.
+/// Both descriptors should appear in the gRPC request.
+///
+/// Config equivalent:
+/// ```yaml
+/// descriptors:
+///   - entries:
+///       - key: path
+///         value: '"literal-path"'
+///       - key: remote_address
+///         value: 'request.headers["x-forwarded-for"]'
+///     type: requests
+///   - entries:
+///       - key: method
+///         value: '"POST"'
+///       - key: user
+///         value: 'request.headers["x-user-id"]'
+///     type: requests
+/// ```
+#[test]
+fn build_request_two_descriptors_multi_entry_all_succeed() {
+	let desc1 = make_descriptor_entry(
+		vec![
+			("path", r#""literal-path""#),
+			("remote_address", r#"request.headers["x-forwarded-for"]"#),
+		],
+		RateLimitType::Requests,
+	);
+	let desc2 = make_descriptor_entry(
+		vec![
+			("method", r#""POST""#),
+			("user", r#"request.headers["x-user-id"]"#),
+		],
+		RateLimitType::Requests,
+	);
+	let rl = make_rate_limit(vec![desc1, desc2]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.header("x-forwarded-for", "10.0.0.1")
+		.header("x-user-id", "alice")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl.build_request(&req, RateLimitType::Requests, None);
+	assert!(result.is_some());
+	let request = result.unwrap();
+	assert_eq!(request.descriptors.len(), 2);
+	// First descriptor: path + remote_address
+	assert_eq!(request.descriptors[0].entries.len(), 2);
+	assert_eq!(request.descriptors[0].entries[0].key, "path");
+	assert_eq!(request.descriptors[0].entries[0].value, "literal-path");
+	assert_eq!(request.descriptors[0].entries[1].key, "remote_address");
+	assert_eq!(request.descriptors[0].entries[1].value, "10.0.0.1");
+	// Second descriptor: method + user
+	assert_eq!(request.descriptors[1].entries.len(), 2);
+	assert_eq!(request.descriptors[1].entries[0].key, "method");
+	assert_eq!(request.descriptors[1].entries[0].value, "POST");
+	assert_eq!(request.descriptors[1].entries[1].key, "user");
+	assert_eq!(request.descriptors[1].entries[1].value, "alice");
+}
+
+/// Two descriptors with multiple entries each. The first descriptor has a
+/// missing header causing it to fail; the second succeeds.
+/// Only the second descriptor should be sent (Envoy per-descriptor drop).
+#[test]
+fn build_request_two_descriptors_first_partially_fails_sends_second() {
+	// First descriptor: "path" succeeds but "remote_address" references a missing header
+	let desc1 = make_descriptor_entry(
+		vec![
+			("path", r#""literal-path""#),
+			("remote_address", r#"request.headers["x-forwarded-for"]"#),
+		],
+		RateLimitType::Requests,
+	);
+	// Second descriptor: both entries are literals, always succeed
+	let desc2 = make_descriptor_entry(
+		vec![("method", r#""POST""#), ("env", r#""prod""#)],
+		RateLimitType::Requests,
+	);
+	let rl = make_rate_limit(vec![desc1, desc2]);
+
+	// Request WITHOUT x-forwarded-for → first descriptor fails
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl.build_request(&req, RateLimitType::Requests, None);
+	assert!(
+		result.is_some(),
+		"expected Some — second descriptor should still be sent"
+	);
+	let request = result.unwrap();
+	assert_eq!(
+		request.descriptors.len(),
+		1,
+		"only the second descriptor should be sent"
+	);
+	assert_eq!(request.descriptors[0].entries[0].key, "method");
+	assert_eq!(request.descriptors[0].entries[0].value, "POST");
+	assert_eq!(request.descriptors[0].entries[1].key, "env");
+	assert_eq!(request.descriptors[0].entries[1].value, "prod");
+}
+
+/// Two descriptors with multiple entries each. Both have at least one entry
+/// referencing a missing header, so both fail. `build_request` returns `None`.
+#[test]
+fn build_request_two_descriptors_both_partially_fail_returns_none() {
+	let desc1 = make_descriptor_entry(
+		vec![
+			("path", r#""literal-path""#),
+			("remote_address", r#"request.headers["x-forwarded-for"]"#),
+		],
+		RateLimitType::Requests,
+	);
+	let desc2 = make_descriptor_entry(
+		vec![
+			("method", r#""POST""#),
+			("user", r#"request.headers["x-user-id"]"#),
+		],
+		RateLimitType::Requests,
+	);
+	let rl = make_rate_limit(vec![desc1, desc2]);
+
+	// Request without either header → both descriptors fail
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl.build_request(&req, RateLimitType::Requests, None);
+	assert!(
+		result.is_none(),
+		"expected None when all descriptors have at least one failing entry"
+	);
 }
 
 /// When a CEL expression evaluates successfully but returns a non-string value

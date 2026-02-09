@@ -105,10 +105,10 @@ impl RemoteRateLimit {
 	/// Build a rate-limit request by evaluating all descriptor entries of the
 	/// given `limit_type` against the incoming HTTP request.
 	///
-	/// Returns `None` when any descriptor entry fails to evaluate (CEL
-	/// expression error or non-string result). This follows Envoy's semantics:
-	/// a descriptor is all-or-nothing, and if it cannot be fully resolved the
-	/// rate-limit call is skipped entirely.
+	/// Individual descriptors whose CEL expressions fail to evaluate are
+	/// silently dropped (matching Envoy's per-descriptor "all-or-nothing"
+	/// semantics). Returns `None` only when **no** descriptor could be
+	/// successfully resolved, so the gRPC call is skipped entirely.
 	fn build_request(
 		&self,
 		req: &http::Request,
@@ -157,13 +157,20 @@ impl RemoteRateLimit {
 					.map(|d| format!("{}={:?}", d.0, d.1))
 					.collect();
 				trace!(
-					"ratelimit descriptor evaluation failed for domain={}, type={:?}, skipping rate-limit call: {}",
+					"ratelimit descriptor evaluation failed for domain={}, type={:?}, skipping descriptor: {}",
 					self.domain,
 					limit_type,
 					attempted.join(", ")
 				);
-				return None;
 			}
+		}
+
+		if descriptors.is_empty() {
+			trace!(
+				"ratelimit all descriptors failed evaluation for domain={}, type={:?}, skipping rate-limit call",
+				self.domain, limit_type,
+			);
+			return None;
 		}
 
 		trace!(
