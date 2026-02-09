@@ -11,59 +11,6 @@ env:
   CI: true
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            # Performance is horrendous on musl without jemalloc
-            features: jemalloc
-          - os: ubuntu-22.04-arm
-            target: aarch64-unknown-linux-musl
-            # Performance is horrendous on musl without jemalloc
-            # TODO: arm64 build fails with jemalloc for some reason?
-            features: default
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            features: default
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            features: default
-
-    steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 23
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
-    - uses: Swatinem/rust-cache@v2
-      # Github cache is too tiny to handle the full matrix :-(
-      if: ${{ matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-latest' }}
-      with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-
-    - name: Build UI
-      run: |
-        cd ui
-        npm ci
-        npm run build
-    - name: Install musl-tools
-      if: ${{ matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-latest' }}
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y musl-tools
-        rustup target add ${{ matrix.target }}
-    - name: Build
-      run: "cargo build --features ui --target ${{ matrix.target }} -F ${{ matrix.features }} --profile quick-release"
-
   test:
     strategy:
       matrix:
