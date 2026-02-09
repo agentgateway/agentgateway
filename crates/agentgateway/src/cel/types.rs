@@ -861,6 +861,7 @@ where
 ///
 /// JSON -> ExecutorSerde -> Executor<'_> -> CEL -> JSON should be consistent.
 #[apply(schema!)]
+#[derive(Default)]
 pub struct ExecutorSerde {
 	/// `request` contains attributes about the incoming HTTP request
 	#[serde(default, skip_serializing_if = "Option::is_none")]

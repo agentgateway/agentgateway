@@ -93,7 +93,7 @@ const EXAMPLES: { name: string; expr: string }[] = [
   { name: "MCP Payload", expr: "mcp.tool.name == 'get_weather'" },
   { name: "Body Based Routing", expr: "json(request.body).model" },
   { name: "JWT Claims", expr: "jwt.iss == 'agentgateway.dev' && jwt.sub == 'test-user'" },
-  { name: "Source IP", expr: "cidr('127.0.0.1/8').contains(source.address)" },
+  { name: "Source IP", expr: "cidr('127.0.0.1/8').containsIP(source.address)" },
 ];
 
 export default function CELPlayground(): React.JSX.Element {
@@ -111,9 +111,9 @@ export default function CELPlayground(): React.JSX.Element {
   const [expression, setExpression] = useState<string>(EXAMPLES[0].expr);
   const [inputData, setInputData] = useState<string>(TEMPLATES["http"]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [resultValue, setResultValue] = useState<unknown>(null);
+  const [resultValue, setResultValue] = useState<unknown | null>();
   const [resultError, setResultError] = useState<string | null>(null);
-  const hasResult = resultValue !== null || resultError !== null;
+  const hasResult = resultValue !== undefined || resultError !== null;
 
   useEffect(() => {
     setInputData(TEMPLATES[template]);

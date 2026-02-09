@@ -198,19 +198,7 @@ async fn handle_cel(Json(request): Json<CelRequest>) -> Response {
 				return (StatusCode::BAD_REQUEST, Json(resp)).into_response();
 			},
 		},
-		_ => ExecutorSerde {
-			request: None,
-			response: None,
-			jwt: None,
-			api_key: None,
-			basic_auth: None,
-			llm: None,
-			source: None,
-			mcp: None,
-			backend: None,
-			extauthz: None,
-			extproc: None,
-		},
+		_ => ExecutorSerde::default(),
 	};
 
 	// Create the executor and evaluate the expression

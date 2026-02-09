@@ -134,7 +134,6 @@ fn test_executor_serde_complete() {
 
 	let json3 = exec_to_json(&executor2);
 	assert_eq!(json1, json3, "Round-trip serialization mismatch");
-	panic!("{:#?}", json3)
 }
 
 fn exec_to_json(exec: &Executor) -> serde_json::Value {
