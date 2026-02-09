@@ -12,7 +12,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@a2a-js/sdk": "^0.3.4",
+    "@a2a-js/sdk": "^0.3.8",
     "@modelcontextprotocol/sdk": "^1.9.0",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-accordion": "^1.2.8",
