@@ -1,6 +1,7 @@
 // Inspired by https://github.com/cdriehuys/axum-jwks/blob/main/axum-jwks/src/jwks.rs (MIT license)
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ::cel::types::dynamic::DynamicType;
 use axum_core::RequestExt;
@@ -37,6 +38,9 @@ pub enum TokenError {
 
 	#[error("token uses the unknown key {0:?}")]
 	UnknownKeyId(String),
+
+	#[error("token has expired (created_at + expires_in <= now)")]
+	Expired,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -247,6 +251,8 @@ impl Provider {
 			// The new() requires 1 algorithm, so just pass the first before we override it
 			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
 			validation.algorithms = supported_algorithms;
+			// Do not require the `exp` claim to be present; if it is present it will still be validated.
+			validation.required_spec_claims.remove("exp");
 			// only set audience if audiences were provided
 			// otherwise, disable audience validation
 			if let Some(audiences) = &audiences {
@@ -389,10 +395,43 @@ impl Jwt {
 				TokenError::Invalid(error)
 			})?;
 
+		// If the token carries `created_at` and `expires_in` (millisecond values),
+		// treat them as an alternative expiration: reject when now >= created_at + expires_in.
+		if let (Some(created_at), Some(expires_in)) = (
+			claim_as_millis(&decoded_token.claims, "created_at"),
+			claim_as_millis(&decoded_token.claims, "expires_in"),
+		) {
+			let expiration_ms = created_at.saturating_add(expires_in);
+			let now_ms = SystemTime::now()
+				.duration_since(UNIX_EPOCH)
+				.expect("system clock before UNIX epoch")
+				.as_millis() as u64;
+			if now_ms >= expiration_ms {
+				debug!(
+					created_at,
+					expires_in,
+					expiration_ms,
+					now_ms,
+					"Token expired based on created_at + expires_in"
+				);
+				return Err(TokenError::Expired);
+			}
+		}
+
 		let claims = Claims {
 			inner: decoded_token.claims,
 			jwt: SecretString::new(token.into()),
 		};
 		Ok(claims)
+	}
+}
+
+/// Extract a claim value as a `u64` representing milliseconds.
+/// Handles both JSON string (e.g. `"86400000"`) and JSON number (e.g. `86400000`) representations.
+fn claim_as_millis(claims: &Map<String, Value>, key: &str) -> Option<u64> {
+	match claims.get(key)? {
+		Value::String(s) => s.parse::<u64>().ok(),
+		Value::Number(n) => n.as_u64(),
+		_ => None,
 	}
 }
