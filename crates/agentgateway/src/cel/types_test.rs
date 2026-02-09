@@ -103,6 +103,28 @@ fn test_executor_snapshot_round_trip() {
 }
 
 #[test]
+fn test_executor_round_trip() {
+	let exec = full_example_executor();
+	let executor1 = exec.as_executor();
+
+	// Serialize to JSON
+	let json = exec_to_json(&executor1);
+
+	// Deserialize into ExecutorSerde
+	let exec_snapshot: ExecutorSerde =
+		serde_json::from_value(json.clone()).expect("failed to deserialize ExecutorSerde");
+
+	// Build executor from ExecutorSerde
+	let executor2 = exec_snapshot.as_executor();
+
+	// Serialize again
+	let json2 = exec_to_json(&executor2);
+
+	// They should be identical
+	assert_eq!(json, json2, "Round-trip serialization mismatch");
+}
+
+#[test]
 fn test_executor_serde_complete() {
 	let exec = full_example_executor();
 	let json1 = serde_json::to_value(&exec).expect("failed to serialize executor2");

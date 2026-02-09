@@ -267,6 +267,18 @@ impl<'a> Executor<'a> {
 		}
 		this
 	}
+	pub fn new_tcp_logger(
+		source_context: Option<&'a SourceContext>,
+		end_time: Option<&'a str>,
+	) -> Self {
+		let mut this = Self::new_empty();
+		// For TCP connections, set the source context directly
+		this.source = ExtensionOrDirect::Direct(source_context);
+		if let Some(f) = this.request.as_mut() {
+			f.end_time = end_time;
+		}
+		this
+	}
 	pub fn new_request(req: &'a crate::http::Request) -> Self {
 		let mut this = Self::new_empty();
 		this.set_request(req);
@@ -861,6 +873,7 @@ where
 ///
 /// JSON -> ExecutorSerde -> Executor<'_> -> CEL -> JSON should be consistent.
 #[apply(schema!)]
+#[derive(Default)]
 pub struct ExecutorSerde {
 	/// `request` contains attributes about the incoming HTTP request
 	#[serde(default, skip_serializing_if = "Option::is_none")]

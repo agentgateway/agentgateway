@@ -659,8 +659,16 @@ fn derive_for_named_struct(
 fn has_field_attr(attrs: &[Attribute], name: &str) -> bool {
 	attrs.iter().any(|attr| {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(Meta::Path(path)) = attr.parse_args::<Meta>() {
-				return path.is_ident(name);
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
+			{
+				for meta in list {
+					if let Meta::Path(path) = meta {
+						if path.is_ident(name) {
+							return true;
+						}
+					}
+				}
 			}
 		}
 		false
@@ -671,17 +679,23 @@ fn has_field_attr(attrs: &[Attribute], name: &str) -> bool {
 fn get_field_rename(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(Meta::NameValue(MetaNameValue {
-				path,
-				value: syn::Expr::Lit(syn::ExprLit {
-					lit: Lit::Str(lit_str),
-					..
-				}),
-				..
-			})) = attr.parse_args::<Meta>()
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
 			{
-				if path.is_ident("rename") {
-					return Some(lit_str.value());
+				for meta in list {
+					if let Meta::NameValue(MetaNameValue {
+						path,
+						value: syn::Expr::Lit(syn::ExprLit {
+							lit: Lit::Str(lit_str),
+							..
+						}),
+						..
+					}) = meta
+					{
+						if path.is_ident("rename") {
+							return Some(lit_str.value());
+						}
+					}
 				}
 			}
 		}
@@ -693,17 +707,23 @@ fn get_field_rename(attrs: &[Attribute]) -> Option<String> {
 fn get_struct_crate_path(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(Meta::NameValue(MetaNameValue {
-				path,
-				value: syn::Expr::Lit(syn::ExprLit {
-					lit: Lit::Str(lit_str),
-					..
-				}),
-				..
-			})) = attr.parse_args::<Meta>()
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
 			{
-				if path.is_ident("crate") {
-					return Some(lit_str.value());
+				for meta in list {
+					if let Meta::NameValue(MetaNameValue {
+						path,
+						value: syn::Expr::Lit(syn::ExprLit {
+							lit: Lit::Str(lit_str),
+							..
+						}),
+						..
+					}) = meta
+					{
+						if path.is_ident("crate") {
+							return Some(lit_str.value());
+						}
+					}
 				}
 			}
 		}
@@ -715,17 +735,23 @@ fn get_struct_crate_path(attrs: &[Attribute]) -> Option<String> {
 fn get_field_with_expr(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(Meta::NameValue(MetaNameValue {
-				path,
-				value: syn::Expr::Lit(syn::ExprLit {
-					lit: Lit::Str(lit_str),
-					..
-				}),
-				..
-			})) = attr.parse_args::<Meta>()
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
 			{
-				if path.is_ident("with") {
-					return Some(lit_str.value());
+				for meta in list {
+					if let Meta::NameValue(MetaNameValue {
+						path,
+						value: syn::Expr::Lit(syn::ExprLit {
+							lit: Lit::Str(lit_str),
+							..
+						}),
+						..
+					}) = meta
+					{
+						if path.is_ident("with") {
+							return Some(lit_str.value());
+						}
+					}
 				}
 			}
 		}
@@ -737,17 +763,23 @@ fn get_field_with_expr(attrs: &[Attribute]) -> Option<String> {
 fn get_field_with_value_expr(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(Meta::NameValue(MetaNameValue {
-				path,
-				value: syn::Expr::Lit(syn::ExprLit {
-					lit: Lit::Str(lit_str),
-					..
-				}),
-				..
-			})) = attr.parse_args::<Meta>()
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
 			{
-				if path.is_ident("with_value") {
-					return Some(lit_str.value());
+				for meta in list {
+					if let Meta::NameValue(MetaNameValue {
+						path,
+						value: syn::Expr::Lit(syn::ExprLit {
+							lit: Lit::Str(lit_str),
+							..
+						}),
+						..
+					}) = meta
+					{
+						if path.is_ident("with_value") {
+							return Some(lit_str.value());
+						}
+					}
 				}
 			}
 		}
@@ -761,17 +793,23 @@ fn get_field_skip_serializing_if(attrs: &[Attribute]) -> Option<String> {
 	// First check dynamic
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(Meta::NameValue(MetaNameValue {
-				path,
-				value: syn::Expr::Lit(syn::ExprLit {
-					lit: Lit::Str(lit_str),
-					..
-				}),
-				..
-			})) = attr.parse_args::<Meta>()
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
 			{
-				if path.is_ident("skip_serializing_if") {
-					return Some(lit_str.value());
+				for meta in list {
+					if let Meta::NameValue(MetaNameValue {
+						path,
+						value: syn::Expr::Lit(syn::ExprLit {
+							lit: Lit::Str(lit_str),
+							..
+						}),
+						..
+					}) = meta
+					{
+						if path.is_ident("skip_serializing_if") {
+							return Some(lit_str.value());
+						}
+					}
 				}
 			}
 		}
@@ -809,17 +847,23 @@ fn get_field_skip_serializing_if(attrs: &[Attribute]) -> Option<String> {
 fn get_variant_rename(attrs: &[Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(Meta::NameValue(MetaNameValue {
-				path,
-				value: syn::Expr::Lit(syn::ExprLit {
-					lit: Lit::Str(lit_str),
-					..
-				}),
-				..
-			})) = attr.parse_args::<Meta>()
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
 			{
-				if path.is_ident("rename") {
-					return Some(lit_str.value());
+				for meta in list {
+					if let Meta::NameValue(MetaNameValue {
+						path,
+						value: syn::Expr::Lit(syn::ExprLit {
+							lit: Lit::Str(lit_str),
+							..
+						}),
+						..
+					}) = meta
+					{
+						if path.is_ident("rename") {
+							return Some(lit_str.value());
+						}
+					}
 				}
 			}
 		}
@@ -834,17 +878,23 @@ fn get_rename_all(attrs: &[Attribute]) -> Option<String> {
 	// First check for dynamic attribute
 	for attr in attrs {
 		if attr.path().is_ident("dynamic") {
-			if let Ok(Meta::NameValue(MetaNameValue {
-				path,
-				value: syn::Expr::Lit(syn::ExprLit {
-					lit: Lit::Str(lit_str),
-					..
-				}),
-				..
-			})) = attr.parse_args::<Meta>()
+			if let Ok(list) = attr
+				.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::token::Comma>::parse_terminated)
 			{
-				if path.is_ident("rename_all") {
-					return Some(lit_str.value());
+				for meta in list {
+					if let Meta::NameValue(MetaNameValue {
+						path,
+						value: syn::Expr::Lit(syn::ExprLit {
+							lit: Lit::Str(lit_str),
+							..
+						}),
+						..
+					}) = meta
+					{
+						if path.is_ident("rename_all") {
+							return Some(lit_str.value());
+						}
+					}
 				}
 			}
 		}

@@ -47,7 +47,7 @@ fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference
 		.cloned()
 }
 
-fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
+pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
 	// Merge filter/fields into config for this request
 	if lp.filter.is_some() {
 		log.cel.filter = lp.filter.clone();

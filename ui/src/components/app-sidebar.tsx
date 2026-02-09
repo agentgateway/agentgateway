@@ -26,7 +26,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Home, Shield, Headphones, Server, Code, Settings, Route } from "lucide-react";
+import {
+  Loader2,
+  Home,
+  Shield,
+  Headphones,
+  Server,
+  Code,
+  Settings,
+  Route,
+  Calculator,
+} from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useWizard } from "@/lib/wizard-context";
 import { toast } from "sonner";
@@ -165,6 +175,17 @@ export function AppSidebar({ setActiveView }: AppSidebarProps) {
                 >
                   <Code className="h-4 w-4" />
                   <span>Playground</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="CEL Playground"
+                  isActive={pathname === "/cel"}
+                  onClick={() => navigateTo("/cel")}
+                  aria-label="CEL Playground"
+                >
+                  <Calculator className="h-4 w-4" />
+                  <span>CEL Playground</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
