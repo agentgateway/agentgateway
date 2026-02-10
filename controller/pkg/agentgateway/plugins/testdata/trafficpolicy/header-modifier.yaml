@@ -1,0 +1,92 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    headerModifiers:
+      request:
+        add:
+        - name: add-req-header
+          value: bar,baz
+        set:
+        - name: set-req-header
+          value: foo
+        remove:
+        - remove-req-header
+      response:
+        add:
+        - name: add-res-header
+          value: bar,baz
+        set:
+        - name: set-res-header
+          value: foo
+        remove:
+        - server
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:header-modifier:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      requestHeaderModifier:
+        add:
+        - name: add-req-header
+          value: bar,baz
+        remove:
+        - remove-req-header
+        set:
+        - name: set-req-header
+          value: foo
+- Policy:
+    key: traffic/default/agw:header-modifier:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      responseHeaderModifier:
+        add:
+        - name: add-res-header
+          value: bar,baz
+        remove:
+        - server
+        set:
+        - name: set-res-header
+          value: foo
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

@@ -1,0 +1,94 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: multipool-priority
+  namespace: default
+spec:
+  ai:
+    groups:
+      # Priority 0 - Primary providers
+      - providers:
+          - name: openai
+            openai:
+              model: "gpt-4o"
+          - name: anthropic
+            anthropic:
+              model: "claude-3-opus-20240229"
+          - name: azureopenai
+            azureopenai:
+              endpoint: ai-gateway.openai.azure.com
+              deploymentName: gpt-4o-mini
+              apiVersion: 2024-02-15-preview
+      # Priority 1 - Secondary fallback providers
+      - providers:
+          - name: gemini
+            gemini:
+              model: "gemini-1.5-flash"
+          - name: vertexai
+            vertexai:
+              model: "gemini-pro"
+              region: "us-central1"
+              projectId: "vertex-fallback-project"
+            policies:
+              auth:
+                passthrough: {}
+      # Priority 2 - Tertiary fallback provider
+      - providers:
+          - name: bedrock
+            bedrock:
+              model: "anthropic.claude-3-haiku-20240307-v1:0"
+              region: "us-east-1"
+---
+# Output
+output:
+- resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: openai
+            openai:
+              model: gpt-4o
+          - anthropic:
+              model: claude-3-opus-20240229
+            name: anthropic
+          - azureopenai:
+              apiVersion: 2024-02-15-preview
+              host: ai-gateway.openai.azure.com
+              model: gpt-4o-mini
+            name: azureopenai
+        - providers:
+          - gemini:
+              model: gemini-1.5-flash
+            name: gemini
+          - inlinePolicies:
+            - auth:
+                passthrough: {}
+            name: vertexai
+            vertex:
+              model: gemini-pro
+              projectId: vertex-fallback-project
+              region: us-central1
+        - providers:
+          - bedrock:
+              model: anthropic.claude-3-haiku-20240307-v1:0
+              region: us-east-1
+            name: bedrock
+      key: default/multipool-priority
+      name:
+        name: multipool-priority
+        namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: multipool-priority
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

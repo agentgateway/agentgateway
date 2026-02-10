@@ -1,0 +1,26 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-route
+  namespace: default
+spec: null
+status:
+  parents:
+  - conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: ""
+      reason: ResolvedRefs
+      status: "True"
+      type: ResolvedRefs
+    controllerName: agentgateway.dev/agentgateway
+    parentRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: example-gateway
+      namespace: default
+---

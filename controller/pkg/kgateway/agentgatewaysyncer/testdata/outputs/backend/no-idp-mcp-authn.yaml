@@ -1,0 +1,83 @@
+Addresses:
+- service:
+    hostname: example-svc.default.svc.cluster.local
+    name: example-svc
+    namespace: default
+    ports:
+    - servicePort: 80
+    - servicePort: 90
+Backends:
+- key: default/mcp-backend-selector
+  mcp:
+    targets:
+    - backend:
+        port: 80
+        service:
+          hostname: example-svc.default.svc.cluster.local
+          namespace: default
+      name: example-svc-80
+      protocol: STREAMABLE_HTTP
+    - backend:
+        port: 90
+        service:
+          hostname: example-svc.default.svc.cluster.local
+          namespace: default
+      name: example-svc-90
+      protocol: SSE
+  name:
+    name: mcp-backend-selector
+    namespace: default
+- key: default/mcp-backend-static
+  mcp:
+    targets:
+    - backend:
+        backend: default/mcp-backend-static/mcp-target
+      name: mcp-target
+      path: override-sse
+      protocol: STREAMABLE_HTTP
+  name:
+    name: mcp-backend-static
+    namespace: default
+- key: default/mcp-backend-static/mcp-target
+  name:
+    name: mcp-backend-static
+    namespace: default
+  static:
+    host: mcp-app.default.svc.cluster.local
+    port: 8000
+Binds:
+- key: 80/default/example-gateway
+  port: 80
+Listeners:
+- bindKey: 80/default/example-gateway
+  key: default/example-gateway.http
+  name:
+    gatewayName: example-gateway
+    gatewayNamespace: default
+    listenerName: http
+  protocol: HTTP
+Routes:
+- backends:
+  - backend:
+      backend: default/mcp-backend-static
+    weight: 1
+  hostnames:
+  - example.com
+  key: default/example-route.0.0.http
+  listenerKey: default/example-gateway.http
+  name:
+    kind: HTTPRoute
+    name: example-route
+    namespace: default
+- backends:
+  - backend:
+      backend: default/mcp-backend-selector
+    weight: 1
+  hostnames:
+  - example.com
+  key: default/example-route.1.0.http
+  listenerKey: default/example-gateway.http
+  name:
+    kind: HTTPRoute
+    name: example-route
+    namespace: default

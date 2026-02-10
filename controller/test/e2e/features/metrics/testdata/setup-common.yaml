@@ -1,0 +1,118 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: default
+  labels:
+    app.kubernetes.io/name: nginx
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.28.0
+      ports:
+        - containerPort: 80
+          name: http-web-svc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-svc
+  namespace: default
+spec:
+  selector:
+    app.kubernetes.io/name: nginx
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: http-web-svc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kgateway-metrics
+  namespace: kgateway-test
+spec:
+  selector:
+    app.kubernetes.io/name: kgateway
+  ports:
+    - protocol: TCP
+      port: 9092
+      targetPort: metrics
+      name: metrics
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw2
+  namespace: default
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+  - protocol: HTTPS
+    port: 8443
+    name: https
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-route-1
+  namespace: default
+spec:
+  parentRefs:
+    - name: gw1
+      namespace: default
+  hostnames:
+    - "example1.com"
+    - "example2.com"
+  rules:
+    - backendRefs:
+        - name: example-svc
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-route-2
+  namespace: default
+spec:
+  parentRefs:
+    - name: gw1
+      namespace: default
+      sectionName: http
+    - name: gw2
+      namespace: default
+  hostnames:
+    - "example3.com"
+    - "example4.com"
+    - "example5.com"
+  rules:
+    - backendRefs:
+        - name: example-svc
+          port: 8080
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: HTTPListenerPolicy
+metadata:
+  name: http-listener-policy-all-fields
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw2
+  useRemoteAddress: true
+  xffNumTrustedHops: 2
+  serverHeaderTransformation: AppendIfAbsent
+  streamIdleTimeout: 30s
+  healthCheck:
+    path: "/health_check"

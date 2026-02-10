@@ -1,0 +1,142 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-to-multiple-lambdas
+  namespace: gwtest
+spec:
+  parentRefs:
+    - name: http-gw-for-test
+  hostnames:
+    - "multi-lambda.example.com"
+  rules:
+    - matches:
+      - path:
+          type: PathPrefix
+          value: /auth
+      backendRefs:
+        - name: lambda-auth-backend
+          kind: Backend
+          group: gateway.kgateway.dev
+    - matches:
+      - path:
+          type: PathPrefix
+          value: /orders
+      backendRefs:
+        - name: lambda-orders-backend
+          kind: Backend
+          group: gateway.kgateway.dev
+    - matches:
+      - path:
+          type: PathPrefix
+          value: /products
+      backendRefs:
+        - name: lambda-products-backend
+          kind: Backend
+          group: gateway.kgateway.dev
+    - matches:
+      - path:
+          type: PathPrefix
+          value: /local
+      backendRefs:
+        - name: lambda-local-integration
+          kind: Backend
+          group: gateway.kgateway.dev
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-creds-multi
+  namespace: gwtest
+type: Opaque
+data:
+  accessKey: QUtJQUlPU0ZPRE5ON0VYQU1QTEU= # Base64 encoded "AKIAIOSFODNN7EXAMPLE"
+  secretKey: d0phbHJYVXRuRkVNSS9LN01ERU5HL2JQeFJmaUNZRVhBTVBMRUtFWQ== # Base64 encoded "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+---
+# Authentication Lambda Backend
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-auth-backend
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    region: us-west-2
+    auth:
+      type: Secret
+      secretRef:
+        name: aws-creds-multi
+    lambda:
+      functionName: auth-service
+      invocationMode: Sync
+---
+# Orders Lambda Backend
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-orders-backend
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    region: us-east-1
+    auth:
+      type: Secret
+      secretRef:
+        name: aws-creds-multi
+    lambda:
+      functionName: orders-service
+      invocationMode: Sync
+---
+# Products Lambda Backend with default auth
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-products-backend
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    region: us-east-1
+    lambda:
+      functionName: products-service
+      invocationMode: Async
+---
+# Local Integration Lambda Backend with custom endpoint URL
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-local-integration
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    region: us-west-2
+    auth:
+      type: Secret
+      secretRef:
+        name: aws-creds-multi
+    lambda:
+      functionName: integration-service
+      invocationMode: Sync
+      endpointURL: "http://staging.localstack.dev:4566"

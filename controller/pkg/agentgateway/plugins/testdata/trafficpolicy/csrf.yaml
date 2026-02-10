@@ -1,0 +1,54 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    csrf:
+      additionalOrigins:
+        - "https://example.com"
+        - "https://app.example.com"
+        - "http://localhost:3000"
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:csrf:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      csrf:
+        additionalOrigins:
+        - https://example.com
+        - https://app.example.com
+        - http://localhost:3000
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

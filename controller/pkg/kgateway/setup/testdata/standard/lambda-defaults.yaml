@@ -1,0 +1,47 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-to-lambda
+  namespace: gwtest
+spec:
+  parentRefs:
+    - name: http-gw-for-test
+  hostnames:
+    - "lambda.example.com"
+  rules:
+    - matches:
+      - path:
+          type: PathPrefix
+          value: /lambda
+      backendRefs:
+        - name: lambda-backend
+          kind: Backend
+          group: gateway.kgateway.dev
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-backend
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    lambda:
+      functionName: my-lambda-function

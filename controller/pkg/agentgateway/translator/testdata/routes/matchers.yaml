@@ -1,0 +1,107 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: exact-match-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: test-gateway
+  hostnames:
+  - api.example.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api
+      headers:
+      - type: Exact
+        name: X-API-Version
+        value: v1
+    backendRefs:
+    - name: test-service
+      port: 80
+  - matches:
+    - path:
+        type: Exact
+        value: /exact
+    backendRefs:
+    - name: test-service
+      port: 80
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 80
+          service:
+            hostname: test-service.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - api.example.com
+      key: default/exact-match-route.0.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - headers:
+        - exact: v1
+          name: X-API-Version
+        path:
+          pathPrefix: /api
+      name:
+        kind: HTTPRoute
+        name: exact-match-route
+        namespace: default
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 80
+          service:
+            hostname: test-service.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - api.example.com
+      key: default/exact-match-route.1.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          exact: /exact
+      name:
+        kind: HTTPRoute
+        name: exact-match-route
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: exact-match-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

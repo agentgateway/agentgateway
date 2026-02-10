@@ -1,0 +1,6 @@
+discoveryNamespaceSelectors:
+- matchExpressions:
+  - key: kubernetes.io/metadata.name
+    operator: In
+    values:
+    - kgw-test-1

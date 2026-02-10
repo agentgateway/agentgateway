@@ -1,0 +1,366 @@
+---
+# Source: kgateway/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-release-kgateway
+  namespace: default
+  labels:
+    helm.sh/chart: kgateway-0.0.2
+    kgateway: kgateway
+    app.kubernetes.io/name: kgateway
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/managed-by: Helm
+    another-label: "true"
+    extra-label-key: extra-label-value
+---
+# Source: kgateway/templates/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kgateway-default
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  - namespaces
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - update
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.kgateway.dev
+  resources:
+  - agentgatewaybackends
+  - agentgatewaypolicies
+  - backendconfigpolicies
+  - backends
+  - directresponses
+  - gatewayextensions
+  - gatewayparameters
+  - httplistenerpolicies
+  - listenerpolicies
+  - trafficpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.kgateway.dev
+  resources:
+  - agentgatewaybackends/status
+  - agentgatewaypolicies/status
+  - backendconfigpolicies/status
+  - backends/status
+  - directresponses/status
+  - gatewayextensions/status
+  - gatewayparameters/status
+  - httplistenerpolicies/status
+  - listenerpolicies/status
+  - trafficpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - backendtlspolicies
+  - gateways
+  - grpcroutes
+  - httproutes
+  - referencegrants
+  - tcproutes
+  - tlsroutes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - backendtlspolicies/status
+  - gatewayclasses/status
+  - gateways/status
+  - grpcroutes/status
+  - httproutes/status
+  - tcproutes/status
+  - tlsroutes/status
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.networking.x-k8s.io
+  resources:
+  - xlistenersets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.x-k8s.io
+  resources:
+  - xlistenersets/status
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - destinationrules
+  - serviceentries
+  - workloadentries
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - security.istio.io
+  resources:
+  - authorizationpolicies
+  verbs:
+  - get
+  - list
+  - watch
+---
+# Source: kgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kgateway-role-default
+subjects:
+- kind: ServiceAccount
+  name: test-release-kgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: kgateway-default
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: kgateway/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-release-kgateway
+  namespace: default
+  labels:
+    helm.sh/chart: kgateway-0.0.2
+    kgateway: kgateway
+    app.kubernetes.io/name: kgateway
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/managed-by: Helm
+    another-label: "true"
+    extra-label-key: extra-label-value
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc-xds
+    protocol: TCP
+    port: 9977
+    targetPort: 9977
+  - name: health
+    protocol: TCP
+    port: 9093
+    targetPort: 9093
+  - name: metrics
+    protocol: TCP
+    port: 9092
+    targetPort: 9092
+  selector:
+    kgateway: kgateway
+    app.kubernetes.io/name: kgateway
+    app.kubernetes.io/instance: test-release
+---
+# Source: kgateway/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-release-kgateway
+  namespace: default
+  labels:
+    helm.sh/chart: kgateway-0.0.2
+    kgateway: kgateway
+    app.kubernetes.io/name: kgateway
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/managed-by: Helm
+    another-label: "true"
+    extra-label-key: extra-label-value
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      kgateway: kgateway
+      app.kubernetes.io/name: kgateway
+      app.kubernetes.io/instance: test-release
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "9092"
+        prometheus.io/scrape: "true"
+      labels:
+        kgateway: kgateway
+        app.kubernetes.io/name: kgateway
+        app.kubernetes.io/instance: test-release
+    spec:
+      serviceAccountName: test-release-kgateway
+      containers:
+        - name: controller
+          image: "cr.kgateway.dev/kgateway-dev/kgateway:v0.0.1"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9977
+              name: grpc-xds
+              protocol: TCP
+            - containerPort: 9093
+              name: health
+              protocol: TCP
+            - containerPort: 9092
+              name: metrics
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9093
+            initialDelaySeconds: 1
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: 9093
+            initialDelaySeconds: 0
+            periodSeconds: 1
+            
+            failureThreshold: 120
+          env:
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "1"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "1"
+                  resource: limits.cpu
+            - name: KGW_LOG_LEVEL
+              value: "info"
+            - name: KGW_XDS_SERVICE_NAME
+              value: test-release-kgateway
+            - name: KGW_XDS_SERVICE_PORT
+              value: "9977"
+            - name: KGW_DEFAULT_IMAGE_REGISTRY
+              value: cr.kgateway.dev/kgateway-dev
+            - name: KGW_DEFAULT_IMAGE_TAG
+              value: v0.0.1
+            - name: KGW_DEFAULT_IMAGE_PULL_POLICY
+              value: IfNotPresent
+            - name: KGW_DISCOVERY_NAMESPACE_SELECTORS
+              value: "[]"
+            - name: KGW_POLICY_MERGE
+              value: "{}"
+            - name: KGW_VALIDATION_MODE
+              value: "standard"
+            - name: KGW_ENABLE_AGENTGATEWAY
+              value: "false"
+            - name: KGW_ENABLE_ENVOY
+              value: "true"
+            - name: KGW_GATEWAY_CLASS_PARAMETERS_REFS
+              value: "{}"
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            {}

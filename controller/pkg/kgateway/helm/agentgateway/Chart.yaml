@@ -1,0 +1,6 @@
+apiVersion: v2
+name: agentgateway
+description: An internal Helm chart for agentgateway
+type: application
+version: 0.0.1-alpha1
+appVersion: "2.0.0-alpha1"

@@ -1,0 +1,126 @@
+# This test is for the traffic distribution for service entries
+# It tests the following scenarios:
+# - ServiceEntry with PreferNetwork traffic distribution and inline endpoints
+# - ServiceEntry with PreferNetwork traffic distribution that selects workload entries
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-to-upstream
+  namespace: gwtest
+spec:
+  parentRefs:
+  - name: http-gw-for-test
+  hostnames:
+  - "se.example.com"
+  rules:
+  - backendRefs:
+    - name: se-a.example.com
+      port: 80
+      kind: Hostname
+      group: networking.istio.io
+    - name: se-b.example.com
+      port: 80
+      kind: Hostname
+      group: networking.istio.io
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: inlined-se
+  namespace: gwtest
+  annotations:
+    networking.istio.io/traffic-distribution: PreferNetwork
+spec:
+  hosts:
+  - se-a.example.com
+  ports:
+  - number: 80
+    name: http
+    protocol: TCP
+  resolution: STATIC
+  location: MESH_INTERNAL
+  endpoints:
+  - address: 1.1.1.1 # Same network
+    locality: r1/r1z2/r1z2s3
+    labels:
+      topology.istio.io/network: n1
+  - address: 2.2.2.2 # No network label
+    locality: r1/r1z3/r1z3s4
+  - address: 3.3.3.3 # Different network
+    locality: r2/r2z1/r2z1s1
+    labels:
+      topology.istio.io/network: n2
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: workloads-se
+  namespace: gwtest
+  annotations:
+    networking.istio.io/traffic-distribution: PreferNetwork
+spec:
+  hosts:
+  - se-b.example.com
+  ports:
+  - number: 80
+    name: http
+    protocol: TCP
+  resolution: STATIC
+  location: MESH_INTERNAL
+  workloadSelector:
+    labels:
+      app: reviews-we
+---
+# WorkloadEntry in same network
+apiVersion: networking.istio.io/v1
+kind: WorkloadEntry
+metadata:
+  name: example-we-a
+  namespace: gwtest
+  labels:
+    app: reviews-we
+    topology.istio.io/network: n1
+spec:
+  address: 1.1.1.1
+  locality: r1/r1z2/r1z2s3
+---
+# WorkloadEntry without network label
+apiVersion: networking.istio.io/v1
+kind: WorkloadEntry
+metadata:
+  name: example-we-b
+  namespace: gwtest
+  labels:
+    app: reviews-we
+spec:
+  address: 2.2.2.2
+  locality: r1/r1z3/r1z3s4
+---
+# WorkloadEntry in different network
+apiVersion: networking.istio.io/v1
+kind: WorkloadEntry
+metadata:
+  name: example-we-c
+  namespace: gwtest
+  labels:
+    app: reviews-we
+    topology.istio.io/network: n2
+spec:
+  address: 3.3.3.3
+  locality: r2/r2z1/r2z1s1

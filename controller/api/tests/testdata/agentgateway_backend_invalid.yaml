@@ -1,0 +1,53 @@
+_err: deploymentName is required for this apiVersion
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: azure-invalid-deployment-name
+spec:
+  ai:
+    provider:
+      azureopenai:
+        apiVersion: 2024-01-01
+        endpoint: test
+---
+_err: AI policies require AI
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: ai-pol-without-ai
+spec:
+  static:
+    host: example.com
+    port: 80
+  policies:
+    ai:
+      defaults:
+        - field: hi
+          value: 1
+---
+_err: MCP policies require MCP
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-pol-without-mcp
+spec:
+  static:
+    host: example.com
+    port: 80
+  policies:
+    mcp:
+      authorization:
+        policy:
+          matchExpressions:
+          - 'true'
+---
+_err: both host and port must be set together
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: host-without-port
+spec:
+  ai:
+    provider:
+      openai: {}
+      host: example.com

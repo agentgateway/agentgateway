@@ -1,0 +1,4 @@
+controller:
+  replicaCount: 2
+  podDisruptionBudget:
+    minAvailable: 1

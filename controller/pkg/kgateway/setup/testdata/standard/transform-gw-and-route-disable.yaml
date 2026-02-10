@@ -1,0 +1,122 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reviews
+  namespace: gwtest
+  labels:
+    app: reviews
+    service: reviews
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: reviews
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: reviews-slice
+  namespace: gwtest
+  labels:
+    kubernetes.io/service-name: reviews
+    app: reviews
+    service: reviews
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 10.244.1.11
+    conditions:
+      ready: true
+    nodeName: worker
+    targetRef:
+      kind: Pod
+      name: reviews-1
+      namespace: gwtest
+ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: happypath
+  namespace: gwtest
+spec:
+  parentRefs:
+    - name: http-gw-for-test
+      namespace: gwtest
+  hostnames:
+    - "www.example-gateway-only.com"
+  rules:
+  - backendRefs:
+      - name: reviews
+        port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: happypath-override
+  namespace: gwtest
+spec:
+  parentRefs:
+    - name: http-gw-for-test
+      namespace: gwtest
+  hostnames:
+    - "www.example-route-override.com"
+  rules:
+  - backendRefs:
+      - name: reviews
+        port: 8080
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: transform-for-gateway
+  namespace: gwtest
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: http-gw-for-test
+  transformation:
+    response:
+      add:
+        - name: "original-greatness"
+          value: '{{request_headers("x-greatness")}}'
+      body:
+        value: '{{ body }}'
+        parseAs: 'AsJson'
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: transform-for-route
+  namespace: gwtest
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: happypath-override
+  transformation:
+    request:
+      add:
+        - name: "x-greatness"
+          value: '{{ length(headers(":path")) }}'

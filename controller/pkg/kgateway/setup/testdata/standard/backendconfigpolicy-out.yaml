@@ -1,0 +1,77 @@
+clusters:
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_default_kubernetes_443
+  type: EDS
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_gwtest_httpbin_8080
+  perConnectionBufferLimitBytes: 1024
+  type: EDS
+  typedExtensionProtocolOptions:
+    envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+      '@type': type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+      commonHttpProtocolOptions:
+        idleTimeout: 10s
+        maxHeadersCount: 15
+        maxRequestsPerConnection: 100
+        maxStreamDuration: 30s
+      explicitHttpConfig:
+        httpProtocolOptions:
+          enableTrailers: true
+          overrideStreamErrorOnInvalidHttpMessage: true
+  upstreamConnectionOptions:
+    tcpKeepalive:
+      keepaliveInterval: 5
+      keepaliveProbes: 3
+      keepaliveTime: 30
+endpoints:
+- clusterName: kube_gwtest_httpbin_8080
+  endpoints:
+  - lbEndpoints:
+    - endpoint:
+        address:
+          socketAddress:
+            address: 10.244.1.11
+            portValue: 8080
+      loadBalancingWeight: 1
+    loadBalancingWeight: 1
+listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8080
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8080
+  name: listener~8080
+routes:
+- ignorePortInHostMatching: true
+  name: listener~8080

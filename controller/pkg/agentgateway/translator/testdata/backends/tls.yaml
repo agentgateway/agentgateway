@@ -1,0 +1,455 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-svc
+  namespace: default
+  labels:
+    app: mcp-app
+  annotations:
+    kgateway.dev/mcp-path: /test
+spec:
+  selector:
+    test: test
+  ports:
+    - protocol: TCP
+      appProtocol: kgateway.dev/mcp
+      port: 80
+      targetPort: test
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: mcp-backend
+spec:
+  mcp:
+    targets:
+      - name: mcp-static
+        static:
+          host: mcp-app.foo
+          port: 8000
+          protocol: StreamableHTTP
+      - name: mcp-selector
+        selector:
+          services:
+            matchLabels:
+              app: mcp-app
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  namespace: default
+  name: mcp-tls-system-cert
+spec:
+  targetRefs:
+    - name: mcp-backend
+      kind: AgentgatewayBackend
+      group: agentgateway.dev
+      sectionName: mcp-static
+    - name: mcp-svc
+      kind: Service
+      group: ""
+      sectionName: "80"
+  validation:
+    hostname: mcp-app.foo
+    wellKnownCACertificates: System
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  namespace: default
+  name: mcp-tls-ca-cert
+spec:
+  targetRefs:
+    - name: mcp-svc
+      group: ""
+      kind: Service
+  validation:
+    caCertificateRefs:
+      - name: ca-cert-1
+        group: ""
+        kind: ConfigMap
+      - name: ca-cert-2
+        group: ""
+        kind: ConfigMap
+    hostname: mcp-svc.foo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: default
+  name: ca-cert-1
+data:
+  ca.crt: |-
+    -----BEGIN CERTIFICATE-----
+    MIIC1jCCAb4CCQCJczLyBBZ1GTANBgkqhkiG9w0BAQsFADAtMRUwEwYDVQQKDAxl
+    eGFtcGxlIEluYy4xFDASBgNVBAMMC2V4YW1wbGUuY29tMB4XDTI1MDMwNzE0Mjkx
+    NloXDTI2MDMwNzE0MjkxNlowLTEVMBMGA1UECgwMZXhhbXBsZSBJbmMuMRQwEgYD
+    VQQDDAtleGFtcGxlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
+    AN0U6TVYECkwqnxh1Kt3dS+LialrXBOXKagj9tE582T6dwmqThD75VZPrNKkRoYO
+    aUzCctfDkUBXRemOTMut7ES5xoAtSAhr2GAnqgM3+yBCLOxooSjEFdlpFT7dhi1w
+    jOPa5iMh6ve/pHuRHvEuaF/J6P8tr83wGutx/xFZVuGA9V1AmBmYhePM+JhdcwaB
+    1+IbJp30gGyPfY4vdRQ9VQWbThE8psEzah+3SgTKJSIT7NAdwiIu3O3rXORbaYYU
+    oycgXUHdOKRbJnbvy3pTnFZJ50sg1HIA4yBdX7c0diy8Zz3Suoondg3DforWr0pB
+    Hs6tySAQoz2RiAqDqcE2rbMCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAWPkz3dJW
+    b+LFtnv7MlOVM79Y4PqeiHnazP1G9FwnWBHARkjISsax3b0zX8/RHnU83c3tLP5D
+    VwenYb9B9mzXbLiWI8aaX0UXP//D593ti15y0Od7yC2hQszlqIbxYnkFVwXoT9fQ
+    bdQ9OtpCt8EZnKEyCxck+hlKEyYTcH2PqZ7Ndp0M8I2znz3Kut/uYHLUddfoPF/m
+    O0V6fbyB/Mx/G1uLiv/BVpx3AdP+3ygJyKtelXkD+IdlY3y110fzmVr6NgxAbz/h
+    n9KpuK4SEloIycZUaKVXAaX7T42SFYw7msmB+Uu7z5oLOijsjX6TjeofdFBZ/Byl
+    SxODgqhtaPnOxQ==
+    -----END CERTIFICATE-----
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: default
+  name: ca-cert-2
+data:
+  ca.crt: |-
+    -----BEGIN CERTIFICATE-----
+    MIIDFTCCAf2gAwIBAgIUG9Mdv3nOQ2i7v68OgjArU4lhBikwDQYJKoZIhvcNAQEL
+    BQAwFjEUMBIGA1UEAwwLZXhhbXBsZS5jb20wHhcNMjUwNzA3MTA0MDQwWhcNMjYw
+    NzA3MTA0MDQwWjAWMRQwEgYDVQQDDAtleGFtcGxlLmNvbTCCASIwDQYJKoZIhvcN
+    AQEBBQADggEPADCCAQoCggEBANueqwfAApjTfg+nxIoKVK4sK/YlNICvdoEq1UEL
+    StE9wfTv0J27uNIsfpMqCx0Ni9Rjt1hzjunc8HUJDeobMNxGaZmryQofrdJWJ7Uu
+    t5jeLW/w0MelPOfFLsDiM5REy4WuPm2X6v1Z1N3N5GR3UNDOtDtsbjS1momvooLO
+    9WxPIr2cfmPqr81fyyD2ReZsMC/8lVs0PkA9XBplMzpSU53DWl5/Nyh2d1W5ENK0
+    Zw1l5Ze4UGUeohQMa5cD5hmZcBjOeJF8MuSTi3167KSopoqfgHTvC5IsBeWXAyZF
+    81ihFYAq+SbhUZeUlsxc1wveuAdBRzafcYkK47gYmbq1K60CAwEAAaNbMFkwFgYD
+    VR0RBA8wDYILZXhhbXBsZS5jb20wCwYDVR0PBAQDAgeAMBMGA1UdJQQMMAoGCCsG
+    AQUFBwMBMB0GA1UdDgQWBBSoa1Zu2o+pQ6sq2HcOjAglZkp01zANBgkqhkiG9w0B
+    AQsFAAOCAQEADZq1EMw/jMl0z2LpPh8cXbP09BnfXhoFbpL4cFrcBNEyig0oPO0j
+    YN1e4bfURNduFVnC/FDnZhR3FlAt8a6ozJAwmJp+nQCYFoDQwotSx12y5Bc9IXwd
+    BRZaLgHYy2NjGp2UgAya2z23BkUnwOJwJNMCzuGw3pOsmDQY0diR8ZWmEYYEPheW
+    6BVkrikzUNXv3tB8LmWzxV9V3eN71fnP5u39IM/UQsOZGRUow/8tvN2/d0W4dHky
+    t/kdgLKhf4gU2wXq/WbeqxlDSpjo7q/emNl59v1FHeR3eITSSjESU+dQgRsYaGEn
+    SWP+58ApfCcURLpMxUmxkO1ayfecNJbmSQ==
+    -----END CERTIFICATE-----
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: ai-groups
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: openai
+            openai:
+              model: "gpt-4o"
+            policies:
+              auth:
+                secretRef:
+                  name: openai-primary-secret
+          - name: anthropic
+            anthropic:
+              model: "claude-3-opus-20240229"
+            policies:
+              auth:
+                key: "sk-anthropic-primary"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openai-primary-secret
+  namespace: default
+type: Opaque
+data:
+  Authorization: QmVhcmVyIHNrLW9wZW5haS1wcmltYXJ5LWtleQ== # Bearer sk-openai-primary-key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: openai-single
+spec:
+  ai:
+    provider:
+      openai:
+        model: "gpt-4o"
+  policies:
+    auth:
+      secretRef:
+        name: openai-primary-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: anthropic-single
+  namespace: default
+spec:
+  ai:
+    provider:
+      anthropic:
+        model: "claude-3-opus-20240229"
+  policies:
+    auth:
+      key: "sk-anthropic-primary"
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: ai-tls
+  namespace: default
+spec:
+  targetRefs:
+    - name: ai-groups
+      kind: AgentgatewayBackend
+      group: agentgateway.dev
+      sectionName: anthropic
+    - name: openai-single
+      kind: AgentgatewayBackend
+      group: agentgateway.dev
+  validation:
+    hostname: foo
+    wellKnownCACertificates: System
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: ai-tls-all-groups
+  namespace: default
+spec:
+  targetRefs:
+    - name: ai-groups
+      kind: AgentgatewayBackend
+      group: agentgateway.dev
+  validation:
+    hostname: baz
+    wellKnownCACertificates: System
+
+---
+# Output
+output:
+- resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - inlinePolicies:
+            - auth:
+                key:
+                  secret: sk-openai-primary-key
+            name: openai
+            openai:
+              model: gpt-4o
+          - anthropic:
+              model: claude-3-opus-20240229
+            inlinePolicies:
+            - auth:
+                key:
+                  secret: sk-anthropic-primary
+            name: anthropic
+      key: default/ai-groups
+      name:
+        name: ai-groups
+        namespace: default
+- resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - anthropic:
+              model: claude-3-opus-20240229
+            name: backend
+      inlinePolicies:
+      - auth:
+          key:
+            secret: sk-anthropic-primary
+      key: default/anthropic-single
+      name:
+        name: anthropic-single
+        namespace: default
+- resource:
+    backend:
+      key: default/mcp-backend
+      mcp:
+        targets:
+        - backend:
+            backend: default/mcp-backend/mcp-static
+          name: mcp-static
+          protocol: STREAMABLE_HTTP
+        - backend:
+            port: 80
+            service:
+              hostname: mcp-svc.default.svc.cluster.local
+              namespace: default
+          name: mcp-svc-80
+          path: /test
+          protocol: STREAMABLE_HTTP
+      name:
+        name: mcp-backend
+        namespace: default
+- resource:
+    backend:
+      key: default/mcp-backend/mcp-static
+      name:
+        name: mcp-backend
+        namespace: default
+      static:
+        host: mcp-app.foo
+        port: 8000
+- resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai:
+              model: gpt-4o
+      inlinePolicies:
+      - auth:
+          key:
+            secret: sk-openai-primary-key
+      key: default/openai-single
+      name:
+        name: openai-single
+        namespace: default
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: baz
+      key: default/ai-tls-all-groups:backend-tls:default/ai-groups
+      name:
+        kind: BackendTLSPolicy
+        name: ai-tls-all-groups
+        namespace: default
+      target:
+        backend:
+          name: ai-groups
+          namespace: default
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: foo
+      key: default/ai-tls:backend-tls:default/ai-groups/anthropic
+      name:
+        kind: BackendTLSPolicy
+        name: ai-tls
+        namespace: default
+      target:
+        backend:
+          name: ai-groups
+          namespace: default
+          section: anthropic
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: foo
+      key: default/ai-tls:backend-tls:default/openai-single
+      name:
+        kind: BackendTLSPolicy
+        name: ai-tls
+        namespace: default
+      target:
+        backend:
+          name: openai-single
+          namespace: default
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: mcp-svc.foo
+          root: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUMxakNDQWI0Q0NRQ0pjekx5QkJaMUdUQU5CZ2txaGtpRzl3MEJBUXNGQURBdE1SVXdFd1lEVlFRS0RBeGwKZUdGdGNHeGxJRWx1WXk0eEZEQVNCZ05WQkFNTUMyVjRZVzF3YkdVdVkyOXRNQjRYRFRJMU1ETXdOekUwTWpreApObG9YRFRJMk1ETXdOekUwTWpreE5sb3dMVEVWTUJNR0ExVUVDZ3dNWlhoaGJYQnNaU0JKYm1NdU1SUXdFZ1lEClZRUUREQXRsZUdGdGNHeGxMbU52YlRDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUIKQU4wVTZUVllFQ2t3cW54aDFLdDNkUytMaWFsclhCT1hLYWdqOXRFNTgyVDZkd21xVGhENzVWWlByTktrUm9ZTwphVXpDY3RmRGtVQlhSZW1PVE11dDdFUzV4b0F0U0FocjJHQW5xZ00zK3lCQ0xPeG9vU2pFRmRscEZUN2RoaTF3CmpPUGE1aU1oNnZlL3BIdVJIdkV1YUYvSjZQOHRyODN3R3V0eC94RlpWdUdBOVYxQW1CbVloZVBNK0poZGN3YUIKMStJYkpwMzBnR3lQZlk0dmRSUTlWUVdiVGhFOHBzRXphaCszU2dUS0pTSVQ3TkFkd2lJdTNPM3JYT1JiYVlZVQpveWNnWFVIZE9LUmJKbmJ2eTNwVG5GWko1MHNnMUhJQTR5QmRYN2MwZGl5OFp6M1N1b29uZGczRGZvcldyMHBCCkhzNnR5U0FRb3oyUmlBcURxY0UycmJNQ0F3RUFBVEFOQmdrcWhraUc5dzBCQVFzRkFBT0NBUUVBV1BrejNkSlcKYitMRnRudjdNbE9WTTc5WTRQcWVpSG5helAxRzlGd25XQkhBUmtqSVNzYXgzYjB6WDgvUkhuVTgzYzN0TFA1RApWd2VuWWI5QjltelhiTGlXSThhYVgwVVhQLy9ENTkzdGkxNXkwT2Q3eUMyaFFzemxxSWJ4WW5rRlZ3WG9UOWZRCmJkUTlPdHBDdDhFWm5LRXlDeGNrK2hsS0V5WVRjSDJQcVo3TmRwME04STJ6bnozS3V0L3VZSExVZGRmb1BGL20KTzBWNmZieUIvTXgvRzF1TGl2L0JWcHgzQWRQKzN5Z0p5S3RlbFhrRCtJZGxZM3kxMTBmem1WcjZOZ3hBYnovaApuOUtwdUs0U0Vsb0l5Y1pVYUtWWEFhWDdUNDJTRll3N21zbUIrVXU3ejVvTE9panNqWDZUamVvZmRGQlovQnlsClN4T0RncWh0YVBuT3hRPT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQoKLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURGVENDQWYyZ0F3SUJBZ0lVRzlNZHYzbk9RMmk3djY4T2dqQXJVNGxoQmlrd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0ZqRVVNQklHQTFVRUF3d0xaWGhoYlhCc1pTNWpiMjB3SGhjTk1qVXdOekEzTVRBME1EUXdXaGNOTWpZdwpOekEzTVRBME1EUXdXakFXTVJRd0VnWURWUVFEREF0bGVHRnRjR3hsTG1OdmJUQ0NBU0l3RFFZSktvWklodmNOCkFRRUJCUUFEZ2dFUEFEQ0NBUW9DZ2dFQkFOdWVxd2ZBQXBqVGZnK254SW9LVks0c0svWWxOSUN2ZG9FcTFVRUwKU3RFOXdmVHYwSjI3dU5Jc2ZwTXFDeDBOaTlSanQxaHpqdW5jOEhVSkRlb2JNTnhHYVptcnlRb2ZyZEpXSjdVdQp0NWplTFcvdzBNZWxQT2ZGTHNEaU01UkV5NFd1UG0yWDZ2MVoxTjNONUdSM1VORE90RHRzYmpTMW1vbXZvb0xPCjlXeFBJcjJjZm1QcXI4MWZ5eUQyUmVac01DLzhsVnMwUGtBOVhCcGxNenBTVTUzRFdsNS9OeWgyZDFXNUVOSzAKWncxbDVaZTRVR1Vlb2hRTWE1Y0Q1aG1aY0JqT2VKRjhNdVNUaTMxNjdLU29wb3FmZ0hUdkM1SXNCZVdYQXlaRgo4MWloRllBcStTYmhVWmVVbHN4YzF3dmV1QWRCUnphZmNZa0s0N2dZbWJxMUs2MENBd0VBQWFOYk1Ga3dGZ1lEClZSMFJCQTh3RFlJTFpYaGhiWEJzWlM1amIyMHdDd1lEVlIwUEJBUURBZ2VBTUJNR0ExVWRKUVFNTUFvR0NDc0cKQVFVRkJ3TUJNQjBHQTFVZERnUVdCQlNvYTFadTJvK3BRNnNxMkhjT2pBZ2xaa3AwMXpBTkJna3Foa2lHOXcwQgpBUXNGQUFPQ0FRRUFEWnExRU13L2pNbDB6MkxwUGg4Y1hiUDA5Qm5mWGhvRmJwTDRjRnJjQk5FeWlnMG9QTzBqCllOMWU0YmZVUk5kdUZWbkMvRkRuWmhSM0ZsQXQ4YTZvekpBd21KcCtuUUNZRm9EUXdvdFN4MTJ5NUJjOUlYd2QKQlJaYUxnSFl5Mk5qR3AyVWdBeWEyejIzQmtVbndPSndKTk1DenVHdzNwT3NtRFFZMGRpUjhaV21FWVlFUGhlVwo2QlZrcmlrelVOWHYzdEI4TG1XenhWOVYzZU43MWZuUDV1MzlJTS9VUXNPWkdSVW93Lzh0dk4yL2QwVzRkSGt5CnQva2RnTEtoZjRnVTJ3WHEvV2JlcXhsRFNwam83cS9lbU5sNTl2MUZIZVIzZUlUU1NqRVNVK2RRZ1JzWWFHRW4KU1dQKzU4QXBmQ2NVUkxwTXhVbXhrTzFheWZlY05KYm1TUT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+      key: default/mcp-tls-ca-cert:backend-tls:default/mcp-svc.default.svc.cluster.local
+      name:
+        kind: BackendTLSPolicy
+        name: mcp-tls-ca-cert
+        namespace: default
+      target:
+        service:
+          hostname: mcp-svc.default.svc.cluster.local
+          namespace: default
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: mcp-app.foo
+      key: default/mcp-tls-system-cert:backend-tls:default/mcp-backend/mcp-static
+      name:
+        kind: BackendTLSPolicy
+        name: mcp-tls-system-cert
+        namespace: default
+      target:
+        backend:
+          name: mcp-backend
+          namespace: default
+          section: mcp-static
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: mcp-app.foo
+      key: default/mcp-tls-system-cert:backend-tls:default/mcp-svc.default.svc.cluster.local/80
+      name:
+        kind: BackendTLSPolicy
+        name: mcp-tls-system-cert
+        namespace: default
+      target:
+        service:
+          hostname: mcp-svc.default.svc.cluster.local
+          namespace: default
+          port: 80
+- hostname: mcp-svc.default.svc.cluster.local
+  name: mcp-svc
+  namespace: default
+  ports:
+  - servicePort: 80
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: ai-groups
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: anthropic-single
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: openai-single
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

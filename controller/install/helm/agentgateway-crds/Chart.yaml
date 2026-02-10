@@ -1,0 +1,8 @@
+apiVersion: v2
+name: agentgateway-crds
+description: A Helm chart for the agentgateway project CRDs
+icon: https://raw.githubusercontent.com/agentgateway/website/refs/heads/main/static/favicon.svg
+type: application
+version: "0.0.2"
+appVersion: "0.0.1"
+

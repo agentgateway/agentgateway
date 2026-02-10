@@ -1,0 +1,8 @@
+apiVersion: v2
+# The following name is a little confusing because it could refer to
+# agentgateway or Envoy, but it eases the code review to leave it the same:
+name: kgateway-proxy
+description: An internal Helm chart for Envoy
+type: application
+version: 0.0.1-alpha1
+appVersion: "2.0.0-alpha1"

@@ -1,0 +1,100 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: my-agwp
+    namespace: default
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: my-agwp
+  namespace: default
+spec:
+  # Configs applied to helm values BEFORE rendering
+  logging:
+    level: debug
+  image:
+    repository: custom-agentgateway
+    tag: v1.0.0
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Overlays applied via strategic merge patch AFTER rendering
+  deployment:
+    metadata:
+      annotations:
+        deployment-overlay-annotation: from-overlay
+      labels:
+        deployment-overlay-label1: from-overlay
+        deployment-overlay-label2: from-overlay
+        app.kubernetes.io/managed-by: null
+    spec:
+      template:
+        spec:
+          volumes:
+            - $patch: replace
+            - name: custom-config
+              configMap:
+                name: my-custom-config
+            # What you don't want is the following, because it will not give
+            # you custom-config and instead delete every volume, leaving no
+            # volumes:
+            # - $patch: replace
+            #   name: custom-config
+            #   configMap:
+            #     name: my-custom-config
+          containers:
+            - name: agentgateway
+              volumeMounts:
+                - name: custom-config
+                  mountPath: /etc/custom-config
+                  readOnly: true
+              $setElementOrder/args:
+                - /config/config.yaml
+                - -f
+              env:
+                - name: RUST_LOG
+                  $patch: delete
+              securityContext: {}
+  service:
+    metadata:
+      annotations:
+        service-overlay-annotation: from-overlay
+    spec:
+      ports:
+        - $patch: replace
+        - name: http
+          port: 80
+          targetPort: 8080
+          protocol: TCP
+        - name: https
+          port: 443
+          targetPort: 8443
+          protocol: TCP
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same

@@ -1,0 +1,34 @@
+# These values represent configurable values for the Envoy proxy chart
+# They are not intended to be actual "defaults," rather they are just placeholder values
+# meant to allow rendering of the chart/template, as the real values will come from:
+# * The control plane
+# * The `Gateway` resource driving the proxy provisioning
+# * A (possibly merged) GatewayParameters object translated to helm values
+# The actual defaults for these values should come from the "default GatewayParameters" object
+# See: (/install/helm/kgateway/templates/gatewayparameters.yaml)
+
+gateway:
+  # xds values actually come from the control plane
+  xds:
+    host: ""
+    port: 8080
+
+  # actual default set in default GatewayParam service.type
+  service:
+    type: LoadBalancer
+
+  image:
+    pullPolicy: IfNotPresent
+
+  # rollout strategy of the proxy's Deployment
+  strategy: {}
+
+  istio:
+    enabled: false
+
+  # list of ports actually come from the Gateway resource driving this proxy
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http

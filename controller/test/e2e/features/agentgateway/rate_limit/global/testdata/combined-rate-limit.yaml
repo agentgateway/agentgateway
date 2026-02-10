@@ -1,0 +1,27 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: combined-rate-limit
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: test-route-1
+  traffic:
+    rateLimit:
+      local:
+      - requests: 1
+        unit: Minutes
+        burst: 1
+      global:
+        backendRef:
+          name: ratelimit
+          namespace: kgateway-test-extensions
+          port: 8081
+        domain: "api-gateway"
+#        timeout: "100ms" # TODO: support timeout
+        descriptors:
+        - entries:
+          - name: service
+            expression: '"premium-api"'

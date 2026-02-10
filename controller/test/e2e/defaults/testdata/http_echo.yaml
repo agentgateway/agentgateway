@@ -1,0 +1,40 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: http-echo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-echo
+  namespace: http-echo
+spec:
+  selector:
+    app.kubernetes.io/name: http-echo
+  ports:
+    - protocol: TCP
+      targetPort: 8080
+      port: 3000
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: http-echo
+  namespace: http-echo
+  labels:
+    app.kubernetes.io/name: http-echo
+spec:
+  terminationGracePeriodSeconds: 0
+  containers:
+  - name: http-echo
+    # we avoid using checksums so that we automatically select amd64 or arm64
+    image: jmalloc/echo-server:v0.3.7
+    ports:
+      - containerPort: 8080
+    resources:
+      requests:
+        cpu: "100m"
+      limits:
+        cpu: "200m"
+

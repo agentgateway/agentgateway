@@ -1,0 +1,63 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: http
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extProc:
+      backendRef:
+        name: extproc-svc
+        port: 4444
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extproc-svc
+  namespace: default
+spec:
+  ports:
+    - port: 4444
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/http:extproc:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: http
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      extProc:
+        target:
+          port: 4444
+          service:
+            hostname: extproc-svc.default.svc.cluster.local
+            namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

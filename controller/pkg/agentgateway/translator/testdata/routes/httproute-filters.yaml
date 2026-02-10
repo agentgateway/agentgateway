@@ -1,0 +1,384 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: request-multiple-mirrors-headers
+  namespace: default
+spec:
+  parentRefs:
+  - name: test-gateway
+  hostnames:
+  - example.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /multi-mirrors
+    filters:
+    - type: RequestMirror
+      requestMirror:
+        backendRef:
+          name: infra-backend-v2
+          namespace: default
+          port: 8080
+    - type: RequestMirror
+      requestMirror:
+        backendRef:
+          name: infra-backend-v3
+          namespace: default
+          port: 8080
+    - type: ExternalAuth
+      externalAuth:
+        protocol: HTTP
+        http:
+          path: /auth
+          allowedHeaders:
+            - hello
+          allowedResponseHeaders:
+            - world
+        backendRef:
+          name: infra-backend-v3
+          namespace: default
+          port: 8080
+    backendRefs:
+    - name: infra-backend-v1
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /request-headers
+    filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        set:
+          - name: X-Header-Set
+            value: set-overwrites-values
+        add:
+          - name: X-Header-Add
+            value: header-val-1
+          - name: X-Header-Add-Append
+            value: header-val-2
+        remove:
+          - X-Header-Remove
+    backendRefs:
+    - name: infra-backend-v1
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /response-headers
+    filters:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        set:
+          - name: X-Header-Set
+            value: set-overwrites-values
+        add:
+          - name: X-Header-Add
+            value: header-val-1
+          - name: X-Header-Add-Append
+            value: header-val-2
+        remove:
+          - X-Header-Remove
+    backendRefs:
+    - name: infra-backend-v1
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /redirect
+    filters:
+    - type: RequestRedirect
+      requestRedirect:
+        statusCode: 301
+        scheme: https
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /rewrite
+    filters:
+      - type: URLRewrite
+        urlRewrite:
+          path:
+            type: ReplacePrefixMatch
+            replacePrefixMatch: /new-prefix
+    backendRefs:
+      - name: infra-backend-v1
+        port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /cors
+    filters:
+    - type: CORS
+      cors:
+        allowCredentials: true
+        allowHeaders:
+        - content-type
+        allowMethods:
+          - GET
+        allowOrigins:
+        - https://example.com
+        exposeHeaders:
+        - x-custom-header
+        maxAge: 300
+    backendRefs:
+      - name: infra-backend-v1
+        port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /direct
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - example.com
+      key: default/request-multiple-mirrors-headers.0.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /multi-mirrors
+      name:
+        kind: HTTPRoute
+        name: request-multiple-mirrors-headers
+        namespace: default
+      trafficPolicies:
+      - extAuthz:
+          http:
+            includeResponseHeaders:
+            - world
+            path: '"/auth" + request.path'
+          includeRequestHeaders:
+          - Authorization
+          - :authority
+          - hello
+          target:
+            port: 8080
+            service:
+              hostname: infra-backend-v3.default.svc.cluster.local
+              namespace: default
+      - requestMirror:
+          mirrors:
+          - backend:
+              port: 8080
+              service:
+                hostname: infra-backend-v2.default.svc.cluster.local
+                namespace: default
+            percentage: 100
+          - backend:
+              port: 8080
+              service:
+                hostname: infra-backend-v3.default.svc.cluster.local
+                namespace: default
+            percentage: 100
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - example.com
+      key: default/request-multiple-mirrors-headers.1.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /request-headers
+      name:
+        kind: HTTPRoute
+        name: request-multiple-mirrors-headers
+        namespace: default
+      trafficPolicies:
+      - requestHeaderModifier:
+          add:
+          - name: X-Header-Add
+            value: header-val-1
+          - name: X-Header-Add-Append
+            value: header-val-2
+          remove:
+          - X-Header-Remove
+          set:
+          - name: X-Header-Set
+            value: set-overwrites-values
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - example.com
+      key: default/request-multiple-mirrors-headers.2.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /response-headers
+      name:
+        kind: HTTPRoute
+        name: request-multiple-mirrors-headers
+        namespace: default
+      trafficPolicies:
+      - responseHeaderModifier:
+          add:
+          - name: X-Header-Add
+            value: header-val-1
+          - name: X-Header-Add-Append
+            value: header-val-2
+          remove:
+          - X-Header-Remove
+          set:
+          - name: X-Header-Set
+            value: set-overwrites-values
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      hostnames:
+      - example.com
+      key: default/request-multiple-mirrors-headers.3.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /redirect
+      name:
+        kind: HTTPRoute
+        name: request-multiple-mirrors-headers
+        namespace: default
+      trafficPolicies:
+      - requestRedirect:
+          scheme: https
+          status: 301
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - example.com
+      key: default/request-multiple-mirrors-headers.4.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /rewrite
+      name:
+        kind: HTTPRoute
+        name: request-multiple-mirrors-headers
+        namespace: default
+      trafficPolicies:
+      - urlRewrite:
+          prefix: /new-prefix
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - example.com
+      key: default/request-multiple-mirrors-headers.5.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /cors
+      name:
+        kind: HTTPRoute
+        name: request-multiple-mirrors-headers
+        namespace: default
+      trafficPolicies:
+      - cors:
+          allowCredentials: true
+          allowHeaders:
+          - content-type
+          allowMethods:
+          - GET
+          allowOrigins:
+          - https://example.com
+          exposeHeaders:
+          - x-custom-header
+          maxAge: 300s
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      hostnames:
+      - example.com
+      key: default/request-multiple-mirrors-headers.6.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /direct
+      name:
+        kind: HTTPRoute
+        name: request-multiple-mirrors-headers
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: request-multiple-mirrors-headers
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

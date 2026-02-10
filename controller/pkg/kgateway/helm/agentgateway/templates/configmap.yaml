@@ -1,0 +1,24 @@
+{{- $gateway := .Values.agentgateway }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kgateway.gateway.fullname" . }}
+  annotations:
+    {{- toYaml ($gateway.gatewayAnnotations| default dict) | nindent 4 }}
+  labels:
+    {{- include "kgateway.gateway.allLabels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- /* Start with rawConfig as base, then merge typed config on top */ -}}
+    {{- $baseConfig := $gateway.rawConfig | default dict }}
+    {{- $typedConfig := dict }}
+    {{- with ($gateway.logging).format }}
+    {{- $typedConfig = dict "config" (dict "logging" (dict "format" .)) }}
+    {{- end }}
+    {{- /* Merge: typed config takes precedence over rawConfig */ -}}
+    {{- $finalConfig := merge $typedConfig $baseConfig }}
+    {{- if $finalConfig }}
+    {{- toYaml $finalConfig | nindent 4 }}
+    {{- else }}
+    config: {}
+    {{- end }}

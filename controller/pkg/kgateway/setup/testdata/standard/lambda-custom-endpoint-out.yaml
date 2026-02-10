@@ -1,0 +1,88 @@
+clusters:
+- connectTimeout: 5s
+  dnsLookupFamily: V4_PREFERRED
+  loadAssignment:
+    clusterName: backend_gwtest_lambda-custom-backend_0
+    endpoints:
+    - lbEndpoints:
+      - endpoint:
+          address:
+            socketAddress:
+              address: 172.18.0.2
+              portValue: 4566
+  metadata: {}
+  name: backend_gwtest_lambda-custom-backend_0
+  type: LOGICAL_DNS
+  typedExtensionProtocolOptions:
+    envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+      '@type': type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+      commonHttpProtocolOptions:
+        idleTimeout: 30s
+      explicitHttpConfig:
+        http2ProtocolOptions: {}
+      httpFilters:
+      - name: envoy.filters.http.aws_lambda
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.aws_lambda.v3.Config
+          arn: arn:aws:lambda:us-east-1:000000000000:function:my-test-function:$LATEST
+      - name: envoy.filters.http.aws_request_signing
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.aws_request_signing.v3.AwsRequestSigning
+          credentialProvider:
+            inlineCredential:
+              accessKeyId: AKIAIOSFODNN7EXAMPLE
+              secretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+          region: us-east-1
+          serviceName: lambda
+      - name: envoy.filters.http.upstream_codec
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.upstream_codec.v3.UpstreamCodec
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_default_kubernetes_443
+  type: EDS
+listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8080
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8080
+  name: listener~8080
+routes:
+- ignorePortInHostMatching: true
+  name: listener~8080
+  virtualHosts:
+  - domains:
+    - lambda-custom.example.com
+    name: listener~8080~lambda-custom_example_com
+    routes:
+    - match:
+        pathSeparatedPrefix: /lambda-custom
+      name: listener~8080~lambda-custom_example_com-route-0-httproute-route-to-lambda-custom-gwtest-0-0-matcher-0
+      route:
+        cluster: backend_gwtest_lambda-custom-backend_0
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR

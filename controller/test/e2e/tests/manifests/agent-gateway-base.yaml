@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentgateway-base
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gateway
+  namespace: agentgateway-base
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 80
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: agentgateway-base
+spec:
+  ports:
+    - name: http
+      port: 80
+    - name: https
+      port: 443
+    - name: tcp
+      port: 9090
+    - name: grpc
+      port: 7070
+  selector:
+    app.kubernetes.io/name: backend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: agentgateway-base
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+    spec:
+      securityContext:
+        sysctls:
+        - name: net.ipv4.ip_unprivileged_port_start
+          value: "0"
+      containers:
+      - image: gcr.io/istio-testing/app:latest
+        imagePullPolicy: IfNotPresent
+        name: backend
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+        args:
+          - --tcp=9090
+          - --port=80
+          - --grpc=7070
+          - --port=443
+          - --tls=443
+          - --crt=/tls/tls.crt
+          - --key=/tls/tls.key
+        env:
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        volumeMounts:
+          - mountPath: /tls
+            name: certs
+      volumes:
+      - name: certs
+        secret:
+          secretName: certs
+          optional: false
+---
+# From https://github.com/agentgateway/agentgateway/tree/main/examples/tls/certs
+# We use this since Istio's builtin cert is self signed which is not supported (https://github.com/agentgateway/agentgateway/issues/680)
+apiVersion: v1
+kind: Secret
+data:
+  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJlekNDQVNDZ0F3SUJBZ0lSQU9ubW9jOWFWU1preUo1OVU5cis2S0F3Q2dZSUtvWkl6ajBFQXdJd0d6RVoKTUJjR0ExVUVBeE1RWVdkbGJuUm5ZWFJsZDJGNUxtUmxkakFlRncweU5URXdNVFV4T1RRek16WmFGdzB6TlRFdwpNVE14T1RRek16WmFNQnN4R1RBWEJnTlZCQU1URUdGblpXNTBaMkYwWlhkaGVTNWtaWFl3V1RBVEJnY3Foa2pPClBRSUJCZ2dxaGtqT1BRTUJCd05DQUFTY1B1QWc2NSs5RDJZdU9yRmw0eEFZT0I2aDI0NjBRaFpUSVN0RTFQSFAKTUlPVUpBQXFCZEFXQUg1Skc0VWlWVUgvdEtZRWQ3M0NmYUJzSFNOck9KbExvMFV3UXpBT0JnTlZIUThCQWY4RQpCQU1DQVFZd0VnWURWUjBUQVFIL0JBZ3dCZ0VCL3dJQkFUQWRCZ05WSFE0RUZnUVVjd3RNaC85RmZKdmNSOUpVCmJJU091czdZRE1vd0NnWUlLb1pJemowRUF3SURTUUF3UmdJaEFMMmFnZkVJOVRCbDA2MFkwYUdRN1NYNjlhTEMKNy9pZmpMbUgzOFNHT1dDSkFpRUE2M05SeWY1b3o2cnp2dklIcEs4T00yaFNIcVdRRlFuaEJUQ2J5ek5BZTVVPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ0ekNDQVYyZ0F3SUJBZ0lSQU5BbWxodzVHb3F0WGRYejNxZTVuTHd3Q2dZSUtvWkl6ajBFQXdJd0d6RVoKTUJjR0ExVUVBeE1RWVdkbGJuUm5ZWFJsZDJGNUxtUmxkakFlRncweU5URXdNVFl5TURFMU5UWmFGdzB6TlRFdwpNVFF5TURFMU5UWmFNQlF4RWpBUUJnTlZCQU1UQ1d4dlkyRnNhRzl6ZERCWk1CTUdCeXFHU000OUFnRUdDQ3FHClNNNDlBd0VIQTBJQUJHVEtzRXZWdjZzWGNCbU00cGJybGRoenQyVjUwNFEvL3cyOEdRV1NGdS9hNzZvR3o5cWQKVDlPdlFvTnRuZ1BjbG9FUnZTVWNhV3N5ai81V3FiSzhMQWlqZ1lnd2dZVXdEZ1lEVlIwUEFRSC9CQVFEQWdlQQpNQjBHQTFVZEpRUVdNQlFHQ0NzR0FRVUZCd01CQmdnckJnRUZCUWNEQWpBZEJnTlZIUTRFRmdRVUlSSmNVQVFBCkJJSElyRFBnU1VKcENZMUtCWWN3SHdZRFZSMGpCQmd3Rm9BVWN3dE1oLzlGZkp2Y1I5SlViSVNPdXM3WURNb3cKRkFZRFZSMFJCQTB3QzRJSmJHOWpZV3hvYjNOME1Bb0dDQ3FHU000OUJBTUNBMGdBTUVVQ0lRQ1RUWHY2WEVNaApvWUlsbnA4REtWZVJHWUdQM1oxOUVFQ1BiTnpkYVllbDRRSWdMYmZKYllVdnBaQmtBVWlBck1ISStKVElMSGhLCldPaXhLL2NHSmZqbTFSRT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+  tls.key: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxFUkhVZmdKRG5uVWRPZDRKdndBVVJMRy9WNFRKalNTN05nOCt4Y21rMStvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFWk1xd1M5Vy9xeGR3R1l6aWx1dVYySE8zWlhuVGhELy9EYndaQlpJVzc5cnZxZ2JQMnAxUAowNjlDZzIyZUE5eVdnUkc5SlJ4cGF6S1AvbGFwc3J3c0NBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+metadata:
+  name: certs
+  namespace: agentgateway-base

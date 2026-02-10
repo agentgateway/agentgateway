@@ -1,0 +1,59 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: grpc
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      backendRef:
+        name: extauthz # this service explicitly does not exist
+        port: 1024
+      forwardBody:
+        maxSize: 1024
+      grpc:
+        contextExtensions:
+          hello: world
+        requestMetadata:
+          user: jwt.sub
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/grpc:extauth:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: grpc
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      extAuthz:
+        grpc:
+          context:
+            hello: world
+          metadata:
+            user: jwt.sub
+        includeRequestBody:
+          allowPartialMessage: true
+          maxRequestBytes: 1024
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: 'failed to build extAuth: unable to find the Service default/extauthz'
+      reason: PartiallyValid
+      status: "True"
+      type: Accepted
+    controllerName: agentgateway.dev/agentgateway

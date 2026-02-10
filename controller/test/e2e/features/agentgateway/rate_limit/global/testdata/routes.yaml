@@ -1,0 +1,37 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test-route-1
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /path1
+    backendRefs:
+    - name: backend
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test-route-2
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /path2
+    backendRefs:
+    - name: backend
+      port: 80

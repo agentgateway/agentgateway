@@ -1,0 +1,184 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: valid
+      port: 443
+      protocol: HTTPS
+      hostname: "valid"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: tls
+            kind: Secret
+            namespace: allowed
+    - name: invalid
+      port: 443
+      protocol: HTTPS
+      hostname: "invalid"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: tls
+            kind: Secret
+            namespace: rejected
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: tls
+  namespace: allowed
+type: kubernetes.io/tls
+data:
+  ## Dummy key/cert is sufficient for our testing purposes
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURKYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: tls
+  namespace: rejected
+type: kubernetes.io/tls
+data:
+  ## Dummy key/cert is sufficient for our testing purposes
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURKYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow
+  namespace: allowed
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: default
+  to:
+    - group: ""
+      kind: Secret
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 443/default/test-gateway
+      port: 443
+      protocol: TLS
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 443/default/test-gateway
+      hostname: invalid
+      key: default/test-gateway.invalid
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: invalid
+      protocol: HTTPS
+      tls:
+        cert: aW52YWxpZA==
+        privateKey: aW52YWxpZA==
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 443/default/test-gateway
+      hostname: valid
+      key: default/test-gateway.valid
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: valid
+      protocol: HTTPS
+      tls:
+        cert: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURKYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+        privateKey: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: test-gateway
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: 'Some listeners are not programmed: invalid: Bad TLS configuration'
+      reason: ListenersNotValid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: valid
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Bad TLS configuration
+        reason: Invalid
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: certificateRef tls/rejected not accessible to a Gateway in namespace
+          "default" (missing a ReferenceGrant?)
+        reason: RefNotPermitted
+        status: "False"
+        type: ResolvedRefs
+      name: invalid
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

@@ -1,0 +1,85 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: r
+  namespace: default
+spec:
+  parentRefs:
+  - name: gw
+  rules:
+  - backendRefs:
+    - name: example-svc
+      port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-svc
+  namespace: default
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: HTTPRoute
+    name: r
+    group: gateway.networking.k8s.io
+  traffic:
+    timeouts:
+      request: 5s
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:timeout:default/r
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      route:
+        kind: HTTPRoute
+        name: r
+        namespace: default
+    traffic:
+      timeout:
+        request: 5s
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: gw
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

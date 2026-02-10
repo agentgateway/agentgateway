@@ -1,0 +1,185 @@
+clusters:
+- connectTimeout: 5s
+  dnsLookupFamily: V4_PREFERRED
+  loadAssignment:
+    clusterName: backend_gwtest_log_0
+    endpoints:
+    - lbEndpoints:
+      - endpoint:
+          address:
+            socketAddress:
+              address: 1.2.3.4
+              portValue: 8080
+          healthCheckConfig:
+            hostname: 1.2.3.4
+          hostname: 1.2.3.4
+  metadata: {}
+  name: backend_gwtest_log_0
+  type: STATIC
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_default_kubernetes_443
+  type: EDS
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_gwtest_reviews_8080
+  type: EDS
+endpoints:
+- clusterName: kube_gwtest_reviews_8080
+  endpoints:
+  - lbEndpoints:
+    - endpoint:
+        address:
+          socketAddress:
+            address: 10.244.1.11
+            portValue: 8080
+      loadBalancingWeight: 1
+    loadBalancingWeight: 1
+listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        accessLog:
+        - filter:
+            extensionFilter:
+              name: envoy.access_loggers.extension_filters.cel
+              typedConfig:
+                '@type': type.googleapis.com/envoy.extensions.access_loggers.filters.cel.v3.ExpressionFilter
+                expression: request.headers['test'].contains('cool-beans')
+          name: envoy.access_loggers.http_grpc
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.access_loggers.grpc.v3.HttpGrpcAccessLogConfig
+            commonConfig:
+              grpcService:
+                envoyGrpc:
+                  clusterName: backend_gwtest_log_0
+              logName: test-accesslog-service
+              transportApiVersion: V3
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8080
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8080
+  metadata:
+    filterMetadata:
+      merge.HTTPListenerPolicy.gateway.kgateway.dev:
+        accessLog:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+        accessLogConfig:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+  name: listener~8080
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8081
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        accessLog:
+        - filter:
+            extensionFilter:
+              name: envoy.access_loggers.extension_filters.cel
+              typedConfig:
+                '@type': type.googleapis.com/envoy.extensions.access_loggers.filters.cel.v3.ExpressionFilter
+                expression: request.headers['test'].contains('cool-beans')
+          name: envoy.access_loggers.http_grpc
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.access_loggers.grpc.v3.HttpGrpcAccessLogConfig
+            commonConfig:
+              grpcService:
+                envoyGrpc:
+                  clusterName: backend_gwtest_log_0
+              logName: test-accesslog-service
+              transportApiVersion: V3
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8081
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8081
+  metadata:
+    filterMetadata:
+      merge.HTTPListenerPolicy.gateway.kgateway.dev:
+        accessLog:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+        accessLogConfig:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+  name: listener~8081
+routes:
+- ignorePortInHostMatching: true
+  metadata:
+    filterMetadata:
+      merge.HTTPListenerPolicy.gateway.kgateway.dev:
+        accessLog:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+        accessLogConfig:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+  name: listener~8080
+  virtualHosts:
+  - domains:
+    - www.example.com
+    name: listener~8080~www_example_com
+    routes:
+    - match:
+        prefix: /
+      name: listener~8080~www_example_com-route-0-httproute-reviews-gwtest-0-0-matcher-0
+      route:
+        cluster: kube_gwtest_reviews_8080
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR
+- ignorePortInHostMatching: true
+  metadata:
+    filterMetadata:
+      merge.HTTPListenerPolicy.gateway.kgateway.dev:
+        accessLog:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+        accessLogConfig:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+  name: listener~8081
+  virtualHosts:
+  - domains:
+    - www.example.com
+    name: listener~8081~www_example_com
+    routes:
+    - match:
+        prefix: /
+      name: listener~8081~www_example_com-route-0-httproute-reviews-gwtest-0-0-matcher-0
+      route:
+        cluster: kube_gwtest_reviews_8080
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR

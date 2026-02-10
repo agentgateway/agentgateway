@@ -1,0 +1,63 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: example-grpc-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - matches:
+        - method:
+            service: "example.grpc.Service"
+            method: "ExampleMethod"
+      backendRefs:
+        - name: example-configmap # Referencing a ConfigMap, which is invalid
+          kind: ConfigMap
+          group: ""
+          port: 9000
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - {}
+      key: default/example-grpc-route.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          exact: /example.grpc.Service/ExampleMethod
+      name:
+        kind: GRPCRoute
+        name: example-grpc-route
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: GRPCRoute
+  metadata:
+    name: example-grpc-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'referencing unsupported backendRef: group "" kind "ConfigMap"'
+        reason: InvalidKind
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

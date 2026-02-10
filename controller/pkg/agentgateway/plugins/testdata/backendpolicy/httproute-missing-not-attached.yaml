@@ -1,0 +1,35 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: fake
+      group: gateway.networking.k8s.io
+  backend:
+    auth:
+      aws:
+        secretRef:
+          name: aws-auth-secret
+---
+# Output
+output: null
+status:
+  ancestors:
+  - ancestorRef:
+      group: agentgateway.dev
+      name: StatusSummary
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: 'Policy is not attached: HTTPRoute default/fake not found'
+      reason: Pending
+      status: "False"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

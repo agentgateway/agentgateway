@@ -1,0 +1,87 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http
+  namespace: gwtest
+spec:
+  parentRefs:
+    - name: http-gw-for-test
+  hostnames:
+    - "www.httpbin.com"
+  rules:
+    - backendRefs:
+        - name: httpbin
+          port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  namespace: gwtest
+  labels:
+    app: httpbin
+    service: httpbin
+spec:
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8080
+    - name: tcp
+      port: 9000
+  selector:
+    app: httpbin
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: httpbin
+  namespace: gwtest
+  labels:
+    app.kubernetes.io/name: httpbin
+spec:
+  containers:
+    - name: httpbin
+      image: docker.io/mccutchen/go-httpbin:v2.15.0
+      ports:
+        - containerPort: 8080
+          name: http
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: httpbin-slice
+  namespace: gwtest
+  labels:
+    kubernetes.io/service-name: httpbin
+    app: httpbin
+    service: httpbin
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 10.244.1.11
+    conditions:
+      ready: true
+    nodeName: worker
+    targetRef:
+      kind: Pod
+      name: httpbin
+      namespace: default
+ports:
+  - name: http
+    port: 8080
+    protocol: TCP

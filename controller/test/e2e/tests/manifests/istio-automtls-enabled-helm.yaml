@@ -1,0 +1,3 @@
+controller:
+  extraEnv:
+    KGW_ENABLE_ISTIO_AUTO_MTLS: true

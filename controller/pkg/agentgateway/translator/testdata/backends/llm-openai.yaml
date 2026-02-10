@@ -1,0 +1,56 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai
+  namespace: default
+spec:
+  ai:
+    provider:
+      openai:
+        model: "gpt-4o-mini"
+  policies:
+    auth:
+      secretRef:
+        name: openai-secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openai-secret
+  namespace: default
+type: Opaque
+data:
+  Authorization: bXlzZWNyZXRrZXk=
+---
+# Output
+output:
+- resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai:
+              model: gpt-4o-mini
+      inlinePolicies:
+      - auth:
+          key:
+            secret: mysecretkey
+      key: default/openai
+      name:
+        name: openai
+        namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: openai
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

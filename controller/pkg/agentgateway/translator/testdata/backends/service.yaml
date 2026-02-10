@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-svc
+  namespace: default
+spec:
+  selector:
+    test: test
+  ports:
+    - protocol: TCP
+      appProtocol: anything
+      port: 80
+      targetPort: test
+
+---
+# Output
+output:
+- hostname: example-svc.default.svc.cluster.local
+  name: example-svc
+  namespace: default
+  ports:
+  - servicePort: 80
+status: []

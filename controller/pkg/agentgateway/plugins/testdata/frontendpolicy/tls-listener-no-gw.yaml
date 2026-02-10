@@ -1,0 +1,46 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tls-policy
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: fake-gw
+    group: gateway.networking.k8s.io
+  frontend:
+    tls:
+      handshakeTimeout: 15s
+---
+# Output
+output:
+- Policy:
+    frontend:
+      tls:
+        handshakeTimeout: 15s
+    key: frontend/default/tls-policy:frontend-tls:default/fake-gw
+    name:
+      kind: AgentgatewayPolicy
+      name: tls-policy
+      namespace: default
+    target:
+      gateway:
+        name: fake-gw
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: agentgateway.dev
+      name: StatusSummary
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: 'Policy is not attached: Gateway default/fake-gw not found'
+      reason: Pending
+      status: "False"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

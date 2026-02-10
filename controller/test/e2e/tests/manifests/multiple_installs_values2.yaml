@@ -1,0 +1,3 @@
+discoveryNamespaceSelectors:
+- matchLabels:
+    kubernetes.io/metadata.name: kgw-test-2    

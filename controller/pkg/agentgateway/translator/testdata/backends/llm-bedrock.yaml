@@ -1,0 +1,62 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: bedrock
+  namespace: default
+spec:
+  ai:
+    provider:
+      bedrock:
+        model: anthropic.claude-3-5-haiku-20241022-v1:0
+        region: us-west-2
+        guardrail:
+          identifier: guardrail-policy-id
+          version: guardrail-policy-version
+  policies:
+    auth:
+      secretRef:
+        name: bedrock-secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bedrock-secret
+  namespace: default
+data:
+  Authorization: QmVhcmVyIHRlc3Q=
+---
+# Output
+output:
+- resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - bedrock:
+              guardrailIdentifier: guardrail-policy-id
+              guardrailVersion: guardrail-policy-version
+              model: anthropic.claude-3-5-haiku-20241022-v1:0
+              region: us-west-2
+            name: backend
+      inlinePolicies:
+      - auth:
+          key:
+            secret: test
+      key: default/bedrock
+      name:
+        name: bedrock
+        namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: bedrock
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

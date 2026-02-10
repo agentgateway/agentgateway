@@ -1,0 +1,17 @@
+{{- if .Values.controller.verticalPodAutoscaler }}
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ include "agentgateway.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "agentgateway.fullname" . }}
+  {{- with .Values.controller.verticalPodAutoscaler }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end }}

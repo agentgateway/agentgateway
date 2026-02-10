@@ -1,0 +1,141 @@
+clusters:
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_default_kubernetes_443
+  type: EDS
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_gwtest_ratings_8080
+  type: EDS
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_gwtest_reviews_8080
+  type: EDS
+endpoints:
+- clusterName: kube_gwtest_ratings_8080
+  endpoints:
+  - lbEndpoints:
+    - endpoint:
+        address:
+          socketAddress:
+            address: 10.244.1.12
+            portValue: 8080
+      loadBalancingWeight: 1
+    loadBalancingWeight: 1
+- clusterName: kube_gwtest_reviews_8080
+  endpoints:
+  - lbEndpoints:
+    - endpoint:
+        address:
+          socketAddress:
+            address: 10.244.1.11
+            portValue: 8080
+      loadBalancingWeight: 1
+    loadBalancingWeight: 1
+listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        httpFilters:
+        - disabled: true
+          name: ratelimit/local
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+            statPrefix: http_local_rate_limiter
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8080
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8080
+  metadata:
+    filterMetadata:
+      merge.TrafficPolicy.gateway.kgateway.dev:
+        rateLimit.local:
+        - gateway.kgateway.dev/TrafficPolicy/gwtest/gw-route-rl-policy
+  name: listener~8080
+routes:
+- ignorePortInHostMatching: true
+  metadata:
+    filterMetadata:
+      merge.TrafficPolicy.gateway.kgateway.dev:
+        rateLimit.local:
+        - gateway.kgateway.dev/TrafficPolicy/gwtest/gw-route-rl-policy
+  name: listener~8080
+  typedPerFilterConfig:
+    ratelimit/local:
+      '@type': type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+      filterEnabled:
+        defaultValue:
+          numerator: 100
+        runtimeKey: local_rate_limit_enabled
+      filterEnforced:
+        defaultValue:
+          numerator: 100
+        runtimeKey: local_rate_limit_enforced
+      statPrefix: http_local_rate_limiter
+      tokenBucket:
+        fillInterval: 30s
+        maxTokens: 100
+        tokensPerFill: 1
+  virtualHosts:
+  - domains:
+    - www.example.com
+    name: listener~8080~www_example_com
+    routes:
+    - match:
+        path: /ratings
+      metadata:
+        filterMetadata:
+          merge.TrafficPolicy.gateway.kgateway.dev:
+            rateLimit.local:
+            - gateway.kgateway.dev/TrafficPolicy/gwtest/route-rl-policy
+      name: listener~8080~www_example_com-route-0-httproute-my-ratings-route-gwtest-0-0-matcher-0
+      route:
+        cluster: kube_gwtest_ratings_8080
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR
+      typedPerFilterConfig:
+        ratelimit/local:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+          filterEnabled:
+            defaultValue: {}
+            runtimeKey: local_rate_limit_disabled
+          statPrefix: http_local_rate_limiter
+          tokenBucket:
+            fillInterval: 0.000000001s
+            maxTokens: 1
+    - match:
+        pathSeparatedPrefix: /reviews
+      name: listener~8080~www_example_com-route-1-httproute-my-reviews-route-gwtest-0-0-matcher-0
+      route:
+        cluster: kube_gwtest_reviews_8080
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR

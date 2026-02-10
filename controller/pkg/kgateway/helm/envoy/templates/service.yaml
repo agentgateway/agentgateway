@@ -1,0 +1,41 @@
+{{- $gateway := .Values.gateway }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kgateway.gateway.fullname" . }}
+  {{- $annotations := merge ($gateway.gatewayAnnotations| default dict) ((($gateway.service).extraAnnotations) | default dict) }}
+  {{- if $annotations }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- toYaml (merge
+      (include "kgateway.gateway.allLabels" . | fromYaml)
+      ((($gateway.service).extraLabels) | default dict)
+    ) | nindent 4 }}
+spec:
+  type: {{ $gateway.service.type }}
+  {{- if $gateway.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ $gateway.service.externalTrafficPolicy }}
+  {{- end }}
+  {{- with $gateway.service.clusterIP }}
+  clusterIP: {{ . }}
+  {{- end }}
+  {{- with $gateway.service.loadBalancerClass }}
+  loadBalancerClass: {{ . }}
+  {{- end }}
+  {{- with $gateway.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  ports:
+  {{- range $p := $gateway.ports }}
+  - name: {{ $p.name }}
+    protocol: {{ $p.protocol }}
+    targetPort: {{ $p.port }}
+    port: {{ $p.port }}
+    {{- if $p.nodePort }}
+    nodePort: {{ $p.nodePort }}
+    {{- end }}
+  {{- end }}
+  selector:
+    {{- include "kgateway.gateway.selectorLabels" . | nindent 4 }}

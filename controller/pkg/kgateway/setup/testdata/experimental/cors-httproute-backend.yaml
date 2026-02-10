@@ -1,0 +1,120 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reviews
+  namespace: gwtest
+  labels:
+    app: reviews
+    service: reviews
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: reviews
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: reviews-slice
+  namespace: gwtest
+  labels:
+    kubernetes.io/service-name: reviews
+    app: reviews
+    service: reviews
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 10.244.1.11
+    conditions:
+      ready: true
+    nodeName: worker
+    targetRef:
+      kind: Pod
+      name: reviews-1
+      namespace: default
+ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reviews-2
+  namespace: gwtest
+  labels:
+    app: reviews-2
+    service: reviews-2
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: reviews-2
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: reviews-slice-2
+  namespace: gwtest
+  labels:
+    kubernetes.io/service-name: reviews-2
+    app: reviews-2
+    service: reviews-2
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 10.244.1.12
+    conditions:
+      ready: true
+    nodeName: worker
+    targetRef:
+      kind: Pod
+      name: reviews-2
+      namespace: default
+ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: my-route
+  namespace: gwtest
+spec:
+  parentRefs:
+  - name: http-gw-for-test
+  hostnames:
+  - "www.example.com"
+  rules:
+  - backendRefs:
+    - name: reviews
+      port: 8080
+      filters: # Filters that are applied only to this specific backend
+      - cors:
+          allowOrigins:
+          - "https://notexample.com"
+          allowMethods:
+          - GET
+        type: CORS
+    - name: reviews-2
+      port: 8080

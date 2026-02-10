@@ -1,0 +1,57 @@
+# Attempt to YAML inject
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway-v2
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: my-agwp
+    namespace: default
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: my-agwp
+  namespace: default
+spec:
+  logging:
+    level: "json\nattack"
+  rawConfig:
+    blah: "bar\nattack"
+  image:
+    tag: "v1\nattack"
+    digest: "v1\nattack"
+    repository: "v1\nattack"
+    pullPolicy: "v1\nattack"
+    registry: "v1\nattack"
+  deployment:
+    metadata:
+      annotations:
+        foo: "bar\nattack"
+    spec:
+      template:
+        metadata:
+          annotations:
+            foo: "bar\nattack"
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway-v2
+  infrastructure:
+    annotations:
+      foo: "bar\nattack"
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: "hello"
+      allowedRoutes:
+        namespaces:
+          from: Same

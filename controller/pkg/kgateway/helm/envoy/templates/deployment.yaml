@@ -1,0 +1,345 @@
+{{- $gateway := .Values.gateway }}
+{{- $statsConfig := $gateway.stats }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kgateway.gateway.fullname" . }}
+  {{- with $gateway.gatewayAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "kgateway.gateway.allLabels" . | nindent 4 }}
+spec:
+  {{- if $gateway.replicaCount }}
+  replicas: {{ $gateway.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "kgateway.gateway.selectorLabels" . | nindent 6 }}
+  {{- with $gateway.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+      {{- $promAnnotations := dict }}
+      {{- if $statsConfig.enabled }}
+        {{- $promAnnotations = dict "prometheus.io/path" "/metrics" "prometheus.io/port" "9091" "prometheus.io/scrape" "true" }}
+      {{- end}}
+      {{- toYaml (merge
+          (deepCopy ($gateway.gatewayAnnotations | default dict))
+          ($gateway.extraPodAnnotations | default dict)
+          $promAnnotations
+          (include "kgateway.gateway.gatewayNameAnnotation" . | fromYaml)
+       ) | nindent 8 }}
+      labels:
+        {{- toYaml (merge
+          (dict "gateway.networking.k8s.io/gateway-class-name" .Values.gateway.gatewayClassName)
+          (include "kgateway.gateway.selectorLabels" . | fromYaml)
+          (dict "kgateway" "kube-gateway")
+          ($gateway.gatewayLabels | default dict)
+          ($gateway.extraPodLabels | default dict)
+        ) | nindent 8 }}
+    spec:
+      {{- with $gateway.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kgateway.gateway.fullname" . }}
+      {{- with $gateway.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: {{ .Chart.Name }}
+        {{- with $gateway.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        args:
+        - "--disable-hot-restart"
+        - "--service-node"
+        - $(POD_NAME).$(POD_NAMESPACE)
+        {{- with $gateway.logLevel }}
+        - "--log-level"
+        - "{{ . }}"
+        {{- end }}{{/* with $gateway.logLevel */}}
+        {{- with $gateway.componentLogLevel }}
+        - "--component-log-level"
+        - "{{ . }}"
+        {{- end }}{{/* with $gateway.componentLogLevel */}}
+        image: "{{ template "kgateway.gateway.image" $gateway.image }}"
+        {{- if $gateway.image.pullPolicy }}
+        imagePullPolicy: {{ $gateway.image.pullPolicy }}
+        {{- end }}
+        volumeMounts:
+        - mountPath: /etc/envoy
+          name: envoy-config
+        - name: xds-token
+          mountPath: /var/run/secrets/tokens
+          readOnly: true
+        {{- with $gateway.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: ENVOY_UID
+          value: "0"
+{{- if $gateway.env }}
+{{ toYaml $gateway.env | indent 8 }}
+{{- end }}{{/* if $gateway.env */}}
+        ports:
+        {{- range $p := $gateway.ports }}
+        - name: {{ $p.name }}
+          protocol: {{ $p.protocol }}
+          containerPort: {{ $p.targetPort }}
+        {{- end }}
+        {{- if $statsConfig.enabled }}
+        - name: http-monitoring
+          containerPort: 9091
+        {{- end }}
+{{- with $gateway.startupProbe }}
+        startupProbe:
+{{ toYaml . | indent 10}}
+{{- end }}
+{{- with $gateway.readinessProbe }}
+        readinessProbe:
+{{ toYaml . | indent 10}}
+{{- end }}
+{{- with $gateway.livenessProbe }}
+        livenessProbe:
+{{ toYaml . | indent 10}}
+{{- end }}
+{{- if ($gateway.gracefulShutdown).enabled }}
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - wget --post-data "" -O /dev/null 127.0.0.1:19000/healthcheck/fail; sleep {{ $gateway.gracefulShutdown.sleepTimeSeconds | default "10" }}
+{{- end}}{{/*if ($gateway.gracefulShutdown).enabled */}}
+{{- with $gateway.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+{{- end }}
+{{- if and $gateway.istio.enabled ($gateway.sdsContainer).image }}
+      - name: sds
+        image: "{{ template "kgateway.gateway.image" $gateway.sdsContainer.image }}"
+        {{- if $gateway.sdsContainer.image.pullPolicy }}
+        imagePullPolicy: {{ $gateway.sdsContainer.image.pullPolicy }}
+        {{- end }}
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+          - name: ISTIO_MTLS_SDS_ENABLED
+            value: "true"
+          - name: LOG_LEVEL
+            value: {{ $gateway.sdsContainer.sdsBootstrap.logLevel }}
+        ports:
+          - containerPort: 8234
+            name: sds
+            protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 3
+          periodSeconds: 10
+          successThreshold: 1
+          tcpSocket:
+            port: 8234
+          timeoutSeconds: 1
+        {{- with $gateway.sdsContainer.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with $gateway.sdsContainer.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+          - mountPath: /etc/envoy
+            name: envoy-config
+{{- end }}{{/* if $gateway.istio.enabled */}}
+{{- if and $gateway.istio.enabled ($gateway.istioContainer).image }}
+          - mountPath: /etc/istio-certs/
+            name: istio-certs
+      - name: istio-proxy
+        image: "{{ template "kgateway.gateway.image" $gateway.istioContainer.image }}"
+        {{- if $gateway.istioContainer.image.pullPolicy }}
+        imagePullPolicy: {{ $gateway.istioContainer.image.pullPolicy }}
+        {{- end }}
+        args:
+          - proxy
+          - sidecar
+          - --domain
+          - $(POD_NAMESPACE).svc.cluster.local
+          - --configPath
+          - /etc/istio/proxy
+          - --serviceCluster
+          - istio-proxy-prometheus
+          - --drainDuration
+          - 45s
+          - --parentShutdownDuration
+          - 1m0s
+          - --proxyLogLevel={{ $gateway.istioContainer.logLevel }}
+          - --proxyComponentLogLevel=misc:error
+          - --connectTimeout
+          - 10s
+          - --controlPlaneAuthPolicy
+          - NONE
+          - --dnsRefreshRate
+          - 300s
+          - --controlPlaneBootstrap=false
+        env:
+          - name: OUTPUT_CERTS
+            value: "/etc/istio-certs"
+          - name: JWT_POLICY
+            value: third-party-jwt
+          - name: PILOT_CERT_PROVIDER
+            value: istiod
+          - name: CA_ADDR
+            value: {{ $gateway.istioContainer.istioDiscoveryAddress }}
+          - name: ISTIO_META_MESH_ID
+            value: {{ $gateway.istioContainer.istioMetaMeshId }}
+          - name: ISTIO_META_CLUSTER_ID
+            value: {{ $gateway.istioContainer.istioMetaClusterId }}
+          - name: PROXY_CONFIG
+            value: |
+              {"discoveryAddress": {{ $gateway.istioContainer.istioDiscoveryAddress }} }
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: INSTANCE_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: SERVICE_ACCOUNT
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.serviceAccountName
+          - name: HOST_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          - name: ISTIO_META_POD_NAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.name
+          - name: ISTIO_META_CONFIG_NAMESPACE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+          - name: DISABLE_ENVOY
+            value: "true"
+        {{- with $gateway.istioContainer.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with $gateway.istioContainer.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        volumeMounts:
+          - mountPath: /var/run/secrets/istio
+            name: istiod-ca-cert
+          - mountPath: /etc/istio/proxy
+            name: istio-envoy
+          - mountPath: /etc/istio-certs/
+            name: istio-certs
+          - mountPath: /var/run/secrets/tokens
+            name: istio-token
+          - mountPath: /var/run/secrets/credential-uds
+            name: credential-socket
+          - mountPath: /var/run/secrets/workload-spiffe-uds
+            name: workload-socket
+          - mountPath: /var/run/secrets/workload-spiffe-credentials
+            name: workload-certs
+{{- end }}{{/* if $gateway.istio.enabled */}}
+      {{- with $gateway.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gateway.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gateway.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $gateway.priorityClassName }}
+      priorityClassName: {{ $gateway.priorityClassName | quote }}
+      {{- end }}
+      {{- if $gateway.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ $gateway.terminationGracePeriodSeconds }}
+      {{- end }}
+      volumes:
+      - name: xds-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: kgateway
+              expirationSeconds: 43200
+              path: xds-token
+      - configMap:
+          name: {{ include "kgateway.gateway.fullname" . }}
+        name: envoy-config
+{{- if $gateway.istio.enabled }}
+      - emptyDir:
+          medium: Memory
+        name: istio-certs
+      - configMap:
+          defaultMode: 420
+          name: istio-ca-root-cert
+        name: istiod-ca-cert
+      - emptyDir:
+          medium: Memory
+        name: istio-envoy
+      - name: istio-token
+        projected:
+          defaultMode: 420
+          sources:
+            - serviceAccountToken:
+                audience: istio-ca
+                expirationSeconds: 43200
+                path: istio-token
+      - name: credential-socket
+        emptyDir: {}
+      - name: workload-socket
+        emptyDir: {}
+      - name: workload-certs
+        emptyDir: {}
+{{- end }}{{/* if $gateway.istio.enabled */}}
+      {{- with $gateway.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}

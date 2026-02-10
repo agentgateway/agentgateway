@@ -1,0 +1,89 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: lambda-route
+  namespace: gwtest
+spec:
+  parentRefs:
+    - name: http-gw-for-test
+  hostnames:
+    - "www.example.com"
+  rules:
+    - matches:
+      - path:
+          type: Exact
+          value: /lambda/prod
+      backendRefs:
+        - name: lambda-prod
+          kind: Backend
+          group: gateway.kgateway.dev
+    - matches:
+      - path:
+          type: Exact
+          value: /lambda/dev
+      backendRefs:
+        - name: lambda-dev
+          kind: Backend
+          group: gateway.kgateway.dev
+    - matches:
+      - path:
+          type: Exact
+          value: /lambda/latest
+      backendRefs:
+        - name: lambda-latest
+          kind: Backend
+          group: gateway.kgateway.dev
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-prod
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    lambda:
+      functionName: hello-function
+      qualifier: prod
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-dev
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    lambda:
+      functionName: hello-function
+      qualifier: dev
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-latest
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    lambda:
+      functionName: hello-function

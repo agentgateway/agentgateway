@@ -1,0 +1,65 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: gateway
+      group: gateway.networking.k8s.io
+  frontend:
+    tracing:
+      backendRef:
+        name: opentelemetry-collector
+        namespace: default
+        port: 4317
+      protocol: GRPC
+      clientSampling: "true"
+      randomSampling: "true"
+      resources:
+        - name: deployment.environment.name
+          expression: '"production"'
+        - name: service.version
+          expression: '"test"'
+      attributes:
+        add:
+          - expression: '"literal"'
+            name: custom
+          - expression: 'request.headers["x-header-tag"]'
+            name: request
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: httpbin-route
+  namespace: agentgateway-base
+spec:
+  hostnames:
+    - www.example.com
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: gateway
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: backend
+          port: 80
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /status/200
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: backend
+          port: 80
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /get
+---

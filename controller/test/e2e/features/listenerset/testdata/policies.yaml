@@ -1,0 +1,64 @@
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: gw-policy
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+  transformation:
+    response:
+      set:
+        - name: policy
+          value: gateway
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: gw-specific-policy
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gw
+    sectionName: http-2
+  transformation:
+    response:
+      set:
+        - name: policy
+          value: gateway-section
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: ls-policy
+  namespace: allowed-ns
+spec:
+  targetRefs:
+    - kind: XListenerSet
+      group: gateway.networking.x-k8s.io
+      name: valid-ls
+  transformation:
+    response:
+      set:
+        - name: policy
+          value: listener-set
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: ls-specific-policy
+  namespace: allowed-ns
+spec:
+  targetRefs:
+    - kind: XListenerSet
+      group: gateway.networking.x-k8s.io
+      name: valid-ls
+      sectionName: http-2
+  transformation:
+    response:
+      set:
+        - name: policy
+          value: listener-set-section
+

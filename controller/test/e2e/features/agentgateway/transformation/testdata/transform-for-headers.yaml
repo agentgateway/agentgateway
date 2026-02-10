@@ -1,0 +1,35 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-route-for-headers
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "example-headers.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: example-agw-policy-for-headers
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: example-route-for-headers
+  traffic:
+    transformation:
+      request:
+        set:
+          - name: x-foo-bar
+            value: "'foolen_' + request.headers['content-length']"
+      response:
+        set:
+          - name: x-foo-response
+            value: "'x-add-bar' in request.headers ? 'supersuper' + request.headers['x-add-bar'] : 'notsuper'"

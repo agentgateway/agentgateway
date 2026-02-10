@@ -1,0 +1,37 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: gw-policy
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: super-gateway
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: https://kgateway.dev
+        jwks:
+          remote:
+            jwksPath: org-one/keys
+            backendRef:
+              group: agentgateway.dev
+              kind: AgentgatewayBackend
+              name: fail
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: fail
+  namespace: default
+spec:
+  mcp:
+    targets:
+    - name: user-target
+      static:
+        host: mcp-website-fetcher.default.svc.cluster.local
+        port: 80
+        protocol: SSE
+

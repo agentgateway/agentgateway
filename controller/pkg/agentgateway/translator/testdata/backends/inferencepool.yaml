@@ -1,0 +1,92 @@
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: gateway-pool
+  namespace: default
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: gateway-pool-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: gateway
+  targetPorts:
+    - number: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: inference-pool
+  namespace: default
+spec:
+  targetRefs:
+    - name: gateway-pool
+      kind: InferencePool
+      group: inference.networking.k8s.io
+  validation:
+    hostname: my.inference.pool.example.com
+    wellKnownCACertificates: System
+---
+# Output
+output:
+- resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+              namespace: default
+          failureMode: FAIL_CLOSED
+      key: default/gateway-pool:inference
+      name:
+        kind: InferencePool
+        name: gateway-pool
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool.default.inference.cluster.local
+          namespace: default
+- resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: default/gateway-pool:inferencetls
+      name:
+        kind: InferencePool
+        name: gateway-pool
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+          namespace: default
+          port: 9002
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: my.inference.pool.example.com
+      key: default/inference-pool:backend-tls:default/gateway-pool.default.inference.cluster.local
+      name:
+        kind: BackendTLSPolicy
+        name: inference-pool
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool.default.inference.cluster.local
+          namespace: default
+- hostname: gateway-pool.default.inference.cluster.local
+  name: gateway-pool
+  namespace: default
+  ports:
+  - appProtocol: HTTP11
+    servicePort: 8080
+    targetPort: 8080
+status: []

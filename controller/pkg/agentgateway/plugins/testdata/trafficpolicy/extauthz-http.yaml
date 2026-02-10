@@ -1,0 +1,94 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: http
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      backendRef:
+        name: extauthz
+        port: 1024
+      forwardBody:
+        maxSize: 1024
+      http:
+        path: |
+          "/prefix/" + request.path
+        redirect: |
+          "/signin"
+        allowedRequestHeaders:
+        - authorization
+        addRequestHeaders:
+          x-custom-header: "random()"
+        allowedResponseHeaders:
+        - x-custom-header
+        responseMetadata:
+          githubUser: response.headers["x-auth-request-user"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extauthz
+  namespace: default
+spec:
+  ports:
+    - port: 1024
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/http:extauth:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: http
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      extAuthz:
+        http:
+          addRequestHeaders:
+            x-custom-header: random()
+          includeResponseHeaders:
+          - x-custom-header
+          metadata:
+            githubUser: response.headers["x-auth-request-user"]
+          path: |
+            "/prefix/" + request.path
+          redirect: |
+            "/signin"
+        includeRequestBody:
+          allowPartialMessage: true
+          maxRequestBytes: 1024
+        includeRequestHeaders:
+        - authorization
+        target:
+          port: 1024
+          service:
+            hostname: extauthz.default.svc.cluster.local
+            namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

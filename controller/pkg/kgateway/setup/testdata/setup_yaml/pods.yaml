@@ -1,0 +1,182 @@
+# env test can't delete pods, so we create them once for all tests
+# changes here may need re-generation of all the output yamls.
+
+# needed for unique client set - xds requests will look like they are coming
+# from this pod
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: gateway
+    version: v1
+    topology.istio.io/network: n1
+  name: gateway
+spec:
+  containers:
+  - image: gateway
+    name: gateway
+    ports:
+    - containerPort: 8080
+      protocol: TCP
+  nodeName: worker
+  serviceAccount: default
+  serviceAccountName: default
+---
+apiVersion: v1
+kind: Node
+metadata:
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: worker
+    kubernetes.io/os: linux
+    topology.istio.io/subzone: r1z2s3
+    topology.kubernetes.io/region: r1
+    topology.kubernetes.io/zone: r1z2
+  name: worker
+spec:
+  podCIDR: 10.244.1.0/24
+  podCIDRs:
+  - 10.244.1.0/24
+  providerID: kind://docker/kgateway/worker
+---
+apiVersion: v1
+kind: Node
+metadata:
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: worker2
+    kubernetes.io/os: linux
+    topology.istio.io/subzone: r1z2s4
+    topology.kubernetes.io/region: r1
+    topology.kubernetes.io/zone: r1z2
+  name: worker2
+spec:
+  podCIDR: 10.244.2.0/24
+  podCIDRs:
+  - 10.244.2.0/24
+  providerID: kind://docker/kgateway/worker2
+---
+apiVersion: v1
+kind: Node
+metadata:
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: worker3
+    kubernetes.io/os: linux
+    topology.istio.io/subzone: r1z3s4
+    topology.kubernetes.io/region: r1
+    topology.kubernetes.io/zone: r1z3
+  name: worker3
+spec:
+  podCIDR: 10.244.3.0/24
+  podCIDRs:
+  - 10.244.3.0/24
+  providerID: kind://docker/kgateway/worker3
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: reviews
+    version: v1
+    topology.istio.io/network: n1
+  name: reviews-1
+spec:
+  containers:
+  - image: docker.io/istio/examples-bookinfo-reviews-v3:1.20.1
+    name: reviews
+    ports:
+    - containerPort: 8080
+      protocol: TCP
+  nodeName: worker
+  serviceAccount: default
+  serviceAccountName: default
+status:
+  podIP: 10.244.1.11
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: reviews
+    version: v2
+    topology.istio.io/network: n1
+  name: reviews-2
+spec:
+  containers:
+  - image: docker.io/istio/examples-bookinfo-reviews-v3:1.20.1
+    name: reviews
+    ports:
+    - containerPort: 8080
+      protocol: TCP
+  nodeName: worker2
+  serviceAccount: default
+  serviceAccountName: default
+status:
+  podIP: 10.244.2.14
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: reviews
+  name: reviews-3
+spec:
+  containers:
+  - image: docker.io/istio/examples-bookinfo-reviews-v3:1.20.1
+    name: reviews
+    ports:
+    - containerPort: 8080
+      protocol: TCP
+  nodeName: worker3
+  serviceAccount: default
+  serviceAccountName: default
+status:
+  podIP: 10.244.3.3
+---
+## while cross regional nodes is usually not a valid k8s setup, we'll add one here for testing purposes
+apiVersion: v1
+kind: Node
+metadata:
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: worker4
+    kubernetes.io/os: linux
+    topology.istio.io/subzone: r2z1s1
+    topology.kubernetes.io/region: r2
+    topology.kubernetes.io/zone: r2z1
+  name: worker4
+spec:
+  podCIDR: 10.244.4.0/24
+  podCIDRs:
+  - 10.244.4.0/24
+  providerID: kind://docker/kgateway/worker4
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: reviews
+    version: v1
+    topology.istio.io/network: n2
+  name: reviews-4
+spec:
+  containers:
+  - image: docker.io/istio/examples-bookinfo-reviews-v3:1.20.1
+    name: reviews
+    ports:
+    - containerPort: 8080
+      protocol: TCP
+  nodeName: worker4
+  serviceAccount: default
+  serviceAccountName: default
+status:
+  podIP: 10.244.4.4

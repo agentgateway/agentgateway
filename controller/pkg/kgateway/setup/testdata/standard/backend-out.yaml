@@ -1,0 +1,67 @@
+clusters:
+- connectTimeout: 5s
+  dnsLookupFamily: V4_PREFERRED
+  loadAssignment:
+    clusterName: backend_gwtest_static_0
+    endpoints:
+    - lbEndpoints:
+      - endpoint:
+          address:
+            socketAddress:
+              address: 1.2.3.4
+              portValue: 8080
+          healthCheckConfig:
+            hostname: 1.2.3.4
+          hostname: 1.2.3.4
+  metadata: {}
+  name: backend_gwtest_static_0
+  type: STATIC
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_default_kubernetes_443
+  type: EDS
+listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8080
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8080
+  name: listener~8080
+routes:
+- ignorePortInHostMatching: true
+  name: listener~8080
+  virtualHosts:
+  - domains:
+    - www.example.com
+    name: listener~8080~www_example_com
+    routes:
+    - match:
+        prefix: /
+      name: listener~8080~www_example_com-route-0-httproute-route-to-upstream-gwtest-0-0-matcher-0
+      route:
+        cluster: backend_gwtest_static_0
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR

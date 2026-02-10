@@ -1,0 +1,179 @@
+clusters:
+- connectTimeout: 5s
+  dnsLookupFamily: V4_PREFERRED
+  loadAssignment:
+    clusterName: backend_gwtest_lambda-dev_0
+    endpoints:
+    - lbEndpoints:
+      - endpoint:
+          address:
+            socketAddress:
+              address: lambda.us-east-1.amazonaws.com
+              portValue: 443
+  metadata: {}
+  name: backend_gwtest_lambda-dev_0
+  transportSocket:
+    name: envoy.transport_sockets.tls
+    typedConfig:
+      '@type': type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+      sni: lambda.us-east-1.amazonaws.com
+  type: LOGICAL_DNS
+  typedExtensionProtocolOptions:
+    envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+      '@type': type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+      commonHttpProtocolOptions:
+        idleTimeout: 30s
+      explicitHttpConfig:
+        http2ProtocolOptions: {}
+      httpFilters:
+      - name: envoy.filters.http.aws_lambda
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.aws_lambda.v3.Config
+          arn: arn:aws:lambda:us-east-1:000000000000:function:hello-function:dev
+      - name: envoy.filters.http.aws_request_signing
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.aws_request_signing.v3.AwsRequestSigning
+          region: us-east-1
+          serviceName: lambda
+      - name: envoy.filters.http.upstream_codec
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.upstream_codec.v3.UpstreamCodec
+- connectTimeout: 5s
+  dnsLookupFamily: V4_PREFERRED
+  loadAssignment:
+    clusterName: backend_gwtest_lambda-latest_0
+    endpoints:
+    - lbEndpoints:
+      - endpoint:
+          address:
+            socketAddress:
+              address: lambda.us-east-1.amazonaws.com
+              portValue: 443
+  metadata: {}
+  name: backend_gwtest_lambda-latest_0
+  transportSocket:
+    name: envoy.transport_sockets.tls
+    typedConfig:
+      '@type': type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+      sni: lambda.us-east-1.amazonaws.com
+  type: LOGICAL_DNS
+  typedExtensionProtocolOptions:
+    envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+      '@type': type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+      commonHttpProtocolOptions:
+        idleTimeout: 30s
+      explicitHttpConfig:
+        http2ProtocolOptions: {}
+      httpFilters:
+      - name: envoy.filters.http.aws_lambda
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.aws_lambda.v3.Config
+          arn: arn:aws:lambda:us-east-1:000000000000:function:hello-function:$LATEST
+      - name: envoy.filters.http.aws_request_signing
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.aws_request_signing.v3.AwsRequestSigning
+          region: us-east-1
+          serviceName: lambda
+      - name: envoy.filters.http.upstream_codec
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.upstream_codec.v3.UpstreamCodec
+- connectTimeout: 5s
+  dnsLookupFamily: V4_PREFERRED
+  loadAssignment:
+    clusterName: backend_gwtest_lambda-prod_0
+    endpoints:
+    - lbEndpoints:
+      - endpoint:
+          address:
+            socketAddress:
+              address: lambda.us-east-1.amazonaws.com
+              portValue: 443
+  metadata: {}
+  name: backend_gwtest_lambda-prod_0
+  transportSocket:
+    name: envoy.transport_sockets.tls
+    typedConfig:
+      '@type': type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+      sni: lambda.us-east-1.amazonaws.com
+  type: LOGICAL_DNS
+  typedExtensionProtocolOptions:
+    envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+      '@type': type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+      commonHttpProtocolOptions:
+        idleTimeout: 30s
+      explicitHttpConfig:
+        http2ProtocolOptions: {}
+      httpFilters:
+      - name: envoy.filters.http.aws_lambda
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.aws_lambda.v3.Config
+          arn: arn:aws:lambda:us-east-1:000000000000:function:hello-function:prod
+      - name: envoy.filters.http.aws_request_signing
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.aws_request_signing.v3.AwsRequestSigning
+          region: us-east-1
+          serviceName: lambda
+      - name: envoy.filters.http.upstream_codec
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.upstream_codec.v3.UpstreamCodec
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_default_kubernetes_443
+  type: EDS
+listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8080
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8080
+  name: listener~8080
+routes:
+- ignorePortInHostMatching: true
+  name: listener~8080
+  virtualHosts:
+  - domains:
+    - www.example.com
+    name: listener~8080~www_example_com
+    routes:
+    - match:
+        path: /lambda/latest
+      name: listener~8080~www_example_com-route-0-httproute-lambda-route-gwtest-2-0-matcher-0
+      route:
+        cluster: backend_gwtest_lambda-latest_0
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR
+    - match:
+        path: /lambda/prod
+      name: listener~8080~www_example_com-route-1-httproute-lambda-route-gwtest-0-0-matcher-0
+      route:
+        cluster: backend_gwtest_lambda-prod_0
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR
+    - match:
+        path: /lambda/dev
+      name: listener~8080~www_example_com-route-2-httproute-lambda-route-gwtest-1-0-matcher-0
+      route:
+        cluster: backend_gwtest_lambda-dev_0
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR

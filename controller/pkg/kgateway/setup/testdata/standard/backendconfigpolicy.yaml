@@ -1,0 +1,80 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  namespace: gwtest
+  labels:
+    app: httpbin
+    service: httpbin
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: httpbin
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: reviews-slice
+  namespace: gwtest
+  labels:
+    kubernetes.io/service-name: httpbin
+    app: httpbin
+    service: httpbin
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 10.244.1.11
+    conditions:
+      ready: true
+    nodeName: worker
+    targetRef:
+      kind: Pod
+      name: httpbin
+      namespace: gwtest
+ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+---
+kind: BackendConfigPolicy
+apiVersion: gateway.kgateway.dev/v1alpha1
+metadata:
+  name: httpbin-policy
+  namespace: gwtest
+spec:
+  targetRefs:
+    - name: httpbin
+      group: ""
+      kind: Service
+  connectTimeout: 5s
+  perConnectionBufferLimitBytes: 1024
+  tcpKeepalive:
+    keepAliveProbes: 3
+    keepAliveTime: 30s
+    keepAliveInterval: 5s
+  commonHttpProtocolOptions:
+    idleTimeout: 10s
+    maxHeadersCount: 15
+    maxStreamDuration: 30s
+    maxRequestsPerConnection: 100
+  http1ProtocolOptions:
+    enableTrailers: true
+    overrideStreamErrorOnInvalidHttpMessage: true

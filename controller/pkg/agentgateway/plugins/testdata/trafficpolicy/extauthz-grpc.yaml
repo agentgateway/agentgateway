@@ -1,0 +1,78 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: grpc
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      backendRef:
+        name: extauthz
+        port: 1024
+      forwardBody:
+        maxSize: 1024
+      grpc:
+        contextExtensions:
+          hello: world
+        requestMetadata:
+          user: jwt.sub
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extauthz
+  namespace: default
+spec:
+  ports:
+    - port: 1024
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/grpc:extauth:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: grpc
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      extAuthz:
+        grpc:
+          context:
+            hello: world
+          metadata:
+            user: jwt.sub
+        includeRequestBody:
+          allowPartialMessage: true
+          maxRequestBytes: 1024
+        target:
+          port: 1024
+          service:
+            hostname: extauthz.default.svc.cluster.local
+            namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

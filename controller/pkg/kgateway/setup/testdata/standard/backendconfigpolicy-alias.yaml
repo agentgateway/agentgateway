@@ -1,0 +1,76 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: httpbin-se
+  namespace: gwtest
+  labels:
+    app: httpbin
+    service: httpbin
+spec:
+  hosts:
+  - se.example.com
+  ports:
+  - number: 80
+    name: http
+    protocol: TCP
+  resolution: STATIC
+  location: MESH_INTERNAL
+  endpoints:
+  - address: 1.1.1.1
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: reviews-slice
+  namespace: gwtest
+  labels:
+    kubernetes.io/service-name: httpbin
+    app: httpbin
+    service: httpbin
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 10.244.1.11
+    conditions:
+      ready: true
+    nodeName: worker
+    targetRef:
+      kind: Pod
+      name: httpbin
+      namespace: gwtest
+ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+---
+kind: BackendConfigPolicy
+apiVersion: gateway.kgateway.dev/v1alpha1
+metadata:
+  name: httpbin-policy-alias
+  namespace: gwtest
+spec:
+  targetSelectors:
+    - group: networking.istio.io
+      kind: Hostname
+      matchLabels:
+        app: httpbin
+        service: httpbin
+  connectTimeout: 5s
+  commonHttpProtocolOptions:
+    maxHeadersCount: 15
+    maxRequestsPerConnection: 100

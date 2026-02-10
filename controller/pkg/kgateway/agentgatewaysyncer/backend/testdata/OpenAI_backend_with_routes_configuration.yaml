@@ -1,0 +1,17 @@
+ai:
+  providerGroups:
+  - providers:
+    - name: backend
+      openai:
+        model: gpt-4o-mini
+inlinePolicies:
+- ai:
+    routes:
+      '*': PASSTHROUGH
+      /v1/chat/completions: COMPLETIONS
+      /v1/messages: MESSAGES
+      /v1/models: MODELS
+key: test-ns/openai-with-routes
+name:
+  name: openai-with-routes
+  namespace: test-ns

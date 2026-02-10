@@ -1,0 +1,65 @@
+clusters:
+- connectTimeout: 5s
+  dnsLookupFamily: V4_PREFERRED
+  loadAssignment:
+    clusterName: istio-se_gwtest_example-se_se.example.com_80
+    endpoints:
+    - lbEndpoints:
+      - endpoint:
+          address:
+            socketAddress:
+              address: se.example.com
+              portValue: 80
+        loadBalancingWeight: 1
+      loadBalancingWeight: 1
+  metadata: {}
+  name: istio-se_gwtest_example-se_se.example.com_80
+  type: STRICT_DNS
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  metadata: {}
+  name: kube_default_kubernetes_443
+  type: EDS
+listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: http
+        statPrefix: http
+        useRemoteAddress: true
+    name: http
+  name: http
+routes:
+- ignorePortInHostMatching: true
+  name: http
+  virtualHosts:
+  - domains:
+    - se.example.com
+    name: http~se_example_com
+    routes:
+    - match:
+        prefix: /
+      name: http~se_example_com-route-0-httproute-route-to-upstream-gwtest-0-0-matcher-0
+      route:
+        cluster: istio-se_gwtest_example-se_se.example.com_80
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR

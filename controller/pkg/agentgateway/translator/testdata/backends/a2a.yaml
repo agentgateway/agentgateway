@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: a2a-agent
+  namespace: default
+spec:
+  selector:
+    app: a2a-agent
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+      appProtocol: kgateway.dev/a2a
+---
+# Output
+output:
+- resource:
+    policy:
+      backend:
+        a2a: {}
+      key: a2a/default/a2a-agent/9090
+      name:
+        kind: Service
+        name: a2a-agent
+        namespace: default
+      target:
+        service:
+          hostname: a2a-agent.default.svc.cluster.local
+          namespace: default
+          port: 9090
+- hostname: a2a-agent.default.svc.cluster.local
+  name: a2a-agent
+  namespace: default
+  ports:
+  - servicePort: 9090
+    targetPort: 9090
+status: []

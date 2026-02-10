@@ -1,0 +1,29 @@
+apiVersion: gateway.networking.x-k8s.io/v1alpha1
+kind: XListenerSet
+metadata:
+  name: invalid-ls-non-existing-gw
+spec:
+  parentRef:
+    name: non-existing
+    kind: Gateway
+    group: gateway.networking.k8s.io
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8081
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: invalid-ls-non-existing-gw-route
+spec:
+  parentRefs:
+    - kind: XListenerSet
+      group: gateway.networking.x-k8s.io
+      name: invalid-ls-non-existing-gw
+  hostnames:
+    - "listenerset.com"
+  rules:
+    - backendRefs:
+        - name: example-svc
+          port: 8080

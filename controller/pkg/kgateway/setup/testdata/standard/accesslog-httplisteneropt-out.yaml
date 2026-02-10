@@ -1,0 +1,196 @@
+clusters:
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_default_kubernetes_443
+  type: EDS
+- connectTimeout: 5s
+  edsClusterConfig:
+    edsConfig:
+      ads: {}
+      resourceApiVersion: V3
+  ignoreHealthOnHostRemoval: true
+  metadata: {}
+  name: kube_gwtest_reviews_8080
+  type: EDS
+endpoints:
+- clusterName: kube_gwtest_reviews_8080
+  endpoints:
+  - lbEndpoints:
+    - endpoint:
+        address:
+          socketAddress:
+            address: 10.244.1.11
+            portValue: 8080
+      loadBalancingWeight: 1
+    loadBalancingWeight: 1
+listeners:
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8080
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        accessLog:
+        - name: envoy.access_loggers.file
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+            logFormat:
+              formatters:
+              - name: envoy.formatter.req_without_query
+                typedConfig:
+                  '@type': type.googleapis.com/envoy.extensions.formatter.req_without_query.v3.ReqWithoutQuery
+              - name: envoy.formatter.metadata
+                typedConfig:
+                  '@type': type.googleapis.com/envoy.extensions.formatter.metadata.v3.Metadata
+              jsonFormat:
+                authority: '%REQ(:AUTHORITY)%'
+                bytes_received: '%BYTES_RECEIVED%'
+                bytes_sent: '%BYTES_SENT%'
+                method: '%REQ(X-ENVOY-ORIGINAL-METHOD?:METHOD)%'
+                path: '%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%'
+                protocol: '%PROTOCOL%'
+                req_x_forwarded_for: '%REQ(X-FORWARDED-FOR)%'
+                request_id: '%REQ(X-REQUEST-ID)%'
+                resp_upstream_service_time: '%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%'
+                response_code: '%RESPONSE_CODE%'
+                response_flags: '%RESPONSE_FLAGS%'
+                start_time: '%START_TIME%'
+                total_duration: '%DURATION%'
+                upstreamCluster: '%UPSTREAM_CLUSTER%'
+                upstreamHost: '%UPSTREAM_HOST%'
+                user_agent: '%REQ(USER-AGENT)%'
+            path: /dev/stdout
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8080
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8080
+  metadata:
+    filterMetadata:
+      merge.HTTPListenerPolicy.gateway.kgateway.dev:
+        accessLog:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+        accessLogConfig:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+  name: listener~8080
+- address:
+    socketAddress:
+      address: '::'
+      ipv4Compat: true
+      portValue: 8081
+  filterChains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        accessLog:
+        - name: envoy.access_loggers.file
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+            logFormat:
+              formatters:
+              - name: envoy.formatter.req_without_query
+                typedConfig:
+                  '@type': type.googleapis.com/envoy.extensions.formatter.req_without_query.v3.ReqWithoutQuery
+              - name: envoy.formatter.metadata
+                typedConfig:
+                  '@type': type.googleapis.com/envoy.extensions.formatter.metadata.v3.Metadata
+              jsonFormat:
+                authority: '%REQ(:AUTHORITY)%'
+                bytes_received: '%BYTES_RECEIVED%'
+                bytes_sent: '%BYTES_SENT%'
+                method: '%REQ(X-ENVOY-ORIGINAL-METHOD?:METHOD)%'
+                path: '%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%'
+                protocol: '%PROTOCOL%'
+                req_x_forwarded_for: '%REQ(X-FORWARDED-FOR)%'
+                request_id: '%REQ(X-REQUEST-ID)%'
+                resp_upstream_service_time: '%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%'
+                response_code: '%RESPONSE_CODE%'
+                response_flags: '%RESPONSE_FLAGS%'
+                start_time: '%START_TIME%'
+                total_duration: '%DURATION%'
+                upstreamCluster: '%UPSTREAM_CLUSTER%'
+                upstreamHost: '%UPSTREAM_HOST%'
+                user_agent: '%REQ(USER-AGENT)%'
+            path: /dev/stdout
+        httpFilters:
+        - name: envoy.filters.http.router
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        mergeSlashes: true
+        normalizePath: true
+        rds:
+          configSource:
+            ads: {}
+            resourceApiVersion: V3
+          routeConfigName: listener~8081
+        statPrefix: http
+        useRemoteAddress: true
+    name: listener~8081
+  metadata:
+    filterMetadata:
+      merge.HTTPListenerPolicy.gateway.kgateway.dev:
+        accessLog:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+        accessLogConfig:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+  name: listener~8081
+routes:
+- ignorePortInHostMatching: true
+  metadata:
+    filterMetadata:
+      merge.HTTPListenerPolicy.gateway.kgateway.dev:
+        accessLog:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+        accessLogConfig:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+  name: listener~8080
+  virtualHosts:
+  - domains:
+    - www.example.com
+    name: listener~8080~www_example_com
+    routes:
+    - match:
+        prefix: /
+      name: listener~8080~www_example_com-route-0-httproute-reviews-gwtest-0-0-matcher-0
+      route:
+        cluster: kube_gwtest_reviews_8080
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR
+- ignorePortInHostMatching: true
+  metadata:
+    filterMetadata:
+      merge.HTTPListenerPolicy.gateway.kgateway.dev:
+        accessLog:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+        accessLogConfig:
+        - gateway.kgateway.dev/HTTPListenerPolicy/gwtest/accesslog
+  name: listener~8081
+  virtualHosts:
+  - domains:
+    - www.example.com
+    name: listener~8081~www_example_com
+    routes:
+    - match:
+        prefix: /
+      name: listener~8081~www_example_com-route-0-httproute-reviews-gwtest-0-0-matcher-0
+      route:
+        cluster: kube_gwtest_reviews_8080
+        clusterNotFoundResponseCode: INTERNAL_SERVER_ERROR

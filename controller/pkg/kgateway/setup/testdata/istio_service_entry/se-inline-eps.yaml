@@ -1,0 +1,54 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-to-upstream
+  namespace: gwtest
+spec:
+  parentRefs:
+  - name: http-gw-for-test
+  hostnames:
+  - "se.example.com"
+  rules:
+  - backendRefs:
+    - name: example-se
+      port: 80
+      kind: ServiceEntry
+      group: networking.istio.io
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: example-se
+  namespace: gwtest
+spec:
+  hosts:
+  - se.example.com
+  ports:
+  - number: 80
+    name: http
+    protocol: TCP
+  resolution: STATIC
+  location: MESH_INTERNAL
+  endpoints:
+  - address: 1.1.1.1
+    locality: r1/z1/sz1
+  - address: 2.2.2.2
+    locality: r1/z1/sz1
+  - address: 3.3.3.3
+    locality: r3/z3/sz3
+---

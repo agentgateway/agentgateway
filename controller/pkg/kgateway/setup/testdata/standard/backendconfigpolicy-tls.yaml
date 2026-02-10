@@ -1,0 +1,114 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  namespace: gwtest
+  labels:
+    app: httpbin
+    service: httpbin
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: httpbin
+---
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/tls
+metadata:
+  name: httpbin-tls
+  namespace: gwtest
+data:
+# Common Name: example.com
+# Subject Alternative Names: www.example.com
+# Organization: Example Inc., CN=example.com
+# Locality: San Francisco, O=Example Inc., CN=example.com
+# State: California, L=San Francisco, O=Example Inc., CN=example.com
+# Country: US, ST=California, L=San Francisco, O=Example Inc., CN=example.com
+# Valid From: Feb 25 20:53:56 2025 GMT
+# Valid To: Feb 23 20:53:56 2035 GMT
+# Issuer: example.com
+# Key Size: 2048 bit
+# Serial Number: 56FCC1423A5915960494615398843723E2148B56
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURwakNDQW82Z0F3SUJBZ0lVVnZ6QlFqcFpGWllFbEdGVG1JUTNJK0lVaTFZd0RRWUpLb1pJaHZjTkFRRUwKQlFBd1p6RUxNQWtHQTFVRUJoTUNWVk14RXpBUkJnTlZCQWdNQ2tOaGJHbG1iM0p1YVdFeEZqQVVCZ05WQkFjTQpEVk5oYmlCR2NtRnVZMmx6WTI4eEZUQVRCZ05WQkFvTURFVjRZVzF3YkdVZ1NXNWpMakVVTUJJR0ExVUVBd3dMClpYaGhiWEJzWlM1amIyMHdIaGNOTWpVd01qSTFNakExTXpVMldoY05NelV3TWpJek1qQTFNelUyV2pCbk1Rc3cKQ1FZRFZRUUdFd0pWVXpFVE1CRUdBMVVFQ0F3S1EyRnNhV1p2Y201cFlURVdNQlFHQTFVRUJ3d05VMkZ1SUVaeQpZVzVqYVhOamJ6RVZNQk1HQTFVRUNnd01SWGhoYlhCc1pTQkpibU11TVJRd0VnWURWUVFEREF0bGVHRnRjR3hsCkxtTnZiVENDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFEZ2dFUEFEQ0NBUW9DZ2dFQkFLQ2dQTVBQQWc0dXdUdnoKc3lWYnBVdk1vRGFmbnEvVGJQVzNpcU5EUyttUnkrdzhKWlgvNzkwTzNuNzdvYUJRd3o5QTdaazdza21nYjhNUwpRMGFod3ZPMzRnU0tHamwrVXQySllTL3JXNmdLTWJmUjVDNWhPVzRTbVhCTzJDWFErRk8rZm53K1VSanhWUFN1ClArcEtrTWhBVnBSdlZQZmZYMm1lT05INjN0V05aWnBGaDRvQVE4YStpMUFiZXE3VGxvOE1XRFowdHJLVGlrQnYKSUN2S1FuYi8xbjN1eEdQaytJYjZtSHZSQ0NyK2NFZ1FVNURnR1lZQ3k4cllabythRXpCQzdkTXBDdXJtZnVvZgpXSzBvbFF2UytQWXpyc0hyeFBERGY5cHB0WUg4T25uRm4zTHJoSGd0OEVOVWh4Zjhjd2lYS0Y0cVlqT2p4NWJECkdaME5kWEVDQXdFQUFhTktNRWd3SndZRFZSMFJCQ0F3SG9JTFpYaGhiWEJzWlM1amIyMkNEM2QzZHk1bGVHRnQKY0d4bExtTnZiVEFkQmdOVkhRNEVGZ1FVOXdtUUpQYnBpV1dieXZneFZ3WHNMSkxsU1Jvd0RRWUpLb1pJaHZjTgpBUUVMQlFBRGdnRUJBQzhaZjA0MnlhVHFnZXpiTjZrL1lObG1MWnBWTWNUaytMajF4VXh3Y2xQRFM2ZmZPaytaCnZOajArNXFIb3U1Y05CUHlvY2FhVU52MWZPcndNMCtKZTJNZytQM25NT3Bia0RvcHhsUXQvS2N2eGJQVFJnazgKYzlaaE10T3ZlR2E4b3JIRHQrQTNaVXpwUEdiUHZwRzZDU1FWR0JnMjFrb0JCMzIzVVdjUzNQRE9iWmNLN0sySgpBYWJHbHU3bHdSazlFRDkyWEVCL3o4TDJ3TmduQjFlajhvV2ZUSS9wT0NKMEs2MnVBemVKQTI3ZUZxUGs0azdNCmY2Y3lHRjQxRzdQUnVPT2pxNmNmTGd5YVAvLzlhdWh5U2JSVlhJWG1kWTQzZ0czaWpoR2xNNXlXVEx5cVFWYUMKUVk4M0d5OXNERmN1OWgrbm1mUHpWdWpkQ2wwb29ZNmY2RkU9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRQ2dvRHpEendJT0xzRTcKODdNbFc2Vkx6S0EybjU2djAyejF0NHFqUTB2cGtjdnNQQ1dWLysvZER0NSsrNkdnVU1NL1FPMlpPN0pKb0cvRApFa05Hb2NMenQrSUVpaG81ZmxMZGlXRXY2MXVvQ2pHMzBlUXVZVGx1RXBsd1R0Z2wwUGhUdm41OFBsRVk4VlQwCnJqL3FTcERJUUZhVWIxVDMzMTlwbmpqUit0N1ZqV1dhUlllS0FFUEd2b3RRRzNxdTA1YVBERmcyZExheWs0cEEKYnlBcnlrSjIvOVo5N3NSajVQaUcrcGg3MFFncS9uQklFRk9RNEJtR0FzdksyR2FQbWhNd1F1M1RLUXJxNW43cQpIMWl0S0pVTDB2ajJNNjdCNjhUd3czL2FhYldCL0RwNXhaOXk2NFI0TGZCRFZJY1gvSE1JbHloZUttSXpvOGVXCnd4bWREWFZ4QWdNQkFBRUNnZ0VBQWVwQlYvQk56UGczQWg3TG5CWEhMbmRhNlVqbTBQenVQQmRoSFZFRDBEci8KT1lIbktlaGtvSWx6VFJ0ZUEzNTd2TGtOaXJENW11d0hDUmU1cGlqdkJnSWdhOURqaE1wVGw5NDN0dzI1OFdRaApYQ29tWUFoR3QwakxIdnlxWTVzM05sMTdoQWZoenhranJWZzZnQ0JVdkUwRWI1cjdISE5EbWQwS0Q5ZVJEQVhVCmEybVBvMy9zeCs2aktOdm1nbkhVNW1HYTByYTlYOWdWMmorcXkrRkwwWW1jWEphOXYwam9vTUJtck5LUTl1MEUKbFpIQ3Jod3o1Zm5WOEg1SWs5STJFc0JlV083RDBtSjErZjZiU0xkNFRjNWlpdGtLbUprU0N1Wks4bWhjWW1PTAozcFdleXcvTTFWcmdCU3Y3UnBnK2ZXUUl5WSsvN0pqMDhrY2Ryaml2MVFLQmdRRGV3TmZNQXMrSndrbDNsRzVRCkhxUXdlcEIrdGNIdlJtaE5BQVhpN0xhbWFMQ3EvcDVaVlVOa1hNTFljZG5CTWpzd2ZwM0dmVzFvWXh0cU1JWWIKU3lrSzgyNloyeG05UlpLd2loWDNzOUlBR3ZzSkFsampmOWZTa2JjU29CYmNjVnhMaGhTU05QTkxHRUVkdDY2QQpCTGlJM1ByK0NHaUZUZDFveDB5M1drY3BPd0tCZ1FDNG1aT1NmcHM3L0Qra2w2MUJCdW9nS2oxeGN4Uzk4RHVaCjVGTTJxZE1hN3hMRkNDdlNYempwOTR0ZGQ2eG9saDhPc0J0WlVwbXRhZzZ4OFpQTUhKbGxOVVNzYTU0Y3YvT2gKeVgzNzlSSDdFbFdMYVkwdHFuNU9pUDZvSnAvWm41MUI2MCtBaGg5V0NWRXhlK1JQVXE5NE51QXFTZWZicHVpUQpVejFVY3daUlF3S0JnUUNuTmtQSDFXUk5tUmJsT1BzR0VicFcyZXFWODRLOVJ6RU1mRFB2QUpxcm1ITG1LWFJjCnd2QnY2bUlwY0cxeDVXOGhIQ3I3MFRQTDVIbXo0UEVLbEFVZlAxV0xFVG5sSnREU3pSVm9lQWZ3SkZERmxvbDcKWFlCNWhRRFVibkE2MHEzaDA2aWxpRElKOFE4UWE4NEdNNFVDMkQ5aGFwWnJXdVFWdjJZTFRTMlYrUUtCZ0ZvcAoyT1J5cGt1ME56bWpRK0pCQ0ZYUmk5VS95bC9EV0xrZnhtMHFvWXZFUGJ5eTh3UjdzZ2JFKy9NWklzS3FvRnpDCk0zbDdXTWhVeHZ5dTYrdUVCSUJrZGpocEQvOG0yazZwWmJtTXg4MkQ5UGgxQTVuTWJvalpiTmlnbE83c2dSalQKWUM5OFV3M28yeGw2VTlkU29aWHI1NjJBRDVrL2V0UVRkQjh0VjJhVkFvR0JBSjBraHpPWHdPNE5DeHZhMlQ1QQo1bFJNSXJwS0NZZXd3am1VaEhOczFWejc3cFVVMG9QNFd3UmxBWHZkdUhuTjNRb3RZQTZPQ1laMXZOUkJsK3JlCk0xU0dxTFpVWjVxa0s3enphelNXRU80TDhOR2NOeXBOUHlSakpKWjh5TXRiSGpuT1VWNWJZSlZPNXcvMFJxaWYKUFpCRXg3UDhpZWZhZVVGbWs2OXRKZW1DCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: httpbin-slice
+  namespace: gwtest
+  labels:
+    kubernetes.io/service-name: httpbin
+    app: httpbin
+    service: httpbin
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 10.244.1.11
+    conditions:
+      ready: true
+    nodeName: worker
+    targetRef:
+      kind: Pod
+      name: httpbin
+      namespace: gwtest
+ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+---
+kind: BackendConfigPolicy
+apiVersion: gateway.kgateway.dev/v1alpha1
+metadata:
+  name: httpbin-policy-ssl
+  namespace: gwtest
+spec:
+  targetRefs:
+    - name: httpbin
+      group: ""
+      kind: Service
+  connectTimeout: 5s
+  perConnectionBufferLimitBytes: 1024
+  tcpKeepalive:
+    keepAliveProbes: 3
+    keepAliveTime: 30s
+    keepAliveInterval: 5s
+  commonHttpProtocolOptions:
+    idleTimeout: 10s
+    maxHeadersCount: 15
+    maxStreamDuration: 30s
+    maxRequestsPerConnection: 100
+  http1ProtocolOptions:
+    enableTrailers: true
+    overrideStreamErrorOnInvalidHttpMessage: true
+  tls:
+    secretRef:
+      name: httpbin-tls
+    sni: "test.example.com"
+    parameters:
+      minVersion: "1.2"
+      maxVersion: "1.3"
+      cipherSuites:
+        - "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+      ecdhCurves:
+        - "X25519"
+        - "P-256"

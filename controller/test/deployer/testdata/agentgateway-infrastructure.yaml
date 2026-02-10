@@ -1,0 +1,64 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: opts
+    namespace: default
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: opts
+  namespace: default
+spec:
+  # Pod-level labels and annotations (applied to helm values after rendering)
+  # These test that infrastructure labels/annotations are merged with SMP
+  # taking precedence
+  deployment:
+    metadata:
+      labels:
+        extra-label: v1
+        infra-and-params: params-but-only-because-overlays-happen-last
+      annotations:
+        extra-annotation: v1
+        infra-and-params: params-but-only-because-overlays-happen-last
+    spec:
+      template:
+        metadata:
+          labels:
+            extra-label: v1
+            infra-and-params: params-but-only-because-overlays-happen-last
+          annotations:
+            extra-annotation: v1
+            infra-and-params: params-but-only-because-overlays-happen-last
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    labels:
+      my-label: my-value
+      infra-and-params: infra
+      gateway.networking.k8s.io/gateway-name: ignored-should-not-be-used
+    annotations:
+      infra-and-params: infra
+      # Not sure why they would want this, but test it!
+      prometheus.io/path: /something/else
+      my-annotation: my-value
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same

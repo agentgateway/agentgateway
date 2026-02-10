@@ -1,0 +1,52 @@
+# Admin MCP Backend
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: admin-mcp-backend
+spec:
+  mcp:
+    targets:
+    - name: admin-target
+      static:
+        host: mcp-admin-server.default.svc.cluster.local
+        port: 80
+        protocol: StreamableHTTP
+---
+# User MCP Backend  
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: user-mcp-backend
+spec:
+  mcp:
+    targets:
+    - name: user-target
+      static:
+        host: mcp-website-fetcher.default.svc.cluster.local
+        port: 80
+        protocol: SSE
+---
+# HTTPRoute for dynamic MCP with header-based routing
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dynamic-mcp-route
+spec:
+  parentRefs:
+  - name: gateway
+    namespace: agentgateway-base
+  rules:
+    # Admin route - matches requests with user-type: admin header
+    - matches:
+      - headers:
+        - name: user-type
+          value: admin
+      backendRefs:
+      - name: admin-mcp-backend
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+    # User route - matches all other requests (default)
+    - backendRefs:
+      - name: user-mcp-backend
+        group: agentgateway.dev
+        kind: AgentgatewayBackend

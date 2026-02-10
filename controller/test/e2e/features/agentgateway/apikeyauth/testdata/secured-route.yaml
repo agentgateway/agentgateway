@@ -1,0 +1,45 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-secure
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "secureroute.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: route-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: route-secure
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretRef:
+        name: route-apikey-auth
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: route-apikey-auth
+  namespace: agentgateway-base
+stringData:
+  client1: |
+    {
+      "key": "k-1230",
+      "metadata": {
+        "group": "sales"
+      }
+    }
+  client2: "k-4560"

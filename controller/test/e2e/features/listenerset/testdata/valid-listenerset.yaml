@@ -1,0 +1,59 @@
+apiVersion: gateway.networking.x-k8s.io/v1alpha1
+kind: XListenerSet
+metadata:
+  name: valid-ls
+  namespace: allowed-ns
+spec:
+  parentRef:
+    kind: Gateway
+    group: gateway.networking.k8s.io
+    name: gw
+    namespace: default
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 90
+    allowedRoutes:
+        namespaces:
+          from: All
+  - name: http-2
+    protocol: HTTP
+    port: 8091
+    allowedRoutes:
+        namespaces:
+          from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ls-route
+spec:
+  parentRefs:
+    - kind: XListenerSet
+      group: gateway.networking.x-k8s.io
+      name: valid-ls
+      namespace: allowed-ns
+  hostnames:
+    - "listenerset.com"
+  rules:
+    - backendRefs:
+        - name: example-svc
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ls-specific-route
+spec:
+  parentRefs:
+    - kind: XListenerSet
+      group: gateway.networking.x-k8s.io
+      name: valid-ls
+      namespace: allowed-ns
+      sectionName: http-2
+  hostnames:
+    - "listenerset-section.com"
+  rules:
+    - backendRefs:
+        - name: example-svc
+          port: 8080

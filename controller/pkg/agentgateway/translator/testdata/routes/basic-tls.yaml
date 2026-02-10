@@ -1,0 +1,85 @@
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: tls-gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - allowedRoutes:
+      kinds:
+      - group: gateway.networking.k8s.io
+        kind: TLSRoute
+      namespaces:
+        from: Same
+    hostname: '*.example.com'
+    name: https
+    port: 443
+    protocol: TLS
+    tls:
+      mode: Passthrough
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: tcp-app-1
+  namespace: default
+spec:
+  hostnames:
+    - abc.example.com
+  parentRefs:
+  - name: tls-gw
+  rules:
+    - backendRefs:
+        - name: infra-backend-v1
+          port: 8080
+---
+# Output
+output:
+- gateway:
+    Name: tls-gw
+    Namespace: default
+  resource:
+    tcpRoute:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - abc.example.com
+      key: default/tcp-app-1.0.https
+      listenerKey: default/tls-gw.https
+      name:
+        kind: TLSRoute
+        name: tcp-app-1
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1alpha2
+  kind: TLSRoute
+  metadata:
+    name: tcp-app-1
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: tls-gw
+        namespace: default

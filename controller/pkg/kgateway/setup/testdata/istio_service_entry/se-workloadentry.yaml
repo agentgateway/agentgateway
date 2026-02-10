@@ -1,0 +1,77 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-to-upstream
+  namespace: gwtest
+spec:
+  parentRefs:
+  - name: http-gw-for-test
+  hostnames:
+  - "se.example.com"
+  rules:
+  - backendRefs:
+    - name: example-se
+      port: 80
+      kind: ServiceEntry
+      group: networking.istio.io
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: example-se
+  namespace: gwtest
+spec:
+  hosts:
+  - se.example.com
+  ports:
+  - number: 80
+    name: http
+    protocol: TCP
+  resolution: STATIC
+  location: MESH_INTERNAL
+  workloadSelector:
+    labels:
+      app: reviews-workloadentry
+---
+apiVersion: networking.istio.io/v1
+kind: WorkloadEntry
+metadata:
+  name: reviews-workloadentry-1
+  namespace: gwtest
+  labels:
+    app: reviews-workloadentry
+spec:
+  address: 1.1.1.1
+  locality: r1/z1/sz1
+  ports:
+    http: 8080
+---
+apiVersion: networking.istio.io/v1
+kind: WorkloadEntry
+metadata:
+  name: reviews-workloadentry-2
+  namespace: gwtest
+  labels:
+    app: reviews-workloadentry
+spec:
+  # note, this is missing an address so we should ignore it
+  # istio allows specifying only a network
+  network: external-network
+  locality: r2/z2/sz2
+  ports:
+    http: 8080

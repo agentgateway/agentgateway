@@ -1,0 +1,163 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    authorization:
+      action: Deny
+      policy:
+        matchExpressions:
+          - "true"
+  backend:
+    ai:
+      overrides:
+      - field: model
+        value: gpt-4
+      defaults:
+      - field: logit_bias
+        value: {"50256": -100}
+      prompt:
+        prepend:
+          - content: "be nice"
+            role: system
+        append:
+          - content: "hello!"
+            role: user
+      promptGuard:
+        request:
+          - regex:
+              builtins:
+                - CreditCard
+              matches:
+                - 'bad.*'
+            response:
+              message: "regex rejected"
+          - openAIModeration:
+              policies:
+                tls:
+                  insecureSkipVerify: All
+          - webhook:
+              backendRef:
+                name: webhook
+                kind: Service
+                group: ""
+                port: 80
+      promptCaching:
+        cacheSystem: true
+        cacheMessages: true
+        cacheTools: false
+        minTokens: 1024
+      modelAliases:
+        "fast": "amazon.nova-micro-v1:0"
+        "smart": "anthropic.claude-3-5-sonnet-20241022-v2:0"
+      routes:
+        "/v1/chat/completions": Completions
+        "/v1/embeddings": Passthrough
+        "/v1/models": Passthrough
+        "*": Passthrough
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook
+  namespace: default
+spec:
+  ports:
+    - port: 80
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:rbac:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      route:
+        kind: HTTPRoute
+        name: test
+        namespace: default
+    traffic:
+      authorization:
+        deny:
+        - "true"
+- Policy:
+    backend:
+      ai:
+        defaults:
+          logit_bias: '{"50256":-100}'
+        modelAliases:
+          fast: amazon.nova-micro-v1:0
+          smart: anthropic.claude-3-5-sonnet-20241022-v2:0
+        overrides:
+          model: '"gpt-4"'
+        promptCaching:
+          cacheMessages: true
+          cacheSystem: true
+          minTokens: 1024
+        promptGuard:
+          request:
+          - regex:
+              rules:
+              - regex: bad.*
+              - builtin: CREDIT_CARD
+            rejection:
+              body: cmVnZXggcmVqZWN0ZWQ=
+          - openaiModeration:
+              inlinePolicies:
+              - backendTls:
+                  verification: INSECURE_ALL
+          - webhook:
+              backend:
+                port: 80
+                service:
+                  hostname: webhook.default.svc.cluster.local
+                  namespace: default
+        prompts:
+          append:
+          - content: hello!
+            role: user
+          prepend:
+          - content: be nice
+            role: system
+        routes:
+          '*': PASSTHROUGH
+          /v1/chat/completions: COMPLETIONS
+          /v1/embeddings: PASSTHROUGH
+          /v1/models: PASSTHROUGH
+    key: backend/default/agw:ai:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      route:
+        kind: HTTPRoute
+        name: test
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

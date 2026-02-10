@@ -1,0 +1,66 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    auth:
+      aws:
+        secretRef:
+          name: aws-auth-secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-auth-secret
+  namespace: default
+type: Opaque
+data:
+  accessKey: c2VjcmV0LWFjY2Vzc0tleQ==
+  secretKey: c2VjcmV0LXNlY3JldEtleQ==
+  sessionToken: c2VjcmV0LXNlc3Npb25Ub2tlbg==
+---
+# Output
+output:
+- Policy:
+    backend:
+      auth:
+        aws:
+          explicitConfig:
+            accessKeyId: secret-accessKey
+            secretAccessKey: secret-secretKey
+            sessionToken: secret-sessionToken
+    key: backend/default/agw:backend-auth:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      route:
+        kind: HTTPRoute
+        name: test
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

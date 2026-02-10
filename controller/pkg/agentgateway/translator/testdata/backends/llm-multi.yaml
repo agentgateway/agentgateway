@@ -1,0 +1,61 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: multipool-inline
+  namespace: default
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: openai
+            openai:
+              model: "gpt-4"
+            policies:
+              auth:
+                key: "sk-openai-primary-key"
+          - name: anthropic
+            anthropic:
+              model: "claude-3-opus-20240229"
+            policies:
+              auth:
+                key: "sk-anthropic-primary-key"
+---
+# Output
+output:
+- resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - inlinePolicies:
+            - auth:
+                key:
+                  secret: sk-openai-primary-key
+            name: openai
+            openai:
+              model: gpt-4
+          - anthropic:
+              model: claude-3-opus-20240229
+            inlinePolicies:
+            - auth:
+                key:
+                  secret: sk-anthropic-primary-key
+            name: anthropic
+      key: default/multipool-inline
+      name:
+        name: multipool-inline
+        namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: multipool-inline
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

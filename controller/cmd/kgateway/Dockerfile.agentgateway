@@ -1,0 +1,9 @@
+FROM cgr.dev/chainguard/static
+
+ARG GOARCH=amd64
+
+COPY kgateway-linux-$GOARCH /usr/local/bin/kgateway
+
+USER 10101
+
+ENTRYPOINT ["/usr/local/bin/kgateway"]

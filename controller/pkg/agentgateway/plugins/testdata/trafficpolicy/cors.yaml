@@ -1,0 +1,80 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    cors:
+      allowOrigins:
+      - "http://127.0.0.1:8080"
+      - "http://localhost:8080"
+      - "https://example.com"
+      allowCredentials: true
+      allowMethods:
+      - GET
+      - PUT
+      - POST
+      - OPTIONS
+      - TRACE
+      allowHeaders:
+      - "content-type"
+      - "authorization"
+      exposeHeaders:
+      - "x-custom-header"
+      maxAge: 86400
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:cors:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      cors:
+        allowCredentials: true
+        allowHeaders:
+        - content-type
+        - authorization
+        allowMethods:
+        - GET
+        - PUT
+        - POST
+        - OPTIONS
+        - TRACE
+        allowOrigins:
+        - http://127.0.0.1:8080
+        - http://localhost:8080
+        - https://example.com
+        exposeHeaders:
+        - x-custom-header
+        maxAge: 86400s
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

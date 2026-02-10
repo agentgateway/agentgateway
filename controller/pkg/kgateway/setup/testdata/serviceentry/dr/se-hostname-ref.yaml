@@ -1,0 +1,75 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: route-to-upstream
+  namespace: gwtest
+spec:
+  parentRefs:
+  - name: http-gw-for-test
+  hostnames:
+  - "se.example.com"
+  rules:
+  - backendRefs:
+    - name: se.example.com
+      port: 80
+      kind: Hostname
+      group: networking.istio.io
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: example-se
+  namespace: gwtest
+spec:
+  hosts:
+  - se.example.com
+  ports:
+  - number: 80
+    name: http
+    protocol: TCP
+  resolution: STATIC
+  location: MESH_INTERNAL
+  endpoints:
+
+  - address: 1.1.1.1
+    locality: r1/r1z2/r1z2s4
+
+  - address: 2.2.2.2
+    locality: r1/r1z3/r1z3s4
+
+  - address: 3.3.3.3
+    locality: r2/r2z1/r2z1s1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: do-failover
+  namespace: gwtest
+spec:
+  host: se.example.com
+  trafficPolicy:
+    outlierDetection:
+      consecutive5xxErrors: 7
+      interval: 5m
+      baseEjectionTime: 15m
+    loadBalancer:
+      localityLbSetting:
+        failoverPriority:
+        - "topology.kubernetes.io/region"
+        - "topology.kubernetes.io/zone"
+        - "topology.istio.io/subzone"

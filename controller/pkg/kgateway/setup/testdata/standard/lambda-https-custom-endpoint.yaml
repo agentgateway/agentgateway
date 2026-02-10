@@ -1,0 +1,58 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: http-gw-for-test
+  namespace: gwtest
+spec:
+  gatewayClassName: kgateway
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-to-lambda-custom
+  namespace: gwtest
+spec:
+  parentRefs:
+    - name: http-gw-for-test
+  hostnames:
+    - "lambda-custom.example.com"
+  rules:
+    - matches:
+      - path:
+          type: PathPrefix
+          value: /lambda-custom
+      backendRefs:
+        - name: lambda-custom-backend
+          kind: Backend
+          group: gateway.kgateway.dev
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: localstack-creds
+  namespace: gwtest
+type: Opaque
+data:
+  accessKey: QUtJQUlPU0ZPRE5ON0VYQU1QTEU= # Base64 encoded "AKIAIOSFODNN7EXAMPLE"
+  secretKey: d0phbHJYVXRuRkVNSS9LN01ERU5HL2JQeFJmaUNZRVhBTVBMRUtFWQ== # Base64 encoded "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: lambda-custom-backend
+  namespace: gwtest
+spec:
+  type: AWS
+  aws:
+    accountId: "000000000000"
+    lambda:
+      functionName: my-test-function
+      endpointURL: "https://172.18.0.2:4566"

@@ -1,0 +1,72 @@
+# This tests the scenario where both GWC and GW specify parametersRef, and
+# verifies that the Gateway's parametersRef merges in instead of replacing GWC
+# params.
+#
+# Expected behavior: Gateway's parametersRef takes precedence over and merges
+# with GatewayClass's parametersRef. This follows the Gateway API spec, but so
+# would any other behavior since this decision is left to the implementation.
+#
+# In the same fashion, inlined labels and annotations on the Gateway (in the
+# 'infrastructure' block) will merge with labels and annotations on the
+# GatewayClass's parametersRef; see ./agentgateway-infrastructure.yaml for an
+# example.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: gwc-params
+  namespace: default
+spec:
+  # From AgentgatewayParametersConfigs:
+  image:
+    digest: sha256:fd697c0542524e19a19baf75acfd06714b95bf4f7c60bf22c86164dd647ceb48
+    tag: ""
+    registry: "from-gwc"
+  # From AgentgatewayParametersOverlays:
+  deployment:
+    spec:
+      replicas: 3
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: gw-params
+  namespace: default
+spec:
+  image:
+    registry: "from-gw"
+  service:
+    spec:
+      type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: gwc-params
+    namespace: default
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw-using-gw-params
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: gw-params
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same
