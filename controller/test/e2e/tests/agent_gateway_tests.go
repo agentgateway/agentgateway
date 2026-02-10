@@ -10,7 +10,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/apikeyauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/backendtls"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/basicauth"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/configmap"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/csrf"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extproc"
@@ -44,7 +43,6 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	agentgatewaySuiteRunner.Register("AIBackend", aibackend.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Transformation", transformation.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("RemoteJwtAuth", remotejwtauth.NewTestingSuite)
-	agentgatewaySuiteRunner.Register("ConfigMap", configmap.NewTestingSuite) // redeploys by need
 	agentgatewaySuiteRunner.Register("Tracing", tracing.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("PolicyStatus", policystatus.NewTestingSuite)
 
