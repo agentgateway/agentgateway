@@ -22,6 +22,25 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.ratelimit.v3");
 }
 
+/// Defines how the proxy behaves when the remote rate limit service is
+/// unavailable or returns an error.
+///
+/// Defaults to `FailOpen`, matching Envoy's default behavior
+/// (`failure_mode_deny=false`). When failing open, requests are allowed
+/// through despite the service failure. When failing closed, a 500
+/// Internal Server Error is returned.
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq)]
+pub enum FailureMode {
+	/// Allow the request through when the rate limit service is unavailable (default).
+	#[default]
+	#[serde(rename = "failOpen")]
+	FailOpen,
+	/// Deny the request with a 500 status when the rate limit service is unavailable.
+	#[serde(rename = "failClosed")]
+	FailClosed,
+}
+
 #[apply(schema!)]
 pub struct RemoteRateLimit {
 	pub domain: String,
@@ -36,6 +55,10 @@ pub struct RemoteRateLimit {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub timeout: Option<Duration>,
+	/// Behavior when the remote rate limit service is unavailable or returns an error.
+	/// Defaults to failOpen, allowing requests through on service failure.
+	#[serde(default)]
+	pub failure_mode: FailureMode,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -224,7 +247,20 @@ impl RemoteRateLimit {
 			request,
 		};
 
-		cr.and_then(|pr| Self::apply(req, pr).map(|x| (x, Some(r))))
+		match cr {
+			Ok(resp) => Self::apply(req, resp).map(|x| (x, Some(r))),
+			Err(e) => {
+				if self.failure_mode == FailureMode::FailOpen {
+					warn!(
+						"ratelimit service failed (domain: {}, failure_mode: failOpen): {:?}; allowing request",
+						self.domain, e
+					);
+					Ok((PolicyResponse::default(), Some(r)))
+				} else {
+					Err(e)
+				}
+			},
+		}
 	}
 
 	pub async fn check(
@@ -249,8 +285,20 @@ impl RemoteRateLimit {
 		let Some(request) = self.build_request(req, RateLimitType::Requests, None) else {
 			return Ok(PolicyResponse::default());
 		};
-		let cr = self.check_internal(client, request).await?;
-		Self::apply(req, cr)
+		match self.check_internal(client, request).await {
+			Ok(cr) => Self::apply(req, cr),
+			Err(e) => {
+				if self.failure_mode == FailureMode::FailOpen {
+					warn!(
+						"ratelimit service failed (domain: {}, failure_mode: failOpen): {:?}; allowing request",
+						self.domain, e
+					);
+					Ok(PolicyResponse::default())
+				} else {
+					Err(e)
+				}
+			},
+		}
 	}
 
 	async fn check_internal(
@@ -375,5 +423,156 @@ fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 			continue;
 		};
 		hm.insert(hn, hv);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::http::tests_common::request_for_uri;
+
+	#[test]
+	fn failure_mode_defaults_to_fail_open() {
+		let mode = FailureMode::default();
+		assert_eq!(mode, FailureMode::FailOpen);
+	}
+
+	#[test]
+	fn failure_mode_serde_roundtrip() {
+		// Test failOpen
+		let json = serde_json::to_string(&FailureMode::FailOpen).unwrap();
+		assert_eq!(json, r#""failOpen""#);
+		let deserialized: FailureMode = serde_json::from_str(&json).unwrap();
+		assert_eq!(deserialized, FailureMode::FailOpen);
+
+		// Test failClosed
+		let json = serde_json::to_string(&FailureMode::FailClosed).unwrap();
+		assert_eq!(json, r#""failClosed""#);
+		let deserialized: FailureMode = serde_json::from_str(&json).unwrap();
+		assert_eq!(deserialized, FailureMode::FailClosed);
+	}
+
+	#[test]
+	fn apply_ok_response_passes_through() {
+		let mut req = request_for_uri("http://example.com/test");
+		let response = proto::RateLimitResponse {
+			overall_code: proto::rate_limit_response::Code::Ok as i32,
+			statuses: vec![],
+			response_headers_to_add: vec![],
+			request_headers_to_add: vec![proto::HeaderValue {
+				key: "x-ratelimit-remaining".to_string(),
+				value: "99".to_string(),
+				raw_value: vec![],
+			}],
+			raw_body: vec![],
+			dynamic_metadata: None,
+			quota: None,
+		};
+		let result = RemoteRateLimit::apply(&mut req, response).unwrap();
+		// Should not have a direct response (request is allowed)
+		assert!(result.direct_response.is_none());
+		// Request header should have been added
+		assert_eq!(req.headers().get("x-ratelimit-remaining").unwrap(), "99");
+	}
+
+	#[test]
+	fn apply_over_limit_response_returns_429() {
+		let mut req = request_for_uri("http://example.com/test");
+		let response = proto::RateLimitResponse {
+			overall_code: proto::rate_limit_response::Code::OverLimit as i32,
+			statuses: vec![],
+			response_headers_to_add: vec![proto::HeaderValue {
+				key: "retry-after".to_string(),
+				value: "60".to_string(),
+				raw_value: vec![],
+			}],
+			request_headers_to_add: vec![],
+			raw_body: b"rate limit exceeded".to_vec(),
+			dynamic_metadata: None,
+			quota: None,
+		};
+		let result = RemoteRateLimit::apply(&mut req, response).unwrap();
+		// Should have a direct response with 429
+		let direct = result.direct_response.unwrap();
+		assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
+		assert_eq!(direct.headers().get("retry-after").unwrap(), "60");
+	}
+
+	#[test]
+	fn rate_limit_failed_maps_to_500() {
+		let err = ProxyError::RateLimitFailed;
+		let response = err.into_response();
+		assert_eq!(
+			response.status(),
+			StatusCode::INTERNAL_SERVER_ERROR,
+			"RateLimitFailed should map to 500, not 429"
+		);
+	}
+
+	#[test]
+	fn rate_limit_exceeded_maps_to_429() {
+		let err = ProxyError::RateLimitExceeded {
+			limit: 10,
+			remaining: 0,
+			reset_seconds: 60,
+		};
+		let response = err.into_response();
+		assert_eq!(
+			response.status(),
+			StatusCode::TOO_MANY_REQUESTS,
+			"RateLimitExceeded should map to 429"
+		);
+	}
+
+	#[test]
+	fn config_with_failure_mode_deserializes() {
+		let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+failureMode: failOpen
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+		let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(rrl.failure_mode, FailureMode::FailOpen);
+		assert_eq!(rrl.domain, "test");
+	}
+
+	#[test]
+	fn config_with_fail_closed_deserializes() {
+		let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+failureMode: failClosed
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+		let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(rrl.failure_mode, FailureMode::FailClosed);
+	}
+
+	#[test]
+	fn config_without_failure_mode_defaults_to_fail_open() {
+		let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+		let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(
+			rrl.failure_mode,
+			FailureMode::FailOpen,
+			"Missing failureMode should default to failOpen"
+		);
 	}
 }

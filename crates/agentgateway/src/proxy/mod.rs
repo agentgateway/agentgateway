@@ -245,7 +245,9 @@ impl ProxyError {
 			ProxyError::Body(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
-			ProxyError::RateLimitFailed => StatusCode::TOO_MANY_REQUESTS,
+			// Rate limit service communication failure is a server error (500), not a rate limit (429).
+			// This matches Envoy's behavior (status_on_error defaults to 500).
+			ProxyError::RateLimitFailed => StatusCode::INTERNAL_SERVER_ERROR,
 
 			// Shouldn't happen on this path
 			ProxyError::UpstreamTCPCallFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,

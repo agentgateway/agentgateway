@@ -2891,6 +2891,11 @@
             "string",
             "null"
           ]
+        },
+        "failureMode": {
+          "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failOpen, allowing requests through on service failure.",
+          "$ref": "#/$defs/FailureMode",
+          "default": "failOpen"
         }
       },
       "required": [
@@ -2998,6 +3003,21 @@
       "required": [
         "key",
         "value"
+      ]
+    },
+    "FailureMode": {
+      "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailOpen`, matching Envoy's default behavior\n(`failure_mode_deny=false`). When failing open, requests are allowed\nthrough despite the service failure. When failing closed, a 500\nInternal Server Error is returned.",
+      "oneOf": [
+        {
+          "description": "Allow the request through when the rate limit service is unavailable (default).",
+          "type": "string",
+          "const": "failOpen"
+        },
+        {
+          "description": "Deny the request with a 500 status when the rate limit service is unavailable.",
+          "type": "string",
+          "const": "failClosed"
+        }
       ]
     },
     "LocalJwtConfig": {
@@ -3217,7 +3237,7 @@
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode",
+          "$ref": "#/$defs/FailureMode2",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -3405,7 +3425,7 @@
         }
       ]
     },
-    "FailureMode": {
+    "FailureMode2": {
       "oneOf": [
         {
           "type": "string",
@@ -3462,7 +3482,7 @@
       "properties": {
         "failureMode": {
           "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -3562,7 +3582,7 @@
         }
       ]
     },
-    "FailureMode2": {
+    "FailureMode3": {
       "type": "string",
       "enum": [
         "failClosed",
