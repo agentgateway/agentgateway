@@ -1030,15 +1030,7 @@ impl Store {
 	}
 
 	fn insert_xds_bind(&mut self, raw: XdsBind) -> anyhow::Result<()> {
-		let mut bind = Bind::try_from(&raw)?;
-		// Respect the enableIpv6 config for bind address selection,
-		// matching the same logic used in types/local.rs for local config binds.
-		let port = bind.address.port();
-		bind.address = if cfg!(target_family = "unix") && self.ipv6_enabled {
-			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
-		} else {
-			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
-		};
+		let mut bind = Bind::try_from_xds(&raw, self.ipv6_enabled)?;
 		// If XDS server pushes the same bind twice (which it shouldn't really do, but oh well),
 		// we need to copy the listeners over.
 		if let Some(old) = self.binds.remove(&bind.key) {
@@ -1334,7 +1326,7 @@ mod tests {
 
 	#[test]
 	fn route_policies_are_kind_scoped() {
-		let mut store = Store::new();
+		let mut store = Store::default();
 		let listener = listener();
 
 		let http_route = route("r", "ns", Some("HTTPRoute"));
@@ -1365,7 +1357,7 @@ mod tests {
 	/// Tests that frontend policies at listener level take precedence over gateway level policies
 	#[test]
 	fn frontend_policy_listener_precedence() {
-		let mut store = Store::new();
+		let mut store = Store::default();
 		let listener = listener();
 
 		// Insert both gateway and listener level frontend policies
@@ -1388,5 +1380,38 @@ mod tests {
 			!access_log.remove.contains("gw_remove"),
 			"Gateway policy should not override listener policy"
 		);
+	}
+
+	#[test]
+	fn xds_bind_uses_ipv4_when_ipv6_disabled() {
+		use std::net::{IpAddr, Ipv4Addr};
+
+		let xds_bind = XdsBind {
+			key: "test-bind".to_string(),
+			port: 8080,
+			protocol: 0, // HTTP
+			tunnel_protocol: 0, // Direct
+		};
+
+		let bind = Bind::try_from_xds(&xds_bind, false).unwrap();
+		assert_eq!(bind.address.port(), 8080);
+		assert_eq!(bind.address.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+	}
+
+	#[cfg(target_family = "unix")]
+	#[test]
+	fn xds_bind_uses_ipv6_when_ipv6_enabled_on_unix() {
+		use std::net::{IpAddr, Ipv6Addr};
+
+		let xds_bind = XdsBind {
+			key: "test-bind".to_string(),
+			port: 9090,
+			protocol: 0, // HTTP
+			tunnel_protocol: 0, // Direct
+		};
+
+		let bind = Bind::try_from_xds(&xds_bind, true).unwrap();
+		assert_eq!(bind.address.port(), 9090);
+		assert_eq!(bind.address.ip(), IpAddr::V6(Ipv6Addr::UNSPECIFIED));
 	}
 }
