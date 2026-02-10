@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -10,15 +11,22 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	meta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
+)
+
+const (
+	defaultInferencePoolStatusKind = "Status"
+	defaultInferencePoolStatusName = "default"
 )
 
 // NewInferencePlugin creates a new InferencePool policy plugin
 func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 	status, policyCol := krt.NewStatusManyCollection(agw.InferencePools, func(krtctx krt.HandlerContext, infPool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
-		return translatePoliciesForInferencePool(infPool)
-	}, agw.KrtOpts.ToOptions("agentgateway/InferencePools")...)
+		return translatePoliciesForInferencePool(infPool, agw.ControllerName)
+	}, agw.KrtOpts.ToOptions("agentgateway/InferencePoolsPolicy")...)
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.InferencePoolGVK.GroupKind(): {
@@ -31,26 +39,35 @@ func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 }
 
 // translatePoliciesForInferencePool generates policies for a single inference pool
-func translatePoliciesForInferencePool(pool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
+func translatePoliciesForInferencePool(pool *inf.InferencePool, controllerName string) (*inf.InferencePoolStatus, []AgwPolicy) {
 	var infPolicies []AgwPolicy
 	status := pool.Status.DeepCopy()
+	if status == nil {
+		status = &inf.InferencePoolStatus{}
+	}
+	if len(status.Parents) == 0 {
+		status.Parents = []inf.ParentStatus{{
+			ParentRef: inf.ParentReference{
+				Kind: inf.Kind(defaultInferencePoolStatusKind),
+				Name: inf.ObjectName(defaultInferencePoolStatusName),
+			},
+		}}
+	}
 
 	// 'service/{namespace}/{hostname}:{port}'
 	hostname := kubeutils.GetInferenceServiceHostname(pool.Name, pool.Namespace)
 
 	epr := pool.Spec.EndpointPickerRef
-	if epr.Group != nil && *epr.Group != "" {
-		logger.Warn("inference pool endpoint picker ref has non-empty group, skipping", "pool", pool.Name, "group", *epr.Group)
-		return status, nil
+	validationErr := validateInferencePoolEndpointPickerRef(epr)
+	for i := range status.Parents {
+		if controllerName != "" {
+			status.Parents[i].ControllerName = inf.ControllerName(controllerName)
+		}
+		meta.SetStatusCondition(&status.Parents[i].Conditions, buildInferencePoolAcceptedCondition(pool.Generation, controllerName))
+		meta.SetStatusCondition(&status.Parents[i].Conditions, buildInferencePoolResolvedRefsCondition(pool.Generation, validationErr))
 	}
-
-	if epr.Kind != wellknown.ServiceKind {
-		logger.Warn("inference pool extension ref is not a Service, skipping", "pool", pool.Name, "kind", epr.Kind)
-		return status, nil
-	}
-
-	if epr.Port == nil {
-		logger.Warn("inference pool extension ref port must be specified, skipping", "pool", pool.Name, "kind", epr.Kind)
+	if validationErr != nil {
+		logger.Warn("inference pool endpoint picker ref invalid, skipping", "pool", pool.Name, "error", validationErr)
 		return status, nil
 	}
 
@@ -115,4 +132,58 @@ func translatePoliciesForInferencePool(pool *inf.InferencePool) (*inf.InferenceP
 		"tls_policy", inferencePolicyTLS.Name)
 
 	return status, infPolicies
+}
+
+func validateInferencePoolEndpointPickerRef(epr inf.EndpointPickerRef) error {
+	if epr.Group != nil && *epr.Group != "" {
+		return fmt.Errorf("endpointPickerRef.group must be empty, got %q", *epr.Group)
+	}
+
+	kind := epr.Kind
+	if kind == "" {
+		// InferencePool defaults this field to Service.
+		kind = inf.Kind(wellknown.ServiceKind)
+	}
+	if kind != inf.Kind(wellknown.ServiceKind) {
+		return fmt.Errorf("endpointPickerRef.kind must be %q, got %q", wellknown.ServiceKind, kind)
+	}
+
+	if epr.Port == nil {
+		return fmt.Errorf("endpointPickerRef.port must be specified")
+	}
+	return nil
+}
+
+func buildInferencePoolAcceptedCondition(gen int64, controllerName string) metav1.Condition {
+	msg := "InferencePool has been accepted"
+	if controllerName != "" {
+		msg = fmt.Sprintf("InferencePool has been accepted by controller %s", controllerName)
+	}
+	return metav1.Condition{
+		Type:               string(inf.InferencePoolConditionAccepted),
+		Status:             metav1.ConditionTrue,
+		Reason:             string(inf.InferencePoolReasonAccepted),
+		Message:            msg,
+		ObservedGeneration: gen,
+		LastTransitionTime: metav1.Now(),
+	}
+}
+
+func buildInferencePoolResolvedRefsCondition(gen int64, validationErr error) metav1.Condition {
+	cond := metav1.Condition{
+		Type:               string(inf.InferencePoolConditionResolvedRefs),
+		ObservedGeneration: gen,
+		LastTransitionTime: metav1.Now(),
+	}
+	if validationErr == nil {
+		cond.Status = metav1.ConditionTrue
+		cond.Reason = string(inf.InferencePoolReasonResolvedRefs)
+		cond.Message = "All InferencePool references have been resolved"
+		return cond
+	}
+
+	cond.Status = metav1.ConditionFalse
+	cond.Reason = string(inf.InferencePoolReasonInvalidExtensionRef)
+	cond.Message = "error: " + validationErr.Error()
+	return cond
 }

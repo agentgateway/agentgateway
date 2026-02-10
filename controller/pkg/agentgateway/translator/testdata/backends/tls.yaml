@@ -414,6 +414,22 @@ status:
       reason: Accepted
       status: "True"
       type: Accepted
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: BackendTLSPolicy
+  metadata:
+    name: ai-tls
+    namespace: default
+  spec: null
+  status:
+    ancestors: null
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: BackendTLSPolicy
+  metadata:
+    name: ai-tls-all-groups
+    namespace: default
+  spec: null
+  status:
+    ancestors: null
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayBackend
   metadata:
@@ -440,6 +456,22 @@ status:
       reason: Accepted
       status: "True"
       type: Accepted
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: BackendTLSPolicy
+  metadata:
+    name: mcp-tls-ca-cert
+    namespace: default
+  spec: null
+  status:
+    ancestors: null
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: BackendTLSPolicy
+  metadata:
+    name: mcp-tls-system-cert
+    namespace: default
+  spec: null
+  status:
+    ancestors: null
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayBackend
   metadata:

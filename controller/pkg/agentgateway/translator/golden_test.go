@@ -38,7 +38,7 @@ func TestGatewayCollection(t *testing.T) {
 
 func TestBackends(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/backends", func(t *testing.T, ctx plugins.PolicyCtx) (any, []any) {
-		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayBackend", "BackendTLSPolicy")
+		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayBackend", "BackendTLSPolicy", "InferencePool")
 		r := ri.Outputs.Resources.List()
 		r = slices.SortBy(r, func(a ir.AgwResource) string {
 			return a.ResourceName()
