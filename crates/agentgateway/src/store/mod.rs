@@ -31,15 +31,15 @@ pub struct Stores {
 
 impl Default for Stores {
 	fn default() -> Self {
-		Self::new(true)
+		Self::with_ipv6_enabled(true)
 	}
 }
 
 impl Stores {
-	pub fn new(ipv6_enabled: bool) -> Stores {
+	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Stores {
 		Stores {
 			discovery: discovery::StoreUpdater::new(Arc::new(RwLock::new(discovery::Store::new()))),
-			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::new(ipv6_enabled)))),
+			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::with_ipv6_enabled(ipv6_enabled)))),
 		}
 	}
 	pub fn read_binds(&self) -> std::sync::RwLockReadGuard<'_, store::BindStore> {

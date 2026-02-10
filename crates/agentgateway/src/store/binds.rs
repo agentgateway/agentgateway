@@ -331,7 +331,7 @@ pub struct LLMResponsePolicies {
 
 impl Default for Store {
 	fn default() -> Self {
-		Self::new(true)
+		Self::with_ipv6_enabled(true)
 	}
 }
 
@@ -343,7 +343,7 @@ pub struct RoutePath<'a> {
 }
 
 impl Store {
-	pub fn new(ipv6_enabled: bool) -> Self {
+	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
 		let (tx, _) = tokio::sync::broadcast::channel(1000);
 		Self {
 			ipv6_enabled,
