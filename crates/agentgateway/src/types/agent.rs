@@ -1392,6 +1392,9 @@ impl RouteSet {
 	}
 
 	pub fn insert(&mut self, r: Route) {
+		if self.all.contains_key(&r.key) {
+			self.remove(&r.key);
+		}
 		let r = Arc::new(r);
 		// Insert the route into all HashMap first so it's available during binary search
 		self.all.insert(r.key.clone(), r.clone());
@@ -1408,7 +1411,6 @@ impl RouteSet {
 						(have_match, &existing.key),
 					))
 				});
-				// TODO: replace old route
 				let insert_idx = to_insert.unwrap_or_else(|pos| pos);
 				v.insert(
 					insert_idx,
@@ -1539,6 +1541,9 @@ impl TCPRouteSet {
 	}
 
 	pub fn insert(&mut self, r: TCPRoute) {
+		if self.all.contains_key(&r.key) {
+			self.remove(&r.key);
+		}
 		// Insert the route into all HashMap first so it's available during binary search
 		self.all.insert(r.key.clone(), r.clone());
 
@@ -1549,7 +1554,6 @@ impl TCPRouteSet {
 				// TODO: not sure that is right
 				Ordering::reverse(r.key.cmp(existing))
 			});
-			// TODO: replace old route
 			let insert_idx = to_insert.unwrap_or_else(|pos| pos);
 			v.insert(insert_idx, r.key.clone());
 		}
@@ -2169,6 +2173,35 @@ pub mod defaults {
 mod tests {
 	use super::*;
 
+	fn route_match(path: &'static str) -> RouteMatch {
+		RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix(strng::new(path)),
+			method: None,
+			query: vec![],
+		}
+	}
+
+	fn route(key: &'static str, hostnames: Vec<&'static str>, matches: Vec<RouteMatch>) -> Route {
+		Route {
+			key: strng::new(key),
+			name: RouteName::default(),
+			hostnames: hostnames.into_iter().map(strng::new).collect(),
+			matches,
+			backends: vec![],
+			inline_policies: vec![],
+		}
+	}
+
+	fn tcp_route(key: &'static str, hostnames: Vec<&'static str>) -> TCPRoute {
+		TCPRoute {
+			key: strng::new(key),
+			name: RouteName::default(),
+			hostnames: hostnames.into_iter().map(strng::new).collect(),
+			backends: vec![],
+		}
+	}
+
 	#[test]
 	fn test_backend_type_categorization() {
 		let opaque_backend = Backend::Opaque(
@@ -2335,30 +2368,9 @@ InvalidKeyData
 	#[test]
 	fn test_route_set_iter() {
 		// Create test routes with unique keys
-		let route1 = Route {
-			key: strng::new("route-1"),
-			name: RouteName::default(),
-			hostnames: vec![],
-			matches: vec![],
-			backends: vec![],
-			inline_policies: vec![],
-		};
-		let route2 = Route {
-			key: strng::new("route-2"),
-			name: RouteName::default(),
-			hostnames: vec![],
-			matches: vec![],
-			backends: vec![],
-			inline_policies: vec![],
-		};
-		let route3 = Route {
-			key: strng::new("route-3"),
-			name: RouteName::default(),
-			hostnames: vec![],
-			matches: vec![],
-			backends: vec![],
-			inline_policies: vec![],
-		};
+		let route1 = route("route-1", vec![], vec![]);
+		let route2 = route("route-2", vec![], vec![]);
+		let route3 = route("route-3", vec![], vec![]);
 
 		// Build RouteSet
 		let route_set = RouteSet::from_list(vec![route1, route2, route3]);
@@ -2371,5 +2383,65 @@ InvalidKeyData
 		assert!(keys.contains(&strng::new("route-1")));
 		assert!(keys.contains(&strng::new("route-2")));
 		assert!(keys.contains(&strng::new("route-3")));
+	}
+
+	#[test]
+	fn test_route_set_insert_upsert_replaces_match_indexes() {
+		let mut route_set = RouteSet::default();
+		route_set.insert(route(
+			"route-1",
+			vec![],
+			vec![route_match("/first"), route_match("/second")],
+		));
+		route_set.insert(route("route-1", vec![], vec![route_match("/first")]));
+
+		let got: Vec<_> = route_set.get_hostname(&HostnameMatchRef::None).collect();
+		assert_eq!(got.len(), 1);
+		assert_eq!(got[0].0.key, strng::new("route-1"));
+		match &got[0].1.path {
+			PathMatch::PathPrefix(path) => assert_eq!(path.as_str(), "/first"),
+			_ => panic!("expected PathPrefix match"),
+		}
+	}
+
+	#[test]
+	fn test_route_set_insert_upsert_cleans_old_hostname_entries() {
+		let mut route_set = RouteSet::default();
+		route_set.insert(route(
+			"route-1",
+			vec!["old.example.com"],
+			vec![route_match("/old")],
+		));
+		route_set.insert(route(
+			"route-1",
+			vec!["new.example.com"],
+			vec![route_match("/new")],
+		));
+		route_set.remove(&strng::new("route-1"));
+		route_set.insert(route(
+			"route-2",
+			vec!["old.example.com"],
+			vec![route_match("/current")],
+		));
+
+		let got: Vec<_> = route_set
+			.get_hostname(&HostnameMatchRef::Exact("old.example.com"))
+			.collect();
+		assert_eq!(got.len(), 1);
+		assert_eq!(got[0].0.key, strng::new("route-2"));
+	}
+
+	#[test]
+	fn test_tcp_route_set_insert_upsert_cleans_old_hostname_entries() {
+		let mut route_set = TCPRouteSet::default();
+		route_set.insert(tcp_route("tcp-1", vec!["old.example.com"]));
+		route_set.insert(tcp_route("tcp-1", vec!["new.example.com"]));
+		route_set.remove(&strng::new("tcp-1"));
+		route_set.insert(tcp_route("tcp-2", vec!["old.example.com"]));
+
+		let got = route_set
+			.get_hostname(&HostnameMatchRef::Exact("old.example.com"))
+			.expect("route should be present");
+		assert_eq!(got.key, strng::new("tcp-2"));
 	}
 }
