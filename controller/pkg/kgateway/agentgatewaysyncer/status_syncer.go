@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
@@ -61,7 +62,8 @@ type AgentGwStatusSyncer struct {
 	grpcRoutes         StatusSyncer[*gwv1.GRPCRoute, *gwv1.GRPCRouteStatus]
 	tcpRoutes          StatusSyncer[*gwv1a2.TCPRoute, *gwv1a2.TCPRouteStatus]
 	tlsRoutes          StatusSyncer[*gwv1a2.TLSRoute, *gwv1a2.TLSRouteStatus]
-	backendTLSPolicies StatusSyncer[*gwv1.BackendTLSPolicy, *gwv1.PolicyStatus]
+	backendTLSPolicies StatusSyncer[*gwv1.BackendTLSPolicy, gwv1.PolicyStatus]
+	inferencePools     StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]
 
 	extraAgwResourceStatusHandlers map[schema.GroupVersionKind]agwplugins.AgwResourceStatusSyncHandler
 }
@@ -173,13 +175,23 @@ func NewAgwStatusSyncer(
 				}
 			},
 		},
-		backendTLSPolicies: StatusSyncer[*gwv1.BackendTLSPolicy, *gwv1.PolicyStatus]{
+		backendTLSPolicies: StatusSyncer[*gwv1.BackendTLSPolicy, gwv1.PolicyStatus]{
 			name:   "backendTLSPolicy",
 			client: kclient.NewFilteredDelayed[*gwv1.BackendTLSPolicy](client, wellknown.BackendTLSPolicyGVR, f),
-			build: func(om metav1.ObjectMeta, s *gwv1.PolicyStatus) *gwv1.BackendTLSPolicy {
+			build: func(om metav1.ObjectMeta, s gwv1.PolicyStatus) *gwv1.BackendTLSPolicy {
 				return &gwv1.BackendTLSPolicy{
 					ObjectMeta: om,
-					Status:     *s,
+					Status:     s,
+				}
+			},
+		},
+		inferencePools: StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]{
+			name:   "inferencePools",
+			client: kclient.NewFilteredDelayed[*inf.InferencePool](client, wellknown.InferencePoolGVR, f),
+			build: func(om metav1.ObjectMeta, s inf.InferencePoolStatus) *inf.InferencePool {
+				return &inf.InferencePool{
+					ObjectMeta: om,
+					Status:     s,
 				}
 			},
 		},
@@ -241,6 +253,8 @@ func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status.Re
 		s.agentgatewayBackends.ApplyStatus(ctx, resource, statusObj)
 	case wellknown.BackendTLSPolicyGVK:
 		s.backendTLSPolicies.ApplyStatus(ctx, resource, statusObj)
+	case wellknown.InferencePoolGVK:
+		s.inferencePools.ApplyStatus(ctx, resource, statusObj)
 	default:
 		// Attempt to handle resource policy kinds via registered handlers.
 		if s.extraAgwResourceStatusHandlers != nil {
@@ -275,7 +289,12 @@ type StatusSyncer[O controllers.ComparableObject, S any] struct {
 }
 
 func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource, statusObj any) {
-	status := statusObj.(S)
+	var status S
+	if ta, ok := statusObj.(*any); ok {
+		status = (*ta).(S)
+	} else {
+		status = statusObj.(S)
+	}
 	stopwatch := stopwatch.NewTranslatorStopWatch(s.name + "Status")
 	stopwatch.Start()
 	defer stopwatch.Stop(ctx)

@@ -10,6 +10,7 @@ import (
 	"istio.io/istio/pkg/slices"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
@@ -129,6 +130,8 @@ func enqueueStatus[T any](sw WorkerQueue, obj controllers.Object, ws T, extraGVK
 		res.GroupVersionKind = wellknown.XListenerSetGVK
 	case *gwv1.BackendTLSPolicy:
 		res.GroupVersionKind = wellknown.BackendTLSPolicyGVK
+	case *inf.InferencePool:
+		res.GroupVersionKind = wellknown.InferencePoolGVK
 	default:
 		// Prefer the object's own GVK if available
 		if gvk := obj.GetObjectKind().GroupVersionKind(); !gvk.Empty() {
