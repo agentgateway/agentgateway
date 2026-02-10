@@ -1389,7 +1389,7 @@ mod tests {
 		let xds_bind = XdsBind {
 			key: "test-bind".to_string(),
 			port: 8080,
-			protocol: 0, // HTTP
+			protocol: 0,        // HTTP
 			tunnel_protocol: 0, // Direct
 		};
 
@@ -1406,7 +1406,7 @@ mod tests {
 		let xds_bind = XdsBind {
 			key: "test-bind".to_string(),
 			port: 9090,
-			protocol: 0, // HTTP
+			protocol: 0,        // HTTP
 			tunnel_protocol: 0, // Direct
 		};
 

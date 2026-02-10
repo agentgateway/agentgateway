@@ -497,10 +497,7 @@ impl TryFrom<(proto::agent::Protocol, Option<&proto::agent::TlsConfig>)> for Lis
 }
 
 impl Bind {
-	pub fn try_from_xds(
-		s: &proto::agent::Bind,
-		ipv6_enabled: bool,
-	) -> Result<Self, ProtoError> {
+	pub fn try_from_xds(s: &proto::agent::Bind, ipv6_enabled: bool) -> Result<Self, ProtoError> {
 		let address = if cfg!(target_family = "unix") && ipv6_enabled {
 			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), s.port as u16)
 		} else {
