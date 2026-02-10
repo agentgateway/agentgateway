@@ -55,6 +55,8 @@ The `failureMode` field controls how the gateway behaves when the remote rate li
 - **`failOpen`** (default): Requests are allowed through when the rate limit service fails. This prevents a rate limit service outage from taking down all traffic. This matches [Envoy's default behavior](https://www.envoyproxy.io/docs/envoy/latest/api-v3/extensions/filters/http/ratelimit/v3/rate_limit.proto) (`failure_mode_deny=false`).
 - **`failClosed`**: Requests are denied with a `500 Internal Server Error` when the rate limit service fails. Use this when strict rate limiting is required and you prefer to reject traffic rather than allow potentially unlimited requests.
 
+> **Note:** Both camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`, `FailClosed`) are supported for compatibility, though camelCase is preferred.
+
 Note: When `failClosed` is active and the service fails, the response is `500` (not `429`), since the request was not actually rate-limited -- the service was simply unreachable.
 
 The `jwtAuth` configuration uses the example JWT keys and tokens included for demonstration purposes only.

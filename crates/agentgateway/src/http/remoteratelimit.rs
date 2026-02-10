@@ -29,15 +29,21 @@ pub mod proto {
 /// (`failure_mode_deny=false`). When failing open, requests are allowed
 /// through despite the service failure. When failing closed, a 500
 /// Internal Server Error is returned.
+///
+/// # Configuration
+///
+/// Both camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,
+/// `FailClosed`) are accepted in configuration files for compatibility,
+/// though camelCase is the preferred format.
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum FailureMode {
 	/// Allow the request through when the rate limit service is unavailable (default).
 	#[default]
-	#[serde(rename = "failOpen")]
+	#[serde(rename = "failOpen", alias = "FailOpen")]
 	FailOpen,
 	/// Deny the request with a 500 status when the rate limit service is unavailable.
-	#[serde(rename = "failClosed")]
+	#[serde(rename = "failClosed", alias = "FailClosed")]
 	FailClosed,
 }
 
@@ -453,6 +459,21 @@ mod tests {
 	}
 
 	#[test]
+	fn failure_mode_accepts_pascal_case_alias() {
+		// Test FailOpen (PascalCase alias for compatibility)
+		let deserialized: FailureMode = serde_json::from_str(r#""FailOpen""#).unwrap();
+		assert_eq!(deserialized, FailureMode::FailOpen);
+
+		// Test FailClosed (PascalCase alias for compatibility)
+		let deserialized: FailureMode = serde_json::from_str(r#""FailClosed""#).unwrap();
+		assert_eq!(deserialized, FailureMode::FailClosed);
+
+		// Serialization still uses camelCase (not the alias)
+		let json = serde_json::to_string(&FailureMode::FailOpen).unwrap();
+		assert_eq!(json, r#""failOpen""#);
+	}
+
+	#[test]
 	fn apply_ok_response_passes_through() {
 		let mut req = request_for_uri("http://example.com/test");
 		let response = proto::RateLimitResponse {
@@ -547,6 +568,37 @@ descriptors:
 domain: "test"
 host: "127.0.0.1:8081"
 failureMode: failClosed
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+		let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(rrl.failure_mode, FailureMode::FailClosed);
+	}
+
+	#[test]
+	fn config_with_pascal_case_aliases_deserializes() {
+		// Test FailOpen (PascalCase alias)
+		let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+failureMode: FailOpen
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+		let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(rrl.failure_mode, FailureMode::FailOpen);
+
+		// Test FailClosed (PascalCase alias)
+		let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+failureMode: FailClosed
 descriptors:
   - entries:
       - key: "user"
