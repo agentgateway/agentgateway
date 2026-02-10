@@ -17,6 +17,15 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - protocol: TCP
+      port: 9090
+      name: tcp
+      allowedRoutes:
+        namespaces:
+          from: All
+        kinds:
+          - kind: TCPRoute
+            group: gateway.networking.k8s.io
 ---
 apiVersion: v1
 kind: Service

@@ -14,22 +14,3 @@ spec:
           - name: config-volume
             configMap:
               name: agentgateway-config
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: agentgateway
-spec:
-  gatewayClassName: agentgateway
-  infrastructure:
-    parametersRef:
-      group: agentgateway.dev
-      kind: AgentgatewayParameters
-      name: tracing-config
-  listeners:
-    - protocol: HTTP
-      port: 8080
-      name: http
-      allowedRoutes:
-        namespaces:
-          from: All

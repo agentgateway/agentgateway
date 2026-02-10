@@ -1,18 +1,3 @@
-kind: Gateway
-apiVersion: gateway.networking.k8s.io/v1
-metadata:
-  name: http-gw-for-test
-  namespace: default
-spec:
-  gatewayClassName: agentgateway
-  listeners:
-    - protocol: HTTP
-      port: 8080
-      name: http
-      allowedRoutes:
-        namespaces:
-          from: All
----
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -22,8 +7,8 @@ metadata:
     example: httpbin-route
 spec:
   parentRefs:
-    - name: http-gw-for-test
-      namespace: default
+    - name: gateway
+      namespace: agentgateway-base
   hostnames:
     - "www.example.com"
   rules:

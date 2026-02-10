@@ -31,22 +31,22 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 func (s *testingSuite) TestAgentgatewayTCPRoute() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
 		s.Ctx,
-		tcpGatewayObjectMeta.Name,
-		tcpGatewayObjectMeta.Namespace,
+		sharedGatewayObjectMeta.Name,
+		sharedGatewayObjectMeta.Namespace,
 		gwv1.GatewayConditionProgrammed,
 		metav1.ConditionTrue,
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
 		s.Ctx,
-		tcpGatewayObjectMeta.Name,
-		tcpGatewayObjectMeta.Namespace,
+		sharedGatewayObjectMeta.Name,
+		sharedGatewayObjectMeta.Namespace,
 		gwv1.GatewayConditionAccepted,
 		metav1.ConditionTrue,
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayListenerAttachedRoutes(
 		s.Ctx,
-		tcpGatewayObjectMeta.Name,
-		tcpGatewayObjectMeta.Namespace,
+		sharedGatewayObjectMeta.Name,
+		sharedGatewayObjectMeta.Namespace,
 		"tcp",
 		1,
 	)
@@ -54,8 +54,8 @@ func (s *testingSuite) TestAgentgatewayTCPRoute() {
 	gateway := common.Gateway{
 		Address: s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayAddress(
 			s.Ctx,
-			tcpGatewayObjectMeta.Name,
-			tcpGatewayObjectMeta.Namespace,
+			sharedGatewayObjectMeta.Name,
+			sharedGatewayObjectMeta.Namespace,
 		),
 	}
 	gateway.Send(
@@ -63,30 +63,29 @@ func (s *testingSuite) TestAgentgatewayTCPRoute() {
 		&matchers.HttpResponse{
 			StatusCode: http.StatusOK,
 		},
-		curl.VerboseOutput(),
-		curl.WithPort(8080),
+		curl.WithPort(9090),
 	)
 }
 
 func (s *testingSuite) TestAgentgatewayHTTPRoute() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
 		s.Ctx,
-		httpGatewayObjectMeta.Name,
-		httpGatewayObjectMeta.Namespace,
+		sharedGatewayObjectMeta.Name,
+		sharedGatewayObjectMeta.Namespace,
 		gwv1.GatewayConditionProgrammed,
 		metav1.ConditionTrue,
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
 		s.Ctx,
-		httpGatewayObjectMeta.Name,
-		httpGatewayObjectMeta.Namespace,
+		sharedGatewayObjectMeta.Name,
+		sharedGatewayObjectMeta.Namespace,
 		gwv1.GatewayConditionAccepted,
 		metav1.ConditionTrue,
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayListenerAttachedRoutes(
 		s.Ctx,
-		httpGatewayObjectMeta.Name,
-		httpGatewayObjectMeta.Namespace,
+		sharedGatewayObjectMeta.Name,
+		sharedGatewayObjectMeta.Namespace,
 		"http",
 		1,
 	)
@@ -94,8 +93,8 @@ func (s *testingSuite) TestAgentgatewayHTTPRoute() {
 	gateway := common.Gateway{
 		Address: s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayAddress(
 			s.Ctx,
-			httpGatewayObjectMeta.Name,
-			httpGatewayObjectMeta.Namespace,
+			sharedGatewayObjectMeta.Name,
+			sharedGatewayObjectMeta.Namespace,
 		),
 	}
 	gateway.Send(
@@ -103,9 +102,7 @@ func (s *testingSuite) TestAgentgatewayHTTPRoute() {
 		&matchers.HttpResponse{
 			StatusCode: http.StatusOK,
 		},
-		curl.VerboseOutput(),
 		curl.WithHostHeader("www.example.com"),
 		curl.WithPath("/status/200"),
-		curl.WithPort(8080),
 	)
 }
