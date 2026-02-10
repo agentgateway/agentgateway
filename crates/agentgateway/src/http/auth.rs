@@ -471,7 +471,7 @@ mod aws {
 	static SDK_CONFIG: OnceCell<SdkConfig> = OnceCell::const_new();
 	async fn sdk_config<'a>() -> &'a SdkConfig {
 		SDK_CONFIG
-			.get_or_init(|| async { aws_config::load_defaults(BehaviorVersion::v2025_08_07()).await })
+			.get_or_init(|| async { aws_config::load_defaults(BehaviorVersion::v2026_01_12()).await })
 			.await
 	}
 
@@ -574,7 +574,6 @@ mod azure {
 						azure_identity::WorkloadIdentityCredentialOptions {
 							credential_options: azure_identity::ClientAssertionCredentialOptions {
 								client_options,
-								..Default::default()
 							},
 							..Default::default()
 						},

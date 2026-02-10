@@ -10,7 +10,7 @@ use agent_hbone::server::RequestParts;
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
-use rand::Rng;
+use rand::RngExt;
 use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};

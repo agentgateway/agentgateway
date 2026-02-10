@@ -12,6 +12,7 @@ use hyper::Response;
 use hyper::server::conn::http2;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
+use rand::Rng;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{debug, error, info};
@@ -179,7 +180,6 @@ fn generate_test_certs(name: &str) -> rustls::ServerConfig {
 	// Generate certificates using rcgen with static test keys
 	use std::time::{Duration, SystemTime};
 
-	use rand::RngCore;
 	use rcgen::{
 		CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
 		KeyUsagePurpose, SanType, SerialNumber,

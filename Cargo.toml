@@ -64,11 +64,11 @@ axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
 # Disable default features to avoid pulling in native-tls and requiring openssl
 # TODO: allow default features if we ever add an openssl feature
-azure_identity = { version = "0.30", default-features = false }
-azure_core = { version = "0.30", default-features = false }
-typespec_client_core = { default-features = false, version = "0.9" }
+azure_identity = { version = "0.31", default-features = false }
+azure_core = { version = "0.31", default-features = false }
+typespec_client_core = { default-features = false, version = "0.10" }
 base64 = "0.22"
-bcrypt = "0.17"
+bcrypt = "0.18"
 bytes = { version = "1.10", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
@@ -103,11 +103,11 @@ indexmap = { version = "2.9", features = ["serde"] }
 insta = { version = "1.38", features = ["json", "redactions", "filters"] }
 ipnet = { version = "2.11", features = ["serde"] }
 itertools = "0.14"
-jsonwebtoken = { version = "10.0", features = ["aws_lc_rs"] }
+jsonwebtoken = { version = "10.3", features = ["aws_lc_rs"] }
 lazy_static = "1.4"
 libc = "0.2"
 notify = "8.0"
-notify-debouncer-full = "0.6"
+notify-debouncer-full = "0.7"
 md-5 = "0.10"
 num_cpus = "1.17"
 once_cell = "1.21"
@@ -121,7 +121,7 @@ parking_lot = "0.12"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"
-pingora-pool = "0.6"
+pingora-pool = "0.7"
 ppp = "2.3"
 pprof = { version = "0.15", features = [
     "protobuf",
@@ -136,7 +136,7 @@ prost-types = "0.14"
 prost-wkt-types = { version = "0.7.0", features = ["vendored-protox"] }
 prost-wkt-build = "0.7.0"
 pwhash = "1"
-rand = "0.9"
+rand = "0.10"
 rcgen = { version = "0.14", features = ["pem", "x509-parser"] }
 regex = "1.11"
 reqwest = { version = "0.12", default-features = false, features = [

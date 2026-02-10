@@ -4,7 +4,7 @@ use assert_matches::assert_matches;
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
-use rand::Rng;
+use rand::RngExt;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use x509_parser::nom::AsBytes;

@@ -84,6 +84,7 @@ impl ResponseBuilder {
 			billing: None,
 			conversation: None,
 			created_at: self.created_at,
+			completed_at: None,
 			error,
 			id: self.response_id.clone(),
 			incomplete_details,
