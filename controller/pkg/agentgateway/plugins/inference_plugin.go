@@ -6,10 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/agentgateway/agentgateway/api"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
@@ -18,6 +14,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
+
+	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
 const (

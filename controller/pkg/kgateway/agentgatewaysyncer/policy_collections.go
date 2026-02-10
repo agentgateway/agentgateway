@@ -1,15 +1,16 @@
 package agentgatewaysyncer
 
 import (
+	"istio.io/istio/pkg/kube/controllers"
+	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/ptr"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
-	"istio.io/istio/pkg/kube/controllers"
-	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type PolicyStatusCollections = map[schema.GroupKind]krt.StatusCollection[controllers.Object, any]
