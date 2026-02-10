@@ -49,8 +49,9 @@ format:
 
 # test
 .PHONY: test
+TEST_RUST_MIN_STACK ?= 8388608
 test:
-	cargo test --all-targets
+	RUST_MIN_STACK=$(TEST_RUST_MIN_STACK) cargo test --all-targets
 
 # clean
 .PHONY: clean

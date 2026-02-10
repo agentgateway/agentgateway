@@ -209,13 +209,13 @@ impl Client {
 		let stream = self.get_stream(ctx).await?;
 		Ok(stream.get_event_stream().await)
 	}
-	pub async fn send_message(
+	pub async fn send_message_stream(
 		&self,
 		req: JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
-	) -> Result<ServerJsonRpcMessage, UpstreamError> {
+	) -> Result<Messages, UpstreamError> {
 		let stream = self.get_stream(ctx).await?;
-		stream.send_message(req, ctx).await
+		stream.send_message_stream(req, ctx).await
 	}
 
 	pub async fn send_notification(
@@ -225,6 +225,15 @@ impl Client {
 	) -> Result<(), UpstreamError> {
 		let stream = self.get_stream(ctx).await?;
 		stream.send_notification(req, ctx).await
+	}
+
+	pub async fn send_client_message(
+		&self,
+		msg: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		let stream = self.get_stream(ctx).await?;
+		stream.send_raw(msg, ctx).await
 	}
 }
 

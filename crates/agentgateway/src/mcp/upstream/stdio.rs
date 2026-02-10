@@ -11,7 +11,7 @@ use rmcp::model::{
 };
 use rmcp::transport::{TokioChildProcess, Transport};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{error, warn};
 
 use crate::mcp::mergestream::Messages;
@@ -21,6 +21,7 @@ pub struct Process {
 	sender: mpsc::Sender<(ClientJsonRpcMessage, IncomingRequestContext)>,
 	shutdown_tx: agent_core::responsechannel::Sender<(), Option<UpstreamError>>,
 	event_stream: AtomicOption<mpsc::Sender<ServerJsonRpcMessage>>,
+	event_bus: broadcast::Sender<ServerJsonRpcMessage>,
 	pending_requests: Arc<Mutex<HashMap<RequestId, oneshot::Sender<ServerJsonRpcMessage>>>>,
 }
 
@@ -37,24 +38,71 @@ impl Process {
 			Ok(())
 		}
 	}
-	pub async fn send_message(
+	pub async fn send_message_stream(
 		&self,
 		req: JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
-	) -> Result<ServerJsonRpcMessage, UpstreamError> {
+	) -> Result<Messages, UpstreamError> {
 		let req_id = req.id.clone();
-		let (sender, receiver) = oneshot::channel();
-
-		self.pending_requests.lock().unwrap().insert(req_id, sender);
-
+		let (response_tx, mut response_rx) = oneshot::channel();
 		self
+			.pending_requests
+			.lock()
+			.unwrap()
+			.insert(req_id.clone(), response_tx);
+
+		let mut event_rx = self.event_bus.subscribe();
+		if self
 			.sender
 			.send((JsonRpcMessage::Request(req), ctx.clone()))
 			.await
-			.map_err(|_| UpstreamError::Send)?;
+			.is_err()
+		{
+			self.pending_requests.lock().unwrap().remove(&req_id);
+			return Err(UpstreamError::Send);
+		}
 
-		let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
-		Ok(response)
+		let pending_requests = self.pending_requests.clone();
+		let (tx, rx) = mpsc::channel(16);
+		tokio::spawn(async move {
+			loop {
+				tokio::select! {
+					response = &mut response_rx => {
+						match response {
+							Ok(msg) => {
+								let _ = tx.send(msg).await;
+							},
+							Err(_) => {
+								pending_requests.lock().unwrap().remove(&req_id);
+								let _ = tx
+									.send(ServerJsonRpcMessage::error(
+										rmcp::ErrorData::internal_error(
+											"upstream closed on receive".to_string(),
+											None,
+										),
+										req_id.clone(),
+									))
+									.await;
+							},
+						}
+						break;
+					},
+					msg = event_rx.recv() => {
+						match msg {
+							Ok(msg) => {
+								if tx.send(msg).await.is_err() {
+									break;
+								}
+							},
+							Err(broadcast::error::RecvError::Lagged(_)) => {},
+							Err(broadcast::error::RecvError::Closed) => break,
+						}
+					},
+				}
+			}
+		});
+
+		Ok(Messages::from(rx))
 	}
 	pub async fn get_event_stream(&self) -> Messages {
 		let (tx, rx) = tokio::sync::mpsc::channel(10);
@@ -73,6 +121,19 @@ impl Process {
 			.map_err(|_| UpstreamError::Send)?;
 		Ok(())
 	}
+
+	pub async fn send_raw(
+		&self,
+		msg: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		self
+			.sender
+			.send((msg, ctx.clone()))
+			.await
+			.map_err(|_| UpstreamError::Send)?;
+		Ok(())
+	}
 }
 
 impl Process {
@@ -81,11 +142,13 @@ impl Process {
 			mpsc::channel::<(ClientJsonRpcMessage, IncomingRequestContext)>(10);
 		let (shutdown_tx, mut shutdown_rx) =
 			agent_core::responsechannel::new::<(), Option<UpstreamError>>(10);
+		let (event_bus, _) = broadcast::channel::<ServerJsonRpcMessage>(32);
 		let pending_requests = Arc::new(Mutex::new(HashMap::<
 			RequestId,
 			oneshot::Sender<ServerJsonRpcMessage>,
 		>::new()));
 		let pending_requests_clone = pending_requests.clone();
+		let event_bus_send = event_bus.clone();
 		let event_stream: AtomicOption<Sender<ServerJsonRpcMessage>> = Default::default();
 		let event_stream_send: AtomicOption<Sender<ServerJsonRpcMessage>> = event_stream.clone();
 
@@ -108,7 +171,14 @@ impl Process {
 							},
 							other => {
 								if let Some(sender) = event_stream_send.load().as_ref() {
-									let _ = sender.send(other).await;
+									match sender.send(other).await {
+										Ok(()) => {},
+										Err(err) => {
+											let _ = event_bus_send.send(err.0);
+										},
+									}
+								} else {
+									let _ = event_bus_send.send(other);
 								}
 							}
 						}
@@ -136,6 +206,7 @@ impl Process {
 			sender: sender_tx,
 			shutdown_tx,
 			event_stream,
+			event_bus,
 			pending_requests,
 		}
 	}

@@ -7,7 +7,7 @@ mod streamablehttp;
 use std::io;
 
 pub(crate) use client::McpHttpClient;
-use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
+use rmcp::model::{ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use thiserror::Error;
 use tokio::process::Command;
@@ -84,8 +84,6 @@ pub enum UpstreamError {
 	Stdio(#[from] io::Error),
 	#[error("upstream closed on send")]
 	Send,
-	#[error("upstream closed on receive")]
-	Recv,
 }
 
 // UpstreamTarget defines a source for MCP information.
@@ -152,12 +150,8 @@ impl Upstream {
 		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
-			Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
-				c.send_message(request, ctx).await?,
-			)),
-			Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
-				c.send_message(request, ctx).await?,
-			)),
+			Upstream::McpStdio(c) => c.send_message_stream(request, ctx).await,
+			Upstream::McpSSE(c) => c.send_message_stream(request, ctx).await,
 			Upstream::McpStreamable(c) => {
 				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
 				let res = c.send_request(request, ctx).await?;
@@ -191,6 +185,26 @@ impl Upstream {
 			},
 			Upstream::McpStreamable(c) => {
 				c.send_notification(request, ctx).await?;
+			},
+			Upstream::OpenAPI(_) => {},
+		}
+		Ok(())
+	}
+
+	pub(crate) async fn send_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		match &self {
+			Upstream::McpStdio(c) => {
+				c.send_raw(message, ctx).await?;
+			},
+			Upstream::McpSSE(c) => {
+				c.send_client_message(message, ctx).await?;
+			},
+			Upstream::McpStreamable(c) => {
+				c.send_client_message(message, ctx).await?;
 			},
 			Upstream::OpenAPI(_) => {},
 		}
