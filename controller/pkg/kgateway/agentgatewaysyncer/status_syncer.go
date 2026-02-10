@@ -45,7 +45,7 @@ const (
 type AgentGwStatusSyncer struct {
 	client apiclient.Client
 
-	agentgatewayPolicies StatusSyncer[*agentgateway.AgentgatewayPolicy, *gwv1.PolicyStatus]
+	agentgatewayPolicies StatusSyncer[*agentgateway.AgentgatewayPolicy, gwv1.PolicyStatus]
 	agentgatewayBackends StatusSyncer[*agentgateway.AgentgatewayBackend, *agentgateway.AgentgatewayBackendStatus]
 
 	// Configuration
@@ -85,11 +85,11 @@ func NewAgwStatusSyncer(
 		cacheSyncs:                     cacheSyncs,
 		extraAgwResourceStatusHandlers: extraHandlers,
 
-		agentgatewayPolicies: StatusSyncer[*agentgateway.AgentgatewayPolicy, *gwv1.PolicyStatus]{
+		agentgatewayPolicies: StatusSyncer[*agentgateway.AgentgatewayPolicy, gwv1.PolicyStatus]{
 			name:           "agentgatewayPolicy",
 			controllerName: controllerName,
 			client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayPolicy](client, wellknown.AgentgatewayPolicyGVR, f),
-			build: func(om metav1.ObjectMeta, s *gwv1.PolicyStatus) *agentgateway.AgentgatewayPolicy {
+			build: func(om metav1.ObjectMeta, s gwv1.PolicyStatus) *agentgateway.AgentgatewayPolicy {
 				return &agentgateway.AgentgatewayPolicy{
 					ObjectMeta: om,
 					Status: gwv1.PolicyStatus{
@@ -291,7 +291,9 @@ type StatusSyncer[O controllers.ComparableObject, S any] struct {
 func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource, statusObj any) {
 	var status S
 	if ta, ok := statusObj.(*any); ok {
-		status = (*ta).(S)
+		if ta != nil {
+			status = (*ta).(S)
+		}
 	} else {
 		status = statusObj.(S)
 	}

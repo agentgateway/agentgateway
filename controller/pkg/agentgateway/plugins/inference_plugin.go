@@ -2,7 +2,9 @@ package plugins
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
@@ -11,9 +13,10 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
-	meta "k8s.io/apimachinery/pkg/api/meta"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 )
 
@@ -24,13 +27,13 @@ const (
 
 // NewInferencePlugin creates a new InferencePool policy plugin
 func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
-	status, policyCol := krt.NewStatusManyCollection(agw.InferencePools, func(krtctx krt.HandlerContext, infPool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
-		return translatePoliciesForInferencePool(infPool, agw.ControllerName)
-	}, agw.KrtOpts.ToOptions("agentgateway/InferencePoolsPolicy")...)
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.InferencePoolGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
+					status, policyCol := krt.NewStatusManyCollection(agw.InferencePools, func(krtctx krt.HandlerContext, infPool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
+						return translatePoliciesForInferencePool(krtctx, agw.ControllerName, input.Ancestors, agw.Services, infPool)
+					}, agw.KrtOpts.ToOptions("agentgateway/InferencePools")...)
 					return convertStatusCollection(status), policyCol
 				},
 			},
@@ -38,41 +41,24 @@ func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 	}
 }
 
-// translatePoliciesForInferencePool generates policies for a single inference pool
-func translatePoliciesForInferencePool(pool *inf.InferencePool, controllerName string) (*inf.InferencePoolStatus, []AgwPolicy) {
+// translatePoliciesForInferencePool generates policies for a single inference pool.
+func translatePoliciesForInferencePool(
+	krtctx krt.HandlerContext,
+	controllerName string,
+	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	services krt.Collection[*corev1.Service],
+	pool *inf.InferencePool,
+) (*inf.InferencePoolStatus, []AgwPolicy) {
 	var infPolicies []AgwPolicy
-	status := pool.Status.DeepCopy()
-	if status == nil {
-		status = &inf.InferencePoolStatus{}
-	}
-	if len(status.Parents) == 0 {
-		status.Parents = []inf.ParentStatus{{
-			ParentRef: inf.ParentReference{
-				Kind: inf.Kind(defaultInferencePoolStatusKind),
-				Name: inf.ObjectName(defaultInferencePoolStatusName),
-			},
-		}}
-	}
+
+	epr := pool.Spec.EndpointPickerRef
+	validationErr := validateInferencePoolEndpointPickerRef(krtctx, pool, services)
+	attachedGateways := inferencePoolAttachedGateways(krtctx, ancestors, pool)
+	status := buildInferencePoolStatus(pool, controllerName, attachedGateways, validationErr)
 
 	// 'service/{namespace}/{hostname}:{port}'
 	hostname := kubeutils.GetInferenceServiceHostname(pool.Name, pool.Namespace)
-
-	epr := pool.Spec.EndpointPickerRef
-	validationErr := validateInferencePoolEndpointPickerRef(epr)
-	for i := range status.Parents {
-		if controllerName != "" {
-			status.Parents[i].ControllerName = inf.ControllerName(controllerName)
-		}
-		meta.SetStatusCondition(&status.Parents[i].Conditions, buildInferencePoolAcceptedCondition(pool.Generation, controllerName))
-		meta.SetStatusCondition(&status.Parents[i].Conditions, buildInferencePoolResolvedRefsCondition(pool.Generation, validationErr))
-	}
-	if validationErr != nil {
-		logger.Warn("inference pool endpoint picker ref invalid, skipping", "pool", pool.Name, "error", validationErr)
-		return status, nil
-	}
-
 	eppPort := epr.Port.Number
-
 	eppSvc := kubeutils.GetServiceHostname(string(epr.Name), pool.Namespace)
 
 	failureMode := api.BackendPolicySpec_InferenceRouting_FAIL_CLOSED
@@ -134,9 +120,12 @@ func translatePoliciesForInferencePool(pool *inf.InferencePool, controllerName s
 	return status, infPolicies
 }
 
-func validateInferencePoolEndpointPickerRef(epr inf.EndpointPickerRef) error {
+func validateInferencePoolEndpointPickerRef(krtctx krt.HandlerContext, pool *inf.InferencePool, services krt.Collection[*corev1.Service]) error {
+	epr := pool.Spec.EndpointPickerRef
+	var errs []string
+
 	if epr.Group != nil && *epr.Group != "" {
-		return fmt.Errorf("endpointPickerRef.group must be empty, got %q", *epr.Group)
+		errs = append(errs, fmt.Sprintf("endpointPickerRef.group must be empty, got %q", *epr.Group))
 	}
 
 	kind := epr.Kind
@@ -145,45 +134,192 @@ func validateInferencePoolEndpointPickerRef(epr inf.EndpointPickerRef) error {
 		kind = inf.Kind(wellknown.ServiceKind)
 	}
 	if kind != inf.Kind(wellknown.ServiceKind) {
-		return fmt.Errorf("endpointPickerRef.kind must be %q, got %q", wellknown.ServiceKind, kind)
+		errs = append(errs, fmt.Sprintf("endpointPickerRef.kind must be %q, got %q", wellknown.ServiceKind, kind))
+	}
+
+	// InferencePool v1 only supports a single target port.
+	if len(pool.Spec.TargetPorts) != 1 {
+		errs = append(errs, "inferencePool.targetPorts must contain exactly one entry")
 	}
 
 	if epr.Port == nil {
-		return fmt.Errorf("endpointPickerRef.port must be specified")
+		errs = append(errs, "endpointPickerRef.port must be specified")
+		return inferencePoolValidationError(errs)
 	}
-	return nil
+
+	svc := ptr.Flatten(krt.FetchOne(krtctx, services, krt.FilterKey(types.NamespacedName{Namespace: pool.Namespace, Name: string(epr.Name)}.String())))
+	if svc == nil {
+		errs = append(errs, fmt.Sprintf("endpointPickerRef Service %s/%s not found", pool.Namespace, epr.Name))
+		return inferencePoolValidationError(errs)
+	}
+
+	if svc.Spec.Type == corev1.ServiceTypeExternalName {
+		errs = append(errs, "endpointPickerRef Service must not be ExternalName")
+	}
+
+	// Service must expose the requested TCP port.
+	foundTCPPort := false
+	eppPort := int32(epr.Port.Number)
+	for _, sp := range svc.Spec.Ports {
+		proto := sp.Protocol
+		if proto == "" {
+			proto = corev1.ProtocolTCP
+		}
+		if sp.Port == eppPort && proto == corev1.ProtocolTCP {
+			foundTCPPort = true
+			break
+		}
+	}
+	if !foundTCPPort {
+		errs = append(errs, fmt.Sprintf("endpointPickerRef.port %d must reference a TCP Service port on %s/%s", eppPort, pool.Namespace, epr.Name))
+	}
+
+	return inferencePoolValidationError(errs)
 }
 
-func buildInferencePoolAcceptedCondition(gen int64, controllerName string) metav1.Condition {
+func inferencePoolValidationError(errs []string) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%s", strings.Join(errs, "; "))
+}
+
+func inferencePoolAttachedGateways(
+	krtctx krt.HandlerContext,
+	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	pool *inf.InferencePool,
+) map[types.NamespacedName]struct{} {
+	gateways := make(map[types.NamespacedName]struct{})
+	if ancestors == nil {
+		return gateways
+	}
+
+	targetRef := utils.TypedNamespacedName{
+		NamespacedName: types.NamespacedName{
+			Name:      pool.Name,
+			Namespace: pool.Namespace,
+		},
+		Kind: wellknown.InferencePoolKind,
+	}
+
+	ancestorBackends := krt.Fetch(krtctx, ancestors, krt.FilterKey(targetRef.String()))
+	for _, gwl := range ancestorBackends {
+		for _, i := range gwl.Objects {
+			gateways[i.Gateway] = struct{}{}
+		}
+	}
+	return gateways
+}
+
+func buildInferencePoolStatus(
+	pool *inf.InferencePool,
+	controllerName string,
+	attachedGateways map[types.NamespacedName]struct{},
+	validationErr error,
+) *inf.InferencePoolStatus {
+	status := pool.Status.DeepCopy()
+	if status == nil {
+		status = &inf.InferencePoolStatus{}
+	}
+
+	existingOurs := make(map[string]inf.ParentStatus)
+	mergedParents := make([]inf.ParentStatus, 0, len(status.Parents)+len(attachedGateways)+1)
+	for _, p := range status.Parents {
+		if string(p.ControllerName) != controllerName {
+			mergedParents = append(mergedParents, p)
+			continue
+		}
+		existingOurs[inferencePoolParentMergeKey(p.ParentRef)] = p
+	}
+
+	conditions := inferencePoolConditionMap(controllerName, validationErr)
+	for _, ref := range desiredInferencePoolParentRefs(attachedGateways, validationErr) {
+		existingConds := []metav1.Condition(nil)
+		if existing, found := existingOurs[inferencePoolParentMergeKey(ref)]; found {
+			existingConds = existing.Conditions
+		}
+		mergedParents = append(mergedParents, inf.ParentStatus{
+			ParentRef:      ref,
+			ControllerName: inf.ControllerName(controllerName),
+			Conditions:     setConditions(pool.Generation, existingConds, conditions),
+		})
+	}
+
+	status.Parents = mergedParents
+	return status
+}
+
+func desiredInferencePoolParentRefs(attachedGateways map[types.NamespacedName]struct{}, err error) []inf.ParentReference {
+	if len(attachedGateways) == 0 {
+		if err == nil {
+			return []inf.ParentReference{}
+		}
+		return []inf.ParentReference{{
+			Kind: inf.Kind(defaultInferencePoolStatusKind),
+			Name: inf.ObjectName(defaultInferencePoolStatusName),
+		}}
+	}
+
+	gateways := make([]types.NamespacedName, 0, len(attachedGateways))
+	for g := range attachedGateways {
+		gateways = append(gateways, g)
+	}
+	sort.SliceStable(gateways, func(i, j int) bool {
+		if gateways[i].Namespace == gateways[j].Namespace {
+			return gateways[i].Name < gateways[j].Name
+		}
+		return gateways[i].Namespace < gateways[j].Namespace
+	})
+
+	refs := make([]inf.ParentReference, 0, len(gateways))
+	for _, g := range gateways {
+		refs = append(refs, inf.ParentReference{
+			Group:     ptr.Of(inf.Group(wellknown.GatewayGroup)),
+			Kind:      inf.Kind(wellknown.GatewayKind),
+			Namespace: inf.Namespace(g.Namespace),
+			Name:      inf.ObjectName(g.Name),
+		})
+	}
+	return refs
+}
+
+func inferencePoolConditionMap(controllerName string, validationErr error) map[string]*condition {
 	msg := "InferencePool has been accepted"
 	if controllerName != "" {
 		msg = fmt.Sprintf("InferencePool has been accepted by controller %s", controllerName)
 	}
-	return metav1.Condition{
-		Type:               string(inf.InferencePoolConditionAccepted),
-		Status:             metav1.ConditionTrue,
-		Reason:             string(inf.InferencePoolReasonAccepted),
-		Message:            msg,
-		ObservedGeneration: gen,
-		LastTransitionTime: metav1.Now(),
+
+	conds := map[string]*condition{
+		string(inf.InferencePoolConditionAccepted): {
+			reason:  string(inf.InferencePoolReasonAccepted),
+			message: msg,
+		},
+		string(inf.InferencePoolConditionResolvedRefs): {
+			reason:  string(inf.InferencePoolReasonResolvedRefs),
+			message: "All InferencePool references have been resolved",
+		},
 	}
+	if validationErr != nil {
+		conds[string(inf.InferencePoolConditionResolvedRefs)].error = &ConfigError{
+			Reason:  string(inf.InferencePoolReasonInvalidExtensionRef),
+			Message: "error: " + validationErr.Error(),
+		}
+	}
+	return conds
 }
 
-func buildInferencePoolResolvedRefsCondition(gen int64, validationErr error) metav1.Condition {
-	cond := metav1.Condition{
-		Type:               string(inf.InferencePoolConditionResolvedRefs),
-		ObservedGeneration: gen,
-		LastTransitionTime: metav1.Now(),
-	}
-	if validationErr == nil {
-		cond.Status = metav1.ConditionTrue
-		cond.Reason = string(inf.InferencePoolReasonResolvedRefs)
-		cond.Message = "All InferencePool references have been resolved"
-		return cond
+func inferencePoolParentMergeKey(ref inf.ParentReference) string {
+	kind := string(ref.Kind)
+	if kind == "" {
+		kind = wellknown.GatewayKind
 	}
 
-	cond.Status = metav1.ConditionFalse
-	cond.Reason = string(inf.InferencePoolReasonInvalidExtensionRef)
-	cond.Message = "error: " + validationErr.Error()
-	return cond
+	group := ""
+	if ref.Group != nil && *ref.Group != "" {
+		group = string(*ref.Group)
+	} else if kind == wellknown.GatewayKind {
+		// For Gateway parent refs, API defaulting implies gateway.networking.k8s.io.
+		group = wellknown.GatewayGroup
+	}
+	return fmt.Sprintf("%s/%s/%s/%s", group, kind, ref.Namespace, ref.Name)
 }

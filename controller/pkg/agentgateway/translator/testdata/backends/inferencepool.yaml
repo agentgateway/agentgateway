@@ -32,6 +32,18 @@ spec:
     hostname: my.inference.pool.example.com
     wellKnownCACertificates: System
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-pool-endpoint-picker
+  namespace: default
+spec:
+  ports:
+    - port: 9002
+      protocol: TCP
+  selector:
+    app: gateway
+---
 # Output
 output:
 - resource:
@@ -82,6 +94,11 @@ output:
         service:
           hostname: gateway-pool.default.inference.cluster.local
           namespace: default
+- hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+  name: gateway-pool-endpoint-picker
+  namespace: default
+  ports:
+  - servicePort: 9002
 - hostname: gateway-pool.default.inference.cluster.local
   name: gateway-pool
   namespace: default
