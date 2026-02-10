@@ -13,11 +13,11 @@ import (
 	"istio.io/istio/pkg/test/util/file"
 	"k8s.io/apimachinery/pkg/types"
 
-	apitests "github.com/kgateway-dev/kgateway/v2/api/tests"
-	"github.com/kgateway-dev/kgateway/v2/pkg/agentgateway/jwks_url"
-	"github.com/kgateway-dev/kgateway/v2/pkg/agentgateway/plugins"
-	"github.com/kgateway-dev/kgateway/v2/pkg/agentgateway/testutils"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
+	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 )
 
 func TestRemoteJwksUrlBuilder(t *testing.T) {

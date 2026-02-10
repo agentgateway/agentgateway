@@ -4,7 +4,7 @@ import (
 	"istio.io/istio/pkg/kube"
 	"k8s.io/client-go/rest"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
+	"github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
 )
 
 var _ Client = (*client)(nil)

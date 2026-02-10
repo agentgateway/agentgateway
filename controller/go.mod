@@ -1,10 +1,12 @@
-module github.com/kgateway-dev/kgateway/v2
+module github.com/agentgateway/agentgateway/controller
 
 go 1.25.7
 
+replace github.com/agentgateway/agentgateway => ..
+
 require (
 	// Also update AgentgatewayDefaultTag in pkg/deployer/wellknown.go and test/deployer/testdata/*
-	github.com/agentgateway/agentgateway v0.11.2
+	github.com/agentgateway/agentgateway v0.0.0
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/cncf/xds/go v0.0.0-20251110193048-8bfbf64dc13e

@@ -1,4 +1,4 @@
-module github.com/kgateway-dev/kgateway/v2/tools
+module github.com/agentgateway/agentgateway/controller/tools
 
 go 1.25.7
 

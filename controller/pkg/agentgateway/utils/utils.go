@@ -7,7 +7,7 @@ import (
 	"github.com/agentgateway/agentgateway/go/api"
 	"istio.io/istio/pkg/ptr"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
 // SingularLLMProviderSubBackendName is the name of the sub-backend for singular LLM providers.

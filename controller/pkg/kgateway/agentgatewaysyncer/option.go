@@ -4,7 +4,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/workloadapi"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/agentgateway/translator"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 )
 
 type agentgatewaySyncerConfig struct {

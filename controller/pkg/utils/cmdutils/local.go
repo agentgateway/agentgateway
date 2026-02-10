@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/threadsafe"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/threadsafe"
 )
 
 var (

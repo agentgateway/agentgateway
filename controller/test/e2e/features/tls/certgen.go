@@ -14,7 +14,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/kgateway-dev/kgateway/v2/api/settings"
+	"github.com/agentgateway/agentgateway/controller/api/settings"
 )
 
 const (

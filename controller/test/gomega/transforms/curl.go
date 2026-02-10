@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/kubectl"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
 )
 
 const (

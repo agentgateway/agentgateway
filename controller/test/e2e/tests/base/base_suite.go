@@ -29,9 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 // GwApiChannel represents the Gateway API release channel

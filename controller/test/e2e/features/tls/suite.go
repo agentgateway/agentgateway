@@ -10,12 +10,12 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	testdefaults "github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/tests/base"
-	"github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
+	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	testdefaults "github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
+	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
 // TODO: Add negative test case to verify that invalid/malformed TLS certificates

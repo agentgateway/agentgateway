@@ -13,8 +13,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
-	"github.com/kgateway-dev/kgateway/v2/test/helpers"
+	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
 
 // EventuallyPodReady asserts that all containers in the pod are reporting a ready status.

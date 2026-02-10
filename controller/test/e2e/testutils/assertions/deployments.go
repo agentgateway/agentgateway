@@ -12,8 +12,8 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
-	"github.com/kgateway-dev/kgateway/v2/test/helpers"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
 
 // EventuallyReadyReplicas asserts that given a Deployment, eventually the number of pods matching the replicaMatcher

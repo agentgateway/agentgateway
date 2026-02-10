@@ -5,8 +5,8 @@ package agentgateway
 import (
 	context "context"
 
-	v1alpha1agentgateway "github.com/kgateway-dev/kgateway/v2/api/v1alpha1/agentgateway"
-	scheme "github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned/scheme"
+	v1alpha1agentgateway "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	scheme "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

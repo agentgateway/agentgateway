@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 )
 
 // HistogramMetricOutput is a struct to hold histogram metric output values.

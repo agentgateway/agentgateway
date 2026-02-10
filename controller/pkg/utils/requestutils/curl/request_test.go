@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 )
 
 var _ = Describe("Curl", func() {

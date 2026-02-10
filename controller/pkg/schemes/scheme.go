@@ -17,7 +17,7 @@ import (
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
-	agwv1a1 "github.com/kgateway-dev/kgateway/v2/api/v1alpha1/agentgateway"
+	agwv1a1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
 // SchemeBuilder contains all the Schemes for registering the CRDs with which kgateway interacts.

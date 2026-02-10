@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
 var _ = Describe("HaveCondition", func() {

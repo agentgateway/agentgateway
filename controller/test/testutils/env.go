@@ -1,7 +1,7 @@
 package testutils
 
 import (
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/envutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
 )
 
 const (

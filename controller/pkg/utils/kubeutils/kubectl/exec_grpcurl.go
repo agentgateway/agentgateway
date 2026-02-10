@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/grpcurl"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/grpcurl"
 )
 
 // GrpcurlResponse holds the structured output from a grpcurl command execution.

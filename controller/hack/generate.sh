@@ -11,8 +11,8 @@ set -o pipefail
 set -x
 
 readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")"/.. && pwd)"
-readonly OUTPUT_PKG=github.com/kgateway-dev/kgateway/v2/pkg/client
-readonly APIS_PKG=github.com/kgateway-dev/kgateway/v2
+readonly OUTPUT_PKG=github.com/agentgateway/agentgateway/controller/pkg/client
+readonly APIS_PKG=github.com/agentgateway/agentgateway/controller
 readonly CLIENTSET_NAME=versioned
 readonly CLIENTSET_PKG_NAME=clientset
 readonly VERSIONS=( v1alpha1 )

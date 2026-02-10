@@ -3,7 +3,7 @@ package wellknown
 import (
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/namespaces"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
 )
 
 const (

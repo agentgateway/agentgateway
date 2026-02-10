@@ -13,10 +13,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/tests/base"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
+	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 )
 
 var _ e2e.NewSuiteFunc = NewTestingSuite

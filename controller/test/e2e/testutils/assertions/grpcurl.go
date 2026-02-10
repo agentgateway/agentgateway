@@ -12,9 +12,9 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/kubectl"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/grpcurl"
-	"github.com/kgateway-dev/kgateway/v2/test/helpers"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/grpcurl"
+	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
 
 // AssertEventualGrpcurlSuccess checks that a grpcurl command eventually succeeds (exit code 0).

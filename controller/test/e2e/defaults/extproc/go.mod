@@ -1,4 +1,4 @@
-module github.com/kgateway-dev/kgateway/v2/test/e2e/defaults/extproc
+module github.com/agentgateway/agentgateway/controller/test/e2e/defaults/extproc
 
 go 1.25.7
 

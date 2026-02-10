@@ -1,7 +1,7 @@
 package deployer
 
 import (
-	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
 // helmConfig stores the top-level helm values used by the deployer.

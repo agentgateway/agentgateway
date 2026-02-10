@@ -18,12 +18,12 @@ import (
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 	"sigs.k8s.io/yaml"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/apiclient"
-	pkgdeployer "github.com/kgateway-dev/kgateway/v2/pkg/deployer"
-	internaldeployer "github.com/kgateway-dev/kgateway/v2/pkg/kgateway/deployer"
-	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/collections"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/envutils"
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
+	internaldeployer "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 type HelmTestCase struct {

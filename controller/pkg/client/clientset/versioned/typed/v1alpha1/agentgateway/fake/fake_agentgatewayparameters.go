@@ -3,8 +3,8 @@
 package fake
 
 import (
-	agentgateway "github.com/kgateway-dev/kgateway/v2/api/v1alpha1/agentgateway"
-	v1alpha1agentgateway "github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway"
+	agentgateway "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	v1alpha1agentgateway "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway"
 	gentype "k8s.io/client-go/gentype"
 )
 

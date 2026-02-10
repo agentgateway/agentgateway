@@ -18,9 +18,9 @@ import (
 	"istio.io/istio/pkg/security"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/agentgatewaysyncer/krtxds"
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/agentgatewaysyncer/nack"
-	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/krtxds"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/nack"
+	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 )
 
 const (

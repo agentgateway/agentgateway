@@ -8,7 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/kubectl"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
 )
 
 // Context contains the metadata about a Kubernetes cluster

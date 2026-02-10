@@ -13,7 +13,7 @@ import (
 
 	_ "embed"
 
-	testmatchers "github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
+	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
 var (

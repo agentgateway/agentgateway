@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/apiclient/fake"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 )
 
 var (

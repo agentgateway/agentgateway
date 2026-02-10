@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
+	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 )
 
 // The logging handler allows dynamically changing the log level at runtime.

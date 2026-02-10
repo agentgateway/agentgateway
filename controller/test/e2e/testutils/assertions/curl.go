@@ -18,13 +18,13 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/kubectl"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
-	e2edefaults "github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
-	"github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
-	"github.com/kgateway-dev/kgateway/v2/test/gomega/transforms"
-	"github.com/kgateway-dev/kgateway/v2/test/helpers"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
+	e2edefaults "github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
+	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/test/gomega/transforms"
+	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
 
 const (

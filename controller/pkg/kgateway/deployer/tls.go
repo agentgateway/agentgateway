@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/deployer"
+	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 )
 
 // injectXdsCACertificate reads the CA certificate from the control plane's mounted TLS Secret

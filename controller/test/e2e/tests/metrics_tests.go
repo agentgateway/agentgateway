@@ -3,8 +3,8 @@
 package tests
 
 import (
-	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/features/metrics"
+	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/metrics"
 )
 
 func KGatewayMetricsSuiteRunner() e2e.SuiteRunner {

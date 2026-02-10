@@ -7,7 +7,7 @@ import (
 	"istio.io/istio/pilot/pkg/util/protoconv"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
+	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 )
 
 var logger = logging.New("agentgateway")

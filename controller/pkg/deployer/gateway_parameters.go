@@ -1,7 +1,7 @@
 package deployer
 
 import (
-	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/collections"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 )
 
 // Inputs is the set of options used to configure gateway/inference pool deployment.

@@ -14,7 +14,7 @@ import (
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/util/sets"
 
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 // TestDependencies controls which binaries can import which packages.
@@ -48,7 +48,7 @@ func TestDependencies(t *testing.T) {
 	allDenials := []*regexp.Regexp{}
 	for _, tt := range tests {
 		t.Run(tt.entrypoint, func(t *testing.T) {
-			deps, err := getDependencies(filepath.Join(testutils.GitRootDirectory(), tt.entrypoint), tt.tag, false)
+			deps, err := getDependencies(filepath.Join(testutils.ControllerRootDirectory(), tt.entrypoint), tt.tag, false)
 			assert.NoError(t, err)
 			denies, err := slices.MapErr(tt.denied, regexp.Compile)
 			allDenials = append(allDenials, denies...)
@@ -95,7 +95,7 @@ func TestDependencies(t *testing.T) {
 		})
 	}
 	t.Run("exhaustive", func(t *testing.T) {
-		all, err := getDependencies(testutils.GitRootDirectory()+"/...", "integ,e2e,conformance", true)
+		all, err := getDependencies(testutils.ControllerRootDirectory()+"/...", "integ,e2e,conformance", true)
 		assert.NoError(t, err)
 		for _, d := range allDenials {
 			found := slices0.ContainsFunc(all, d.MatchString)

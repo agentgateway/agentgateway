@@ -11,18 +11,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/helmutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/helmutils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/actions"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/assertions"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/cluster"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/install"
-	testruntime "github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/runtime"
-	"github.com/kgateway-dev/kgateway/v2/test/helpers"
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/actions"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
+	testruntime "github.com/agentgateway/agentgateway/controller/test/e2e/testutils/runtime"
+	"github.com/agentgateway/agentgateway/controller/test/helpers"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 // CreateTestInstallation is the simplest way to construct a TestInstallation in kgateway.

@@ -12,10 +12,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1/agentgateway"
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
-	krtpkg "github.com/kgateway-dev/kgateway/v2/pkg/utils/krtutil"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
 type JwksUrlBuilder interface {

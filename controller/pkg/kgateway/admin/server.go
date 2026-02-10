@@ -12,9 +12,9 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/controller"
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
-	"github.com/kgateway-dev/kgateway/v2/pkg/version"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/controller"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/version"
 )
 
 func RunAdminServer(ctx context.Context, setupOpts *controller.SetupOpts) error {

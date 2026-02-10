@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/crds"
-	"github.com/kgateway-dev/kgateway/v2/pkg/schemes"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	. "github.com/kgateway-dev/kgateway/v2/test/e2e/tests"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/cluster"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/install"
-	testruntime "github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/runtime"
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/crds"
+	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
+	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	. "github.com/agentgateway/agentgateway/controller/test/e2e/tests"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
+	testruntime "github.com/agentgateway/agentgateway/controller/test/e2e/testutils/runtime"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 var (

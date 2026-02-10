@@ -3,7 +3,7 @@
 package fake
 
 import (
-	agentgateway "github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway"
+	agentgateway "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/cmdutils"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/threadsafe"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/cmdutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/threadsafe"
 )
 
 // Client is a utility for executing `helm` commands

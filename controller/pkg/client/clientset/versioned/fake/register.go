@@ -3,7 +3,7 @@
 package fake
 
 import (
-	agentgatewayagentgateway "github.com/kgateway-dev/kgateway/v2/api/v1alpha1/agentgateway"
+	agentgatewayagentgateway "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

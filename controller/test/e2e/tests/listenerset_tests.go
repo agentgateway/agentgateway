@@ -3,8 +3,8 @@
 package tests
 
 import (
-	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/features/listenerset"
+	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/listenerset"
 )
 
 func ListenerSetSuiteRunner() e2e.SuiteRunner {

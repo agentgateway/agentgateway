@@ -8,9 +8,9 @@ import (
 
 	"github.com/onsi/gomega"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/tests/base"
-	"github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
+	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
 const (

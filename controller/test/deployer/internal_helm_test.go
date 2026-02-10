@@ -29,13 +29,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/apiclient/fake"
-	pkgdeployer "github.com/kgateway-dev/kgateway/v2/pkg/deployer"
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
-	"github.com/kgateway-dev/kgateway/v2/pkg/schemes"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
-	"github.com/kgateway-dev/kgateway/v2/pkg/version"
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
+	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/version"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 func mockVersion(t *testing.T) {
@@ -300,7 +300,7 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 
 	dir := fsutils.MustGetThisDir()
 	scheme := schemes.GatewayScheme()
-	crdDir := filepath.Join(testutils.GitRootDirectory(), testutils.AgwCRDPath)
+	crdDir := filepath.Join(testutils.ControllerRootDirectory(), testutils.AgwCRDPath)
 
 	VerifyAllYAMLFilesReferenced(t, filepath.Join(dir, "testdata"), tests)
 

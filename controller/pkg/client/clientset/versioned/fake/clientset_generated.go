@@ -3,9 +3,9 @@
 package fake
 
 import (
-	clientset "github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
-	agentgatewayagentgateway "github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway"
-	fakeagentgatewayagentgateway "github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway/fake"
+	clientset "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
+	agentgatewayagentgateway "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway"
+	fakeagentgatewayagentgateway "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"

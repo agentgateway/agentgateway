@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/common"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
 )
 
 // buildInitializeRequest is a helper function to build the initialize request for the MCP server

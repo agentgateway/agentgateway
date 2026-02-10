@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	. "github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
+	. "github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 )
 
 var _ = Describe("FSUtils", func() {

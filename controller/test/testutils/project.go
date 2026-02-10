@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -12,4 +13,9 @@ func GitRootDirectory() string {
 		panic(err)
 	}
 	return strings.TrimSpace(string(data))
+}
+
+// ControllerRootDirectory returns the path of the top-level directory of the controller folder.
+func ControllerRootDirectory() string {
+	return filepath.Join(GitRootDirectory(), "controller")
 }

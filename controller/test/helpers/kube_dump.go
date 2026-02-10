@@ -14,9 +14,9 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/kubectl"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/threadsafe"
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/threadsafe"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 // StandardKgatewayDumpOnFail creates a dump of the kubernetes state and certain envoy data from

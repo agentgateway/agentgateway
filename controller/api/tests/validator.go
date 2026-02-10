@@ -9,7 +9,7 @@ import (
 	"istio.io/istio/pkg/config/crd"
 	"istio.io/istio/pkg/test/util/assert"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 )
 
 func NewKgatewayValidator(t *testing.T) *crd.Validator {

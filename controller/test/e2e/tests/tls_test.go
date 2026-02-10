@@ -8,12 +8,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/envutils"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/features/tls"
-	. "github.com/kgateway-dev/kgateway/v2/test/e2e/tests"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/install"
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
+	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/tls"
+	. "github.com/agentgateway/agentgateway/controller/test/e2e/tests"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 // TestControlPlaneTLS tests the TLS control plane integration functionality.

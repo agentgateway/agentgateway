@@ -15,12 +15,12 @@ import (
 
 	_ "github.com/envoyproxy/go-control-plane/envoy/extensions/upstreams/http/v3"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/apiclient"
-	"github.com/kgateway-dev/kgateway/v2/pkg/apiclient/fake"
-	"github.com/kgateway-dev/kgateway/v2/pkg/deployer"
-	deployerinternal "github.com/kgateway-dev/kgateway/v2/pkg/kgateway/deployer"
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
-	"github.com/kgateway-dev/kgateway/v2/pkg/schemes"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
+	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
+	deployerinternal "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 )
 
 var scheme = schemes.DefaultScheme()

@@ -12,7 +12,7 @@ import (
 
 	"github.com/avast/retry-go/v4"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/cmdutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/cmdutils"
 )
 
 var _ PortForwarder = &cliPortForwarder{}

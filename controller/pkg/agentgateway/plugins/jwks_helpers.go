@@ -7,7 +7,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/agentgateway/jwks"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 )
 
 // resolveRemoteJWKSInline resolves a remote JWKS URI to an inline JWKS string by

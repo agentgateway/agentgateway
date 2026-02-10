@@ -5,7 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 )
 
 const (

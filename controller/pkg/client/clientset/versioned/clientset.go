@@ -6,7 +6,7 @@ import (
 	fmt "fmt"
 	http "net/http"
 
-	agentgatewayagentgateway "github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway"
+	agentgatewayagentgateway "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/typed/v1alpha1/agentgateway"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

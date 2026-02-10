@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/setup"
-	"github.com/kgateway-dev/kgateway/v2/pkg/version"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/setup"
+	"github.com/agentgateway/agentgateway/controller/pkg/version"
 )
 
 func main() {

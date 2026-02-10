@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/cluster"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/install"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
 )
 
 // Provider is the entity that provides methods which assert behaviors of a Kubernetes Cluster
