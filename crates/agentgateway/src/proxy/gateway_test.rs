@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use x509_parser::nom::AsBytes;
 
+use crate::http::cors;
 use crate::http::tests_common::*;
 use crate::http::transformation_cel::Transformation;
 use crate::http::{Body, Response, transformation_cel};
@@ -88,6 +89,144 @@ async fn local_ratelimit() {
 	assert_eq!(res.status(), 200);
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 429);
+}
+
+/// Helper to build a CORS policy for tests.
+fn cors_policy(allow_origins: Vec<&str>, allow_methods: Vec<&str>) -> cors::Cors {
+	cors::Cors::try_from(cors::CorsSerde {
+		allow_credentials: false,
+		allow_headers: vec!["*".to_string()],
+		allow_methods: allow_methods.into_iter().map(String::from).collect(),
+		allow_origins: allow_origins.into_iter().map(String::from).collect(),
+		expose_headers: vec![],
+		max_age: None,
+	})
+	.unwrap()
+}
+
+/// Verifies that a CORS preflight (OPTIONS) request returns 200 even when
+/// the rate limit is exhausted, because CORS runs before rate limiting.
+#[tokio::test]
+async fn cors_preflight_bypasses_ratelimit() {
+	let (_mock, bind, io) = basic_setup().await;
+	let route_target = PolicyTarget::Route(RouteName {
+		name: "route".into(),
+		namespace: "".into(),
+		rule_name: None,
+		kind: None,
+	});
+
+	// Attach CORS + rate limit (1 token, essentially immediately exhausted after first real request)
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			key: strng::new("cors"),
+			name: None,
+			target: route_target.clone(),
+			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
+				.into(),
+		})
+		.with_policy(TargetedPolicy {
+			key: strng::new("rl"),
+			name: None,
+			target: route_target,
+			policy: TrafficPolicy::LocalRateLimit(vec![
+				http::localratelimit::RateLimitSpec {
+					max_tokens: 1,
+					tokens_per_fill: 1,
+					fill_interval: Duration::from_secs(100),
+					limit_type: Default::default(),
+				}
+				.try_into()
+				.unwrap(),
+			])
+			.into(),
+		});
+
+	// First real request exhausts the single token
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	// Second real request should be rate limited
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 429);
+
+	// A CORS preflight should still succeed (200) even though rate limit is exhausted
+	let res = send_request_headers(
+		io.clone(),
+		Method::OPTIONS,
+		"http://lo",
+		&[
+			("origin", "http://example.com"),
+			("access-control-request-method", "GET"),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
+}
+
+/// Verifies that when a cross-origin request is rate limited (429), the response
+/// still carries the CORS headers so browsers can read the error.
+#[tokio::test]
+async fn cors_headers_present_on_ratelimited_response() {
+	let (_mock, bind, io) = basic_setup().await;
+	let route_target = PolicyTarget::Route(RouteName {
+		name: "route".into(),
+		namespace: "".into(),
+		rule_name: None,
+		kind: None,
+	});
+
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			key: strng::new("cors"),
+			name: None,
+			target: route_target.clone(),
+			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
+				.into(),
+		})
+		.with_policy(TargetedPolicy {
+			key: strng::new("rl"),
+			name: None,
+			target: route_target,
+			policy: TrafficPolicy::LocalRateLimit(vec![
+				http::localratelimit::RateLimitSpec {
+					max_tokens: 1,
+					tokens_per_fill: 1,
+					fill_interval: Duration::from_secs(100),
+					limit_type: Default::default(),
+				}
+				.try_into()
+				.unwrap(),
+			])
+			.into(),
+		});
+
+	// Exhaust rate limit with a normal cross-origin GET
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("origin", "http://example.com")],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
+
+	// Second cross-origin request is rate limited, but should still have CORS headers
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("origin", "http://example.com")],
+	)
+	.await;
+	assert_eq!(res.status(), 429);
+	assert_eq!(
+		res.hdr("access-control-allow-origin"),
+		"http://example.com",
+		"CORS headers must be present even on rate-limited responses"
+	);
 }
 
 #[tokio::test]

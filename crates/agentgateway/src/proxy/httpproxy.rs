@@ -93,6 +93,16 @@ async fn apply_request_policies(
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
 	}
 
+	// CORS must run before rate limiting so that:
+	// 1. Preflight OPTIONS requests short-circuit without consuming rate limit quota
+	// 2. CORS response headers are queued even if the request is later rate-limited,
+	//    allowing browsers to read the 429 response instead of seeing a CORS error
+	if let Some(c) = &policies.cors {
+		c.apply(req)
+			.map_err(ProxyError::from)?
+			.apply(response_policies.headers())?;
+	}
+
 	for lrl in &policies.local_rate_limit {
 		lrl.check_request()?;
 	}
@@ -136,11 +146,6 @@ async fn apply_request_policies(
 	}
 	if let Some(r) = &policies.url_rewrite {
 		r.apply(req).map_err(ProxyError::from)?;
-	}
-	if let Some(c) = &policies.cors {
-		c.apply(req)
-			.map_err(ProxyError::from)?
-			.apply(response_policies.headers())?;
 	}
 	if let Some(rr) = &policies.request_redirect {
 		rr.apply(req)
