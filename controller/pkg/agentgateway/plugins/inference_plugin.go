@@ -3,29 +3,27 @@ package plugins
 import (
 	"strconv"
 
+	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/agentgateway/agentgateway/api"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
 // NewInferencePlugin creates a new InferencePool policy plugin
 func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
-	policyCol := krt.NewManyCollection(agw.InferencePools, func(krtctx krt.HandlerContext, infPool *inf.InferencePool) []AgwPolicy {
+	status, policyCol := krt.NewStatusManyCollection(agw.InferencePools, func(krtctx krt.HandlerContext, infPool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
 		return translatePoliciesForInferencePool(infPool)
-	})
+	}, agw.KrtOpts.ToOptions("agentgateway/InferencePools")...)
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.InferencePoolGVK.GroupKind(): {
-				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, gwv1.PolicyStatus], krt.Collection[AgwPolicy]) {
-					return nil, policyCol
+				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
+					return convertStatusCollection(status), policyCol
 				},
 			},
 		},
@@ -33,8 +31,9 @@ func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 }
 
 // translatePoliciesForInferencePool generates policies for a single inference pool
-func translatePoliciesForInferencePool(pool *inf.InferencePool) []AgwPolicy {
+func translatePoliciesForInferencePool(pool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
 	var infPolicies []AgwPolicy
+	status := pool.Status.DeepCopy()
 
 	// 'service/{namespace}/{hostname}:{port}'
 	hostname := kubeutils.GetInferenceServiceHostname(pool.Name, pool.Namespace)
@@ -42,17 +41,17 @@ func translatePoliciesForInferencePool(pool *inf.InferencePool) []AgwPolicy {
 	epr := pool.Spec.EndpointPickerRef
 	if epr.Group != nil && *epr.Group != "" {
 		logger.Warn("inference pool endpoint picker ref has non-empty group, skipping", "pool", pool.Name, "group", *epr.Group)
-		return nil
+		return status, nil
 	}
 
 	if epr.Kind != wellknown.ServiceKind {
 		logger.Warn("inference pool extension ref is not a Service, skipping", "pool", pool.Name, "kind", epr.Kind)
-		return nil
+		return status, nil
 	}
 
 	if epr.Port == nil {
 		logger.Warn("inference pool extension ref port must be specified, skipping", "pool", pool.Name, "kind", epr.Kind)
-		return nil
+		return status, nil
 	}
 
 	eppPort := epr.Port.Number
@@ -115,5 +114,5 @@ func translatePoliciesForInferencePool(pool *inf.InferencePool) []AgwPolicy {
 		"inference_policy", inferencePolicy.Name,
 		"tls_policy", inferencePolicyTLS.Name)
 
-	return infPolicies
+	return status, infPolicies
 }

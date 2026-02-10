@@ -41,7 +41,7 @@ func NewBackendTLSPlugin(agw *AgwCollections) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.BackendTLSPolicyGVK.GroupKind(): {
-				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, gwv1.PolicyStatus], krt.Collection[AgwPolicy]) {
+				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					st, o := krt.NewStatusManyCollection(agw.BackendTLSPolicies, func(krtctx krt.HandlerContext, btls *gwv1.BackendTLSPolicy) (*gwv1.PolicyStatus, []AgwPolicy) {
 						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.Ancestors, agw.ConfigMaps, agw.Services, backendTLSTarget, btls)
 					}, agw.KrtOpts.ToOptions("agentgateway/BackendTLSPolicy")...)
