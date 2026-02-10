@@ -42,6 +42,7 @@ enum ResourceKind {
 
 #[derive(Debug)]
 pub struct Store {
+	ipv6_enabled: bool,
 	binds: HashMap<BindKey, Arc<Bind>>,
 	resources: HashMap<Strng, ResourceKind>,
 
@@ -330,7 +331,7 @@ pub struct LLMResponsePolicies {
 
 impl Default for Store {
 	fn default() -> Self {
-		Self::new()
+		Self::new(true)
 	}
 }
 
@@ -342,9 +343,10 @@ pub struct RoutePath<'a> {
 }
 
 impl Store {
-	pub fn new() -> Self {
+	pub fn new(ipv6_enabled: bool) -> Self {
 		let (tx, _) = tokio::sync::broadcast::channel(1000);
 		Self {
+			ipv6_enabled,
 			binds: Default::default(),
 			resources: Default::default(),
 			policies_by_key: Default::default(),
@@ -1029,6 +1031,14 @@ impl Store {
 
 	fn insert_xds_bind(&mut self, raw: XdsBind) -> anyhow::Result<()> {
 		let mut bind = Bind::try_from(&raw)?;
+		// Respect the enableIpv6 config for bind address selection,
+		// matching the same logic used in types/local.rs for local config binds.
+		let port = bind.address.port();
+		bind.address = if cfg!(target_family = "unix") && self.ipv6_enabled {
+			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+		} else {
+			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
+		};
 		// If XDS server pushes the same bind twice (which it shouldn't really do, but oh well),
 		// we need to copy the listeners over.
 		if let Some(old) = self.binds.remove(&bind.key) {
