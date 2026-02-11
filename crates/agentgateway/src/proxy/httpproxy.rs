@@ -770,7 +770,6 @@ impl HTTPProxy {
 					tokio::time::sleep(bo).await;
 					Ok(())
 				};
-				tracing::error!("howardjohn: TIMEOUT");
 				fut
 					.map_err(|_| ProxyError::RequestTimeout)
 					// This is safe because we guarantee in attempt_upstream to snapshot

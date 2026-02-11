@@ -4,6 +4,7 @@ package policystatus
 
 import (
 	"context"
+	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
@@ -49,10 +50,7 @@ func (s *testingSuite) TestAgwPolicyClearStaleStatus() {
 	})
 
 	// Apply policy with missing gateway target
-	err := s.TestInstallation.Actions.Kubectl().ApplyFile(
-		s.Ctx,
-		policyWithMissingGwManifest,
-	)
+	err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLFiles("", policyWithMissingGwManifest)
 	s.Require().NoError(err)
 
 	// Verify agw status cleared, other remains
@@ -98,7 +96,7 @@ func (s *testingSuite) addAncestorStatus(policyName, policyNamespace, gwName, co
 
 func (s *testingSuite) assertAncestorStatuses(ancestorName string, expectedControllers map[string]bool) {
 	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	s.TestInstallation.Assertions.Gomega.Eventually(func(g gomega.Gomega) {
+	s.TestInstallation.AssertionsT(s.T()).Gomega.Eventually(func(g gomega.Gomega) {
 		policy := &agentgateway.AgentgatewayPolicy{}
 		err := s.TestInstallation.ClusterContext.Client.Get(
 			s.Ctx,

@@ -4,12 +4,12 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/avast/retry-go/v4"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/kclient"
+	"istio.io/istio/pkg/slices"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -331,14 +331,14 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 
 		mergedAny := any(status)
 		switch desired := mergedAny.(type) {
-		case *gwv1.PolicyStatus:
+		case gwv1.PolicyStatus:
 			// PolicyStatus is multi-writer across controllers, so preserve entries not owned by our controller.
 			// NOTE: We can only merge if the current object is the expected type.
 			curPol, ok := any(current).(*agentgateway.AgentgatewayPolicy)
 			if ok {
-				merged := *desired
+				merged := desired
 				merged.Ancestors = mergePolicyAncestorStatuses(s.controllerName, curPol.Status.Ancestors, desired.Ancestors)
-				mergedAny = &merged
+				mergedAny = merged
 			}
 		case *gwv1.GatewayStatus:
 			// Preserve addresses unless the desired status explicitly sets them.
