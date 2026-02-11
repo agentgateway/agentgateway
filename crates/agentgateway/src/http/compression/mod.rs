@@ -184,8 +184,10 @@ pub async fn encode_body(body: &[u8], encoding: &str) -> Result<Bytes, axum_core
 		_ => return Err(Error::UnsupportedEncoding.into()),
 	};
 
-	// Use usize::MAX since encoding has no limit, convert Error to axum_core::Error
-	read_to_bytes(encoder, usize::MAX).await.map_err(Into::into)
+	// Preallocate assuming ~50% compression (it can grow if we are wrong)
+	read_to_bytes(encoder, body.len() / 2)
+		.await
+		.map_err(Into::into)
 }
 
 async fn decode_body<B>(body: B, encoding: &str, limit: usize) -> Result<Bytes, Error>
@@ -198,22 +200,13 @@ where
 	read_body_with_limit(decompressed, limit).await
 }
 
-async fn read_to_bytes<R>(mut reader: R, limit: usize) -> Result<Bytes, Error>
+async fn read_to_bytes<R>(mut reader: R, initial_capacity: usize) -> Result<Bytes, Error>
 where
 	R: AsyncRead + Unpin,
 {
-	// Pre-allocate with a reasonable default capacity, capped at 64KB
-	let initial_capacity = if limit == usize::MAX {
-		8192
-	} else {
-		limit.min(65536)
-	};
 	let mut buffer = bytes::BytesMut::with_capacity(initial_capacity);
 	loop {
 		let n = reader.read_buf(&mut buffer).await?;
-		if buffer.len() > limit {
-			return Err(Error::LimitExceeded);
-		}
 		if n == 0 {
 			break;
 		}
