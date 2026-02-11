@@ -1,0 +1,85 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-pre-routing
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    phase: PreRouting
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: https://example.com
+        audiences:
+        - my-app
+        jwks:
+          inline: |
+            {
+              "keys": [
+                {
+                  "kty": "RSA",
+                  "e": "AQAB",
+                  "use": "sig",
+                  "kid": "test-key",
+                  "alg": "RS256",
+                  "n": "test"
+                }
+              ]
+            }
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/jwt-pre-routing:jwt:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: jwt-pre-routing
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      jwt:
+        mode: STRICT
+        providers:
+        - audiences:
+          - my-app
+          inline: |-
+            {
+              "keys": [
+                {
+                  "kty": "RSA",
+                  "e": "AQAB",
+                  "use": "sig",
+                  "kid": "test-key",
+                  "alg": "RS256",
+                  "n": "test"
+                }
+              ]
+            }
+          issuer: https://example.com
+      phase: GATEWAY
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway
