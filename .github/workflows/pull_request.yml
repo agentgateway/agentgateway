@@ -128,7 +128,7 @@ jobs:
       run: ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
       run: |
-        CGO_ENABLED=0 go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
+        CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
     - name: Summary
       run: |
         echo '# E2E Timings\n'
@@ -142,10 +142,9 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
     - uses: Swatinem/rust-cache@v2
       with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        # We only read the cache from 'E2E' job, since they should have identical cache.
+        save-if: "false"
+        shared-key: "controller-e2e" # Pull E2E job's cache
     - uses: actions/setup-go@v6
       with:
         go-version: '1.25.7'
@@ -159,7 +158,7 @@ jobs:
       run: ./controller/test/setup/setup-kind-ci.sh
     - name: Conformance
       run: |
-        make -C controller conformance
+        make -C controller all-conformance
     - name: Summary
       run: |
         function cat-yamls () {

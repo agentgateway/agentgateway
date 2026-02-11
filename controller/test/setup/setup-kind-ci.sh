@@ -201,7 +201,7 @@ function step_build_go_controller_binary() {
 }
 
 function step_push_go_controller_to_local_registry() {
-  make -C controller agentgateway-controller-docker
+  make -C controller agentgateway-controller-docker-local
 }
 
 function step_build_proxy_binary() {
