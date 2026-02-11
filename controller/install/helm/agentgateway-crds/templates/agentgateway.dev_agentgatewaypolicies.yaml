@@ -3843,7 +3843,7 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,
-                    and extProc
+                    extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication
                   rule: 'has(self.phase) && self.phase == ''PreRouting'' ? !has(self.rateLimit)
                     && !has(self.cors) && !has(self.csrf) && !has(self.headerModifiers)
                     && !has(self.hostRewrite) && !has(self.timeouts) && !has(self.retry)
