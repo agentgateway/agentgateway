@@ -648,6 +648,7 @@ impl Handler {
 				// Serialize structured content to JSON string for backwards compatibility
 				// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
 				//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
+				// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
 				let serialized_content = serde_json::to_string(&res)
 					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
 

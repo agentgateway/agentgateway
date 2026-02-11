@@ -810,7 +810,7 @@ async fn test_headers_not_in_schema_are_ignored() {
 }
 
 #[tokio::test]
-async fn test_call_tool_backwards_compatibility() {
+async fn test_call_tool_structured_content_fallback() {
 	// Test that CallToolResult has both content and structured_content populated
 	// This verifies our backwards compatibility fix for langchain-mcp-adapter
 	let (server, handler) = setup().await;
@@ -832,7 +832,9 @@ async fn test_call_tool_backwards_compatibility() {
 		id: RequestId::String("test-123".into()),
 		request: ClientRequest::CallToolRequest(CallToolRequest {
 			method: CallToolRequestMethod,
-			params: CallToolRequestParam {
+			params: CallToolRequestParams {
+				meta: None,
+				task: None,
 				name: "get_user".into(),
 				arguments: Some(json!({ "path": { "user_id": user_id } }).as_object().unwrap().clone()),
 			},
@@ -847,53 +849,42 @@ async fn test_call_tool_backwards_compatibility() {
 
 	// Convert Messages to Vec to inspect CallToolResult
 	use futures_util::StreamExt;
-	let message_vec: Vec<_> = messages.collect().await;
-	assert_eq!(message_vec.len(), 1, "should receive exactly one message");
+	let mut message_stream = messages;
+	let message_result = message_stream.next().await.expect("Should receive at least one message");
 
-	if let Some(message_result) = message_vec.first() {
-		// Handle the Result<JsonRpcMessage, ClientError> wrapper
-		match message_result {
-			Ok(server_msg) => {
-				if let JsonRpcMessage::Response(response) = server_msg {
-					if let ServerResult::CallToolResult(call_result) = &response.result {
+	// Handle the Result<JsonRpcMessage, ClientError> wrapper
+	let server_msg = message_result.expect("Message processing should succeed");
 
-						// Test 1: content field should NOT be empty (our backwards compatibility fix)
-						assert!(!call_result.content.is_empty(), "content field should not be empty after our fix");
-						assert_eq!(call_result.content.len(), 1, "content should have exactly one item");
+	let JsonRpcMessage::Response(response) = server_msg else {
+		panic!("Should receive a Response message, got: {:?}", server_msg);
+	};
 
-						// Test 2: structured_content should contain the original JSON
-						assert!(call_result.structured_content.is_some(), "structured_content should be populated");
-						let structured_content = call_result.structured_content.as_ref().unwrap();
-						assert_eq!(*structured_content, expected_response, "structured_content should contain original API response");
+	let ServerResult::CallToolResult(call_result) = &response.result else {
+		panic!("Response should contain CallToolResult, got: {:?}", response.result);
+	};
 
-						// Test 3: content[0] should contain serialized JSON as text
-						if let Some(content_item) = call_result.content.first() {
-							if let RawContent::Text(text_content) = &content_item.raw {
-								let serialized_json = &text_content.text;
-								let parsed_from_content: serde_json::Value = serde_json::from_str(serialized_json)
-									.expect("content should contain valid JSON string");
-								assert_eq!(parsed_from_content, expected_response, "content should contain serialized version of API response");
+	// Test 1: content field should NOT be empty (our backwards compatibility fix)
+	assert!(!call_result.content.is_empty(), "content field should not be empty after our fix");
+	assert_eq!(call_result.content.len(), 1, "content should have exactly one item");
 
-								// Test 4: Both fields should represent the same data
-								assert_eq!(parsed_from_content, *structured_content, "content and structured_content should represent the same data");
-							} else {
-								panic!("content[0] should be Text content type, got: {:?}", content_item.raw);
-							}
-						}
+	// Test 2: structured_content should contain the original JSON
+	assert!(call_result.structured_content.is_some(), "structured_content should be populated");
+	let structured_content = call_result.structured_content.as_ref().unwrap();
+	assert_eq!(*structured_content, expected_response, "structured_content should contain original API response");
 
-					} else {
-						panic!("Response should contain CallToolResult, got: {:?}", response.result);
-					}
-				} else {
-					panic!("Should receive a Response message, got: {:?}", server_msg);
-				}
-			}
-			Err(e) => {
-				panic!("Message processing failed with error: {:?}", e);
-			}
-		}
-	} else {
-		panic!("Should receive at least one message");
-	}
+	// Test 3: content[0] should contain serialized JSON as text
+	let content_item = call_result.content.first().expect("content should have at least one item");
+
+	let RawContent::Text(text_content) = &content_item.raw else {
+		panic!("content[0] should be Text content type, got: {:?}", content_item.raw);
+	};
+
+	let serialized_json = &text_content.text;
+	let parsed_from_content: serde_json::Value = serde_json::from_str(serialized_json)
+		.expect("content should contain valid JSON string");
+	assert_eq!(parsed_from_content, expected_response, "content should contain serialized version of API response");
+
+	// Test 4: Both fields should represent the same data
+	assert_eq!(parsed_from_content, *structured_content, "content and structured_content should represent the same data");
 }
 
