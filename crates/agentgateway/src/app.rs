@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::thread;
@@ -122,6 +123,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		ca,
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
+		config_extensions: handle_config_extensions(config.extensions.as_slice()).await?,
 	};
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());
@@ -242,4 +244,15 @@ fn new_data_plane_pool(
 
 	let handle = rx_handle.recv().unwrap();
 	(handle, tx)
+}
+
+async fn handle_config_extensions(
+	extensions: &[Arc<crate::LoadedConfigExtension>],
+) -> anyhow::Result<HashMap<String, Arc<dyn std::any::Any + Send + Sync>>> {
+	let mut result = HashMap::new();
+	for ext in extensions {
+		let any = ext.handler.start().await?;
+		result.insert(ext.name.clone(), any.into());
+	}
+	Ok(result)
 }

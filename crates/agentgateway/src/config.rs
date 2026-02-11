@@ -422,6 +422,12 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				)
 				.unwrap_or(Duration::from_secs(60 * 5)),
 		}),
+		extensions: raw
+			.extensions
+			.unwrap_or_default()
+			.into_iter()
+			.map(Arc::new)
+			.collect(),
 	})
 }
 

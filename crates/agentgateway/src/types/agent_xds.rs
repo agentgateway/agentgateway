@@ -9,7 +9,7 @@ use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthExtension, GcpAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization};
 use crate::mcp::McpAuthorization;
@@ -513,6 +513,18 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 					None => return Err(ProtoError::MissingRequiredField),
 				};
 				BackendAuth::Azure(azure_auth)
+			},
+			Some(proto::agent::backend_auth_policy::Kind::Custom(c)) => {
+				// Get the google.protobuf.Any config
+				let any_config = c.config.ok_or(ProtoError::MissingRequiredField)?;
+
+				// Use extension module to resolve handler and config from protobuf Any
+				let extension =
+					BackendAuthExtension::resolve_any(c.name.as_str(), &any_config).map_err(|e| {
+						ProtoError::EnumParse(format!("Failed to resolve custom auth handler: {}", e))
+					})?;
+
+				BackendAuth::Custom(Arc::from(extension))
 			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})

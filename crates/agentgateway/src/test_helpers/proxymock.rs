@@ -617,6 +617,7 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 		ca: None,
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),
+		config_extensions: Default::default(),
 	});
 	Ok(TestBind {
 		pi,

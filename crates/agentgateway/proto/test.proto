@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package agentgateway.dev.test;
+
+message TestExtension {
+    string value = 1;
+}
+message Test2Extension {
+    string value2 = 1;
+}

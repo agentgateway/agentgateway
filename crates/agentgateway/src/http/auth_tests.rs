@@ -228,3 +228,50 @@ async fn test_aws_sign_request_implicit_with_extension() {
 
 	result.expect("signing failed");
 }
+
+#[derive(Debug)]
+struct DummyHandler;
+
+#[async_trait::async_trait]
+impl crate::http::auth::BackendAuthHandler for DummyHandler {
+	async fn apply_auth(
+		&self,
+		_backend_info: &http::auth::BackendInfo,
+		_req: &mut crate::http::Request,
+	) -> Result<(), anyhow::Error> {
+		Ok(())
+	}
+	async fn apply_late_auth(&self, _req: &mut crate::http::Request) -> Result<(), anyhow::Error> {
+		Ok(())
+	}
+}
+
+#[test]
+fn test_extension() {
+	BackendAuthExtension::register(|_, _config: &crate::types::proto::agent::TestExtension| {
+		// In a real implementation, you'd parse the config and return an appropriate handler
+		Ok(Box::new(DummyHandler))
+	});
+	let mut config = crate::types::proto::agent::BackendAuthPolicy::default();
+	let test_ext = crate::types::proto::agent::TestExtension::default();
+
+	config.kind = Some(
+		crate::types::proto::agent::backend_auth_policy::Kind::Custom(
+			crate::types::proto::agent::Extension {
+				name: "test_extension".to_string(),
+				config: Some(prost_types::Any::from_msg(&test_ext).unwrap()),
+			},
+		),
+	);
+
+	let ba = BackendAuth::try_from(config);
+	assert!(
+		ba.is_ok(),
+		"Custom backend auth policy should be parsed successfully {}",
+		ba.err().unwrap()
+	);
+	assert!(
+		matches!(ba.unwrap(), BackendAuth::Custom(_)),
+		"Parsed policy should be of Custom variant"
+	);
+}

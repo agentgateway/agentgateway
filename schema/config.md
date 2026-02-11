@@ -59,6 +59,9 @@
 |`config.hbone.frameSize`||
 |`config.hbone.poolMaxStreamsPerConn`||
 |`config.hbone.poolUnusedReleaseTimeout`||
+|`config.extensions`||
+|`config.extensions[].name`||
+|`config.extensions[].config`||
 |`binds`||
 |`binds[].port`||
 |`binds[].listeners`||

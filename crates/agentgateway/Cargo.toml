@@ -87,6 +87,7 @@ opentelemetry-http.workspace = true
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 parking_lot.workspace = true
+paste.workspace = true
 percent-encoding.workspace = true
 phonenumber.workspace = true
 pin-project-lite.workspace = true

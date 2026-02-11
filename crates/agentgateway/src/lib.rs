@@ -25,6 +25,7 @@ pub mod cel;
 pub mod client;
 pub mod config;
 pub mod control;
+pub mod extension;
 pub mod http;
 pub mod json;
 pub mod llm;
@@ -51,7 +52,7 @@ use crate::control::{AuthSource, RootCert};
 use crate::telemetry::trc::Protocol;
 use crate::types::agent::{ListenerTarget, PolicyTargetRef};
 
-#[derive(serde::Deserialize, Clone, Debug)]
+#[derive(serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 /// NestedRawConfig represents a subset of the config that can be passed in. This is split out from static
 /// and dynamic config
@@ -59,7 +60,7 @@ pub struct NestedRawConfig {
 	config: Option<RawConfig>,
 }
 
-#[derive(serde::Deserialize, Default, Clone, Debug)]
+#[derive(serde::Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 // RawConfig represents the inputs a user can pass in. Config represents the internal representation of this.
@@ -116,6 +117,7 @@ pub struct RawConfig {
 	_listener: serdes::RenamedField,
 
 	hbone: Option<RawHBONE>,
+	extensions: Option<Vec<LoadedConfigExtension>>,
 }
 
 mod removed {
@@ -367,6 +369,12 @@ impl schemars::JsonSchema for StringBoolFloat {
 	}
 }
 
+#[async_trait::async_trait]
+pub trait LoadedConfigExtensionHandler: Debug + Send + Sync {
+	async fn start(&self) -> anyhow::Result<Box<dyn std::any::Any + Send + Sync>>;
+}
+define_extension_point!(LoadedConfig, LoadedConfigExtensionHandler);
+
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
@@ -398,6 +406,8 @@ pub struct Config {
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
 
 	pub backend: BackendConfig,
+
+	pub extensions: Vec<Arc<LoadedConfigExtension>>,
 }
 
 impl Config {
@@ -484,6 +494,8 @@ pub struct ProxyInputs {
 
 	mcp_state: mcp::App,
 	ca: Option<Arc<CaClient>>,
+
+	pub config_extensions: HashMap<String, Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]

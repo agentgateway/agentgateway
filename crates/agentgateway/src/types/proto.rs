@@ -28,6 +28,9 @@ pub mod agentgateway1 {
 }
 pub mod agent {
 	pub use super::agentgateway1::agentgateway2::agentgateway3::*;
+
+	#[cfg(test)]
+	tonic::include_proto!("agentgateway.dev.test");
 }
 
 #[allow(clippy::enum_variant_names)]

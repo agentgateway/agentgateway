@@ -7,6 +7,33 @@ use crate::serdes::deser_key_from_file;
 use crate::types::agent::{BackendTarget, Target};
 use crate::*;
 
+/// Trait for custom backend authentication handlers.
+#[async_trait::async_trait]
+pub trait BackendAuthHandler: Send + Sync + std::fmt::Debug {
+	/// Apply authentication to the request.
+	///
+	/// This is called before the request body is fully available.
+	/// For auth methods that need to sign the request body (like AWS SigV4),
+	/// use `apply_late_auth` instead.
+	async fn apply_auth(
+		&self,
+		backend_info: &BackendInfo,
+		req: &mut Request,
+	) -> Result<(), anyhow::Error>;
+
+	/// Apply late authentication (after body is available).
+	///
+	/// This is called after the request body is fully buffered and available.
+	/// Use this for authentication methods that need to sign the request body.
+	///
+	/// Default implementation does nothing.
+	async fn apply_late_auth(&self, _req: &mut Request) -> Result<(), anyhow::Error> {
+		Ok(())
+	}
+}
+
+define_extension_point!(BackendAuth, BackendAuthHandler);
+
 #[apply(schema!)]
 #[serde(untagged)]
 pub enum AwsAuth {
@@ -136,6 +163,11 @@ pub enum BackendAuth {
 	Aws(AwsAuth),
 	#[serde(rename = "azure")]
 	Azure(AzureAuth),
+	/// Custom authentication handler.
+	///
+	/// The handler must be registered via `BackendAuthExtension::register` before configuration is loaded.
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	Custom(Arc<BackendAuthExtension>),
 }
 
 #[derive(Clone)]
@@ -182,6 +214,13 @@ pub async fn apply_backend_auth(
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
+		BackendAuth::Custom(extension) => {
+			extension
+				.handler
+				.apply_auth(backend_info, req)
+				.await
+				.map_err(ProxyError::BackendAuthenticationFailed)?;
+		},
 	}
 	Ok(())
 }
@@ -203,6 +242,13 @@ pub async fn apply_late_backend_auth(
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
 		BackendAuth::Azure(_) => {},
+		BackendAuth::Custom(extension) => {
+			extension
+				.handler
+				.apply_late_auth(req)
+				.await
+				.map_err(ProxyError::BackendAuthenticationFailed)?;
+		},
 	};
 	Ok(())
 }

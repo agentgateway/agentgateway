@@ -34,9 +34,27 @@ fn main() -> Result<(), anyhow::Error> {
 		.build_server(true)
 		.compile_fds_with_config(fds, config)?;
 
+	// build test protos
+	let test_proto_files = ["proto/test.proto"]
+		.iter()
+		.map(|name| std::env::current_dir().unwrap().join(name))
+		.collect::<Vec<_>>();
+	let config = {
+		let mut c = prost_build::Config::new();
+		c.disable_comments(Some("."));
+		c.type_name_domain(["."], "type.googleapis.com");
+		c.enable_type_names();
+		c.type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]");
+		c
+	};
+	let fds = protox::compile(&test_proto_files, &include_dirs)?;
+	tonic_prost_build::configure()
+		.build_server(true)
+		.compile_fds_with_config(fds, config)?;
+
 	// This tells cargo to re-run this build script only when the proto files
 	// we're interested in change or the any of the proto directories were updated.
-	for path in [proto_files, include_dirs].concat() {
+	for path in [proto_files, test_proto_files, include_dirs].concat() {
 		println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
 	}
 	Ok(())

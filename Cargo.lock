@@ -204,6 +204,7 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "parking_lot",
+ "paste",
  "percent-encoding",
  "phonenumber",
  "pin-project-lite",

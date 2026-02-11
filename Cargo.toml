@@ -118,6 +118,7 @@ opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
 opentelemetry-proto = { version = "0.31", features = ["gen-tonic"] }
 opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
 parking_lot = "0.12"
+paste = "1.0"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"

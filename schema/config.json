@@ -429,6 +429,29 @@
             }
           },
           "additionalProperties": false
+        },
+        "extensions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "object"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "config": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "name",
+              "config"
+            ]
+          }
         }
       },
       "additionalProperties": false,
