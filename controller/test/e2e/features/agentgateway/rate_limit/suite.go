@@ -70,8 +70,6 @@ func (s *testingSuite) SetupSuite() {
 		}
 	}
 	s.commonResources = []client.Object{
-		// resources from curl manifest
-		testdefaults.CurlPod,
 		// resources from service manifest
 		simpleSvc, simpleDeployment,
 		// resources from gateway manifest

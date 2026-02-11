@@ -7,17 +7,14 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/onsi/gomega"
-	"github.com/stretchr/testify/suite"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/transforms"
+	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/suite"
 )
 
 var _ e2e.NewSuiteFunc = NewTestingSuite
@@ -31,7 +28,6 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	// Define the setup TestCase for common resources only
 	setupTestCase := base.TestCase{
 		Manifests: []string{
-			backendWithServiceManifest,
 			extProcManifest,
 		},
 	}
@@ -61,23 +57,6 @@ func (s *testingSuite) SetupSuite() {
 
 // TestExtProcWithGatewayTargetRef tests ExtProc with targetRef to Gateway using AgentgatewayPolicy
 func (s *testingSuite) TestExtProcWithGatewayTargetRef() {
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
-		s.Ctx,
-		gateway.Name,
-		gateway.Namespace,
-		gwv1.GatewayConditionProgrammed,
-		metav1.ConditionTrue,
-		timeout,
-	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
-		s.Ctx,
-		gateway.Name,
-		gateway.Namespace,
-		gwv1.GatewayConditionAccepted,
-		metav1.ConditionTrue,
-		timeout,
-	)
-
 	testCases := []struct {
 		name string
 		opts []curl.Option
@@ -94,10 +73,8 @@ func (s *testingSuite) TestExtProcWithGatewayTargetRef() {
 			},
 			resp: &testmatchers.HttpResponse{
 				StatusCode: http.StatusOK,
-				Body: gomega.WithTransform(transforms.WithJsonBody(),
-					gomega.And(
-						gomega.HaveKeyWithValue("headers", gomega.HaveKey("Extproctest")),
-					),
+				Body: gomega.WithTransform(transforms.WithEchoHeaders(),
+					gomega.HaveKeyWithValue("Extproctest", "true"),
 				),
 			},
 		},
@@ -112,10 +89,8 @@ func (s *testingSuite) TestExtProcWithGatewayTargetRef() {
 			},
 			resp: &testmatchers.HttpResponse{
 				StatusCode: http.StatusOK,
-				Body: gomega.WithTransform(transforms.WithJsonBody(),
-					gomega.And(
-						gomega.HaveKeyWithValue("headers", gomega.HaveKey("Extproctest")),
-					),
+				Body: gomega.WithTransform(transforms.WithEchoHeaders(),
+					gomega.HaveKeyWithValue("Extproctest", "true"),
 				),
 			},
 		},
@@ -129,23 +104,6 @@ func (s *testingSuite) TestExtProcWithGatewayTargetRef() {
 
 // TestExtProcWithHTTPRouteTargetRef tests ExtProc with targetRef to HTTPRoute using AgentgatewayPolicy
 func (s *testingSuite) TestExtProcWithHTTPRouteTargetRef() {
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
-		s.Ctx,
-		gateway.Name,
-		gateway.Namespace,
-		gwv1.GatewayConditionProgrammed,
-		metav1.ConditionTrue,
-		timeout,
-	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
-		s.Ctx,
-		gateway.Name,
-		gateway.Namespace,
-		gwv1.GatewayConditionAccepted,
-		metav1.ConditionTrue,
-		timeout,
-	)
-
 	testCases := []struct {
 		name string
 		opts []curl.Option
@@ -162,10 +120,8 @@ func (s *testingSuite) TestExtProcWithHTTPRouteTargetRef() {
 			},
 			resp: &testmatchers.HttpResponse{
 				StatusCode: http.StatusOK,
-				Body: gomega.WithTransform(transforms.WithJsonBody(),
-					gomega.And(
-						gomega.HaveKeyWithValue("headers", gomega.HaveKey("Extproctest")),
-					),
+				Body: gomega.WithTransform(transforms.WithEchoHeaders(),
+					gomega.HaveKeyWithValue("Extproctest", "true"),
 				),
 			},
 		},
@@ -180,10 +136,8 @@ func (s *testingSuite) TestExtProcWithHTTPRouteTargetRef() {
 			},
 			resp: &testmatchers.HttpResponse{
 				StatusCode: http.StatusOK,
-				Body: gomega.WithTransform(transforms.WithJsonBody(),
-					gomega.And(
-						gomega.HaveKeyWithValue("headers", gomega.Not(gomega.HaveKey("Extproctest"))),
-					),
+				Body: gomega.WithTransform(transforms.WithEchoHeaders(),
+					gomega.Not(gomega.HaveKeyWithValue("Extproctest", "true")),
 				),
 			},
 		},

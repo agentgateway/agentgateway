@@ -15,8 +15,8 @@ spec:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: extproc-backend
-          port: 3000
+        - name: backend
+          port: 80
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -34,8 +34,8 @@ spec:
             type: PathPrefix
             value: /myapp
       backendRefs:
-        - name: extproc-backend
-          port: 3000
+        - name: backend
+          port: 80
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

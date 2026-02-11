@@ -8,7 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 )
 
@@ -26,7 +25,7 @@ var (
 
 	testCases = map[string]*base.TestCase{
 		"TestAgentgatewayHTTPRoute": {
-			Manifests: []string{defaults.HttpbinManifest, httpRouteManifest},
+			Manifests: []string{httpRouteManifest},
 		},
 		"TestAgentgatewayTCPRoute": {
 			Manifests:       []string{tcpRouteManifest},

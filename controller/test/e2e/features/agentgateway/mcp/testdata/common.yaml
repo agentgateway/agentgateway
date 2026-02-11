@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: mcp-website-fetcher
-        image: ghcr.io/agentgateway/mcp-website-fetcher:0.0.1
+        image: ghcr.io/kgateway-dev/mcp-website-fetcher:0.0.1
         imagePullPolicy: Always
 ---
 apiVersion: v1
@@ -51,7 +51,7 @@ spec:
     spec:
       containers:
         - name: mcp-admin-server
-          image: ghcr.io/agentgateway/mcp-admin-server:0.0.1
+          image: ghcr.io/kgateway-dev/mcp-admin-server:0.0.1
           command: ["npx"]
           args: ["-y","@modelcontextprotocol/server-everything","streamableHttp","--port","3001"]
           ports:

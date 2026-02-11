@@ -45,7 +45,7 @@ func NewTestingSuiteAgentgateway(ctx context.Context, testInst *e2e.TestInstalla
 			},
 			map[string]*base.TestCase{
 				"TestZeroDowntimeRolloutAgentgateway": {
-					Manifests: []string{agentgatewayManifest, defaults.CurlPodManifest},
+					Manifests: []string{agentgatewayManifest},
 				},
 			},
 		),

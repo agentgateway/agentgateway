@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
+	"istio.io/istio/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -112,20 +114,24 @@ func (s *testingSuite) TestSSEEndpoint() {
 
 	headers := mcpHeaders(nil)
 
-	out, err := s.execCurlMCP(headers, initBody, "--max-time", "8")
-	s.Require().NoError(err, "SSE initialize curl failed")
-	s.requireHTTPStatus(out, httpOKCode)
-	// Match header w/ or w/o '-v' prefix, any casing, and optional params.
-	headerCT := regexp.MustCompile(`(?mi)^\s*(?:<\s*)?content-type\s*:\s*text/event-stream(?:\s*;.*)?\s*$`)
-	if headerCT.FindStringIndex(out) == nil {
-		// Fallback to curl -w line (we print: "Content-Type:%{content_type}")
-		wCT := regexp.MustCompile(`(?i)^Content-Type:\s*text/event-stream\b`)
-		if !wCT.MatchString(out) {
-			s.T().Logf("missing text/event-stream content-type: %s", out)
-			s.Require().Fail("expected Content-Type: text/event-stream in response headers (or curl -w output)")
+	s.TestInstallation.AssertionsT(s.T()).Gomega.Eventually(func(g gomega.Gomega) {
+		out, err := s.execCurlMCP(headers, initBody, "--max-time", "8")
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		s.Require().NoError(err, "SSE initialize curl failed")
+		log.Errorf("howardjohn: OUT %v", out)
+		s.requireHTTPStatus(out, httpOKCode)
+		// Match header w/ or w/o '-v' prefix, any casing, and optional params.
+		headerCT := regexp.MustCompile(`(?mi)^\s*(?:<\s*)?content-type\s*:\s*text/event-stream(?:\s*;.*)?\s*$`)
+		if headerCT.FindStringIndex(out) == nil {
+			// Fallback to curl -w line (we print: "Content-Type:%{content_type}")
+			wCT := regexp.MustCompile(`(?i)^Content-Type:\s*text/event-stream\b`)
+			if !wCT.MatchString(out) {
+				s.T().Logf("missing text/event-stream content-type: %s", out)
+				s.Require().Fail("expected Content-Type: text/event-stream in response headers (or curl -w output)")
+			}
 		}
-	}
-	_ = s.initializeSession(initBody, headers, "sse")
+		_ = s.initializeSession(initBody, headers, "sse")
+	})
 }
 
 func (s *testingSuite) TestDynamicMCPAdminRouting() {

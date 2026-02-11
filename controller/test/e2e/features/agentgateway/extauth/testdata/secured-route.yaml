@@ -10,8 +10,8 @@ spec:
     - "secureroute.com"
   rules:
     - backendRefs:
-        - name: simple-svc
-          port: 8080
+        - name: backend
+          port: 80
 ---
 ## On a route that is not part of the gw gateway opt in
 apiVersion: agentgateway.dev/v1alpha1

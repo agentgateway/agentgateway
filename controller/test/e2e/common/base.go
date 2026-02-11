@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/test/util/assert"
@@ -61,5 +62,5 @@ func (g *Gateway) Send(t *testing.T, match *matchers.HttpResponse, opts ...curl.
 			return fmt.Errorf("match failed: %v", mm.FailureMessage(r))
 		}
 		return nil
-	})
+	}, retry.Timeout(time.Second*3))
 }

@@ -19,6 +19,7 @@ import (
 	testruntime "github.com/agentgateway/agentgateway/controller/test/e2e/testutils/runtime"
 	"github.com/agentgateway/agentgateway/controller/test/helpers"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
+	"istio.io/istio/pkg/slices"
 )
 
 // CreateTestInstallation is the simplest way to construct a TestInstallation in kgateway.
@@ -276,6 +277,13 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	// The kubernetes/e2e tests may use multiple namespaces, so we need to dump all of them
 	namespaces, err := i.Actions.Kubectl().Namespaces(ctx)
 	i.AssertionsT(t).Require.NoError(err, "failed to get namespaces for failure dump")
+	namespaces = slices.Filter(namespaces, func(s string) bool {
+		return s != "kube-node-lease" &&
+			s != "kube-public" &&
+			s != "kube-system" &&
+			s != "local-path-storage" &&
+			s != "metallb-system"
+	})
 
 	// Dump the logs and state of the cluster
 	helpers.StandardKgatewayDumpOnFail(os.Stdout, i.Actions.Kubectl(), dir, namespaces)

@@ -306,7 +306,7 @@ type StatusSyncer[O controllers.ComparableObject, S any] struct {
 func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource, statusObj any) {
 	var status S
 	if ta, ok := statusObj.(*any); ok {
-		if ta != nil {
+		if ta != nil && *ta != nil {
 			status = (*ta).(S)
 		}
 	} else {
