@@ -39,7 +39,7 @@ impl http_body::Body for PartiallyBufferedBody {
 	}
 
 	fn is_end_stream(&self) -> bool {
-		!self.buffer.has_remaining() && self.inner.is_end_stream()
+		!self.buffer.has_remaining() && self.inner.is_end_stream() && self.trailers.is_none()
 	}
 
 	/// Returns the bounds on the remaining length of the stream.
