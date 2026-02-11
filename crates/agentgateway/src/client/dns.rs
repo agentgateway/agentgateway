@@ -12,7 +12,8 @@ use hickory_resolver::{ResolveError, TokioResolver};
 
 use crate::*;
 
-const ERROR_BACKOFF: Duration = Duration::from_secs(5);
+const ERROR_BACKOFF_MAX: Duration = Duration::from_secs(5);
+const ERROR_BACKOFF_BASE: Duration = Duration::from_millis(100);
 
 #[derive(Debug)]
 struct CircularBuffer<T> {
@@ -63,6 +64,8 @@ impl CacheEntry {
 	) {
 		self.active.store(true, Ordering::Relaxed);
 
+		let mut backoff = ERROR_BACKOFF_BASE;
+
 		loop {
 			// Mark this is inactive, so we can see if there are any request before the next refresh timer.
 			let was_active = self.active.swap(false, Ordering::Relaxed);
@@ -78,6 +81,8 @@ impl CacheEntry {
 				Ok((ips, expiry)) => {
 					let cb = CircularBuffer::new(ips);
 					self.entries.store(Some(Arc::new(cb)));
+					// reset backoff on success
+					backoff = ERROR_BACKOFF_BASE;
 					expiry
 				},
 				Err(e) => {
@@ -86,7 +91,9 @@ impl CacheEntry {
 					self.entries.store(Some(Arc::new(cb)));
 					// if we got an error, retain the last state
 					debug!("resolution failed: {e:?}");
-					Instant::now() + ERROR_BACKOFF
+
+					backoff = std::cmp::min(backoff * 2, ERROR_BACKOFF_MAX);
+					Instant::now() + backoff
 				},
 			};
 			// NB: this will run even on error, so the first fetch for a failed response will hit this and

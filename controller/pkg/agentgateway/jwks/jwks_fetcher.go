@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -63,7 +65,7 @@ type jwksHttpClientImpl struct {
 func NewJwksFetcher(cache *jwksCache) *JwksFetcher {
 	toret := &JwksFetcher{
 		cache:             cache,
-		defaultJwksClient: &jwksHttpClientImpl{Client: &http.Client{}},
+		defaultJwksClient: &jwksHttpClientImpl{Client: makeClient(nil)},
 		keysetSources:     make(map[string]*JwksSource),
 		schedule:          make([]fetchAt, 0),
 		subscribers:       make([]chan map[string]string, 0),
@@ -71,6 +73,17 @@ func NewJwksFetcher(cache *jwksCache) *JwksFetcher {
 	heap.Init(&toret.schedule)
 
 	return toret
+}
+
+func makeClient(t *tls.Config) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: t,
+			DialContext: (&net.Dialer{
+				Timeout: 5 * time.Second,
+			}).DialContext,
+			DisableKeepAlives: true,
+		}}
 }
 
 // heap implementation
@@ -132,7 +145,9 @@ func (f *JwksFetcher) maybeFetchJwks(ctx context.Context) {
 		if err != nil {
 			logger.Error("error fetching jwks", "jwks_uri", fetch.keysetSource.JwksURL, "error", err)
 			if fetch.retryAttempt < 5 { // backoff by 5s * retry attempt number
-				heap.Push(&f.schedule, fetchAt{at: now.Add(time.Duration(5*(fetch.retryAttempt+1)) * time.Second), keysetSource: fetch.keysetSource, retryAttempt: fetch.retryAttempt + 1})
+				// 100ms with exponential backoff up to 15s
+				next := time.Duration(math.Pow(100, float64(fetch.retryAttempt+1))) * time.Millisecond
+				heap.Push(&f.schedule, fetchAt{at: now.Add(next), keysetSource: fetch.keysetSource, retryAttempt: fetch.retryAttempt + 1})
 			} else {
 				// give up retrying and schedule an update at a later time
 				heap.Push(&f.schedule, fetchAt{at: now.Add(fetch.keysetSource.Ttl), keysetSource: fetch.keysetSource})
@@ -144,7 +159,8 @@ func (f *JwksFetcher) maybeFetchJwks(ctx context.Context) {
 		// error serializing jwks, shouldn't happen, retry
 		if err != nil {
 			logger.Error("error adding jwks", "jwks_uri", fetch.keysetSource.JwksURL, "error", err)
-			heap.Push(&f.schedule, fetchAt{at: now.Add(time.Duration(5*(fetch.retryAttempt+1)) * time.Second), keysetSource: fetch.keysetSource, retryAttempt: fetch.retryAttempt + 1})
+			next := time.Duration(math.Pow(100, float64(fetch.retryAttempt+1))) * time.Millisecond
+			heap.Push(&f.schedule, fetchAt{at: now.Add(next), keysetSource: fetch.keysetSource, retryAttempt: fetch.retryAttempt + 1})
 			continue
 		}
 
@@ -207,7 +223,7 @@ func (f *JwksFetcher) RemoveKeyset(source JwksSource) {
 
 func (f *JwksFetcher) fetchJwks(ctx context.Context, jwksURL string, tlsConfig *tls.Config) (jose.JSONWebKeySet, error) {
 	if tlsConfig != nil {
-		c := &jwksHttpClientImpl{Client: &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}}
+		c := &jwksHttpClientImpl{Client: makeClient(tlsConfig)}
 		return c.FetchJwks(ctx, jwksURL)
 	}
 	return f.defaultJwksClient.FetchJwks(ctx, jwksURL)

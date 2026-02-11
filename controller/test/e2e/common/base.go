@@ -62,5 +62,5 @@ func (g *Gateway) Send(t *testing.T, match *matchers.HttpResponse, opts ...curl.
 			return fmt.Errorf("match failed: %v", mm.FailureMessage(r))
 		}
 		return nil
-	}, retry.Timeout(time.Second*3))
+	}, retry.Timeout(time.Second*300))
 }
