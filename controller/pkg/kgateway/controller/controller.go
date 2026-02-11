@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"golang.org/x/time/rate"
 	"istio.io/istio/pkg/kube/kubetypes"
 	"k8s.io/client-go/util/workqueue"
@@ -32,6 +33,8 @@ type GatewayConfig struct {
 	// AgwControllerName is the name of the agentgateway controller. Any GatewayClass objects
 	// managed by this controller must have this name as their ControllerName.
 	AgwControllerName string
+	// ImageDefaults sets the defaults for the image
+	ImageDefaults *agentgateway.Image
 	// ControlPlane sets the default control plane information the deployer will use.
 	ControlPlane deployer.ControlPlaneInfo
 	// DiscoveryNamespaceFilter filters namespaced objects based on the discovery namespace filter.
@@ -81,6 +84,7 @@ func watchGw(
 
 	inputs := &deployer.Inputs{
 		Dev:                        cfg.Dev,
+		ImageDefaults:              cfg.ImageDefaults,
 		ControlPlane:               cfg.ControlPlane,
 		CommonCollections:          cfg.CommonCollections,
 		AgentgatewayClassName:      cfg.AgentgatewayClassName,

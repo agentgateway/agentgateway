@@ -422,9 +422,9 @@ agentgateway-controller-docker: agentgateway-controller $(CONTROLLER_OUTPUT_DIR)
 
 .PHONY: agentgateway-controller-docker-local
 agentgateway-controller-docker-local: agentgateway-controller $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway
-	$(BUILDX_BUILD) --push $(PLATFORM) $(CONTROLLER_OUTPUT_DIR) -f $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway \
+	docker buildx build --push $(PLATFORM) $(CONTROLLER_OUTPUT_DIR) -f $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway \
 		--build-arg GOARCH=$(GOARCH) \
-		-t localhost:5000/$(AGENTGATEWAY_IMAGE_REPO):$(VERSION)
+		-t localhost:5000/$(AGENTGATEWAY_IMAGE_REPO):$(TAG)
 
 #----------------------------------------------------------------------------------
 # dummy idp (used in e2e tests)

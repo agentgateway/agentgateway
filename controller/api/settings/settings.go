@@ -188,6 +188,13 @@ type Settings struct {
 	// is deprecated in v2.1 and will not be supported in v2.2.
 	EnableInferExt bool `split_words:"true"`
 
+	// ProxyImageRegistry is the default image registry to use for the proxy image.
+	ProxyImageRegistry string `split_words:"true" default:"cr.agentgateway.dev"`
+	// ProxyImageRepository is the default image repository to use for the proxy image.
+	ProxyImageRepository string `split_words:"true" default:"agentgateway"`
+	// ProxyImageTag is the default image tag to use for the proxy image.
+	ProxyImageTag *string `split_words:"true" default:""`
+
 	// LogLevel specifies the logging level (e.g., "trace", "debug", "info", "warn", "error").
 	// Defaults to "info" if not set.
 	LogLevel string `split_words:"true" default:"info"`

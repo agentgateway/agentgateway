@@ -167,6 +167,17 @@ controller:
   #           memory: 128Mi
   verticalPodAutoscaler: {}
 
+# -- Configure the agentgateway data plane deployment.
+proxy:
+  image:
+    # -- Set the default image registry.
+    # Set to override the global value.
+    registry: ""
+    # -- Set the default image repository.
+    repository: agentgateway
+    # -- Set the default image tag.
+    tag: ""
+
 # -- Configure the default container image for the components that Helm deploys. You can override these settings for each particular component in that component's section, such as 'controller.image' for the agentgateway control plane. If you use your own private registry, make sure to include the imagePullSecrets.
 image:
   # -- Set the default image registry.

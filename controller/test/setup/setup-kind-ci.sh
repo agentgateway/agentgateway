@@ -215,7 +215,14 @@ function step_push_proxy_to_local_registry() {
 function step_deploy_helm() {
 	helm upgrade -i --create-namespace --namespace agentgateway-system agentgateway-crds ./controller/install/helm/agentgateway-crds/
 	helm upgrade -i --namespace agentgateway-system agentgateway ./controller/install/helm/agentgateway  \
-	  --set image.registry=localhost:5000 --set-string image.tag="${TAG}" "$@"
+	  --set image.registry=localhost:5000 \
+	  --set-string image.tag="${TAG}"\
+	   --set controller.image.repository=agentgateway-controller \
+	   --set inferenceExtension.enabled=true \
+	   "$@"
+}
+function step_setup_gateway_api() {
+	make -C controller gw-api-crds gie-crds
 }
 
 function main() {
@@ -283,6 +290,7 @@ function main() {
   fi
 
   run_timed_step "deploy-helm" step_deploy_helm "$@"
+  run_timed_step "deploy-gateway-api" step_setup_gateway_api "$@"
 }
 
 main "$@"
