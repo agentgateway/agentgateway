@@ -44,7 +44,7 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
 	} else if provider == "vertex" {
 		r#"
               projectId: $VERTEX_PROJECT
-              region: us-central1
+              region: us-east5
               "#
 	} else if provider == "azureOpenAI" {
 		r#"
@@ -325,7 +325,7 @@ mod vertex {
 
 	#[tokio::test]
 	async fn completions_to_anthropic() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_completions(&gw, false).await;
@@ -333,9 +333,9 @@ mod vertex {
 
 	#[tokio::test]
 	#[ignore]
-	/// TODO(https://github.com/agentgateway/agentgateway/pull/800) support this
+	/// TODO(https://github.com/agentgateway/agentgateway/pull/909) support this
 	async fn completions_streaming_to_anthropic() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_completions(&gw, true).await;
@@ -351,7 +351,7 @@ mod vertex {
 
 	#[tokio::test]
 	async fn messages() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_messages(&gw, false).await;
@@ -359,7 +359,7 @@ mod vertex {
 
 	#[tokio::test]
 	async fn messages_streaming() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_messages(&gw, true).await;
@@ -375,7 +375,7 @@ mod vertex {
 
 	#[tokio::test]
 	async fn token_count() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_anthropic_token_count(&gw).await;

@@ -14,5 +14,6 @@ info:
       "content": "Hello, how are you?"
     }
   ],
+  "model": "anthropic/claude-sonnet-4-5",
   "anthropic_version": "vertex-2023-10-16"
 }

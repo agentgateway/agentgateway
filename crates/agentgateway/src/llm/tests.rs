@@ -334,7 +334,7 @@ async fn test_vertex_messages() {
 
 	let request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
 		let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
-		provider.prepare_anthropic_request_body(anthropic_body)
+		provider.prepare_anthropic_message_body(anthropic_body)
 	};
 
 	for r in MESSAGES_REQUESTS {
@@ -512,7 +512,7 @@ async fn test_vertex_count_tokens() {
 
 	let request = |input: types::count_tokens::Request| -> Result<Vec<u8>, AIError> {
 		let anthropic_body = input.to_anthropic()?;
-		provider.prepare_anthropic_request_body(anthropic_body)
+		provider.prepare_anthropic_count_tokens_body(anthropic_body)
 	};
 
 	for r in COUNT_TOKENS_REQUESTS {

@@ -649,7 +649,7 @@ impl AIProvider {
 				AIProvider::Bedrock(_) => req.to_bedrock_token_count(parts.headers())?,
 				AIProvider::Vertex(provider) => {
 					let body = req.to_anthropic()?;
-					provider.prepare_anthropic_request_body(body)?
+					provider.prepare_anthropic_count_tokens_body(body)?
 				},
 				_ => {
 					return Err(AIError::UnsupportedConversion(strng::literal!(
@@ -661,7 +661,7 @@ impl AIProvider {
 			match self {
 				AIProvider::Vertex(provider) if provider.is_anthropic_model(Some(request_model)) => {
 					let body = req.to_anthropic()?;
-					provider.prepare_anthropic_request_body(body)?
+					provider.prepare_anthropic_message_body(body)?
 				},
 				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_) => {
 					req.to_openai()?
