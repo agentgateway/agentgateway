@@ -133,7 +133,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.serviceAccountName
-        image: cr.agentgateway.dev/custom-repo:0.12.0
+        image: cr.agentgateway.dev/custom-repo:99.99.99
         name: agentgateway
         ports:
         - containerPort: 15020

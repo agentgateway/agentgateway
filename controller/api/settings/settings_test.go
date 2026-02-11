@@ -33,6 +33,9 @@ func allEnvVarsSet() map[string]string {
 		"AGW_XDS_AUTH":                                 "false",
 		"AGW_XDS_TLS":                                  "true",
 		"AGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES": "false",
+		"AGW_PROXY_IMAGE_REGISTRY":                     "my-registry",
+		"AGW_PROXY_IMAGE_REPOSITORY":                   "my-repo",
+		"AGW_PROXY_IMAGE_TAG":                          "my-tag",
 	}
 }
 
@@ -71,6 +74,8 @@ func TestSettings(t *testing.T) {
 				XdsTLS:                               false,
 				EnableExperimentalGatewayAPIFeatures: true,
 				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
+				ProxyImageRegistry:                   "cr.agentgateway.dev",
+				ProxyImageRepository:                 "agentgateway",
 			},
 		},
 		{
@@ -93,6 +98,9 @@ func TestSettings(t *testing.T) {
 				XdsAuth:                              false,
 				XdsTLS:                               true,
 				EnableExperimentalGatewayAPIFeatures: false,
+				ProxyImageRegistry:                   "my-registry",
+				ProxyImageRepository:                 "my-repo",
+				ProxyImageTag:                        ptr.To("my-tag"),
 				GatewayClassParametersRefs: GatewayClassParametersRefs{
 					"kgateway": {
 						Name:      "custom-gwp",
@@ -166,6 +174,8 @@ func TestSettings(t *testing.T) {
 				XdsTLS:                               false,
 				EnableExperimentalGatewayAPIFeatures: true,
 				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
+				ProxyImageRegistry:                   "cr.agentgateway.dev",
+				ProxyImageRepository:                 "agentgateway",
 			},
 		},
 	}

@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"golang.org/x/time/rate"
 	"istio.io/istio/pkg/kube/kubetypes"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	internaldeployer "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"

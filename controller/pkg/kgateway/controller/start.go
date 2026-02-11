@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/version"
 	"istio.io/istio/pkg/kube/krt"
 	istiolog "istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/ptr"
@@ -21,6 +19,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
@@ -30,6 +29,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
+	"github.com/agentgateway/agentgateway/controller/pkg/version"
 )
 
 // TLSRootCAPath is the path to the TLS root CA
@@ -212,7 +212,7 @@ func (c *ControllerBuilder) Build(ctx context.Context) (*agentgatewaysyncer.Sync
 		ImageDefaults: &agentgateway.Image{
 			Registry:   &globalSettings.ProxyImageRegistry,
 			Repository: &globalSettings.ProxyImageRepository,
-			Tag:        globalSettings.ProxyImageTag,
+			Tag:        defaultTag,
 		},
 		ControlPlane: deployer.ControlPlaneInfo{
 			XdsHost:      xdsHost,
