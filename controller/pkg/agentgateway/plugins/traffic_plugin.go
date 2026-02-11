@@ -787,6 +787,10 @@ func processAPIKeyAuthenticationPolicy(
 			})
 		}
 	}
+	// Ensure deterministic ordering
+	slices.SortBy(p.ApiKeys, func(a *api.TrafficPolicySpec_APIKey_User) string {
+		return a.Key
+	})
 	apiKeyPolicy := &api.Policy{
 		Key:    basePolicyName + apiKeyPolicySuffix + attachmentName(target),
 		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
