@@ -1,0 +1,46 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: fake-gw
+    group: gateway.networking.k8s.io
+  traffic:
+    timeouts:
+      request: 5s
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:timeout:default/fake-gw
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: fake-gw
+        namespace: default
+    traffic:
+      timeout:
+        request: 5s
+status:
+  ancestors:
+  - ancestorRef:
+      group: agentgateway.dev
+      name: StatusSummary
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: 'Policy is not attached: Gateway default/fake-gw not found'
+      reason: Pending
+      status: "False"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

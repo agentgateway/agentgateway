@@ -1,0 +1,44 @@
+# ref: https://github.com/vladopajic/go-test-coverage/blob/a5134457f681defa8eada436f1bcda10407f4f8b/.testcoverage.example.yml
+
+# (mandatory)
+# Path to coverprofile file (output of `go test -coverprofile` command)
+profile: _output/cover.out
+
+# Holds coverage thresholds percentages, values should be in range [0-100]
+# We should strive to increase these percentages over time
+threshold:
+  # (optional; default 0)
+  # The minimum coverage that each file should have
+  file: 50
+
+  # (optional; default 0)
+  # The minimum coverage that each package should have
+  package: 50
+
+  # (optional; default 0)
+  # The minimum total coverage project should have
+  total: 50
+
+# Holds regexp rules which will override thresholds for matched files or packages
+# using their paths.
+#
+# First rule from this list that matches file or package is going to apply
+# new threshold to it. If project has multiple rules that match same path,
+# override rules should be listed in order from specific to more general rules.
+override:
+  # Calls to external library, which is tested
+  - threshold: 0
+    path: ^hack/generate.go
+  # The only code at the top-level of the `pkg/kgateway` package is code generation
+  - threshold: 0
+    path: ^pkg/kgateway$
+
+# Holds regexp rules which will exclude matched files or packages
+# from coverage statistics
+exclude:
+  # Exclude files or packages matching their paths
+  paths:
+    # Exclude the protobuf generated files (pb.go, pb.equal.go, pb.hash.go)
+    - \.pb\.go$
+    - \.pb\.hash\.go$
+    - \.pb\.equal\.go$

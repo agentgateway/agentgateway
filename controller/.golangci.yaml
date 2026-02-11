@@ -1,0 +1,213 @@
+version: "2"
+run:
+  concurrency: 4
+  tests: true
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - forbidigo
+    - ginkgolinter
+    - gomodguard
+    - gosec
+    - importas
+    - ineffassign
+    - krtequals
+    - kubeapilinter
+    - misspell
+    - modernize
+    - nakedret
+    - predeclared
+    - promlinter
+    - sloglint
+    - spancheck
+    - staticcheck
+    - unparam
+    - unused
+    - usestdlibvars
+    - whitespace
+  settings:
+    custom:
+      krtequals:
+        type: "module"
+        description: Checks Equals() implementations for KRT-style semantic equality issues
+        settings:
+          deepEqual: false
+          checkUnexported: true
+      kubeapilinter:
+        type: module
+        description: Kube API Linter lints Kube like APIs based on API conventions and best practices
+        settings:
+          linters:
+            enable:
+            - "*"
+            disable:
+            - commentstart
+            - integers
+            - maxlength
+            - nobools
+            - nomaps
+            - optionalfields
+            - ssatags
+          lintersConfig:
+            conditions:
+              isFirstField: Ignore
+              useProtobuf: Forbid
+              usePatchStrategy: Ignore
+    forbidigo:
+      forbid:
+        - pattern: anypb.New
+          msg: use utils.MessageToAny instead
+        - pattern: kclient.New$
+          msg: use kclient.NewFilteredDelayed for CRDs and kclient.NewFiltered for core types, with discovery namespace ObjectFilter instead
+        - pattern: ^client.Client$
+          msg: use apiclient.Client instead of controller-runtime's client.Client
+        - pattern: (\bt|\bT\(\))\.Cleanup
+          msg: require testutils.Cleanup in e2e tests (test/e2e/)
+    gomodguard:
+      blocked:
+        modules:
+          - github.com/rotisserie/eris:
+              recommendations:
+                - errors.Join
+              reason: Use the std-lib errors package with \\%w instead.
+          - github.com/hashicorp/go-multierror:
+              recommendations:
+                - errors.Join
+              reason: Use errors.Join (Go 1.20+) instead.
+          - github.com/pkg/errors:
+              recommendations:
+                - fmt.Errorf
+                - errors.New
+                - errors.Join
+              reason: Use the std-lib errors package and fmt.Errorf with \\%w instead.
+    importas:
+      alias:
+        - pkg: k8s.io/api/apps/v1
+          alias: appsv1
+        - pkg: k8s.io/api/core/v1
+          alias: corev1
+        - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
+          alias: metav1
+        - pkg: k8s.io/api/batch/v1
+          alias: batchv1
+        - pkg: sigs.k8s.io/gateway-api/apis/v1
+          alias: gwv1
+        - pkg: sigs.k8s.io/gateway-api/apis/v1alpha2
+          alias: gwv1a2
+        - pkg: sigs.k8s.io/gateway-api/apis/v1beta1
+          alias: gwv1b1
+        - pkg: github.com/envoyproxy/go-control-plane/envoy/config/(\w+)/(v[\w\d]+)
+          alias: envoy$1$2
+        - pkg: github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3
+          alias: envoytlsv3
+        - pkg: github.com/agentgateway/agentgateway/controller/api/annotations
+          alias: apiannotations
+        - pkg: github.com/agentgateway/agentgateway/controller/api/settings
+          alias: apisettings
+    misspell:
+      ignore-rules:
+        - kgateway
+    modernize:
+      disable:
+        # disabled because modernize gets confused with conflicting edits. we can probably rely on the kube api linter instead for this one.
+        - omitzero
+    nakedret:
+      # The team consensus is that naked returns hinder the readability of the code.
+      # However, named return values can still be useful as documentation for certain scenarios.
+      # By setting this to 0 in lieu of the default 30, we will effectively allow named return
+      # values as long as they are included in the return statement(s) e.g.
+      # func foo() (a, b int) {
+      #     a = 1
+      #     b = 2
+      #     c := 3
+      #     d := 4
+      #     // These are allowed
+      #     return a, b
+      #     return c, d
+      #     return d, c
+      #     // This is NOT allowed
+      #     return
+      #     // This is allowed but really, really bad. DO NOT do this.
+      #     return b, a
+      max-func-lines: 0
+    staticcheck:
+      checks:
+        - SA1019 # deprecated usage
+        - ST1019 # duplicate imports
+    sloglint:
+      static-msg: true
+      msg-style: lowercased
+      key-naming-case: snake
+      # ignore built-in keys
+      forbidden-keys:
+        - time
+        - level
+        - msg
+        - source
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - test/rules
+      - gomock_reflect_\d*
+      - third_party$
+      - builtin$
+      - examples$
+      - hack/dummy-idp
+    rules:
+      # Forbid t.Cleanup only in e2e tests (exclude the rule from non-e2e paths)
+      - path-except: test/e2e/
+        linters:
+          - forbidigo
+        text: 'require testutils.Cleanup'
+      # Skip client.Client forbidgo rule for e2e tests
+      - path: test/e2e/
+        linters:
+          - forbidigo
+        text: 'use apiclient.Client instead'
+      # Restrict krtequals analyzer to the pkg and internal directories
+      - path-except: pkg/|internal/
+        linters:
+          - krtequals
+      # Only run kubeapilinter inside the 'api/' directory. This prevents running API-specific checks
+      # on unrelated packages like controllers or tests and producing false positives.
+      - path-except: "^api/v1alpha1"
+        linters:
+          - kubeapilinter
+issues:
+  max-same-issues: 0
+  uniq-by-line: true
+formatters:
+  enable:
+    - gofmt
+    - gci
+  settings:
+    gci:
+      sections:
+      - standard
+      - default
+      - prefix(github.com/kgateway-dev)
+      - blank
+      - dot
+      - localmodule
+      custom-order: true
+  exclusions:
+    generated: lax
+    paths:
+      - test/rules
+      - gomock_reflect_\d*
+      - third_party$
+      - builtin$
+      - examples$

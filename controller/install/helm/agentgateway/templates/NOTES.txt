@@ -1,0 +1,20 @@
+Thank you for installing the {{ .Chart.Name }} chart.
+
+Your release "{{ .Release.Name }}" has been deployed in the "{{ .Release.Namespace }}" namespace.
+
+To check the status of the deployment:
+
+  helm status {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+
+To view the resources created by this chart:
+
+  kubectl get all -n {{ .Release.Namespace }}
+
+To learn how to access and use agentgateway, please visit the official documentation:
+
+  https://kgateway.dev/docs/
+
+To uninstall the agentgateway deployment:
+
+  helm uninstall {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+

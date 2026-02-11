@@ -1,0 +1,10 @@
+# Remove image registry directive when https://github.com/kgateway-dev/kgateway/issues/11359 is fixed
+image:
+  registry: ghcr.io/kgateway-dev
+
+# Configuration for the kgateway controller pod
+controller:
+  logLevel: debug
+
+inferenceExtension:
+  enabled: true

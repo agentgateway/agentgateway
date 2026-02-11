@@ -1,0 +1,11 @@
+Thank you for installing the {{ .Chart.Name }} chart.
+
+Your release "{{ .Release.Name }}" has been deployed in the "{{ .Release.Namespace }}" namespace.
+
+This chart installs the Custom Resource Definitions (CRDs) required by agentgateway.
+
+To check the installed CRDs:
+
+  kubectl get crds | grep agentgateway.dev
+
+

@@ -1,0 +1,52 @@
+# Send h2c gRPC request to /proto.EchoTestService/Echo with grpc framing.
+# Response should include `x-grpc-response: from-grpc`.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: example-route # same name and namespace as HTTPRoute
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "example.com"
+  rules:
+    - matches:
+        - method:
+            method: Echo
+            service: proto.EchoTestService
+      backendRefs:
+        - name: backend
+          port: 7070
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-route
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "example.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: example-agw-policy-for-grpc
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: GRPCRoute
+      name: example-route
+  traffic:
+    transformation:
+      response:
+        set:
+          - name: x-grpc-response
+            value: "'from-grpc'"

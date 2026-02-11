@@ -1,0 +1,3 @@
+api/applyconfiguration/** linguist-generated=true
+pkg/client/** linguist-generated=true
+pkg/generated/** linguist-generated=true

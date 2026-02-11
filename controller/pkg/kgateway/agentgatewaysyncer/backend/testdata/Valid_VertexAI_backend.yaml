@@ -1,0 +1,10 @@
+ai:
+  providerGroups:
+  - providers:
+    - name: backend
+      vertex:
+        model: gemini-pro
+key: test-ns/vertex-backend
+name:
+  name: vertex-backend
+  namespace: test-ns

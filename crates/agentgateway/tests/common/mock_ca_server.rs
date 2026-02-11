@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use rand::RngCore;
+use rand::Rng;
 use rcgen::{ExtendedKeyUsagePurpose, Issuer, KeyPair, KeyUsagePurpose, SanType, SerialNumber};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};

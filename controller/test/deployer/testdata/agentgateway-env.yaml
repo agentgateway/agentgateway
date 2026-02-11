@@ -1,0 +1,45 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: my-agwp
+    namespace: default
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: my-agwp
+  namespace: default
+spec:
+  env:
+    - name: FOOBAR
+      value: ""
+    - name: CONNECTION_MIN_TERMINATION_DEADLINE
+      value: "500s"
+    - name: RUST_BACKTRACE
+      value: null
+    - name: TEST_OF_VARIABLE_EXPANSION
+      value: "$(GATEWAY)"
+    - name: TEST_OF_AVOIDING_VARIABLE_EXPANSION
+      value: "$$(GATEWAY)"
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same

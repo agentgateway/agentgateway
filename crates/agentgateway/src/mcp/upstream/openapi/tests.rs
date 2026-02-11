@@ -24,7 +24,7 @@ async fn setup() -> (MockServer, Handler) {
 	let parsed = reqwest::Url::parse(&host).unwrap();
 	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
 	let encoder = config.session_encoder.clone();
-	let stores = Stores::new();
+	let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
 	let client = Client::new(
 		&client::Config {
 			resolver_cfg: ResolverConfig::default(),

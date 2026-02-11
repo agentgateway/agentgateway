@@ -8,7 +8,7 @@ IMAGE_TAG ?= $(VERSION)
 IMAGE_FULL_NAME ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 DOCKER_BUILDER ?= docker
 DOCKER_BUILD_ARGS ?= --build-arg VERSION=$(VERSION) --build-arg GIT_REVISION=$(GIT_REVISION)
-KIND_CLUSTER_NAME ?= agentgateway
+export PATH := ./tools:$(PATH)
 
 # docker
 .PHONY: docker
@@ -40,7 +40,11 @@ lint:
 
 .PHONY: fix-lint
 fix-lint:
-	cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs --workspace
+	cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs
+	cargo fmt
+
+.PHONY: format
+format:
 	cargo fmt
 
 # test
@@ -57,15 +61,10 @@ objects := $(wildcard examples/*/config.json)
 
 .PHONY: check-clean-repo
 check-clean-repo:
-ifeq ($(OS),Windows_NT)
-	@powershell -ExecutionPolicy Bypass -Command common/scripts/check_clean_repo.ps1
-else
-	@common/scripts/check_clean_repo.sh
-endif
-
+	@tools/check_clean_repo.sh
 
 .PHONY: gen
-gen: generate-apis generate-schema fix-lint
+gen: generate-apis generate-schema format
 	@:
 
 .PHONY: generate-schema
@@ -75,39 +74,16 @@ generate-schema:
 # Code generation for xds apis
 .PHONY: generate-apis
 generate-apis:
-ifeq ($(OS),Windows_NT)
-	@powershell -ExecutionPolicy Bypass -Command common/tools/buf.ps1 generate --path crates/agentgateway/proto/resource.proto
-else
 	@PATH="./common/tools:$(PATH)" buf generate --path crates/agentgateway/proto/resource.proto
-endif
 
 .PHONY: run-validation-deps
 run-validation-deps:
-ifeq ($(OS),Windows_NT)
-	@powershell -ExecutionPolicy Bypass -Command common/scripts/manage-validation-deps.ps1 start
-else
-	@common/scripts/manage-validation-deps.sh start
-endif
+	@tools/manage-validation-deps.sh start
 
 .PHONY: stop-validation-deps
 stop-validation-deps:
-ifeq ($(OS),Windows_NT)
-	@powershell -ExecutionPolicy Bypass -Command common/scripts/manage-validation-deps.ps1 stop
-else
-	@common/scripts/manage-validation-deps.sh stop
-endif
-
-CONFIG_FILES := $(wildcard examples/*/config.yaml)
-ifeq ($(CI),true)
-ifeq ($(OS),Windows_NT)
-# On Windows
-CONFIG_FILES := $(filter-out examples/mcp-authentication/config.yaml, $(CONFIG_FILES))
-endif
-endif
+	@tools/manage-validation-deps.sh stop
 
 .PHONY: validate
-validate: run-validation-deps $(CONFIG_FILES) stop-validation-deps
-
-.PHONY: $(CONFIG_FILES)
-$(CONFIG_FILES):
-	@cargo run -- -f $@ --validate-only
+validate:
+	@tools/validate-configs.sh

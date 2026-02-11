@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
@@ -496,13 +496,16 @@ impl TryFrom<(proto::agent::Protocol, Option<&proto::agent::TlsConfig>)> for Lis
 	}
 }
 
-impl TryFrom<&proto::agent::Bind> for Bind {
-	type Error = ProtoError;
-
-	fn try_from(s: &proto::agent::Bind) -> Result<Self, Self::Error> {
+impl Bind {
+	pub fn try_from_xds(s: &proto::agent::Bind, ipv6_enabled: bool) -> Result<Self, ProtoError> {
+		let address = if cfg!(target_family = "unix") && ipv6_enabled {
+			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), s.port as u16)
+		} else {
+			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), s.port as u16)
+		};
 		Ok(Self {
 			key: s.key.clone().into(),
-			address: SocketAddr::from((IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]), s.port as u16)),
+			address,
 			listeners: Default::default(),
 			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,

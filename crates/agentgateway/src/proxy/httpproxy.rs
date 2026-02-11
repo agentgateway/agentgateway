@@ -1,3 +1,4 @@
+use rand::RngExt;
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
@@ -10,7 +11,6 @@ use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
-use rand::Rng;
 use rand::seq::IndexedRandom;
 use tracing::{debug, trace};
 use types::agent::*;

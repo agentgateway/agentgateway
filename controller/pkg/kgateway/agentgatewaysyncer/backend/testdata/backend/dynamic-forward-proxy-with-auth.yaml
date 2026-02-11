@@ -1,0 +1,30 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: dynamic-backend-with-auth
+spec:
+  dynamicForwardProxy: {}
+  policies:
+    auth:
+      key: sk-test-token
+---
+# Output
+output:
+- backend:
+    dynamic: {}
+    inlinePolicies:
+    - auth:
+        key:
+          secret: sk-test-token
+    key: default/dynamic-backend-with-auth
+    name:
+      name: dynamic-backend-with-auth
+      namespace: default
+status:
+  conditions:
+  - lastTransitionTime: fake
+    message: Backend successfully accepted
+    reason: Accepted
+    status: "True"
+    type: Accepted

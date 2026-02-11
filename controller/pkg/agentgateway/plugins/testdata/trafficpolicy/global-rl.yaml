@@ -1,0 +1,74 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: http
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          name: rl-svc
+          port: 4444
+        domain: "api-gateway"
+        descriptors:
+          - entries:
+              - name: user-agent
+                expression: 'request.headers["user-agent"]'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rl-svc
+  namespace: default
+spec:
+  ports:
+    - port: 4444
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/http:rl-global:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: http
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      remoteRateLimit:
+        descriptors:
+        - entries:
+          - key: user-agent
+            value: request.headers["user-agent"]
+        domain: api-gateway
+        target:
+          port: 4444
+          service:
+            hostname: rl-svc.default.svc.cluster.local
+            namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

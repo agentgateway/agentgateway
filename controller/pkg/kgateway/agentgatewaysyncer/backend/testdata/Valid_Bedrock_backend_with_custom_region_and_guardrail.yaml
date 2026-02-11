@@ -1,0 +1,13 @@
+ai:
+  providerGroups:
+  - providers:
+    - bedrock:
+        guardrailIdentifier: test-guardrail
+        guardrailVersion: "1.0"
+        model: anthropic.claude-3-haiku-20240307-v1:0
+        region: eu-west-1
+      name: backend
+key: test-ns/bedrock-backend-custom
+name:
+  name: bedrock-backend-custom
+  namespace: test-ns

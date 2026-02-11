@@ -934,6 +934,7 @@ async fn convert(
 				client.clone(),
 				idx,
 				l,
+				bind_name.clone(),
 				Some(frontend_policies.clone()),
 				gateway.clone(),
 			)
@@ -1028,6 +1029,7 @@ async fn convert_listener(
 	client: client::Client,
 	idx: usize,
 	l: LocalListener,
+	bind_key: Strng,
 	frontend_policies: Option<LocalFrontendPolicies>,
 	gateway: ListenerTarget,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
@@ -1082,7 +1084,8 @@ async fn convert_listener(
 		.unwrap_or_else(|| strng::format!("listener{}", idx));
 	let gateway_name = gateway.gateway_name.clone();
 	let gateway_namespace = gateway.gateway_namespace.clone();
-	let key: ListenerKey = strng::format!("{gateway_namespace}/{gateway_name}/{listener_name}");
+	let key: ListenerKey =
+		strng::format!("{gateway_namespace}/{gateway_name}/{bind_key}/{listener_name}");
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];

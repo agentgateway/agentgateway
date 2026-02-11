@@ -1,0 +1,21 @@
+ai:
+  providerGroups:
+  - providers:
+    - inlinePolicies:
+      - auth:
+          key:
+            secret: first-token
+      name: openai
+      openai:
+        model: gpt-4
+    - anthropic:
+        model: claude-3
+      inlinePolicies:
+      - auth:
+          key:
+            secret: second-token
+      name: anthropic
+key: test-ns/multipool-backend
+name:
+  name: multipool-backend
+  namespace: test-ns

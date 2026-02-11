@@ -1,0 +1,30 @@
+{{- $gateway := .Values.agentgateway }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kgateway.gateway.fullname" . }}
+  annotations:
+    {{- toYaml (merge
+      ($gateway.gatewayAnnotations| default dict)
+    ) | nindent 4 }}
+  labels:
+    {{- toYaml (merge
+      (include "kgateway.gateway.allLabels" . | fromYaml)
+    ) | nindent 4 }}
+spec:
+  type: LoadBalancer
+  {{- with $gateway.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  ports:
+  {{- range $p := $gateway.ports }}
+    - name: {{ $p.name | quote }}
+      protocol: {{ $p.protocol | quote }}
+      targetPort: {{ $p.port | int }}
+      port: {{ $p.port | int }}
+    {{- if $p.nodePort }}
+      nodePort: {{ $p.nodePort | int }}
+    {{- end }}
+  {{- end }}
+  selector:
+    {{- include "kgateway.gateway.selectorLabels" . | nindent 4 }}

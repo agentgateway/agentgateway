@@ -1,0 +1,641 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-basic
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      sni: example.com
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+        - name: client-cert
+      sni: api.example.com
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-ca
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+        - name: mtls
+      caCertificateRefs:
+        - name: ca-bundle
+      verifySubjectAltNames:
+        - "*.example.com"
+        - "api.example.com"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-insecure
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      insecureSkipVerify: All
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-insecure-hostname
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: ca-bundle
+      insecureSkipVerify: Hostname
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-alpn
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      alpnProtocols:
+        - h2
+        - http/1.1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tcp-keepalive
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tcp:
+      keepalive:
+        retries: 5
+        time: 60s
+        interval: 30s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tcp-timeout
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tcp:
+      connectTimeout: 5s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-ai-prompt
+spec:
+  targetRefs:
+    - group: "agentgateway.dev"
+      kind: AgentgatewayBackend
+      name: dummy
+  backend:
+    ai:
+      modelAliases:
+        fast: gpt-3.5-turbo
+        smart: gpt-4-turbo
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-auth-inline
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      key: "sk-test-token-12345"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-auth-secret
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    http:
+      maxBufferSize: 5242880
+      http1MaxHeaders: 150
+      http1IdleTimeout: 5m
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http2
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    http:
+      http2WindowSize: 65536
+      http2ConnectionWindowSize: 131072
+      http2FrameSize: 32768
+      http2KeepaliveInterval: 30s
+      http2KeepaliveTimeout: 10s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-tls
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    tls:
+      handshakeTimeout: 10s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-tcp
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    tcp:
+      keepalive:
+        retries: 10
+        time: 120s
+        interval: 60s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-transform
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    transformation:
+      request:
+        set:
+          - name: X-Custom-Header
+            value: '"custom-value"'
+        add:
+          - name: X-Request-ID
+            value: 'request.id'
+        remove:
+          - Authorization
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-body-transform
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    transformation:
+      request:
+        body: 'request.body + " modified"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extproc
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extProc:
+      backendRef:
+        name: ext-processor
+        namespace: default
+        kind: Service
+        port: 123
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      backendRef:
+        name: auth-server
+        kind: Service
+        port: 123
+      grpc:
+        contextExtensions:
+          env: production
+          region: us-west
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      grpc: {}
+      backendRef:
+        name: auth-server
+        kind: AgentgatewayBackend
+        group: agentgateway.dev
+      forwardBody:
+        maxSize: 1048576
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-local-requests
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      local:
+        - requests: 100
+          unit: Minutes
+          burst: 20
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-local-tokens
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      local:
+        - tokens: 10000
+          unit: Hours
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-global
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          name: ratelimit-service
+          kind: Service
+          port: 8080
+        domain: example.com
+        descriptors:
+          - entries:
+              - name: client-ip
+                expression: 'source.address'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-global-tokens
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          name: ratelimit-service
+          kind: Service
+          port: 8080
+        domain: example.com
+        descriptors:
+          - entries:
+              - name: user-id
+                expression: 'request.headers["x-user-id"]'
+            unit: Tokens
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-cors
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    cors:
+      allowOrigins:
+        - "https://example.com"
+        - "https://*.example.com"
+      allowMethods:
+        - GET
+        - POST
+        - PUT
+      allowHeaders:
+        - Content-Type
+        - Authorization
+      maxAge: 3600
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-csrf
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    csrf:
+      additionalOrigins:
+        - "https://trusted.example.com"
+        - "https://app.example.com:8443"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-timeouts
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    timeouts:
+      request: 30s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-access-log
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    accessLog:
+      filter: 'response.code >= 400'
+      attributes:
+        add:
+        - name: custom-field
+          expression: 'request.headers["x-custom"]'
+        remove:
+          - http.method
+#---
+#apiVersion: agentgateway.dev/v1alpha1
+#kind: AgentgatewayPolicy
+#metadata:
+#  name: traffic-tracing-http
+#spec:
+#  targetRefs:
+#    - group: gateway.networking.k8s.io
+#      kind: Gateway
+#      name: dummy
+#  frontend:
+#    tracing:
+#      backendRef:
+#        name: otel-collector
+#        kind: Service
+#        port: 4318
+#      protocol: HTTP
+#      randomSampling: '0.1'
+#      clientSampling: '1.0'
+#---
+#apiVersion: agentgateway.dev/v1alpha1
+#kind: AgentgatewayPolicy
+#metadata:
+#  name: traffic-tracing-grpc
+#spec:
+#  targetRefs:
+#    - group: gateway.networking.k8s.io
+#      kind: Gateway
+#      name: dummy
+#  frontend:
+#    tracing:
+#      backendRef:
+#        name: otel-collector
+#        kind: Service
+#        port: 4317
+#      protocol: GRPC
+#      randomSampling: 'false'
+#      clientSampling: 'true'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-gateway-phase
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    phase: PreRouting
+    transformation:
+      request:
+        set:
+          - name: X-Gateway
+            value: '"true"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-route-phase
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    phase: PostRouting
+    transformation:
+      request:
+        set:
+          - name: X-Route
+            value: '"true"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-combined
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tcp:
+      keepalive:
+        retries: 3
+        time: 30s
+        interval: 10s
+      connectTimeout: 3s
+    tls:
+      sni: backend.example.com
+      alpnProtocols:
+        - h2
+    auth:
+      secretRef:
+        name: backend-token
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-combined
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    tcp:
+      keepalive:
+        retries: 5
+        time: 60s
+        interval: 30s
+    tls:
+      handshakeTimeout: 15s
+    http:
+      maxBufferSize: 2097152
+      http1MaxHeaders: 100
+      http1IdleTimeout: 10m
+      http2WindowSize: 65536
+      http2ConnectionWindowSize: 131072
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-complex
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    transformation:
+      request:
+        set:
+          - name: X-Forwarded-Proto
+            value: '"https"'
+      response:
+        add:
+          - name: X-Response-Time
+            value: 'string(duration.milliseconds)'
+    extAuth:
+      backendRef:
+        name: auth-server
+        kind: Service
+        port: 8888
+      grpc: {}
+    rateLimit:
+      local:
+        - requests: 100
+          unit: Minutes
+          burst: 10
+    cors:
+      allowOrigins:
+        - "*"
+      allowMethods:
+        - GET
+        - POST
+      maxAge: 600
+    timeouts:
+      request: 30s
+  frontend:
+    accessLog:
+      filter: 'true'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-multi-ratelimit
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      local:
+        - requests: 1000
+          unit: Hours
+        - requests: 100
+          unit: Minutes
+        - requests: 10
+          unit: Seconds
+          burst: 5

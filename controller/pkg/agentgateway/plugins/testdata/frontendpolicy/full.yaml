@@ -1,0 +1,144 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  frontend:
+    tls:
+      alpnProtocols:
+      - custom
+      handshakeTimeout: 10s
+    tcp:
+      keepalive:
+        retries: 5
+        time: 60s
+        interval: 30s
+    http:
+      http2FrameSize: 17000
+      maxBufferSize: 1000
+    accessLog:
+      filter: 'response.code != 200'
+      attributes:
+        remove:
+        - response.code
+        add:
+          - expression: 'request.headers["user-agent"]'
+            name: http.useragent
+    tracing:
+      backendRef:
+        name: my-otel
+        namespace: some-other-ns
+        port: 4317
+      protocol: GRPC
+      clientSampling: "true"
+      randomSampling: "true"
+      resources:
+        - name: service.name
+          expression: "agent-gateway"
+      attributes:
+        remove:
+          - response.code
+        add:
+          - expression: 'request.headers["user-agent"]'
+            name: http.useragent
+
+---
+# Output
+output:
+- Policy:
+    frontend:
+      http:
+        http2FrameSize: 17000
+        maxBufferSize: 1000
+    key: frontend/default/agw:frontend-http:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+- Policy:
+    frontend:
+      tls:
+        alpn:
+          protocols:
+          - custom
+        handshakeTimeout: 10s
+    key: frontend/default/agw:frontend-tls:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+- Policy:
+    frontend:
+      tcp:
+        keepalives:
+          interval: 30s
+          retries: 5
+          time: 60s
+    key: frontend/default/agw:frontend-tcp:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+- Policy:
+    frontend:
+      logging:
+        fields:
+          add:
+          - expression: request.headers["user-agent"]
+            name: http.useragent
+          remove:
+          - response.code
+        filter: response.code != 200
+    key: frontend/default/agw:frontend-logging:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: 'failed to translate tracing backend ref: unable to find the Service
+        some-other-ns/my-otel'
+      reason: PartiallyValid
+      status: "True"
+      type: Accepted
+    controllerName: agentgateway.dev/agentgateway

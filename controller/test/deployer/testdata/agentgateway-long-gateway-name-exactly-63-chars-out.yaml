@@ -1,0 +1,191 @@
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/version: 1.0.0-ci1
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    kgateway: kube-gateway
+  name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+---
+apiVersion: v1
+data:
+  config.yaml: |
+    config: {}
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/version: 1.0.0-ci1
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    kgateway: kube-gateway
+  name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/version: 1.0.0-ci1
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    kgateway: kube-gateway
+  name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+spec:
+  ports:
+  - name: listener-8080
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+  type: LoadBalancer
+status:
+  loadBalancer: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    app.kubernetes.io/version: 1.0.0-ci1
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    kgateway: kube-gateway
+  name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+      app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+      gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        checksum/config: bd5a792abb7811a8cd7c81d8acfed9ae4be83332ee2972d4df458f37c4912c01
+        gateway.kgateway.dev/gateway-full-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+        prometheus.io/path: /metrics
+        prometheus.io/port: "15020"
+        prometheus.io/scrape: "true"
+      labels:
+        app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+        app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+        gateway.networking.k8s.io/gateway-class-name: agentgateway
+        gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+    spec:
+      containers:
+      - args:
+        - -f
+        - /config/config.yaml
+        env:
+        - name: TERMINATION_GRACE_PERIOD_SECONDS
+          value: "60"
+        - name: CONNECTION_MIN_TERMINATION_DEADLINE
+          value: 10s
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: RUST_BACKTRACE
+          value: "1"
+        - name: RUST_LOG
+          value: info
+        - name: XDS_ADDRESS
+          value: http://xds.cluster.local:9978
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: GATEWAY
+          value: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+        - name: CPU_LIMIT
+          valueFrom:
+            resourceFieldRef:
+              divisor: "1"
+              resource: limits.cpu
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: SERVICE_ACCOUNT
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
+        image: cr.agentgateway.dev/agentgateway:99.99.99
+        name: agentgateway
+        ports:
+        - containerPort: 15020
+          name: metrics
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: 15021
+          periodSeconds: 10
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10101
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /healthz/ready
+            port: 15021
+          periodSeconds: 1
+          successThreshold: 1
+          timeoutSeconds: 2
+        volumeMounts:
+        - mountPath: /config
+          name: config-volume
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /var/run/secrets/xds-tokens
+          name: xds-token
+          readOnly: true
+      securityContext:
+        sysctls:
+        - name: net.ipv4.ip_unprivileged_port_start
+          value: "0"
+      serviceAccountName: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - configMap:
+          name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+        name: config-volume
+      - name: xds-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: kgateway
+              expirationSeconds: 43200
+              path: xds-token
+      - emptyDir: {}
+        name: tmp
+status: {}

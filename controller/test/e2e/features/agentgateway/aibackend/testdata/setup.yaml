@@ -1,0 +1,144 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai
+  namespace: default
+spec:
+  ai:
+    provider:
+      openai:
+        model: gpt-4o-mini
+      host: 172.17.0.1
+      port: 9234
+  policies:
+    auth:
+      key: openai-key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: anthropic
+  namespace: default
+spec:
+  ai:
+    provider:
+      anthropic:
+        model: claude-sonnet-4@20250514
+      host: 172.17.0.1
+      port: 9234
+  policies:
+    auth:
+      key: anthropic-key
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gateway
+    namespace: agentgateway-base
+  rules:
+  - name: openai
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: openai
+    matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+  - name: anthropic-0
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: anthropic
+    matches:
+    - path:
+        type: PathPrefix
+        value: /v1/messages
+      headers:
+      - type: Exact
+        name: x-direction
+        value: request        
+  - name: anthropic-1
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: anthropic
+    matches:
+    - path:
+        type: PathPrefix
+        value: /v1/messages
+      headers:
+      - type: Exact
+        name: x-direction
+        value: response          
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: openai-prompt-guard
+  namespace: default
+spec:
+  targetRefs:
+  - group: agentgateway.dev
+    kind: AgentgatewayBackend
+    name: openai
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - response:
+            message: "request rejected"
+            statusCode: 403
+          regex:
+            action: Reject
+            matches:
+            - "credit card"
+        response:
+        - regex:
+            action: Reject
+            builtins:
+              - Ssn
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: anthropic-request-guardrails
+  namespace: default
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: anthropic
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - webhook:
+            backendRef:
+              name: ai-guardrails-webhook
+              port: 8000
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: anthropic-response-guardrails
+  namespace: default
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: anthropic
+  backend:
+    ai:
+      promptGuard:
+        response:
+        - webhook:
+            backendRef:
+              name: ai-guardrails-webhook
+              port: 8000

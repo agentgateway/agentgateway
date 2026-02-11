@@ -1,0 +1,10 @@
+ai:
+  providerGroups:
+  - providers:
+    - gemini:
+        model: gemini-pro
+      name: backend
+key: test-ns/gemini-backend
+name:
+  name: gemini-backend
+  namespace: test-ns

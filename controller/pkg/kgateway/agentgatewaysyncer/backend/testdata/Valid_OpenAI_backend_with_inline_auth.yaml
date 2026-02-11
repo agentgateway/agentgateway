@@ -1,0 +1,14 @@
+ai:
+  providerGroups:
+  - providers:
+    - name: backend
+      openai:
+        model: gpt-4
+inlinePolicies:
+- auth:
+    key:
+      secret: sk-test-token
+key: test-ns/openai-backend
+name:
+  name: openai-backend
+  namespace: test-ns

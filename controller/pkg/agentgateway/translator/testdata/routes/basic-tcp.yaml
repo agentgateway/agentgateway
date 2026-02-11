@@ -1,0 +1,135 @@
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: tcp-gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: foo
+      protocol: TCP
+      port: 8088
+    - name: bar
+      protocol: TCP
+      port: 8089
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: tcp-app-1
+  namespace: default
+spec:
+  parentRefs:
+    - name: tcp-gw
+      sectionName: foo
+  rules:
+    - backendRefs:
+        - name: infra-backend-v1
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: tcp-app-2
+  namespace: default
+spec:
+  parentRefs:
+    - name: tcp-gw
+      sectionName: bar
+  rules:
+    - backendRefs:
+        - name: infra-backend-v2
+          port: 8080
+---
+# Output
+output:
+- gateway:
+    Name: tcp-gw
+    Namespace: default
+  resource:
+    tcpRoute:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      key: default/tcp-app-1.0.foo
+      listenerKey: default/tcp-gw.foo
+      name:
+        kind: TCPRoute
+        name: tcp-app-1
+        namespace: default
+- gateway:
+    Name: tcp-gw
+    Namespace: default
+  resource:
+    tcpRoute:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v2.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      key: default/tcp-app-2.0.bar
+      listenerKey: default/tcp-gw.bar
+      name:
+        kind: TCPRoute
+        name: tcp-app-2
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1alpha2
+  kind: TCPRoute
+  metadata:
+    name: tcp-app-1
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: tcp-gw
+        namespace: default
+        sectionName: foo
+- apiVersion: gateway.networking.k8s.io/v1alpha2
+  kind: TCPRoute
+  metadata:
+    name: tcp-app-2
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: tcp-gw
+        namespace: default
+        sectionName: bar

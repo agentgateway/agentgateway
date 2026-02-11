@@ -1,0 +1,218 @@
+# For BackendTLSPolicy, we need a mapping from Backend --> Gateway, via a Route, so we need this boilerplate
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - backendRefs:
+        - name: infra-backend-v1
+          port: 443
+        - name: infra-backend-v2
+          port: 443
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: infra-backend-v1
+  namespace: default
+spec:
+  ports:
+    - name: https
+      port: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: test-tls
+  namespace: default
+spec:
+  targetRefs:
+    - name: infra-backend-v1
+      kind: Service
+      group: ""
+      sectionName: https
+  validation:
+    hostname: example.com
+    wellKnownCACertificates: System
+    subjectAltNames:
+      - type: "Hostname"
+        hostname: "dce.example.com"
+      - type: "URI"
+        uri: "spiffe://foo/bar"
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: test-tls-invalid
+  namespace: default
+spec:
+  targetRefs:
+    - name: infra-backend-v2
+      kind: Service
+      group: ""
+  validation:
+    hostname: example.com
+    caCertificateRefs:
+      - name: ca-cert-1
+        group: ""
+        kind: ConfigMap
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: default
+  name: ca-cert-1
+data:
+  ca.crt: |-
+    not valid!!!
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/test-gateway
+      port: 80
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/test-gateway
+      key: default/test-gateway.http
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 443
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      - backend:
+          port: 443
+          service:
+            hostname: infra-backend-v2.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      key: default/test-route.0.0.http
+      listenerKey: default/test-gateway.http
+      name:
+        kind: HTTPRoute
+        name: test-route
+        namespace: default
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: example.com
+          root: aW52YWxpZA==
+      key: default/test-tls-invalid:backend-tls:default/infra-backend-v2.default.svc.cluster.local
+      name:
+        kind: BackendTLSPolicy
+        name: test-tls-invalid
+        namespace: default
+      target:
+        service:
+          hostname: infra-backend-v2.default.svc.cluster.local
+          namespace: default
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: example.com
+          verifySubjectAltNames:
+          - dce.example.com
+          - spiffe://foo/bar
+      key: default/test-tls:backend-tls:default/infra-backend-v1.default.svc.cluster.local/443
+      name:
+        kind: BackendTLSPolicy
+        name: test-tls
+        namespace: default
+      target:
+        service:
+          hostname: infra-backend-v1.default.svc.cluster.local
+          namespace: default
+          port: 443
+- hostname: infra-backend-v1.default.svc.cluster.local
+  name: infra-backend-v1
+  namespace: default
+  ports:
+  - servicePort: 443
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: BackendTLSPolicy
+  metadata:
+    name: test-tls
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+      conditions:
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: BackendTLSPolicy
+  metadata:
+    name: test-tls-invalid
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+      conditions:
+      - lastTransitionTime: fake
+        message: 'certificate invalid: invalid ca.crt in ConfigMap default/ca-cert-1:
+          data does not contain any valid RSA or ECDSA certificates'
+        reason: NoValidCACertificate
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Certificate invalid: invalid ca.crt in ConfigMap default/ca-cert-1:
+          data does not contain any valid RSA or ECDSA certificates'
+        reason: InvalidCACertificateRef
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway

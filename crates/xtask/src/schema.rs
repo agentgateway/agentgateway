@@ -30,14 +30,14 @@ pub fn generate_schema() -> Result<()> {
 		let mut readme = format!("# {name} Schema\n\n");
 		let rule_path = format!("{xtask_path}/../../schema/{file}");
 		let o = if cfg!(target_os = "windows") {
-			let cmd_path: String = format!("{xtask_path}/../../common/scripts/schema-to-md.ps1");
+			let cmd_path: String = format!("{xtask_path}/../../tools/schema-to-md.ps1");
 			std::process::Command::new("powershell")
 				.arg("-Command")
 				.arg(cmd_path)
 				.arg(&rule_path)
 				.output()?
 		} else {
-			let cmd_path: String = format!("{xtask_path}/../../common/scripts/schema-to-md.sh");
+			let cmd_path: String = format!("{xtask_path}/../../tools/schema-to-md.sh");
 			std::process::Command::new(cmd_path)
 				.arg(&rule_path)
 				.output()?

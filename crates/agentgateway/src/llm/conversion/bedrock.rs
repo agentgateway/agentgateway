@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::RngExt;
 use tracing::trace;
 
 use crate::http::Response;
@@ -1132,7 +1132,7 @@ pub mod from_responses {
 
 	use bytes::Bytes;
 	use helpers::*;
-	use rand::Rng;
+	use rand::RngExt;
 	use responses::{
 		AssistantRole, ErrorObject, FunctionToolCall, IncompleteDetails, InputTokenDetails,
 		OutputContent, OutputItem, OutputMessage, OutputStatus, OutputTextContent, OutputTokenDetails,

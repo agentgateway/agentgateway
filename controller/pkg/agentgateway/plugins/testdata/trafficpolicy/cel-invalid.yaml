@@ -1,0 +1,52 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    phase: PostRouting
+    transformation:
+      request:
+        set:
+          - name: x-invalid-header
+            value: foolen_{{header("content-length")}}
+          - name: x-valid-header
+            value: "'foolen_' + request.headers['content-length']"
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:transformation:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      transformation:
+        request:
+          set:
+          - expression: '''foolen_'' + request.headers[''content-length'']'
+            name: x-valid-header
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: 'header value is not a valid CEL expression: foolen_{{header("content-length")}}'
+      reason: PartiallyValid
+      status: "True"
+      type: Accepted
+    controllerName: agentgateway.dev/agentgateway

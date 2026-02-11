@@ -1,0 +1,54 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend
+  namespace: default
+spec:
+  mcp:
+    targets:
+      - name: mcp-target
+        static:
+          host: mcp-app.default.svc.cluster.local
+          port: 8000
+          protocol: StreamableHTTP
+          path: override-sse
+
+---
+# Output
+output:
+- resource:
+    backend:
+      key: default/mcp-backend
+      mcp:
+        targets:
+        - backend:
+            backend: default/mcp-backend/mcp-target
+          name: mcp-target
+          path: override-sse
+          protocol: STREAMABLE_HTTP
+      name:
+        name: mcp-backend
+        namespace: default
+- resource:
+    backend:
+      key: default/mcp-backend/mcp-target
+      name:
+        name: mcp-backend
+        namespace: default
+      static:
+        host: mcp-app.default.svc.cluster.local
+        port: 8000
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

@@ -1,0 +1,110 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: external-service-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: example-gateway
+  hostnames:
+    - "external.example.com"
+  rules:
+    - backendRefs:
+        - name: external.example.com
+          kind: Hostname
+          group: networking.istio.io
+          port: 8080
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: external-service
+  namespace: default
+spec:
+  hosts:
+    - external.example.com
+  location: MESH_EXTERNAL
+  ports:
+    - number: 8080
+      name: http
+      protocol: HTTP
+  resolution: DNS
+  endpoints:
+    - address: external-backend.example.com
+
+---
+# Output
+output:
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/example-gateway
+      port: 80
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/example-gateway
+      key: default/example-gateway.http
+      name:
+        gatewayName: example-gateway
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: external.example.com
+            namespace: default
+        weight: 1
+      hostnames:
+      - external.example.com
+      key: default/external-service-route.0.0.http
+      listenerKey: default/example-gateway.http
+      name:
+        kind: HTTPRoute
+        name: external-service-route
+        namespace: default
+- canonicalName: external-service
+  canonicalRevision: latest
+  clusterId: Kubernetes
+  hostname: external-backend.example.com
+  name: external-service
+  namespace: default
+  services:
+    default/external.example.com:
+      ports:
+      - servicePort: 8080
+        targetPort: 8080
+  uid: Kubernetes/networking.istio.io/ServiceEntry/default/external-service/external-backend.example.com
+  workloadName: external-service
+  workloadType: POD
+- hostname: external.example.com
+  name: external-service
+  namespace: default
+  ports:
+  - appProtocol: HTTP11
+    servicePort: 8080
+    targetPort: 8080
+status: []

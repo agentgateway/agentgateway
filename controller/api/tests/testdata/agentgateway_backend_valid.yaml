@@ -1,0 +1,127 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: ai-simple
+spec:
+  ai:
+    provider:
+      openai: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: ai-full
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: openai-gpt4
+        openai: {}
+        policies:
+          ai:
+            modelAliases:
+              fast: gpt-5-nano
+              slow: gpt-4o
+            overrides:
+            - field: model
+              value: gpt-4
+            defaults:
+              - field: logit_bias
+                value: {"50256": -100}
+            prompt:
+              prepend:
+                - content: "be nice"
+                  role: system
+              append:
+                - content: "hello!"
+                  role: user
+            promptCaching:
+              cacheMessages: true
+              cacheSystem: true
+              minTokens: 1024
+            promptGuard:
+              request:
+              - regex:
+                  builtins:
+                  - CreditCard
+                  matches:
+                  - 'bad.*'
+                response:
+                  message: "regex rejected"
+              - openAIModeration:
+                  policies:
+                    tls:
+                      insecureSkipVerify: All
+              - webhook:
+                  backendRef:
+                    name: hello
+                    kind: Backend
+                    group: gateway.kgateway.dev
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-full
+spec:
+  mcp:
+    targets:
+    - name: everything
+      static:
+        host: example.com
+        port: 443
+        policies:
+          tls: {}
+          mcp:
+            authorization:
+              action: Deny
+              policy:
+                matchExpressions:
+                - 'mcp.tool.name == "hello"'
+    - name: k8s
+      selector:
+        namespaces:
+          matchLabels:
+            kubernetes.io/metadata.name: mcp-servers
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: static-full
+spec:
+  policies:
+    http:
+      version: HTTP2
+  static:
+    host: example.com
+    port: 443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: ai-providers
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: openai
+        openai:
+          model: gpt-4
+      - name: vertex
+        vertexai:
+          projectId: "123"
+          region: global
+      - name: azure
+        azureopenai:
+          endpoint: test
+      - name: anthropic
+        anthropic:
+          model: claude
+      - name: gemini
+        gemini:
+          model: xx
+      - name: local
+        openai:
+          model: ollama
+        host: localhost
+        port: 8443
+        path: /custom

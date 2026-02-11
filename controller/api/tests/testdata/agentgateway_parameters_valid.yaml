@@ -1,0 +1,8 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: shutdown-min-gt-max
+spec:
+  shutdown:
+    max: 0
+    min: 0

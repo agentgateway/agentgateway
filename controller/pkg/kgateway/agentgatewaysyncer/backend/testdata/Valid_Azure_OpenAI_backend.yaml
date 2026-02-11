@@ -1,0 +1,12 @@
+ai:
+  providerGroups:
+  - providers:
+    - azureopenai:
+        apiVersion: 2024-02-15-preview
+        host: endpoint-123.openai.azure.com
+        model: my-deployment
+      name: backend
+key: test-ns/azure-openai-backend
+name:
+  name: azure-openai-backend
+  namespace: test-ns

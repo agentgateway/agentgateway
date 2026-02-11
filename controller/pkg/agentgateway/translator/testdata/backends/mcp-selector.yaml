@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-svc
+  namespace: default
+  labels:
+    app: mcp-app
+spec:
+  selector:
+    test: test
+  ports:
+    - protocol: TCP
+      appProtocol: kgateway.dev/mcp
+      port: 80
+      targetPort: test
+    - protocol: TCP
+      appProtocol: kgateway.dev/mcp-sse
+      port: 90
+      targetPort: test-2
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend
+  namespace: default
+spec:
+  mcp:
+    targets:
+      - name: mcp-app
+        selector:
+          services:
+            matchLabels:
+              app: mcp-app
+---
+# Output
+output:
+- resource:
+    backend:
+      key: default/mcp-backend
+      mcp:
+        targets:
+        - backend:
+            port: 80
+            service:
+              hostname: example-svc.default.svc.cluster.local
+              namespace: default
+          name: example-svc-80
+          protocol: STREAMABLE_HTTP
+        - backend:
+            port: 90
+            service:
+              hostname: example-svc.default.svc.cluster.local
+              namespace: default
+          name: example-svc-90
+          protocol: SSE
+      name:
+        name: mcp-backend
+        namespace: default
+- hostname: example-svc.default.svc.cluster.local
+  name: example-svc
+  namespace: default
+  ports:
+  - servicePort: 80
+  - servicePort: 90
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
