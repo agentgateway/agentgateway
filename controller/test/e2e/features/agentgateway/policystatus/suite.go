@@ -4,7 +4,6 @@ package policystatus
 
 import (
 	"context"
-	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"

@@ -10,6 +10,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
+	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
 func buildMessageSendRequest(text string, id string) string {
@@ -51,9 +52,7 @@ func a2aHeaders() map[string]string {
 func (s *testingSuite) execCurlA2A(path string, headers map[string]string, body string) (string, error) {
 	// Build curl options using the existing curl utilities
 	curlOpts := []curl.Option{
-		curl.WithHost(common.BaseGateway.Address),
 		curl.WithPath(path),
-		curl.Silent(),
 	}
 
 	// Add headers
@@ -66,12 +65,9 @@ func (s *testingSuite) execCurlA2A(path string, headers map[string]string, body 
 		curlOpts = append(curlOpts, curl.WithBody(body))
 	}
 
-	// Execute curl request
-	resp, err := curl.ExecuteRequest(curlOpts...)
-	if err != nil {
-		s.T().Logf("curl error: %v", err)
-		return "", err
-	}
+	resp := common.BaseGateway.SendWithResponse(s.T(), &matchers.HttpResponse{
+		StatusCode: 200,
+	}, curlOpts...)
 	defer resp.Body.Close()
 
 	// Read response body

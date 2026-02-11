@@ -105,6 +105,10 @@ spec:
       labels:
         app.kubernetes.io/name: ratelimit
     spec:
+      initContainers:
+      - name: wait-for-redis
+        image: docker.io/envoyproxy/ratelimit:3e085e5b
+        command: ["/bin/sh", "-c", "until nc -z redis 6379; do echo waiting for redis; sleep .1; done"]
       containers:
       - name: ratelimit
         image: docker.io/envoyproxy/ratelimit:3e085e5b
