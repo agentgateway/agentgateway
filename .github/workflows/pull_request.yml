@@ -128,7 +128,52 @@ jobs:
       run: ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
       run: |
-        CGO_ENABLED=0 go test -tags=e2e -v ./test/e2e/tests -run '^TestAgentgatewayIntegration'
+        CGO_ENABLED=0 go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
     - name: Summary
       run: |
+        echo '# E2E Timings\n'
+        cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
+
+  controller-conformance:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        # Github cache will restore from 'main' OR the current branch.
+        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
+        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - uses: actions/setup-go@v6
+      with:
+        go-version: '1.25.7'
+        cache-dependency-path: |
+          **/*.sum
+          .github/workflows/cache-e2e
+    - name: Set Path
+      run: |
+        echo "./tools" >> $GITHUB_PATH
+    - name: Setup
+      run: ./controller/test/setup/setup-kind-ci.sh
+    - name: Conformance
+      run: |
+        make -C controller conformance
+    - name: Summary
+      run: |
+        function cat-yamls () {
+          argc=$#
+          argv=("$@")
+          for ((j=1; j<argc; j++ )) do
+          cat "${argv[j]}"
+          echo -e "\n---"
+          done
+          cat "${argv[argc]}"
+        }
+
+        echo '\n# Conformance Reports\n\n```yaml'
+        cat-yamls controller/_test/conformance/*.yaml
+        echo '```\n'
+        echo '# Conformance Timings\n'
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
