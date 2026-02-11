@@ -289,6 +289,25 @@ export function renderRemoteRateLimitForm({ data, onChange }: FormRendererProps)
         required
       />
 
+      <div className="space-y-2">
+        <Label htmlFor="failureMode">Failure Mode</Label>
+        <p className="text-sm text-muted-foreground">
+          Controls behavior when the rate limit service is unavailable or returns an error.
+        </p>
+        <Select
+          value={data.failureMode || "failOpen"}
+          onValueChange={(value) => onChange({ ...data, failureMode: value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select failure mode" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="failOpen">Fail Open (allow requests through)</SelectItem>
+            <SelectItem value="failClosed">Fail Closed (deny requests with 500)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="space-y-3">
         <Label>Rate Limit Descriptors</Label>
         <p className="text-sm text-muted-foreground">
