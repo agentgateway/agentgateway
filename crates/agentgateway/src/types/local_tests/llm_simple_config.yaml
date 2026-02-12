@@ -1,0 +1,16 @@
+llm:
+  models:
+  - name: claude-3-haiku
+    provider:
+      anthropic:
+        model: claude-3-5-haiku-20241022
+    params:
+      apiKey: "sk-123"
+  #    guardrails: ...
+  #    additionalHeaders: ...
+  - name: thinking
+    provider:
+      anthropic: {}
+    params:
+      model: claude-sonnet-4-5-20250929
+      apiKey: "$ANTHROPIC_API_KEY"
