@@ -1,7 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
-assertion_line: 51
-description: "Config normalization test for basic: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+description: "Config normalization test for mcp: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
 - key: bind/3000
@@ -27,13 +26,19 @@ binds:
           backends:
           - weight: 1
             backend: /ns/name/bind/3000/listener0/default/route0/backend0
+            inlinePolicies:
+            - mcpAuthorization:
+                rules:
+                  allow:
+                  - mcp.tool.name == "echo"
+                  - jwt.sub == "test-user" && mcp.tool.name == "add"
+                  - mcp.tool.name == "printEnv" && jwt.nested.key == "value"
+                  deny: []
           inlinePolicies:
           - cors:
               allowCredentials: false
               allowHeaders:
-              - mcp-protocol-version
-              - content-type
-              - cache-control
+              - '*'
               allowOrigins:
               - '*'
               maxAge: null
@@ -41,16 +46,28 @@ binds:
 policies: []
 backends:
 - backend:
+    host:
+      name: mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
+      namespace: ''
+      target: example.com:443
+  inlinePolicies:
+  - backendTLS: null
+- backend:
     mcp:
       name: ns/name/bind/3000/listener0/default/route0/backend0
       namespace: ''
       target:
         targets:
-        - name: everything
+        - name: stdio
           stdio:
             cmd: npx
             args:
             - '@modelcontextprotocol/server-everything'
+        - name: remote
+          mcp:
+            backend:
+              backend: /mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
+            path: /mcp
         stateful: true
         alwaysUsePrefix: false
 workloads: []

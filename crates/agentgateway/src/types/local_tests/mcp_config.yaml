@@ -20,7 +20,10 @@ binds:
       backends:
       - mcp:
           targets:
-          - name: everything
+          - name: stdio
             stdio:
               cmd: npx
               args: ["@modelcontextprotocol/server-everything"]
+          - name: remote
+            mcp:
+              host: https://example.com:443/mcp

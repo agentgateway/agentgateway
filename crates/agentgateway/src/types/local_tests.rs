@@ -58,11 +58,11 @@ async fn test_basic_config() {
 }
 
 #[tokio::test]
-async fn test_authorization_config() {
-	test_config_parsing("authorization").await;
+async fn test_mcp_config() {
+	test_config_parsing("mcp").await;
 }
 
 #[tokio::test]
-async fn test_multiplex_config() {
-	test_config_parsing("multiplex").await;
+async fn test_llm_config() {
+	test_config_parsing("llm").await;
 }

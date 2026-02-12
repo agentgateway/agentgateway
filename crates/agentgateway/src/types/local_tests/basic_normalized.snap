@@ -1,25 +1,32 @@
 ---
-source: crates/agentgateway/src/types/local.rs
+source: crates/agentgateway/src/types/local_tests.rs
 description: "Config normalization test for basic: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
 - key: bind/3000
   address: '[::]:3000'
+  protocol: http
+  tunnelProtocol: direct
   listeners:
-    listener0/bind/3000:
-      key: listener0/bind/3000
-      name: listener0
-      gatewayName: bind/3000
+    ns/name/bind/3000/listener0:
+      key: ns/name/bind/3000/listener0
+      gatewayName: name
+      gatewayNamespace: ns
+      listenerName: listener0
       hostname: ''
       protocol: HTTP
       routes:
-        listener0/bind/3000/route0/default:
-          key: listener0/bind/3000/route0/default
-          routeName: route0
+        ns/name/bind/3000/listener0/default/route0:
+          key: ns/name/bind/3000/listener0/default/route0
+          name: route0
+          namespace: default
           matches:
           - path:
               pathPrefix: /
-          filters:
+          backends:
+          - weight: 1
+            backend: /ns/name/bind/3000/listener0/default/route0/backend0
+          inlinePolicies:
           - cors:
               allowCredentials: false
               allowHeaders:
@@ -29,23 +36,21 @@ binds:
               allowOrigins:
               - '*'
               maxAge: null
-          backends:
-          - weight: 1
-            backend: listener0/bind/3000/route0/default
-          policies:
-            timeout: {}
-            retry: null
       tcpRoutes: {}
 policies: []
 backends:
-- mcp:
-    name: listener0/bind/3000/route0/default
-    target:
-      targets:
-      - name: everything
-        stdio:
-          cmd: npx
-          args:
-          - '@modelcontextprotocol/server-everything'
+- backend:
+    mcp:
+      name: ns/name/bind/3000/listener0/default/route0/backend0
+      namespace: ''
+      target:
+        targets:
+        - name: everything
+          stdio:
+            cmd: npx
+            args:
+            - '@modelcontextprotocol/server-everything'
+        stateful: true
+        alwaysUsePrefix: false
 workloads: []
 services: []
