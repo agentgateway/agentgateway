@@ -161,18 +161,22 @@ jobs:
         make -C controller all-conformance
     - name: Summary
       run: |
-        function cat-yamls () {
-          argc=$#
-          argv=("$@")
-          for ((j=1; j<argc; j++ )) do
-          cat "${argv[j]}"
+        cat-yamls () {
+          local files=("$@")
+          local count=$#
+          
+          for ((i=0; i<count-1; i++)); do
+          cat "${files[i]}"
           echo -e "\n---"
           done
-          cat "${argv[argc]}"
+          
+          if [ $count -gt 0 ]; then
+          cat "${files[count-1]}"
+          fi
         }
 
-        echo '\n# Conformance Reports\n\n```yaml'
-        cat-yamls controller/_test/conformance/*.yaml
-        echo '```\n'
-        echo '# Conformance Timings\n'
+        echo -e '\n# Conformance Reports\n\n```yaml'
+        cat-yamls ./controller/_test/conformance/*.yaml
+        echo -e '```\n'
+        echo -e '# Conformance Timings\n'
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY

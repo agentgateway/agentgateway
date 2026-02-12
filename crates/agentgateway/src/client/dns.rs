@@ -196,7 +196,7 @@ async fn sleep_until_expired(valid_until: Instant, respect_small_value: bool) {
 	const MINIMUM_TTL: Duration = Duration::from_secs(5);
 	let minimum = Instant::now() + MINIMUM_TTL;
 
-	let deadline = if respect_small_value ||valid_until >= minimum {
+	let deadline = if respect_small_value || valid_until >= minimum {
 		valid_until
 	} else {
 		minimum
