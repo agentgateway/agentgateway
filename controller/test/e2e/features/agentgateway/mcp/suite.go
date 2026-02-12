@@ -199,6 +199,7 @@ func (s *testingSuite) runDynamicRoutingCase(clientName string, routeHeaders map
 		100*time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, 1*time.Second)
 
 	// Get full response for logging + session extraction
+	// nolint: bodyclose // false positive
 	resp, body, err := s.execCurlMCP(headers, initBody, "--max-time", "10")
 	s.Require().NoError(err, "%s initialize failed", label)
 	s.T().Logf("%s initialize body: %s", label, body)

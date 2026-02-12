@@ -161,14 +161,14 @@ func TestFetchJwksWithError(t *testing.T) {
 		default:
 			return false
 		}
-	}, 1*time.Second, 100*time.Millisecond)
+	}, 250*time.Millisecond, 10*time.Millisecond)
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	// check that we scheduled a retry
 	retry := f.schedule.Peek()
 	assert.NotNil(t, retry)
-	assert.WithinDuration(t, time.Now().Add(5*time.Second), retry.at, 2*time.Second)
+	assert.WithinDuration(t, time.Now().Add(200*time.Millisecond), retry.at, 2*time.Second)
 	assert.Equal(t, retry.retryAttempt, 1)
 	assert.Equal(t, retry.keysetSource.JwksURL, "https://test/jwks")
 }

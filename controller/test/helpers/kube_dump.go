@@ -1,13 +1,11 @@
 package helpers
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -59,44 +57,6 @@ func KubeDumpOnFail(ctx context.Context, kubectlCli *kubectl.Cli, outLog io.Writ
 	recordKubeDump(outDir, namespaces...)
 
 	fmt.Printf("Finished dumping kubernetes state (%v)\n", time.Since(t0))
-}
-
-func recordDockerState(f *os.File) {
-	defer f.Close()
-
-	dockerCmd := exec.Command("docker", "ps")
-
-	dockerState := &bytes.Buffer{}
-
-	dockerCmd.Stdout = dockerState
-	dockerCmd.Stderr = dockerState
-	err := dockerCmd.Run()
-	if err != nil {
-		f.WriteString("*** Unable to get docker state ***. Reason: " + err.Error() + " \n")
-		return
-	}
-	f.WriteString("*** Docker state ***\n")
-	f.WriteString(dockerState.String() + "\n")
-	f.WriteString("*** End Docker state ***\n")
-}
-
-func recordProcessState(f *os.File) {
-	defer f.Close()
-
-	psCmd := exec.Command("ps", "-auxf")
-
-	psState := &bytes.Buffer{}
-
-	psCmd.Stdout = psState
-	psCmd.Stderr = psState
-	err := psCmd.Run()
-	if err != nil {
-		f.WriteString("unable to get process state. Reason: " + err.Error() + " \n")
-		return
-	}
-	f.WriteString("*** Process state ***\n")
-	f.WriteString(psState.String() + "\n")
-	f.WriteString("*** End Process state ***\n")
 }
 
 func recordKubeState(ctx context.Context, kubectlCli *kubectl.Cli, f *os.File) {
@@ -165,7 +125,6 @@ func recordPods(podDir, namespace string) error {
 	}
 	g := errgroup.Group{}
 	for _, pod := range pods {
-
 		g.Go(func() error {
 			logs, errOutput, err := kubeLogs(namespace, pod)
 			// store any error running the log command to return later

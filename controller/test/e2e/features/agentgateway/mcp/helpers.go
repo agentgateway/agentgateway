@@ -1,5 +1,6 @@
 //go:build e2e
 
+// nolint: bodyclose // Too many false positives to handle
 package mcp
 
 import (
