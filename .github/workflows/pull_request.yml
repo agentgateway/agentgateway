@@ -13,6 +13,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CI: true
+  RUST_VERSION: "1.93.1"
+  GO_VERSION: "1.25.7"
 
 jobs:
   #### Proxy jobs ####
@@ -24,7 +26,9 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "${{ env.RUST_VERSION }}"
     - uses: Swatinem/rust-cache@v2
       # Github cache is too tiny to handle the full matrix :-(
       if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -47,7 +51,9 @@ jobs:
       with:
         node-version: 23
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "${{ env.RUST_VERSION }}"
     - uses: Swatinem/rust-cache@v2
       with:
         # Github cache will restore from 'main' OR the current branch.
@@ -84,7 +90,7 @@ jobs:
     - uses: actions/checkout@v6
     - uses: actions/setup-go@v6
       with:
-        go-version: '1.25.7'
+        go-version: "${{ env.GO_VERSION }}"
         cache-dependency-path: |
           **/*.sum
           .github/workflows/cache-lint
@@ -97,7 +103,7 @@ jobs:
     - uses: actions/checkout@v6
     - uses: actions/setup-go@v6
       with:
-        go-version: '1.25.7'
+        go-version: "${{ env.GO_VERSION }}"
         cache-dependency-path: |
           **/*.sum
           .github/workflows/cache-test
@@ -112,7 +118,9 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "${{ env.RUST_VERSION }}"
     - uses: Swatinem/rust-cache@v2
       with:
         # Github cache will restore from 'main' OR the current branch.
@@ -121,7 +129,7 @@ jobs:
         save-if: ${{ github.ref == 'refs/heads/main' }}
     - uses: actions/setup-go@v6
       with:
-        go-version: '1.25.7'
+        go-version: "${{ env.GO_VERSION }}"
         cache-dependency-path: |
           **/*.sum
           .github/workflows/cache-e2e
@@ -156,7 +164,9 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "${{ env.RUST_VERSION }}"
     - uses: Swatinem/rust-cache@v2
       with:
         # We only read the cache from 'E2E' job, since they should have identical cache.
@@ -164,7 +174,7 @@ jobs:
         shared-key: "controller-e2e" # Pull E2E job's cache
     - uses: actions/setup-go@v6
       with:
-        go-version: '1.25.7'
+        go-version: "${{ env.GO_VERSION }}"
         cache-dependency-path: |
           **/*.sum
           .github/workflows/cache-e2e
