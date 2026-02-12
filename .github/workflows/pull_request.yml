@@ -106,6 +106,12 @@ jobs:
   controller-e2e:
     runs-on: ubuntu-latest
     steps:
+    - name: Collect Workflow Telemetry
+      uses: catchpoint/workflow-telemetry-action@v2
+      with:
+        comment_on_pr: false
+    - uses: alexellis/setup-arkade@master
+    - uses: self-actuated/vmmeter-action@master
     - uses: actions/checkout@v6
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -137,6 +143,10 @@ jobs:
   controller-conformance:
     runs-on: ubuntu-latest
     steps:
+    - name: Collect Workflow Telemetry
+      uses: catchpoint/workflow-telemetry-action@v2
+      with:
+        comment_on_pr: false
     - uses: actions/checkout@v6
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -175,8 +185,8 @@ jobs:
           fi
         }
 
-        echo -e '\n# Conformance Reports\n\n```yaml'
-        cat-yamls ./controller/_test/conformance/*.yaml
-        echo -e '```\n'
-        echo -e '# Conformance Timings\n'
+        echo -e '\n# Conformance Reports\n\n```yaml' >> $GITHUB_STEP_SUMMARY
+        cat-yamls ./controller/_test/conformance/*.yaml >> $GITHUB_STEP_SUMMARY
+        echo -e '```\n' >> $GITHUB_STEP_SUMMARY
+        echo -e '# Conformance Timings\n' >> $GITHUB_STEP_SUMMARY
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
