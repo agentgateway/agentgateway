@@ -206,11 +206,11 @@ function step_push_go_controller_to_local_registry() {
 }
 
 function step_build_proxy_binary() {
-   (cd "${REPO_ROOT}" && TIMINGS=true DRY_RUN=true ./tools/proxy-dev-build quick-release)
+   (cd "${REPO_ROOT}" && TIMINGS=true DRY_RUN=true ./tools/proxy-dev-build ci)
 }
 
 function step_push_proxy_to_local_registry() {
-   (cd "${REPO_ROOT}" && ./tools/proxy-dev-build quick-release)
+   (cd "${REPO_ROOT}" && ./tools/proxy-dev-build ci)
 }
 
 function step_deploy_helm() {

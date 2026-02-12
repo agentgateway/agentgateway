@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   CI: true
@@ -106,12 +110,6 @@ jobs:
   controller-e2e:
     runs-on: ubuntu-latest
     steps:
-    - name: Collect Workflow Telemetry
-      uses: whywaita/workflow-telemetry-action@use_quickchart
-      with:
-        comment_on_pr: false
-    - uses: alexellis/setup-arkade@master
-    - uses: self-actuated/vmmeter-action@master
     - uses: actions/checkout@v6
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -135,6 +133,13 @@ jobs:
     - name: E2E
       run: |
         CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
+    - name: Archive bug report directory on failure
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: bug-report
+        path: ./controller/_test/bug_report/kind
+        retention-days: 2
     - name: Upload cargo timings
       uses: actions/upload-artifact@v4
       with:
@@ -149,10 +154,6 @@ jobs:
   controller-conformance:
     runs-on: ubuntu-latest
     steps:
-    - name: Collect Workflow Telemetry
-      uses: whywaita/workflow-telemetry-action@use_quickchart
-      with:
-        comment_on_pr: false
     - uses: actions/checkout@v6
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
