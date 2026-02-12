@@ -241,7 +241,13 @@ inherits = "release"
 codegen-units = 16
 lto = false
 incremental = true
-debug = "full"
+
+# For CI, optimize all dependencies since they are cached. Leave workspace packages, which are uncached,
+[profile.ci]
+inherits = "quick-release"
+opt-level = 1
+[profile.ci.package."*"]
+opt-level = 3
 
 [profile.release]
 codegen-units = 1

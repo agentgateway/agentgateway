@@ -280,7 +280,10 @@ function main() {
   (await $PID_KIND && run_step "deploy-gateway-api" step_setup_gateway_api) & PID_GATEWAY_API=$!
   (await $PID_GATEWAY_API && run_step "deploy-helm" step_deploy_helm "$@") &
 
-  wait
+  # Wait each one, not just a raw `wait`, to ensure we fail on errors
+  for pid in $(jobs -p); do
+    wait $pid
+  done
 }
 
 main "$@"
