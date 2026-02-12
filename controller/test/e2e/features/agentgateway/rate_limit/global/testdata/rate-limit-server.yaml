@@ -108,7 +108,7 @@ spec:
       initContainers:
       - name: wait-for-redis
         image: docker.io/envoyproxy/ratelimit:3e085e5b
-        command: ["/bin/sh", "-c", "until nc -z redis 6379; do echo waiting for redis; sleep .1; done"]
+        command: ["/bin/sh", "-c", "until timeout 1 nc -z redis 6379; do echo waiting for redis; sleep .1; done"]
       containers:
       - name: ratelimit
         image: docker.io/envoyproxy/ratelimit:3e085e5b
