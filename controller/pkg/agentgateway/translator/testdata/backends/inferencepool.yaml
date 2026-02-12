@@ -160,7 +160,8 @@ output:
         service:
           hostname: gateway-pool.default.inference.cluster.local
           namespace: default
-- hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+- canonical: true
+  hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
   name: gateway-pool-endpoint-picker
   namespace: default
   ports:

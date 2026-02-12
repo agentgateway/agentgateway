@@ -160,7 +160,8 @@ output:
           hostname: infra-backend-v1.default.svc.cluster.local
           namespace: default
           port: 443
-- hostname: infra-backend-v1.default.svc.cluster.local
+- canonical: true
+  hostname: infra-backend-v1.default.svc.cluster.local
   name: infra-backend-v1
   namespace: default
   ports:

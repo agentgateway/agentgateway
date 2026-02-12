@@ -29,7 +29,8 @@ output:
           hostname: a2a-agent.default.svc.cluster.local
           namespace: default
           port: 9090
-- hostname: a2a-agent.default.svc.cluster.local
+- canonical: true
+  hostname: a2a-agent.default.svc.cluster.local
   name: a2a-agent
   namespace: default
   ports:

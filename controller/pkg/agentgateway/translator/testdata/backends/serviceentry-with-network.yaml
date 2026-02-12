@@ -222,6 +222,7 @@ output:
   uid: NetworkGateway/network2/192.168.20.1/15008
 - addresses:
   - address: 8PAACg==
+  canonical: true
   hostname: api.example.com
   name: api-service
   namespace: default
