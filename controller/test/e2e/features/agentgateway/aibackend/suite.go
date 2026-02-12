@@ -14,7 +14,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/kagent-dev/mockllm"
 	"github.com/onsi/gomega"
-	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 

@@ -14,14 +14,14 @@ require (
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/mock v1.7.0-rc.1
-	github.com/golang/protobuf v1.5.4
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.7.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/kagent-dev/mockllm v0.0.3
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
-	github.com/openai/openai-go v1.12.0
+	github.com/openai/openai-go/v3 v3.21.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.67.5
@@ -30,6 +30,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.27.1
+	golang.org/x/net v0.50.0
 	google.golang.org/grpc v1.79.0
 	google.golang.org/protobuf v1.36.11
 	helm.sh/helm/v3 v3.20.0
@@ -48,8 +49,6 @@ require (
 	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260212193201-47e9d05050a6
 	sigs.k8s.io/yaml v1.6.0
 )
-
-require golang.org/x/net v0.50.0
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -79,7 +78,6 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.28 // indirect
 	github.com/nxadm/tail v1.4.11 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/openai/openai-go/v3 v3.15.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/otlptranslator v0.0.2 // indirect
 	github.com/redis/go-redis/v9 v9.14.1 // indirect
