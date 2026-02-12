@@ -1607,7 +1607,10 @@ pub fn build_service_call(
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
 
 	let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
-	let target_port = if let Some(&ep_target_port) = ep.port.get(&port) {
+	let target_port = if let Some(ov) = override_dest {
+		// use the explicit override. select_endpoint ensures this is actually in the endpoint
+		ov.port()
+	} else if let Some(&ep_target_port) = ep.port.get(&port) {
 		// prefer endpoint port mapping
 		ep_target_port
 	} else if svc_target_port > 0 {
@@ -1616,6 +1619,7 @@ pub fn build_service_call(
 	} else {
 		return Err(ProxyError::NoHealthyEndpoints);
 	};
+
 	let http_version_override = if svc.port_is_http2(port) {
 		Some(::http::Version::HTTP_2)
 	} else if svc.port_is_http1(port) {
@@ -1643,11 +1647,11 @@ pub fn build_service_call(
 			};
 
 			if let Some(gw_wl) = gateway_workload {
-				tracing::debug!(
-					source_network=%inputs.cfg.network,
-					dest_network=%wl.network,
-					gateway=?gw_addr,
-					"picked workload on remote network, using double hbone"
+				tracing::debug ! (
+				source_network = % inputs.cfg.network,
+				dest_network = % wl.network,
+				gateway = ? gw_addr,
+				"picked workload on remote network, using double hbone"
 				);
 				Some((gw_addr.clone(), gw_wl.identity()))
 			} else {
@@ -1658,10 +1662,10 @@ pub fn build_service_call(
 				None
 			}
 		} else {
-			tracing::warn!(
-				source_network=%inputs.cfg.network,
-				dest_network=%wl.network,
-				"workload on remote network but no gateway configured"
+			tracing::warn ! (
+			source_network = % inputs.cfg.network,
+			dest_network = % wl.network,
+			"workload on remote network but no gateway configured"
 			);
 			None
 		}
@@ -1671,10 +1675,10 @@ pub fn build_service_call(
 
 	// For double HBONE, use hostname-based target so the gateway can resolve it
 	let target = if network_gateway.is_some() {
-		tracing::debug!(
-			hostname=%svc.hostname,
-			port=%port,
-			"using hostname-based target for double hbone"
+		tracing::debug ! (
+		hostname = % svc.hostname,
+		port = % port,
+		"using hostname-based target for double hbone"
 		);
 		Target::Hostname(svc.hostname.clone(), port)
 	} else {
