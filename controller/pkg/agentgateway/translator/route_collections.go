@@ -132,10 +132,25 @@ func AgwRouteCollection(
 
 	ancestorBackends := krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{
 		krt.NewManyCollection(httpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute) []*utils.AncestorBackend {
-			return extractAncestorBackends(obj.Namespace, obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1.HTTPRouteRule) []gwv1.HTTPBackendRef {
+			return extractAncestorBackends(obj.ObjectMeta, "HTTPRoute", obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1.HTTPRouteRule) []gwv1.HTTPBackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("HTTPAncestors")...),
+		krt.NewManyCollection(grpcRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.GRPCRoute) []*utils.AncestorBackend {
+			return extractAncestorBackends(obj.ObjectMeta, "GRPCRoute", obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1.GRPCRouteRule) []gwv1.GRPCBackendRef {
+				return r.BackendRefs
+			})
+		}, krtopts.ToOptions("GRPCAncestors")...),
+		krt.NewManyCollection(tlsRouteCol, func(krtctx krt.HandlerContext, obj *gwv1a2.TLSRoute) []*utils.AncestorBackend {
+			return extractAncestorBackends(obj.ObjectMeta, "TLSRoute", obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1a2.TLSRouteRule) []gwv1a2.BackendRef {
+				return r.BackendRefs
+			})
+		}, krtopts.ToOptions("TLSAncestors")...),
+		krt.NewManyCollection(tcpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1a2.TCPRoute) []*utils.AncestorBackend {
+			return extractAncestorBackends(obj.ObjectMeta, "TCPRoute", obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1a2.TCPRouteRule) []gwv1a2.BackendRef {
+				return r.BackendRefs
+			})
+		}, krtopts.ToOptions("TCPAncestors")...),
 	})
 
 	return routes, routeAttachments, ancestorBackends
@@ -609,7 +624,14 @@ func (r RouteAttachment) Equals(other RouteAttachment) bool {
 	return r.From == other.From && r.To == other.To && r.ListenerName == other.ListenerName
 }
 
-func extractAncestorBackends[RT, BT any](ns string, prefs []gwv1.ParentReference, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {
+func extractAncestorBackends[RT, BT any](obj metav1.ObjectMeta, kind string, prefs []gwv1.ParentReference, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {
+	source := utils.TypedNamespacedName{
+		NamespacedName: types.NamespacedName{
+			Namespace: obj.Namespace,
+			Name:      obj.Name,
+		},
+		Kind: kind,
+	}
 	gateways := sets.Set[types.NamespacedName]{}
 	for _, r := range prefs {
 		ref := NormalizeReference(r.Group, r.Kind, wellknown.GatewayGVK)
@@ -617,7 +639,7 @@ func extractAncestorBackends[RT, BT any](ns string, prefs []gwv1.ParentReference
 			continue
 		}
 		gateways.Insert(types.NamespacedName{
-			Namespace: defaultString(r.Namespace, ns),
+			Namespace: defaultString(r.Namespace, obj.Namespace),
 			Name:      string(r.Name),
 		})
 	}
@@ -627,7 +649,7 @@ func extractAncestorBackends[RT, BT any](ns string, prefs []gwv1.ParentReference
 			ref, refNs, refName := GetBackendRef(b)
 			be := utils.TypedNamespacedName{
 				NamespacedName: types.NamespacedName{
-					Namespace: defaultString(refNs, ns),
+					Namespace: defaultString(refNs, obj.Namespace),
 					Name:      string(refName),
 				},
 				Kind: ref.Kind,
@@ -643,6 +665,7 @@ func extractAncestorBackends[RT, BT any](ns string, prefs []gwv1.ParentReference
 			res = append(res, &utils.AncestorBackend{
 				Gateway: gw,
 				Backend: be,
+				Source:  source,
 			})
 		}
 	}

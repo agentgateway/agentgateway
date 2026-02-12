@@ -190,12 +190,13 @@ func (n TypedNamespacedName) String() string {
 type AncestorBackend struct {
 	Gateway types.NamespacedName
 	Backend TypedNamespacedName
+	Source  TypedNamespacedName
 }
 
 func (a AncestorBackend) Equals(other AncestorBackend) bool {
-	return a.Gateway == other.Gateway && a.Backend == other.Backend
+	return a.Gateway == other.Gateway && a.Backend == other.Backend && a.Source == other.Source
 }
 
 func (a AncestorBackend) ResourceName() string {
-	return a.Gateway.String() + "/" + a.Backend.String()
+	return a.Source.String() + "/" + a.Gateway.String() + "/" + a.Backend.String()
 }
