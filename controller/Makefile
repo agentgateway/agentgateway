@@ -683,7 +683,8 @@ GIE_CONFORMANCE_REPORT_ARGS ?= \
 # The args to pass into the Gateway API Inference Extension conformance test suite.
 GIE_CONFORMANCE_ARGS := \
     -gateway-class=agentgateway \
-    $(GIE_CONFORMANCE_REPORT_ARGS)
+    $(GIE_CONFORMANCE_REPORT_ARGS) \
+    -skip-tests GatewayWeightedAcrossTwoInferencePools # We can pass this test but its broke (in the test, not our code) so it takes forever
 
 INFERENCE_CONFORMANCE_DIR := $(shell go list -m -f '{{.Dir}}' sigs.k8s.io/gateway-api-inference-extension)/conformance
 
