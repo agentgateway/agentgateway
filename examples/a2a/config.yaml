@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../schema/config.json
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
 config:
   logging:
     format: json

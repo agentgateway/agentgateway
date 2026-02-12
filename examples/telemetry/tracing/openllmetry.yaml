@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../../schema/local.json
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
 config:
   tracing:
     # Example connecting to a local OpenLLMetry backend
