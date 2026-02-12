@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# Linking is a bottleneck in compilation, but often not needed if we just want to check if things compile
+# This command wraps Go's "exec" which is called for each phase of compilation, and makes the link step do nothing.
 if [[ "${2}" == "-V=full" ]]; then
   "$@"
   exit 0
