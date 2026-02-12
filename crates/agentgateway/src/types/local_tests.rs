@@ -8,8 +8,7 @@ async fn test_config_parsing(test_name: &str) {
 	let test_dir = Path::new("src/types/local_tests");
 	let input_path = test_dir.join(format!("{}_config.yaml", test_name));
 
-	let yaml_str =
-		fs::read_to_string(&input_path).expect(&format!("Failed to read input file: {:?}", input_path));
+	let yaml_str = fs::read_to_string(&input_path).unwrap();
 
 	// Create a test client. Ideally we could have a fake one
 	let client = client::Client::new(
@@ -34,10 +33,7 @@ async fn test_config_parsing(test_name: &str) {
 		&yaml_str,
 	)
 	.await
-	.expect(&format!(
-		"Failed to normalize config from: {:?}",
-		input_path
-	));
+	.unwrap_or_else(|_| panic!("Failed to normalize config from: {:?}", input_path));
 
 	let output_yaml = serdes::yamlviajson::to_string(&normalized)
 		.expect("Failed to serialize NormalizedLocalConfig to YAML");

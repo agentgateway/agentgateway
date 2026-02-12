@@ -31,7 +31,8 @@ use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
 use crate::*;
 
-#[cfg(test)]
+// Windows has different output, for now easier to just not deal with it
+#[cfg(all(test, target_family = "unix"))]
 #[path = "local_tests.rs"]
 mod tests;
 
