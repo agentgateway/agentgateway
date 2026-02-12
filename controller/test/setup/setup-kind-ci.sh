@@ -22,6 +22,7 @@ KIND_NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.35.0}"
 KIND_REGISTRY_NAME="${KIND_REGISTRY_NAME:-kind-registry}"
 KIND_REGISTRY_PORT="${KIND_REGISTRY_PORT:-5000}"
 LOCAL_REGISTRY="localhost:${KIND_REGISTRY_PORT}"
+TEST_MODE="${TEST_MODE:-"unknown"}"
 
 CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-${LOCAL_REGISTRY}/agentgateway-controller:ci}"
 PROXY_IMAGE="${PROXY_IMAGE:-${LOCAL_REGISTRY}/agentgateway-proxy:ci}"
@@ -205,7 +206,7 @@ function step_push_go_controller_to_local_registry() {
 }
 
 function step_build_proxy_binary() {
-   (cd "${REPO_ROOT}" && DRY_RUN=true ./tools/proxy-dev-build quick-release)
+   (cd "${REPO_ROOT}" && TIMINGS=true DRY_RUN=true ./tools/proxy-dev-build quick-release)
 }
 
 function step_push_proxy_to_local_registry() {
@@ -238,6 +239,16 @@ function step_preload_images() {(
 
   wait
 )}
+
+function step_warm_test() {
+  if [[ "${TEST_MODE}" == "e2e" ]]; then
+    CGO_ENABLED=0 go test -tags=e2e -exec=true -toolexec=./tools/go-compile-without-link -vet=off ./controller/test/e2e/tests
+  elif [[ "${TEST_MODE}" == "conformance" ]]; then
+    # TODO
+    :
+  fi
+}
+
 function await() {
     for pid in "$@"; do
         tail --pid="$pid" -f /dev/null
@@ -251,6 +262,8 @@ function main() {
   run_step "create-kind-cluster" step_create_kind_cluster & PID_KIND=$!
   run_step "build-go-controller-binary" step_build_go_controller_binary & PID_BUILD_CONTROLLER=$!
   run_step "build-proxy-binary" step_build_proxy_binary & PID_BUILD_PROXY=$!
+
+  (await $PID_BUILD_CONTROLLER && run_step "warm-test" step_warm_test) &
 
   (await $PID_KIND && run_step "deploy-metallb" step_deploy_metallb) &
   (await $PID_KIND && run_step "create-local-kind-registry" step_create_local_kind_registry) & PID_REGISTRY=$!

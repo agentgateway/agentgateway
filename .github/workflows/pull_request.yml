@@ -107,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Collect Workflow Telemetry
-      uses: catchpoint/workflow-telemetry-action@v2
+      uses: whywaita/workflow-telemetry-action@use_quickchart
       with:
         comment_on_pr: false
     - uses: alexellis/setup-arkade@master
@@ -135,6 +135,12 @@ jobs:
     - name: E2E
       run: |
         CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
+    - name: Upload cargo timings
+      uses: actions/upload-artifact@v4
+      with:
+        name: cargo-timings
+        path: target/cargo-timings/cargo-timing*.html
+        retention-days: 2
     - name: Summary
       run: |
         echo '# E2E Timings\n'
@@ -144,7 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Collect Workflow Telemetry
-      uses: catchpoint/workflow-telemetry-action@v2
+      uses: whywaita/workflow-telemetry-action@use_quickchart
       with:
         comment_on_pr: false
     - uses: actions/checkout@v6
@@ -169,6 +175,12 @@ jobs:
     - name: Conformance
       run: |
         make -C controller all-conformance
+    - name: Upload cargo timings
+      uses: actions/upload-artifact@v4
+      with:
+        name: cargo-timings
+        path: target/cargo-timings/cargo-timing*.html
+        retention-days: 2
     - name: Summary
       run: |
         cat-yamls () {
