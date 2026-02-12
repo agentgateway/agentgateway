@@ -314,7 +314,6 @@ impl ExtProcInstance {
 	}
 
 	async fn send_request(&mut self, req: ProcessingRequest) -> Result<(), Error> {
-		tracing::error!("howardjohn: send req {req:#?}");
 		self.tx_req.send(req).await.map_err(|_| Error::RequestSend)
 	}
 

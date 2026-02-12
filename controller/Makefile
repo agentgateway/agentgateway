@@ -585,6 +585,7 @@ endif
 # The version of the k8s gateway api inference extension CRDs to install.
 # Managed by `make bump-gie`.
 GIE_CRD_VERSION ?= v1.3.0
+# When we are back on a release version instead of `main`, we can do this
 #GIE_CRD_VERSION ?= $(shell go list -m -f '{{.Version}}' sigs.k8s.io/gateway-api-inference-extension)
 
 .PHONY: gie-crds

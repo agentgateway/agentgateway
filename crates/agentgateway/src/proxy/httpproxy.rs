@@ -1647,11 +1647,11 @@ pub fn build_service_call(
 			};
 
 			if let Some(gw_wl) = gateway_workload {
-				tracing::debug ! (
-				source_network = % inputs.cfg.network,
-				dest_network = % wl.network,
-				gateway = ? gw_addr,
-				"picked workload on remote network, using double hbone"
+				tracing::debug!(
+					source_network = % inputs.cfg.network,
+					dest_network = % wl.network,
+					gateway = ? gw_addr,
+					"picked workload on remote network, using double hbone"
 				);
 				Some((gw_addr.clone(), gw_wl.identity()))
 			} else {
@@ -1675,10 +1675,10 @@ pub fn build_service_call(
 
 	// For double HBONE, use hostname-based target so the gateway can resolve it
 	let target = if network_gateway.is_some() {
-		tracing::debug ! (
-		hostname = % svc.hostname,
-		port = % port,
-		"using hostname-based target for double hbone"
+		tracing::debug!(
+			hostname = % svc.hostname,
+			port = % port,
+			"using hostname-based target for double hbone"
 		);
 		Target::Hostname(svc.hostname.clone(), port)
 	} else {
