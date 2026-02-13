@@ -687,15 +687,13 @@ GIE_CONFORMANCE_ARGS := \
     -gateway-class=agentgateway \
     $(GIE_CONFORMANCE_REPORT_ARGS)
 
-INFERENCE_CONFORMANCE_DIR := $(shell go list -m -f '{{.Dir}}' sigs.k8s.io/gateway-api-inference-extension/conformance)
-
 .PHONY: gie-conformance
 gie-conformance: gie-crds ## Run the Gateway API Inference Extension conformance suite
 	@mkdir -p $(TEST_ASSET_DIR)/conformance
 	CGO_ENABLED=0 go test -mod=mod -ldflags='$(LDFLAGS)' \
 	    -tags conformance \
 	    -timeout=25m \
-	    -v $(INFERENCE_CONFORMANCE_DIR) \
+	    -v $(shell go mod download && go list -m -f '{{.Dir}}' sigs.k8s.io/gateway-api-inference-extension/conformance) \
 	    -args $(GIE_CONFORMANCE_ARGS)
 
 # An alias to run both Gateway API and Inference Extension conformance tests.
