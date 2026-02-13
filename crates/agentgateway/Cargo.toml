@@ -173,6 +173,7 @@ divan.workspace = true
 insta.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
+test-with.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
 rmcp = { version = "0.14", features = [

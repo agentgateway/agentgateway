@@ -1,18 +1,20 @@
 use agent_core::telemetry::testing;
 use http::StatusCode;
 use serde_json::json;
-use tracing::warn;
 
 use crate::common::gateway::AgentGateway;
 
 // This module provides real LLM integration tests. These require API keys!
+// Tests are automatically ignored (skipped) at compile time if required
+// environment variables are not set. Set these variables before running:
+//
 // Example running all tests:
+//     AGENTGATEWAY_E2E=true \
 //     AZURE_HOST=xxx.azure.com \
 //     VERTEX_PROJECT=octo-386314 \
 //     GEMINI_API_KEY=`cat ~/.secrets/gemini` \
 //     ANTHROPIC_API_KEY=`cat ~/.secrets/anthropic` \
-//     OPENAI_API_KEY=`cat ~/.secrets/openai`
-//     AGENTGATEWAY_E2E=true \
+//     OPENAI_API_KEY=`cat ~/.secrets/openai` \
 //     cargo test --test integration tests::llm::
 //
 // Note: AGENTGATEWAY_E2E must be set to run any tests.
@@ -94,61 +96,54 @@ binds:
 
 mod openai {
 	use super::*;
+	#[test_with::env(AGENTGATEWAY_E2E, OPENAI_API_KEY)]
 	#[tokio::test]
 	async fn responses() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
+		let gw = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await;
 		send_responses(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, OPENAI_API_KEY)]
 	#[tokio::test]
 	async fn responses_stream() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
+		let gw = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await;
 		send_responses(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, OPENAI_API_KEY)]
 	#[tokio::test]
 	async fn completions() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
+		let gw = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await;
 		send_completions(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, OPENAI_API_KEY)]
 	#[tokio::test]
 	async fn completions_streaming() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
+		let gw = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await;
 		send_completions(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, OPENAI_API_KEY)]
 	#[tokio::test]
 	#[ignore] // TODO
 	async fn messages() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
+		let gw = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await;
 		send_messages(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, OPENAI_API_KEY)]
 	#[tokio::test]
 	#[ignore] // TODO
 	async fn messages_streaming() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await else {
-			return;
-		};
+		let gw = setup("openAI", "OPENAI_API_KEY", "gpt-4.1-nano").await;
 		send_messages(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, OPENAI_API_KEY)]
 	#[tokio::test]
 	async fn embeddings() {
-		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "text-embedding-3-small").await else {
-			return;
-		};
+		let gw = setup("openAI", "OPENAI_API_KEY", "text-embedding-3-small").await;
 		send_embeddings(&gw, None).await;
 	}
 }
@@ -156,76 +151,67 @@ mod openai {
 mod bedrock {
 	use super::*;
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn completions() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await;
 		send_completions(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn completions_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await;
 		send_completions(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn responses() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await;
 		send_responses(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn responses_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await;
 		send_responses(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn messages() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await;
 		send_messages(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn messages_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await;
 		send_messages(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn embeddings_titan() {
-		let Some(gw) = setup("bedrock", "", "amazon.titan-embed-text-v2:0").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "amazon.titan-embed-text-v2:0").await;
 		send_embeddings(&gw, None).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn embeddings_cohere() {
-		let Some(gw) = setup("bedrock", "", "cohere.embed-english-v3").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "cohere.embed-english-v3").await;
 		// Cohere does not respect overriding the dimension count
 		send_embeddings(&gw, Some(1024)).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E)]
 	#[tokio::test]
 	async fn token_count() {
-		let Some(gw) = setup("bedrock", "", "anthropic.claude-3-5-haiku-20241022-v1:0").await else {
-			return;
-		};
+		let gw = setup("bedrock", "", "anthropic.claude-3-5-haiku-20241022-v1:0").await;
 		send_anthropic_token_count(&gw).await;
 	}
 }
@@ -233,61 +219,54 @@ mod bedrock {
 mod anthropic {
 	use super::*;
 
+	#[test_with::env(AGENTGATEWAY_E2E, ANTHROPIC_API_KEY)]
 	#[tokio::test]
 	async fn completions() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
+		let gw = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await;
 		send_completions(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, ANTHROPIC_API_KEY)]
 	#[tokio::test]
 	async fn completions_streaming() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
+		let gw = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await;
 		send_completions(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, ANTHROPIC_API_KEY)]
 	#[tokio::test]
 	#[ignore]
 	async fn responses() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
+		let gw = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await;
 		send_responses(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, ANTHROPIC_API_KEY)]
 	#[tokio::test]
 	#[ignore]
 	async fn responses_streaming() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
+		let gw = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await;
 		send_responses(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, ANTHROPIC_API_KEY)]
 	#[tokio::test]
 	async fn messages() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
+		let gw = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await;
 		send_messages(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, ANTHROPIC_API_KEY)]
 	#[tokio::test]
 	async fn messages_streaming() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
+		let gw = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await;
 		send_messages(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, ANTHROPIC_API_KEY)]
 	#[tokio::test]
 	async fn token_count() {
-		let Some(gw) = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await else {
-			return;
-		};
+		let gw = setup("anthropic", "ANTHROPIC_API_KEY", "claude-3-haiku-20240307").await;
 		send_anthropic_token_count(&gw).await;
 	}
 }
@@ -295,19 +274,17 @@ mod anthropic {
 mod gemini {
 	use super::*;
 
+	#[test_with::env(AGENTGATEWAY_E2E, GEMINI_API_KEY)]
 	#[tokio::test]
 	async fn completions() {
-		let Some(gw) = setup("gemini", "GEMINI_API_KEY", "gemini-2.5-flash").await else {
-			return;
-		};
+		let gw = setup("gemini", "GEMINI_API_KEY", "gemini-2.5-flash").await;
 		send_completions(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, GEMINI_API_KEY)]
 	#[tokio::test]
 	async fn completions_streaming() {
-		let Some(gw) = setup("gemini", "GEMINI_API_KEY", "gemini-2.5-flash").await else {
-			return;
-		};
+		let gw = setup("gemini", "GEMINI_API_KEY", "gemini-2.5-flash").await;
 		send_completions(&gw, true).await;
 	}
 }
@@ -315,69 +292,61 @@ mod gemini {
 mod vertex {
 	use super::*;
 
+	#[test_with::env(AGENTGATEWAY_E2E, VERTEX_PROJECT)]
 	#[tokio::test]
 	async fn completions() {
-		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
-			return;
-		};
+		let gw = setup("vertex", "", "google/gemini-2.5-flash-lite").await;
 		send_completions(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, VERTEX_PROJECT)]
 	#[tokio::test]
 	async fn completions_to_anthropic() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
+		let gw = setup("vertex", "", "anthropic/claude-3-haiku").await;
 		send_completions(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, VERTEX_PROJECT)]
 	#[tokio::test]
 	#[ignore]
 	/// TODO(https://github.com/agentgateway/agentgateway/pull/800) support this
 	async fn completions_streaming_to_anthropic() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
+		let gw = setup("vertex", "", "anthropic/claude-3-haiku").await;
 		send_completions(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, VERTEX_PROJECT)]
 	#[tokio::test]
 	async fn completions_streaming() {
-		let Some(gw) = setup("vertex", "", "google/gemini-2.5-flash-lite").await else {
-			return;
-		};
+		let gw = setup("vertex", "", "google/gemini-2.5-flash-lite").await;
 		send_completions(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, VERTEX_PROJECT)]
 	#[tokio::test]
 	async fn messages() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
+		let gw = setup("vertex", "", "anthropic/claude-3-haiku").await;
 		send_messages(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, VERTEX_PROJECT)]
 	#[tokio::test]
 	async fn messages_streaming() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
+		let gw = setup("vertex", "", "anthropic/claude-3-haiku").await;
 		send_messages(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, VERTEX_PROJECT)]
 	#[tokio::test]
 	async fn embeddings() {
-		let Some(gw) = setup("vertex", "", "text-embedding-004").await else {
-			return;
-		};
+		let gw = setup("vertex", "", "text-embedding-004").await;
 		send_embeddings(&gw, None).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, VERTEX_PROJECT)]
 	#[tokio::test]
 	async fn token_count() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
-			return;
-		};
+		let gw = setup("vertex", "", "anthropic/claude-3-haiku").await;
 		send_anthropic_token_count(&gw).await;
 	}
 }
@@ -385,65 +354,48 @@ mod vertex {
 mod azureopenai {
 	use super::*;
 
+	#[test_with::env(AGENTGATEWAY_E2E, AZURE_HOST)]
 	#[tokio::test]
 	async fn completions() {
-		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
-			return;
-		};
+		let gw = setup("azureOpenAI", "", "gpt-4o-mini").await;
 		send_completions(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, AZURE_HOST)]
 	#[tokio::test]
 	async fn completions_streaming() {
-		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
-			return;
-		};
+		let gw = setup("azureOpenAI", "", "gpt-4o-mini").await;
 		send_completions(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, AZURE_HOST)]
 	#[tokio::test]
 	async fn responses() {
-		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
-			return;
-		};
+		let gw = setup("azureOpenAI", "", "gpt-4o-mini").await;
 		send_responses(&gw, false).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, AZURE_HOST)]
 	#[tokio::test]
 	async fn responses_stream() {
-		let Some(gw) = setup("azureOpenAI", "", "gpt-4o-mini").await else {
-			return;
-		};
+		let gw = setup("azureOpenAI", "", "gpt-4o-mini").await;
 		send_responses(&gw, true).await;
 	}
 
+	#[test_with::env(AGENTGATEWAY_E2E, AZURE_HOST)]
 	#[tokio::test]
 	async fn embeddings() {
-		let Some(gw) = setup("azureOpenAI", "", "text-embedding-3-small").await else {
-			return;
-		};
+		let gw = setup("azureOpenAI", "", "text-embedding-3-small").await;
 		send_embeddings(&gw, None).await;
 	}
 }
 
-async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
-	// Explicitly opt in to avoid accidentally using implicit configs
-	if !require_env("AGENTGATEWAY_E2E") {
-		return None;
-	}
-	if !env.is_empty() && !require_env("OPENAI_API_KEY") {
-		return None;
-	}
-	if provider == "vertex" && !require_env("VERTEX_PROJECT") {
-		return None;
-	}
-	if provider == "azureOpenAI" && !require_env("AZURE_HOST") {
-		return None;
-	}
-	let gw = AgentGateway::new(llm_config(provider, env, model))
+async fn setup(provider: &str, env: &str, model: &str) -> AgentGateway {
+	testing::setup_test_logging();
+
+	AgentGateway::new(llm_config(provider, env, model))
 		.await
-		.unwrap();
-	Some(gw)
+		.expect("AgentGateway::new should succeed when environment is properly configured")
 }
 
 fn assert_log(path: &str, streaming: bool, test_id: &str) {
@@ -508,15 +460,6 @@ fn assert_embeddings_log(path: &str, test_id: &str, expected: u64) {
 		enc_format, "float",
 		"unexpected encoding format: {enc_format}"
 	);
-}
-
-fn require_env(var: &str) -> bool {
-	testing::setup_test_logging();
-	let found = std::env::var(var).is_ok();
-	if !found {
-		warn!("environment variable {} not set, skipping test", var);
-	}
-	found
 }
 
 async fn send_completions(gw: &AgentGateway, stream: bool) {
