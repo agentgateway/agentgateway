@@ -54,10 +54,9 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *deployer.HelmCon
 	}
 
 	// Deep copy to avoid mutating the cached AgentgatewayParameters object.
-	// This mirrors the envoy path (DeepMergeGatewayParameters) which deep-copies
-	// src.Spec.Kube before merging. Without this, the first Apply (GatewayClass)
-	// can alias configs.Resources into res, and the second Apply (Gateway) would
-	// mutate the cached GatewayClass object when merging maps in-place.
+	// Without this, the first Apply (GatewayClass) can alias configs.Resources
+	// into res, and the second Apply (Gateway) would mutate the cached
+	// GatewayClass object when merging maps in-place.
 	configs := *a.params.Spec.AgentgatewayParametersConfigs.DeepCopy()
 	res := vals.Agentgateway.AgentgatewayParametersConfigs
 
