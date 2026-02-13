@@ -68,6 +68,9 @@ impl McpHttpClient {
 		// Capture resolved destination on first request if stateful
 		if self.stateful
 			&& self.pinned_dest.lock().unwrap().is_none()
+		// Only pin to services. Pinning to a specific IP for DNS resolution is not appropriate.
+		// With Service, we know there are replicas of the pod and we can pin to that.
+		&& let SimpleBackend::Service(_, _) = &*self.backend
 			&& let Some(resolved) = resp.extensions().get::<ResolvedDestination>()
 		{
 			self.pin_backend(*resolved);

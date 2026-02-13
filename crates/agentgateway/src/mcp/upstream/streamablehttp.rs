@@ -37,10 +37,10 @@ impl Client {
 
 	pub fn get_session_state(&self) -> Option<http::sessionpersistence::MCPSession> {
 		let session_id = self.session_id.load().clone()?;
-		let be = self.http_client.pinned_backend()?;
+		let backend = self.http_client.pinned_backend();
 		Some(http::sessionpersistence::MCPSession {
 			session: session_id.to_string(),
-			backend: be,
+			backend,
 		})
 	}
 
