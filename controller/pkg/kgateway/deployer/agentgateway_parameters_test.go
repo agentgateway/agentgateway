@@ -193,6 +193,66 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_RawConfig(t *testing.T)
 	assert.Equal(t, vals.Agentgateway.RawConfig.Raw, rawConfigJSON)
 }
 
+// TestAgentgatewayParametersApplier_ApplyToHelmValues_NoAliasing verifies that
+// applying GatewayClass AGWP followed by Gateway AGWP does not mutate the
+// cached GatewayClass object. This reproduces a bug where the first Apply
+// returned a pointer alias to configs.Resources, and the second Apply mutated
+// that alias via maps.Copy when merging requests/limits.
+func TestAgentgatewayParametersApplier_ApplyToHelmValues_NoAliasing(t *testing.T) {
+	// Simulate the cached GatewayClass AGWP with resource limits.
+	gatewayClassAGWP := &agentgateway.AgentgatewayParameters{
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+				Resources: &corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("512Mi"),
+					},
+				},
+			},
+		},
+	}
+
+	// Simulate the cached Gateway AGWP with resource requests.
+	gatewayAGWP := &agentgateway.AgentgatewayParameters{
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+				Resources: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("250m"),
+						corev1.ResourceMemory: resource.MustParse("128Mi"),
+					},
+				},
+			},
+		},
+	}
+
+	// Snapshot the original GatewayClass limits before merging.
+	origGWCLimits := gatewayClassAGWP.Spec.Resources.Limits.DeepCopy()
+
+	// Apply GatewayClass first, then Gateway — same order as GetValues.
+	vals := &deployer.HelmConfig{
+		Agentgateway: &deployer.AgentgatewayHelmGateway{},
+	}
+	NewAgentgatewayParametersApplier(gatewayClassAGWP).ApplyToHelmValues(vals)
+	NewAgentgatewayParametersApplier(gatewayAGWP).ApplyToHelmValues(vals)
+
+	// The merged result should have both the GWC limits and the GW requests.
+	require.NotNil(t, vals.Agentgateway.Resources)
+	assert.Equal(t, resource.MustParse("500m"), vals.Agentgateway.Resources.Limits[corev1.ResourceCPU],
+		"merged result should contain GWC CPU limit")
+	assert.Equal(t, resource.MustParse("250m"), vals.Agentgateway.Resources.Requests[corev1.ResourceCPU],
+		"merged result should contain GW CPU request")
+	assert.Equal(t, resource.MustParse("128Mi"), vals.Agentgateway.Resources.Requests[corev1.ResourceMemory],
+		"merged result should contain GW memory request")
+
+	// The cached GatewayClass object must NOT have been mutated.
+	assert.Equal(t, origGWCLimits, gatewayClassAGWP.Spec.Resources.Limits,
+		"cached GatewayClass Limits must not be mutated by subsequent Gateway merge")
+	assert.Nil(t, gatewayClassAGWP.Spec.Resources.Requests,
+		"cached GatewayClass Requests must remain nil")
+}
+
 func TestAgentgatewayParametersApplier_ApplyToHelmValues_RawConfigWithLogging(t *testing.T) {
 	// rawConfig has logging.format, but typed Logging.Format should take precedence
 	// (merging happens in helm template, but here we test both are passed through)
