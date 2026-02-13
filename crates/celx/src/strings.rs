@@ -2,17 +2,21 @@
 // under Apache 2.0 license (https://github.com/Kuadrant/wasm-shim/blob/main/LICENSE)
 // TODO: https://github.com/cel-rust/cel-rust/issues/103, have this upstreamed
 
-use ::cel::extractors::{Argument, This};
-use ::cel::{ExecutionError, FunctionContext, ResolveResult, Value};
 use cel::Context;
+use cel::extractors::{Argument, This};
 use cel::objects::StringValue;
+use cel::{ExecutionError, FunctionContext, ResolveResult, Value};
 
 pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("charAt", char_at);
+	ctx.add_function("endsWith", ends_with);
 	ctx.add_function("indexOf", index_of);
 	ctx.add_function("join", join);
 	ctx.add_function("lastIndexOf", last_index_of);
 	ctx.add_function("lowerAscii", lower_ascii);
+	ctx.add_function("startsWith", starts_with);
+	ctx.add_function("stripPrefix", strip_prefix);
+	ctx.add_function("stripSuffix", strip_suffix);
 	ctx.add_function("upperAscii", upper_ascii);
 	ctx.add_function("trim", trim);
 	ctx.add_function("replace", replace);
@@ -138,6 +142,54 @@ pub fn join<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<
 pub fn lower_ascii<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
 	let this: StringValue = this.load_value(ftx)?;
 	Ok(this.as_ref().to_ascii_lowercase().into())
+}
+
+pub fn starts_with<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	prefix: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let prefix: StringValue = prefix.load_value(ftx)?;
+	Ok(this.as_ref().starts_with(prefix.as_ref()).into())
+}
+
+pub fn ends_with<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	suffix: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let suffix: StringValue = suffix.load_value(ftx)?;
+	Ok(this.as_ref().ends_with(suffix.as_ref()).into())
+}
+
+pub fn strip_prefix<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	prefix: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let prefix: StringValue = prefix.load_value(ftx)?;
+	let stripped = this
+		.as_ref()
+		.strip_prefix(prefix.as_ref())
+		.unwrap_or(this.as_ref());
+	Ok(stripped.to_string().into())
+}
+
+pub fn strip_suffix<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	suffix: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let suffix: StringValue = suffix.load_value(ftx)?;
+	let stripped = this
+		.as_ref()
+		.strip_suffix(suffix.as_ref())
+		.unwrap_or(this.as_ref());
+	Ok(stripped.to_string().into())
 }
 
 pub fn upper_ascii<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
@@ -313,6 +365,22 @@ mod tests {
 
 		assert_eq!(eval("'TacoCat'.lowerAscii()"), json!("tacocat"));
 		assert_eq!(eval("'TacoCÆt Xii'.lowerAscii()"), json!("tacocÆt xii"));
+
+		assert_eq!(eval("'hello'.startsWith('he')"), json!(true));
+		assert_eq!(eval("'hello'.startsWith('lo')"), json!(false));
+		assert_eq!(eval("'hello'.startsWith('')"), json!(true));
+
+		assert_eq!(eval("'hello'.endsWith('lo')"), json!(true));
+		assert_eq!(eval("'hello'.endsWith('he')"), json!(false));
+		assert_eq!(eval("'hello'.endsWith('')"), json!(true));
+
+		assert_eq!(eval("'hello'.stripPrefix('he')"), json!("llo"));
+		assert_eq!(eval("'hello'.stripPrefix('hi')"), json!("hello"));
+		assert_eq!(eval("'hello'.stripPrefix('')"), json!("hello"));
+
+		assert_eq!(eval("'hello'.stripSuffix('lo')"), json!("hel"));
+		assert_eq!(eval("'hello'.stripSuffix('hi')"), json!("hello"));
+		assert_eq!(eval("'hello'.stripSuffix('')"), json!("hello"));
 
 		assert_eq!(eval("'TacoCat'.upperAscii()"), json!("TACOCAT"));
 		assert_eq!(eval("'TacoCÆt Xii'.upperAscii()"), json!("TACOCÆT XII"));
