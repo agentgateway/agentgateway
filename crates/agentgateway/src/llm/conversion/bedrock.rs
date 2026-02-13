@@ -3,8 +3,8 @@ use tracing::trace;
 
 use crate::http::Response;
 use crate::llm::AIError;
-use crate::llm::types::{bedrock, messages, responses};
 use crate::llm::types::completions::typed::UsagePromptDetails;
+use crate::llm::types::{bedrock, messages, responses};
 
 #[cfg(test)]
 #[path = "bedrock_tests.rs"]
@@ -181,10 +181,10 @@ pub mod from_completions {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
+	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::{AIError, LLMInfo, types};
 	use crate::telemetry::log::AsyncLog;
 	use crate::{json, parse};
-	use crate::llm::types::completions::typed::UsagePromptDetails;
 
 	/// translate an OpenAI completions request to a Bedrock converse  request
 	pub fn translate(
@@ -629,7 +629,9 @@ pub mod from_completions {
 								total_tokens: usage.total_tokens as u32,
 								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
 								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
-								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails{cached_tokens: Some(i as u64)}),
+								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
+									cached_tokens: Some(i as u64),
+								}),
 								// TODO: can we get reasoning tokens?
 								completion_tokens_details: None,
 							}),
@@ -2404,7 +2406,11 @@ impl ConverseResponseAdapter {
 				completion_tokens_details: None,
 
 				cache_read_input_tokens: token_usage.cache_read_input_tokens.map(|i| i as u64),
-				prompt_tokens_details: token_usage.cache_read_input_tokens.map(|i| UsagePromptDetails{cached_tokens: Some(i as u64)}),
+				prompt_tokens_details: token_usage
+					.cache_read_input_tokens
+					.map(|i| UsagePromptDetails {
+						cached_tokens: Some(i as u64),
+					}),
 				cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
 			})
 			.unwrap_or_default();

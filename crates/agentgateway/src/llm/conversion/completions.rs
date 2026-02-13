@@ -315,13 +315,11 @@ pub fn passthrough_stream(
 								r.response.cached_input_tokens = u
 									.prompt_tokens_details
 									.as_ref()
-									.and_then(|d| d.cached_tokens)
-									.map(|x| x as u64);
+									.and_then(|d| d.cached_tokens);
 								r.response.reasoning_tokens = u
 									.completion_tokens_details
 									.as_ref()
-									.and_then(|d| d.reasoning_tokens)
-									.map(|x| x as u64);
+									.and_then(|d| d.reasoning_tokens);
 								if let Some(c) = completion.take() {
 									r.response.completion = Some(vec![c]);
 								}
