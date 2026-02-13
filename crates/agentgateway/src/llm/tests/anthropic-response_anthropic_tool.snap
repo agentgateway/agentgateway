@@ -29,6 +29,9 @@ info:
     "prompt_tokens": 558,
     "completion_tokens": 48,
     "total_tokens": 606,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
     "cache_read_input_tokens": 2,
     "cache_creation_input_tokens": 1
   },
