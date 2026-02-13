@@ -626,8 +626,12 @@ pub mod from_completions {
 								prompt_tokens: usage.input_tokens as u32,
 								completion_tokens: usage.output_tokens as u32,
 								total_tokens: usage.total_tokens as u32,
+								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
+								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
+								// TODO: can we get reasoning tokens?
 								prompt_tokens_details: None,
 								completion_tokens_details: None,
+
 							}),
 						)
 					} else {
@@ -2401,9 +2405,13 @@ impl ConverseResponseAdapter {
 				total_tokens: token_usage.total_tokens as u32,
 				prompt_tokens_details: None,
 				completion_tokens_details: None,
+
+				cache_read_input_tokens: token_usage.cache_read_input_tokens.map(|i| i as u64),
+				cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
 			})
 			.unwrap_or_default();
 
+		tracing::error!("howardjohn: {:#?}", usage);
 		completions::Response {
 			id: format!("bedrock-{}", chrono::Utc::now().timestamp_millis()),
 			object: "chat.completion".to_string(),

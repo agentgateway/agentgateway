@@ -6,7 +6,6 @@ use self::typed::{
 	OutputTextContent as OutputText, Role,
 };
 use super::*;
-use crate::llm::types::completions::{UsageCompletionDetails, UsagePromptDetails};
 use crate::llm::{
 	conversion, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
 	ResponseType,
@@ -388,8 +387,16 @@ impl ResponseType for Response {
 				.usage
 				.as_ref()
 				.map(|u| u.input_tokens + u.output_tokens),
-			reasoning_tokens: self.usage.as_ref().and_then(|u| u.output_tokens_details.as_ref().and_then(|d| d.reasoning_tokens)),
-			cached_input_tokens: self.usage.as_ref().and_then(|u| u.input_tokens_details.as_ref().and_then(|d| d.cached_tokens)),
+			reasoning_tokens: self.usage.as_ref().and_then(|u| {
+				u.output_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens)
+			}),
+			cached_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.input_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens)
+			}),
 			cache_creation_input_tokens: None,
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {

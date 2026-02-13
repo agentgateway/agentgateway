@@ -699,7 +699,7 @@ pub struct LLMContext {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_tokens: Option<u64>,
 	/// The number of reasoning tokens in the output/completion.
-	#[dynamic(rename = "reasoningOutputTokens")]
+	#[dynamic(rename = "reasoningTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub reasoning_tokens: Option<u64>,
 	/// The total number of tokens for the request.
