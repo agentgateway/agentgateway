@@ -77,6 +77,20 @@ pub struct ResponseMessage {
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct UsageCompletionDetails {
+	pub reasoning_tokens: Option<u64>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct UsagePromptDetails {
+	pub cached_tokens: Option<u64>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Usage {
 	/// Number of tokens in the prompt.
 	pub prompt_tokens: u32,
@@ -84,6 +98,11 @@ pub struct Usage {
 	pub completion_tokens: u32,
 	/// Total number of tokens used in the request (prompt + completion).
 	pub total_tokens: u32,
+	/// Breakdown of tokens used in a completion.
+	pub completion_tokens_details: Option<UsageCompletionDetails>,
+	/// Breakdown of tokens used in the prompt.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub prompt_tokens_details: Option<UsagePromptDetails>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -95,6 +114,9 @@ impl ResponseType for Response {
 			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens as u64),
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
 			count_tokens: None,
+			reasoning_tokens: self.usage.as_ref().and_then(|u| u.completion_tokens_details.as_ref().and_then(|d| d.reasoning_tokens)),
+			cached_input_tokens: self.usage.as_ref().and_then(|u| u.prompt_tokens_details.as_ref().and_then(|d| d.cached_tokens)),
+			cache_creation_input_tokens: None,
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
 				Some(

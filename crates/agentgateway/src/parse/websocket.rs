@@ -52,6 +52,13 @@ impl<IO> Parser<IO> {
 						completion: None,
 						first_token: None,
 						count_tokens: None,
+						reasoning_tokens: None,
+						cache_creation_input_tokens: None,
+						cached_input_tokens: usage
+							.input_token_details
+							.as_ref()
+							.and_then(|d| d.cached_tokens)
+							.map(|x| x as u64),
 					}
 				});
 			}

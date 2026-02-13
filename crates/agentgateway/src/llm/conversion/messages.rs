@@ -319,6 +319,10 @@ pub mod from_completions {
 						log.non_atomic_mutate(|r| {
 							r.response.output_tokens = Some(message.usage.output_tokens as u64);
 							r.response.input_tokens = Some(message.usage.input_tokens as u64);
+							r.response.cached_input_tokens =
+								message.usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								message.usage.cache_creation_input_tokens.map(|i| i as u64);
 							r.response.provider_model = Some(strng::new(&message.model))
 						});
 						// no need to respond with anything yet
@@ -361,6 +365,8 @@ pub mod from_completions {
 						// TODO
 						// finish_reason = delta.stop_reason.as_ref().map(translate_stop_reason);
 						log.non_atomic_mutate(|r| {
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens = usage.cache_creation_input_tokens.map(|i| i as u64);
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							if let Some(inp) = r.response.input_tokens {
 								r.response.total_tokens = Some(inp + usage.output_tokens as u64)
@@ -413,6 +419,10 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) 
 				log.non_atomic_mutate(|r| {
 					r.response.output_tokens = Some(message.usage.output_tokens as u64);
 					r.response.input_tokens = Some(message.usage.input_tokens as u64);
+					r.response.cached_input_tokens =
+						message.usage.cache_read_input_tokens.map(|i| i as u64);
+					r.response.cache_creation_input_tokens =
+						message.usage.cache_creation_input_tokens.map(|i| i as u64);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
 			},
@@ -427,6 +437,10 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) 
 			messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
 				log.non_atomic_mutate(|r| {
 					r.response.output_tokens = Some(usage.output_tokens as u64);
+					r.response.cached_input_tokens =
+						usage.cache_read_input_tokens.map(|i| i as u64);
+					r.response.cache_creation_input_tokens =
+						usage.cache_creation_input_tokens.map(|i| i as u64);
 					if let Some(inp) = r.response.input_tokens {
 						r.response.total_tokens = Some(inp + usage.output_tokens as u64)
 					}
