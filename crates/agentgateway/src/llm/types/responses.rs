@@ -7,8 +7,8 @@ use self::typed::{
 };
 use super::*;
 use crate::llm::{
-	conversion, AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
-	ResponseType,
+	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType, ResponseType,
+	conversion,
 };
 
 #[derive(Debug, Deserialize, Clone, Serialize)]

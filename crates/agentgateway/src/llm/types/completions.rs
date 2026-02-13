@@ -115,8 +115,16 @@ impl ResponseType for Response {
 			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens as u64),
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
 			count_tokens: None,
-			reasoning_tokens: self.usage.as_ref().and_then(|u| u.completion_tokens_details.as_ref().and_then(|d| d.reasoning_tokens)),
-			cached_input_tokens: self.usage.as_ref().and_then(|u| u.prompt_tokens_details.as_ref().and_then(|d| d.cached_tokens)),
+			reasoning_tokens: self.usage.as_ref().and_then(|u| {
+				u.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens)
+			}),
+			cached_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens)
+			}),
 			cache_creation_input_tokens: None,
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
@@ -338,9 +346,7 @@ pub mod typed {
 
 	use std::collections::HashMap;
 
-	use async_openai::types::chat::{
-		ChatChoiceLogprobs, ChatCompletionResponseMessageAudio,
-	};
+	use async_openai::types::chat::{ChatChoiceLogprobs, ChatCompletionResponseMessageAudio};
 	#[allow(deprecated)]
 	#[allow(deprecated_in_future)]
 	pub use async_openai::types::chat::{
@@ -362,10 +368,10 @@ pub mod typed {
 		ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
 		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool as FunctionTool,
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
-		ChatCompletionTools as Tool, FinishReason, FunctionCall,
-		FunctionCallStream, FunctionName, FunctionObject, FunctionType, PredictionContent,
-		ReasoningEffort, ResponseFormat, ResponseModalities as ChatCompletionModalities, Role,
-		ServiceTier, StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
+		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
+		FunctionObject, FunctionType, PredictionContent, ReasoningEffort, ResponseFormat,
+		ResponseModalities as ChatCompletionModalities, Role, ServiceTier, StopConfiguration as Stop,
+		ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
 
@@ -393,7 +399,6 @@ pub mod typed {
 		pub object: String,
 		pub usage: Option<Usage>,
 	}
-
 
 	#[derive(Debug, Deserialize, Clone, Serialize)]
 	pub struct UsageCompletionDetails {

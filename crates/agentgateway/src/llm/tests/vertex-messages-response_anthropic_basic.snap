@@ -13,8 +13,8 @@ info:
   stop_sequence: ~
   usage:
     input_tokens: 15
-    cache_creation_input_tokens: 0
-    cache_read_input_tokens: 0
+    cache_creation_input_tokens: 13
+    cache_read_input_tokens: 12
     output_tokens: 21
     service_tier: standard
 ---
@@ -23,8 +23,8 @@ info:
   "usage": {
     "input_tokens": 15,
     "output_tokens": 21,
-    "cache_creation_input_tokens": 0,
-    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 13,
+    "cache_read_input_tokens": 12,
     "service_tier": "standard"
   },
   "content": [

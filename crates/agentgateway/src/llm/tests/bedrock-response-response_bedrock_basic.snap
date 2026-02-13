@@ -1,6 +1,5 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
-assertion_line: 38
 description: src/llm/tests/response_bedrock_basic.json
 info:
   output:
@@ -38,6 +37,12 @@ info:
   "model": "fake-model",
   "usage": {
     "input_tokens": 18,
-    "output_tokens": 46
+    "output_tokens": 46,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    }
   }
 }

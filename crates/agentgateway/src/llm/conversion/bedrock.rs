@@ -614,8 +614,7 @@ pub mod from_completions {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
-							r.response.cached_input_tokens =
-								usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
@@ -631,7 +630,6 @@ pub mod from_completions {
 								// TODO: can we get reasoning tokens?
 								prompt_tokens_details: None,
 								completion_tokens_details: None,
-
 							}),
 						)
 					} else {
@@ -1248,8 +1246,7 @@ pub mod from_messages {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
-							r.response.cached_input_tokens =
-								usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
@@ -2035,8 +2032,7 @@ pub mod from_responses {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
-							r.response.cached_input_tokens =
-								usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
