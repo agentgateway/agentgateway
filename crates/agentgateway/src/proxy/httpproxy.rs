@@ -1147,7 +1147,7 @@ fn get_backend_policies(
 	)
 }
 
-struct MustSnapshot<'a>(&'a mut Option<Request>);
+pub struct MustSnapshot<'a>(&'a mut Option<Request>);
 
 impl<'a> MustSnapshot<'a> {
 	pub fn new(req: &'a mut Option<Request>) -> Self {
@@ -1318,16 +1318,13 @@ async fn make_backend_call(
 			let inputs = inputs.clone();
 			let backend = backend.clone();
 			set_backend_cel_context(&mut req, log.as_ref());
-			let req = req.take_and_snapshot(log.as_mut())?;
-			let mcp_response_log = log.map(|l| l.mcp_status.clone()).expect("must be set");
 			let name = name.clone();
-			return Ok(Box::pin(async move {
-				inputs
-					.clone()
-					.mcp_state
-					.serve(inputs, name, backend, policies, req, mcp_response_log)
-					.await
-			}));
+			let res = inputs
+				.clone()
+				.mcp_state
+				.serve(inputs, name, backend, policies, req, log)
+				.await;
+			return Ok(Box::pin(async move { res }));
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};

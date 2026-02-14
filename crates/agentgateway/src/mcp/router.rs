@@ -15,9 +15,9 @@ use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
 use crate::mcp::{MCPInfo, McpAuthorizationSet};
 use crate::proxy::ProxyError;
-use crate::proxy::httpproxy::PolicyClient;
+use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
 use crate::store::{BackendPolicies, Stores};
-use crate::telemetry::log::AsyncLog;
+use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
 	BackendTargetRef, McpBackend, McpTargetSpec, ResourceName, SimpleBackend, SimpleBackendReference,
 };
@@ -64,8 +64,8 @@ impl App {
 		backend_group_name: ResourceName,
 		backend: McpBackend,
 		backend_policies: BackendPolicies,
-		mut req: Request,
-		log: AsyncLog<MCPInfo>,
+		mut req: MustSnapshot<'_>,
+		mut log: Option<&mut RequestLog>,
 	) -> Result<Response, ProxyError> {
 		let backends = {
 			let binds = self.state.read_binds();
@@ -110,8 +110,12 @@ impl App {
 		let authn = backend_policies.mcp_authentication;
 
 		// Store an empty value, we will populate each field async
-		log.store(Some(MCPInfo::default()));
-		req.extensions_mut().insert(log);
+		let logy = log
+			.as_mut()
+			.map(|l| l.mcp_status.clone())
+			.expect("must be set");
+		logy.store(Some(MCPInfo::default()));
+		req.extensions_mut().insert(logy);
 
 		// TODO: today we duplicate everything which is error prone. It would be ideal to re-use the parent one
 		// The problem is that we decide whether to include various attributes before we pick the backend,
@@ -130,6 +134,7 @@ impl App {
 			return Ok(resp);
 		}
 
+		let req = req.take_and_snapshot(log.as_mut())?;
 		if req.uri().path() == "/sse" {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise
