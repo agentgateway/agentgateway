@@ -1,13 +1,13 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
 assertion_line: 108
-description: "anthropic: request_reasoning"
+description: "anthropic: request_reasoning_max"
 info:
-  model: gpt-3.5-turbo
+  model: claude-opus-4-6
   messages:
     - role: user
-      content: How is the current weather in Columbus?
-  reasoning_effort: medium
+      content: Deeply analyze quantum gravity
+  reasoning_effort: xhigh
 ---
 {
   "messages": [
@@ -16,15 +16,15 @@ info:
       "content": [
         {
           "type": "text",
-          "text": "How is the current weather in Columbus?"
+          "text": "Deeply analyze quantum gravity"
         }
       ]
     }
   ],
-  "model": "gpt-3.5-turbo",
+  "model": "claude-opus-4-6",
   "max_tokens": 4096,
   "thinking": {
     "type": "enabled",
-    "budget_tokens": 2048
+    "budget_tokens": 4096
   }
 }

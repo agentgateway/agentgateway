@@ -11,7 +11,7 @@ use crate::{llm, parse};
 
 pub mod from_messages {
 	use itertools::Itertools;
-	use messages::{ContentBlock, ThinkingInput, ToolResultContent, ToolResultContentPart};
+	use messages::{ContentBlock, ToolResultContent, ToolResultContentPart};
 	use types::completions::typed as completions;
 	use types::messages::typed as messages;
 
@@ -40,7 +40,22 @@ pub mod from_messages {
 			tool_choice,
 			metadata,
 			thinking,
+			output_config: _,
 		} = req;
+
+		let reasoning_effort = thinking.as_ref().and_then(|t| match t {
+			messages::ThinkingInput::Adaptive { effort } => Some(match effort {
+				Some(messages::ThinkingEffort::Minimal) => completions::ReasoningEffort::Minimal,
+				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
+				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
+				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
+				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Xhigh,
+				// Anthropic adaptive thinking defaults to high effort when omitted.
+				None => completions::ReasoningEffort::High,
+			}),
+			_ => None,
+		});
+
 		let mut msgs: Vec<completions::RequestMessage> = Vec::new();
 
 		// Handle the system prompt (convert both string and block formats to string)
@@ -240,9 +255,9 @@ pub mod from_messages {
 
 			vendor_extensions: completions::RequestVendorExtensions {
 				top_k,
-				thinking_budget_tokens: thinking.and_then(|t| match t {
-					ThinkingInput::Enabled { budget_tokens } => Some(budget_tokens),
-					ThinkingInput::Disabled { .. } => None,
+				thinking_budget_tokens: thinking.as_ref().and_then(|t| match t {
+					messages::ThinkingInput::Enabled { budget_tokens } => Some(*budget_tokens),
+					_ => None,
 				}),
 			},
 
@@ -269,7 +284,7 @@ pub mod from_messages {
 			web_search_options: None,
 			stream_options: None,
 			store: None,
-			reasoning_effort: None,
+			reasoning_effort,
 		}
 	}
 }

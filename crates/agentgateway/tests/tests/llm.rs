@@ -228,6 +228,98 @@ mod bedrock {
 		};
 		send_anthropic_token_count(&gw).await;
 	}
+
+	#[tokio::test]
+	async fn thinking() {
+		let Some(gw) = setup(
+			"bedrock",
+			"",
+			"us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+		)
+		.await
+		else {
+			return;
+		};
+		send_thinking(&gw).await;
+	}
+
+	#[tokio::test]
+	async fn completions_reasoning_effort() {
+		let Some(gw) = setup(
+			"bedrock",
+			"",
+			"us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+		)
+		.await
+		else {
+			return;
+		};
+		send_completions_reasoning_effort(&gw).await;
+	}
+
+	#[tokio::test]
+	async fn adaptive_thinking() {
+		let Some(gw) = setup("bedrock", "", "us.anthropic.claude-opus-4-6-v1").await else {
+			return;
+		};
+		send_adaptive_thinking(&gw).await;
+	}
+
+	#[tokio::test]
+	async fn adaptive_thinking_with_effort() {
+		let Some(gw) = setup("bedrock", "", "us.anthropic.claude-opus-4-6-v1").await else {
+			return;
+		};
+		send_adaptive_thinking_with_options(&gw, Some("high"), None, false).await;
+	}
+
+	#[tokio::test]
+	async fn adaptive_thinking_tool_choice_auto() {
+		let Some(gw) = setup("bedrock", "", "us.anthropic.claude-opus-4-6-v1").await else {
+			return;
+		};
+		send_adaptive_thinking_with_options(&gw, Some("high"), Some(AdaptiveToolChoice::Auto), false)
+			.await;
+	}
+
+	#[tokio::test]
+	async fn adaptive_thinking_tool_choice_tool() {
+		let Some(gw) = setup("bedrock", "", "us.anthropic.claude-opus-4-6-v1").await else {
+			return;
+		};
+		send_adaptive_thinking_with_options(
+			&gw,
+			Some("high"),
+			Some(AdaptiveToolChoice::Tool { name: "lookup" }),
+			false,
+		)
+		.await;
+	}
+
+	#[tokio::test]
+	async fn adaptive_thinking_tool_choice_none() {
+		let Some(gw) = setup("bedrock", "", "us.anthropic.claude-opus-4-6-v1").await else {
+			return;
+		};
+		send_adaptive_thinking_with_options(&gw, Some("high"), Some(AdaptiveToolChoice::None), false)
+			.await;
+	}
+
+	#[tokio::test]
+	async fn adaptive_thinking_streaming() {
+		let Some(gw) = setup("bedrock", "", "us.anthropic.claude-opus-4-6-v1").await else {
+			return;
+		};
+		send_adaptive_thinking_with_options(&gw, Some("medium"), None, true).await;
+	}
+
+	#[tokio::test]
+	async fn output_config_effort() {
+		let Some(gw) = setup("bedrock", "", "us.anthropic.claude-opus-4-6-v1").await else {
+			return;
+		};
+		send_output_config_effort(&gw).await;
+	}
 }
 
 mod anthropic {
@@ -447,6 +539,10 @@ async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
 }
 
 fn assert_log(path: &str, streaming: bool, test_id: &str) {
+	assert_log_with_output_range(path, streaming, test_id, 1, 100);
+}
+
+fn assert_log_with_output_range(path: &str, streaming: bool, test_id: &str, min: i64, max: i64) {
 	let logs = agent_core::telemetry::testing::find(&[
 		("scope", "request"),
 		("http.path", path),
@@ -460,8 +556,8 @@ fn assert_log(path: &str, streaming: bool, test_id: &str) {
 		.as_i64()
 		.unwrap();
 	assert!(
-		(1..100).contains(&output),
-		"unexpected output tokens: {output}"
+		(min..max).contains(&output),
+		"unexpected output tokens: {output}; expected [{min}, {max})"
 	);
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
 	assert_eq!(stream, streaming, "unexpected streaming value: {stream}");
@@ -520,21 +616,37 @@ fn require_env(var: &str) -> bool {
 }
 
 async fn send_completions(gw: &AgentGateway, stream: bool) {
+	send_completions_request(gw, stream, None, None, "give me a 1 word answer").await;
+	assert_log("/v1/chat/completions", stream, &gw.test_id);
+}
+
+async fn send_completions_request(
+	gw: &AgentGateway,
+	stream: bool,
+	max_tokens: Option<u32>,
+	reasoning_effort: Option<&str>,
+	prompt: &str,
+) {
+	let mut req = json!({
+		"stream": stream,
+		"messages": [{
+			"role": "user",
+			"content": prompt
+		}]
+	});
+
+	if let Some(max_tokens) = max_tokens {
+		req["max_tokens"] = json!(max_tokens);
+	}
+	if let Some(reasoning_effort) = reasoning_effort {
+		req["reasoning_effort"] = json!(reasoning_effort);
+	}
+
 	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/chat/completions",
-			json!({
-			"stream": stream,
-				"messages": [{
-					"role": "user",
-					"content": "give me a 1 word answer"
-				}]
-			}),
-		)
+		.send_request_json("http://localhost/v1/chat/completions", req)
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/chat/completions", stream, &gw.test_id);
 }
 
 async fn send_responses(gw: &AgentGateway, stream: bool) {
@@ -632,4 +744,163 @@ async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) 
 		&gw.test_id,
 		expected_dimensions.unwrap_or(256) as u64,
 	);
+}
+
+async fn send_adaptive_thinking(gw: &AgentGateway) {
+	send_adaptive_thinking_with_options(gw, None, None, false).await;
+}
+
+enum AdaptiveToolChoice<'a> {
+	Auto,
+	Tool { name: &'a str },
+	None,
+}
+
+impl AdaptiveToolChoice<'_> {
+	fn as_json(&self) -> serde_json::Value {
+		match self {
+			Self::Auto => json!({ "type": "auto" }),
+			Self::Tool { name } => json!({ "type": "tool", "name": name }),
+			Self::None => json!({ "type": "none" }),
+		}
+	}
+}
+
+async fn send_adaptive_thinking_with_options(
+	gw: &AgentGateway,
+	effort: Option<&str>,
+	tool_choice: Option<AdaptiveToolChoice<'_>>,
+	stream: bool,
+) {
+	use http_body_util::BodyExt;
+
+	let thinking = match effort {
+		Some(effort) => json!({
+			"type": "adaptive",
+			"effort": effort
+		}),
+		None => json!({
+			"type": "adaptive"
+		}),
+	};
+	let mut req = json!({
+		"max_tokens": 4096,
+		"stream": stream,
+		"thinking": thinking,
+		"messages": [{
+			"role": "user",
+			"content": "Explain quantum gravity in one sentence."
+		}]
+	});
+
+	if let Some(ref tool_choice) = tool_choice {
+		let req_obj = req
+			.as_object_mut()
+			.expect("adaptive thinking request must be a JSON object");
+		req_obj.insert(
+			"tools".to_string(),
+			json!([{
+				"name": "lookup",
+				"description": "Look up a concept",
+				"input_schema": {
+					"type": "object",
+					"properties": {
+						"query": {"type": "string"}
+					},
+					"required": ["query"]
+				}
+			}]),
+		);
+		req_obj.insert("tool_choice".to_string(), tool_choice.as_json());
+	}
+
+	let resp = gw
+		.send_request_json("http://localhost/v1/messages", req)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	if stream {
+		let body = resp.into_body().collect().await.expect("collect body");
+		let body_bytes = body.to_bytes();
+		assert!(
+			!body_bytes.is_empty(),
+			"streaming response body should not be empty"
+		);
+		assert_log_with_output_range("/v1/messages", true, &gw.test_id, 1, 3000);
+	} else {
+		let body = resp.into_body().collect().await.expect("collect body");
+		let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+		let content = body.get("content").unwrap().as_array().unwrap();
+		assert!(!content.is_empty(), "content should not be empty");
+		assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 3000);
+	}
+}
+
+async fn send_thinking(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 4096,
+				"thinking": {
+					"type": "enabled",
+					"budget_tokens": 1024
+				},
+				"messages": [{
+					"role": "user",
+					"content": "Explain quantum gravity in one sentence."
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	let content = body.get("content").unwrap().as_array().unwrap();
+	assert!(!content.is_empty(), "content should not be empty");
+
+	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 1000);
+}
+
+async fn send_output_config_effort(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 4096,
+				"output_config": {
+					"effort": "high"
+				},
+				"messages": [{
+					"role": "user",
+					"content": "Explain quantum gravity in one sentence."
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	let content = body.get("content").unwrap().as_array().unwrap();
+	assert!(!content.is_empty(), "content should not be empty");
+
+	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 1000);
+}
+
+async fn send_completions_reasoning_effort(gw: &AgentGateway) {
+	send_completions_request(
+		gw,
+		false,
+		Some(2048),
+		Some("low"),
+		"Explain quantum gravity in one sentence.",
+	)
+	.await;
+	assert_log_with_output_range("/v1/chat/completions", false, &gw.test_id, 1, 1000);
 }
