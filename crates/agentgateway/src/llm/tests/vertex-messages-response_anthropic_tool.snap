@@ -24,7 +24,12 @@ info:
     service_tier: standard
 ---
 {
+  "id": "[id]",
+  "type": "message",
+  "role": "assistant",
   "model": "claude-opus-4-1-20250805",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
   "usage": {
     "input_tokens": 558,
     "output_tokens": 48,
@@ -46,9 +51,5 @@ info:
         "unit": "celsius"
       }
     }
-  ],
-  "id": "[id]",
-  "type": "message",
-  "stop_reason": "tool_use",
-  "role": "assistant"
+  ]
 }

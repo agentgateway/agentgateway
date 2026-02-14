@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 108
 description: "bedrock-completions: request_full"
 info:
   model: gpt-4-turbo-preview
@@ -89,6 +90,14 @@ info:
       "content": [
         {
           "text": "This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "What's in this image?"
         }
       ]
     }

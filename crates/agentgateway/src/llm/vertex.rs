@@ -57,13 +57,14 @@ impl Provider {
 		let location = self
 			.region
 			.clone()
-			.unwrap_or_else(|| strng::literal!("global"));
+			.unwrap_or_else(|| strng::literal!("us-central1"));
 		if let Some(model) = self.anthropic_model(request_model) {
 			return match route {
 				RouteType::AnthropicTokenCount => strng::format!(
-					"/v1/projects/{}/locations/{}/publishers/anthropic/models/count-tokens:rawPredict",
+					"/v1/projects/{}/locations/{}/publishers/anthropic/models/{}:countTokens",
 					self.project_id,
-					location
+					location,
+					model
 				),
 				_ => strng::format!(
 					"/v1/projects/{}/locations/{}/publishers/anthropic/models/{}:{}",
@@ -96,10 +97,10 @@ impl Provider {
 		)
 	}
 
-	pub fn get_host(&self) -> Strng {
+	pub fn get_host(&self, _request_model: Option<&str>) -> Strng {
 		match &self.region {
 			None => {
-				strng::literal!("aiplatform.googleapis.com")
+				strng::literal!("us-central1-aiplatform.googleapis.com")
 			},
 			Some(region) => {
 				strng::format!("{region}-aiplatform.googleapis.com")
