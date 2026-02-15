@@ -1,0 +1,192 @@
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/instance: gw
+    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/name: gw
+    app.kubernetes.io/version: 1.0.0-ci1
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: gw
+    kgateway: kube-gateway
+  name: gw
+---
+apiVersion: v1
+data:
+  config.yaml: |
+    config: {}
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: gw
+    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/name: gw
+    app.kubernetes.io/version: 1.0.0-ci1
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: gw
+    kgateway: kube-gateway
+  name: gw
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: gw
+    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/name: gw
+    app.kubernetes.io/version: 1.0.0-ci1
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: gw
+    kgateway: kube-gateway
+  name: gw
+spec:
+  ports:
+  - name: listener-8080
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app.kubernetes.io/instance: gw
+    app.kubernetes.io/name: gw
+    gateway.networking.k8s.io/gateway-name: gw
+  type: LoadBalancer
+status:
+  loadBalancer: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: gw
+    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/name: gw
+    app.kubernetes.io/version: 1.0.0-ci1
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: gw
+    kgateway: kube-gateway
+  name: gw
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: gw
+      app.kubernetes.io/name: gw
+      gateway.networking.k8s.io/gateway-name: gw
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        checksum/config: bb8bdc8cacbd1ae4af6e9f72baafbd5859e9422ade140b725464c0ec0d7fee9d
+        gateway.kgateway.dev/gateway-full-name: gw
+        prometheus.io/path: /metrics
+        prometheus.io/port: "15020"
+        prometheus.io/scrape: "true"
+      labels:
+        app.kubernetes.io/instance: gw
+        app.kubernetes.io/name: gw
+        gateway.networking.k8s.io/gateway-class-name: agentgateway
+        gateway.networking.k8s.io/gateway-name: gw
+    spec:
+      containers:
+      - args:
+        - -f
+        - /config/config.yaml
+        env:
+        - name: TERMINATION_GRACE_PERIOD_SECONDS
+          value: "60"
+        - name: CONNECTION_MIN_TERMINATION_DEADLINE
+          value: 10s
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: RUST_BACKTRACE
+          value: "1"
+        - name: RUST_LOG
+          value: info
+        - name: XDS_ADDRESS
+          value: http://xds.cluster.local:9978
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: GATEWAY
+          value: gw
+        - name: CPU_LIMIT
+          valueFrom:
+            resourceFieldRef:
+              divisor: "1"
+              resource: limits.cpu
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: SERVICE_ACCOUNT
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
+        image: cr.agentgateway.dev/agentgateway:99.99.99
+        name: agentgateway
+        ports:
+        - containerPort: 15020
+          name: metrics
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: 15021
+          periodSeconds: 10
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10101
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /healthz/ready
+            port: 15021
+          periodSeconds: 1
+          successThreshold: 1
+          timeoutSeconds: 2
+        volumeMounts:
+        - mountPath: /config
+          name: config-volume
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /var/run/secrets/xds-tokens
+          name: xds-token
+          readOnly: true
+      securityContext:
+        sysctls:
+        - name: net.ipv4.ip_unprivileged_port_start
+          value: "0"
+      serviceAccountName: gw
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - configMap:
+          name: gw
+        name: config-volume
+      - name: xds-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: kgateway
+              expirationSeconds: 43200
+              path: xds-token
+      - emptyDir: {}
+        name: tmp
+status: {}

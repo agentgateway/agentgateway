@@ -293,6 +293,98 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			},
 		},
 
+		// Cookbook recipe test cases - these validate the documented overlay examples
+		{
+			Name:      "agentgateway with replicas overlay",
+			InputFile: "agentgateway-replicas",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "replicas: 3",
+					"deployment should have 3 replicas from overlay")
+			},
+		},
+		{
+			Name:      "agentgateway with image pull secrets overlay",
+			InputFile: "agentgateway-image-pull-secrets",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "name: my-registry-secret",
+					"imagePullSecrets should contain my-registry-secret")
+				assert.Contains(t, outputYaml, "name: another-registry-secret",
+					"imagePullSecrets should contain another-registry-secret")
+			},
+		},
+		{
+			Name:      "agentgateway with AWS EKS load balancer annotations",
+			InputFile: "agentgateway-aws-annotations",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "service.beta.kubernetes.io/aws-load-balancer-type: nlb",
+					"service should have AWS NLB annotation")
+				assert.Contains(t, outputYaml, "service.beta.kubernetes.io/aws-load-balancer-internal: \"true\"",
+					"service should have AWS internal annotation")
+				assert.Contains(t, outputYaml, "service.beta.kubernetes.io/aws-load-balancer-subnets: subnet-abc123,subnet-def456",
+					"service should have AWS subnets annotation")
+			},
+		},
+		{
+			Name:      "agentgateway with Azure AKS load balancer annotations",
+			InputFile: "agentgateway-azure-annotations",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "service.beta.kubernetes.io/azure-load-balancer-internal: \"true\"",
+					"service should have Azure internal annotation")
+				assert.Contains(t, outputYaml, "service.beta.kubernetes.io/azure-load-balancer-resource-group: my-resource-group",
+					"service should have Azure resource group annotation")
+			},
+		},
+		{
+			Name:      "agentgateway with init containers overlay",
+			InputFile: "agentgateway-init-containers",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "name: wait-for-config",
+					"init container should be present")
+				assert.Contains(t, outputYaml, "image: busybox:1.36",
+					"init container should have correct image")
+				assert.Contains(t, outputYaml, "initContainers:",
+					"initContainers section should be present")
+			},
+		},
+		{
+			Name:      "agentgateway with sidecar containers overlay",
+			InputFile: "agentgateway-sidecar-containers",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "name: log-shipper",
+					"sidecar container should be present")
+				assert.Contains(t, outputYaml, "name: agentgateway",
+					"main agentgateway container should still be present")
+			},
+		},
+		{
+			Name:      "agentgateway with ServiceAccount IAM annotations",
+			InputFile: "agentgateway-sa-iam-annotations",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/agentgateway-role",
+					"ServiceAccount should have AWS IRSA annotation")
+			},
+		},
+		{
+			Name:      "agentgateway with custom pod security context",
+			InputFile: "agentgateway-security-context",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "runAsUser: 1000",
+					"pod security context should have runAsUser")
+				assert.Contains(t, outputYaml, "runAsGroup: 2000",
+					"pod security context should have runAsGroup")
+				assert.Contains(t, outputYaml, "fsGroup: 3000",
+					"pod security context should have fsGroup")
+			},
+		},
+
 		// TLS test cases
 		{
 			Name:                        "agentgateway with TLS enabled",
