@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=../../schema/config.json
+config:
+  adminAddr: localhost:15005
+  statsAddr: localhost:15025
+  readinessAddr: localhost:15026
+binds:
+- port: 3001
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          pathPrefix: /
+      backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["-y", "@modelcontextprotocol/server-everything"]
+          - name: filesystem
+            stdio:
+              cmd: npx
+              args: ["-y", "@modelcontextprotocol/server-filesystem", "."]

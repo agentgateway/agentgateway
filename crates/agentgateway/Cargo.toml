@@ -48,6 +48,7 @@ clocksource.workspace = true
 core_affinity.workspace = true
 crossbeam.workspace = true
 divan = { workspace = true, optional = true }
+flagset.workspace = true
 frozen-collections.workspace = true
 fs-err = { workspace = true }
 futures-core.workspace = true
@@ -72,6 +73,7 @@ include_dir.workspace = true
 indexmap = { workspace = true }
 ipnet.workspace = true
 itertools.workspace = true
+vector-map.workspace = true
 jemalloc_pprof = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
@@ -98,7 +100,8 @@ prost.workspace = true
 rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
-rmcp = { version = "0.14", features = [
+# TODO: Switch to rmcp = "0.16.0" after https://github.com/modelcontextprotocol/rust-sdk/pull/652 is merged and published
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk.git", rev = "08a5b0551bd2c5936009f29b1b26efafc2712b40", features = [
     "client",
     "transport-child-process",
 ] }
@@ -141,8 +144,6 @@ uuid.workspace = true
 x509-parser.workspace = true
 reqwest = { optional = true, workspace = true }
 websocket-sans-io.workspace = true
-vector-map.workspace = true
-flagset.workspace = true
 
 
 # Linux only dependencies
@@ -175,7 +176,9 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "0.14", features = [
+proptest.workspace = true
+# TODO: Switch to rmcp = "0.16.0" after https://github.com/modelcontextprotocol/rust-sdk/pull/652 is merged and published
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk.git", rev = "08a5b0551bd2c5936009f29b1b26efafc2712b40", features = [
     "client",
     "server",
     "base64",
@@ -188,7 +191,8 @@ rmcp = { version = "0.14", features = [
 ] }
 # We need SSE client for testing but they removed it for some reason :-(
 # https://github.com/modelcontextprotocol/rust-sdk/pull/562
-legacy-rmcp = { package = "rmcp", version = "0.10.0", features = ["transport-sse-server",
+legacy-rmcp = { package = "rmcp", version = "0.10.0", features = [
+    "transport-sse-server",
     "transport-sse-client",
     "transport-sse-client-reqwest",
     "client",

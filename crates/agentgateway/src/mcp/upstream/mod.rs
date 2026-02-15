@@ -7,7 +7,7 @@ mod streamablehttp;
 use std::io;
 
 pub(crate) use client::McpHttpClient;
-use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
+use rmcp::model::{ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use thiserror::Error;
 use tokio::process::Command;
@@ -191,6 +191,26 @@ impl Upstream {
 			},
 			Upstream::McpStreamable(c) => {
 				c.send_notification(request, ctx).await?;
+			},
+			Upstream::OpenAPI(_) => {},
+		}
+		Ok(())
+	}
+
+	pub(crate) async fn send_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		match &self {
+			Upstream::McpStdio(c) => {
+				c.send_raw(message, ctx).await?;
+			},
+			Upstream::McpSSE(c) => {
+				c.send_client_message(message, ctx).await?;
+			},
+			Upstream::McpStreamable(c) => {
+				c.send_client_message(message, ctx).await?;
 			},
 			Upstream::OpenAPI(_) => {},
 		}

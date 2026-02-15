@@ -13,7 +13,7 @@ use crate::proxy::ProxyError;
 use crate::*;
 
 #[derive(Debug, Clone)]
-pub struct StreamableHttpServerConfig {
+pub struct GatewayStreamableHttpServerConfig {
 	/// If true, the server will create a session for each request and keep it alive.
 	pub stateful_mode: bool,
 }
@@ -43,7 +43,7 @@ impl std::fmt::Debug for StreamableHttpPostResponse {
 	}
 }
 pub struct StreamableHttpService {
-	config: StreamableHttpServerConfig,
+	config: GatewayStreamableHttpServerConfig,
 	session_manager: Arc<SessionManager>,
 	service_factory: Arc<dyn Fn() -> Result<Relay, http::Error> + Send + Sync>,
 }
@@ -52,7 +52,7 @@ impl StreamableHttpService {
 	pub fn new(
 		service_factory: impl Fn() -> Result<Relay, http::Error> + Send + Sync + 'static,
 		session_manager: Arc<SessionManager>,
-		config: StreamableHttpServerConfig,
+		config: GatewayStreamableHttpServerConfig,
 	) -> Self {
 		Self {
 			config,

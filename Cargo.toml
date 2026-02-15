@@ -135,6 +135,7 @@ prost-build = "0.14"
 prost-types = "0.14"
 prost-wkt-types = { version = "0.7.0", features = ["vendored-protox"] }
 prost-wkt-build = "0.7.0"
+proptest = "1.6"
 pwhash = "1"
 rand = "0.10"
 rcgen = { version = "0.14", features = ["pem", "x509-parser"] }

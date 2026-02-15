@@ -3,7 +3,7 @@
 In the [basic](../basic) example, we exposed a single MCP server.
 Agentgateway can also multiplex multiple MCP servers, and expose them as a single MCP server to clients.
 
-This can centralize and simplify client configuration -- as we add and remove tools, only the gateway configuration needs to change, rather than all MCP clients.
+This centralizes and simplifies client configuration -- as we add and remove tools, only the gateway configuration needs to change, rather than all MCP clients.
 
 ### Running the example
 
@@ -11,7 +11,7 @@ This can centralize and simplify client configuration -- as we add and remove to
 cargo run -- -f examples/multiplex/config.yaml
 ```
 
-Multiplexing is only a matter of adding multiple targets. Here we will serve the `everything` and `time` server.
+Multiplexing is enabled by adding multiple `targets` to an MCP backend. Here we serve the `everything` and `time` servers.
 
 ```yaml
 targets:
@@ -25,8 +25,12 @@ targets:
     args: ["@modelcontextprotocol/server-everything"]
 ```
 
-Now when we open the MCP inspector we can see the tools from both `time` and `everything`.
-Because we have multiple tools, each tool is prefixed with the `<name>_` to avoid collisions.
+When you connect an MCP client, you will see tools from both servers. 
 
-![Tools List](./img/list.png)
+### Namespacing (SEP-993)
 
+To avoid collisions, identifiers are prefixed with the target name followed by `__` (double underscore). For example, the `echo` tool from the `everything` server becomes `everything__echo`.
+
+### Resource Handling
+
+Resource URIs are automatically wrapped in an `agw://` scheme (e.g., `agw://everything/?u=memo%3A%2F%2Finsights`). This allows the gateway to route requests back to the correct origin server while preserving URI templates for AI clients.

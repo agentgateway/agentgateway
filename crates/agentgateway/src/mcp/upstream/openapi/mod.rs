@@ -388,6 +388,7 @@ pub(crate) fn parse_openapi_schema(
 								output_schema: None,
 								icons: None,
 								title: None,
+								execution: None,
 							};
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
@@ -623,12 +624,14 @@ impl Handler {
 				},
 			),
 			ClientRequest::GetTaskInfoRequest(_) => {
-				Messages::from_result(id, GetTaskInfoResult { task: None })
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
 			ClientRequest::GetTaskResultRequest(_) => {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
-			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
+			ClientRequest::CancelTaskRequest(_) => {
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			},
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult { contents: vec![] })
 			},

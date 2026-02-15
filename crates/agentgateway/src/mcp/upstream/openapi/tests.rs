@@ -88,6 +88,7 @@ async fn setup() -> (MockServer, Handler) {
 		),
 		annotations: None,
 		output_schema: None,
+		execution: None,
 	};
 	let upstream_call_get = UpstreamOpenAPICall {
 		method: "GET".to_string(),
@@ -134,6 +135,7 @@ async fn setup() -> (MockServer, Handler) {
 		),
 		output_schema: None,
 		annotations: None,
+		execution: None,
 	};
 	let upstream_call_post = UpstreamOpenAPICall {
 		method: "POST".to_string(),
