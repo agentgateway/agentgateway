@@ -34,6 +34,7 @@ import (
 	internaldeployer "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
@@ -57,6 +58,8 @@ type gatewayReconciler struct {
 	svcAccountClient kclient.Client[*corev1.ServiceAccount]
 	configMapClient  kclient.Client[*corev1.ConfigMap]
 
+	controllerExtension pluginsdk.GatewayControllerExtension
+
 	queue controllers.Queue
 }
 
@@ -64,13 +67,15 @@ func NewGatewayReconciler(
 	cfg GatewayConfig,
 	deployer *deployer.Deployer,
 	gwParams *internaldeployer.GatewayParameters,
+	controllerExtension pluginsdk.GatewayControllerExtension,
 ) *gatewayReconciler {
 	filter := kclient.Filter{ObjectFilter: cfg.Client.ObjectFilter()}
 	r := &gatewayReconciler{
-		deployer:          deployer,
-		gwParams:          gwParams,
-		scheme:            cfg.Mgr.GetScheme(),
-		agwControllerName: cfg.AgwControllerName,
+		deployer:            deployer,
+		gwParams:            gwParams,
+		scheme:              cfg.Mgr.GetScheme(),
+		agwControllerName:   cfg.AgwControllerName,
+		controllerExtension: controllerExtension,
 
 		gwClient:         kclient.NewFilteredDelayed[*gwv1.Gateway](cfg.Client, gvr.KubernetesGateway, filter),
 		gwClassClient:    kclient.NewFilteredDelayed[*gwv1.GatewayClass](cfg.Client, gvr.GatewayClass, filter),
@@ -186,27 +191,12 @@ func NewGatewayReconciler(
 		r.agwParamClient.AddEventHandler(agwParamEventHandler)
 	}
 
-	// Custom event handler for XListenerSet changes
-	// TODODONOTMERGE
-	//cfg.CommonCollections.GatewayIndex.GatewaysForDeployer.Register(func(o krt.Event[ir.GatewayForDeployer]) {
-	//	gw := o.Latest()
-	//	ref := types.NamespacedName{Namespace: gw.Namespace, Name: gw.Name}
-	//	logger.Debug("reconciling Gateway due to XListenerSet change", "ref", ref)
-	//	r.queue.Add(ref)
-	//})
-
 	// Add a handler to reconcile the parent Gateway when child objects (Deployment, Service, etc.)
 	parentHandler := controllers.ObjectHandler(controllers.EnqueueForParentHandler(r.queue, gvk.KubernetesGateway))
 	r.deploymentClient.AddEventHandler(parentHandler)
 	r.svcAccountClient.AddEventHandler(parentHandler)
 	r.svcClient.AddEventHandler(parentHandler)
 	r.configMapClient.AddEventHandler(parentHandler)
-
-	// Register controller extensions
-	// TODODONOTMERGE
-	//if controllerExtension != nil {
-	//	controllerExtension.Register(r.queue, gwParamEventHandler)
-	//}
 
 	// Add a handler to reconcile the Gateways when the xDS TLS certificate changes
 	r.setupTLSCertificateWatch(cfg.CertWatcher)
@@ -236,6 +226,9 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 
 	// Wait for all caches to sync
 	kube.WaitForCacheSync("GatewayController", ctx.Done(), hasSynced...)
+	if r.controllerExtension != nil {
+		r.controllerExtension.Start(ctx)
+	}
 	r.queue.Run(ctx.Done())
 
 	// Shutdown all the clients
@@ -252,7 +245,9 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 		clients = append(clients, r.agwParamClient)
 	}
 	controllers.ShutdownAll(clients...)
-
+	if r.controllerExtension != nil {
+		r.controllerExtension.Stop()
+	}
 	return nil
 }
 
@@ -439,7 +434,7 @@ func updateGatewayStatusWithRetryFunc(
 			return nil
 		}
 		_, err := cli.UpdateStatus(&gwv1.Gateway{
-			ObjectMeta: CloneObjectMetaForStatus(gw.ObjectMeta),
+			ObjectMeta: pluginsdk.CloneObjectMetaForStatus(gw.ObjectMeta),
 			Status:     status,
 		})
 		return err

@@ -9,28 +9,33 @@ import (
 
 	"github.com/go-logr/logr"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/kube/kubetypes"
 	"istio.io/istio/pkg/security"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/agentgateway/agentgateway/controller/api/settings"
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
 	agentjwksstore "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwksstore"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	"github.com/agentgateway/agentgateway/controller/pkg/common"
+	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/admin"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
@@ -41,15 +46,134 @@ type Server interface {
 	Start(ctx context.Context) error
 }
 
+func WithAPIClient(apiClient apiclient.Client) func(*setup) {
+	return func(s *setup) {
+		s.apiClient = apiClient
+	}
+}
+
+func WithExtraInformerCacheSyncHandlers(handlers []cache.InformerSynced) func(*setup) {
+	return func(s *setup) {
+		s.extraInformerCacheSyncHandlers = handlers
+	}
+}
+
+func WithGatewayControllerExtension(extension pluginsdk.GatewayControllerExtension) func(*setup) {
+	return func(s *setup) {
+		s.gatewayControllerExtension = extension
+	}
+}
+
+func WithAgwControllerName(name string) func(*setup) {
+	return func(s *setup) {
+		s.agwControllerName = name
+	}
+}
+
+func WithAgentgatewayClassName(name string) func(*setup) {
+	return func(s *setup) {
+		s.agentgatewayClassName = name
+	}
+}
+
+func WithAdditionalGatewayClasses(classes map[string]*deployer.GatewayClassInfo) func(*setup) {
+	return func(s *setup) {
+		s.additionalGatewayClasses = classes
+	}
+}
+
+func WithExtraAgwPlugins(extraAgwPlugins func(ctx context.Context, agw *agwplugins.AgwCollections) []agwplugins.AgwPlugin) func(*setup) {
+	return func(s *setup) {
+		s.extraAgwPlugins = extraAgwPlugins
+	}
+}
+
+// WithLeaderElectionID sets the LeaderElectionID for the leader lease.
+func WithLeaderElectionID(id string) func(*setup) {
+	return func(s *setup) {
+		s.leaderElectionID = id
+	}
+}
+
+func WithHelmValuesGeneratorOverride(helmValuesGeneratorOverride func(inputs *deployer.Inputs) deployer.HelmValuesGenerator) func(*setup) {
+	return func(s *setup) {
+		s.helmValuesGeneratorOverride = helmValuesGeneratorOverride
+	}
+}
+
+func WithRestConfig(rc *rest.Config) func(*setup) {
+	return func(s *setup) {
+		s.restConfig = rc
+	}
+}
+
+func WithControllerManagerOptions(f func(context.Context) *ctrl.Options) func(*setup) {
+	return func(s *setup) {
+		s.ctrlMgrOptionsInitFunc = f
+	}
+}
+
+// used for tests only to get access to dynamically assigned port number
+func WithAgwXDSListener(l net.Listener) func(*setup) {
+	return func(s *setup) {
+		s.agwXdsListener = l
+	}
+}
+
+func WithExtraManagerConfig(mgrConfigFuncs ...func(context.Context, manager.Manager, kubetypes.DynamicObjectFilter) error) func(*setup) {
+	return func(s *setup) {
+		s.extraManagerConfig = mgrConfigFuncs
+	}
+}
+
+func WithKrtDebugger(dbg *krt.DebugHandler) func(*setup) {
+	return func(s *setup) {
+		s.krtDebugger = dbg
+	}
+}
+
+func WithExtraRunnables(runnables ...func(ctx context.Context, commoncol *collections.CommonCollections, agw *agwplugins.AgwCollections, s *apisettings.Settings) (bool, manager.Runnable)) func(*setup) {
+	return func(s *setup) {
+		s.extraRunnables = runnables
+	}
+}
+
+func WithGlobalSettings(settings *apisettings.Settings) func(*setup) {
+	return func(s *setup) {
+		s.globalSettings = settings
+	}
+}
+
+func WithExtraAgwResourceStatusHandlers(handlers map[schema.GroupVersionKind]agwplugins.AgwResourceStatusSyncHandler) func(*setup) {
+	return func(s *setup) {
+		s.extraAgwPolicyStatusHandlers = handlers
+	}
+}
+
+func WithAgentgatewaySyncerOptions(agentgatewaySyncerOptions []agentgatewaysyncer.AgentgatewaySyncerOption) func(*setup) {
+	return func(s *setup) {
+		s.agentgatewaySyncerOptions = agentgatewaySyncerOptions
+	}
+}
+
 type setup struct {
-	apiClient                    apiclient.Client
-	agwControllerName            string
-	agentgatewayClassName        string
-	agwXdsListener               net.Listener
-	restConfig                   *rest.Config
-	ctrlMgrOptionsInitFunc       func(context.Context) *ctrl.Options
+	apiClient                      apiclient.Client
+	extraInformerCacheSyncHandlers []cache.InformerSynced
+	gatewayControllerExtension     pluginsdk.GatewayControllerExtension
+	agwControllerName              string
+	agentgatewayClassName          string
+	additionalGatewayClasses       map[string]*deployer.GatewayClassInfo
+	extraAgwPlugins                func(ctx context.Context, agw *agwplugins.AgwCollections) []agwplugins.AgwPlugin
+	helmValuesGeneratorOverride    func(inputs *deployer.Inputs) deployer.HelmValuesGenerator
+	agwXdsListener                 net.Listener
+	restConfig                     *rest.Config
+	ctrlMgrOptionsInitFunc         func(context.Context) *ctrl.Options
+	// extra controller manager config, like adding registering additional controllers
+	extraManagerConfig []func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter) error
+	// extra Runnable to add to the manager
+	extraRunnables               []func(ctx context.Context, commoncol *collections.CommonCollections, agw *agwplugins.AgwCollections, settings *apisettings.Settings) (bool, manager.Runnable)
 	krtDebugger                  *krt.DebugHandler
-	globalSettings               *settings.Settings
+	globalSettings               *apisettings.Settings
 	leaderElectionID             string
 	extraAgwPolicyStatusHandlers map[schema.GroupVersionKind]agwplugins.AgwResourceStatusSyncHandler
 
@@ -61,16 +185,19 @@ var _ Server = &setup{}
 // ensure global logger wiring happens once to avoid data races
 var setLoggerOnce sync.Once
 
-func New() (*setup, error) {
+func New(opts ...func(*setup)) (*setup, error) {
 	s := &setup{
 		agwControllerName:     wellknown.DefaultAgwControllerName,
 		agentgatewayClassName: wellknown.DefaultAgwClassName,
 		leaderElectionID:      wellknown.LeaderElectionID,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
 
 	if s.globalSettings == nil {
 		var err error
-		s.globalSettings, err = settings.BuildSettings()
+		s.globalSettings, err = apisettings.BuildSettings()
 		if err != nil {
 			slog.Error("error loading settings from env", "error", err)
 			return nil, err
@@ -118,8 +245,8 @@ func New() (*setup, error) {
 		s.krtDebugger = new(krt.DebugHandler)
 	}
 
+	var err error
 	if s.agwXdsListener == nil {
-		var err error
 		s.agwXdsListener, err = newXDSListener("0.0.0.0", s.globalSettings.AgentgatewayXdsServicePort)
 		if err != nil {
 			slog.Error("error creating agw xds listener", "error", err)
@@ -157,7 +284,7 @@ func (s *setup) Start(ctx context.Context) error {
 	var certWatcher *certwatcher.CertWatcher
 	if s.globalSettings.XdsTLS {
 		var err error
-		certWatcher, err = certwatcher.New(settings.TLSCertPath, settings.TLSKeyPath)
+		certWatcher, err = certwatcher.New(apisettings.TLSCertPath, apisettings.TLSKeyPath)
 		if err != nil {
 			return err
 		}
@@ -204,8 +331,32 @@ func (s *setup) Start(ctx context.Context) error {
 	jwksUrlFactory := jwks_url.NewJwksUrlFactory(agwCollections.ConfigMaps, agwCollections.Backends, agwCollections.AgentgatewayPolicies)
 	jwks_url.JwksUrlBuilderFactory = func() jwks_url.JwksUrlBuilder { return jwksUrlFactory }
 
-	if err := buildJwksStore(ctx, mgr, s.apiClient, commoncol, agwCollections); err != nil {
-		return fmt.Errorf("error creating jwks store %w", err)
+	for _, mgrCfgFunc := range s.extraManagerConfig {
+		err := mgrCfgFunc(ctx, mgr, s.apiClient.ObjectFilter())
+		if err != nil {
+			return err
+		}
+	}
+
+	runnablesRegistry := make(map[string]any)
+	for _, runnable := range s.extraRunnables {
+		enabled, r := runnable(ctx, commoncol, agwCollections, s.globalSettings)
+		if !enabled {
+			continue
+		}
+		if named, ok := r.(common.NamedRunnable); ok {
+			runnablesRegistry[named.RunnableName()] = struct{}{}
+		}
+		if err := mgr.Add(r); err != nil {
+			return fmt.Errorf("error adding extra Runnable to manager: %w", err)
+		}
+	}
+
+	// rebuild jwks store if it doesn't exist
+	if _, exists := runnablesRegistry[jwks.RunnableName]; !exists {
+		if err := buildJwksStore(ctx, mgr, s.apiClient, commoncol, agwCollections); err != nil {
+			return fmt.Errorf("error creating jwks store %w", err)
+		}
 	}
 
 	agw, err := s.buildKgatewayWithConfig(ctx, mgr, setupOpts, commoncol, agwCollections)
@@ -243,6 +394,7 @@ func (s *setup) buildKgatewayWithConfig(
 		setupOpts.GlobalSettings,
 		s.agentgatewayClassName,
 		s.agwControllerName,
+		s.additionalGatewayClasses,
 	)
 
 	slog.Info("initializing controller")
@@ -250,7 +402,10 @@ func (s *setup) buildKgatewayWithConfig(
 		Manager:                        mgr,
 		AgwControllerName:              s.agwControllerName,
 		AgentgatewayClassName:          s.agentgatewayClassName,
+		AdditionalGatewayClasses:       s.additionalGatewayClasses,
 		GatewayClassInfos:              gatewayClassInfos,
+		ExtraAgwPlugins:                s.extraAgwPlugins,
+		HelmValuesGeneratorOverride:    s.helmValuesGeneratorOverride,
 		RestConfig:                     s.restConfig,
 		SetupOpts:                      setupOpts,
 		Client:                         s.apiClient,
@@ -259,6 +414,7 @@ func (s *setup) buildKgatewayWithConfig(
 		CommonCollections:              commonCollections,
 		AgwCollections:                 agwCollections,
 		ExtraAgwResourceStatusHandlers: s.extraAgwPolicyStatusHandlers,
+		GatewayControllerExtension:     s.gatewayControllerExtension,
 		AgentgatewaySyncerOptions:      s.agentgatewaySyncerOptions,
 	})
 	if err != nil {
@@ -275,6 +431,9 @@ func (s *setup) buildKgatewayWithConfig(
 
 	// RunAndWait must be called AFTER all Informers clients have been created
 	s.apiClient.RunAndWait(ctx.Done())
+
+	// Wait for extra Informer caches to sync
+	s.apiClient.WaitForCacheSync("extra-informers", ctx.Done(), s.extraInformerCacheSyncHandlers...)
 
 	return agwSyncer, nil
 }

@@ -9,37 +9,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-// ValidationMode determines how invalid routes and policies are handled during translation.
-// Higher levels increase safety guarantees, but may have performance implications.
-type ValidationMode string
-
-const (
-	// ValidationStandard rewrites invalid routes to direct responses
-	// (typically HTTP 500), preserving a valid config while isolating failures.
-	// This limits the blast radius of misconfigured routes or policies without
-	// affecting unrelated tenants.
-	ValidationStandard ValidationMode = "STANDARD"
-	// ValidationStrict builds on standard by running targeted validation
-	// (e.g. RDS, CDS, and security-related policies). Routes that fail these
-	// checks are also replaced with direct responses, and helps prevent unsafe
-	// config from reaching Envoy.
-	// Strict Validation is not supported with Rustformation yet,
-	// see docs/guides/transformation.md for details
-	ValidationStrict ValidationMode = "STRICT"
-)
-
-// Decode implements envconfig.Decoder.
-func (v *ValidationMode) Decode(value string) error {
-	level := ValidationMode(strings.ToUpper(value))
-	switch level {
-	case ValidationStandard, ValidationStrict:
-		*v = level
-		return nil
-	default:
-		return fmt.Errorf("invalid validation mode: %q", value)
-	}
-}
-
 // DnsLookupFamily controls the DNS lookup family for all static clusters created via Backend resources.
 type DnsLookupFamily string
 
@@ -163,13 +132,9 @@ type Settings struct {
 	XdsServiceHost string `split_words:"true"`
 
 	// XdsServiceName is the name of the Kubernetes Service that serves xDS config.
-	// It is assumed to be in the kgateway install namespace.
+	// It is assumed to be in the agentgateway install namespace.
 	// Ignored if XdsServiceHost is set.
 	XdsServiceName string `split_words:"true" default:"agentgateway"`
-
-	// XdsServicePort is the port of the Kubernetes Service that serves xDS config.
-	// This corresponds to the value of the `grpc-xds` port in the service.
-	XdsServicePort uint32 `split_words:"true" default:"9977"`
 
 	// XdsAuth enables or disables xDS authentication between the data-plane and control-plane.
 	// By default, this is enabled.
@@ -188,6 +153,13 @@ type Settings struct {
 	// is deprecated in v2.1 and will not be supported in v2.2.
 	EnableInferExt bool `split_words:"true"`
 
+	// DefaultImageRegistry is the default image registry to use for the agentgateway image.
+	DefaultImageRegistry string `split_words:"true" default:"cr.agentgateway.dev"`
+	// DefaultImageTag is the default image tag to use for the agentgateway image.
+	DefaultImageTag string `split_words:"true" default:""`
+	// DefaultImagePullPolicy is the default image pull policy to use for the agentgateway image.
+	DefaultImagePullPolicy string `split_words:"true" default:"IfNotPresent"`
+
 	// ProxyImageRegistry is the default image registry to use for the proxy image.
 	ProxyImageRegistry string `split_words:"true" default:"cr.agentgateway.dev"`
 	// ProxyImageRepository is the default image repository to use for the proxy image.
@@ -199,9 +171,18 @@ type Settings struct {
 	// Defaults to "info" if not set.
 	LogLevel string `split_words:"true" default:"info"`
 
+	// JSON representation of list of metav1.LabelSelector to select namespaces considered for resource discovery.
+	// Defaults to an empty list which selects all namespaces.
+	// E.g., [{"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"In","values":["infra"]}]},{"matchLabels":{"app":"a"}}]
+	DiscoveryNamespaceSelectors string `split_words:"true" default:"[]"`
+
 	// EnableBuiltinDefaultMetrics enables the default builtin controller-runtime metrics and go runtime metrics.
 	// Since these metrics can be numerous, it is disabled by default.
 	EnableBuiltinDefaultMetrics bool `split_words:"true" default:"false"`
+
+	// GlobalPolicyNamespace is the namespace where policies that can attach to resources
+	// in any namespace are defined.
+	GlobalPolicyNamespace string `split_words:"true"`
 
 	// Controls if leader election is disabled. Defaults to false.
 	DisableLeaderElection bool `split_words:"true" default:"false"`

@@ -2,12 +2,6 @@
 
 This syncer configures xds updates for the [agentgateway](https://agentgateway.dev/) data plane.
 
-To use the agentgateway control plane with kgateway, the kgateway helm chart must be installed with `agentgateway.enabled` set to `true` (which is the default):
-```yaml
-agentgateway:
-  enabled: true
-```
-
 You can configure the agentgateway Gateway class to use a specific image by setting the image field on the
 AgentgatewayParameters:
 ```yaml
@@ -280,17 +274,10 @@ EOF
 
 ### Architecture
 
-The agentgateway syncer only runs if `cfg.SetupOpts.GlobalSettings.EnableAgentgateway` is set. Otherwise,
-only the Envoy proxy syncer will run by default.
+The agentgateway kubernetes controller used to be a part of the kgateway project.
 
 ```mermaid
 flowchart TD
-    subgraph "kgateway startup"
-        A1["start.go"] --> A2["NewControllerBuilder()"]
-        A2 --> A3{EnableAgentgateway?}
-        A3 -->|true| A4["Create AgentGwSyncer"]
-        A3 -->|false| A5["Skip Agentgateway"]
-    end
 
     subgraph "agentgateway Syncer Initialization"
         A4 --> B1["agentgatewaysyncer.NewAgentGwSyncer()"]
@@ -374,11 +361,11 @@ Retag and load the image to match the default image tag in the values file for a
 make run HELM_ADDITIONAL_VALUES=test/e2e/tests/manifests/agent-gateway-integration.yaml; CONFORMANCE_GATEWAY_CLASS=agentgateway make conformance
 ```
 
-Set up a kind cluster and install kgateway with the kubernetes Gateway APIs:
+Set up a kind cluster and install agentgateway with the kubernetes Gateway APIs:
 ```shell
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.3.0/standard-install.yaml
-helm upgrade -i --create-namespace --namespace kgateway-system --version v2.3.0-main kgateway-crds oci://cr.kgateway.dev/kgateway-dev/charts/kgateway-crds
-helm upgrade -i --namespace kgateway-system --version v2.3.0-main kgateway oci://cr.kgateway.dev/kgateway-dev/charts/kgateway --set agentgateway.enabled=true --set inferenceExtension.enabled=true
+helm upgrade -i --create-namespace --namespace agentgateway-system --version v2.3.0-main agentgateway-crds oci://cr.agentgateway.dev/agentgateway/charts/agentgateway-crds
+helm upgrade -i --namespace agentgateway-system --version v2.3.0-main agentgateway oci://cr.agentgateway/agentgateway/charts/agentgateway
 ```
 
 #### HTTPRoute
@@ -876,8 +863,6 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
-  labels:
-    app: kgateway
   name: mcp-backend
 spec:
   mcp:

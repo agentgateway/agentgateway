@@ -145,12 +145,12 @@ func NewAgwCollections(
 		AgentgatewayPolicies: krt.NewInformer[*agentgateway.AgentgatewayPolicy](commoncol.Client),
 		Backends:             krt.NewInformer[*agentgateway.AgentgatewayBackend](commoncol.Client),
 	}
-
 	if commoncol.Settings.EnableInferExt {
 		// inference extensions cluster watch permissions are controlled by enabling EnableInferExt
 		inferencePoolGVR := wellknown.InferencePoolGVK.GroupVersion().WithResource("inferencepools")
 		agwCollections.InferencePools = krt.WrapClient(kclient.NewDelayedInformer[*inf.InferencePool](commoncol.Client, inferencePoolGVR, kubetypes.StandardInformer, kclient.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/InferencePools")...)
 	}
+
 	agwCollections.SetupIndexes()
 
 	return agwCollections, nil

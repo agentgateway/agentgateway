@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/gateway-api/conformance/utils/suite"
 	"sigs.k8s.io/gateway-api/pkg/features"
 	"sigs.k8s.io/yaml"
+
 	_ "sigs.k8s.io/gateway-api-inference-extension/conformance"
 )
 
