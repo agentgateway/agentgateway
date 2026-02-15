@@ -18,6 +18,7 @@ internal_benches = ["divan"]
 testing = ["dep:reqwest"]
 
 [dependencies]
+cookie.workspace = true
 a2a-sdk.workspace = true
 agent-core.workspace = true
 agent-celx.workspace = true
@@ -80,6 +81,7 @@ notify-debouncer-full.workspace = true
 notify.workspace = true
 num_cpus.workspace = true
 once_cell.workspace = true
+oauth2.workspace = true
 openapiv3.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry-proto.workspace = true

@@ -654,6 +654,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)timeout`|Timeout for the request|
 |`binds[].listeners[].routes[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)forward`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].issuer`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].audiences`||
@@ -661,11 +662,16 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)forward`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)issuer`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)forward`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)issuer`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].routes[].policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.(any)file`||
@@ -702,6 +708,21 @@
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`binds[].listeners[].routes[].policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`binds[].listeners[].routes[].policies.oauth2.issuer`|OIDC issuer URL.|
+|`binds[].listeners[].routes[].policies.oauth2.clientId`|OAuth2 client ID.|
+|`binds[].listeners[].routes[].policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`binds[].listeners[].routes[].policies.oauth2.clientSecret.(any)file`||
+|`binds[].listeners[].routes[].policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
+|`binds[].listeners[].routes[].policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`binds[].listeners[].routes[].policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
+|`binds[].listeners[].routes[].policies.oauth2.cookieName`|Session cookie base name.|
+|`binds[].listeners[].routes[].policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days).|
+|`binds[].listeners[].routes[].policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
+|`binds[].listeners[].routes[].policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
+|`binds[].listeners[].routes[].policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
+|`binds[].listeners[].routes[].policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
+|`binds[].listeners[].routes[].policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`binds[].listeners[].routes[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name`||
@@ -1509,6 +1530,7 @@
 |`binds[].listeners[].policies`||
 |`binds[].listeners[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)forward`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].issuer`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].audiences`||
@@ -1516,11 +1538,16 @@
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)forward`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)issuer`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)forward`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)issuer`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].policies.extAuthz.(any)(1)service`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.name`||
@@ -1547,6 +1574,21 @@
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`binds[].listeners[].policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`binds[].listeners[].policies.oauth2.issuer`|OIDC issuer URL.|
+|`binds[].listeners[].policies.oauth2.clientId`|OAuth2 client ID.|
+|`binds[].listeners[].policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`binds[].listeners[].policies.oauth2.clientSecret.(any)file`||
+|`binds[].listeners[].policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
+|`binds[].listeners[].policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`binds[].listeners[].policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
+|`binds[].listeners[].policies.oauth2.cookieName`|Session cookie base name.|
+|`binds[].listeners[].policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days).|
+|`binds[].listeners[].policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
+|`binds[].listeners[].policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
+|`binds[].listeners[].policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
+|`binds[].listeners[].policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
+|`binds[].listeners[].policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`binds[].listeners[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].policies.extProc.(any)(1)service.name`||
@@ -2206,6 +2248,7 @@
 |`policies[].policy.remoteRateLimit.(any)timeout`|Timeout for the request|
 |`policies[].policy.jwtAuth`|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)forward`||
 |`policies[].policy.jwtAuth.(any)(any)providers`||
 |`policies[].policy.jwtAuth.(any)(any)providers[].issuer`||
 |`policies[].policy.jwtAuth.(any)(any)providers[].audiences`||
@@ -2213,11 +2256,16 @@
 |`policies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`policies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)url`||
 |`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)forward`||
 |`policies[].policy.jwtAuth.(any)(any)issuer`||
 |`policies[].policy.jwtAuth.(any)(any)audiences`||
 |`policies[].policy.jwtAuth.(any)(any)jwks`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)file`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
+|`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)forward`||
+|`policies[].policy.jwtAuth.(any)(any)issuer`||
+|`policies[].policy.jwtAuth.(any)(any)audiences`||
 |`policies[].policy.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`policies[].policy.basicAuth.htpasswd.(any)file`||
@@ -2254,6 +2302,21 @@
 |`policies[].policy.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`policies[].policy.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`policies[].policy.oauth2.issuer`|OIDC issuer URL.|
+|`policies[].policy.oauth2.clientId`|OAuth2 client ID.|
+|`policies[].policy.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`policies[].policy.oauth2.clientSecret.(any)file`||
+|`policies[].policy.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
+|`policies[].policy.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`policies[].policy.oauth2.scopes`|OAuth scopes requested during browser login flow.|
+|`policies[].policy.oauth2.cookieName`|Session cookie base name.|
+|`policies[].policy.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days).|
+|`policies[].policy.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
+|`policies[].policy.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
+|`policies[].policy.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
+|`policies[].policy.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
+|`policies[].policy.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`policies[].policy.extProc`|Extend agentgateway with an external processor|
 |`policies[].policy.extProc.(any)(1)service`||
 |`policies[].policy.extProc.(any)(1)service.name`||

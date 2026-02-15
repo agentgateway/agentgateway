@@ -144,7 +144,7 @@ impl App {
 					);
 					auth
 						.jwt_validator
-						.apply(None, &mut req)
+						.apply(&pi.upstream, None, &mut req)
 						.await
 						.map_err(|e| {
 							Self::create_auth_required_response(

@@ -883,7 +883,8 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRefSerde>,
 
-	/// `jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.
+	/// `jwt` contains claims from a verified JWT token or OAuth2/OIDC `id_token`.
+	/// This is present when either the JWT or OAuth2 policy injects claims.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub jwt: Option<jwt::Claims>,
 

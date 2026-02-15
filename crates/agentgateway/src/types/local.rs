@@ -632,6 +632,85 @@ where
 }
 
 #[apply(schema_de!)]
+struct LocalOAuth2Policy {
+	/// OIDC issuer URL.
+	issuer: String,
+	/// OAuth2 client ID.
+	client_id: String,
+	/// OAuth2 client secret value or file reference.
+	client_secret: crate::serdes::FileOrInline,
+	/// Explicit callback URL (recommended for multi-proxy deployments).
+	#[serde(default)]
+	redirect_uri: Option<String>,
+	/// Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.
+	/// Prefer explicit `redirectUri` in production.
+	#[serde(default)]
+	auto_detect_redirect_uri: Option<bool>,
+	/// OAuth scopes requested during browser login flow.
+	#[serde(default)]
+	scopes: Vec<String>,
+	/// Session cookie base name.
+	#[serde(default)]
+	cookie_name: Option<String>,
+	/// Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).
+	#[serde(default)]
+	refreshable_cookie_max_age_seconds: Option<u64>,
+	/// Forward `Authorization: Bearer <access_token>` upstream after login (default: false).
+	#[serde(default)]
+	pass_access_token: Option<bool>,
+	/// Sign-out path that clears the local OAuth2 session.
+	#[serde(default)]
+	sign_out_path: Option<String>,
+	/// Route path prefixes that bypass OAuth2 auth.
+	#[serde(default)]
+	pass_through_matchers: Vec<String>,
+	/// Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.
+	#[serde(default)]
+	deny_redirect_matchers: Vec<String>,
+	/// Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.
+	#[serde(default)]
+	trusted_proxy_cidrs: Vec<String>,
+}
+
+impl LocalOAuth2Policy {
+	fn try_into(self) -> anyhow::Result<crate::types::agent::OAuth2Policy> {
+		let Self {
+			issuer,
+			client_id,
+			client_secret,
+			redirect_uri,
+			auto_detect_redirect_uri,
+			scopes,
+			cookie_name,
+			refreshable_cookie_max_age_seconds,
+			pass_access_token,
+			sign_out_path,
+			pass_through_matchers,
+			deny_redirect_matchers,
+			trusted_proxy_cidrs,
+		} = self;
+		let client_secret = client_secret.load()?;
+		let policy = crate::types::agent::OAuth2Policy {
+			issuer,
+			client_id,
+			client_secret: secrecy::SecretString::new(client_secret.into()),
+			redirect_uri,
+			auto_detect_redirect_uri,
+			scopes,
+			cookie_name,
+			refreshable_cookie_max_age_seconds,
+			pass_access_token,
+			sign_out_path,
+			pass_through_matchers,
+			deny_redirect_matchers,
+			trusted_proxy_cidrs,
+		};
+		crate::http::oauth2::OAuth2Filter::validate_policy(&policy)?;
+		Ok(policy)
+	}
+}
+
+#[apply(schema_de!)]
 #[derive(Default)]
 struct LocalGatewayPolicy {
 	/// Authenticate incoming JWT requests.
@@ -640,6 +719,9 @@ struct LocalGatewayPolicy {
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
 	ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Authenticate incoming requests using OAuth2/OIDC.
+	#[serde(default)]
+	oauth2: Option<LocalOAuth2Policy>,
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
 	ext_proc: Option<crate::http::ext_proc::ExtProc>,
@@ -664,6 +746,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 		let LocalGatewayPolicy {
 			jwt_auth,
 			ext_authz,
+			oauth2,
 			ext_proc,
 			transformations,
 			basic_auth,
@@ -672,6 +755,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 		FilterOrPolicy {
 			jwt_auth,
 			ext_authz,
+			oauth2,
 			ext_proc,
 			transformations,
 			basic_auth,
@@ -881,6 +965,9 @@ struct FilterOrPolicy {
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
 	ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Authenticate incoming requests using OAuth2/OIDC.
+	#[serde(default)]
+	oauth2: Option<LocalOAuth2Policy>,
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
 	ext_proc: Option<crate::http::ext_proc::ExtProc>,
@@ -1311,10 +1398,16 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 		transformations,
 		csrf,
 		ext_authz,
+		oauth2,
 		ext_proc,
 		timeout,
 		retry,
 	} = pol;
+
+	if jwt_auth.is_some() && oauth2.is_some() {
+		bail!("`jwtAuth` and `oauth2` cannot be configured together in the same policy block");
+	}
+
 	if let Some(p) = request_header_modifier {
 		route_policies.push(TrafficPolicy::RequestHeaderModifier(p));
 	}
@@ -1384,6 +1477,10 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 	}
 	if let Some(p) = ext_authz {
 		route_policies.push(TrafficPolicy::ExtAuthz(p))
+	}
+	if let Some(p) = oauth2 {
+		let oauth2_policy = p.try_into()?;
+		route_policies.push(TrafficPolicy::OAuth2(oauth2_policy))
 	}
 	if let Some(p) = ext_proc {
 		route_policies.push(TrafficPolicy::ExtProc(p))

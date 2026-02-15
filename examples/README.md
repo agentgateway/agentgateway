@@ -15,6 +15,10 @@ The multiplex example shows how to use agentgateway to multiplex multiple target
 
 The authorization example shows how to use agentgateway to apply authorization policies to incoming requests. It uses JWT Authentication and authorizaton policies to authenticate and authorize incoming requests.
 
+### [OAuth2](oauth2/README.md)
+
+The oauth2 example shows how to use agentgateway's built-in OAuth2/OIDC policy to protect routes with browser login using a local `clientSecret` (inline or file).
+
 ### [TLS](tls/README.md)
 
 The tls example shows how to use agentgateway to terminate TLS connections.
