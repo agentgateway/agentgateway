@@ -54,6 +54,7 @@ pub struct Response {
 	pub model: String,
 	pub usage: Option<Usage>,
 	/// A list of chat completion choices. Can be more than one if `n` is greater than 1.
+	#[serde(default)]
 	pub choices: Vec<Choice>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,

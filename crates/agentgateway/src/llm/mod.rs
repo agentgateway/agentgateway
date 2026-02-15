@@ -830,16 +830,28 @@ impl AIProvider {
 				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
 				InputFormat::Completions,
 			) => Ok(Box::new(
-				serde_json::from_slice::<types::completions::Response>(bytes)
-					.map_err(AIError::ResponseParsing)?,
+				serde_json::from_slice::<types::completions::Response>(bytes).map_err(|e| {
+					warn!(
+						error = %e,
+						body = %String::from_utf8_lossy(bytes),
+						"failed to parse completions response"
+					);
+					AIError::ResponseParsing(e)
+				})?,
 			)),
 			// Responses with OpenAI: just passthrough
 			(
 				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
 				InputFormat::Responses,
 			) => Ok(Box::new(
-				serde_json::from_slice::<types::responses::Response>(bytes)
-					.map_err(AIError::ResponseParsing)?,
+				serde_json::from_slice::<types::responses::Response>(bytes).map_err(|e| {
+					warn!(
+						error = %e,
+						body = %String::from_utf8_lossy(bytes),
+						"failed to parse responses response"
+					);
+					AIError::ResponseParsing(e)
+				})?,
 			)),
 			// Anthropic messages: passthrough
 			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => Ok(Box::new(
