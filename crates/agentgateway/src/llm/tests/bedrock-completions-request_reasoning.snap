@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 108
 description: "bedrock-completions: request_reasoning"
 info:
   model: gpt-3.5-turbo

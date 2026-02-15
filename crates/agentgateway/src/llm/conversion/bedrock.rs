@@ -327,42 +327,29 @@ pub mod from_completions {
 		});
 		let tool_config = tools.map(|tools| bedrock::ToolConfiguration { tools, tool_choice });
 
-		// Handle thinking configuration similar to Anthropic
-		let thinking = if let Some(budget) = req.vendor_extensions.thinking_budget_tokens {
-			Some(serde_json::json!({
+		let thinking_budget =
+			req
+				.vendor_extensions
+				.thinking_budget_tokens
+				.or(match &req.reasoning_effort {
+					Some(completions::ReasoningEffort::Minimal) | Some(completions::ReasoningEffort::Low) => {
+						Some(1024)
+					},
+					Some(completions::ReasoningEffort::Medium) => Some(2048),
+					Some(completions::ReasoningEffort::High) | Some(completions::ReasoningEffort::Xhigh) => {
+						Some(4096)
+					},
+					Some(completions::ReasoningEffort::None) | None => None,
+				});
+
+		let additional_model_request_fields = thinking_budget.map(|budget| {
+			serde_json::json!({
 				"thinking": {
 					"type": "enabled",
 					"budget_tokens": budget
 				}
-			}))
-		} else {
-			match &req.reasoning_effort {
-				// Note: Anthropic's minimum budget_tokens is 1024
-				Some(completions::ReasoningEffort::Minimal) | Some(completions::ReasoningEffort::Low) => {
-					Some(serde_json::json!({
-						"thinking": {
-							"type": "enabled",
-							"budget_tokens": 1024
-						}
-					}))
-				},
-				Some(completions::ReasoningEffort::Medium) => Some(serde_json::json!({
-					"thinking": {
-						"type": "enabled",
-						"budget_tokens": 2048
-					}
-				})),
-				Some(completions::ReasoningEffort::High) | Some(completions::ReasoningEffort::Xhigh) => {
-					Some(serde_json::json!({
-						"thinking": {
-							"type": "enabled",
-							"budget_tokens": 4096
-						}
-					}))
-				},
-				Some(completions::ReasoningEffort::None) | None => None,
-			}
-		};
+			})
+		});
 
 		let supports_caching = helpers::supports_prompt_caching(&model_id);
 		let system_content = if system_text.is_empty() {
@@ -400,7 +387,7 @@ pub mod from_completions {
 			inference_config: Some(inference_config),
 			tool_config,
 			guardrail_config,
-			additional_model_request_fields: thinking,
+			additional_model_request_fields,
 			prompt_variables: None,
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
@@ -688,9 +675,25 @@ pub mod from_messages {
 		headers: Option<&http::HeaderMap>,
 	) -> bedrock::ConverseRequest {
 		let mut cache_points_used = 0;
+		// Bedrock adaptive thinking effort uses output_config.effort.
+		// See: https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-adaptive-thinking.html
+		let requested_thinking = req.thinking.as_ref();
+		let requested_output_config = req.output_config.as_ref();
+		let translated_adaptive_effort = match requested_thinking {
+			Some(messages::ThinkingInput::Adaptive { effort }) => *effort,
+			_ => None,
+		};
+		let requested_output_config_json = requested_output_config.map(|cfg| {
+			let mut output_config = serde_json::Map::new();
+			if let Some(effort) = cfg.effort {
+				output_config.insert("effort".to_string(), serde_json::json!(effort));
+			}
+			serde_json::Value::Object(output_config)
+		});
 
-		// Check if thinking is enabled (Bedrock constraint: thinking requires specific tool/temp settings)
-		let thinking_enabled = req.thinking.is_some();
+		// Bedrock applies strict inference/tool-choice constraints only to explicit extended thinking.
+		let thinking_enabled = requested_thinking
+			.is_some_and(|thinking| matches!(thinking, messages::ThinkingInput::Enabled { .. }));
 
 		// Convert system prompt to Bedrock format with cache point insertion
 		// Note: Anthropic MessagesRequest.system is Option<SystemPrompt>, Bedrock wants Option<Vec<SystemContentBlock>>
@@ -872,7 +875,7 @@ pub mod from_messages {
 		// Build inference config from typed fields
 		let inference_config = bedrock::InferenceConfiguration {
 			max_tokens: req.max_tokens,
-			// When thinking is enabled, temperature/top_p/top_k must be None (Bedrock constraint)
+			// Extended thinking requires temperature/top_p/top_k to be unset.
 			temperature: if thinking_enabled {
 				None
 			} else {
@@ -942,44 +945,43 @@ pub mod from_messages {
 			None
 		};
 
-		// Convert thinking from typed field and handle beta headers
-		let mut additional_fields = req.thinking.map(|thinking| match thinking {
-			messages::ThinkingInput::Enabled { budget_tokens } => serde_json::json!({
-				"thinking": {
+		let mut additional_fields = requested_thinking.map(|thinking| {
+			let thinking_json = match thinking {
+				messages::ThinkingInput::Enabled { budget_tokens } => serde_json::json!({
 					"type": "enabled",
 					"budget_tokens": budget_tokens
-				}
-			}),
-			messages::ThinkingInput::Disabled {} => serde_json::json!({
-				"thinking": {
+				}),
+				messages::ThinkingInput::Disabled {} => serde_json::json!({
 					"type": "disabled"
-				}
-			}),
+				}),
+				messages::ThinkingInput::Adaptive { .. } => serde_json::json!({
+					"type": "adaptive"
+				}),
+			};
+			serde_json::json!({ "thinking": thinking_json })
 		});
+		let mut upsert_additional_field = |key: &str, value: serde_json::Value| {
+			let fields =
+				additional_fields.get_or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+			fields
+				.as_object_mut()
+				.expect("additional model request fields must be a JSON object")
+				.insert(key.to_string(), value);
+		};
+
+		// Preserve explicit output_config and translate adaptive effort only when output_config is absent.
+		if let Some(output_config) = requested_output_config_json {
+			upsert_additional_field("output_config", output_config);
+		} else if let Some(effort) = translated_adaptive_effort {
+			upsert_additional_field("output_config", serde_json::json!({ "effort": effort }));
+		}
 
 		// Extract beta headers from HTTP headers if provided
 		let beta_headers = headers.and_then(|h| helpers::extract_beta_headers(h).ok().flatten());
 
 		if let Some(beta_array) = beta_headers {
-			// Add beta headers to additionalModelRequestFields
-			match additional_fields {
-				Some(ref mut fields) => {
-					if let Some(existing_obj) = fields.as_object_mut() {
-						existing_obj.insert(
-							"anthropic_beta".to_string(),
-							serde_json::Value::Array(beta_array),
-						);
-					}
-				},
-				None => {
-					let mut fields = serde_json::Map::new();
-					fields.insert(
-						"anthropic_beta".to_string(),
-						serde_json::Value::Array(beta_array),
-					);
-					additional_fields = Some(serde_json::Value::Object(fields));
-				},
-			}
+			// Add beta headers to additionalModelRequestFields.
+			upsert_additional_field("anthropic_beta", serde_json::Value::Array(beta_array));
 		}
 
 		// Build guardrail configuration if provider has it configured

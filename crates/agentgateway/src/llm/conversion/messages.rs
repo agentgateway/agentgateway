@@ -115,31 +115,26 @@ pub mod from_completions {
 			},
 			_ => None,
 		};
-		let thinking = if let Some(budget) = req.vendor_extensions.thinking_budget_tokens {
-			Some(messages::ThinkingInput::Enabled {
-				budget_tokens: budget,
-			})
-		} else {
-			match &req.reasoning_effort {
-				// Arbitrary constants come from LiteLLM defaults.
-				// OpenRouter uses percentages which may be more appropriate though (https://openrouter.ai/docs/use-cases/reasoning-tokens#reasoning-effort-level)
-				// Note: Anthropic's minimum budget_tokens is 1024
-				Some(completions::ReasoningEffort::Minimal) | Some(completions::ReasoningEffort::Low) => {
-					Some(messages::ThinkingInput::Enabled {
-						budget_tokens: 1024,
-					})
-				},
-				Some(completions::ReasoningEffort::Medium) => Some(messages::ThinkingInput::Enabled {
-					budget_tokens: 2048,
-				}),
-				Some(completions::ReasoningEffort::High) | Some(completions::ReasoningEffort::Xhigh) => {
-					Some(messages::ThinkingInput::Enabled {
-						budget_tokens: 4096,
-					})
-				},
-				Some(completions::ReasoningEffort::None) | None => None,
-			}
-		};
+		let thinking_budget =
+			req
+				.vendor_extensions
+				.thinking_budget_tokens
+				.or(match &req.reasoning_effort {
+					// Use explicit enabled budgets for reasoning_effort to preserve compatibility
+					// with models/providers that don't support adaptive thinking.
+					Some(completions::ReasoningEffort::Minimal) | Some(completions::ReasoningEffort::Low) => {
+						Some(1024)
+					},
+					Some(completions::ReasoningEffort::Medium) => Some(2048),
+					Some(completions::ReasoningEffort::High) | Some(completions::ReasoningEffort::Xhigh) => {
+						Some(4096)
+					},
+					Some(completions::ReasoningEffort::None) | None => None,
+				});
+
+		let thinking = thinking_budget.map(|budget| messages::ThinkingInput::Enabled {
+			budget_tokens: budget,
+		});
 		messages::Request {
 			messages,
 			system: if system.is_empty() {
@@ -158,6 +153,7 @@ pub mod from_completions {
 			tool_choice,
 			metadata,
 			thinking,
+			output_config: None,
 		}
 	}
 

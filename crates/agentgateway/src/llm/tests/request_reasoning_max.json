@@ -1,0 +1,10 @@
+{
+  "model": "claude-opus-4-6",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Deeply analyze quantum gravity"
+    }
+  ],
+  "reasoning_effort": "xhigh"
+}

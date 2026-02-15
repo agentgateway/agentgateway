@@ -4,7 +4,7 @@ use std::path::Path;
 use agent_core::strng;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::*;
 
@@ -118,7 +118,12 @@ const COMPLETION_REQUESTS: &[&str] = &[
 	"request_tool-call",
 	"request_reasoning",
 ];
-const MESSAGES_REQUESTS: &[&str] = &["request_anthropic_basic", "request_anthropic_tools"];
+const ANTHROPIC_COMPLETION_REQUESTS: &[&str] = &["request_reasoning_max"];
+const MESSAGES_REQUESTS: &[&str] = &[
+	"request_anthropic_basic",
+	"request_anthropic_tools",
+	"request_anthropic_reasoning",
+];
 const RESPONSES_REQUESTS: &[&str] = &["request_responses_basic", "request_responses_instructions"];
 const COUNT_TOKENS_REQUESTS: &[&str] = &[
 	"request_count_tokens_basic",
@@ -365,8 +370,34 @@ async fn test_passthrough() {
 #[tokio::test]
 async fn test_messages_to_completions() {
 	let request = |i| conversion::completions::from_messages::translate(&i);
-	test_request("anthropic", "request_anthropic_basic", request);
-	test_request("anthropic", "request_anthropic_tools", request);
+	for r in MESSAGES_REQUESTS {
+		test_request("anthropic", r, request);
+	}
+}
+
+#[test]
+fn test_adaptive_thinking_without_effort_maps_to_high_reasoning_effort() {
+	let request: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-opus-4-6",
+		"max_tokens": 256,
+		"thinking": {
+			"type": "adaptive"
+		},
+		"messages": [
+			{
+				"role": "user",
+				"content": "Give one concise insight."
+			}
+		]
+	}))
+	.expect("valid messages request");
+
+	let translated = conversion::completions::from_messages::translate(&request)
+		.expect("messages->completions translation");
+	let translated: Value =
+		serde_json::from_slice(&translated).expect("translated request should be valid json");
+
+	assert_eq!(translated.get("reasoning_effort"), Some(&json!("high")));
 }
 
 #[tokio::test]
@@ -396,6 +427,9 @@ async fn test_completions_to_messages() {
 
 	let request = |i| conversion::messages::from_completions::translate(&i);
 	for r in COMPLETION_REQUESTS {
+		test_request("anthropic", r, request);
+	}
+	for r in ANTHROPIC_COMPLETION_REQUESTS {
 		test_request("anthropic", r, request);
 	}
 }

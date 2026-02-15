@@ -114,6 +114,7 @@ fn test_metadata_from_header() {
 		tools: None,
 		tool_choice: None,
 		thinking: None,
+		output_config: None,
 	};
 
 	let out = super::from_messages::translate_internal(req, &provider, Some(&headers));
@@ -121,6 +122,305 @@ fn test_metadata_from_header() {
 
 	assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
 	assert_eq!(metadata.get("department"), Some(&"engineering".to_string()));
+}
+
+#[test]
+fn test_output_config_effort_without_thinking_is_passed_through() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: None,
+		tool_choice: None,
+		thinking: None,
+		output_config: Some(messages::typed::OutputConfig {
+			effort: Some(messages::typed::ThinkingEffort::High),
+		}),
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"output_config": {
+				"effort": "high"
+			}
+		}))
+	);
+	let inference = out.inference_config.unwrap();
+	assert_eq!(inference.temperature, Some(0.7));
+	assert_eq!(inference.top_p, Some(0.8));
+	assert_eq!(inference.top_k, Some(50));
+}
+
+#[test]
+fn test_explicit_empty_output_config_is_preserved() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: None,
+		tool_choice: None,
+		thinking: Some(messages::typed::ThinkingInput::Adaptive {
+			effort: Some(messages::typed::ThinkingEffort::High),
+		}),
+		output_config: Some(messages::typed::OutputConfig { effort: None }),
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"thinking": {
+				"type": "adaptive"
+			},
+			"output_config": {}
+		}))
+	);
+
+	let inference = out.inference_config.unwrap();
+	assert_eq!(inference.temperature, Some(0.7));
+	assert_eq!(inference.top_p, Some(0.8));
+	assert_eq!(inference.top_k, Some(50));
+}
+
+#[test]
+fn test_thinking_and_output_config_are_both_passed_through() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_k: None,
+		top_p: None,
+		tools: None,
+		tool_choice: None,
+		thinking: Some(messages::typed::ThinkingInput::Enabled {
+			budget_tokens: 1024,
+		}),
+		output_config: Some(messages::typed::OutputConfig {
+			effort: Some(messages::typed::ThinkingEffort::High),
+		}),
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": 1024
+			},
+			"output_config": {
+				"effort": "high"
+			}
+		}))
+	);
+}
+
+#[test]
+fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: Some(vec![messages::typed::Tool {
+			name: "lookup".to_string(),
+			description: Some("Lookup tool".to_string()),
+			input_schema: json!({
+				"type": "object",
+				"properties": {
+					"q": { "type": "string" }
+				},
+				"required": ["q"]
+			}),
+			cache_control: None,
+		}]),
+		tool_choice: Some(messages::typed::ToolChoice::Tool {
+			name: "lookup".to_string(),
+		}),
+		thinking: Some(messages::typed::ThinkingInput::Adaptive {
+			effort: Some(messages::typed::ThinkingEffort::High),
+		}),
+		output_config: None,
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	let inference = out.inference_config.unwrap();
+	assert_eq!(inference.temperature, Some(0.7));
+	assert_eq!(inference.top_p, Some(0.8));
+	assert_eq!(inference.top_k, Some(50));
+
+	let tool_choice = out
+		.tool_config
+		.as_ref()
+		.and_then(|cfg| cfg.tool_choice.as_ref());
+	assert!(matches!(
+		tool_choice,
+		Some(types::bedrock::ToolChoice::Tool { name }) if name == "lookup"
+	));
+
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"thinking": {
+				"type": "adaptive"
+			},
+			"output_config": {
+				"effort": "high"
+			}
+		}))
+	);
+}
+
+#[test]
+fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: Some(vec![messages::typed::Tool {
+			name: "lookup".to_string(),
+			description: Some("Lookup tool".to_string()),
+			input_schema: json!({
+				"type": "object",
+				"properties": {
+					"q": { "type": "string" }
+				},
+				"required": ["q"]
+			}),
+			cache_control: None,
+		}]),
+		tool_choice: Some(messages::typed::ToolChoice::Auto),
+		thinking: Some(messages::typed::ThinkingInput::Enabled {
+			budget_tokens: 1024,
+		}),
+		output_config: None,
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	let inference = out.inference_config.unwrap();
+	assert_eq!(inference.temperature, None);
+	assert_eq!(inference.top_p, None);
+	assert_eq!(inference.top_k, None);
+
+	let tool_choice = out
+		.tool_config
+		.as_ref()
+		.and_then(|cfg| cfg.tool_choice.as_ref());
+	assert!(matches!(tool_choice, Some(types::bedrock::ToolChoice::Any)));
 }
 
 #[test]
