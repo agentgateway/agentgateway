@@ -1,0 +1,45 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: sa-iam-agwp
+    namespace: default
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: sa-iam-agwp
+  namespace: default
+spec:
+  serviceAccount:
+    metadata:
+      annotations:
+        eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/agentgateway-role"
+  deployment:
+    metadata:
+      labels:
+        # You'd think this would remove the app.kubernetes.io/instance label,
+        # but it just sets the label to the empty string. TODO(chandler):
+        # Figure out the incantation to cause removal of the label.
+        app.kubernetes.io/instance: null
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same
