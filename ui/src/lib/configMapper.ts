@@ -33,42 +33,98 @@ export function configDumpToLocalConfig(configDump: any): LocalConfig {
     .map((b: any) => (b.backend ? mapToBackend(b.backend) : null))
     .filter(Boolean);
 
+  // Build a lookup of A2A policies keyed by their target service hostname + port.
+  // In XDS mode, A2A policies are delivered as separate policy objects targeting
+  // specific services rather than being inline on routes. We need to resolve them
+  // onto the routes whose service backends match the policy targets.
+  const a2aPolicies = buildA2aPolicyLookup(configDump.policies || []);
+
   localConfig.binds = (configDump.binds || []).map((bind: any) =>
-    mapToBind(bind, backends as Backend[])
+    mapToBind(bind, backends as Backend[], a2aPolicies)
   );
 
   return localConfig;
 }
 
-function mapToBind(bindData: any, backends: Backend[]): Bind {
+// A2A policy target key format: "hostname:port"
+type A2aPolicyLookup = Map<string, true>;
+
+// Extract A2A backend policies from the top-level policies array and build a
+// lookup by target service hostname:port so we can efficiently match them to
+// route backends during mapping.
+function buildA2aPolicyLookup(policies: any[]): A2aPolicyLookup {
+  const lookup: A2aPolicyLookup = new Map();
+  for (const p of policies) {
+    // Only process backend-targeted A2A policies
+    const backendPolicy = p?.policy?.backend;
+    if (!backendPolicy?.a2a) continue;
+
+    const service = p?.target?.backend?.service;
+    if (!service?.hostname || typeof service.port !== "number") continue;
+
+    lookup.set(`${service.hostname}:${service.port}`, true);
+  }
+  return lookup;
+}
+
+function mapToBind(bindData: any, backends: Backend[], a2aPolicies: A2aPolicyLookup): Bind {
   return {
     port: parseInt(bindData.address.split(":")[1]),
     listeners: Object.values(bindData.listeners || {}).map((listenerData: any) =>
-      mapToListener(listenerData, backends)
+      mapToListener(listenerData, backends, a2aPolicies)
     ),
   };
 }
 
-function mapToListener(listenerData: any, backends: Backend[]): Listener {
+function mapToListener(
+  listenerData: any,
+  backends: Backend[],
+  a2aPolicies: A2aPolicyLookup
+): Listener {
   return {
     name: listenerData.name,
     hostname: listenerData.hostname,
     protocol: listenerData.protocol as ListenerProtocol,
     tls: mapToTlsConfig(listenerData.tls),
     routes: Object.values(listenerData.routes || {}).map((routeData: any) =>
-      mapToRoute(routeData, backends)
+      mapToRoute(routeData, backends, a2aPolicies)
     ),
   };
 }
 
-function mapToRoute(routeData: any, backends: Backend[]): Route {
-  return {
+function mapToRoute(routeData: any, backends: Backend[], a2aPolicies: A2aPolicyLookup): Route {
+  const mappedBackends = (routeData.backends || []).map((rb: any) =>
+    mapToRouteBackend(rb, backends)
+  );
+
+  // Resolve A2A policies onto this route by checking if any of its service
+  // backends match an A2A policy target. Also check for inline A2A policies
+  // that may already be present on the route data.
+  const hasInlineA2a = routeData.inlinePolicies?.some((p: any) => p?.a2a !== undefined);
+  const hasMatchingA2aPolicy = (routeData.backends || []).some((rb: any) => {
+    const svc = rb.service;
+    if (!svc) return false;
+    // Service name in routes is "namespace/fqdn" format, port is a number
+    const hostname =
+      typeof svc.name === "string"
+        ? svc.name.split("/").pop() || svc.name
+        : svc.name?.hostname || "";
+    return hostname && typeof svc.port === "number" && a2aPolicies.has(`${hostname}:${svc.port}`);
+  });
+
+  const route: Route = {
     name: routeData.name,
     ruleName: routeData.ruleName || "",
     hostnames: routeData.hostnames || [],
     matches: mapToMatches(routeData.matches),
-    backends: (routeData.backends || []).map((rb: any) => mapToRouteBackend(rb, backends)),
+    backends: mappedBackends,
   };
+
+  if (hasInlineA2a || hasMatchingA2aPolicy) {
+    route.policies = { a2a: {} };
+  }
+
+  return route;
 }
 
 function mapToMatches(matchesData: any): Match[] {
