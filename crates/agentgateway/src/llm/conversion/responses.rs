@@ -25,6 +25,10 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) 
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
+							r.response.cached_input_tokens =
+								Some(usage.input_tokens_details.cached_tokens as u64);
+							r.response.reasoning_tokens =
+								Some(usage.output_tokens_details.reasoning_tokens as u64);
 						}
 					});
 				},
@@ -43,6 +47,10 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) 
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
+							r.response.cached_input_tokens =
+								Some(usage.input_tokens_details.cached_tokens as u64);
+							r.response.reasoning_tokens =
+								Some(usage.output_tokens_details.reasoning_tokens as u64);
 						}
 					});
 				},

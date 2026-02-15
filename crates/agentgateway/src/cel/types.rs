@@ -685,10 +685,23 @@ pub struct LLMContext {
 	#[dynamic(rename = "inputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
+	/// The number of tokens in the input/prompt read from cache (savings)
+	#[dynamic(rename = "cachedInputTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cached_input_tokens: Option<u64>,
+	/// Tokens written to cache (costs)
+	/// Not present with OpenAI
+	#[dynamic(rename = "cacheCreationInputTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_input_tokens: Option<u64>,
 	/// The number of tokens in the output/completion.
 	#[dynamic(rename = "outputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_tokens: Option<u64>,
+	/// The number of reasoning tokens in the output/completion.
+	#[dynamic(rename = "reasoningTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reasoning_tokens: Option<u64>,
 	/// The total number of tokens for the request.
 	#[dynamic(rename = "totalTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -720,6 +733,9 @@ impl From<llm::LLMInfo> for LLMContext {
 			count_tokens: resp.count_tokens,
 			total_tokens: resp.total_tokens,
 			first_token: resp.first_token,
+			reasoning_tokens: resp.reasoning_tokens,
+			cached_input_tokens: resp.cached_input_tokens,
+			cache_creation_input_tokens: resp.cache_creation_input_tokens,
 			response_model: resp.provider_model.clone(),
 			// Not always set
 			completion: resp.completion.clone(),
@@ -758,6 +774,9 @@ impl From<llm::LLMRequest> for LLMContext {
 			output_tokens: None,
 			total_tokens: None,
 			completion: None,
+			reasoning_tokens: None,
+			cached_input_tokens: None,
+			cache_creation_input_tokens: None,
 		}
 	}
 }
@@ -1052,10 +1071,14 @@ pub fn full_example_executor() -> ExecutorSerde {
 			response_model: Some("gpt-4-turbo".into()),
 			provider: "fake-ai".into(),
 			input_tokens: Some(100),
+			cached_input_tokens: Some(20),
+			cache_creation_input_tokens: Some(10),
 			output_tokens: Some(50),
+			reasoning_tokens: Some(30),
 			total_tokens: Some(150),
 			first_token: None,
 			count_tokens: Some(10),
+
 			prompt: None,
 			completion: Some(vec!["Hello".to_string()]),
 			params: llm::LLMRequestParams {

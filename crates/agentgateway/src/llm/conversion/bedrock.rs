@@ -3,6 +3,7 @@ use tracing::trace;
 
 use crate::http::Response;
 use crate::llm::AIError;
+use crate::llm::types::completions::typed::UsagePromptDetails;
 use crate::llm::types::{bedrock, messages, responses};
 
 #[cfg(test)]
@@ -180,6 +181,7 @@ pub mod from_completions {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
+	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::{AIError, LLMInfo, types};
 	use crate::telemetry::log::AsyncLog;
 	use crate::{json, parse};
@@ -614,6 +616,9 @@ pub mod from_completions {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
 
 						mk(
@@ -622,7 +627,12 @@ pub mod from_completions {
 								prompt_tokens: usage.input_tokens as u32,
 								completion_tokens: usage.output_tokens as u32,
 								total_tokens: usage.total_tokens as u32,
-								prompt_tokens_details: None,
+								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
+								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
+								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
+									cached_tokens: Some(i as u64),
+								}),
+								// TODO: can we get reasoning tokens?
 								completion_tokens_details: None,
 							}),
 						)
@@ -1240,6 +1250,9 @@ pub mod from_messages {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
 					}
 
@@ -2023,6 +2036,9 @@ pub mod from_responses {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
 					}
 
@@ -2387,11 +2403,19 @@ impl ConverseResponseAdapter {
 				prompt_tokens: token_usage.input_tokens as u32,
 				completion_tokens: token_usage.output_tokens as u32,
 				total_tokens: token_usage.total_tokens as u32,
-				prompt_tokens_details: None,
 				completion_tokens_details: None,
+
+				cache_read_input_tokens: token_usage.cache_read_input_tokens.map(|i| i as u64),
+				prompt_tokens_details: token_usage
+					.cache_read_input_tokens
+					.map(|i| UsagePromptDetails {
+						cached_tokens: Some(i as u64),
+					}),
+				cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
 			})
 			.unwrap_or_default();
 
+		tracing::error!("howardjohn: {:#?}", usage);
 		completions::Response {
 			id: format!("bedrock-{}", chrono::Utc::now().timestamp_millis()),
 			object: "chat.completion".to_string(),

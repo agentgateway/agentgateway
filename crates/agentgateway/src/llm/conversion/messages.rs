@@ -19,6 +19,7 @@ pub mod from_completions {
 	use crate::http::Body;
 	use crate::llm::types::ResponseType;
 	use crate::llm::types::completions::typed as completions;
+	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::types::messages::typed as messages;
 	use crate::llm::{AIError, LLMInfo, types};
 	use crate::telemetry::log::AsyncLog;
@@ -247,7 +248,15 @@ pub mod from_completions {
 			prompt_tokens: resp.usage.input_tokens as u32,
 			completion_tokens: resp.usage.output_tokens as u32,
 			total_tokens: (resp.usage.input_tokens + resp.usage.output_tokens) as u32,
-			prompt_tokens_details: None,
+			cache_read_input_tokens: resp.usage.cache_read_input_tokens.map(|i| i as u64),
+			prompt_tokens_details: resp
+				.usage
+				.cache_read_input_tokens
+				.map(|i| UsagePromptDetails {
+					cached_tokens: Some(i as u64),
+				}),
+			cache_creation_input_tokens: resp.usage.cache_creation_input_tokens.map(|i| i as u64),
+
 			completion_tokens_details: None,
 		};
 
@@ -319,6 +328,10 @@ pub mod from_completions {
 						log.non_atomic_mutate(|r| {
 							r.response.output_tokens = Some(message.usage.output_tokens as u64);
 							r.response.input_tokens = Some(message.usage.input_tokens as u64);
+							r.response.cached_input_tokens =
+								message.usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								message.usage.cache_creation_input_tokens.map(|i| i as u64);
 							r.response.provider_model = Some(strng::new(&message.model))
 						});
 						// no need to respond with anything yet
@@ -361,6 +374,9 @@ pub mod from_completions {
 						// TODO
 						// finish_reason = delta.stop_reason.as_ref().map(translate_stop_reason);
 						log.non_atomic_mutate(|r| {
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								usage.cache_creation_input_tokens.map(|i| i as u64);
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							if let Some(inp) = r.response.input_tokens {
 								r.response.total_tokens = Some(inp + usage.output_tokens as u64)
@@ -374,7 +390,12 @@ pub mod from_completions {
 
 								total_tokens: (input_tokens + usage.output_tokens) as u32,
 
-								prompt_tokens_details: None,
+								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
+								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
+									cached_tokens: Some(i as u64),
+								}),
+								cache_creation_input_tokens: usage.cache_creation_input_tokens.map(|i| i as u64),
+
 								completion_tokens_details: None,
 							}),
 						)
@@ -413,6 +434,9 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) 
 				log.non_atomic_mutate(|r| {
 					r.response.output_tokens = Some(message.usage.output_tokens as u64);
 					r.response.input_tokens = Some(message.usage.input_tokens as u64);
+					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
+					r.response.cache_creation_input_tokens =
+						message.usage.cache_creation_input_tokens.map(|i| i as u64);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
 			},
@@ -427,6 +451,9 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) 
 			messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
 				log.non_atomic_mutate(|r| {
 					r.response.output_tokens = Some(usage.output_tokens as u64);
+					r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+					r.response.cache_creation_input_tokens =
+						usage.cache_creation_input_tokens.map(|i| i as u64);
 					if let Some(inp) = r.response.input_tokens {
 						r.response.total_tokens = Some(inp + usage.output_tokens as u64)
 					}
