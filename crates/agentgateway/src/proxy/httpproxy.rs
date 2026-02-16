@@ -1318,6 +1318,11 @@ async fn make_backend_call(
 			let backend = backend.clone();
 			set_backend_cel_context(&mut req, log.as_ref());
 			let name = name.clone();
+			let Some(log) = log else {
+				return Err(
+					ProxyError::ProcessingString("invalid: log required for MCP".to_string()).into(),
+				);
+			};
 			let res = inputs
 				.clone()
 				.mcp_state

@@ -65,7 +65,7 @@ impl App {
 		backend: McpBackend,
 		backend_policies: BackendPolicies,
 		mut req: MustSnapshot<'_>,
-		mut log: Option<&mut RequestLog>,
+		mut log: &mut RequestLog,
 	) -> Result<Response, ProxyError> {
 		let backends = {
 			let binds = self.state.read_binds();
@@ -110,10 +110,7 @@ impl App {
 		let authn = backend_policies.mcp_authentication;
 
 		// Store an empty value, we will populate each field async
-		let logy = log
-			.as_mut()
-			.map(|l| l.mcp_status.clone())
-			.expect("must be set");
+		let logy = log.mcp_status.clone();
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
 
@@ -131,7 +128,12 @@ impl App {
 			return Ok(resp);
 		}
 
-		let req = req.take_and_snapshot(log.as_mut())?;
+		let mut req = req.take_and_snapshot(Some(&mut log))?;
+		// This is an unfortunate clone. The request snapshot is intended to be done at the end of the request,
+		// so it strips all of the extensions. However, in MCP land its much trickier for us to do this so
+		// we snapshot early... but then we lose the extensions. So we do a clone here.
+		let snapshot = log.request_snapshot.clone();
+		req.extensions_mut().insert(Arc::new(snapshot));
 		if req.uri().path() == "/sse" {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise

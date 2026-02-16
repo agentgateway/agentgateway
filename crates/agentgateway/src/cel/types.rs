@@ -240,9 +240,11 @@ impl<'a> Executor<'a> {
 	pub fn new_empty() -> Self {
 		Default::default()
 	}
-	pub fn new_mcp<B>(req: &'a ::http::Request<B>, mcp: &'a ResourceType) -> Self {
+	pub fn new_mcp(req: Option<&'a RequestSnapshot>, mcp: &'a ResourceType) -> Self {
 		let mut this = Self::new_empty();
-		this.set_request(req);
+		if let Some(req) = req {
+			this.set_request_snapshot(req);
+		}
 		this.mcp = Some(mcp);
 		this
 	}

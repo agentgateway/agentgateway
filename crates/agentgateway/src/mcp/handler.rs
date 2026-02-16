@@ -1,6 +1,19 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
+use crate::cel::RequestSnapshot;
+use crate::http::Response;
+use crate::http::jwt::Claims;
+use crate::http::sessionpersistence::MCPSession;
+use crate::mcp::mergestream::MergeFn;
+use crate::mcp::rbac::{CelExecWrapper, Identity, McpAuthorizationSet};
+use crate::mcp::router::McpBackendGroup;
+use crate::mcp::streamablehttp::ServerSseMessage;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::AsyncLog;
+use crate::telemetry::trc::TraceParent;
 use agent_core::trcng;
 use futures_core::Stream;
 use http::StatusCode;
@@ -16,19 +29,6 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
-
-use crate::http::Response;
-use crate::http::jwt::Claims;
-use crate::http::sessionpersistence::MCPSession;
-use crate::mcp::mergestream::MergeFn;
-use crate::mcp::rbac::{CelExecWrapper, Identity, McpAuthorizationSet};
-use crate::mcp::router::McpBackendGroup;
-use crate::mcp::streamablehttp::ServerSseMessage;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::AsyncLog;
-use crate::telemetry::trc::TraceParent;
 
 const DELIMITER: &str = "_";
 
@@ -403,8 +403,8 @@ impl Relay {
 			}
 		};
 		let instructions = Some(
-			"This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
-		);
+            "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
+        );
 		ServerInfo {
 			protocol_version: pv,
 			capabilities,
@@ -437,7 +437,13 @@ pub fn setup_request_log(
 		.cloned()
 		.unwrap_or_default();
 
-	let cel = CelExecWrapper::new(http);
+	let snap = http
+		.extensions
+		.get::<Arc<Option<RequestSnapshot>>>()
+		.cloned()
+		.unwrap_or_else(|| Arc::new(None));
+
+	let cel = CelExecWrapper::new(snap);
 
 	let tracer = trcng::get_tracer();
 	let _span = trcng::start_span(span_name.to_string(), &Identity::new(claims))
