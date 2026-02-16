@@ -202,13 +202,13 @@ impl Session {
 				});
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
-						if self.relay.is_multiplexing() {
-							// Currently, we cannot support roots until we have a mapping of downstream and upstream ID.
-							// However, the clients can tell the server they support roots.
-							// Instead, we hijack this to tell them not to so they do not send requests that we cannot
-							// actually support
-							ir.params.capabilities.roots = None
-						}
+						// Currently, we cannot support roots until we have a mapping of downstream and upstream ID.
+						// However, the clients can tell the server they support roots.
+						// Instead, we hijack this to tell them not to so they do not send requests that we cannot
+						// actually support
+						// This could probably be more easily done without multiplexing but for now neither supports.
+						ir.params.capabilities.roots = None;
+
 						let pv = ir.params.protocol_version.clone();
 						let res = self
 							.relay
