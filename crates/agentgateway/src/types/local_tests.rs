@@ -33,7 +33,7 @@ async fn test_config_parsing(test_name: &str) {
 		&yaml_str,
 	)
 	.await
-	.unwrap_or_else(|_| panic!("Failed to normalize config from: {:?}", input_path));
+	.unwrap_or_else(|e| panic!("Failed to normalize config from: {:?} {e}", input_path));
 
 	let output_yaml = serdes::yamlviajson::to_string(&normalized)
 		.expect("Failed to serialize NormalizedLocalConfig to YAML");
@@ -61,4 +61,9 @@ async fn test_mcp_config() {
 #[tokio::test]
 async fn test_llm_config() {
 	test_config_parsing("llm").await;
+}
+
+#[tokio::test]
+async fn test_llm_simple_config() {
+	test_config_parsing("llm_simple").await;
 }

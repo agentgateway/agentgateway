@@ -1,16 +1,34 @@
+frontendPolicies:
+  accessLog:
+    add:
+      "body": variables()
+      wtf: ba
 llm:
+#  policies:
+#    jwtAuth:
+#      issuer: agentgateway.dev
+#      audiences: [test.agentgateway.dev]
+#      jwks: '{"keys":[]}'
   models:
   - name: claude-3-haiku
-    provider:
-      anthropic:
-        model: claude-3-5-haiku-20241022
+    provider: anthropic
     params:
+      model: claude-3-5-haiku-20241022
       apiKey: "sk-123"
+  - name: gemini-0.5-pro
+    provider: vertex
+    params:
+      model: claude-3-5-haiku-20241022
+      apiKey: "sk-123"
+      vertexRegion: global
+      vertexProject: my-vertex-project
   #    guardrails: ...
   #    additionalHeaders: ...
-  - name: thinking
-    provider:
-      anthropic: {}
+  - name: gpt-7-max
+    provider: azureOpenAI
     params:
-      model: claude-sonnet-4-5-20250929
-      apiKey: "$ANTHROPIC_API_KEY"
+      model: gpt-3.5-turbo
+      azureHost: my-azure-openai-endpoint.openai.azure.com
+      azureApiVersion: v1
+  - name: gpt-3.5-turbo
+    provider: openAI

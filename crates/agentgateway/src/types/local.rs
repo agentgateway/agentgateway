@@ -9,19 +9,19 @@ use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::transformation_cel::LocalTransformationConfig;
 use crate::http::{HeaderName, HeaderOrPseudo, filters, retry, timeout};
-use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
+use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider};
 use crate::llm::{anthropic, openai};
 use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindKey, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch,
-	Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget,
-	LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec,
-	OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route,
-	RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
-	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
-	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy,
+	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
+	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
+	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
+	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
+	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
 	TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
@@ -34,7 +34,6 @@ use bytes::Bytes;
 use itertools::Itertools;
 use macro_rules_attribute::apply;
 use openapiv3::OpenAPI;
-use rustls::ServerConfig;
 use secrecy::SecretString;
 
 // Windows has different output, for now easier to just not deal with it
@@ -97,22 +96,60 @@ pub struct LocalConfig {
 
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
+	/// models defines the set of models that can be served by this gateway. The model name refers to the
+	/// model in the users request that is matched; the model sent to the actual LLM can be overriden
+	/// on a per-model basis.
 	models: Vec<LocalLLMModels>,
+	/// policies defines policies for handling incoming requests, before a model is selected
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	policies: Option<LocalGatewayPolicy>,
 }
 
 #[apply(schema_de!)]
 pub struct LocalLLMModels {
+	/// name is the name of the model we are matching from a users request. If params.model is set, that
+	/// will be used in the request to the LLM provider. If not, the incoming model is used.
 	name: String,
+	/// params customizes parameters for the outgoing request
+	#[serde(default)]
 	params: LocalLLMParams,
-	provider: AIProvider,
+	/// provider of the LLM we are connecting too
+	provider: LocalModelAIProvider,
+
+	// Policies
+	/// defaults allows setting default values for the request. If these are not present in the request body, they will be set.
+	/// To override even when set, use `overrides`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	defaults: Option<HashMap<String, serde_json::Value>>,
+	/// overrides allows setting values for the request, overriding any existing values
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	overrides: Option<HashMap<String, serde_json::Value>>,
+	/// requestHeaders modifies headers in requests to the LLM provider.
+	#[serde(default)]
+	request_headers: Option<filters::HeaderModifier>,
 }
 
 #[apply(schema_de!)]
+#[derive(Default)]
 pub struct LocalLLMParams {
+	/// The model to send to the provider.
+	/// If unset, the same model will be used from the request.
 	#[serde(default)]
-	model: Option<String>,
+	model: Option<Strng>,
+	/// An API key to attach to the request.
+	/// If unset this will be automatically detected from the environment.
 	#[serde(default)]
 	api_key: Option<String>,
+	// For Bedorkc: The AWS region to use
+	aws_region: Option<Strng>,
+	// For Vertex: The Google region to use
+	vertex_region: Option<Strng>,
+	// For Vertex: The Google project ID to use
+	vertex_project: Option<Strng>,
+	/// For Azure: the host of the deployment
+	azure_host: Option<Strng>,
+	/// For Azure: the API version to sue
+	azure_api_version: Option<Strng>,
 }
 
 #[apply(schema_de!)]
@@ -964,15 +1001,8 @@ async fn convert(
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) = convert_listener(
-				client.clone(),
-				idx,
-				l,
-				bind_name.clone(),
-				Some(frontend_policies.clone()),
-				gateway.clone(),
-			)
-			.await?;
+			let (l, pol, backends) =
+				convert_listener(client.clone(), idx, l, bind_name.clone(), gateway.clone()).await?;
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
@@ -1031,11 +1061,14 @@ async fn convert(
 	// Convert llm config if present
 	if let Some(llm_config) = llm {
 		let (llm_bind, llm_policies, llm_backends) =
-			convert_llm_config(client.clone(), llm_config).await?;
+			convert_llm_config(client.clone(), gateway.clone(), llm_config).await?;
 		all_binds.push(llm_bind);
 		all_policies.extend_from_slice(&llm_policies);
 		all_backends.extend_from_slice(&llm_backends);
 	}
+
+	// Add frontend policies targeted to this listener
+	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
@@ -1047,7 +1080,8 @@ async fn convert(
 }
 
 async fn convert_llm_config(
-	_client: client::Client,
+	client: client::Client,
+	gateway: ListenerTarget,
 	llm_config: LocalLLMConfig,
 ) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	const DEFAULT_LLM_PORT: u16 = 4000;
@@ -1103,6 +1137,7 @@ async fn convert_llm_config(
 		name: RouteName {
 			name: strng::new("admin:model-list"),
 			namespace: strng::new("internal"),
+			kind: None,
 			rule_name: None,
 		},
 		hostnames: vec![],
@@ -1129,45 +1164,41 @@ async fn convert_llm_config(
 	routes.insert(model_list_route);
 
 	// Create routes and backends for each model
-	for model in &llm_config.models {
-		let model_name = strng::new(&model.name);
-		let backend_key = strng::format!("llm:{}", model.name);
+	for model_config in &llm_config.models {
+		let model_name = strng::new(&model_config.name);
+		let backend_key = strng::format!("llm:{}", model_config.name);
+		let p = model_config.params.clone();
+		let model = p.model;
 
 		// Use provider from config and set the model name
-		let provider_with_model = if let Some(pmodel) = model.params.model.as_ref() {
-			match &model.provider {
-				AIProvider::Anthropic(p) => AIProvider::Anthropic(anthropic::Provider {
-					model: Some(strng::new(pmodel)),
-					..p.clone()
-				}),
-				AIProvider::OpenAI(p) => AIProvider::OpenAI(openai::Provider {
-					model: Some(strng::new(pmodel)),
-					..p.clone()
-				}),
-				AIProvider::Gemini(p) => AIProvider::Gemini(crate::llm::gemini::Provider {
-					model: Some(strng::new(pmodel)),
-					..p.clone()
-				}),
-				AIProvider::Vertex(p) => AIProvider::Vertex(crate::llm::vertex::Provider {
-					model: Some(strng::new(pmodel)),
-					..p.clone()
-				}),
-				AIProvider::Bedrock(p) => AIProvider::Bedrock(crate::llm::bedrock::Provider {
-					model: Some(strng::new(pmodel)),
-					..p.clone()
-				}),
-				AIProvider::AzureOpenAI(p) => AIProvider::AzureOpenAI(crate::llm::azureopenai::Provider {
-					model: Some(strng::new(pmodel)),
-					..p.clone()
-				}),
-			}
-		} else {
-			model.provider.clone()
+		let provider = match &model_config.provider {
+			LocalModelAIProvider::Anthropic => AIProvider::Anthropic(anthropic::Provider { model }),
+			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider { model }),
+			LocalModelAIProvider::Gemini => AIProvider::Gemini(crate::llm::gemini::Provider { model }),
+			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
+				model,
+
+				region: p.vertex_region,
+				project_id: p.vertex_project.context("vertex requires vertex_project")?,
+			}),
+			LocalModelAIProvider::Bedrock => AIProvider::Bedrock(crate::llm::bedrock::Provider {
+				model,
+				region: p.aws_region.context("bedrock requires aws_region")?,
+				guardrail_identifier: None,
+				guardrail_version: None,
+			}),
+			LocalModelAIProvider::AzureOpenAI => {
+				AIProvider::AzureOpenAI(crate::llm::azureopenai::Provider {
+					model,
+					host: p.azure_host.context("azure requires azure_host")?,
+					api_version: p.azure_api_version,
+				})
+			},
 		};
 
 		// Create backend auth policy
 		let mut pols = vec![];
-		if let Some(key) = model.params.api_key.as_ref() {
+		if let Some(key) = p.api_key.as_ref() {
 			let backend_auth = BackendAuth::Key(SecretString::new(key.clone().into_boxed_str()));
 			pols.push(BackendPolicy::BackendAuth(backend_auth));
 		}
@@ -1175,7 +1206,7 @@ async fn convert_llm_config(
 		// Create AI backend
 		let named_provider = NamedAIProvider {
 			name: model_name.clone(),
-			provider: provider_with_model,
+			provider,
 			host_override: None,
 			path_override: None,
 			tokenize: false,
@@ -1189,20 +1220,35 @@ async fn convert_llm_config(
 			)]]),
 		};
 
+		let mut pols = vec![];
+		if let Some(rh) = &model_config.request_headers {
+			pols.push(BackendPolicy::RequestHeaderModifier(rh.clone()));
+		}
+		pols.push(BackendPolicy::AI(Arc::new(llm::Policy {
+			defaults: model_config.defaults.clone(),
+			overrides: model_config.overrides.clone(),
+			prompt_guard: None,
+			prompts: None,
+			model_aliases: Default::default(),
+			wildcard_patterns: Arc::new(vec![]),
+			prompt_caching: None,
+			routes: Default::default(),
+		})));
 		let backend_with_policies = BackendWithPolicies {
 			backend: Backend::AI(local_name(backend_key.clone()), ai_backend),
-			inline_policies: vec![],
+			inline_policies: pols,
 		};
 		all_backends.push(backend_with_policies);
 
 		// Create route for this model
-		let route_key = strng::format!("llm:model:{}", model.name);
+		let route_key = strng::format!("llm:model:{}", model_config.name);
 		let model_route = Route {
 			key: route_key.clone(),
 			name: RouteName {
-				name: strng::format!("model:{}", model.name),
+				name: strng::format!("model:{}", model_config.name),
 				namespace: strng::new("internal"),
 				rule_name: None,
+				kind: None,
 			},
 			hostnames: vec![],
 			matches: vec![RouteMatch {
@@ -1213,7 +1259,7 @@ async fn convert_llm_config(
 							.map_err(|e| anyhow!("Invalid header name: {}", e))?,
 					),
 					value: HeaderValueMatch::Exact(
-						::http::HeaderValue::from_str(&model.name)
+						::http::HeaderValue::from_str(&model_config.name)
 							.map_err(|e| anyhow!("Invalid header value: {}", e))?,
 					),
 				}],
@@ -1253,8 +1299,8 @@ async fn convert_llm_config(
 	// Create listener
 	let listener_key: ListenerKey = strng::new("llm");
 	let listener_name = ListenerName {
-		gateway_name: strng::new("llm"),
-		gateway_namespace: strng::new("internal"),
+		gateway_name: gateway.gateway_name.clone(),
+		gateway_namespace: gateway.gateway_namespace.clone(),
 		listener_name: strng::new("llm"),
 		listener_set: None,
 	};
@@ -1266,6 +1312,19 @@ async fn convert_llm_config(
 		routes,
 		tcp_routes: Default::default(),
 	};
+
+	if let Some(pol) = llm_config.policies {
+		let pols = split_policies(client.clone(), pol.into()).await?;
+		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
+			let key = strng::format!("listener/{idx}");
+			all_policies.push(TargetedPolicy {
+				key: key.clone(),
+				name: None,
+				target: PolicyTarget::Gateway(listener_name.clone().into()),
+				policy: (pol, PolicyPhase::Gateway).into(),
+			})
+		}
+	}
 
 	// Create transformation policy for the listener
 	let listener_target: ListenerTarget = listener_name.clone().into();
@@ -1332,7 +1391,6 @@ async fn convert_listener(
 	idx: usize,
 	l: LocalListener,
 	bind_key: Strng,
-	frontend_policies: Option<LocalFrontendPolicies>,
 	gateway: ListenerTarget,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalListener {
@@ -1391,16 +1449,6 @@ async fn convert_listener(
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
-
-	// Add frontend policies targeted to this listener
-	if let Some(frontend_pols) = frontend_policies {
-		let listener_target = ListenerTarget {
-			gateway_name: gateway_name.clone(),
-			gateway_namespace: gateway_namespace.clone(),
-			listener_name: None,
-		};
-		all_policies.extend_from_slice(&split_frontend_policies(listener_target, frontend_pols).await?);
-	}
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {

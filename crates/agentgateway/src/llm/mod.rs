@@ -126,6 +126,17 @@ pub enum AIProvider {
 	AzureOpenAI(azureopenai::Provider),
 }
 
+#[apply(schema!)]
+pub enum LocalModelAIProvider {
+	OpenAI,
+	Gemini,
+	Vertex,
+	Anthropic,
+	Bedrock,
+	AzureOpenAI,
+}
+
+
 trait Provider {
 	const NAME: Strng;
 }

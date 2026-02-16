@@ -37,7 +37,19 @@ binds:
               - '*'
               maxAge: null
       tcpRoutes: {}
-policies: []
+policies:
+- key: frontend/accessLog
+  name: null
+  target:
+    gateway:
+      gatewayName: name
+      gatewayNamespace: ns
+      listenerName: null
+  policy:
+    frontend:
+      accessLog:
+        add:
+          user: request.headers['user-agent']
 backends:
 - backend:
     mcp:
