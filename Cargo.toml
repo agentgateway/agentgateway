@@ -83,7 +83,7 @@ futures = "0.3"
 futures-channel = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-google-cloud-auth = { git = "https://github.com/googleapis/google-cloud-rust", rev = "18f8434cb598ae9f9835b7d77b2a8774fec1d2ea", default-features = false, features = ["idtoken"] }
+google-cloud-auth = { version = "1.6", default-features = false, features = ["idtoken"] }
 hashbrown = "0.16"
 h2 = "0.4"
 headers = "0.4"
