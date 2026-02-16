@@ -1250,6 +1250,28 @@ async fn convert_llm_config(
 
 		// Create route for this model
 		let route_key = strng::format!("llm:model:{}", model_config.name);
+		let header_match = if model_config.name == "*" {
+			// TODO: support prefix and suffix wildcards too
+			HeaderMatch {
+				name: HeaderOrPseudo::Header(
+					HeaderName::from_bytes(b"x-gateway-model-name")
+						.map_err(|e| anyhow!("Invalid header name: {}", e))?,
+				),
+				value: HeaderValueMatch::Regex(regex::Regex::new(r".*").unwrap()),
+			}
+		} else {
+			HeaderMatch {
+				name: HeaderOrPseudo::Header(
+					HeaderName::from_bytes(b"x-gateway-model-name")
+						.map_err(|e| anyhow!("Invalid header name: {}", e))?,
+				),
+				value: HeaderValueMatch::Exact(
+					::http::HeaderValue::from_str(&model_config.name)
+						.map_err(|e| anyhow!("Invalid header value: {}", e))?,
+				),
+			}
+		};
+
 		let model_route = Route {
 			key: route_key.clone(),
 			name: RouteName {
@@ -1261,16 +1283,7 @@ async fn convert_llm_config(
 			hostnames: vec![],
 			matches: vec![RouteMatch {
 				path: PathMatch::PathPrefix(strng::new("/")),
-				headers: vec![HeaderMatch {
-					name: HeaderOrPseudo::Header(
-						HeaderName::from_bytes(b"x-gateway-model-name")
-							.map_err(|e| anyhow!("Invalid header name: {}", e))?,
-					),
-					value: HeaderValueMatch::Exact(
-						::http::HeaderValue::from_str(&model_config.name)
-							.map_err(|e| anyhow!("Invalid header value: {}", e))?,
-					),
-				}],
+				headers: vec![header_match],
 				method: None,
 				query: vec![],
 			}],

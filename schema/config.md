@@ -2455,3 +2455,95 @@
 |`backends[].policies.tcp.connectTimeout`||
 |`backends[].policies.tcp.connectTimeout.secs`||
 |`backends[].policies.tcp.connectTimeout.nanos`||
+|`llm`||
+|`llm.models`|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overriden<br>on a per-model basis.|
+|`llm.models[].name`|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
+|`llm.models[].params`|params customizes parameters for the outgoing request|
+|`llm.models[].params.model`|The model to send to the provider.<br>If unset, the same model will be used from the request.|
+|`llm.models[].params.apiKey`|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
+|`llm.models[].params.awsRegion`||
+|`llm.models[].params.vertexRegion`||
+|`llm.models[].params.vertexProject`||
+|`llm.models[].params.azureHost`|For Azure: the host of the deployment|
+|`llm.models[].params.azureApiVersion`|For Azure: the API version to sue|
+|`llm.models[].provider`|provider of the LLM we are connecting too|
+|`llm.models[].defaults`|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
+|`llm.models[].overrides`|overrides allows setting values for the request, overriding any existing values|
+|`llm.models[].requestHeaders`|requestHeaders modifies headers in requests to the LLM provider.|
+|`llm.models[].requestHeaders.add`||
+|`llm.models[].requestHeaders.set`||
+|`llm.models[].requestHeaders.remove`||
+|`llm.policies`|policies defines policies for handling incoming requests, before a model is selected|
+|`llm.policies.jwtAuth`|Authenticate incoming JWT requests.|
+|`llm.policies.jwtAuth.(any)(any)mode`||
+|`llm.policies.jwtAuth.(any)(any)providers`||
+|`llm.policies.jwtAuth.(any)(any)providers[].issuer`||
+|`llm.policies.jwtAuth.(any)(any)providers[].audiences`||
+|`llm.policies.jwtAuth.(any)(any)providers[].jwks`||
+|`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
+|`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`llm.policies.jwtAuth.(any)(any)mode`||
+|`llm.policies.jwtAuth.(any)(any)issuer`||
+|`llm.policies.jwtAuth.(any)(any)audiences`||
+|`llm.policies.jwtAuth.(any)(any)jwks`||
+|`llm.policies.jwtAuth.(any)(any)jwks.(any)file`||
+|`llm.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`llm.policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
+|`llm.policies.extAuthz.(any)(1)service`||
+|`llm.policies.extAuthz.(any)(1)service.name`||
+|`llm.policies.extAuthz.(any)(1)service.name.namespace`||
+|`llm.policies.extAuthz.(any)(1)service.name.hostname`||
+|`llm.policies.extAuthz.(any)(1)service.port`||
+|`llm.policies.extAuthz.(any)(1)host`|Hostname or IP address|
+|`llm.policies.extAuthz.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
+|`llm.policies.extAuthz.(any)protocol.(1)grpc`||
+|`llm.policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`llm.policies.extAuthz.(any)protocol.(1)grpc.metadata`|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`llm.policies.extAuthz.(any)protocol.(1)http`||
+|`llm.policies.extAuthz.(any)protocol.(1)http.path`||
+|`llm.policies.extAuthz.(any)protocol.(1)http.redirect`|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`llm.policies.extAuthz.(any)protocol.(1)http.includeResponseHeaders`|Specific headers from the authorization response will be copied into the request to the backend.|
+|`llm.policies.extAuthz.(any)protocol.(1)http.addRequestHeaders`|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`llm.policies.extAuthz.(any)protocol.(1)http.metadata`|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`llm.policies.extAuthz.(any)failureMode`|Behavior when the authorization service is unavailable or returns an error|
+|`llm.policies.extAuthz.(any)failureMode.(1)denyWithStatus`||
+|`llm.policies.extAuthz.(any)includeRequestHeaders`|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`llm.policies.extAuthz.(any)includeRequestBody`|Options for including the request body in the authorization request|
+|`llm.policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
+|`llm.policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
+|`llm.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`llm.policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`llm.policies.extProc`|Extend agentgateway with an external processor|
+|`llm.policies.extProc.(any)(1)service`||
+|`llm.policies.extProc.(any)(1)service.name`||
+|`llm.policies.extProc.(any)(1)service.name.namespace`||
+|`llm.policies.extProc.(any)(1)service.name.hostname`||
+|`llm.policies.extProc.(any)(1)service.port`||
+|`llm.policies.extProc.(any)(1)host`|Hostname or IP address|
+|`llm.policies.extProc.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
+|`llm.policies.extProc.(any)metadataContext`|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.(any)responseAttributes`|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.transformations`|Modify requests and responses|
+|`llm.policies.transformations.request`||
+|`llm.policies.transformations.request.add`||
+|`llm.policies.transformations.request.set`||
+|`llm.policies.transformations.request.remove`||
+|`llm.policies.transformations.request.body`||
+|`llm.policies.transformations.response`||
+|`llm.policies.transformations.response.add`||
+|`llm.policies.transformations.response.set`||
+|`llm.policies.transformations.response.remove`||
+|`llm.policies.transformations.response.body`||
+|`llm.policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
+|`llm.policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
+|`llm.policies.basicAuth.htpasswd.(any)file`||
+|`llm.policies.basicAuth.realm`|Realm name for the WWW-Authenticate header|
+|`llm.policies.basicAuth.mode`|Validation mode for basic authentication|
+|`llm.policies.apiKey`|Authenticate incoming requests using API Keys|
+|`llm.policies.apiKey.keys`|List of API keys|
+|`llm.policies.apiKey.keys[].key`||
+|`llm.policies.apiKey.keys[].metadata`||
+|`llm.policies.apiKey.mode`|Validation mode for API keys|

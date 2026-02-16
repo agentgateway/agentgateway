@@ -23269,6 +23269,890 @@
           "host"
         ]
       }
+    },
+    "llm": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "models": {
+          "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overriden\non a per-model basis.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "name is the name of the model we are matching from a users request. If params.model is set, that\nwill be used in the request to the LLM provider. If not, the incoming model is used.",
+                "type": "string"
+              },
+              "params": {
+                "description": "params customizes parameters for the outgoing request",
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "description": "The model to send to the provider.\nIf unset, the same model will be used from the request.",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "default": null
+                  },
+                  "apiKey": {
+                    "description": "An API key to attach to the request.\nIf unset this will be automatically detected from the environment.",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "default": null
+                  },
+                  "awsRegion": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "vertexRegion": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "vertexProject": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "azureHost": {
+                    "description": "For Azure: the host of the deployment",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "azureApiVersion": {
+                    "description": "For Azure: the API version to sue",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "provider": {
+                "description": "provider of the LLM we are connecting too",
+                "type": "string",
+                "enum": [
+                  "openAI",
+                  "gemini",
+                  "vertex",
+                  "anthropic",
+                  "bedrock",
+                  "azureOpenAI"
+                ]
+              },
+              "defaults": {
+                "description": "defaults allows setting default values for the request. If these are not present in the request body, they will be set.\nTo override even when set, use `overrides`.",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": true
+              },
+              "overrides": {
+                "description": "overrides allows setting values for the request, overriding any existing values",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": true
+              },
+              "requestHeaders": {
+                "description": "requestHeaders modifies headers in requests to the LLM provider.",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "add": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "set": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "remove": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "default": null
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "provider"
+            ]
+          }
+        },
+        "policies": {
+          "description": "policies defines policies for handling incoming requests, before a model is selected",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "jwtAuth": {
+              "description": "Authenticate incoming JWT requests.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "oneOf": [
+                            {
+                              "description": "A valid token, issued by a configured issuer, must be present.",
+                              "type": "string",
+                              "const": "strict"
+                            },
+                            {
+                              "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                              "type": "string",
+                              "const": "optional"
+                            },
+                            {
+                              "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                              "type": "string",
+                              "const": "permissive"
+                            }
+                          ],
+                          "default": "optional"
+                        },
+                        "providers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "issuer": {
+                                "type": "string"
+                              },
+                              "audiences": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "jwks": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "file": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "file"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "url"
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "issuer",
+                              "jwks"
+                            ]
+                          }
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "providers"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "oneOf": [
+                            {
+                              "description": "A valid token, issued by a configured issuer, must be present.",
+                              "type": "string",
+                              "const": "strict"
+                            },
+                            {
+                              "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                              "type": "string",
+                              "const": "optional"
+                            },
+                            {
+                              "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                              "type": "string",
+                              "const": "permissive"
+                            }
+                          ],
+                          "default": "optional"
+                        },
+                        "issuer": {
+                          "type": "string"
+                        },
+                        "audiences": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "jwks": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "file": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "file"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "url": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "url"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "issuer",
+                        "jwks"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "extAuthz": {
+              "description": "Authenticate incoming requests by calling an external authorization server.",
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "protocol": {
+                      "description": "The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.",
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "grpc": {
+                              "type": "object",
+                              "properties": {
+                                "context": {
+                                  "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ],
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "metadata": {
+                                  "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ],
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "grpc"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "http": {
+                              "type": "object",
+                              "properties": {
+                                "path": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "redirect": {
+                                  "description": "When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by\nthe provided expression rather than directly returning the error.",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "includeResponseHeaders": {
+                                  "description": "Specific headers from the authorization response will be copied into the request to the backend.",
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "addRequestHeaders": {
+                                  "description": "Specific headers to add in the authorization request (empty = all headers), based on the expression",
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "metadata": {
+                                  "description": "Metadata to include under the `extauthz` variable, based on the authorization response.",
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "http"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "default": {
+                        "grpc": {}
+                      }
+                    },
+                    "failureMode": {
+                      "description": "Behavior when the authorization service is unavailable or returns an error",
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "denyWithStatus": {
+                              "type": "integer",
+                              "format": "uint16",
+                              "minimum": 0,
+                              "maximum": 65535
+                            }
+                          },
+                          "required": [
+                            "denyWithStatus"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "default": "deny"
+                    },
+                    "includeRequestHeaders": {
+                      "description": "Specific headers to include in the authorization request.\nIf unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "includeRequestBody": {
+                      "description": "Options for including the request body in the authorization request",
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "maxRequestBytes": {
+                          "description": "Maximum size of request body to buffer (default: 8192)",
+                          "type": "integer",
+                          "format": "uint32",
+                          "minimum": 0,
+                          "default": 0
+                        },
+                        "allowPartialMessage": {
+                          "description": "If true, send partial body when max_request_bytes is reached",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "packAsBytes": {
+                          "description": "If true, pack body as raw bytes in gRPC",
+                          "type": "boolean",
+                          "default": false
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "timeout": {
+                      "description": "Timeout for the authorization request (default: 200ms)",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "unevaluatedProperties": false,
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "invalid"
+                      ]
+                    },
+                    {
+                      "description": "Service reference. Service must be defined in the top level services list.",
+                      "type": "object",
+                      "properties": {
+                        "service": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "object",
+                              "properties": {
+                                "namespace": {
+                                  "type": "string"
+                                },
+                                "hostname": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "namespace",
+                                "hostname"
+                              ]
+                            },
+                            "port": {
+                              "type": "integer",
+                              "format": "uint16",
+                              "minimum": 0,
+                              "maximum": 65535
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "name",
+                            "port"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "service"
+                      ]
+                    },
+                    {
+                      "description": "Hostname or IP address",
+                      "type": "object",
+                      "properties": {
+                        "host": {
+                          "description": "Hostname or IP address",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "host"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "backend": {
+                          "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "backend"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "extProc": {
+              "description": "Extend agentgateway with an external processor",
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "failureMode": {
+                      "description": "Behavior when the ext_proc service is unavailable or returns an error",
+                      "type": "string",
+                      "enum": [
+                        "failClosed",
+                        "failOpen"
+                      ],
+                      "default": "failClosed"
+                    },
+                    "metadataContext": {
+                      "description": "Additional metadata to send to the external processing service.\nMaps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "requestAttributes": {
+                      "description": "Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "responseAttributes": {
+                      "description": "Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.",
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "unevaluatedProperties": false,
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "invalid"
+                      ]
+                    },
+                    {
+                      "description": "Service reference. Service must be defined in the top level services list.",
+                      "type": "object",
+                      "properties": {
+                        "service": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "object",
+                              "properties": {
+                                "namespace": {
+                                  "type": "string"
+                                },
+                                "hostname": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "namespace",
+                                "hostname"
+                              ]
+                            },
+                            "port": {
+                              "type": "integer",
+                              "format": "uint16",
+                              "minimum": 0,
+                              "maximum": 65535
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "name",
+                            "port"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "service"
+                      ]
+                    },
+                    {
+                      "description": "Hostname or IP address",
+                      "type": "object",
+                      "properties": {
+                        "host": {
+                          "description": "Hostname or IP address",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "host"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "backend": {
+                          "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "backend"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "transformations": {
+              "description": "Modify requests and responses",
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "request": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "add": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {}
+                    },
+                    "set": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {}
+                    },
+                    "remove": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": []
+                    },
+                    "body": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "default": null
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "response": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "add": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {}
+                    },
+                    "set": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {}
+                    },
+                    "remove": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": []
+                    },
+                    "body": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "default": null
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false,
+              "default": null
+            },
+            "basicAuth": {
+              "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "htpasswd": {
+                  "description": ".htpasswd file contents/reference",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "file": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "file"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "realm": {
+                  "description": "Realm name for the WWW-Authenticate header",
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "default": null
+                },
+                "mode": {
+                  "description": "Validation mode for basic authentication",
+                  "oneOf": [
+                    {
+                      "description": "A valid username/password must be present.",
+                      "type": "string",
+                      "const": "strict"
+                    },
+                    {
+                      "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+                      "type": "string",
+                      "const": "optional"
+                    }
+                  ],
+                  "default": "optional"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "htpasswd"
+              ]
+            },
+            "apiKey": {
+              "description": "Authenticate incoming requests using API Keys",
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "keys": {
+                  "description": "List of API keys",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "metadata": true
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "key"
+                    ]
+                  }
+                },
+                "mode": {
+                  "description": "Validation mode for API keys",
+                  "oneOf": [
+                    {
+                      "description": "A valid API Key must be present.",
+                      "type": "string",
+                      "const": "strict"
+                    },
+                    {
+                      "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+                      "type": "string",
+                      "const": "optional"
+                    }
+                  ],
+                  "default": "optional"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "keys"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "models"
+      ]
     }
   },
   "additionalProperties": false,
