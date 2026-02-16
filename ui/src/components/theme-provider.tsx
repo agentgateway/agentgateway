@@ -67,9 +67,9 @@ export function ThemeProvider({
     setResolvedTheme(resolved);
 
     if (disableTransitionOnChange) {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         root.classList.remove("no-transition");
-      }, 0);
+      });
     }
   }, [theme, attribute, enableSystem, disableTransitionOnChange]);
 
@@ -104,8 +104,11 @@ export const useTheme = () => {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
 
-  // Add systemTheme for compatibility
-  const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  // Memoize systemTheme to avoid repeated window.matchMedia calls
+  const systemTheme = React.useMemo(
+    () => (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
+    []
+  );
 
   return {
     ...context,
