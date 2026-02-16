@@ -20,6 +20,8 @@ binds:
           exact: /stdio/mcp
       - path:
           exact: /.well-known/oauth-protected-resource/stdio/mcp
+      - path:
+          exact: /.well-known/oauth-authorization-server/stdio/mcp
       policies:
         cors:
           allowHeaders:
@@ -30,6 +32,7 @@ binds:
           exposeHeaders:
           - "Mcp-Session-Id"
         mcpAuthentication:
+          mode: strict
           issuer: http://localhost:9000
           audiences:
           - http://localhost:3000/stdio/mcp
