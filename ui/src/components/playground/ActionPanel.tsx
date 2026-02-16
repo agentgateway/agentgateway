@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
 import type { AgentSkill } from "@a2a-js/sdk";

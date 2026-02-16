@@ -1,4 +1,3 @@
-
 import { PolicyConfig } from "@/components/policy-config";
 import { useServer } from "@/lib/server-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";

@@ -1,4 +1,3 @@
-
 import { useXdsMode } from "@/hooks/use-xds-mode";
 
 export function XdsModeNotification() {

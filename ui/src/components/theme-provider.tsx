@@ -1,4 +1,3 @@
-
 import * as React from "react";
 
 type Theme = "dark" | "light" | "system";
@@ -18,9 +17,7 @@ interface ThemeProviderState {
   resolvedTheme?: "dark" | "light";
 }
 
-const ThemeProviderContext = React.createContext<ThemeProviderState | undefined>(
-  undefined
-);
+const ThemeProviderContext = React.createContext<ThemeProviderState | undefined>(undefined);
 
 export function ThemeProvider({
   children,
@@ -44,7 +41,7 @@ export function ThemeProvider({
 
   React.useEffect(() => {
     const root = window.document.documentElement;
-    
+
     if (disableTransitionOnChange) {
       root.classList.add("no-transition");
     }
@@ -115,4 +112,3 @@ export const useTheme = () => {
     systemTheme,
   };
 };
-

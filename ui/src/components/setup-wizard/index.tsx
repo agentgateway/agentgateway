@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { LocalConfig } from "@/lib/types";
 import { WelcomeStep } from "./WelcomeStep";

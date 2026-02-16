@@ -75,7 +75,7 @@ export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2A
         } else if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
           finalPortNumber = parsedUrl.protocol === "https:" ? 443 : 80;
         } else {
-          toast.error(`Port is required for protocol \"${parsedUrl.protocol}\" or use http/https.`);
+          toast.error(`Port is required for protocol "${parsedUrl.protocol}" or use http/https.`);
           isValidationError = true;
           return;
         }

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Config, Target, RBACConfig, Listener, TargetWithType, Bind } from "@/lib/types";
 import { fetchBinds, fetchMcpTargets, fetchA2aTargets } from "@/lib/api";
