@@ -1,4 +1,3 @@
-"use client";
 
 import { useState, useEffect } from "react";
 import { SetupWizard } from "@/components/setup-wizard";
@@ -27,7 +26,7 @@ import {
   Database,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { LoadingState } from "@/components/loading-state";
 import { useXdsMode } from "@/hooks/use-xds-mode";
 
@@ -228,7 +227,7 @@ export default function Home() {
                 </Button>
               ) : (
                 <Button asChild>
-                  <Link href="/listeners">
+                  <Link to="/listeners">
                     <Plus className="h-4 w-4 mr-2" />
                     Create First Listener
                   </Link>
@@ -274,7 +273,7 @@ export default function Home() {
               </CardDescription>
               <CardTitle className="text-3xl font-semibold mt-2">{binds?.length || 0}</CardTitle>
               <Link
-                href="/listeners"
+                to="/listeners"
                 className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
               >
                 Manage binds
@@ -291,7 +290,7 @@ export default function Home() {
               </CardDescription>
               <CardTitle className="text-3xl font-semibold mt-2">{getTotalListeners()}</CardTitle>
               <Link
-                href="/listeners"
+                to="/listeners"
                 className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
               >
                 View listeners
@@ -308,7 +307,7 @@ export default function Home() {
               </CardDescription>
               <CardTitle className="text-3xl font-semibold mt-2">{getTotalRoutes()}</CardTitle>
               <Link
-                href="/routes"
+                to="/routes"
                 className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
               >
                 Manage routes
@@ -325,7 +324,7 @@ export default function Home() {
               </CardDescription>
               <CardTitle className="text-3xl font-semibold mt-2">{getTotalBackends()}</CardTitle>
               <Link
-                href="/backends"
+                to="/backends"
                 className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
               >
                 View backends
@@ -427,7 +426,7 @@ export default function Home() {
                   </Button>
                 ) : (
                   <Button asChild variant="outline" className="w-full justify-start">
-                    <Link href="/listeners">
+                    <Link to="/listeners">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Listener
                     </Link>
@@ -444,7 +443,7 @@ export default function Home() {
                   </Button>
                 ) : (
                   <Button asChild variant="outline" className="w-full justify-start">
-                    <Link href="/routes">
+                    <Link to="/routes">
                       <Route className="h-4 w-4 mr-2" />
                       Create Route
                     </Link>
@@ -461,14 +460,14 @@ export default function Home() {
                   </Button>
                 ) : (
                   <Button asChild variant="outline" className="w-full justify-start">
-                    <Link href="/policies">
+                    <Link to="/policies">
                       <Shield className="h-4 w-4 mr-2" />
                       Configure Policy
                     </Link>
                   </Button>
                 )}
                 <Button asChild variant="outline" className="w-full justify-start">
-                  <Link href="/playground">
+                  <Link to="/playground">
                     <Code className="h-4 w-4 mr-2" />
                     Test Routes
                   </Link>

@@ -1,4 +1,3 @@
-"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -17,7 +16,7 @@ import {
   ChevronRight,
   ExternalLink,
 } from "lucide-react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import {
   fetchBinds,
   createBind,
@@ -596,7 +595,7 @@ export function ListenerConfig({
                                 <TableCell>
                                   <div className="flex items-center space-x-2">
                                     <Link
-                                      href="/policies"
+                                      to="/policies"
                                       className="flex items-center underline space-x-1 hover:text-primary"
                                     >
                                       <span className="text-sm">View Policies</span>

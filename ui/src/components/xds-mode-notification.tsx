@@ -1,4 +1,3 @@
-"use client";
 
 import { useXdsMode } from "@/hooks/use-xds-mode";
 

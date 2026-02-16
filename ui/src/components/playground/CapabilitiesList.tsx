@@ -1,4 +1,3 @@
-"use client";
 
 import { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
 import type { AgentSkill, AgentCard } from "@a2a-js/sdk";

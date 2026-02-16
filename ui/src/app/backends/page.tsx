@@ -1,4 +1,3 @@
-"use client";
 
 import { BackendConfig } from "@/components/backend-config";
 import { useServer } from "@/lib/server-context";

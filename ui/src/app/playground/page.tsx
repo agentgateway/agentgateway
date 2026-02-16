@@ -1,4 +1,3 @@
-"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
@@ -505,7 +504,7 @@ export default function PlaygroundPage() {
             headers: async () => ({
               Authorization: `Bearer ${connectionState.authToken}`,
             }),
-            shouldRetryWithHeaders: async (req: RequestInit, res: Response) => {
+            shouldRetryWithHeaders: async (_req: RequestInit, res: Response) => {
               // Retry with auth headers on 401 or 403 responses
               if (res.status === 401 || res.status === 403) {
                 return {

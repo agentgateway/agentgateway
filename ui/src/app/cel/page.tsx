@@ -1,8 +1,6 @@
-"use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-import { useTheme } from "next-themes";
+import React, { useCallback, useEffect, useRef, useState, lazy, Suspense } from "react";
+import { useTheme } from "@/hooks/use-theme";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +10,7 @@ import yaml from "js-yaml";
 import { API_URL } from "@/lib/api";
 
 // dynamic import OUTSIDE component to avoid remount on every render
-const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
+const MonacoEditor = lazy(() => import("@monaco-editor/react"));
 
 type TemplateKey = "empty" | "http";
 
@@ -227,17 +225,19 @@ export default function CELPlayground(): React.JSX.Element {
             <label className="block text-sm font-medium mb-2">Expression</label>
             <Card>
               <CardContent className="p-4">
-                <MonacoEditor
-                  height="250px"
-                  defaultLanguage="javascript"
-                  language="javascript"
-                  theme={editorTheme}
-                  value={expression}
-                  onChange={(v) => setExpression(v ?? "")}
-                  loading={<Skeleton className="h-32" />}
-                  onMount={handleEditorMount}
-                  options={{ minimap: { enabled: false }, lineNumbers: "off", wordWrap: "on" }}
-                />
+                <Suspense fallback={<Skeleton className="h-32" />}>
+                  <MonacoEditor
+                    height="250px"
+                    defaultLanguage="javascript"
+                    language="javascript"
+                    theme={editorTheme}
+                    value={expression}
+                    onChange={(v) => setExpression(v ?? "")}
+                    loading={<Skeleton className="h-32" />}
+                    onMount={handleEditorMount}
+                    options={{ minimap: { enabled: false }, lineNumbers: "off", wordWrap: "on" }}
+                  />
+                </Suspense>
 
                 <div className="flex gap-2 mt-3 flex-wrap">
                   {EXAMPLES.map((ex, idx) => (
@@ -279,20 +279,22 @@ export default function CELPlayground(): React.JSX.Element {
                     </pre>
                   </div>
                 ) : resultValue !== null ? (
-                  <MonacoEditor
-                    height="250px"
-                    defaultLanguage="json"
-                    language="json"
-                    theme={editorTheme}
-                    value={JSON.stringify(resultValue, null, 2)}
-                    loading={<Skeleton className="h-[250px]" />}
-                    options={{
-                      minimap: { enabled: false },
-                      lineNumbers: "off",
-                      readOnly: true,
-                      wordWrap: "on",
-                    }}
-                  />
+                  <Suspense fallback={<Skeleton className="h-[250px]" />}>
+                    <MonacoEditor
+                      height="250px"
+                      defaultLanguage="json"
+                      language="json"
+                      theme={editorTheme}
+                      value={JSON.stringify(resultValue, null, 2)}
+                      loading={<Skeleton className="h-[250px]" />}
+                      options={{
+                        minimap: { enabled: false },
+                        lineNumbers: "off",
+                        readOnly: true,
+                        wordWrap: "on",
+                      }}
+                    />
+                  </Suspense>
                 ) : (
                   <div className="h-[250px] flex items-center justify-center text-sm text-muted-foreground">
                     Press Evaluate or Ctrl+Enter to run
@@ -318,17 +320,19 @@ export default function CELPlayground(): React.JSX.Element {
           </div>
           <Card>
             <CardContent className="p-4">
-              <MonacoEditor
-                height="705px"
-                defaultLanguage="yaml"
-                language="yaml"
-                theme={editorTheme}
-                value={inputData}
-                onChange={(v) => setInputData(v ?? "")}
-                loading={<Skeleton className="h-48" />}
-                onMount={handleEditorMount}
-                options={{ minimap: { enabled: false }, lineNumbers: "off", wordWrap: "on" }}
-              />
+              <Suspense fallback={<Skeleton className="h-48" />}>
+                <MonacoEditor
+                  height="705px"
+                  defaultLanguage="yaml"
+                  language="yaml"
+                  theme={editorTheme}
+                  value={inputData}
+                  onChange={(v) => setInputData(v ?? "")}
+                  loading={<Skeleton className="h-48" />}
+                  onMount={handleEditorMount}
+                  options={{ minimap: { enabled: false }, lineNumbers: "off", wordWrap: "on" }}
+                />
+              </Suspense>
             </CardContent>
           </Card>
         </section>

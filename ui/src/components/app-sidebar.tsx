@@ -1,4 +1,3 @@
-"use client";
 
 import { useState } from "react";
 import {
@@ -37,7 +36,7 @@ import {
   Route,
   Calculator,
 } from "lucide-react";
-import { useRouter, usePathname } from "next/navigation";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useWizard } from "@/lib/wizard-context";
 import { toast } from "sonner";
 import { useServer } from "@/lib/server-context";
@@ -49,8 +48,9 @@ interface AppSidebarProps {
 
 export function AppSidebar({ setActiveView }: AppSidebarProps) {
   const [showRestartDialog, setShowRestartDialog] = useState(false);
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pathname = location.pathname;
   const { restartWizard, isRestartingWizard } = useWizard();
   const { listeners } = useServer();
 
@@ -90,7 +90,7 @@ export function AppSidebar({ setActiveView }: AppSidebarProps) {
   };
 
   const navigateTo = (path: string) => {
-    router.push(path);
+    navigate(path);
     setActiveView(path.split("/").pop() || "home");
   };
 

@@ -1,4 +1,3 @@
-"use client";
 
 import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { motion } from "framer-motion";

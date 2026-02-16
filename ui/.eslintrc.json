@@ -1,11 +1,20 @@
 {
+  "root": true,
+  "env": { "browser": true, "es2020": true },
   "extends": [
-    "next/core-web-vitals",
-    "next/typescript",
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react-hooks/recommended",
     "prettier"
   ],
-  "plugins": ["prettier"],
+  "ignorePatterns": ["out", ".eslintrc.json"],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["react-refresh", "prettier"],
   "rules": {
+    "react-refresh/only-export-components": [
+      "warn",
+      { "allowConstantExport": true }
+    ],
     "prettier/prettier": ["error", {
       "semi": true,
       "singleQuote": false,

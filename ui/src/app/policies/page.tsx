@@ -1,4 +1,3 @@
-"use client";
 
 import { PolicyConfig } from "@/components/policy-config";
 import { useServer } from "@/lib/server-context";

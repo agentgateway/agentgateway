@@ -1,4 +1,3 @@
-"use client";
 
 import { useState, useEffect, MouseEvent } from "react";
 import { Label } from "@/components/ui/label";

@@ -1,4 +1,3 @@
-"use client";
 
 import { ListenerConfig } from "@/components/listener-config";
 import { useServer } from "@/lib/server-context";

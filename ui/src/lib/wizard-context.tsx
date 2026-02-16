@@ -1,6 +1,5 @@
-"use client";
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { useServer } from "@/lib/server-context";
 import { useLoading } from "@/lib/loading-context";
 import { deleteEverything } from "@/lib/api";

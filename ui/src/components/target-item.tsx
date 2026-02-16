@@ -1,4 +1,3 @@
-"use client";
 
 import { TargetType, TargetWithType } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
