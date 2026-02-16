@@ -924,6 +924,11 @@ impl HTTPProxy {
 				.insert(BackendRequestTimeout(backend_timeout));
 		}
 		let mut req_opt = Some(req);
+		let timeout = response_policies
+			.timeout
+			.as_ref()
+			.and_then(|t| t.request_timeout);
+		let start = log.start;
 		let call = make_backend_call(
 			self.inputs.clone(),
 			route_policies.clone(),
@@ -932,17 +937,11 @@ impl HTTPProxy {
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
-		)
-		.await
-		.maybe_snapshot_on_err(log, &mut req_opt)?;
-		let timeout = response_policies
-			.timeout
-			.as_ref()
-			.and_then(|t| t.request_timeout);
+		);
 
 		// Setup timeout
 		let call_result = if let Some(timeout) = timeout {
-			let deadline = tokio::time::Instant::from_std(log.start + timeout);
+			let deadline = tokio::time::Instant::from_std(start + timeout);
 			let fut = tokio::time::timeout_at(deadline, call);
 			fut.await
 		} else {
@@ -953,7 +952,7 @@ impl HTTPProxy {
 		let mut resp = match call_result {
 			Ok(Ok(resp)) => resp,
 			Ok(Err(e)) => {
-				return Err(ProxyResponse::Error(e)).maybe_snapshot_on_err(log, &mut req_opt)?;
+				return Err(e).maybe_snapshot_on_err(log, &mut req_opt)?;
 			},
 			Err(_) => {
 				return Err(ProxyResponse::Error(ProxyError::RequestTimeout))
@@ -1190,7 +1189,7 @@ async fn make_backend_call(
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
-) -> Result<Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send>>, ProxyResponse> {
+) -> Result<Response, ProxyResponse> {
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
 	};
@@ -1324,7 +1323,7 @@ async fn make_backend_call(
 				.mcp_state
 				.serve(inputs, name, backend, policies, req, log)
 				.await;
-			return Ok(Box::pin(async move { res }));
+			return res.map_err(ProxyResponse::from);
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
@@ -1431,7 +1430,7 @@ async fn make_backend_call(
 					};
 					let (mut req, llm_request) = match r {
 						RequestResult::Success(r, lr) => (r, lr),
-						RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
+						RequestResult::Rejected(dr) => return Err(ProxyResponse::DirectResponse(Box::new(dr))),
 					};
 					// If a user doesn't configure explicit overrides for connecting to a provider, setup default
 					// paths, TLS, etc.
@@ -1463,17 +1462,15 @@ async fn make_backend_call(
 					(req, response_policies, Some(llm_request))
 				},
 				RouteType::Models => {
-					return Ok(Box::pin(async move {
-						Ok(
-							::http::Response::builder()
-								.status(::http::StatusCode::NOT_IMPLEMENTED)
-								.header(::http::header::CONTENT_TYPE, "application/json")
-								.body(http::Body::from(format!(
-									"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
-								)))
-								.expect("Failed to build response"),
-						)
-					}));
+					return Ok(
+						::http::Response::builder()
+							.status(::http::StatusCode::NOT_IMPLEMENTED)
+							.header(::http::header::CONTENT_TYPE, "application/json")
+							.body(http::Body::from(format!(
+								"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
+							)))
+							.expect("Failed to build response"),
+					);
 				},
 				RouteType::Passthrough | RouteType::Realtime => {
 					// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
@@ -1542,37 +1539,36 @@ async fn make_backend_call(
 		.map(|l| l.cel.cel_context.needs_llm_completion())
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
-	Ok(Box::pin(async move {
-		let mut resp = upstream.call(call).await?;
-		a2a::apply_to_response(
-			backend_call.backend_policies.a2a.as_ref(),
-			a2a_type,
-			&mut resp,
-		)
-		.await
-		.map_err(ProxyError::Processing)?;
-		let mut resp = if let (Some(llm), Some(llm_request)) =
-			(backend_call.backend_policies.llm_provider, llm_request)
-		{
-			llm
-				.provider
-				.process_response(
-					policy_client.clone(),
-					llm_request,
-					llm_response_policies,
-					llm_response_log.expect("must be set"),
-					include_completion_in_log,
-					resp,
-				)
-				.await
-				.map_err(|e| ProxyError::Processing(e.into()))?
-		} else {
-			resp
-		};
-		// TODO: we currently do not support ImmediateResponse from inference router
-		let _ = maybe_inference.mutate_response(&mut resp).await?;
-		Ok(resp)
-	}))
+
+	let mut resp = upstream.call(call).await?;
+	a2a::apply_to_response(
+		backend_call.backend_policies.a2a.as_ref(),
+		a2a_type,
+		&mut resp,
+	)
+	.await
+	.map_err(ProxyError::Processing)?;
+	let mut resp = if let (Some(llm), Some(llm_request)) =
+		(backend_call.backend_policies.llm_provider, llm_request)
+	{
+		llm
+			.provider
+			.process_response(
+				policy_client.clone(),
+				llm_request,
+				llm_response_policies,
+				llm_response_log.expect("must be set"),
+				include_completion_in_log,
+				resp,
+			)
+			.await
+			.map_err(|e| ProxyError::Processing(e.into()))?
+	} else {
+		resp
+	};
+	// TODO: we currently do not support ImmediateResponse from inference router
+	let _ = maybe_inference.mutate_response(&mut resp).await?;
+	Ok(resp)
 }
 
 fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog>) {
@@ -1998,8 +1994,7 @@ impl PolicyClient {
 				&mut Default::default(),
 			)
 			.await
-			.map_err(ProxyResponse::downcast)?
-			.await
+			.map_err(ProxyResponse::downcast)
 		})
 	}
 

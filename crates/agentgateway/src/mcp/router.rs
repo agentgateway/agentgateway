@@ -117,9 +117,6 @@ impl App {
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
 
-		// TODO: today we duplicate everything which is error prone. It would be ideal to re-use the parent one
-		// The problem is that we decide whether to include various attributes before we pick the backend,
-		// so we don't know to register the MCP policies
 		let mut ctx = ContextBuilder::new();
 		authorization_policies.register(&mut ctx);
 		ctx.maybe_buffer_request_body(&mut req).await;
