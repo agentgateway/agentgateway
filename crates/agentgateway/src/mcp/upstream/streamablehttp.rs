@@ -91,7 +91,9 @@ impl Client {
 
 		let resp = self.http_client.call(req).await?;
 
-		if resp.status() == http::StatusCode::ACCEPTED {
+		// MCP spec has 202 only but some servers in the wild return 204. This is close enough for us to massage it.
+		if resp.status() == http::StatusCode::ACCEPTED || resp.status() == http::StatusCode::NO_CONTENT
+		{
 			return Ok(StreamableHttpPostResponse::Accepted);
 		}
 
