@@ -285,7 +285,7 @@ func DefaultGatewayIRGetter(gw *gwv1.Gateway, commonCollections *collections.Com
 }
 func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmValues(gw *gwv1.Gateway) (*deployer.HelmConfig, error) {
 	irGW := DefaultGatewayIRGetter(gw, g.inputs.CommonCollections)
-	ports := deployer.GetPortsValues(irGW)
+	ports := deployer.GetPortsValues(irGW, int32(g.inputs.NoListenersDummyPort))
 	if len(ports) == 0 {
 		return nil, ErrNoValidPorts
 	}

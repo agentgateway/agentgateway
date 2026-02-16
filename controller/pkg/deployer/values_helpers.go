@@ -31,17 +31,24 @@ var ComponentLogLevelEmptyError = func(key string, value string) error {
 // Extract the listener ports from a Gateway and corresponding listener sets. These will be used to populate:
 // 1. the ports exposed on the envoy container
 // 2. the ports exposed on the proxy service
-func GetPortsValues(gw *collections.GatewayForDeployer) []HelmPort {
+func GetPortsValues(gw *collections.GatewayForDeployer, noListenersDummyPort int32) []HelmPort {
 	gwPorts := []HelmPort{}
+	listenerPorts := gw.Ports.List()
 
 	// Add ports from Gateway listeners
-	for _, port := range gw.Ports.List() {
+	for _, port := range listenerPorts {
 		portName := GenerateListenerNameFromPort(port)
 		if err := validateListenerPortForParent(port); err != nil {
 			// skip invalid ports; statuses are handled in the translator
 			logger.Error("skipping port", "gateway", gw.ResourceName(), "error", err)
 			continue
 		}
+		gwPorts = AppendPortValue(gwPorts, port, portName)
+	}
+
+	if len(listenerPorts) == 0 && noListenersDummyPort != 0 {
+		port := noListenersDummyPort
+		portName := GenerateListenerNameFromPort(gwv1.PortNumber(port))
 		gwPorts = AppendPortValue(gwPorts, port, portName)
 	}
 
@@ -55,8 +62,13 @@ var agentGatewayReservedPorts = sets.New[int32](
 )
 
 var ErrListenerPortReserved = fmt.Errorf("port is reserved")
+var ErrListenerPortOutOfRange = fmt.Errorf("port is out of range")
 
 func validateListenerPortForParent(port int32) error {
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("invalid port %d in listener: %w",
+			port, ErrListenerPortOutOfRange)
+	}
 	if agentGatewayReservedPorts.Has(port) {
 		return fmt.Errorf("invalid port %d in listener: %w",
 			port, ErrListenerPortReserved)
