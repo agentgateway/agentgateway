@@ -9,12 +9,10 @@ use cel::{ExecutionError, FunctionContext, ResolveResult, Value};
 
 pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("charAt", char_at);
-	ctx.add_function("endsWith", ends_with);
 	ctx.add_function("indexOf", index_of);
 	ctx.add_function("join", join);
 	ctx.add_function("lastIndexOf", last_index_of);
 	ctx.add_function("lowerAscii", lower_ascii);
-	ctx.add_function("startsWith", starts_with);
 	ctx.add_function("stripPrefix", strip_prefix);
 	ctx.add_function("stripSuffix", strip_suffix);
 	ctx.add_function("upperAscii", upper_ascii);
@@ -142,26 +140,6 @@ pub fn join<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<
 pub fn lower_ascii<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
 	let this: StringValue = this.load_value(ftx)?;
 	Ok(this.as_ref().to_ascii_lowercase().into())
-}
-
-pub fn starts_with<'a>(
-	ftx: &mut FunctionContext<'a, '_>,
-	this: This,
-	prefix: Argument,
-) -> ResolveResult<'a> {
-	let this: StringValue = this.load_value(ftx)?;
-	let prefix: StringValue = prefix.load_value(ftx)?;
-	Ok(this.as_ref().starts_with(prefix.as_ref()).into())
-}
-
-pub fn ends_with<'a>(
-	ftx: &mut FunctionContext<'a, '_>,
-	this: This,
-	suffix: Argument,
-) -> ResolveResult<'a> {
-	let this: StringValue = this.load_value(ftx)?;
-	let suffix: StringValue = suffix.load_value(ftx)?;
-	Ok(this.as_ref().ends_with(suffix.as_ref()).into())
 }
 
 pub fn strip_prefix<'a>(

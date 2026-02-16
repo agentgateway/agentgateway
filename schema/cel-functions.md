@@ -29,6 +29,6 @@ The following standard functions are available:
 
 * `contains`, `size`, `has`, `map`, `filter`, `all`, `max`, `startsWith`, `endsWith`, `string`, `bytes`, `double`, `exists`, `exists_one`, `int`, `uint`, `matches`.
 * Duration/time functions: `duration`, `timestamp`, `getFullYear`, `getMonth`, `getDayOfYear`, `getDayOfMonth`, `getDate`, `getDayOfWeek`, `getHours`, `getMinutes`, `getSeconds`, `getMilliseconds`.
-* From the [strings extension](https://pkg.go.dev/github.com/google/cel-go/ext#Strings): `charAt`, `indexOf`, `join`, `lastIndexOf`, `lowerAscii`, `upperAscii`, `trim`, `replace`, `split`, `substring`, `startsWith`, `endsWith`, `stripPrefix`, `stripSuffix`.
+* From the [strings extension](https://pkg.go.dev/github.com/google/cel-go/ext#Strings): `charAt`, `indexOf`, `join`, `lastIndexOf`, `lowerAscii`, `upperAscii`, `trim`, `replace`, `split`, `substring`, `stripPrefix`, `stripSuffix`.
 * From the [Kubernetes IP extension](https://kubernetes.io/docs/reference/using-api/cel/#kubernetes-ip-address-library): `isIP("...")`, `ip("...")`, `ip("...").family()`, `ip("...").isUnspecified()`, `ip("...").isLoopback()`, `ip("...").isLinkLocalMulticast()`, `ip("...").isLinkLocalUnicast()`, `ip("...").isGlobalUnicast()`.
 * From the [Kubernetes CIDR extension](https://kubernetes.io/docs/reference/using-api/cel/#kubernetes-cidr-library): `cidr("...").containsIP("...")`, `cidr("...").containsIP(ip("..."))`, `cidr("...").containsCIDR(cidr("..."))`, `cidr("...").ip()`, `cidr("...").masked()`, `cidr("...").prefixLength()`.
