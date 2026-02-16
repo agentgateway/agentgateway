@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
+use crate::http::filters::HeaderModifier;
 use crate::http::transformation_cel::LocalTransformationConfig;
 use crate::http::{HeaderName, HeaderOrPseudo, filters, retry, timeout};
 use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider};
@@ -1221,8 +1222,15 @@ async fn convert_llm_config(
 		};
 
 		let mut pols = vec![];
-		if let Some(rh) = &model_config.request_headers {
-			pols.push(BackendPolicy::RequestHeaderModifier(rh.clone()));
+		if let Some(mut rh) = model_config.request_headers.clone() {
+			rh.remove.push(strng::literal!("x-gateway-model-name"));
+			pols.push(BackendPolicy::RequestHeaderModifier(rh));
+		} else {
+			pols.push(BackendPolicy::RequestHeaderModifier(HeaderModifier {
+				remove: vec![strng::literal!("x-gateway-model-name")],
+				add: vec![],
+				set: vec![],
+			}));
 		}
 		pols.push(BackendPolicy::AI(Arc::new(llm::Policy {
 			defaults: model_config.defaults.clone(),

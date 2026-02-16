@@ -1,14 +1,13 @@
 frontendPolicies:
   accessLog:
     add:
-      "body": variables()
-      wtf: ba
+      user: request.headers["user-agent"]
 llm:
-#  policies:
-#    jwtAuth:
-#      issuer: agentgateway.dev
-#      audiences: [test.agentgateway.dev]
-#      jwks: '{"keys":[]}'
+  policies:
+    jwtAuth:
+      issuer: agentgateway.dev
+      audiences: [test.agentgateway.dev]
+      jwks: '{"keys":[]}'
   models:
   - name: claude-3-haiku
     provider: anthropic
@@ -22,8 +21,6 @@ llm:
       apiKey: "sk-123"
       vertexRegion: global
       vertexProject: my-vertex-project
-  #    guardrails: ...
-  #    additionalHeaders: ...
   - name: gpt-7-max
     provider: azureOpenAI
     params:
