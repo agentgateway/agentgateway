@@ -418,7 +418,7 @@ mod aws {
 					aws_region.region.as_str()
 				} else {
 					// Fall back to region from AWS config
-					let config = sdk_config().await;
+					let config = Box::pin(sdk_config()).await;
 					config.region().map(|r| r.as_ref()).ok_or(anyhow::anyhow!(
 						"No region found in AWS config or request extensions"
 					))?
@@ -497,7 +497,7 @@ mod aws {
 			},
 			AwsAuth::Implicit {} => {
 				// Load AWS configuration and credentials from environment/IAM
-				let config = sdk_config().await;
+				let config = Box::pin(sdk_config()).await;
 
 				// Get credentials from the config
 				// TODO this is not caching!!

@@ -70,7 +70,7 @@ impl StateManager {
 					listener_name: None,
 				},
 			};
-			local_client.run().await?;
+			Box::pin(local_client.run()).await?;
 		}
 		Ok(Self { stores, xds_client })
 	}
