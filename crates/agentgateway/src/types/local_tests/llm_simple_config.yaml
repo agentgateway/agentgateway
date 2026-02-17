@@ -9,6 +9,9 @@ llm:
       issuer: agentgateway.dev
       audiences: [test.agentgateway.dev]
       jwks: '{"keys":[]}'
+    authorization:
+      rules:
+      - 'jwt.email.endsWith("@example.com")'
   models:
   - name: claude-3-haiku
     provider: anthropic

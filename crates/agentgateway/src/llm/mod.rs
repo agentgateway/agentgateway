@@ -6,7 +6,6 @@ use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use agent_hbone::server::RequestParts;
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
@@ -136,7 +135,6 @@ pub enum LocalModelAIProvider {
 	AzureOpenAI,
 }
 
-
 trait Provider {
 	const NAME: Strng;
 }
@@ -248,6 +246,9 @@ pub enum RequestResult {
 	Success(Request, LLMRequest),
 	Rejected(Response),
 }
+
+#[derive(Clone, Debug)]
+pub struct OverrideModel(pub String);
 
 impl AIProvider {
 	pub fn provider(&self) -> Strng {
@@ -662,7 +663,7 @@ impl AIProvider {
 		let new_request = if original_format == InputFormat::CountTokens {
 			match self {
 				AIProvider::Anthropic(_) => req.to_anthropic()?,
-				AIProvider::Bedrock(_) => req.to_bedrock_token_count(parts.headers())?,
+				AIProvider::Bedrock(_) => req.to_bedrock_token_count(&parts.headers)?,
 				AIProvider::Vertex(provider) => {
 					let body = req.to_anthropic()?;
 					provider.prepare_anthropic_count_tokens_body(body)?
@@ -1017,10 +1018,10 @@ impl AIProvider {
 	async fn read_body_and_default_model<T: RequestType + DeserializeOwned>(
 		&self,
 		policies: Option<&Policy>,
-		req: Request,
+		hreq: Request,
 	) -> Result<(Parts, T), AIError> {
-		let buffer = http::buffer_limit(&req);
-		let (parts, body) = req.into_parts();
+		let buffer = http::buffer_limit(&hreq);
+		let (parts, body) = hreq.into_parts();
 		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
 			return Err(AIError::RequestTooLarge);
 		};
@@ -1032,6 +1033,10 @@ impl AIProvider {
 
 		if let Some(provider_model) = &self.override_model() {
 			*req.model() = Some(provider_model.to_string());
+		} else if req.model().is_none()
+			&& let Some(m) = parts.extensions.get::<OverrideModel>()
+		{
+			*req.model() = Some(m.0.to_string());
 		} else if req.model().is_none() {
 			return Err(AIError::MissingField("model not specified".into()));
 		}

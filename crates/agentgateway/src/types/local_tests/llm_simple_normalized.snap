@@ -16,56 +16,8 @@ binds:
       hostname: '*'
       protocol: HTTP
       routes:
-        llm:model:gpt-7-max:
-          key: llm:model:gpt-7-max
-          name: model:gpt-7-max
-          namespace: internal
-          matches:
-          - headers:
-            - name: x-gateway-model-name
-              value:
-                exact: gpt-7-max
-            path:
-              pathPrefix: /
-          backends:
-          - weight: 1
-            backend: /llm:gpt-7-max
-          inlinePolicies:
-          - ai:
-              routes:
-                /v1/chat/completions: completions
-                :streamRawPredict: messages
-                /v1/embeddings: embeddings
-                /v1/responses: responses
-                /v1/messages: messages
-                :rawPredict: messages
-                '*': passthrough
-        llm:model:gemini-0.5-pro:
-          key: llm:model:gemini-0.5-pro
-          name: model:gemini-0.5-pro
-          namespace: internal
-          matches:
-          - headers:
-            - name: x-gateway-model-name
-              value:
-                exact: gemini-0.5-pro
-            path:
-              pathPrefix: /
-          backends:
-          - weight: 1
-            backend: /llm:gemini-0.5-pro
-          inlinePolicies:
-          - ai:
-              routes:
-                /v1/chat/completions: completions
-                :streamRawPredict: messages
-                /v1/embeddings: embeddings
-                /v1/responses: responses
-                /v1/messages: messages
-                :rawPredict: messages
-                '*': passthrough
-        llm:model:claude-3-haiku:
-          key: llm:model:claude-3-haiku
+        llm:model:claude-3-haiku:0:
+          key: llm:model:claude-3-haiku:0
           name: model:claude-3-haiku
           namespace: internal
           matches:
@@ -91,21 +43,32 @@ binds:
                 /v1/messages: messages
                 :rawPredict: messages
                 '*': passthrough
-        llm:admin:model-list:
-          key: llm:admin:model-list
-          name: admin:model-list
+        llm:model:gpt-7-max:2:
+          key: llm:model:gpt-7-max:2
+          name: model:gpt-7-max
           namespace: internal
           matches:
-          - path:
-              pathPrefix: /v1/models
-          - path:
-              pathPrefix: /models
+          - headers:
+            - name: x-gateway-model-name
+              value:
+                exact: gpt-7-max
+            path:
+              pathPrefix: /
+          backends:
+          - weight: 1
+            backend: /llm:gpt-7-max
           inlinePolicies:
-          - directResponse:
-              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjg3OTUzLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MTc3MTI4Nzk1Mywib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjg3OTUzLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjg3OTUzLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
-              status: 200
-        llm:model:gpt-3.5-turbo:
-          key: llm:model:gpt-3.5-turbo
+          - ai:
+              routes:
+                /v1/chat/completions: completions
+                :streamRawPredict: messages
+                /v1/embeddings: embeddings
+                /v1/responses: responses
+                /v1/messages: messages
+                :rawPredict: messages
+                '*': passthrough
+        llm:model:gpt-3.5-turbo:3:
+          key: llm:model:gpt-3.5-turbo:3
           name: model:gpt-3.5-turbo
           namespace: internal
           matches:
@@ -128,6 +91,43 @@ binds:
                 /v1/messages: messages
                 :rawPredict: messages
                 '*': passthrough
+        llm:model:gemini-0.5-pro:1:
+          key: llm:model:gemini-0.5-pro:1
+          name: model:gemini-0.5-pro
+          namespace: internal
+          matches:
+          - headers:
+            - name: x-gateway-model-name
+              value:
+                exact: gemini-0.5-pro
+            path:
+              pathPrefix: /
+          backends:
+          - weight: 1
+            backend: /llm:gemini-0.5-pro
+          inlinePolicies:
+          - ai:
+              routes:
+                /v1/chat/completions: completions
+                :streamRawPredict: messages
+                /v1/embeddings: embeddings
+                /v1/responses: responses
+                /v1/messages: messages
+                :rawPredict: messages
+                '*': passthrough
+        llm:admin:model-list:
+          key: llm:admin:model-list
+          name: admin:model-list
+          namespace: internal
+          matches:
+          - path:
+              pathPrefix: /v1/models
+          - path:
+              pathPrefix: /models
+          inlinePolicies:
+          - directResponse:
+              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMzcwNTczLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MTc3MTM3MDU3Mywib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMzcwNTczLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMzcwNTczLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
+              status: 200
       tcpRoutes: {}
 policies:
 - key: listener/0
@@ -145,6 +145,21 @@ policies:
         providers:
         - issuer: agentgateway.dev
           keys: []
+- key: listener/1
+  name: null
+  target:
+    gateway:
+      gatewayName: name
+      gatewayNamespace: ns
+      listenerName: llm
+  policy:
+    traffic:
+      phase: route
+      authorization:
+        rules:
+          allow:
+          - jwt.email.endsWith("@example.com")
+          deny: []
 - key: llm:transformation
   name:
     kind: Local
@@ -163,7 +178,13 @@ policies:
           add: []
           set:
           - - x-gateway-model-name
-            - json(request.body).model
+            - |2
+
+              request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict") ?
+              request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
+              json(request.body).model
+          - - anthropic-beta
+            - request.headers['anthropic-beta'].split(',').filter(v, v.trim() in [])
           remove: []
           body: null
         response:

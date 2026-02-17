@@ -36,6 +36,7 @@ use itertools::Itertools;
 use macro_rules_attribute::apply;
 use openapiv3::OpenAPI;
 use secrecy::SecretString;
+use crate::llm::policy::PromptGuard;
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
@@ -103,7 +104,7 @@ pub struct LocalLLMConfig {
 	models: Vec<LocalLLMModels>,
 	/// policies defines policies for handling incoming requests, before a model is selected
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	policies: Option<LocalGatewayPolicy>,
+	policies: Option<LocalLLMPolicy>,
 }
 
 #[apply(schema_de!)]
@@ -128,7 +129,11 @@ pub struct LocalLLMModels {
 	/// requestHeaders modifies headers in requests to the LLM provider.
 	#[serde(default)]
 	request_headers: Option<filters::HeaderModifier>,
+	/// guardrails to apply to the request or response
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	guardrails: Option<PromptGuard>,
 
+	/// matches specifies the conditions under which this model should be used in addition to matching the model name.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	matches: Vec<LLMRouteMatch>,
 }
@@ -708,6 +713,16 @@ where
 
 #[apply(schema_de!)]
 #[derive(Default)]
+struct LocalLLMPolicy {
+	#[serde(flatten)]
+	gateway: LocalGatewayPolicy,
+	/// Authorization policies for HTTP access.
+	#[serde(default)]
+	authorization: Option<Authorization>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
 struct LocalGatewayPolicy {
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
@@ -1256,7 +1271,7 @@ json(request.body).model
 		pols.push(BackendPolicy::AI(Arc::new(llm::Policy {
 			defaults: model_config.defaults.clone(),
 			overrides: model_config.overrides.clone(),
-			prompt_guard: None,
+			prompt_guard: model_config.guardrails.clone(),
 			prompts: None,
 			model_aliases: Default::default(),
 			wildcard_patterns: Arc::new(vec![]),
@@ -1374,7 +1389,10 @@ json(request.body).model
 	};
 
 	if let Some(pol) = llm_config.policies {
-		let pols = split_policies(client.clone(), pol.into()).await?;
+		let route_pols = split_policies(client.clone(), FilterOrPolicy{authorization: pol.authorization.clone(), ..Default::default()}).await?;
+		let pols = split_policies(client.clone(), pol.gateway.into()).await?;
+
+		let pc = pols.route_policies.len();
 		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{idx}");
 			all_policies.push(TargetedPolicy {
@@ -1382,6 +1400,15 @@ json(request.body).model
 				name: None,
 				target: PolicyTarget::Gateway(listener_name.clone().into()),
 				policy: (pol, PolicyPhase::Gateway).into(),
+			})
+		}
+		for (idx, pol) in route_pols.route_policies.into_iter().enumerate() {
+			let key = strng::format!("listener/{}", pc + idx);
+			all_policies.push(TargetedPolicy {
+				key: key.clone(),
+				name: None,
+				target: PolicyTarget::Gateway(listener_name.clone().into()),
+				policy: (pol, PolicyPhase::Route).into(),
 			})
 		}
 	}
