@@ -67,3 +67,8 @@ async fn test_llm_config() {
 async fn test_llm_simple_config() {
 	test_config_parsing("llm_simple").await;
 }
+
+#[tokio::test]
+async fn test_mcp_simple_config() {
+	test_config_parsing("mcp_simple").await;
+}

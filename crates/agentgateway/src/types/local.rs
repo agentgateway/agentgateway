@@ -18,8 +18,8 @@ use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
 	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
 	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, MethodMatch,
-	OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, QueryMatch, ResourceName, Route,
+	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
+	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route,
 	RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
 	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
 	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
@@ -94,6 +94,8 @@ pub struct LocalConfig {
 	backends: Vec<FullLocalBackend>,
 	#[serde(default)]
 	llm: Option<LocalLLMConfig>,
+	#[serde(default)]
+	mcp: Option<LocalSimpleMcpConfig>,
 }
 
 #[apply(schema_de!)]
@@ -105,6 +107,20 @@ pub struct LocalLLMConfig {
 	/// policies defines policies for handling incoming requests, before a model is selected
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<LocalLLMPolicy>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalSimpleMcpConfig {
+	#[serde(default = "default_simple_mcp_port")]
+	port: u16,
+	#[serde(flatten)]
+	backend: LocalMcpBackend,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	policies: Option<FilterOrPolicy>,
+}
+
+fn default_simple_mcp_port() -> u16 {
+	3000
 }
 
 #[apply(schema_de!)]
@@ -1018,6 +1034,7 @@ async fn convert(
 		services,
 		backends,
 		llm,
+		mcp,
 	} = i;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -1090,6 +1107,13 @@ async fn convert(
 		all_binds.push(llm_bind);
 		all_policies.extend_from_slice(&llm_policies);
 		all_backends.extend_from_slice(&llm_backends);
+	}
+	if let Some(mcp_config) = mcp {
+		let (mcp_bind, mcp_policies, mcp_backends) =
+			convert_mcp_config(client.clone(), gateway.clone(), mcp_config).await?;
+		all_binds.push(mcp_bind);
+		all_policies.extend_from_slice(&mcp_policies);
+		all_backends.extend_from_slice(&mcp_backends);
 	}
 
 	// Add frontend policies targeted to this listener
@@ -1449,6 +1473,81 @@ json(request.body).model
 	};
 
 	Ok((bind, all_policies, all_backends))
+}
+
+async fn convert_mcp_config(
+	client: client::Client,
+	gateway: ListenerTarget,
+	mcp_config: LocalSimpleMcpConfig,
+) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
+	let LocalSimpleMcpConfig {
+		port,
+		backend,
+		policies,
+	} = mcp_config;
+
+	let resolved_policies = if let Some(pol) = policies {
+		split_policies(client, pol).await?
+	} else {
+		ResolvedPolicies::default()
+	};
+
+	let mut routes = RouteSet::default();
+	let route = Route {
+		key: strng::new("mcp:default"),
+		name: RouteName {
+			name: strng::new("default"),
+			namespace: strng::new("internal"),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: vec![],
+		matches: default_matches(),
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			backend: BackendReference::Backend(strng::new("/mcp")),
+			inline_policies: resolved_policies.backend_policies,
+		}],
+		inline_policies: resolved_policies.route_policies,
+	};
+	routes.insert(route);
+
+	let listener_key: ListenerKey = strng::new("mcp");
+	let listener_name = ListenerName {
+		gateway_name: gateway.gateway_name.clone(),
+		gateway_namespace: gateway.gateway_namespace.clone(),
+		listener_name: strng::new("mcp"),
+		listener_set: None,
+	};
+	let listener = Listener {
+		key: listener_key,
+		name: listener_name,
+		hostname: strng::new("*"),
+		protocol: ListenerProtocol::HTTP,
+		routes,
+		tcp_routes: Default::default(),
+	};
+
+	let mut listener_set = ListenerSet::default();
+	listener_set.insert(listener);
+
+	let sockaddr = if cfg!(target_family = "unix") {
+		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+	} else {
+		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
+	};
+
+	let bind = Bind {
+		key: strng::format!("bind/{}", port),
+		address: sockaddr,
+		protocol: BindProtocol::http,
+		listeners: listener_set,
+		tunnel_protocol: TunnelProtocol::Direct,
+	};
+
+	let backends = LocalBackend::MCP(backend).as_backends(local_name(strng::new("mcp")))?;
+
+	Ok((bind, vec![], backends))
 }
 
 fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
