@@ -982,7 +982,7 @@ message BackendPolicySpec {
 
     // Validation mode for JWT authentication
     enum Mode {
-      // Default mode - if a token exists, validate it
+      // if a token exists, validate it
       OPTIONAL = 0;
       // A valid token must be present
       STRICT = 1;
