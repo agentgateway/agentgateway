@@ -56,6 +56,7 @@ async fn setup() -> (MockServer, Handler) {
 		icons: None,
 		title: None,
 		meta: None,
+		execution: None,
 		input_schema: Arc::new(
 			json!({ // Define a simple schema for testing
 					"type": "object",
@@ -101,6 +102,7 @@ async fn setup() -> (MockServer, Handler) {
 		icons: None,
 		title: None,
 		meta: None,
+		execution: None,
 		input_schema: Arc::new(
 			json!({
 				"type": "object",

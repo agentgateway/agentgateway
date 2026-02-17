@@ -616,6 +616,7 @@ fn get_client_info() -> ClientInfo {
 			sampling: None,
 			elicitation: None,
 			tasks: None,
+			extensions: None,
 		},
 		client_info: Implementation {
 			name: "agentgateway".to_string(),
