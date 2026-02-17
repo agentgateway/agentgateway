@@ -1,0 +1,27 @@
+binds:
+- port: 8080
+  listeners:
+  - name: llm
+    protocol: HTTP
+    routes:
+    - backends:
+      - ai:
+          groups:
+          - providers:
+            - name: anthropic
+              provider:
+                anthropic: {}
+          - providers:
+            - name: openai
+              provider:
+                openAI: {}
+            - name: overrides
+              hostOverride: "example.com:443"
+              pathOverride: /api/v1/chat/completions
+              provider:
+                openAI:
+                  model: "some-model"
+              policies:
+                backendAuth:
+                  key: example-key
+                backendTLS: {}

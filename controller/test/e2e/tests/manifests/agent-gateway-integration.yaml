@@ -1,5 +1,5 @@
 image:
-  registry: ghcr.io/kgateway-dev
+  registry: ghcr.io/agentgateway
 
 # Configuration for the kgateway controller pod
 controller:

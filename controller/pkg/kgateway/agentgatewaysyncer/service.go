@@ -39,11 +39,13 @@ func inferencePoolBuilder() krt.TransformationSingle[*inf.InferencePool, model.S
 	domainSuffix := kubeutils.GetClusterDomainName()
 	return func(ctx krt.HandlerContext, s *inf.InferencePool) *model.ServiceInfo {
 		portNames := map[int32]model.ServicePortName{}
-		ports := []*workloadapi.Port{{
-			ServicePort: uint32(s.Spec.TargetPorts[0].Number), //nolint:gosec // G115: InferencePool TargetPort is int32 with validation 1-65535, always safe
-			TargetPort:  uint32(s.Spec.TargetPorts[0].Number), //nolint:gosec // G115: InferencePool TargetPort is int32 with validation 1-65535, always safe
-			AppProtocol: workloadapi.AppProtocol_HTTP11,
-		}}
+		ports := slices.Map(s.Spec.TargetPorts, func(e inf.Port) *workloadapi.Port {
+			return &workloadapi.Port{
+				ServicePort: uint32(e.Number), //nolint:gosec // G115: InferencePool TargetPort is int32 with validation 1-65535, always safe
+				TargetPort:  uint32(e.Number), //nolint:gosec // G115: InferencePool TargetPort is int32 with validation 1-65535, always safe
+				AppProtocol: workloadapi.AppProtocol_HTTP11,
+			}
+		})
 
 		// TODO this is only checking one controller - we may be missing service vips for instances in another cluster
 		svc := &workloadapi.Service{

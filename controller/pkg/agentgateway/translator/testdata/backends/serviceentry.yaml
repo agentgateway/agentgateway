@@ -100,7 +100,8 @@ output:
   uid: Kubernetes/networking.istio.io/ServiceEntry/default/external-service/external-backend.example.com
   workloadName: external-service
   workloadType: POD
-- hostname: external.example.com
+- canonical: true
+  hostname: external.example.com
   name: external-service
   namespace: default
   ports:

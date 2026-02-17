@@ -21,7 +21,7 @@ cd a2a-rs
 ### 3. Build the Docker image
 
 ```bash
-export REPO="ghcr.io/kgateway-dev"
+export REPO="ghcr.io/agentgateway"
 export IMAGE="test-a2a-server"
 export IMAGE_VERSION="0.0.<version>"
 docker build -t $REPO/$IMAGE:$IMAGE_VERSION .

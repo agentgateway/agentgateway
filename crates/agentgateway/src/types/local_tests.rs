@@ -1,0 +1,64 @@
+use std::fs;
+use std::path::Path;
+
+use crate::types::local::NormalizedLocalConfig;
+use crate::*;
+
+async fn test_config_parsing(test_name: &str) {
+	let test_dir = Path::new("src/types/local_tests");
+	let input_path = test_dir.join(format!("{}_config.yaml", test_name));
+
+	let yaml_str = fs::read_to_string(&input_path).unwrap();
+
+	// Create a test client. Ideally we could have a fake one
+	let client = client::Client::new(
+		&client::Config {
+			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+		},
+		None,
+		BackendConfig::default(),
+		None,
+	);
+	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+
+	let normalized = NormalizedLocalConfig::from(
+		&config,
+		client,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+		},
+		&yaml_str,
+	)
+	.await
+	.unwrap_or_else(|_| panic!("Failed to normalize config from: {:?}", input_path));
+
+	let output_yaml = serdes::yamlviajson::to_string(&normalized)
+		.expect("Failed to serialize NormalizedLocalConfig to YAML");
+
+	insta::with_settings!({
+		description => format!("Config normalization test for {}: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML", test_name),
+		omit_expression => true,
+		prepend_module_to_snapshot => false,
+		snapshot_path => "local_tests",
+	}, {
+		insta::assert_snapshot!(format!("{}_normalized", test_name), output_yaml);
+	});
+}
+
+#[tokio::test]
+async fn test_basic_config() {
+	test_config_parsing("basic").await;
+}
+
+#[tokio::test]
+async fn test_mcp_config() {
+	test_config_parsing("mcp").await;
+}
+
+#[tokio::test]
+async fn test_llm_config() {
+	test_config_parsing("llm").await;
+}

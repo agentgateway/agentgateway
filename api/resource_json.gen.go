@@ -996,6 +996,28 @@ func (this *BackendPolicySpec_Ai_Moderation) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_BedrockGuardrails
+func (this *BackendPolicySpec_Ai_BedrockGuardrails) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_Ai_BedrockGuardrails
+func (this *BackendPolicySpec_Ai_BedrockGuardrails) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_GoogleModelArmor
+func (this *BackendPolicySpec_Ai_GoogleModelArmor) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_Ai_GoogleModelArmor
+func (this *BackendPolicySpec_Ai_GoogleModelArmor) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_RequestRejection
 func (this *BackendPolicySpec_Ai_RequestRejection) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

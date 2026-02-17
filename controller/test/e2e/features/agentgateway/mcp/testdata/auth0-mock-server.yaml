@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: dummy-idp
-          image: ghcr.io/kgateway-dev/dummy-idp:0.0.1
+          image: ghcr.io/agentgateway/dummy-idp:0.0.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8443

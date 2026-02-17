@@ -1,9 +1,7 @@
 package deployer
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,12 +10,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"istio.io/istio/pkg/ptr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 	"sigs.k8s.io/yaml"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	internaldeployer "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
@@ -197,8 +197,6 @@ func (dt DeployerTester) RunHelmChartTest(
 	got, err := objectsToYAML(deployObjs)
 	assert.NoError(t, err, "error converting objects to YAML")
 
-	got = sanitizeOutput(got)
-
 	if envutils.IsEnvTruthy("REFRESH_GOLDEN") {
 		t.Log("REFRESH_GOLDEN is set, writing output file", outputFile)
 		err = os.WriteFile(outputFile, got, 0o644) //nolint:gosec // G306: Golden test file can be readable
@@ -230,14 +228,6 @@ func (dt DeployerTester) RunHelmChartTest(
 	}
 }
 
-// Remove things that change often but are not relevant to the tests
-func sanitizeOutput(got []byte) []byte {
-	old := fmt.Sprintf("%s/%s:%v", pkgdeployer.AgentgatewayRegistry, pkgdeployer.AgentgatewayImage, pkgdeployer.AgentgatewayDefaultTag)
-	now := fmt.Sprintf("%s/%s:99.99.99", pkgdeployer.AgentgatewayRegistry, pkgdeployer.AgentgatewayImage)
-
-	return bytes.Replace(got, []byte(old), []byte(now), -1)
-}
-
 // objectsToYAML converts a slice of client.Object to YAML bytes, separated by "---"
 func objectsToYAML(objs []client.Object) ([]byte, error) {
 	var result []byte
@@ -264,6 +254,13 @@ func DefaultDeployerInputs(dt DeployerTester, commonCols *collections.CommonColl
 		},
 		AgentgatewayClassName:      dt.AgwClassName,
 		AgentgatewayControllerName: dt.AgwControllerName,
+		ImageDefaults: &agentgateway.Image{
+			Registry:   ptr.Of("cr.agentgateway.dev"),
+			Repository: ptr.Of("agentgateway"),
+			Tag:        ptr.Of("99.99.99"),
+			Digest:     nil,
+			PullPolicy: nil,
+		},
 	}
 }
 

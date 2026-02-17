@@ -31,10 +31,7 @@ type testingSuite struct {
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	setup := base.TestCase{
-		Manifests: []string{
-			testdefaults.CurlPodManifest,
-			testdefaults.HttpbinManifest,
-		},
+		Manifests: []string{},
 	}
 	testCases := map[string]*base.TestCase{
 		"TestTLSControlPlaneBasicFunctionality": {

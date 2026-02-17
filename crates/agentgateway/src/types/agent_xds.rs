@@ -308,6 +308,32 @@ fn convert_backend_ai_policy(
 					};
 					llm::policy::RequestGuardKind::OpenAIModeration(md)
 				},
+				Kind::GoogleModelArmor(gma) => {
+					let pols = gma
+						.inline_policies
+						.iter()
+						.map(BackendPolicy::try_from)
+						.collect::<Result<Vec<_>, _>>()?;
+					llm::policy::RequestGuardKind::GoogleModelArmor(llm::policy::GoogleModelArmor {
+						template_id: strng::new(&gma.template_id),
+						project_id: strng::new(&gma.project_id),
+						location: gma.location.as_ref().map(strng::new),
+						policies: pols,
+					})
+				},
+				Kind::BedrockGuardrails(bg) => {
+					let pols = bg
+						.inline_policies
+						.iter()
+						.map(BackendPolicy::try_from)
+						.collect::<Result<Vec<_>, _>>()?;
+					llm::policy::RequestGuardKind::BedrockGuardrails(llm::policy::BedrockGuardrails {
+						guardrail_identifier: strng::new(&bg.identifier),
+						guardrail_version: strng::new(&bg.version),
+						region: strng::new(&bg.region),
+						policies: pols,
+					})
+				},
 			};
 			Ok(llm::policy::RequestGuard { rejection, kind })
 		});
@@ -334,6 +360,32 @@ fn convert_backend_ai_policy(
 				},
 				response_guard::Kind::Webhook(wh) => {
 					llm::policy::ResponseGuardKind::Webhook(convert_webhook(wh).ok()?)
+				},
+				response_guard::Kind::GoogleModelArmor(gma) => {
+					let pols = gma
+						.inline_policies
+						.iter()
+						.filter_map(|p| BackendPolicy::try_from(p).ok())
+						.collect::<Vec<_>>();
+					llm::policy::ResponseGuardKind::GoogleModelArmor(llm::policy::GoogleModelArmor {
+						template_id: strng::new(&gma.template_id),
+						project_id: strng::new(&gma.project_id),
+						location: gma.location.as_ref().map(strng::new),
+						policies: pols,
+					})
+				},
+				response_guard::Kind::BedrockGuardrails(bg) => {
+					let pols = bg
+						.inline_policies
+						.iter()
+						.filter_map(|p| BackendPolicy::try_from(p).ok())
+						.collect::<Vec<_>>();
+					llm::policy::ResponseGuardKind::BedrockGuardrails(llm::policy::BedrockGuardrails {
+						guardrail_identifier: strng::new(&bg.identifier),
+						guardrail_version: strng::new(&bg.version),
+						region: strng::new(&bg.region),
+						policies: pols,
+					})
 				},
 			};
 			Some(llm::policy::ResponseGuard { rejection, kind })

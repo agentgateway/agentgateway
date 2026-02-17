@@ -15,6 +15,8 @@ use crate::*;
 
 pub mod webhook;
 
+mod bedrock_guardrails;
+mod google_model_armor;
 mod moderation;
 mod pii;
 #[cfg(test)]
@@ -394,6 +396,44 @@ impl Policy {
 						);
 					}
 				},
+				RequestGuardKind::BedrockGuardrails(bg) => {
+					if let Some(res) =
+						Self::apply_bedrock_guardrails_request(req, claims.clone(), &client, &g.rejection, bg)
+							.await?
+					{
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
+						return Ok(Some(res));
+					} else {
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
+					}
+				},
+				RequestGuardKind::GoogleModelArmor(gma) => {
+					if let Some(res) =
+						Self::apply_google_model_armor_request(req, claims.clone(), &client, &g.rejection, gma)
+							.await?
+					{
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
+						return Ok(Some(res));
+					} else {
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
+					}
+				},
 			}
 		}
 		Ok(None)
@@ -408,6 +448,90 @@ impl Policy {
 	) -> anyhow::Result<Option<Response>> {
 		let resp = moderation::send_request(req, claims, client, moderation).await?;
 		if resp.results.iter().any(|r| r.flagged) {
+			Ok(Some(rej.as_response()))
+		} else {
+			Ok(None)
+		}
+	}
+
+	async fn apply_bedrock_guardrails_request(
+		req: &mut dyn RequestType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		guardrails: &BedrockGuardrails,
+	) -> anyhow::Result<Option<Response>> {
+		let resp = bedrock_guardrails::send_request(req, claims.clone(), client, guardrails).await?;
+		if resp.is_blocked() {
+			Ok(Some(rej.as_response()))
+		} else {
+			Ok(None)
+		}
+	}
+
+	async fn apply_bedrock_guardrails_response(
+		resp: &mut dyn ResponseType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		guardrails: &BedrockGuardrails,
+	) -> anyhow::Result<Option<Response>> {
+		// Extract text content from response choices
+		let content: Vec<String> = resp
+			.to_webhook_choices()
+			.into_iter()
+			.map(|c| c.message.content.to_string())
+			.collect();
+
+		if content.is_empty() {
+			return Ok(None);
+		}
+
+		let guardrail_resp =
+			bedrock_guardrails::send_response(content, claims, client, guardrails).await?;
+		if guardrail_resp.is_blocked() {
+			Ok(Some(rej.as_response()))
+		} else {
+			Ok(None)
+		}
+	}
+
+	async fn apply_google_model_armor_request(
+		req: &mut dyn RequestType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		model_armor: &GoogleModelArmor,
+	) -> anyhow::Result<Option<Response>> {
+		let resp = google_model_armor::send_request(req, claims.clone(), client, model_armor).await?;
+		if resp.is_blocked() {
+			Ok(Some(rej.as_response()))
+		} else {
+			Ok(None)
+		}
+	}
+
+	async fn apply_google_model_armor_response(
+		resp: &mut dyn ResponseType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		model_armor: &GoogleModelArmor,
+	) -> anyhow::Result<Option<Response>> {
+		// Extract text content from response choices
+		let content: Vec<String> = resp
+			.to_webhook_choices()
+			.into_iter()
+			.map(|c| c.message.content.to_string())
+			.collect();
+
+		if content.is_empty() {
+			return Ok(None);
+		}
+
+		let guardrail_resp =
+			google_model_armor::send_response(content, claims.clone(), client, model_armor).await?;
+		if guardrail_resp.is_blocked() {
 			Ok(Some(rej.as_response()))
 		} else {
 			Ok(None)
@@ -768,6 +892,42 @@ impl Policy {
 						return Ok(Some(res));
 					}
 				},
+				ResponseGuardKind::BedrockGuardrails(bg) => {
+					if let Some(res) =
+						Self::apply_bedrock_guardrails_response(resp, None, client, &g.rejection, bg).await?
+					{
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
+						return Ok(Some(res));
+					} else {
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
+					}
+				},
+				ResponseGuardKind::GoogleModelArmor(gma) => {
+					if let Some(res) =
+						Self::apply_google_model_armor_response(resp, None, client, &g.rejection, gma).await?
+					{
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
+						return Ok(Some(res));
+					} else {
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
+					}
+				},
 			}
 		}
 		Ok(None)
@@ -792,6 +952,8 @@ pub enum RequestGuardKind {
 	Regex(RegexRules),
 	Webhook(Webhook),
 	OpenAIModeration(Moderation),
+	BedrockGuardrails(BedrockGuardrails),
+	GoogleModelArmor(GoogleModelArmor),
 }
 
 #[apply(schema!)]
@@ -873,6 +1035,45 @@ pub struct Moderation {
 	pub policies: Vec<BackendPolicy>,
 }
 
+/// Configuration for AWS Bedrock Guardrails integration.
+#[apply(schema!)]
+pub struct BedrockGuardrails {
+	/// The unique identifier of the guardrail
+	pub guardrail_identifier: Strng,
+	/// The version of the guardrail
+	pub guardrail_version: Strng,
+	/// AWS region where the guardrail is deployed
+	pub region: Strng,
+	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
+	#[serde(
+		default,
+		deserialize_with = "de_from_local_backend_policy_opt",
+		skip_serializing_if = "Vec::is_empty"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<LocalBackendPolicies>"))]
+	pub policies: Vec<BackendPolicy>,
+}
+
+/// Configuration for Google Cloud Model Armor integration.
+#[apply(schema!)]
+pub struct GoogleModelArmor {
+	/// The template ID for the Model Armor configuration
+	pub template_id: Strng,
+	/// The GCP project ID
+	pub project_id: Strng,
+	/// The GCP region (default: us-central1)
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub location: Option<Strng>,
+	/// Backend policies for GCP authentication (optional, defaults to implicit GCP auth)
+	#[serde(
+		default,
+		deserialize_with = "de_from_local_backend_policy_opt",
+		skip_serializing_if = "Vec::is_empty"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<LocalBackendPolicies>"))]
+	pub policies: Vec<BackendPolicy>,
+}
+
 pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(
 	deserializer: D,
 ) -> Result<Vec<BackendPolicy>, D::Error>
@@ -881,6 +1082,19 @@ where
 {
 	let s = LocalBackendPolicies::deserialize(deserializer)?;
 	s.translate().map_err(serde::de::Error::custom)
+}
+
+pub fn de_from_local_backend_policy_opt<'de: 'a, 'a, D>(
+	deserializer: D,
+) -> Result<Vec<BackendPolicy>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let s = Option::<LocalBackendPolicies>::deserialize(deserializer)?;
+	match s {
+		Some(policies) => policies.translate().map_err(serde::de::Error::custom),
+		None => Ok(Vec::new()),
+	}
 }
 
 #[apply(schema!)]
@@ -925,6 +1139,8 @@ pub struct ResponseGuard {
 pub enum ResponseGuardKind {
 	Regex(RegexRules),
 	Webhook(Webhook),
+	BedrockGuardrails(BedrockGuardrails),
+	GoogleModelArmor(GoogleModelArmor),
 }
 
 #[apply(schema!)]

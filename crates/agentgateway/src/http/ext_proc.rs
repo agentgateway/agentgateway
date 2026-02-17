@@ -17,6 +17,7 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::cel::{Executor, Expression, RequestSnapshot};
+use crate::client::ResolvedDestination;
 use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, HeaderMutation, HeaderValueOption, HeadersResponse, HttpBody,
 	HttpHeaders, HttpTrailers, ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse,
@@ -124,11 +125,12 @@ impl InferencePoolRouter {
 		&mut self,
 		resp: &mut http::Response,
 	) -> Result<PolicyResponse, ProxyError> {
+		let rd = resp.extensions().get::<ResolvedDestination>().map(|d| d.0);
 		let Some(ext_proc) = &mut self.ext_proc else {
 			return Ok(Default::default());
 		};
 		let r = std::mem::take(resp);
-		let (new_resp, pr) = ext_proc.mutate_response(r, None).await?;
+		let (new_resp, pr) = ext_proc.mutate_response(r, None, rd).await?;
 		*resp = new_resp;
 		Ok(pr.unwrap_or_default())
 	}
@@ -218,7 +220,7 @@ impl ExtProcRequest {
 			return Ok(PolicyResponse::default());
 		};
 		let r = std::mem::take(resp);
-		let (new_resp, pr) = ext_proc.mutate_response(r, request).await?;
+		let (new_resp, pr) = ext_proc.mutate_response(r, request, None).await?;
 		*resp = new_resp;
 		Ok(pr.unwrap_or_default())
 	}
@@ -513,6 +515,7 @@ impl ExtProcInstance {
 		&mut self,
 		req: http::Response,
 		request: Option<&RequestSnapshot>,
+		resolved_destination_metadata: Option<SocketAddr>,
 	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
 		if self.skipped.load(Ordering::SeqCst) {
 			return Ok((req, None));
@@ -521,14 +524,27 @@ impl ExtProcInstance {
 
 		let exec = cel::Executor::new_response(request, &req);
 		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let metadata_context = self.metadata_context.as_ref().map(|meta| {
-			Arc::new(Metadata {
-				filter_metadata: meta
-					.iter()
-					.filter_map(|(n, e)| eval_to_struct(&exec, e).map(|v| (n.clone(), v)).ok())
-					.collect(),
+		let metadata_context = if self.metadata_context.is_none()
+			&& let Some(rd) = resolved_destination_metadata
+		{
+			Some(Arc::new(Metadata {
+				filter_metadata: HashMap::from([(
+					// This is gross, but the GIE project unfairly favors Envoy, so we have to adapt to its limitations.
+					"envoy.lb".to_string(),
+					serde_json::from_value(serde_json::json!({"x-gateway-destination-endpoint-served": rd}))
+						.unwrap(),
+				)]),
+			}))
+		} else {
+			self.metadata_context.as_ref().map(|meta| {
+				Arc::new(Metadata {
+					filter_metadata: meta
+						.iter()
+						.filter_map(|(n, e)| eval_to_struct(&exec, e).map(|v| (n.clone(), v)).ok())
+						.collect(),
+				})
 			})
-		});
+		};
 		// response_attributes should only be sent on first ProcessingRequest
 		// this will need to be modified if we configure which Requests to send
 		let attributes = self

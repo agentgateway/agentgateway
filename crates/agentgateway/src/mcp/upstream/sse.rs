@@ -3,6 +3,7 @@ use ::http::header::{ACCEPT, CONTENT_TYPE};
 use anyhow::anyhow;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
+use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
@@ -127,7 +128,11 @@ impl ClientCore {
 
 		match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
-				let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
+				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
+				let (body, _encoding) =
+					crate::http::compression::decompress_body(resp.into_body(), content_encoding.as_ref())
+						.map_err(ClientError::new)?;
+				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
 				Ok(StreamableHttpPostResponse::Sse(event_stream, None))
 			},
 			_ => Err(ClientError::new(anyhow!(

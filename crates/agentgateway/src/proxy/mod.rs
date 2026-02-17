@@ -130,7 +130,7 @@ pub enum ProxyError {
 	MisdirectedRequest,
 	#[error("no valid backends")]
 	NoValidBackends,
-	#[error("backends does not exist")]
+	#[error("backend does not exist")]
 	BackendDoesNotExist,
 	#[error("backends required DNS resolution which failed")]
 	DnsResolution,

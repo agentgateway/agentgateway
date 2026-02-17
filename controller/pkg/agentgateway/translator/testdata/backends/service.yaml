@@ -15,7 +15,8 @@ spec:
 ---
 # Output
 output:
-- hostname: example-svc.default.svc.cluster.local
+- canonical: true
+  hostname: example-svc.default.svc.cluster.local
   name: example-svc
   namespace: default
   ports:

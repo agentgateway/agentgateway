@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            - bedrockGuardrails:
+                guardrailIdentifier: bedrock-guardrail-identifier
+                guardrailVersion: DRAFT
+                region: us-west-2
+            response:
+            - bedrockGuardrails:
+                guardrailIdentifier: bedrock-guardrail-identifier
+                guardrailVersion: DRAFT
+                region: us-west-2

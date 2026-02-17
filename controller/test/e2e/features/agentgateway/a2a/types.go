@@ -84,15 +84,8 @@ type A2AAgentCard struct {
 	} `json:"skills"`
 }
 
-const (
-	// test namespace for proxy resources
-	namespace = "agentgateway-base"
-)
-
 var (
 	_ e2e.NewSuiteFunc = NewTestingSuite
-
-	gatewayName = "gateway"
 
 	setupManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "common.yaml")
 

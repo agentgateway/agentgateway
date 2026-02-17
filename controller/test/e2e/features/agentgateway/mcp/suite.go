@@ -5,16 +5,18 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"regexp"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
+	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
@@ -109,22 +111,15 @@ func (s *testingSuite) TestSSEEndpoint() {
 	s.waitStaticReady()
 
 	initBody := buildInitializeRequest("sse-client", 0)
-
 	headers := mcpHeaders(nil)
 
-	out, err := s.execCurlMCP(headers, initBody, "--max-time", "8")
-	s.Require().NoError(err, "SSE initialize curl failed")
-	s.requireHTTPStatus(out, httpOKCode)
-	// Match header w/ or w/o '-v' prefix, any casing, and optional params.
-	headerCT := regexp.MustCompile(`(?mi)^\s*(?:<\s*)?content-type\s*:\s*text/event-stream(?:\s*;.*)?\s*$`)
-	if headerCT.FindStringIndex(out) == nil {
-		// Fallback to curl -w line (we print: "Content-Type:%{content_type}")
-		wCT := regexp.MustCompile(`(?i)^Content-Type:\s*text/event-stream\b`)
-		if !wCT.MatchString(out) {
-			s.T().Logf("missing text/event-stream content-type: %s", out)
-			s.Require().Fail("expected Content-Type: text/event-stream in response headers (or curl -w output)")
-		}
-	}
+	s.sendMCP(&testmatchers.HttpResponse{
+		StatusCode: http.StatusOK,
+		Headers: map[string]any{
+			"Content-Type": gomega.MatchRegexp(`^text/event-stream(?:\s*;.*)?$`),
+		},
+	}, headers, initBody, "--max-time", "8")
+
 	_ = s.initializeSession(initBody, headers, "sse")
 }
 
@@ -204,15 +199,16 @@ func (s *testingSuite) runDynamicRoutingCase(clientName string, routeHeaders map
 		100*time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, 1*time.Second)
 
 	// Get full response for logging + session extraction
-	out, err := s.execCurlMCP(headers, initBody, "--max-time", "10")
+	// nolint: bodyclose // false positive
+	resp, body, err := s.execCurlMCP(headers, initBody, "--max-time", "10")
 	s.Require().NoError(err, "%s initialize failed", label)
-	s.T().Logf("%s initialize: %s", label, out)
+	s.T().Logf("%s initialize body: %s", label, body)
 
-	sid := ExtractMCPSessionID(out)
+	sid := ExtractMCPSessionID(resp)
 	s.Require().NotEmpty(sid, "%s initialize must return mcp-session-id header", label)
 	s.notifyInitializedWithHeaders(sid, routeHeaders)
 
-	payload, ok := FirstSSEDataPayload(out)
+	payload, ok := FirstSSEDataPayload(body)
 	s.Require().True(ok, "%s initialize must return SSE payload", label)
 
 	var initResp InitializeResponse

@@ -4,7 +4,7 @@ use std::task::{Context, Poll};
 
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
-use http_body::Frame;
+use http_body::{Frame, SizeHint};
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 
@@ -36,6 +36,24 @@ impl http_body::Body for PartiallyBufferedBody {
 		}
 		let this = self.project();
 		this.inner.poll_frame(cx)
+	}
+
+	fn is_end_stream(&self) -> bool {
+		!self.buffer.has_remaining() && self.inner.is_end_stream() && self.trailers.is_none()
+	}
+
+	/// Returns the bounds on the remaining length of the stream.
+	///
+	/// When the **exact** remaining length of the stream is known, the upper bound will be set and
+	/// will equal the lower bound.
+	fn size_hint(&self) -> SizeHint {
+		let rem = self.buffer.remaining();
+		let mut rest = self.inner.size_hint();
+		if let Some(upper) = rest.upper() {
+			rest.set_upper(upper.saturating_add(rem as u64));
+		}
+		rest.set_lower(rest.lower() + rem as u64);
+		rest
 	}
 }
 
@@ -87,11 +105,11 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 mod tests {
 	use std::collections::HashMap;
 
-	use bytes::Bytes;
-	use http::HeaderMap;
-
 	use super::*;
 	use crate::http::Body;
+	use bytes::Bytes;
+	use http::HeaderMap;
+	use http_body::Body as _;
 
 	pub async fn read(body: Body) -> Bytes {
 		crate::http::read_body_with_limit(body, 1_097_152)
@@ -115,10 +133,13 @@ mod tests {
 	async fn inspect_short_body() {
 		let payload = b"hello world";
 		let mut original = Body::from(payload.as_slice());
+		let hint = original.size_hint();
 
 		let inspected = inspect_body(&mut original, 100).await.unwrap();
 
 		assert_eq!(inspected, Bytes::from_static(payload));
+		assert_eq!(hint.lower(), original.size_hint().lower());
+		assert_eq!(hint.upper(), original.size_hint().upper());
 
 		assert_eq!(read(original).await, Bytes::from_static(payload));
 	}
@@ -129,7 +150,10 @@ mod tests {
 		let payload = Bytes::from_iter(std::iter::repeat_n(b'a', 100));
 		let mut original = Body::from(payload.clone());
 
+		let hint = original.size_hint();
 		let inspected = inspect_body(&mut original, 99).await.unwrap();
+		assert_eq!(hint.lower(), original.size_hint().lower());
+		assert_eq!(hint.upper(), original.size_hint().upper());
 
 		assert_eq!(inspected, payload.slice(0..99));
 		assert_eq!(read(original).await, payload);
@@ -151,7 +175,11 @@ mod tests {
 			futures_util::stream::iter(frames),
 		));
 
+		let hint = original.size_hint();
 		let inspected = inspect_body(&mut original, 99).await.unwrap();
+		// Here we intentionally change the hint, since we have some more info
+		assert_eq!(10, original.size_hint().lower());
+		assert_eq!(hint.upper(), original.size_hint().upper());
 
 		assert_eq!(inspected, payload);
 
@@ -176,7 +204,11 @@ mod tests {
 			futures_util::stream::iter(frames),
 		));
 
+		let hint = original.size_hint();
 		let inspected = inspect_body(&mut original, 99).await.unwrap();
+		// Here we intentionally change the hint, since we have some more info
+		assert_eq!(99, original.size_hint().lower());
+		assert_eq!(hint.upper(), original.size_hint().upper());
 
 		assert_eq!(inspected, payload.slice(0..99));
 

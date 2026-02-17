@@ -31,6 +31,11 @@ use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
 use crate::*;
 
+// Windows has different output, for now easier to just not deal with it
+#[cfg(all(test, target_family = "unix"))]
+#[path = "local_tests.rs"]
+mod tests;
+
 impl NormalizedLocalConfig {
 	pub async fn from(
 		config: &crate::Config,
@@ -47,7 +52,7 @@ impl NormalizedLocalConfig {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
 	pub binds: Vec<Bind>,
 	pub policies: Vec<TargetedPolicy>,

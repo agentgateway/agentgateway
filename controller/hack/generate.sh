@@ -11,6 +11,10 @@ set -o pipefail
 set -x
 
 readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")"/.. && pwd)"
+readonly REPO_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
+
+# Add tools to PATH
+export PATH="${REPO_ROOT}/tools:${PATH}"
 readonly OUTPUT_PKG=github.com/agentgateway/agentgateway/controller/pkg/client
 readonly APIS_PKG=github.com/agentgateway/agentgateway/controller
 readonly CLIENTSET_NAME=versioned
@@ -38,7 +42,7 @@ done
 API_INPUT_DIRS_SPACE="${API_INPUT_DIRS_SPACE%,}" # drop trailing space
 API_INPUT_DIRS_COMMA="${API_INPUT_DIRS_COMMA%,}" # drop trailing comma
 
-go tool register-gen --output-file zz_generated.register.go ${API_INPUT_DIRS_SPACE}
+(cd "${REPO_ROOT}" && register-gen --output-file zz_generated.register.go ${API_INPUT_DIRS_SPACE})
 
 # replace version since kubebuilder will use the package name
 for VERSION in "${VERSIONS[@]}"; do
@@ -47,8 +51,8 @@ for VERSION in "${VERSIONS[@]}"; do
 done
 
 # Generate agentgateway CRDs and RBAC
-go tool controller-gen crd:maxDescLen=50000 object rbac:roleName=agentgateway paths="${APIS_PKG}/api/${VERSION}/agentgateway" paths="${APIS_PKG}/api/${VERSION}/shared" \
-    output:crd:artifacts:config=${ROOT_DIR}/${AGENTGATEWAY_CRD_DIR} output:rbac:artifacts:config=${ROOT_DIR}/${AGENTGATEWAY_MANIFESTS_DIR}
+(cd "${REPO_ROOT}" && controller-gen crd:maxDescLen=50000 object rbac:roleName=agentgateway paths="${APIS_PKG}/api/${VERSION}/agentgateway" paths="${APIS_PKG}/api/${VERSION}/shared" \
+    output:crd:artifacts:config=${ROOT_DIR}/${AGENTGATEWAY_CRD_DIR} output:rbac:artifacts:config=${ROOT_DIR}/${AGENTGATEWAY_MANIFESTS_DIR})
 # Template the ClusterRole name to include the namespace
 if [[ "$OSTYPE" == "darwin"* ]]; then
   # On macOS, prefer gsed (GNU sed) if available
@@ -67,14 +71,13 @@ fi
 # throw away
 new_report="$(mktemp -t "$(basename "$0").api_violations.XXXXXX")"
 
-go tool client-gen \
+(cd "${REPO_ROOT}" && client-gen \
   --clientset-name "versioned" \
   --input-base "${APIS_PKG}" \
   --input "${API_INPUT_DIRS_COMMA//${APIS_PKG}\//}" \
   --output-dir "${ROOT_DIR}/${CLIENT_GEN_DIR}/${CLIENTSET_PKG_NAME}" \
   --output-pkg "${OUTPUT_PKG}/${CLIENTSET_PKG_NAME}" \
-  --plural-exceptions "AgentgatewayParameters:AgentgatewayParameters"
+  --plural-exceptions "AgentgatewayParameters:AgentgatewayParameters")
 
-go generate ${ROOT_DIR}/internal/...
 go generate ${ROOT_DIR}/pkg/...
 

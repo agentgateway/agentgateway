@@ -399,7 +399,7 @@ spec:
           - name: X-Gateway
             value: '"true"'
 ---
-_err: "phase PreRouting only supports extAuth, transformation, and extProc"
+_err: "phase PreRouting only supports extAuth, transformation, "
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:

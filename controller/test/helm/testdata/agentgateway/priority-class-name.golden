@@ -109,6 +109,18 @@ rules:
   verbs:
   - create
 - apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - coordination.k8s.io
   resources:
   - leases
@@ -186,6 +198,18 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - security.istio.io
@@ -315,6 +339,11 @@ spec:
                 resourceFieldRef:
                   divisor: "1"
                   resource: limits.cpu
+            - name: AGW_PROXY_IMAGE_REGISTRY
+              value: cr.agentgateway.dev
+            - name: AGW_PROXY_IMAGE_REPOSITORY
+              value: agentgateway
+
             - name: AGW_LOG_LEVEL
               value: "info"
             - name: AGW_XDS_SERVICE_NAME

@@ -31,7 +31,7 @@ func TestDependencies(t *testing.T) {
 		wantToDeny []string
 	}{
 		{
-			entrypoint: "cmd/kgateway",
+			entrypoint: "cmd/agentgateway",
 			tag:        "agent",
 			denied: []string{
 				// Deps meant only for other components; if we import them, something may be wrong

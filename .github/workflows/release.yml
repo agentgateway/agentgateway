@@ -16,13 +16,35 @@ on:
 
 env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+  CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository }}-controller
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Set canonical VERSION
+        id: version
+        run: |
+          # Determine version source
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          # Always strip 'v' prefix if present
+          VERSION="${VERSION#v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Canonical VERSION: ${VERSION}"
+
   build-image:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
       packages: write
+    needs:
+      - setup
     strategy:
       fail-fast: false
       matrix:
@@ -31,12 +53,13 @@ jobs:
             os: ubuntu-latest
           - platform: linux/arm64
             os: ubuntu-22.04-arm
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
     steps:
     - name: Prepare
       run: |
         platform=${{ matrix.platform }}
         echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-        echo "VERSION=${GITHUB_REF##*/v}" >> $GITHUB_ENV
 
     - name: Docker meta
       id: meta
@@ -51,8 +74,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     - uses: actions/checkout@v4
-    - name: Prep Runner
-      uses: ./.github/actions/prep-runner
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -91,7 +112,10 @@ jobs:
       packages: write
       id-token: write
     needs:
+      - setup
       - build-image
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.9.2
@@ -119,9 +143,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}}
-            # use custom value instead of git tag
-            type=semver,pattern={{version}},value=${{ github.event.inputs.version }}
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -141,6 +163,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    needs:
+      - setup
     strategy:
       fail-fast: false
       matrix:
@@ -149,12 +173,13 @@ jobs:
             os: ubuntu-latest
           - platform: linux/arm64
             os: ubuntu-22.04-arm
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
     steps:
     - name: Prepare
       run: |
         platform=${{ matrix.platform }}
         echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-        echo "VERSION=${GITHUB_REF##*/v}" >> $GITHUB_ENV
 
     - name: Docker meta
       id: meta
@@ -170,9 +195,6 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - uses: actions/checkout@v4
-    - name: Prep Runner
-      uses: ./.github/actions/prep-runner
-
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -212,7 +234,10 @@ jobs:
       packages: write
       id-token: write
     needs:
+      - setup
       - musl-build-image
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.9.2
@@ -240,9 +265,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}}
-            # use custom value instead of git tag
-            type=semver,pattern={{version}},value=${{ github.event.inputs.version }}
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests-musl
@@ -257,9 +280,166 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}-musl
 
+  build-controller-image:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: write
+    needs:
+      - setup
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            os: ubuntu-latest
+            goarch: amd64
+          - platform: linux/arm64
+            os: ubuntu-22.04-arm
+            goarch: arm64
+    defaults:
+      run:
+        working-directory: controller
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
+    steps:
+    - name: Prepare
+      run: |
+        platform=${{ matrix.platform }}
+        echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+      working-directory: .
+
+    - uses: actions/checkout@v4
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.7'
+        cache-dependency-path: |
+          **/*.sum
+
+    - name: Build controller binary
+      run: |
+        CGO_ENABLED=0 GOARCH=${{ matrix.goarch }} GOOS=linux go build \
+          -ldflags="-X github.com/agentgateway/agentgateway/controller/pkg/version.Version=${{ env.VERSION }} -s -w" \
+          -o _output/pkg/agentgateway/agentgateway-linux-${{ matrix.goarch }} \
+          ./cmd/agentgateway
+
+    - name: Copy Dockerfile
+      run: cp cmd/agentgateway/Dockerfile.agentgateway _output/pkg/agentgateway/
+
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.CONTROLLER_REGISTRY_IMAGE }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push by digest
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        context: controller/_output/pkg/agentgateway
+        file: controller/_output/pkg/agentgateway/Dockerfile.agentgateway
+        build-args: |
+          GOARCH=${{ matrix.goarch }}
+        platforms: ${{ matrix.platform }}
+        labels: ${{ steps.meta.outputs.labels }}
+        tags: ${{ env.CONTROLLER_REGISTRY_IMAGE }}
+        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Export digest
+      run: |
+        mkdir -p ${{ runner.temp }}/controller-digests
+        digest="${{ steps.build.outputs.digest }}"
+        touch "${{ runner.temp }}/controller-digests/${digest#sha256:}"
+
+    - name: Upload digest
+      uses: actions/upload-artifact@v4
+      with:
+        name: controller-digests-${{ env.PLATFORM_PAIR }}
+        path: ${{ runner.temp }}/controller-digests/*
+        if-no-files-found: error
+        retention-days: 1
+
+  push-controller-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    needs:
+      - setup
+      - build-controller-image
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.9.2
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/controller-digests
+          pattern: controller-digests-*
+          merge-multiple: true
+
+      - name: Display structure of downloaded digests
+        working-directory: ${{ runner.temp }}/controller-digests
+        run: |
+          ls -R
+          echo "Found digest files:"
+          find . -type f
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.CONTROLLER_REGISTRY_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/controller-digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(find . -type f -exec sh -c 'printf "${{ env.CONTROLLER_REGISTRY_IMAGE }}@sha256:%s " "$(basename "$1")"' _ {} \;)
+
+      - name: Sign the container image
+        run: cosign sign --yes ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+
   build:
     if: ${{ github.event_name == 'push' || ! github.event.inputs.skip_gh_release }}
+    needs:
+      - setup
     runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
     strategy:
       matrix:
         include:
@@ -281,9 +461,6 @@ jobs:
             target: x86_64-pc-windows-msvc
             features: default
     steps:
-    - name: Prepare
-      run: |
-        echo "VERSION=${GITHUB_REF##*/v}" >> $GITHUB_ENV
     - name: Checkout Repository
       uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -325,6 +502,7 @@ jobs:
     needs:
     - push-image
     - musl-push-image
+    - push-controller-image
     - build
     runs-on: ubuntu-latest
     permissions:

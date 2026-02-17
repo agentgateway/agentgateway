@@ -31,6 +31,14 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_OpenaiModeration{
 				OpenaiModeration: processModeration(ctx, namespace, req.OpenAIModeration),
 			}
+		} else if req.BedrockGuardrails != nil {
+			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_BedrockGuardrails{
+				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails),
+			}
+		} else if req.GoogleModelArmor != nil {
+			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_GoogleModelArmor{
+				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor),
+			}
 		}
 
 		if req.CustomResponse != nil {
@@ -60,6 +68,14 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 		} else if req.Regex != nil {
 			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_Regex{
 				Regex: processRegex(req.Regex),
+			}
+		} else if req.BedrockGuardrails != nil {
+			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_BedrockGuardrails{
+				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails),
+			}
+		} else if req.GoogleModelArmor != nil {
+			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_GoogleModelArmor{
+				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor),
 			}
 		}
 
@@ -219,4 +235,62 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 	}
 
 	return pgModeration
+}
+
+func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agentgateway.BedrockGuardrails) *api.BackendPolicySpec_Ai_BedrockGuardrails {
+	if guardrails == nil {
+		return nil
+	}
+
+	pgGuardrails := &api.BackendPolicySpec_Ai_BedrockGuardrails{
+		Identifier: guardrails.GuardrailIdentifier,
+		Version:    guardrails.GuardrailVersion,
+		Region:     guardrails.Region,
+	}
+
+	if guardrails.Policies != nil {
+		pol := &agentgateway.BackendFull{
+			BackendSimple: *guardrails.Policies,
+		}
+		pols, err := TranslateInlineBackendPolicy(ctx, namespace, pol)
+		if err != nil {
+			logger.Warn("failed to translate policy", "err", err)
+		} else {
+			pgGuardrails.InlinePolicies = pols
+		}
+	}
+
+	return pgGuardrails
+}
+
+func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgateway.GoogleModelArmor) *api.BackendPolicySpec_Ai_GoogleModelArmor {
+	if armor == nil {
+		return nil
+	}
+
+	pgArmor := &api.BackendPolicySpec_Ai_GoogleModelArmor{
+		TemplateId: armor.TemplateID,
+		ProjectId:  armor.ProjectID,
+	}
+
+	// Set location with default value if not specified
+	if armor.Location != nil {
+		pgArmor.Location = ptr.Of(string(*armor.Location))
+	} else {
+		pgArmor.Location = ptr.Of("us-central1")
+	}
+
+	if armor.Policies != nil {
+		pol := &agentgateway.BackendFull{
+			BackendSimple: *armor.Policies,
+		}
+		pols, err := TranslateInlineBackendPolicy(ctx, namespace, pol)
+		if err != nil {
+			logger.Warn("failed to translate policy", "err", err)
+		} else {
+			pgArmor.InlinePolicies = pols
+		}
+	}
+
+	return pgArmor
 }

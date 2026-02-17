@@ -1,18 +1,17 @@
 package helpers
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/threadsafe"
@@ -50,65 +49,30 @@ func StandardKgatewayDumpOnFail(outLog io.Writer, kubectlCli *kubectl.Cli, outDi
 func KubeDumpOnFail(ctx context.Context, kubectlCli *kubectl.Cli, outLog io.Writer, outDir string,
 	namespaces []string,
 ) {
+	t0 := time.Now()
 	setupOutDir(outDir)
 
-	recordDockerState(fileAtPath(filepath.Join(outDir, "docker-state.log")))
-	recordProcessState(fileAtPath(filepath.Join(outDir, "process-state.log")))
 	recordKubeState(ctx, kubectlCli, fileAtPath(filepath.Join(outDir, "kube-state.log")))
 
 	recordKubeDump(outDir, namespaces...)
 
-	fmt.Printf("Finished dumping kubernetes state\n")
-}
-
-func recordDockerState(f *os.File) {
-	defer f.Close()
-
-	dockerCmd := exec.Command("docker", "ps")
-
-	dockerState := &bytes.Buffer{}
-
-	dockerCmd.Stdout = dockerState
-	dockerCmd.Stderr = dockerState
-	err := dockerCmd.Run()
-	if err != nil {
-		f.WriteString("*** Unable to get docker state ***. Reason: " + err.Error() + " \n")
-		return
-	}
-	f.WriteString("*** Docker state ***\n")
-	f.WriteString(dockerState.String() + "\n")
-	f.WriteString("*** End Docker state ***\n")
-}
-
-func recordProcessState(f *os.File) {
-	defer f.Close()
-
-	psCmd := exec.Command("ps", "-auxf")
-
-	psState := &bytes.Buffer{}
-
-	psCmd.Stdout = psState
-	psCmd.Stderr = psState
-	err := psCmd.Run()
-	if err != nil {
-		f.WriteString("unable to get process state. Reason: " + err.Error() + " \n")
-		return
-	}
-	f.WriteString("*** Process state ***\n")
-	f.WriteString(psState.String() + "\n")
-	f.WriteString("*** End Process state ***\n")
+	fmt.Printf("Finished dumping kubernetes state (%v)\n", time.Since(t0))
 }
 
 func recordKubeState(ctx context.Context, kubectlCli *kubectl.Cli, f *os.File) {
 	defer f.Close()
-	err := kubectlCli.RunCommandToWriters(ctx, f, f, "get", "all", "-A", "-o", "wide")
-	if err != nil {
-		f.WriteString(fmt.Sprintf("*** Unable to get kube state ***\nReason: %v", err))
-	}
 
 	resourcesToGet := []string{
 		// Kubernetes resources
 		"secrets",
+		"services",
+		"pods",
+		"deployments",
+		"configmaps",
+		// Agentgateway
+		"agentgatewaybackends.agentgateway.dev",
+		"agentgatewayparameters.agentgateway.dev",
+		"agentgatewaypolicies.agentgateway.dev",
 		// Kube GW API resources
 		"backendtlspolicies.gateway.networking.k8s.io",
 		"gatewayclasses.gateway.networking.k8s.io",
@@ -119,50 +83,31 @@ func recordKubeState(ctx context.Context, kubectlCli *kubectl.Cli, f *os.File) {
 		"tcproutes.gateway.networking.k8s.io",
 		"tlsroutes.gateway.networking.k8s.io",
 		"udproutes.gateway.networking.k8s.io",
-		// kgateway resources
-		"backends.gateway.kgateway.dev",
-		"backendconfigpolicies.gateway.kgateway.dev",
-		"directresponses.gateway.kgateway.dev",
-		"gatewayextensions.gateway.kgateway.dev",
-		"gatewayparameters.gateway.kgateway.dev",
-		"httplistenerpolicies.gateway.kgateway.dev",
-		"trafficpolicies.gateway.kgateway.dev",
+		"xbackendtrafficpolicies.gateway.networking.x-k8s.io",
+		"xlistenersets.gateway.networking.x-k8s.io",
+		"xmeshes.gateway.networking.x-k8s.io",
+		// GIE
+		"inferencepools.inference.networking.k8s.io",
 	}
 
 	f.WriteString("*** Kube resources ***\n")
-	err = kubectlCli.RunCommandToWriters(ctx, f, f, "get", strings.Join(resourcesToGet, ","), "-A", "-owide")
+	err := kubectlCli.RunCommandToWriters(ctx, f, f, "get", strings.Join(resourcesToGet, ","), "-A", "-owide")
 	if err != nil {
 		f.WriteString("*** Unable to get kube resources ***. Reason: " + err.Error() + " \n")
-	}
-
-	// Describe everything to identify the reason for issues such as Pods, LoadBalancers stuck in pending state
-	// (insufficient resources, unable to acquire an IP), etc.
-	// Ie: More context around the output of the previous command `kubectl get all -A`
-	f.WriteString("*** Kube describe ***\n")
-	err = kubectlCli.RunCommandToWriters(ctx, f, f, "describe", "all", "-A")
-	if err != nil {
-		f.WriteString("*** Unable to get kube describe ***. Reason: " + err.Error() + " \n")
-	}
-
-	f.WriteString("*** Kube endpoints ***\n")
-	err = kubectlCli.RunCommandToWriters(ctx, f, f, "get", "endpoints", "-A")
-	if err != nil {
-		f.WriteString("*** Unable to get endpoint state ***. Reason: " + err.Error() + " \n")
 	}
 }
 
 func recordKubeDump(outDir string, namespaces ...string) {
+	g := errgroup.Group{}
 	// for each namespace, create a namespace directory that contains...
 	for _, ns := range namespaces {
 		// ...a pod logs subdirectoy
-		if err := recordPods(filepath.Join(outDir, ns, "_pods"), ns); err != nil {
-			fmt.Printf("error recording pod logs: %f, \n", err)
-		}
-
-		// ...and a subdirectory for each kgateway CRD with non-zero resources
-		if err := recordCRs(filepath.Join(outDir, ns), ns); err != nil {
-			fmt.Printf("error recording pod logs: %f, \n", err)
-		}
+		g.Go(func() error {
+			return recordPods(filepath.Join(outDir, ns, "_pods"), ns)
+		})
+	}
+	if err := g.Wait(); err != nil {
+		fmt.Printf("error recording pod logs: %v, \n", err)
 	}
 }
 
@@ -175,97 +120,44 @@ func recordPods(podDir, namespace string) error {
 
 	var errs []error
 
-	for _, pod := range pods {
-		if err := os.MkdirAll(podDir, os.ModePerm); err != nil {
-			return err
-		}
-
-		logs, errOutput, err := kubeLogs(namespace, pod)
-		// store any error running the log command to return later
-		// the error represents the cause of the failure, and should be bubbled up
-		// we will still try to get logs for other pods even if this one returns an error
-		if err != nil {
-			errs = append(errs, err)
-		}
-		// write any log output to the standard file
-		if logs != "" {
-			f := fileAtPath(filepath.Join(podDir, pod+".log"))
-			f.WriteString(logs)
-			f.Close()
-		}
-		// write any error output to the error file
-		// this will consist of the combined stdout and stderr of the command
-		if errOutput != "" {
-			f := fileAtPath(filepath.Join(podDir, pod+"-error.log"))
-			f.WriteString(errOutput)
-			f.Close()
-		}
-	}
-
-	return errors.Join(errs...)
-}
-
-// recordCRs records all unique CRs floating about to <output-dir>/$namespace/$crd/$cr.yaml
-func recordCRs(namespaceDir string, namespace string) error {
-	crds, err := kubeList(namespace, "crd")
-	if err != nil {
+	if err := os.MkdirAll(podDir, os.ModePerm); err != nil {
 		return err
 	}
-
-	// record all unique CRs floating about
-	for _, crd := range crds {
-		// consider all installed CRDs that are kgateway-managed
-		if !strings.Contains(crd, "kgateway.dev") && !strings.Contains(crd, "networking.k8s.io") {
-			continue
-		}
-
-		// if there are any existing CRs corresponding to this CRD
-		crs, err := kubeList(namespace, crd)
-		if err != nil {
-			return err
-		}
-		if len(crs) == 0 {
-			continue
-		}
-		crdDir := filepath.Join(namespaceDir, crd)
-		if err := os.MkdirAll(crdDir, os.ModePerm); err != nil {
-			return err
-		}
-
-		// we record each one in its own .yaml representation
-		for _, cr := range crs {
-			f := fileAtPath(filepath.Join(crdDir, cr+".yaml"))
-			errF := fileAtPath(filepath.Join(crdDir, cr+"-error.log"))
-
-			crDetails, errOutput, err := kubeGet(namespace, crd, cr)
-
-			if crDetails != "" {
-				f.WriteString(crDetails)
-				f.Close()
-			}
-			if errOutput != "" {
-				errF.WriteString(errOutput)
-				errF.Close()
-			}
-
+	g := errgroup.Group{}
+	for _, pod := range pods {
+		g.Go(func() error {
+			logs, errOutput, err := kubeLogs(namespace, pod)
+			// store any error running the log command to return later
+			// the error represents the cause of the failure, and should be bubbled up
+			// we will still try to get logs for other pods even if this one returns an error
 			if err != nil {
-				fmt.Printf("error getting cr: %s\n", err)
+				errs = append(errs, err)
 			}
-		}
-	}
+			// write any log output to the standard file
+			if logs != "" {
+				f := fileAtPath(filepath.Join(podDir, pod+".log"))
+				defer f.Close()
+				f.WriteString(logs)
+			}
+			// write any error output to the error file
+			// this will consist of the combined stdout and stderr of the command
+			if errOutput != "" {
+				f := fileAtPath(filepath.Join(podDir, pod+"-error.log"))
+				defer f.Close()
+				f.WriteString(errOutput)
+			}
 
-	return nil
+			return nil
+		})
+	}
+	g.Wait()
+
+	return errors.Join(errs...)
 }
 
 // kubeLogs runs $(kubectl -n $namespace logs $pod --all-containers) and returns the string result
 func kubeLogs(namespace string, pod string) (string, string, error) {
 	args := []string{"-n", namespace, "logs", pod, "--all-containers"}
-	return kubeExecute(args)
-}
-
-// kubeGet runs $(kubectl -n $namespace get $kubeType $name -oyaml) and returns the string result
-func kubeGet(namespace string, kubeType string, name string) (string, string, error) {
-	args := []string{"-n", namespace, "get", kubeType, name, "-oyaml"}
 	return kubeExecute(args)
 }
 

@@ -10,8 +10,8 @@ spec:
     - "securegateways.com"
   rules:
     - backendRefs:
-        - name: simple-svc
-          port: 8080
+        - name: backend
+          port: 80
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

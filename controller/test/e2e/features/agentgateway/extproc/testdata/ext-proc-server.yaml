@@ -32,7 +32,7 @@ spec:
       containers:
         - name: ext-proc-grpc
           # Source code for this image is in test/e2e/defaults/extproc
-          image: ghcr.io/kgateway-dev/extproc-server:0.0.1
+          image: ghcr.io/agentgateway/extproc-server:0.0.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 18080

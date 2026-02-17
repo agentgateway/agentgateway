@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../../schema/local.json
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        cors:
+          allowOrigins:
+          - "*"
+          allowHeaders:
+          - "*"
+        mcpAuthorization:
+          rules:
+          # Allow anyone to call 'echo'
+          - 'mcp.tool.name == "echo"'
+          # Only the test-user can call 'add'
+          - 'jwt.sub == "test-user" && mcp.tool.name == "add"'
+          # Any authenticated user with the claim `nested.key == value` can access 'printEnv'
+          - 'mcp.tool.name == "printEnv" && jwt.nested.key == "value"'
+      backends:
+      - mcp:
+          targets:
+          - name: stdio
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]
+          - name: remote
+            mcp:
+              host: https://example.com:443/mcp

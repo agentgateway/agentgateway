@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/suite"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
@@ -23,7 +21,6 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 
 func (s *testingSuite) TestA2AAgentCard() {
 	s.T().Log("Testing A2A agent card discovery")
-	s.waitA2AEnvironmentReady()
 
 	headers := a2aHeaders()
 	out, err := s.execCurlA2A("/agent-card", headers, "")
@@ -43,7 +40,6 @@ func (s *testingSuite) TestA2AAgentCard() {
 
 func (s *testingSuite) TestA2AMessageSend() {
 	s.T().Log("Testing A2A tasks/send")
-	s.waitA2AEnvironmentReady()
 
 	request := buildMessageSendRequest("hello", "test-123")
 	headers := a2aHeaders()
@@ -76,7 +72,6 @@ func (s *testingSuite) TestA2AMessageSend() {
 
 func (s *testingSuite) TestA2AHelloWorld() {
 	s.T().Log("Testing A2A Hello World skill")
-	s.waitA2AEnvironmentReady()
 
 	request := buildMessageSendRequest("hello world", "test-hello")
 	headers := a2aHeaders()
@@ -105,23 +100,4 @@ func (s *testingSuite) TestA2AHelloWorld() {
 	s.Require().Contains(agentMessage.Parts[0].Text, "Echo", "expected Echo in response")
 
 	s.T().Logf("Response: %s", agentMessage.Parts[0].Text)
-}
-
-func (s *testingSuite) waitA2AEnvironmentReady() {
-	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
-		s.Ctx, namespace,
-		metav1.ListOptions{LabelSelector: "app=a2a-helloworld"},
-	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
-		s.Ctx, gatewayName, namespace,
-		gwv1.GatewayConditionProgrammed, metav1.ConditionTrue,
-	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
-		s.Ctx, namespace,
-		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=" + gatewayName},
-	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
-		s.Ctx, "a2a-route", namespace,
-		gwv1.RouteConditionAccepted, metav1.ConditionTrue,
-	)
 }

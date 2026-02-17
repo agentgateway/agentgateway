@@ -105,7 +105,7 @@ async fn test_ip_error() {
 	mock.add_response("example.com", vec![IP3], 60);
 	assert_matches!(resolver.resolve("example.com".into()).await, Err(_));
 	// But once the retry occurs we will get it
-	tokio::time::sleep(ERROR_BACKOFF + Duration::from_secs(1)).await;
+	tokio::time::sleep(ERROR_BACKOFF_BASE + Duration::from_secs(1)).await;
 	// Now we should get the IP
 	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP3);
 }

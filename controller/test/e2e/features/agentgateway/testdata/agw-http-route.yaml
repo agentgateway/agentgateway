@@ -1,10 +1,8 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: httpbin
-  namespace: default
-  labels:
-    example: httpbin-route
+  name: basic
+  namespace: agentgateway-base
 spec:
   parentRefs:
     - name: gateway
@@ -13,5 +11,5 @@ spec:
     - "www.example.com"
   rules:
     - backendRefs:
-        - name: httpbin
-          port: 8000
+        - name: backend
+          port: 80

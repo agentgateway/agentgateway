@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/cel-go/cel"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -521,7 +520,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.JWTAuthentication != nil {
-		jwtAuthenticationPolicies, err := processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, basePolicyName, policyName, policyTarget)
+		jwtAuthenticationPolicies, err := processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName, policyTarget)
 		if err != nil {
 			logger.Error("error processing jwtAuthentication policy", "error", err)
 			errs = append(errs, err)
@@ -530,7 +529,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.APIKeyAuthentication != nil {
-		apiKeyAuthenticationPolicies, err := processAPIKeyAuthenticationPolicy(ctx, traffic.APIKeyAuthentication, basePolicyName, policyName, policyTarget)
+		apiKeyAuthenticationPolicies, err := processAPIKeyAuthenticationPolicy(ctx, traffic.APIKeyAuthentication, traffic.Phase, basePolicyName, policyName, policyTarget)
 		if err != nil {
 			logger.Error("error processing apiKeyAuthentication policy", "error", err)
 			errs = append(errs, err)
@@ -539,7 +538,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.BasicAuthentication != nil {
-		basicAuthenticationPolicies, err := processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, basePolicyName, policyName, policyTarget)
+		basicAuthenticationPolicies, err := processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, traffic.Phase, basePolicyName, policyName, policyTarget)
 		if err != nil {
 			logger.Error("error processing basicAuthentication policy", "error", err)
 			errs = append(errs, err)
@@ -624,7 +623,7 @@ func processDirectResponse(directResponse *agentgateway.DirectResponse, basePoli
 	return []AgwPolicy{{Policy: directRespPolicy}}
 }
 
-func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) ([]AgwPolicy, error) {
+func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) ([]AgwPolicy, error) {
 	p := &api.TrafficPolicySpec_JWT{}
 
 	switch jwt.Mode {
@@ -669,7 +668,8 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 		Target: target,
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Jwt{Jwt: p},
+				Phase: phase(policyPhase),
+				Kind:  &api.TrafficPolicySpec_Jwt{Jwt: p},
 			},
 		},
 	}
@@ -682,7 +682,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	return []AgwPolicy{{Policy: jwtPolicy}}, errors.Join(errs...)
 }
 
-func processBasicAuthenticationPolicy(ctx PolicyCtx, ba *agentgateway.BasicAuthentication, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) ([]AgwPolicy, error) {
+func processBasicAuthenticationPolicy(ctx PolicyCtx, ba *agentgateway.BasicAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) ([]AgwPolicy, error) {
 	p := &api.TrafficPolicySpec_BasicAuthentication{}
 	p.Realm = ba.Realm
 
@@ -713,7 +713,8 @@ func processBasicAuthenticationPolicy(ctx PolicyCtx, ba *agentgateway.BasicAuthe
 		Target: target,
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_BasicAuth{BasicAuth: p},
+				Phase: phase(policyPhase),
+				Kind:  &api.TrafficPolicySpec_BasicAuth{BasicAuth: p},
 			},
 		},
 	}
@@ -734,6 +735,7 @@ type APIKeyEntry struct {
 func processAPIKeyAuthenticationPolicy(
 	ctx PolicyCtx,
 	ak *agentgateway.APIKeyAuthentication,
+	policyPhase *agentgateway.PolicyPhase,
 	basePolicyName string,
 	policy types.NamespacedName,
 	target *api.PolicyTarget,
@@ -784,13 +786,18 @@ func processAPIKeyAuthenticationPolicy(
 			})
 		}
 	}
+	// Ensure deterministic ordering
+	slices.SortBy(p.ApiKeys, func(a *api.TrafficPolicySpec_APIKey_User) string {
+		return a.Key
+	})
 	apiKeyPolicy := &api.Policy{
 		Key:    basePolicyName + apiKeyPolicySuffix + attachmentName(target),
 		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Target: target,
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_ApiKeyAuth{ApiKeyAuth: p},
+				Phase: phase(policyPhase),
+				Kind:  &api.TrafficPolicySpec_ApiKeyAuth{ApiKeyAuth: p},
 			},
 		},
 	}
@@ -917,7 +924,7 @@ func processCorsPolicy(cors *agentgateway.CORS, basePolicyName string, policy ty
 					AllowMethods:     slices.Map(cors.AllowMethods, func(m gwv1.HTTPMethodWithWildcard) string { return string(m) }),
 					AllowOrigins:     slices.Map(cors.AllowOrigins, func(o gwv1.CORSOrigin) string { return string(o) }),
 					ExposeHeaders:    slices.Map(cors.ExposeHeaders, func(h gwv1.HTTPHeaderName) string { return string(h) }),
-					MaxAge: &duration.Duration{
+					MaxAge: &durationpb.Duration{
 						Seconds: int64(cors.MaxAge),
 					},
 				}},

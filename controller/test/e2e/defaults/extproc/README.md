@@ -44,4 +44,4 @@ To build/load only the extproc server, run
 make extproc-server-docker kind-load-extproc-server
 ```
 
-This will produce a container image `ghcr.io/kgateway-dev/extproc-server:0.0.1`
+This will produce a container image `ghcr.io/agentgateway/extproc-server:0.0.1`

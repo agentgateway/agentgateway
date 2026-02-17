@@ -5,7 +5,9 @@ package common
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
+	"time"
 
 	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/test/util/assert"
@@ -45,21 +47,30 @@ type Gateway struct {
 var BaseGateway Gateway
 
 func (g *Gateway) Send(t *testing.T, match *matchers.HttpResponse, opts ...curl.Option) {
+	resp := g.SendWithResponse(t, match, opts...)
+	_ = resp.Body.Close()
+}
+
+func (g *Gateway) SendWithResponse(t *testing.T, match *matchers.HttpResponse, opts ...curl.Option) http.Response {
 	fullOpts := append([]curl.Option{curl.WithHost(g.Address)}, opts...)
+	var passedRes http.Response
 	retry.UntilSuccessOrFail(t, func() error {
 		r, err := curl.ExecuteRequest(fullOpts...)
 		if err != nil {
 			return err
 		}
-		defer r.Body.Close()
 		mm := matchers.HaveHttpResponse(match)
 		success, err := mm.Match(r)
 		if err != nil {
+			r.Body.Close()
 			return err
 		}
 		if !success {
+			r.Body.Close()
 			return fmt.Errorf("match failed: %v", mm.FailureMessage(r))
 		}
+		passedRes = *r
 		return nil
-	})
+	}, retry.Timeout(time.Second*300))
+	return passedRes
 }

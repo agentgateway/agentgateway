@@ -1,0 +1,20 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 108
+description: "vertex-embeddings: request_embeddings_basic"
+info:
+  model: text-embedding-3-small
+  input: hello world
+  dimensions: 1024
+---
+{
+  "instances": [
+    {
+      "content": "hello world",
+      "task_type": "RETRIEVAL_QUERY"
+    }
+  ],
+  "parameters": {
+    "outputDimensionality": 1024
+  }
+}

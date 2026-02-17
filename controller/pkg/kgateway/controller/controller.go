@@ -10,9 +10,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	internaldeployer "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 )
 
@@ -32,8 +34,12 @@ type GatewayConfig struct {
 	// AgwControllerName is the name of the agentgateway controller. Any GatewayClass objects
 	// managed by this controller must have this name as their ControllerName.
 	AgwControllerName string
+	// ImageDefaults sets the defaults for the image
+	ImageDefaults *agentgateway.Image
 	// ControlPlane sets the default control plane information the deployer will use.
 	ControlPlane deployer.ControlPlaneInfo
+	// ImageInfo sets the default image information the deployer will use.
+	ImageInfo *deployer.ImageInfo
 	// DiscoveryNamespaceFilter filters namespaced objects based on the discovery namespace filter.
 	DiscoveryNamespaceFilter kubetypes.DynamicObjectFilter
 	// CommonCollections used to fetch ir.Gateways for the deployer to generate the ports for the proxy service
@@ -53,11 +59,12 @@ func NewBaseGatewayController(
 	cfg GatewayConfig,
 	classInfos map[string]*deployer.GatewayClassInfo,
 	helmValuesGeneratorOverride HelmValuesGeneratorOverrideFunc,
+	gatewayControllerExtension pluginsdk.GatewayControllerExtension,
 ) error {
 	logger.Info("starting controllers")
 
 	// Initialize Gateway reconciler
-	if err := watchGw(cfg, helmValuesGeneratorOverride); err != nil {
+	if err := watchGw(cfg, helmValuesGeneratorOverride, gatewayControllerExtension); err != nil {
 		return nil
 	}
 
@@ -72,6 +79,7 @@ func NewBaseGatewayController(
 func watchGw(
 	cfg GatewayConfig,
 	helmValuesGeneratorOverride HelmValuesGeneratorOverrideFunc,
+	gatewayControllerExtension pluginsdk.GatewayControllerExtension,
 ) error {
 	logger.Info("creating gateway deployer",
 		"agwctrlname", cfg.AgwControllerName,
@@ -81,7 +89,9 @@ func watchGw(
 
 	inputs := &deployer.Inputs{
 		Dev:                        cfg.Dev,
+		ImageDefaults:              cfg.ImageDefaults,
 		ControlPlane:               cfg.ControlPlane,
+		ImageInfo:                  cfg.ImageInfo,
 		CommonCollections:          cfg.CommonCollections,
 		AgentgatewayClassName:      cfg.AgentgatewayClassName,
 		AgentgatewayControllerName: cfg.AgwControllerName,
@@ -103,5 +113,5 @@ func watchGw(
 		return err
 	}
 
-	return cfg.Mgr.Add(NewGatewayReconciler(cfg, d, gwParams))
+	return cfg.Mgr.Add(NewGatewayReconciler(cfg, d, gwParams, gatewayControllerExtension))
 }

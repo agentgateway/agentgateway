@@ -30,18 +30,59 @@ spec:
           - content: "hello!"
             role: user
       promptGuard:
+        response:
+          - response:
+              message: "regex rejected on response"
+            regex:
+              builtins:
+                - Email
+                - CaSin
+                - PhoneNumber
+                - Ssn
+              matches:
+                - 'bad.*'
+          - webhook:
+              backendRef:
+                name: ai-guardrails-webhook
+                port: 8000
+          - bedrockGuardrails:
+              identifier: bedrock-guardrail-identifier
+              version: DRAFT
+              region: us-west-2
+              policies:
+                auth:
+                  aws:
+                    secretRef:
+                      name: aws-secret
+          - googleModelArmor:
+              templateId: model-armor-template-id
+              projectId: model-armor-project-id
+              location: us-central1
+              policies:
+                auth:
+                  gcp:
+                    type: IdToken
+                    audience: "https://ai-guardrails.example.com"
         request:
-          - regex:
+          - response:
+              message: "regex rejected on request"
+            regex:
               builtins:
                 - CreditCard
               matches:
                 - 'bad.*'
-            response:
-              message: "regex rejected"
           - openAIModeration:
               policies:
                 tls:
                   insecureSkipVerify: All
+          - bedrockGuardrails:
+              identifier: bedrock-guardrail-identifier
+              version: DRAFT
+              region: us-west-2
+          - googleModelArmor:
+              templateId: model-armor-template-id
+              projectId: model-armor-project-id
+              location: us-central1
           - webhook:
               backendRef:
                 name: webhook
@@ -109,11 +150,19 @@ output:
               - regex: bad.*
               - builtin: CREDIT_CARD
             rejection:
-              body: cmVnZXggcmVqZWN0ZWQ=
+              body: cmVnZXggcmVqZWN0ZWQgb24gcmVxdWVzdA==
           - openaiModeration:
               inlinePolicies:
               - backendTls:
                   verification: INSECURE_ALL
+          - bedrockGuardrails:
+              identifier: bedrock-guardrail-identifier
+              region: us-west-2
+              version: DRAFT
+          - googleModelArmor:
+              location: us-central1
+              projectId: model-armor-project-id
+              templateId: model-armor-template-id
           - webhook:
               backend:
                 port: 80
@@ -151,13 +200,8 @@ status:
       namespace: default
     conditions:
     - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
+      message: 'failed to build webhook: unable to find the Service default/ai-guardrails-webhook'
+      reason: PartiallyValid
       status: "True"
       type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
     controllerName: agentgateway.dev/agentgateway

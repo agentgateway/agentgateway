@@ -96,7 +96,7 @@ status:
     - lastTransitionTime: fake
       message: |-
         ConfigMap default/ca-bundle not found
-        secret default/hello not found
+        secret default/hello missing Authorization value
       reason: PartiallyValid
       status: "True"
       type: Accepted

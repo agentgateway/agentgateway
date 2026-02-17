@@ -208,6 +208,19 @@ pub mod from_messages {
 			},
 		});
 
+		// Carry request-scoped metadata forward for downstream guardrail providers (e.g. Bedrock Guardrails,
+		// Model Armor) while still mapping the common `user_id` to OpenAI's `user` field.
+		//
+		// `messages.metadata.fields` is a string map, which fits cleanly into OpenAI's free-form `metadata` object.
+		let user_id = metadata
+			.as_ref()
+			.and_then(|m| m.fields.get("user_id").cloned());
+		let metadata_json = metadata.and_then(|m| {
+			serde_json::to_value(m.fields)
+				.ok()
+				.filter(|v| !matches!(v, serde_json::Value::Object(map) if map.is_empty()))
+		});
+
 		completions::Request {
 			model: Some(model),
 			messages: msgs,
@@ -223,7 +236,7 @@ pub mod from_messages {
 			tools: if tools.is_empty() { None } else { Some(tools) },
 			tool_choice,
 			parallel_tool_calls: None,
-			user: metadata.and_then(|m| m.fields.get("user_id").cloned()),
+			user: user_id,
 
 			vendor_extensions: completions::RequestVendorExtensions {
 				top_k,
@@ -249,7 +262,7 @@ pub mod from_messages {
 			function_call: None,
 			#[allow(deprecated)]
 			functions: None,
-			metadata: None,
+			metadata: metadata_json,
 			#[allow(deprecated)]
 			max_tokens: None,
 			service_tier: None,
@@ -299,6 +312,14 @@ pub fn passthrough_stream(
 								r.response.input_tokens = Some(u.prompt_tokens as u64);
 								r.response.output_tokens = Some(u.completion_tokens as u64);
 								r.response.total_tokens = Some(u.total_tokens as u64);
+								r.response.cached_input_tokens = u
+									.prompt_tokens_details
+									.as_ref()
+									.and_then(|d| d.cached_tokens);
+								r.response.reasoning_tokens = u
+									.completion_tokens_details
+									.as_ref()
+									.and_then(|d| d.reasoning_tokens);
 								if let Some(c) = completion.take() {
 									r.response.completion = Some(vec![c]);
 								}

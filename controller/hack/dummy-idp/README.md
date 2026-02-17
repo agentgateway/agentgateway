@@ -25,7 +25,7 @@ Build and run the Docker container locally:
 make dummy-idp-docker
 
 # Run the container
-docker run -p 8443:8443 ghcr.io/kgateway-dev/dummy-idp:0.0.1
+docker run -p 8443:8443 ghcr.io/agentgateway/dummy-idp:0.0.1
 ```
 
 **Note:** If you see "Nothing to be done for 'dummy-idp'", that's normal - it means the binary is already built and up to date. The `dummy-idp-docker` target will automatically rebuild the binary if source files have changed.
@@ -55,7 +55,7 @@ make dummy-idp-docker
 
 **Quick run command:**
 ```shell
-docker run -p 8443:8443 ghcr.io/kgateway-dev/dummy-idp:0.0.1
+docker run -p 8443:8443 ghcr.io/agentgateway/dummy-idp:0.0.1
 ```
 
 The server will be available at `https://localhost:8443`.

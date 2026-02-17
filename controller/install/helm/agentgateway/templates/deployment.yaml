@@ -82,6 +82,17 @@ spec:
                 resourceFieldRef:
                   divisor: "1"
                   resource: limits.cpu
+            {{- with (.Values.proxy.image.registry | default .Values.image.registry) }}
+            - name: AGW_PROXY_IMAGE_REGISTRY
+              value: {{ . }}
+             {{- end }}
+            - name: AGW_PROXY_IMAGE_REPOSITORY
+              value: {{ .Values.proxy.image.repository }}
+            {{- with (.Values.proxy.image.tag | default .Values.image.tag) }}
+            - name: AGW_PROXY_IMAGE_TAG
+              value: {{ . | quote }}
+             {{- end }}
+
             - name: AGW_LOG_LEVEL
               value: {{ .Values.controller.logLevel | quote }}
             - name: AGW_XDS_SERVICE_NAME

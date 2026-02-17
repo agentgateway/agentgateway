@@ -5,8 +5,8 @@ before:
     - go mod download
 builds:
   - id: controller
-    main: ./cmd/kgateway
-    binary: kgateway-linux-{{ .Arch }}
+    main: ./cmd/agentgateway
+    binary: agentgateway-linux-{{ .Arch }}
     gcflags: "{{ .Env.GCFLAGS }}"
     ldflags: "{{ .Env.LDFLAGS }}"
     env:
@@ -54,7 +54,7 @@ dockers:
   - image_templates:
       - &controller_arm_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.CONTROLLER_IMAGE_REPO }}:{{ .Env.VERSION }}-arm64"
     use: buildx
-    dockerfile: &controller_dockerfile cmd/kgateway/Dockerfile
+    dockerfile: &controller_dockerfile cmd/agentgateway/Dockerfile
     goos: linux
     goarch: arm64
     build_flag_templates:
@@ -76,7 +76,7 @@ dockers:
   - image_templates:
       - &agentgateway_arm_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.AGENTGATEWAY_IMAGE_REPO }}:{{ .Env.VERSION }}-arm64"
     use: buildx
-    dockerfile: &agentgateway_dockerfile cmd/kgateway/Dockerfile.agentgateway
+    dockerfile: &agentgateway_dockerfile cmd/agentgateway/Dockerfile.agentgateway
     goos: linux
     goarch: arm64
     build_flag_templates:

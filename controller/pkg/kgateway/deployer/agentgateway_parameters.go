@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -54,7 +53,11 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *deployer.HelmCon
 		return
 	}
 
-	configs := a.params.Spec.AgentgatewayParametersConfigs
+	// Deep copy to avoid mutating the cached AgentgatewayParameters object.
+	// Without this, the first Apply (GatewayClass) can alias configs.Resources
+	// into res, and the second Apply (Gateway) would mutate the cached
+	// GatewayClass object when merging maps in-place.
+	configs := *a.params.Spec.AgentgatewayParametersConfigs.DeepCopy()
 	res := vals.Agentgateway.AgentgatewayParametersConfigs
 
 	// Do a manual merge of the fields.
@@ -310,9 +313,9 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 	}
 
 	gtw.Image = &agentgateway.Image{
-		Registry:   ptr.To(deployer.AgentgatewayRegistry),
-		Repository: ptr.To(deployer.AgentgatewayImage),
-		Tag:        ptr.To(deployer.AgentgatewayDefaultTag),
+		Registry:   g.inputs.ImageDefaults.Registry,
+		Repository: g.inputs.ImageDefaults.Repository,
+		Tag:        g.inputs.ImageDefaults.Tag,
 		PullPolicy: nil,
 	}
 

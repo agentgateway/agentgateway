@@ -217,14 +217,12 @@ type OpenAIConfig struct {
 type AzureOpenAIConfig struct {
 	// The endpoint for the Azure OpenAI API to use, such as `my-endpoint.openai.azure.com`.
 	// If the scheme is included, it is stripped.
-	// +kubebuilder:validation:MinLength=1
 	// +required
 	Endpoint ShortString `json:"endpoint"`
 
 	// The name of the Azure OpenAI model deployment to use.
 	// For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models).
 	// This is required if ApiVersion is not 'v1'. For v1, the model can be set in the request.
-	// +kubebuilder:validation:MinLength=1
 	// +optional
 	DeploymentName *ShortString `json:"deploymentName,omitempty"`
 
@@ -251,12 +249,10 @@ type VertexAIConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 
 	// The ID of the Google Cloud Project that you use for the Vertex AI.
-	// +kubebuilder:validation:MinLength=1
 	// +required
 	ProjectId TinyString `json:"projectId"`
 
 	// The location of the Google Cloud Project that you use for the Vertex AI.
-	// +kubebuilder:validation:MinLength=1
 	// +required
 	Region TinyString `json:"region"`
 }

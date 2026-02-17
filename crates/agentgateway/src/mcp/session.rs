@@ -8,6 +8,7 @@ use ::http::request::Parts;
 use agent_core::version::BuildInfo;
 use anyhow::anyhow;
 use futures_util::StreamExt;
+use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
 	ProtocolVersion, RequestId, ServerJsonRpcMessage,
@@ -111,7 +112,11 @@ impl Session {
 		let sse = match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
 				trace!("forward SSE got SSE stream response");
-				let event_stream = SseStream::from_byte_stream(resp.into_body().into_data_stream()).boxed();
+				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
+				let (body, _encoding) =
+					crate::http::compression::decompress_body(resp.into_body(), content_encoding.as_ref())
+						.map_err(ClientError::new)?;
+				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
 				StreamableHttpPostResponse::Sse(event_stream, None)
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
@@ -197,13 +202,13 @@ impl Session {
 				});
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
-						if self.relay.is_multiplexing() {
-							// Currently, we cannot support roots until we have a mapping of downstream and upstream ID.
-							// However, the clients can tell the server they support roots.
-							// Instead, we hijack this to tell them not to so they do not send requests that we cannot
-							// actually support
-							ir.params.capabilities.roots = None
-						}
+						// Currently, we cannot support roots until we have a mapping of downstream and upstream ID.
+						// However, the clients can tell the server they support roots.
+						// Instead, we hijack this to tell them not to so they do not send requests that we cannot
+						// actually support
+						// This could probably be more easily done without multiplexing but for now neither supports.
+						ir.params.capabilities.roots = None;
+
 						let pv = ir.params.protocol_version.clone();
 						let res = self
 							.relay
@@ -611,6 +616,7 @@ fn get_client_info() -> ClientInfo {
 			sampling: None,
 			elicitation: None,
 			tasks: None,
+			extensions: None,
 		},
 		client_info: Implementation {
 			name: "agentgateway".to_string(),

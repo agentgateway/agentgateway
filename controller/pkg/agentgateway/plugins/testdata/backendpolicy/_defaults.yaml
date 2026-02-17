@@ -24,3 +24,21 @@ spec:
     - backendRefs:
         - name: reviews
           port: 8080
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-secret
+  namespace: default
+type: Opaque
+data:
+  test: test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hello
+  namespace: default
+type: Opaque
+data:
+  test: test

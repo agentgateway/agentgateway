@@ -22,6 +22,7 @@ KIND_NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.35.0}"
 KIND_REGISTRY_NAME="${KIND_REGISTRY_NAME:-kind-registry}"
 KIND_REGISTRY_PORT="${KIND_REGISTRY_PORT:-5000}"
 LOCAL_REGISTRY="localhost:${KIND_REGISTRY_PORT}"
+TEST_MODE="${TEST_MODE:-"unknown"}"
 
 CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-${LOCAL_REGISTRY}/agentgateway-controller:ci}"
 PROXY_IMAGE="${PROXY_IMAGE:-${LOCAL_REGISTRY}/agentgateway-proxy:ci}"
@@ -39,7 +40,7 @@ get-tag () {
 }
 export TAG="$(get-tag)"
 
-run_timed_step() {
+run_step() {
   local step_name="$1"
   shift
 
@@ -64,7 +65,7 @@ run_timed_step() {
   if [[ "${rc}" -ne 0 ]]; then
     echo "Step failed: ${step_name} (exit ${rc})" >&2
   else
-    echo "==> Step completed: ${step_name}" >&2
+    echo "==> Step completed: ${step_name} (${elapsed_seconds}s)" >&2
   fi
 
   return "${rc}"
@@ -201,88 +202,89 @@ function step_build_go_controller_binary() {
 }
 
 function step_push_go_controller_to_local_registry() {
-  make -C controller agentgateway-controller-docker
+  make -C controller agentgateway-controller-docker-local
 }
 
 function step_build_proxy_binary() {
-   (cd "${REPO_ROOT}" && DRY_RUN=true ./tools/proxy-dev-build quick-release)
+   (cd "${REPO_ROOT}" && TIMINGS=true DRY_RUN=true ./tools/proxy-dev-build ci)
 }
 
 function step_push_proxy_to_local_registry() {
-   (cd "${REPO_ROOT}" && ./tools/proxy-dev-build quick-release)
+   (cd "${REPO_ROOT}" && ./tools/proxy-dev-build ci)
 }
 
 function step_deploy_helm() {
 	helm upgrade -i --create-namespace --namespace agentgateway-system agentgateway-crds ./controller/install/helm/agentgateway-crds/
 	helm upgrade -i --namespace agentgateway-system agentgateway ./controller/install/helm/agentgateway  \
-	  --set image.registry=localhost:5000 --set-string image.tag="${TAG}" "$@"
+	  --set image.registry=localhost:5000 \
+	  --set-string image.tag="${TAG}"\
+	   --set controller.image.repository=agentgateway-controller \
+	   --set inferenceExtension.enabled=true \
+	   "$@"
+}
+function step_setup_gateway_api() {
+	make --no-print-directory -C controller gw-api-crds gie-crds
+}
+function step_preload_images() {(
+  if [[ "${TEST_MODE}" == "e2e" ]]; then
+    make --no-print-directory -C controller dummy-idp-docker kind-load-dummy-idp &
+    make --no-print-directory -C controller extproc-server-docker kind-load-extproc-server &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/istio-testing/app:latest &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/istio-testing/ext-authz:1.25-dev &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/solo-public/docs/ai-guardrail-webhook@sha256:01f81b20ae016d123f018841c62daff7f6f44d0dec9189ecf591b3e99753c6b1 &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/mcp-admin-server:0.0.1 &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/mcp-website-fetcher:0.0.1 &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/test-a2a-server:0.0.11 &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/otel/opentelemetry-collector-contrib:0.143.0 &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/library/redis:7.4.3 &
+    docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/envoyproxy/ratelimit:3e085e5b &
+  elif [[ "${TEST_MODE}" == "conformance" ]]; then
+    # TODO?
+    :
+  fi
+
+  wait
+)}
+
+function step_warm_test() {
+  if [[ "${TEST_MODE}" == "e2e" ]]; then
+    CGO_ENABLED=0 go test -tags=e2e -exec=true -toolexec=./tools/go-compile-without-link -vet=off ./controller/test/e2e/tests
+  elif [[ "${TEST_MODE}" == "conformance" ]]; then
+    # TODO
+    :
+  fi
 }
 
+function await() {
+    for pid in "$@"; do
+        tail --pid="$pid" -f /dev/null
+    done
+}
 function main() {
-  local rc=0
-
   echo "Timings will be written to: ${TIMINGS_FILE}"
 
-  # Start root steps that do not depend on each other.
-  run_timed_step "create-kind-cluster" step_create_kind_cluster &
-  local pid_kind="$!"
-  run_timed_step "build-go-controller-binary" step_build_go_controller_binary &
-  local pid_build_controller="$!"
-  run_timed_step "build-proxy-binary" step_build_proxy_binary &
-  local pid_build_proxy="$!"
+  # Run a ~DAG of setup
 
-  # Registry and MetalLB both require the kind cluster first.
-  if ! wait "${pid_kind}"; then
-    echo "create-kind-cluster failed; stopping dependent steps." >&2
-    wait || true
-    exit 1
-  fi
+  run_step "create-kind-cluster" step_create_kind_cluster & PID_KIND=$!
+  run_step "build-go-controller-binary" step_build_go_controller_binary & PID_BUILD_CONTROLLER=$!
+  run_step "build-proxy-binary" step_build_proxy_binary & PID_BUILD_PROXY=$!
 
-  run_timed_step "create-local-kind-registry" step_create_local_kind_registry &
-  local pid_registry="$!"
-  run_timed_step "deploy-metallb" step_deploy_metallb &
-  local pid_metallb="$!"
+  (await $PID_BUILD_CONTROLLER && run_step "warm-test" step_warm_test) &
 
-  # Pushes require the registry.
-  if ! wait "${pid_registry}"; then
-    echo "create-local-kind-registry failed; skipping push steps." >&2
-    wait || true
-    exit 1
-  fi
+  (await $PID_KIND && run_step "deploy-metallb" step_deploy_metallb) &
+  (await $PID_KIND && run_step "create-local-kind-registry" step_create_local_kind_registry) & PID_REGISTRY=$!
 
-  if wait "${pid_build_controller}"; then
-    run_timed_step "push-go-controller-to-local-registry" step_push_go_controller_to_local_registry &
-    local pid_push_controller="$!"
-  else
-    echo "build-go-controller-binary failed; skipping controller push." >&2
-    rc=1
-  fi
+  (await $PID_REGISTRY $PID_BUILD_CONTROLLER && run_step "push-go-controller-to-local-registry" step_push_go_controller_to_local_registry) &
+  (await $PID_REGISTRY $PID_BUILD_PROXY && run_step "push-proxy-to-local-registry" step_push_proxy_to_local_registry) &
 
-  if wait "${pid_build_proxy}"; then
-    run_timed_step "push-proxy-to-local-registry" step_push_proxy_to_local_registry &
-    local pid_push_proxy="$!"
-  else
-    echo "build-proxy-binary failed; skipping proxy push." >&2
-    rc=1
-  fi
+  (await $PID_REGISTRY && run_step "preload-images" step_preload_images) &
+  (await $PID_KIND && run_step "deploy-gateway-api" step_setup_gateway_api) & PID_GATEWAY_API=$!
+  (await $PID_GATEWAY_API && run_step "deploy-helm" step_deploy_helm "$@") &
 
-  if ! wait "${pid_metallb}"; then
-    rc=1
-  fi
-
-  if [[ -n "${pid_push_controller:-}" ]] && ! wait "${pid_push_controller}"; then
-    rc=1
-  fi
-
-  if [[ -n "${pid_push_proxy:-}" ]] && ! wait "${pid_push_proxy}"; then
-    rc=1
-  fi
-
-  if [[ "${rc}" != 0 ]]; then
-    exit "${rc}"
-  fi
-
-  run_timed_step "deploy-helm" step_deploy_helm "$@"
+  # Wait each one, not just a raw `wait`, to ensure we fail on errors
+  for pid in $(jobs -p); do
+    wait $pid
+  done
 }
 
 main "$@"

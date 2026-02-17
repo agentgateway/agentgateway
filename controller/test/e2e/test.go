@@ -11,6 +11,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"istio.io/istio/pkg/slices"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/helmutils"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/actions"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
@@ -147,7 +152,7 @@ func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Con
 
 	// Check if we should skip installation if the release already exists (PERSIST_INSTALL or FAIL_FAST_AND_PERSIST mode)
 	if testutils.ShouldPersistInstall() || testutils.ShouldFailFastAndPersist() {
-		if i.Actions.Helm().ReleaseExists(ctx, helmutils.AgentgatewayCRDChartName, i.Metadata.InstallNamespace) {
+		if i.releaseExists(ctx, helmutils.AgentgatewayCRDChartName, i.Metadata.InstallNamespace) {
 			return
 		}
 	}
@@ -172,7 +177,7 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 
 	// Check if we should skip installation if the release already exists (PERSIST_INSTALL or FAIL_FAST_AND_PERSIST mode)
 	if testutils.ShouldPersistInstall() || testutils.ShouldFailFastAndPersist() {
-		if i.Actions.Helm().ReleaseExists(ctx, helmutils.AgentgatewayChartName, i.Metadata.InstallNamespace) {
+		if i.releaseExists(ctx, helmutils.AgentgatewayChartName, i.Metadata.InstallNamespace) {
 			return
 		}
 	}
@@ -208,7 +213,7 @@ func (i *TestInstallation) UninstallAgentgatewayCore(ctx context.Context, t *tes
 	}
 
 	// Check if the release exists before attempting to uninstall
-	if !i.Actions.Helm().ReleaseExists(ctx, helmutils.AgentgatewayChartName, i.Metadata.InstallNamespace) {
+	if !i.releaseExists(ctx, helmutils.AgentgatewayChartName, i.Metadata.InstallNamespace) {
 		// Release doesn't exist, nothing to uninstall
 		return
 	}
@@ -233,7 +238,7 @@ func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *tes
 	}
 
 	// Check if the release exists before attempting to uninstall
-	if !i.Actions.Helm().ReleaseExists(ctx, helmutils.AgentgatewayCRDChartName, i.Metadata.InstallNamespace) {
+	if !i.releaseExists(ctx, helmutils.AgentgatewayCRDChartName, i.Metadata.InstallNamespace) {
 		// Release doesn't exist, nothing to uninstall
 		return
 	}
@@ -276,9 +281,30 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	// The kubernetes/e2e tests may use multiple namespaces, so we need to dump all of them
 	namespaces, err := i.Actions.Kubectl().Namespaces(ctx)
 	i.AssertionsT(t).Require.NoError(err, "failed to get namespaces for failure dump")
+	namespaces = slices.Filter(namespaces, func(s string) bool {
+		return s != "kube-node-lease" &&
+			s != "kube-public" &&
+			s != "kube-system" &&
+			s != "local-path-storage" &&
+			s != "metallb-system"
+	})
 
 	// Dump the logs and state of the cluster
 	helpers.StandardKgatewayDumpOnFail(os.Stdout, i.Actions.Kubectl(), dir, namespaces)
+}
+
+func (i *TestInstallation) releaseExists(ctx context.Context, releaseName, namespace string) bool {
+	l := &corev1.SecretList{}
+	if err := i.ClusterContext.Client.List(ctx, l, &client.ListOptions{
+		Namespace: namespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			"owner": "helm",
+			"name":  releaseName,
+		}),
+	}); err != nil {
+		return false
+	}
+	return len(l.Items) > 0
 }
 
 // GeneratedFiles is a collection of files that are generated during the execution of a set of tests

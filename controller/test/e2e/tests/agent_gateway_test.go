@@ -20,7 +20,7 @@ import (
 
 func TestAgentgatewayIntegration(t *testing.T) {
 	ctx := context.Background()
-	installNs, nsEnvPredefined := envutils.LookupOrDefault(testutils.InstallNamespace, "agent-gateway-test")
+	installNs, nsEnvPredefined := envutils.LookupOrDefault(testutils.InstallNamespace, "agentgateway-system")
 	testInstallation := e2e.CreateTestInstallation(
 		t,
 		&install.Context{

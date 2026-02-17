@@ -28,7 +28,7 @@ help: ## Output the self-documenting make targets
 ROOTDIR := $(shell pwd)
 OUTPUT_DIR ?= $(ROOTDIR)/_output
 
-export IMAGE_REGISTRY ?= ghcr.io/kgateway-dev
+export IMAGE_REGISTRY ?= ghcr.io/agentgateway
 
 # Kind of a hack to make sure _output exists
 z := $(shell mkdir -p $(OUTPUT_DIR))
@@ -70,7 +70,7 @@ GO_BUILD_FLAGS := CGO_ENABLED=0 GOARCH=$(GOARCH)
 TEST_ASSET_DIR ?= $(ROOTDIR)/_test
 
 # This is the location where assets are placed after a test failure
-# This is used by our e2e tests to emit information about the running instance of kgateway
+# This is used by our e2e tests to emit information about the running instance of agentgateway
 BUG_REPORT_DIR := $(TEST_ASSET_DIR)/bug_report
 $(BUG_REPORT_DIR):
 	mkdir -p $(BUG_REPORT_DIR)
@@ -82,6 +82,7 @@ DEPSGOBIN ?= $(OUTPUT_DIR)
 ANALYZE_ARGS ?= --fix --verbose --max-issues-per-linter 0 --max-same-issues 0
 CUSTOM_GOLANGCI_LINT_BIN ?= $(DEPSGOBIN)/golangci-lint-custom
 CUSTOM_GOLANGCI_LINT_RUN ?= $(CUSTOM_GOLANGCI_LINT_BIN) run --build-tags e2e
+CUSTOM_GOLANGCI_LINT_FMT ?= $(CUSTOM_GOLANGCI_LINT_BIN) fmt
 
 #----------------------------------------------------------------------------------
 # Macros
@@ -110,17 +111,17 @@ fmt-changed: ## Format only the changed code with golangci-lint (skip deleted fi
 # must be a separate target so that make waits for it to complete before moving on
 .PHONY: mod-download
 mod-download:  ## Download the dependencies
-	go mod download all
-	cd tools && go mod download all
+	cd .. && go mod download all
+	cd ../tools && go mod download all
 
 .PHONY: mod-tidy-nested
 mod-tidy-nested:  ## Tidy go mod files in nested modules
-	@echo "Tidying tools..." && cd tools && go mod tidy
+	@echo "Tidying tools..." && cd ../tools && go mod tidy
 	@echo "Tidying test/e2e/defaults/extproc..." && cd test/e2e/defaults/extproc && go mod tidy
 
 .PHONY: mod-tidy
 mod-tidy: mod-download mod-tidy-nested ## Tidy the go mod file
-	go mod tidy
+	cd .. && go mod tidy
 
 #----------------------------------------------------------------------------
 # Analyze
@@ -220,7 +221,7 @@ endif
 E2E_GO_TEST_ARGS ?= -vet=off -timeout=25m -outputdir=$(OUTPUT_DIR)
 # Testing flags: https://pkg.go.dev/cmd/go#hdr-Testing_flags
 # The default timeout for a suite is 10 minutes, but this can be overridden by setting the -timeout flag. Currently set
-# to 25 minutes based on the time it takes to run the longest test setup (kgateway_test).
+# to 25 minutes based on the time it takes to run the longest test setup.
 GO_TEST_ARGS ?= -timeout=25m -outputdir=$(OUTPUT_DIR) -race
 GO_TEST_COVERAGE_ARGS ?= --cover --covermode=atomic --coverprofile=cover.out
 GO_TEST_COVERAGE ?= github.com/vladopajic/go-test-coverage/v2
@@ -317,8 +318,8 @@ $(STAMP_DIR):
 API_SOURCE_FILES := $(shell find api/v1alpha1 -name "*.go" ! -name "zz_generated*")
 API_SOURCE_FILES += hack/generate.sh hack/generate.go
 
-# Files that track dependency changes
-MOD_FILES := go.mod go.sum
+# Files that track dependency changes (in root module)
+MOD_FILES := ../go.mod ../go.sum
 
 # Clean generated code
 .PHONY: clean-gen
@@ -326,7 +327,7 @@ clean-gen:
 	rm -rf api/applyconfiguration
 	rm -rf pkg/generated/openapi
 	rm -rf pkg/client
-	rm -f install/helm/kgateway-crds/templates/agentgateway.dev_*.yaml
+	rm -f install/helm/agentgateway-crds/templates/agentgateway.dev_*.yaml
 
 # Clean all stamp files to force regeneration
 .PHONY: clean-stamps
@@ -349,7 +350,7 @@ $(STAMP_DIR)/mod-tidy: $(MOD_FILES) | $(STAMP_DIR)
 	@echo "Running mod tidy..."
 	@$(MAKE) --no-print-directory mod-download
 	@$(MAKE) --no-print-directory mod-tidy-nested
-	go mod tidy
+	cd .. && go mod tidy
 	@touch $@
 
 # License generation with dependency tracking
@@ -402,20 +403,28 @@ generate-licenses: $(STAMP_DIR)/generate-licenses  ## Generate the licenses for 
 # Controller
 #----------------------------------------------------------------------------------
 
-CONTROLLER_OUTPUT_DIR=$(OUTPUT_DIR)/pkg/kgateway
+# TODO: rename to agentgateway-controller
+CONTROLLER_OUTPUT_DIR=$(OUTPUT_DIR)/pkg/agentgateway
 export AGENTGATEWAY_IMAGE_REPO ?= agentgateway-controller
 
 .PHONY: agentgateway-controller
 agentgateway-controller:
-	 $(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(CONTROLLER_OUTPUT_DIR)/kgateway-linux-$(GOARCH) ./cmd/kgateway
+	 $(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(CONTROLLER_OUTPUT_DIR)/agentgateway-linux-$(GOARCH) ./cmd/agentgateway
 
-$(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway: cmd/kgateway/Dockerfile.agentgateway
+$(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway: cmd/agentgateway/Dockerfile.agentgateway
 	cp $< $@
 
 .PHONY: agentgateway-controller-docker
 agentgateway-controller-docker: agentgateway-controller $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway
-	$(BUILDX_BUILD) --push $(CONTROLLER_OUTPUT_DIR) -f $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway \
-		-t localhost:5000/controller:$(TAG)
+	$(BUILDX_BUILD) --load $(PLATFORM) $(CONTROLLER_OUTPUT_DIR) -f $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway \
+		--build-arg GOARCH=$(GOARCH) \
+		-t $(IMAGE_REGISTRY)/$(AGENTGATEWAY_IMAGE_REPO):$(VERSION)
+
+.PHONY: agentgateway-controller-docker-local
+agentgateway-controller-docker-local: agentgateway-controller $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway
+	docker buildx build --push $(PLATFORM) $(CONTROLLER_OUTPUT_DIR) -f $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway \
+		--build-arg GOARCH=$(GOARCH) \
+		-t localhost:5000/$(AGENTGATEWAY_IMAGE_REPO):$(TAG)
 
 #----------------------------------------------------------------------------------
 # dummy idp (used in e2e tests)
@@ -426,24 +435,19 @@ DUMMY_IDP_OUTPUT_DIR=$(OUTPUT_DIR)/$(DUMMY_IDP_DIR)
 export DUMMY_IDP_IMAGE_REPO ?= dummy-idp
 DUMMY_IDP_VERSION=0.0.1
 
-$(DUMMY_IDP_OUTPUT_DIR)/dummy-idp-linux-$(GOARCH): $(DUMMY_IDP_SOURCES)
-	$(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $@ ./hack/dummy-idp...
-
 .PHONY: dummy-idp
-dummy-idp: $(DUMMY_IDP_OUTPUT_DIR)/dummy-idp-linux-$(GOARCH)
+dummy-idp:
+	$(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(DUMMY_IDP_OUTPUT_DIR)/dummy-idp-linux-$(GOARCH) ./hack/dummy-idp...
 
 $(DUMMY_IDP_OUTPUT_DIR)/Dockerfile.dummy-idp: ./hack/dummy-idp/Dockerfile
 	cp $< $@
 
-$(DUMMY_IDP_OUTPUT_DIR)/.docker-stamp-$(DUMMY_IDP_VERSION)-$(GOARCH): $(DUMMY_IDP_OUTPUT_DIR)/dummy-idp-linux-$(GOARCH) $(DUMMY_IDP_OUTPUT_DIR)/Dockerfile.dummy-idp
+.PHONY: dummy-idp-docker
+dummy-idp-docker: dummy-idp $(DUMMY_IDP_OUTPUT_DIR)/Dockerfile.dummy-idp
 	$(BUILDX_BUILD) --load $(PLATFORM) $(DUMMY_IDP_OUTPUT_DIR) -f $(DUMMY_IDP_OUTPUT_DIR)/Dockerfile.dummy-idp \
 		--build-arg GOARCH=$(GOARCH) \
 		--build-arg BASE_IMAGE=$(ALPINE_BASE_IMAGE) \
 		-t $(IMAGE_REGISTRY)/$(DUMMY_IDP_IMAGE_REPO):$(DUMMY_IDP_VERSION)
-	@touch $@
-
-.PHONY: dummy-idp-docker
-dummy-idp-docker: $(DUMMY_IDP_OUTPUT_DIR)/.docker-stamp-$(DUMMY_IDP_VERSION)-$(GOARCH)
 
 .PHONY: kind-load-dummy-idp
 kind-load-dummy-idp:
@@ -486,6 +490,7 @@ HELM ?= helm
 HELM_PACKAGE_ARGS ?= --version $(VERSION) --app-version $(VERSION)
 HELM_CHART_DIR_AGW=install/helm/agentgateway
 HELM_CHART_DIR_AGW_CRD=install/helm/agentgateway-crds
+HELM_ADDITIONAL_VALUES ?= hack/helm/dev.yaml
 
 .PHONY: package-agentgateway-charts
 package-agentgateway-charts: package-agentgateway-chart package-agentgateway-crd-chart ## Package the agentgateway charts
@@ -504,10 +509,10 @@ package-agentgateway-crd-chart: ## Package the agentgateway crd chart
 
 # VERSION_NO_V strips the leading 'v' from VERSION (e.g., v2.0.0 -> 2.0.0)
 VERSION_NO_V := $(patsubst v%,%,$(VERSION))
-CHART_NAMES := kgateway kgateway-crds agentgateway agentgateway-crds
+CHART_NAMES := agentgateway agentgateway-crds
 
 .PHONY: release-charts
-release-charts: ## Release the kgateway and agentgateway charts (publishes both vX.Y.Z and X.Y.Z tags)
+release-charts: ## Release the agentgateway charts (publishes both vX.Y.Z and X.Y.Z tags)
 	@for v in $(VERSION) $(VERSION_NO_V); do \
 		$(MAKE) package-agentgateway-charts VERSION=$$v; \
 		for chart in $(CHART_NAMES); do \
@@ -528,8 +533,8 @@ deploy-agentgateway-chart: ## Deploy the agentgateway chart
 	--set controller.image.repository=$(AGENTGATEWAY_IMAGE_REPO) \
 	-f $(HELM_ADDITIONAL_VALUES)
 
-.PHONY: lint-kgateway-charts
-lint-kgateway-charts: ## Lint the kgateway and agentgateway charts
+.PHONY: lint-charts
+lint-charts: ## Lint the agentgateway charts
 	$(HELM) lint $(HELM_CHART_DIR_AGW)
 	$(HELM) lint $(HELM_CHART_DIR_AGW_CRD)
 
@@ -553,8 +558,7 @@ release-notes: ## Generate release notes (PREVIOUS_TAG required, CURRENT_TAG opt
 #----------------------------------------------------------------------------------
 
 CLUSTER_NAME ?= kind
-# TODO: This should probably change depending on if kgateway or agw is installed
-INSTALL_NAMESPACE ?= kgateway-system
+INSTALL_NAMESPACE ?= agentgateway-system
 
 # The version of the Node Docker image to use for booting the kind cluster: https://hub.docker.com/r/kindest/node/tags
 # This version should stay in sync with `hack/kind/setup-kind.sh`.
@@ -580,7 +584,9 @@ endif
 
 # The version of the k8s gateway api inference extension CRDs to install.
 # Managed by `make bump-gie`.
-GIE_CRD_VERSION ?= v1.1.0
+GIE_CRD_VERSION ?= v1.3.0
+# When we are back on a release version instead of `main`, we can do this
+#GIE_CRD_VERSION ?= $(shell go list -m -f '{{.Version}}' sigs.k8s.io/gateway-api-inference-extension)
 
 .PHONY: gie-crds
 gie-crds: ## Install the Gateway API Inference Extension CRDs
@@ -632,7 +638,7 @@ kind-build-and-load-%: %-docker kind-load-% ; ## Use to build specified image an
 kind-set-image-%:
 	kubectl rollout pause deployment $* -n $(INSTALL_NAMESPACE) || true
 	kubectl set image deployment/$* $*=$(IMAGE_REGISTRY)/$*:$(VERSION) -n $(INSTALL_NAMESPACE)
-	kubectl patch deployment $* -n $(INSTALL_NAMESPACE) -p '{"spec": {"template":{"metadata":{"annotations":{"kgateway-kind-last-update":"$(shell date)"}}}} }'
+	kubectl patch deployment $* -n $(INSTALL_NAMESPACE) -p '{"spec": {"template":{"metadata":{"annotations":{"agentgateway-kind-last-update":"$(shell date)"}}}} }'
 	kubectl rollout resume deployment $* -n $(INSTALL_NAMESPACE)
 
 # Reload an image in KinD
@@ -661,7 +667,7 @@ AGW_CONFORMANCE_ARGS := -gateway-class=agentgateway $(AGW_CONFORMANCE_REPORT_ARG
 .PHONY: agw-conformance ## Run the agent gateway conformance test suite
 agw-conformance:
 	@mkdir -p $(TEST_ASSET_DIR)/conformance
-	go test -mod=mod -ldflags='$(LDFLAGS)' -tags conformance -test.v ./test/conformance/... -args $(AGW_CONFORMANCE_ARGS)
+	CGO_ENABLED=0 go test -mod=mod -ldflags='$(LDFLAGS)' -tags conformance -test.v ./test/conformance/... -args $(AGW_CONFORMANCE_ARGS)
 
 #----------------------------------------------------------------------------------
 # Targets for running Gateway API Inference Extension conformance tests
@@ -681,29 +687,18 @@ GIE_CONFORMANCE_ARGS := \
     -gateway-class=agentgateway \
     $(GIE_CONFORMANCE_REPORT_ARGS)
 
-INFERENCE_CONFORMANCE_DIR := $(shell go list -m -f '{{.Dir}}' sigs.k8s.io/gateway-api-inference-extension)/conformance
-
 .PHONY: gie-conformance
 gie-conformance: gie-crds ## Run the Gateway API Inference Extension conformance suite
 	@mkdir -p $(TEST_ASSET_DIR)/conformance
-	go test -mod=mod -ldflags='$(LDFLAGS)' \
+	CGO_ENABLED=0 go test -mod=mod -ldflags='$(LDFLAGS)' \
 	    -tags conformance \
 	    -timeout=25m \
-	    -v $(INFERENCE_CONFORMANCE_DIR) \
+	    -v $(shell go mod download && go list -m -f '{{.Dir}}' sigs.k8s.io/gateway-api-inference-extension/conformance) \
 	    -args $(GIE_CONFORMANCE_ARGS)
-
-.PHONY: gie-conformance-%
-gie-conformance-%: gie-crds ## Run only the specified Gateway API Inference Extension conformance test by ShortName
-	@mkdir -p $(TEST_ASSET_DIR)/conformance
-	go test -mod=mod -ldflags='$(LDFLAGS)' \
-	    -tags conformance \
-	    -timeout=25m \
-	    -v $(INFERENCE_CONFORMANCE_DIR) \
-	    -args $(GIE_CONFORMANCE_ARGS) -run-test=$*
 
 # An alias to run both Gateway API and Inference Extension conformance tests.
 .PHONY: all-conformance
-all-conformance: conformance gie-conformance agw-conformance ## Run all conformance test suites
+all-conformance: gie-conformance agw-conformance ## Run all conformance test suites
 	@echo "All conformance suites have completed."
 
 #----------------------------------------------------------------------------------

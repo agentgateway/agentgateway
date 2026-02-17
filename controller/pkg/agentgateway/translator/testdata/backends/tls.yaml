@@ -395,7 +395,8 @@ output:
           hostname: mcp-svc.default.svc.cluster.local
           namespace: default
           port: 80
-- hostname: mcp-svc.default.svc.cluster.local
+- canonical: true
+  hostname: mcp-svc.default.svc.cluster.local
   name: mcp-svc
   namespace: default
   ports:

@@ -10,8 +10,8 @@ spec:
     - "disableall.com"
   rules:
     - backendRefs:
-        - name: simple-svc
-          port: 8080
+        - name: backend
+          port: 80
 ---
 # TODO: add support for disable
 #apiVersion: gateway.kgateway.dev/v1alpha1

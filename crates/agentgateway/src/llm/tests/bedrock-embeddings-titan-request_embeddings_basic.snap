@@ -1,0 +1,12 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "bedrock-embeddings-titan: request_embeddings_basic"
+info:
+  model: text-embedding-3-small
+  input: hello world
+  dimensions: 1024
+---
+{
+  "inputText": "hello world",
+  "dimensions": 1024
+}

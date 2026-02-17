@@ -35,6 +35,7 @@ impl Provider {
 		let model = self.model.as_deref().unwrap_or(model);
 		match route_type {
 			super::RouteType::AnthropicTokenCount => strng::format!("/model/{model}/count-tokens"),
+			super::RouteType::Embeddings => strng::format!("/model/{model}/invoke"),
 			_ if streaming => strng::format!("/model/{model}/converse-stream"),
 			_ => strng::format!("/model/{model}/converse"),
 		}

@@ -18,7 +18,7 @@ if [[ $tgt == "dev" ]]; then
   tgt=debug
 fi
 
-cargo build --profile "${profile}" ${platform:+--target $platform} || exit 1
+cargo build --profile "${profile}" ${platform:+--target $platform} ${TIMINGS+--timings} || exit 1
 if [[ "${DRY_RUN}" == "" ]]; then
   exit 0
 fi

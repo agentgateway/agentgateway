@@ -83,6 +83,7 @@ func fakeIstioClient(objects ...client.Object) kube.Client {
 }
 
 func fakeKgwClient(objects ...client.Object) *fake.Clientset {
+	//nolint:staticcheck // SA1019: NewClientset requires apply configurations which are not generated. The fakeKgwClient is just used for testing
 	f := fake.NewSimpleClientset()
 	for _, obj := range objects {
 		gvr := mustGetGVR(obj, schemes.DefaultScheme())

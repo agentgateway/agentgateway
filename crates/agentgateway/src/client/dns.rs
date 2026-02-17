@@ -12,7 +12,8 @@ use hickory_resolver::{ResolveError, TokioResolver};
 
 use crate::*;
 
-const ERROR_BACKOFF: Duration = Duration::from_secs(5);
+const ERROR_BACKOFF_MAX: Duration = Duration::from_secs(5);
+const ERROR_BACKOFF_BASE: Duration = Duration::from_millis(100);
 
 #[derive(Debug)]
 struct CircularBuffer<T> {
@@ -63,6 +64,8 @@ impl CacheEntry {
 	) {
 		self.active.store(true, Ordering::Relaxed);
 
+		let mut backoff = ERROR_BACKOFF_BASE;
+
 		loop {
 			// Mark this is inactive, so we can see if there are any request before the next refresh timer.
 			let was_active = self.active.swap(false, Ordering::Relaxed);
@@ -74,11 +77,13 @@ impl CacheEntry {
 				}
 				return;
 			}
-			let next_refresh = match resolver.resolve(name.as_str()).await {
+			let (next_refresh, respect_small_value) = match resolver.resolve(name.as_str()).await {
 				Ok((ips, expiry)) => {
 					let cb = CircularBuffer::new(ips);
 					self.entries.store(Some(Arc::new(cb)));
-					expiry
+					// reset backoff on success
+					backoff = ERROR_BACKOFF_BASE;
+					(expiry, false)
 				},
 				Err(e) => {
 					let cb = CircularBuffer::new(Default::default());
@@ -86,13 +91,15 @@ impl CacheEntry {
 					self.entries.store(Some(Arc::new(cb)));
 					// if we got an error, retain the last state
 					debug!("resolution failed: {e:?}");
-					Instant::now() + ERROR_BACKOFF
+
+					backoff = std::cmp::min(backoff * 2, ERROR_BACKOFF_MAX);
+					(Instant::now() + backoff, true)
 				},
 			};
 			// NB: this will run even on error, so the first fetch for a failed response will hit this and
 			// not block
 			self.notify.notify_waiters();
-			sleep_until_expired(next_refresh).await;
+			sleep_until_expired(next_refresh, respect_small_value).await;
 		}
 	}
 
@@ -185,11 +192,11 @@ impl CachedResolver {
 	}
 }
 
-async fn sleep_until_expired(valid_until: Instant) {
+async fn sleep_until_expired(valid_until: Instant, respect_small_value: bool) {
 	const MINIMUM_TTL: Duration = Duration::from_secs(5);
 	let minimum = Instant::now() + MINIMUM_TTL;
 
-	let deadline = if valid_until >= minimum {
+	let deadline = if respect_small_value || valid_until >= minimum {
 		valid_until
 	} else {
 		minimum

@@ -14,6 +14,8 @@ var (
 	// Version is the version of the kgateway controller.
 	// This is set by the linker during build.
 	Version string
+	// GitVersion is like Version, but always set based on the git information
+	GitVersion string
 	// ref is the version of the kgateway controller.
 	// Constructed from the build info during init
 	ref *version
@@ -39,12 +41,15 @@ func init() {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		Version = UndefinedVersion
+		GitVersion = UndefinedVersion
 		return
 	}
 	v := Version
+	GitVersion = Version
 	if v == "" {
 		// TODO(tim): use info.Main.Version instead of UndefinedVersion.
 		v = UndefinedVersion
+		GitVersion = info.Main.Version
 	}
 	ref = &version{
 		Controller: v,

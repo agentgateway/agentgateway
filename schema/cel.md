@@ -28,7 +28,10 @@
 |`llm.responseModel`|The model that actually served the LLM response.|
 |`llm.provider`|The provider of the LLM.|
 |`llm.inputTokens`|The number of tokens in the input/prompt.|
+|`llm.cachedInputTokens`|The number of tokens in the input/prompt read from cache (savings)|
+|`llm.cacheCreationInputTokens`|Tokens written to cache (costs)<br>Not present with OpenAI|
 |`llm.outputTokens`|The number of tokens in the output/completion.|
+|`llm.reasoningTokens`|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|The total number of tokens for the request.|
 |`llm.countTokens`|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
 |`llm.prompt`|The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.|

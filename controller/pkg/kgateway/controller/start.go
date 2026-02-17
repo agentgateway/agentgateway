@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"net/http"
 	"sync/atomic"
 
 	"istio.io/istio/pkg/kube/krt"
 	istiolog "istio.io/istio/pkg/log"
+	"istio.io/istio/pkg/ptr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -18,15 +20,18 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
+	"github.com/agentgateway/agentgateway/controller/pkg/version"
 )
 
 // TLSRootCAPath is the path to the TLS root CA
@@ -56,11 +61,9 @@ type StartConfig struct {
 	AdditionalGatewayClasses map[string]*deployer.GatewayClassInfo
 	GatewayClassInfos        map[string]*deployer.GatewayClassInfo
 
-	Dev        bool
-	SetupOpts  *SetupOpts
-	RestConfig *rest.Config
-	// ExtensionsFactory is the factory function which will return an extensions.K8sGatewayExtensions
-	// This is responsible for producing the extension points that this controller requires
+	Dev             bool
+	SetupOpts       *SetupOpts
+	RestConfig      *rest.Config
 	ExtraAgwPlugins func(ctx context.Context, agw *agwplugins.AgwCollections) []agwplugins.AgwPlugin
 	// HelmValuesGeneratorOverride allows replacing the default helm values generation logic.
 	// When set, this generator will be used instead of the built-in GatewayParameters-based generator
@@ -74,6 +77,9 @@ type StartConfig struct {
 
 	KrtOptions                     krtutil.KrtOptions
 	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]agwplugins.AgwResourceStatusSyncHandler
+
+	// GatewayControllerExtension is an extension that can be used to extend Gateway controller
+	GatewayControllerExtension pluginsdk.GatewayControllerExtension
 
 	// AgentgatewaySyncerOptions is the list of options to be passed when creating the AgentGatewaySyncer
 	AgentgatewaySyncerOptions []agentgatewaysyncer.AgentgatewaySyncerOption
@@ -100,7 +106,12 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	}
 	istiolog.Configure(loggingOptions)
 
-	setupLog.Info("initializing kgateway extensions")
+	setupLog.Info("initializing agentgateway extensions")
+
+	// TODO: re-enable metrics processing https://github.com/agentgateway/agentgateway/issues/970
+	// Begin background processing of resource sync metrics.
+	// This only effects metrics in the resources subsystem and is not required for other metrics.
+	//metrics.StartResourceSyncMetricsProcessing(ctx)
 
 	agwMergedPlugins := agwPluginFactory(cfg)(ctx, cfg.AgwCollections)
 
@@ -134,6 +145,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		agwSyncer.StatusCollections(),
 		agwSyncer.CacheSyncs(),
 		cfg.ExtraAgwResourceStatusHandlers,
+		cfg.CommonCollections.Settings.EnableInferExt,
 	)
 	if err := cfg.Manager.Add(agwStatusSyncer); err != nil {
 		setupLog.Error(err, "unable to add agentgateway StatusSyncer runnable")
@@ -188,15 +200,38 @@ func (c *ControllerBuilder) Build(ctx context.Context) (*agentgatewaysyncer.Sync
 	agwXdsPort := globalSettings.AgentgatewayXdsServicePort
 	slog.Info("got agentgateway xds address for deployer", "agw_xds_host", xdsHost, "agw_xds_port", agwXdsPort)
 
+	// Best case: they explicit set at runtime
+	defaultTag := globalSettings.ProxyImageTag
+	if defaultTag == nil {
+		// Else, the binary is built with an explicit version
+		if version.Version != "" {
+			defaultTag = ptr.Of("v" + version.Version)
+		} else {
+			// Else, detect automatically based on the build.
+			// TODO: probably what we really want here is to have a file in the repo that has a floating version like v1.0.0-dev
+			// that is used here + for nightly builds.
+			defaultTag = ptr.Of(version.GitVersion)
+		}
+	}
 	gwCfg := GatewayConfig{
 		Client:            c.cfg.Client,
 		Mgr:               c.mgr,
 		AgwControllerName: c.cfg.AgwControllerName,
+		ImageDefaults: &agentgateway.Image{
+			Registry:   &globalSettings.ProxyImageRegistry,
+			Repository: &globalSettings.ProxyImageRepository,
+			Tag:        defaultTag,
+		},
 		ControlPlane: deployer.ControlPlaneInfo{
 			XdsHost:      xdsHost,
 			AgwXdsPort:   agwXdsPort,
 			XdsTLS:       globalSettings.XdsTLS,
-			XdsTlsCaPath: TLSRootCAPath,
+			XdsTlsCaPath: apisettings.TLSRootCAPath,
+		},
+		ImageInfo: &deployer.ImageInfo{
+			Registry:   globalSettings.DefaultImageRegistry,
+			Tag:        globalSettings.DefaultImageTag,
+			PullPolicy: globalSettings.DefaultImagePullPolicy,
 		},
 		DiscoveryNamespaceFilter: c.cfg.Client.ObjectFilter(),
 		CommonCollections:        c.commoncol,
@@ -210,6 +245,7 @@ func (c *ControllerBuilder) Build(ctx context.Context) (*agentgatewaysyncer.Sync
 		gwCfg,
 		c.cfg.GatewayClassInfos,
 		c.cfg.HelmValuesGeneratorOverride,
+		c.cfg.GatewayControllerExtension,
 	); err != nil {
 		setupLog.Error(err, "unable to create gateway controller")
 		return nil, err
@@ -229,12 +265,13 @@ func (c *ControllerBuilder) HasSynced() bool {
 	return true
 }
 
-// GetDefaultClassInfo returns the default GatewayClass for the kgateway controller.
+// GetDefaultClassInfo returns the default GatewayClass for the agentgateway controller.
 // Exported for testing.
 func GetDefaultClassInfo(
 	globalSettings *apisettings.Settings,
 	agwClassName,
 	agwControllerName string,
+	additionalClassInfos map[string]*deployer.GatewayClassInfo,
 ) map[string]*deployer.GatewayClassInfo {
 	classInfos := map[string]*deployer.GatewayClassInfo{}
 	refOverrides := globalSettings.GatewayClassParametersRefs
@@ -248,6 +285,7 @@ func GetDefaultClassInfo(
 		SupportedFeatures: deployer.GetSupportedFeaturesForAgentGateway(),
 	}
 	applyGatewayClassParametersRef(classInfos[agwClassName], agwClassName, refOverrides)
+	maps.Copy(classInfos, additionalClassInfos)
 	return classInfos
 }
 

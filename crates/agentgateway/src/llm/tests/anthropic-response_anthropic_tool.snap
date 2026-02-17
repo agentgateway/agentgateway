@@ -1,6 +1,5 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
-assertion_line: 38
 description: src/llm/tests/response_anthropic_tool.json
 info:
   id: msg_01Aq9w938a90dw8q
@@ -19,8 +18,8 @@ info:
         unit: celsius
   usage:
     input_tokens: 558
-    cache_creation_input_tokens: 0
-    cache_read_input_tokens: 0
+    cache_creation_input_tokens: 1
+    cache_read_input_tokens: 2
     output_tokens: 48
     service_tier: standard
 ---
@@ -29,7 +28,12 @@ info:
   "usage": {
     "prompt_tokens": 558,
     "completion_tokens": 48,
-    "total_tokens": 606
+    "total_tokens": 606,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "cache_read_input_tokens": 2,
+    "cache_creation_input_tokens": 1
   },
   "choices": [
     {

@@ -220,8 +220,13 @@ pub struct LLMResponse {
 	pub count_tokens: Option<u64>,
 	pub output_tokens: Option<u64>,
 	pub total_tokens: Option<u64>,
+	pub reasoning_tokens: Option<u64>,
+	pub cache_creation_input_tokens: Option<u64>,
+	pub cached_input_tokens: Option<u64>,
+
 	pub provider_model: Option<Strng>,
 	pub completion: Option<Vec<String>>,
+
 	// Time to get the first token. Only used for streaming.
 	pub first_token: Option<Instant>,
 }
@@ -342,7 +347,7 @@ impl AIProvider {
 			AIProvider::Gemini(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path {
-						Self::set_path_and_query(uri, gemini::DEFAULT_PATH)?;
+						Self::set_path_and_query(uri, gemini::path(route_type))?;
 					}
 					uri.authority = Some(Authority::from_static(gemini::DEFAULT_HOST_STR));
 					Ok(())
@@ -591,8 +596,15 @@ impl AIProvider {
 			) => {
 				// Anthropic supports count_tokens natively (Bedrock & Vertex assumes its serving Anthropic models)
 			},
-			(AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_), InputFormat::Embeddings) => {
-				// passthrough
+			(
+				AIProvider::OpenAI(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::AzureOpenAI(_)
+				| AIProvider::Bedrock(_)
+				| AIProvider::Vertex(_),
+				InputFormat::Embeddings,
+			) => {
+				// OpenAI compatible, Gemini, Bedrock, or Vertex
 			},
 			(p, m) => {
 				// Messages with OpenAI compatible: currently only supports translating the request
@@ -629,6 +641,7 @@ impl AIProvider {
 		let mut llm_info = req.to_llm_request(self.provider(), tokenize)?;
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
+			&& original_format.supports_prompt_guard()
 		{
 			llm_info.prompt = Some(req.get_messages().into());
 		}
@@ -641,7 +654,7 @@ impl AIProvider {
 				AIProvider::Bedrock(_) => req.to_bedrock_token_count(parts.headers())?,
 				AIProvider::Vertex(provider) => {
 					let body = req.to_anthropic()?;
-					provider.prepare_anthropic_request_body(body)?
+					provider.prepare_anthropic_count_tokens_body(body)?
 				},
 				_ => {
 					return Err(AIError::UnsupportedConversion(strng::literal!(
@@ -653,12 +666,12 @@ impl AIProvider {
 			match self {
 				AIProvider::Vertex(provider) if provider.is_anthropic_model(Some(request_model)) => {
 					let body = req.to_anthropic()?;
-					provider.prepare_anthropic_request_body(body)?
+					provider.prepare_anthropic_message_body(body)?
 				},
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::Vertex(_)
-				| AIProvider::AzureOpenAI(_) => req.to_openai()?,
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_) => {
+					req.to_openai()?
+				},
+				AIProvider::Vertex(p) => req.to_vertex(p)?,
 				AIProvider::Anthropic(_) => req.to_anthropic()?,
 				AIProvider::Bedrock(p) => req.to_bedrock(
 					p,
@@ -692,11 +705,10 @@ impl AIProvider {
 		let buffer_limit = http::response_buffer_limit(&resp);
 		let (mut parts, body) = resp.into_parts();
 		let ce = parts.headers.typed_get::<ContentEncoding>();
-		let Ok((encoding, bytes)) =
-			http::compression::to_bytes_with_decompression(body, ce, buffer_limit).await
-		else {
-			return Err(AIError::ResponseTooLarge);
-		};
+		let (encoding, bytes) =
+			http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer_limit)
+				.await
+				.map_err(|e| map_compression_error(e, &parts.headers))?;
 
 		// count_tokens has simplified response handling (just format translation)
 		if req.input_format == InputFormat::CountTokens {
@@ -722,10 +734,40 @@ impl AIProvider {
 			return Ok(resp);
 		}
 
-		// embeddings has simplified response handling (currently nothing; no translation needed)
+		// embeddings has simplified response handling
 		if req.input_format == InputFormat::Embeddings {
+			if !parts.status.is_success() {
+				let body = self.process_error(&req, &bytes)?;
+				parts.headers.remove(header::CONTENT_LENGTH);
+				let resp = Response::from_parts(parts, body.into());
+				let llm_info = LLMInfo::new(req, LLMResponse::default());
+				log.store(Some(llm_info));
+				return Ok(resp);
+			}
+
+			let (llm_resp, bytes) = match self {
+				AIProvider::Bedrock(_) => {
+					let translated = conversion::bedrock::from_embeddings::translate_response(
+						&bytes,
+						&parts.headers,
+						&req.request_model,
+					)?;
+					let llm_resp = translated.to_llm_response(false);
+					let body = translated.serialize().map_err(AIError::ResponseParsing)?;
+					(llm_resp, Bytes::from(body))
+				},
+				AIProvider::Vertex(p) if !p.is_anthropic_model(Some(&req.request_model)) => {
+					let translated =
+						conversion::vertex::from_embeddings::translate_response(&bytes, &req.request_model)?;
+					let llm_resp = translated.to_llm_response(false);
+					let body = translated.serialize().map_err(AIError::ResponseParsing)?;
+					(llm_resp, Bytes::from(body))
+				},
+				_ => (LLMResponse::default(), bytes),
+			};
+
+			parts.headers.remove(header::CONTENT_LENGTH);
 			let resp = Response::from_parts(parts, bytes.into());
-			let llm_resp = LLMResponse::default();
 			let llm_info = LLMInfo::new(req, llm_resp);
 			log.store(Some(llm_info));
 			return Ok(resp);
@@ -788,16 +830,28 @@ impl AIProvider {
 				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
 				InputFormat::Completions,
 			) => Ok(Box::new(
-				serde_json::from_slice::<types::completions::Response>(bytes)
-					.map_err(AIError::ResponseParsing)?,
+				serde_json::from_slice::<types::completions::Response>(bytes).map_err(|e| {
+					warn!(
+						error = %e,
+						body = %String::from_utf8_lossy(bytes),
+						"failed to parse completions response"
+					);
+					AIError::ResponseParsing(e)
+				})?,
 			)),
 			// Responses with OpenAI: just passthrough
 			(
 				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
 				InputFormat::Responses,
 			) => Ok(Box::new(
-				serde_json::from_slice::<types::responses::Response>(bytes)
-					.map_err(AIError::ResponseParsing)?,
+				serde_json::from_slice::<types::responses::Response>(bytes).map_err(|e| {
+					warn!(
+						error = %e,
+						body = %String::from_utf8_lossy(bytes),
+						"failed to parse responses response"
+					);
+					AIError::ResponseParsing(e)
+				})?,
 			)),
 			// Anthropic messages: passthrough
 			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => Ok(Box::new(
@@ -862,6 +916,20 @@ impl AIProvider {
 		};
 		log.store(Some(llmresp));
 		let buffer = http::response_buffer_limit(&resp);
+
+		// Decompress before the SSE parser, which expects plaintext chunks.
+		let (mut parts, body) = resp.into_parts();
+		let ce = parts.headers.typed_get::<ContentEncoding>();
+		let (body, decompressed_encoding) = http::compression::decompress_body(body, ce.as_ref())
+			.map_err(|e| map_compression_error(e, &parts.headers))?;
+
+		// Strip encoding headers after successful decompression
+		if decompressed_encoding.is_some() {
+			parts.headers.remove(header::CONTENT_ENCODING);
+			parts.headers.remove(header::CONTENT_LENGTH);
+			parts.headers.remove(header::TRANSFER_ENCODING);
+		}
+		let resp = Response::from_parts(parts, body);
 
 		Ok(match (self, input_format) {
 			// Completions with OpenAI: just passthrough
@@ -966,7 +1034,7 @@ impl AIProvider {
 				| AIProvider::Gemini(_)
 				| AIProvider::AzureOpenAI(_)
 				| AIProvider::Vertex(_),
-				InputFormat::Completions | InputFormat::Responses,
+				InputFormat::Completions | InputFormat::Responses | InputFormat::Embeddings,
 			) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
@@ -987,10 +1055,27 @@ impl AIProvider {
 			(AIProvider::Bedrock(_), InputFormat::Responses) => {
 				conversion::bedrock::from_responses::translate_error(bytes)
 			},
+			(AIProvider::Bedrock(_), InputFormat::Embeddings) => {
+				conversion::bedrock::from_embeddings::translate_error(bytes)
+			},
 			(_, _) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider and format is not supported"
 			))),
 		}
+	}
+}
+
+fn map_compression_error(e: http::compression::Error, headers: &::http::HeaderMap) -> AIError {
+	match e {
+		http::compression::Error::UnsupportedEncoding => AIError::UnsupportedEncoding(strng::new(
+			headers
+				.get(header::CONTENT_ENCODING)
+				.and_then(|v| v.to_str().ok())
+				.unwrap_or("unknown"),
+		)),
+		http::compression::Error::LimitExceeded => AIError::ResponseTooLarge,
+		http::compression::Error::Io(e) => AIError::Encoding(axum_core::Error::new(e)),
+		http::compression::Error::Body(e) => AIError::Encoding(e),
 	}
 }
 
@@ -1106,6 +1191,8 @@ pub enum AIError {
 	ResponseParsing(serde_json::Error),
 	#[error("failed to marshal response: {0}")]
 	ResponseMarshal(serde_json::Error),
+	#[error("unsupported content encoding: {0}")]
+	UnsupportedEncoding(Strng),
 	#[error("failed to encode response: {0}")]
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]

@@ -32,7 +32,7 @@ spec:
         version: v1
     spec:
       containers:
-        - image: ghcr.io/kgateway-dev/dummy-idp:0.0.1
+        - image: ghcr.io/agentgateway/dummy-idp:0.0.1
           imagePullPolicy: IfNotPresent
           name: dummy-idp
           ports:

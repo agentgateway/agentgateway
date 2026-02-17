@@ -4,6 +4,7 @@ pub mod count_tokens;
 pub mod embeddings;
 pub mod messages;
 pub mod responses;
+pub mod vertex;
 
 use agent_core::prelude::Strng;
 use agent_core::strng;
@@ -55,6 +56,10 @@ pub trait RequestType: Send + Sync {
 		Err(AIError::UnsupportedConversion(strng::literal!(
 			"bedrock token count"
 		)))
+	}
+
+	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
+		Err(AIError::UnsupportedConversion(strng::literal!("vertex")))
 	}
 }
 

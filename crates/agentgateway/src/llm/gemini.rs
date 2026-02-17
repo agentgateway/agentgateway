@@ -1,6 +1,7 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
 
+use crate::llm::RouteType;
 use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -16,4 +17,10 @@ impl super::Provider for Provider {
 }
 pub const DEFAULT_HOST_STR: &str = "generativelanguage.googleapis.com";
 pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
-pub const DEFAULT_PATH: &str = "/v1beta/openai/chat/completions";
+
+pub fn path(route: RouteType) -> &'static str {
+	match route {
+		RouteType::Embeddings => "/v1beta/openai/embeddings",
+		_ => "/v1beta/openai/chat/completions",
+	}
+}
