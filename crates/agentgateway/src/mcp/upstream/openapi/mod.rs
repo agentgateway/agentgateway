@@ -374,6 +374,7 @@ pub(crate) fn parse_openapi_schema(
 								))?
 								.clone();
 							let tool = Tool {
+								execution: None,
 								meta: None,
 								annotations: None,
 								name: Cow::Owned(name.clone()),

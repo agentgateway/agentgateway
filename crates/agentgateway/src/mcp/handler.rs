@@ -386,6 +386,7 @@ impl Relay {
 				experimental: None,
 				logging: None,
 				tasks: None,
+				extensions: None,
 				tools: Some(ToolsCapability::default()),
 				// These are not supported when multiplexing.
 				prompts: None,
@@ -397,6 +398,7 @@ impl Relay {
 				experimental: None,
 				logging: None,
 				tasks: None,
+				extensions: None,
 				tools: Some(ToolsCapability::default()),
 				prompts: Some(PromptsCapability::default()),
 				resources: Some(ResourcesCapability::default()),

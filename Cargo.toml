@@ -139,11 +139,10 @@ pwhash = "1"
 rand = "0.10"
 rcgen = { version = "0.14", features = ["pem", "x509-parser"] }
 regex = "1.11"
-reqwest = { version = "0.12", default-features = false, features = [
+reqwest = { version = "0.13", default-features = false, features = [
     "http2",
     "charset",
-    "macos-system-configuration",
-    "rustls-tls",
+    "rustls",
 ] }
 rstest = "0.26"
 rustc_version = "0.4"
