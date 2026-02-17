@@ -15,7 +15,6 @@ ui = []
 schema = ["schemars"]
 tls-ring = ["rustls/ring", "tokio-rustls/ring"]
 internal_benches = ["divan"]
-testing = ["dep:reqwest"]
 
 [dependencies]
 a2a-sdk.workspace = true
@@ -142,7 +141,7 @@ typespec_client_core.workspace = true
 url.workspace = true
 uuid.workspace = true
 x509-parser.workspace = true
-reqwest = { optional = true, workspace = true }
+reqwest.workspace = true
 websocket-sans-io.workspace = true
 vector-map.workspace = true
 flagset.workspace = true
