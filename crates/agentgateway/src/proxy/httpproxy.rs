@@ -1,3 +1,4 @@
+use rand::RngExt;
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
@@ -10,7 +11,6 @@ use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
-use rand::Rng;
 use rand::seq::IndexedRandom;
 use tracing::{debug, trace};
 use types::agent::*;
@@ -47,7 +47,7 @@ fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference
 		.cloned()
 }
 
-fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
+pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
 	// Merge filter/fields into config for this request
 	if lp.filter.is_some() {
 		log.cel.filter = lp.filter.clone();
@@ -93,6 +93,16 @@ async fn apply_request_policies(
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
 	}
 
+	// CORS must run before rate limiting so that:
+	// 1. Preflight OPTIONS requests short-circuit without consuming rate limit quota
+	// 2. CORS response headers are queued even if the request is later rate-limited,
+	//    allowing browsers to read the 429 response instead of seeing a CORS error
+	if let Some(c) = &policies.cors {
+		c.apply(req)
+			.map_err(ProxyError::from)?
+			.apply(response_policies.headers())?;
+	}
+
 	for lrl in &policies.local_rate_limit {
 		lrl.check_request()?;
 	}
@@ -136,11 +146,6 @@ async fn apply_request_policies(
 	}
 	if let Some(r) = &policies.url_rewrite {
 		r.apply(req).map_err(ProxyError::from)?;
-	}
-	if let Some(c) = &policies.cors {
-		c.apply(req)
-			.map_err(ProxyError::from)?
-			.apply(response_policies.headers())?;
 	}
 	if let Some(rr) = &policies.request_redirect {
 		rr.apply(req)
@@ -770,7 +775,6 @@ impl HTTPProxy {
 					tokio::time::sleep(bo).await;
 					Ok(())
 				};
-				tracing::error!("howardjohn: TIMEOUT");
 				fut
 					.map_err(|_| ProxyError::RequestTimeout)
 					// This is safe because we guarantee in attempt_upstream to snapshot
@@ -920,6 +924,11 @@ impl HTTPProxy {
 				.insert(BackendRequestTimeout(backend_timeout));
 		}
 		let mut req_opt = Some(req);
+		let timeout = response_policies
+			.timeout
+			.as_ref()
+			.and_then(|t| t.request_timeout);
+		let start = log.start;
 		let call = make_backend_call(
 			self.inputs.clone(),
 			route_policies.clone(),
@@ -928,17 +937,11 @@ impl HTTPProxy {
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
-		)
-		.await
-		.maybe_snapshot_on_err(log, &mut req_opt)?;
-		let timeout = response_policies
-			.timeout
-			.as_ref()
-			.and_then(|t| t.request_timeout);
+		);
 
 		// Setup timeout
 		let call_result = if let Some(timeout) = timeout {
-			let deadline = tokio::time::Instant::from_std(log.start + timeout);
+			let deadline = tokio::time::Instant::from_std(start + timeout);
 			let fut = tokio::time::timeout_at(deadline, call);
 			fut.await
 		} else {
@@ -949,7 +952,7 @@ impl HTTPProxy {
 		let mut resp = match call_result {
 			Ok(Ok(resp)) => resp,
 			Ok(Err(e)) => {
-				return Err(ProxyResponse::Error(e)).maybe_snapshot_on_err(log, &mut req_opt)?;
+				return Err(e).maybe_snapshot_on_err(log, &mut req_opt)?;
 			},
 			Err(_) => {
 				return Err(ProxyResponse::Error(ProxyError::RequestTimeout))
@@ -1143,7 +1146,7 @@ fn get_backend_policies(
 	)
 }
 
-struct MustSnapshot<'a>(&'a mut Option<Request>);
+pub struct MustSnapshot<'a>(&'a mut Option<Request>);
 
 impl<'a> MustSnapshot<'a> {
 	pub fn new(req: &'a mut Option<Request>) -> Self {
@@ -1186,7 +1189,7 @@ async fn make_backend_call(
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
-) -> Result<Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send>>, ProxyResponse> {
+) -> Result<Response, ProxyResponse> {
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
 	};
@@ -1314,16 +1317,18 @@ async fn make_backend_call(
 			let inputs = inputs.clone();
 			let backend = backend.clone();
 			set_backend_cel_context(&mut req, log.as_ref());
-			let req = req.take_and_snapshot(log.as_mut())?;
-			let mcp_response_log = log.map(|l| l.mcp_status.clone()).expect("must be set");
 			let name = name.clone();
-			return Ok(Box::pin(async move {
-				inputs
-					.clone()
-					.mcp_state
-					.serve(inputs, name, backend, policies, req, mcp_response_log)
-					.await
-			}));
+			let Some(log) = log else {
+				return Err(
+					ProxyError::ProcessingString("invalid: log required for MCP".to_string()).into(),
+				);
+			};
+			let res = inputs
+				.clone()
+				.mcp_state
+				.serve(inputs, name, backend, policies, req, log)
+				.await;
+			return res.map_err(ProxyResponse::from);
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
@@ -1430,7 +1435,7 @@ async fn make_backend_call(
 					};
 					let (mut req, llm_request) = match r {
 						RequestResult::Success(r, lr) => (r, lr),
-						RequestResult::Rejected(dr) => return Ok(Box::pin(async move { Ok(dr) })),
+						RequestResult::Rejected(dr) => return Err(ProxyResponse::DirectResponse(Box::new(dr))),
 					};
 					// If a user doesn't configure explicit overrides for connecting to a provider, setup default
 					// paths, TLS, etc.
@@ -1462,17 +1467,15 @@ async fn make_backend_call(
 					(req, response_policies, Some(llm_request))
 				},
 				RouteType::Models => {
-					return Ok(Box::pin(async move {
-						Ok(
-							::http::Response::builder()
-								.status(::http::StatusCode::NOT_IMPLEMENTED)
-								.header(::http::header::CONTENT_TYPE, "application/json")
-								.body(http::Body::from(format!(
-									"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
-								)))
-								.expect("Failed to build response"),
-						)
-					}));
+					return Ok(
+						::http::Response::builder()
+							.status(::http::StatusCode::NOT_IMPLEMENTED)
+							.header(::http::header::CONTENT_TYPE, "application/json")
+							.body(http::Body::from(format!(
+								"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
+							)))
+							.expect("Failed to build response"),
+					);
 				},
 				RouteType::Passthrough | RouteType::Realtime => {
 					// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
@@ -1541,37 +1544,36 @@ async fn make_backend_call(
 		.map(|l| l.cel.cel_context.needs_llm_completion())
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
-	Ok(Box::pin(async move {
-		let mut resp = upstream.call(call).await?;
-		a2a::apply_to_response(
-			backend_call.backend_policies.a2a.as_ref(),
-			a2a_type,
-			&mut resp,
-		)
-		.await
-		.map_err(ProxyError::Processing)?;
-		let mut resp = if let (Some(llm), Some(llm_request)) =
-			(backend_call.backend_policies.llm_provider, llm_request)
-		{
-			llm
-				.provider
-				.process_response(
-					policy_client.clone(),
-					llm_request,
-					llm_response_policies,
-					llm_response_log.expect("must be set"),
-					include_completion_in_log,
-					resp,
-				)
-				.await
-				.map_err(|e| ProxyError::Processing(e.into()))?
-		} else {
-			resp
-		};
-		// TODO: we currently do not support ImmediateResponse from inference router
-		let _ = maybe_inference.mutate_response(&mut resp).await?;
-		Ok(resp)
-	}))
+
+	let mut resp = upstream.call(call).await?;
+	a2a::apply_to_response(
+		backend_call.backend_policies.a2a.as_ref(),
+		a2a_type,
+		&mut resp,
+	)
+	.await
+	.map_err(ProxyError::Processing)?;
+	let mut resp = if let (Some(llm), Some(llm_request)) =
+		(backend_call.backend_policies.llm_provider, llm_request)
+	{
+		llm
+			.provider
+			.process_response(
+				policy_client.clone(),
+				llm_request,
+				llm_response_policies,
+				llm_response_log.expect("must be set"),
+				include_completion_in_log,
+				resp,
+			)
+			.await
+			.map_err(|e| ProxyError::Processing(e.into()))?
+	} else {
+		resp
+	};
+	// TODO: we currently do not support ImmediateResponse from inference router
+	let _ = maybe_inference.mutate_response(&mut resp).await?;
+	Ok(resp)
 }
 
 fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog>) {
@@ -1603,7 +1605,10 @@ pub fn build_service_call(
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
 
 	let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
-	let target_port = if let Some(&ep_target_port) = ep.port.get(&port) {
+	let target_port = if let Some(ov) = override_dest {
+		// use the explicit override. select_endpoint ensures this is actually in the endpoint
+		ov.port()
+	} else if let Some(&ep_target_port) = ep.port.get(&port) {
 		// prefer endpoint port mapping
 		ep_target_port
 	} else if svc_target_port > 0 {
@@ -1612,6 +1617,7 @@ pub fn build_service_call(
 	} else {
 		return Err(ProxyError::NoHealthyEndpoints);
 	};
+
 	let http_version_override = if svc.port_is_http2(port) {
 		Some(::http::Version::HTTP_2)
 	} else if svc.port_is_http1(port) {
@@ -1640,9 +1646,9 @@ pub fn build_service_call(
 
 			if let Some(gw_wl) = gateway_workload {
 				tracing::debug!(
-					source_network=%inputs.cfg.network,
-					dest_network=%wl.network,
-					gateway=?gw_addr,
+					source_network = % inputs.cfg.network,
+					dest_network = % wl.network,
+					gateway = ? gw_addr,
 					"picked workload on remote network, using double hbone"
 				);
 				Some((gw_addr.clone(), gw_wl.identity()))
@@ -1654,10 +1660,10 @@ pub fn build_service_call(
 				None
 			}
 		} else {
-			tracing::warn!(
-				source_network=%inputs.cfg.network,
-				dest_network=%wl.network,
-				"workload on remote network but no gateway configured"
+			tracing::warn ! (
+			source_network = % inputs.cfg.network,
+			dest_network = % wl.network,
+			"workload on remote network but no gateway configured"
 			);
 			None
 		}
@@ -1668,8 +1674,8 @@ pub fn build_service_call(
 	// For double HBONE, use hostname-based target so the gateway can resolve it
 	let target = if network_gateway.is_some() {
 		tracing::debug!(
-			hostname=%svc.hostname,
-			port=%port,
+			hostname = % svc.hostname,
+			port = % port,
 			"using hostname-based target for double hbone"
 		);
 		Target::Hostname(svc.hostname.clone(), port)
@@ -1993,8 +1999,7 @@ impl PolicyClient {
 				&mut Default::default(),
 			)
 			.await
-			.map_err(ProxyResponse::downcast)?
-			.await
+			.map_err(ProxyResponse::downcast)
 		})
 	}
 

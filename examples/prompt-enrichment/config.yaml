@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../../main/schema/config.json
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
 binds:
 - port: 3000
   listeners:

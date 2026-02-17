@@ -1,0 +1,59 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: missing-dest
+  namespace: default
+spec:
+  parentRefs:
+  - name: test-gateway
+  rules:
+  - backendRefs:
+    - name: unknown
+      port: 8080
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: unknown.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      key: default/missing-dest.0.0.http
+      listenerKey: default/test-gateway.http
+      name:
+        kind: HTTPRoute
+        name: missing-dest
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: missing-dest
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: backend(unknown.default.svc.cluster.local) not found
+        reason: BackendNotFound
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

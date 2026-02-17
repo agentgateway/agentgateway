@@ -1,0 +1,29 @@
+ai:
+  providerGroups:
+  - providers:
+    - inlinePolicies:
+      - auth:
+          key:
+            secret: openai-primary
+      name: openai
+      openai:
+        model: gpt-4
+    - anthropic:
+        model: claude-3-opus
+      inlinePolicies:
+      - auth:
+          key:
+            secret: anthropic-primary
+      name: anthropic
+  - providers:
+    - gemini:
+        model: gemini-pro
+      inlinePolicies:
+      - auth:
+          key:
+            secret: gemini-fallback
+      name: gemini
+key: test-ns/multipool-priority-backend
+name:
+  name: multipool-priority-backend
+  namespace: test-ns

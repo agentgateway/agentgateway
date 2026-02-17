@@ -1,0 +1,22 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 108
+description: "vertex-embeddings: request_embeddings_array"
+info:
+  model: text-embedding-3-small
+  input:
+    - hello
+    - world
+---
+{
+  "instances": [
+    {
+      "content": "hello",
+      "task_type": "RETRIEVAL_QUERY"
+    },
+    {
+      "content": "world",
+      "task_type": "RETRIEVAL_QUERY"
+    }
+  ]
+}

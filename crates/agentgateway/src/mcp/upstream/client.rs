@@ -20,6 +20,7 @@ pub(crate) struct McpHttpClient {
 	base_policies: BackendPolicies,
 	pinned_dest: Arc<Mutex<Option<ResolvedDestination>>>,
 	stateful: bool,
+	target_name: String,
 }
 
 impl McpHttpClient {
@@ -28,6 +29,7 @@ impl McpHttpClient {
 		backend: SimpleBackend,
 		policies: BackendPolicies,
 		stateful: bool,
+		target_name: String,
 	) -> Self {
 		Self {
 			client,
@@ -35,6 +37,7 @@ impl McpHttpClient {
 			base_policies: policies,
 			pinned_dest: Arc::new(Mutex::new(None)),
 			stateful,
+			target_name,
 		}
 	}
 
@@ -49,6 +52,7 @@ impl McpHttpClient {
 			&& let Some(pinned) = *self.pinned_dest.lock().unwrap()
 		{
 			tracing::trace!(
+				target = %self.target_name,
 				backend = %self.backend,
 				endpoint = %pinned.0,
 				"using pinned backend endpoint"
@@ -74,6 +78,7 @@ impl McpHttpClient {
 
 	pub fn pin_backend(&self, resolved: ResolvedDestination) {
 		tracing::debug!(
+			target = %self.target_name,
 			backend = %self.backend,
 			endpoint = %resolved.0,
 			"pinned stateful MCP session to backend endpoint"

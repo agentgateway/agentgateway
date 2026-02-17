@@ -18,4 +18,4 @@ event:
 data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[{"index":0,"delta":{"content":" you with?"}}],"created":123,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
 
 event: 
-data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[],"created":123,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":15,"completion_tokens":21,"total_tokens":36}}
+data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[],"created":123,"model":"claude-3-5-haiku-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":15,"completion_tokens":21,"total_tokens":36,"prompt_tokens_details":{"cached_tokens":0},"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}

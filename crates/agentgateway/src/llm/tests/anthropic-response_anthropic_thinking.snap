@@ -1,14 +1,40 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
 description: src/llm/tests/response_anthropic_thinking.json
-info: "{\n  \"id\": \"msg_01BE9GBzjs95TqdG8FeUanUn\",\n  \"type\": \"message\",\n  \"role\": \"assistant\",\n  \"model\": \"claude-opus-4-1-20250805\",\n  \"content\": [\n    {\n      \"type\": \"thinking\",\n      \"thinking\": \"The user is asking me about the current weather in San Francisco\",\n      \"signature\": \"Es8DCkYI\"\n    },\n    {\n      \"type\": \"text\",\n      \"text\": \"I don't have access to real-time weather data\"\n    }\n  ],\n  \"stop_reason\": \"end_turn\",\n  \"stop_sequence\": null,\n  \"usage\": {\n    \"input_tokens\": 47,\n    \"cache_creation_input_tokens\": 0,\n    \"cache_read_input_tokens\": 0,\n    \"cache_creation\": {\n      \"ephemeral_5m_input_tokens\": 0,\n      \"ephemeral_1h_input_tokens\": 0\n    },\n    \"output_tokens\": 251,\n    \"service_tier\": \"standard\"\n  }\n}\n"
+info:
+  id: msg_01BE9GBzjs95TqdG8FeUanUn
+  type: message
+  role: assistant
+  model: claude-opus-4-1-20250805
+  content:
+    - type: thinking
+      thinking: The user is asking me about the current weather in San Francisco
+      signature: Es8DCkYI
+    - type: text
+      text: "I don't have access to real-time weather data"
+  stop_reason: end_turn
+  stop_sequence: ~
+  usage:
+    input_tokens: 47
+    cache_creation_input_tokens: 1
+    cache_read_input_tokens: 2
+    cache_creation:
+      ephemeral_5m_input_tokens: 0
+      ephemeral_1h_input_tokens: 0
+    output_tokens: 251
+    service_tier: standard
 ---
 {
   "model": "claude-opus-4-1-20250805",
   "usage": {
     "prompt_tokens": 47,
     "completion_tokens": 251,
-    "total_tokens": 298
+    "total_tokens": 298,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "cache_read_input_tokens": 2,
+    "cache_creation_input_tokens": 1
   },
   "choices": [
     {

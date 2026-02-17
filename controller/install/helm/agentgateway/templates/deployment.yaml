@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentgateway.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+  {{- with .Values.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.controller.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentgateway.selectorLabels" . | nindent 6 }}
+  {{- with .Values.controller.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: {{ .Values.controller.service.ports.metrics | default 9092 | quote}}
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+      labels:
+        {{- include "agentgateway.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.controller.priorityClassName }}
+      priorityClassName: {{ .Values.controller.priorityClassName | quote }}
+      {{- end }}
+      serviceAccountName: {{ include "agentgateway.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: controller
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.controller.image.registry | default .Values.image.registry }}/{{ .Values.controller.image.repository }}:{{ include "agentgateway.imageTag" (.Values.controller.image.tag | default .Values.image.tag | default .Chart.AppVersion) }}"
+          imagePullPolicy: {{ .Values.controller.image.pullPolicy | default .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.controller.service.ports.agwGrpc }}
+              name: grpc-xds-agw
+              protocol: TCP
+            - containerPort: {{ .Values.controller.service.ports.health }}
+              name: health
+              protocol: TCP
+            - containerPort: {{ .Values.controller.service.ports.metrics }}
+              name: metrics
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.controller.service.ports.health }}
+            initialDelaySeconds: 1
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.controller.service.ports.health }}
+            initialDelaySeconds: 0
+            periodSeconds: 1
+            {{/* Allow failing for 120s before the pod is killed */}}
+            failureThreshold: 120
+          env:
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "1"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "1"
+                  resource: limits.cpu
+            {{- with (.Values.proxy.image.registry | default .Values.image.registry) }}
+            - name: AGW_PROXY_IMAGE_REGISTRY
+              value: {{ . }}
+             {{- end }}
+            - name: AGW_PROXY_IMAGE_REPOSITORY
+              value: {{ .Values.proxy.image.repository }}
+            {{- with (.Values.proxy.image.tag | default .Values.image.tag) }}
+            - name: AGW_PROXY_IMAGE_TAG
+              value: {{ . | quote }}
+             {{- end }}
+
+            - name: AGW_LOG_LEVEL
+              value: {{ .Values.controller.logLevel | quote }}
+            - name: AGW_XDS_SERVICE_NAME
+              value: {{ include "agentgateway.fullname" . }}
+            - name: AGW_AGENTGATEWAY_XDS_SERVICE_PORT
+              value: {{ .Values.controller.service.ports.agwGrpc | quote }}
+            {{- /* Note: Unlike kgateway, agentgateway proxy images use AgentgatewayDefaultTag
+                 from pkg/deployer/wellknown.go rather than AGW_DEFAULT_IMAGE_* env vars. */}}
+            - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
+              value: {{ .Values.discoveryNamespaceSelectors | toJson | quote }}
+            {{- if .Values.controller.extraEnv }}
+            {{- range $key, $value := .Values.controller.extraEnv }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.inferenceExtension.enabled }}
+            - name: AGW_ENABLE_INFER_EXT
+              value: "true"
+            {{- end }}
+            {{- if .Values.controller.xds.tls.enabled }}
+            - name: AGW_XDS_TLS_ENABLED
+              value: "true"
+            {{- end }}
+            - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
+              value: {{ .Values.gatewayClassParametersRefs | toJson | quote }}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.controller.xds.tls.enabled }}
+          volumeMounts:
+            - name: xds-tls
+              mountPath: /etc/xds-tls
+              readOnly: true
+          {{- end }}
+      {{- if .Values.controller.xds.tls.enabled }}
+      volumes:
+        - name: xds-tls
+          secret:
+            secretName: agentgateway-xds-cert
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.gatewayClassParametersRefs }}
+{{- range $className, $ref := .Values.gatewayClassParametersRefs }}
+{{- if not $ref.name }}
+{{ fail (printf "gatewayClassParametersRefs.%s.name must be set" $className) }}
+{{- end }}
+{{- if not $ref.namespace }}
+{{ fail (printf "gatewayClassParametersRefs.%s.namespace must be set" $className) }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,76 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    phase: PostRouting
+    transformation:
+      response:
+        add:
+          - name: x-response-time
+            value: string(timestamp(response.complete_time) - timestamp(request.start_time))
+        remove:
+          - server
+          - x-internal-header
+      request:
+        body: "json({'modified': true, 'original': json(request.body)})"
+        set:
+          - name: x-custom-header
+            value: request.headers['x-forwarded-for']
+          - name: x-user-id
+            value: request.headers['authorization'].split(' ')[1]
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:transformation:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      transformation:
+        request:
+          body:
+            expression: 'json({''modified'': true, ''original'': json(request.body)})'
+          set:
+          - expression: request.headers['x-forwarded-for']
+            name: x-custom-header
+          - expression: request.headers['authorization'].split(' ')[1]
+            name: x-user-id
+        response:
+          add:
+          - expression: string(timestamp(response.complete_time) - timestamp(request.start_time))
+            name: x-response-time
+          remove:
+          - server
+          - x-internal-header
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

@@ -1,0 +1,11 @@
+#!/bin/sh
+if [ $# -lt 1 ]; then
+  echo "usage: $0 <go-tool-package> [args...]" >&2
+  exit 2
+fi
+
+WD=$(cd "$(dirname "$0")"; pwd)
+
+TOOL=$(cd "$WD"; go tool -n "$1")
+shift
+exec "$TOOL" "$@"

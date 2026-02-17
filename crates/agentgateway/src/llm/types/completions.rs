@@ -54,6 +54,7 @@ pub struct Response {
 	pub model: String,
 	pub usage: Option<Usage>,
 	/// A list of chat completion choices. Can be more than one if `n` is greater than 1.
+	#[serde(default)]
 	pub choices: Vec<Choice>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -77,6 +78,20 @@ pub struct ResponseMessage {
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct UsageCompletionDetails {
+	pub reasoning_tokens: Option<u64>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct UsagePromptDetails {
+	pub cached_tokens: Option<u64>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Usage {
 	/// Number of tokens in the prompt.
 	pub prompt_tokens: u32,
@@ -84,6 +99,12 @@ pub struct Usage {
 	pub completion_tokens: u32,
 	/// Total number of tokens used in the request (prompt + completion).
 	pub total_tokens: u32,
+	/// Breakdown of tokens used in a completion.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub completion_tokens_details: Option<UsageCompletionDetails>,
+	/// Breakdown of tokens used in the prompt.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub prompt_tokens_details: Option<UsagePromptDetails>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -95,6 +116,17 @@ impl ResponseType for Response {
 			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens as u64),
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
 			count_tokens: None,
+			reasoning_tokens: self.usage.as_ref().and_then(|u| {
+				u.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens)
+			}),
+			cached_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens)
+			}),
+			cache_creation_input_tokens: None,
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
 				Some(
@@ -171,6 +203,15 @@ impl super::RequestType for Request {
 
 	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
 		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
+	}
+
+	fn to_vertex(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
+		if provider.is_anthropic_model(self.model.as_deref()) {
+			let body = self.to_anthropic()?;
+			provider.prepare_anthropic_message_body(body)
+		} else {
+			self.to_openai()
+		}
 	}
 
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
@@ -306,9 +347,7 @@ pub mod typed {
 
 	use std::collections::HashMap;
 
-	use async_openai::types::chat::{
-		ChatChoiceLogprobs, ChatCompletionResponseMessageAudio, CompletionUsage,
-	};
+	use async_openai::types::chat::{ChatChoiceLogprobs, ChatCompletionResponseMessageAudio};
 	#[allow(deprecated)]
 	#[allow(deprecated_in_future)]
 	pub use async_openai::types::chat::{
@@ -330,15 +369,15 @@ pub mod typed {
 		ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
 		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool as FunctionTool,
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
-		ChatCompletionTools as Tool, CompletionUsage as Usage, FinishReason, FunctionCall,
-		FunctionCallStream, FunctionName, FunctionObject, FunctionType, PredictionContent,
-		ReasoningEffort, ResponseFormat, ResponseModalities as ChatCompletionModalities, Role,
-		ServiceTier, StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
+		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
+		FunctionObject, FunctionType, PredictionContent, ReasoningEffort, ResponseFormat,
+		ResponseModalities as ChatCompletionModalities, Role, ServiceTier, StopConfiguration as Stop,
+		ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
 
 	/// Represents a chat completion response returned by model, based on the provided input.
-	#[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
+	#[derive(Debug, Deserialize, Clone, Serialize)]
 	pub struct Response {
 		/// A unique identifier for the chat completion.
 		pub id: String,
@@ -359,10 +398,43 @@ pub mod typed {
 
 		/// The object type, which is always `chat.completion`.
 		pub object: String,
-		pub usage: Option<CompletionUsage>,
+		pub usage: Option<Usage>,
 	}
 
-	#[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
+	#[derive(Debug, Deserialize, Clone, Serialize)]
+	pub struct UsageCompletionDetails {
+		pub reasoning_tokens: Option<u64>,
+	}
+
+	#[derive(Debug, Deserialize, Clone, Serialize)]
+	pub struct UsagePromptDetails {
+		pub cached_tokens: Option<u64>,
+	}
+
+	// Forked typed from OpenAI to include custom cache token details other providers use.
+	#[derive(Default, Debug, Deserialize, Clone, Serialize)]
+	pub struct Usage {
+		/// Number of tokens in the prompt.
+		pub prompt_tokens: u32,
+		/// Number of tokens in the generated completion.
+		pub completion_tokens: u32,
+		/// Total number of tokens used in the request (prompt + completion).
+		pub total_tokens: u32,
+		/// Breakdown of tokens used in a completion.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub completion_tokens_details: Option<UsageCompletionDetails>,
+		/// Breakdown of tokens used in the prompt.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub prompt_tokens_details: Option<UsagePromptDetails>,
+
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_read_input_tokens: Option<u64>,
+		/// Tokens written to cache (costs)
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_creation_input_tokens: Option<u64>,
+	}
+
+	#[derive(Debug, Deserialize, Clone, Serialize)]
 	/// Represents a streamed chunk of a chat completion response returned by model, based on the provided input.
 	pub struct StreamResponse {
 		/// A unique identifier for the chat completion. Each chunk has the same ID.
@@ -384,7 +456,7 @@ pub mod typed {
 
 		/// An optional field that will only be present when you set `stream_options: {"include_usage": true}` in your request.
 		/// When present, it contains a null value except for the last chunk which contains the token usage statistics for the entire request.
-		pub usage: Option<CompletionUsage>,
+		pub usage: Option<Usage>,
 	}
 
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]

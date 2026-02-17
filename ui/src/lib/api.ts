@@ -9,7 +9,7 @@ import {
   subscribeXdsMode,
 } from "@/hooks/use-xds-mode";
 
-const API_URL = process.env.NODE_ENV === "production" ? "" : "http://localhost:15000";
+export const API_URL = process.env.NODE_ENV === "production" ? "" : "http://localhost:15000";
 
 let currentXdsMode = isXdsMode();
 subscribeXdsMode((xdsMode) => {

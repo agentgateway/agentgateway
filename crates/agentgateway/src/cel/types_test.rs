@@ -56,6 +56,9 @@ fn build_test_request() -> crate::http::Request {
 		total_tokens: Some(150),
 		first_token: None,
 		count_tokens: None,
+		reasoning_tokens: None,
+		cache_creation_input_tokens: None,
+		cached_input_tokens: None,
 		prompt: None,
 		completion: Some(vec!["Hello world".to_string()]),
 		params: llm::LLMRequestParams::default(),
@@ -84,6 +87,28 @@ fn test_executor_snapshot_round_trip() {
 
 	// Create executor from snapshot
 	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None);
+
+	// Serialize to JSON
+	let json = exec_to_json(&executor1);
+
+	// Deserialize into ExecutorSerde
+	let exec_snapshot: ExecutorSerde =
+		serde_json::from_value(json.clone()).expect("failed to deserialize ExecutorSerde");
+
+	// Build executor from ExecutorSerde
+	let executor2 = exec_snapshot.as_executor();
+
+	// Serialize again
+	let json2 = exec_to_json(&executor2);
+
+	// They should be identical
+	assert_eq!(json, json2, "Round-trip serialization mismatch");
+}
+
+#[test]
+fn test_executor_round_trip() {
+	let exec = full_example_executor();
+	let executor1 = exec.as_executor();
 
 	// Serialize to JSON
 	let json = exec_to_json(&executor1);

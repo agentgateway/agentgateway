@@ -569,3 +569,47 @@ pub struct ToolUseBlockStart {
 	#[allow(dead_code)]
 	pub name: String,
 }
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum BedrockEmbeddingType {
+	Float,
+	Binary,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AmazonTitanV2EmbeddingRequest {
+	pub input_text: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub dimensions: Option<u32>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub normalize: Option<bool>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub embedding_types: Option<Vec<BedrockEmbeddingType>>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AmazonTitanV2EmbeddingResponse {
+	#[serde(default)]
+	pub embedding: Vec<f32>,
+	#[serde(default)]
+	pub embeddings_by_type: HashMap<String, serde_json::Value>,
+	pub input_text_token_count: usize,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct CohereEmbeddingRequest {
+	pub texts: Vec<String>,
+	pub input_type: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub truncate: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct CohereEmbeddingResponse {
+	pub embeddings: Vec<Vec<f32>>,
+	pub id: String,
+	pub texts: Vec<String>,
+}

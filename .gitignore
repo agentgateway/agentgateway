@@ -5,3 +5,5 @@
 .venv
 *.local
 var/
+controller/_output
+controller/_test

@@ -1,0 +1,5 @@
+{
+  "model": "text-embedding-3-small",
+  "input": "hello world",
+  "dimensions": 1024
+}

@@ -1,0 +1,17 @@
+{{- if .Values.controller.horizontalPodAutoscaler }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "agentgateway.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "agentgateway.fullname" . }}
+  {{- with .Values.controller.horizontalPodAutoscaler }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end }}

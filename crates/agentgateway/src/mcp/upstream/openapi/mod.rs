@@ -142,7 +142,7 @@ fn resolve_nested_schema<'a>(
 		SchemaKind::Not { not } => {
 			let temp_ref = (**not).clone();
 			let resolved = resolve_nested_schema(&temp_ref, doc)?;
-			*not = Box::new(ReferenceOr::Item(resolved));
+			**not = ReferenceOr::Item(resolved);
 		},
 		SchemaKind::Any(any_schema) => {
 			// Properties
@@ -181,7 +181,7 @@ fn resolve_nested_schema<'a>(
 			if let Some(not_box) = any_schema.not.as_mut() {
 				let temp_ref = (**not_box).clone();
 				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				*not_box = Box::new(ReferenceOr::Item(resolved));
+				**not_box = ReferenceOr::Item(resolved);
 			}
 		},
 		// Base types (String, Number, Integer, Boolean) - no nested schemas to resolve further
@@ -374,6 +374,7 @@ pub(crate) fn parse_openapi_schema(
 								))?
 								.clone();
 							let tool = Tool {
+								execution: None,
 								meta: None,
 								annotations: None,
 								name: Cow::Owned(name.clone()),
@@ -644,10 +645,18 @@ impl Handler {
 				let res = self
 					.call_tool(ctr.params.name.as_ref(), ctr.params.arguments, ctx)
 					.await?;
+
+				// Serialize structured content to JSON string for backwards compatibility
+				// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
+				//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
+				// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
+				let serialized_content = serde_json::to_string(&res)
+					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
+
 				Messages::from_result(
 					id,
 					CallToolResult {
-						content: vec![],
+						content: vec![Content::text(serialized_content)],
 						structured_content: Some(res),
 						is_error: None,
 						meta: None,
@@ -854,7 +863,7 @@ impl Handler {
 			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
 			let body_bytes = crate::http::compression::to_bytes_with_decompression(
 				response.into_body(),
-				content_encoding,
+				content_encoding.as_ref(),
 				lim,
 			)
 			.await

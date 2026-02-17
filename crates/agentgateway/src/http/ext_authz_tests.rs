@@ -426,7 +426,7 @@ fn test_append_action_append_if_exists_or_add() {
 				value: "new-value".to_string(),
 				raw_value: vec![],
 			}),
-			append: None,
+			append: Some(true),
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		},
 		HeaderValueOption {
@@ -435,7 +435,7 @@ fn test_append_action_append_if_exists_or_add() {
 				value: "added".to_string(),
 				raw_value: vec![],
 			}),
-			append: None,
+			append: Some(true),
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		},
 	];
@@ -447,6 +447,46 @@ fn test_append_action_append_if_exists_or_add() {
 	assert_eq!(values.len(), 2);
 	assert_eq!(values[0], "existing");
 	assert_eq!(values[1], "new-value");
+
+	// Should add new header
+	assert_eq!(headers.get("x-new").unwrap(), "added");
+}
+
+#[test]
+fn test_default_append_action_overwrite() {
+	let mut headers = HeaderMap::new();
+
+	// Pre-existing header with multiple values
+	headers.append("x-test", "value1".parse().unwrap());
+	headers.append("x-test", "value2".parse().unwrap());
+
+	let header_options = vec![
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-test".to_string(),
+				value: "overwritten".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: 0, // default
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-new".to_string(),
+				value: "added".to_string(),
+				raw_value: vec![],
+			}),
+			append: None,
+			append_action: 0,
+		},
+	];
+
+	super::process_headers(&mut headers, header_options, None);
+
+	// Should replace all existing values with single new value
+	let values: Vec<_> = headers.get_all("x-test").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "overwritten");
 
 	// Should add new header
 	assert_eq!(headers.get("x-new").unwrap(), "added");
@@ -632,7 +672,7 @@ fn test_append_action_multiple_set_cookie_headers() {
 				value: "access_token=abc123; Path=/; HttpOnly".to_string(),
 				raw_value: vec![],
 			}),
-			append: None,
+			append: Some(true),
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		},
 		HeaderValueOption {
@@ -641,7 +681,7 @@ fn test_append_action_multiple_set_cookie_headers() {
 				value: "id_token=xyz789; Path=/; HttpOnly".to_string(),
 				raw_value: vec![],
 			}),
-			append: None,
+			append: Some(true),
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		},
 		HeaderValueOption {
@@ -650,7 +690,7 @@ fn test_append_action_multiple_set_cookie_headers() {
 				value: "session=def456; Path=/; Secure".to_string(),
 				raw_value: vec![],
 			}),
-			append: None,
+			append: Some(true),
 			append_action: HeaderAppendAction::AppendIfExistsOrAdd as i32,
 		},
 	];

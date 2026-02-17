@@ -1,0 +1,417 @@
+_err: 'must be at least 1 second'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: invalid-internval
+spec:
+  frontend:
+    tcp:
+      keepalive:
+        interval: 100ms
+---
+_err: 'sni in body should be at least 1 char'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-sni-short
+spec:
+  backend:
+    tls:
+      sni: ""
+---
+_err: "randomSampling in body must be of type string"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tracing-invalid-expression
+spec:
+  frontend:
+    tracing:
+      backendRef:
+        name: otel-collector
+        kind: Service
+      protocol: GRPC
+      randomSampling: false
+---
+_err: 'insecureSkipVerify All and caCertificateRefs may not be set together'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-invalid-combo-1
+spec:
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: ca-bundle
+      insecureSkipVerify: All
+---
+_err: 'at most one of the fields in'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-invalid-combo-2
+spec:
+  backend:
+    tls:
+      verifySubjectAltNames:
+        - "example.com"
+      insecureSkipVerify: All
+---
+_err: 'connectTimeout must be at least 100ms'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tcp-timeout-short
+spec:
+  backend:
+    tcp:
+      connectTimeout: 50ms
+---
+_err: 'invalid duration value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tcp-invalid-duration
+spec:
+  backend:
+    tcp:
+      connectTimeout: 5seconds
+---
+_err: 'keepalive.retries'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tcp-keepalive-retries-low
+spec:
+  backend:
+    tcp:
+      keepalive:
+        retries: 0
+---
+_err: 'keepalive.retries'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tcp-keepalive-retries-high
+spec:
+  backend:
+    tcp:
+      keepalive:
+        retries: 100
+---
+_err: 'time must be at least 1 second'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tcp-keepalive-time-short
+spec:
+  backend:
+    tcp:
+      keepalive:
+        time: 500ms
+---
+_err: 'interval must be at least 1 second'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tcp-keepalive-interval-short
+spec:
+  backend:
+    tcp:
+      keepalive:
+        interval: 100ms
+---
+_err: 'http.maxBufferSize'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-buffer-small
+spec:
+  frontend:
+    http:
+      maxBufferSize: 0
+---
+_err: 'http.http1MaxHeaders'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-headers-small
+spec:
+  frontend:
+    http:
+      http1MaxHeaders: 0
+---
+_err: 'http.http1IdleTimeout'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-idle-short
+spec:
+  frontend:
+    http:
+      http1IdleTimeout: 500ms
+---
+_err: 'http.http1IdleTimeout'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-idle-invalid
+spec:
+  frontend:
+    http:
+      http1IdleTimeout: 10minutes
+---
+_err: 'http.http2WindowSize'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http2-window-small
+spec:
+  frontend:
+    http:
+      http2WindowSize: 0
+---
+_err: 'keepalive.retries'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-tcp-retries-low
+spec:
+  frontend:
+    tcp:
+      keepalive:
+        retries: 0
+---
+_err: 'backendRef: Required'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-no-backend
+spec:
+  traffic:
+    extAuth:
+      forwardBody:
+        maxSize: 1024
+---
+_err: 'exactly one of the fields in [requests tokens] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-both
+spec:
+  traffic:
+    rateLimit:
+      local:
+        - requests: 100
+          tokens: 1000
+          unit: Minutes
+---
+_err: 'exactly one of the fields in [requests tokens] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-neither
+spec:
+  traffic:
+    rateLimit:
+      local:
+        - unit: Minutes
+---
+_err: 'unit: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-invalid-unit
+spec:
+  traffic:
+    rateLimit:
+      local:
+        - requests: 100
+          unit: Days
+---
+_err: 'unit: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-global-invalid-unit
+spec:
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          name: ratelimit-service
+          kind: Service
+        descriptors:
+          - entries:
+              - name: user
+                expression: 'request.headers["x-user"]'
+            unit: Minutes
+---
+_err: 'phase: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-invalid-phase
+spec:
+  traffic:
+    phase: Backend
+    transformation:
+      request:
+        set:
+          - name: X-Test
+            value: '"test"'
+---
+_err: 'pseudo-headers must be one of'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: transform-bad-pseudo
+spec:
+  traffic:
+    transformation:
+      request:
+        set:
+          - name: :bogus
+            value: '"test"'
+---
+_err: 'protocol: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-tracing-invalid-protocol
+spec:
+  frontend:
+    tracing:
+      backendRef:
+        name: otel-collector
+        kind: Service
+      protocol: TCP
+---
+_err: 'hostRewrite: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-hostrewrite-invalid
+spec:
+  traffic:
+    hostRewrite: Custom
+---
+_err: ' exactly one of the fields in [targetRefs targetSelectors] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ref-and-selector
+spec:
+  targetRefs:
+    - group: gateway.kgateway.dev
+      kind: Backend
+      name: f1
+  targetSelectors:
+    - group: "gateway.kgateway.dev"
+      kind: Backend
+      matchLabels:
+        app: foo
+---
+_err: 'Only one Kind of targetRef can be set on one policy'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: two-kinds
+spec:
+  targetRefs:
+    - group: gateway.kgateway.dev
+      kind: Backend
+      name: f1
+    - group: ""
+      kind: Service
+      name: s2
+---
+_err: 'At least one of traffic, frontend, or backend must be provided'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-hostrewrite-invalid
+spec:
+  targetRefs:
+    - group: gateway.kgateway.dev
+      kind: Backend
+      name: f1
+---
+_err: 'backend.mcp may not be used with a Service target'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-backend
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: f1
+  backend:
+    mcp:
+      authorization:
+        policy:
+          matchExpressions:
+          - 'true'
+---
+_err: 'backend.ai may not be used with a Service target'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ai-backend
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: f1
+  backend:
+    ai:
+      defaults:
+        - field: a
+          value: b
+---
+_err: "targetRefs may only"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: bad-group
+spec:
+  targetRefs:
+    - group: ""
+      kind: Backend
+      name: dummy
+---
+_err: "the 'traffic.phase=PreRouting' field can only target a Gateway or XListenerSet"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-invalid-phase-policy
+spec:
+  targetRefs:
+    - group: "gateway.networking.k8s.io"
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    phase: PreRouting
+    transformation:
+      request:
+        set:
+          - name: X-Gateway
+            value: '"true"'
+---
+_err: "phase PreRouting only supports extAuth, transformation, "
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-invalid-phase-policy-rule
+spec:
+  targetRefs:
+    - group: "gateway.networking.k8s.io"
+      kind: Gateway
+      name: dummy
+  traffic:
+    phase: PreRouting
+    rateLimit:
+      local:
+        - requests: 100
+          unit: Minutes

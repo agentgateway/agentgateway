@@ -424,7 +424,7 @@ pub async fn mcp_streamable_client(
 	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
-		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
+		StreamableHttpClientTransport::<legacyreqwest::Client>::from_uri(format!("http://{s}/mcp"));
 	let client_info = ClientInfo {
 		meta: None,
 		protocol_version: Default::default(),
@@ -435,6 +435,7 @@ pub async fn mcp_streamable_client(
 			title: None,
 			website_url: None,
 			icons: None,
+			description: None,
 		},
 	};
 
@@ -456,7 +457,7 @@ pub async fn mcp_sse_client(s: SocketAddr) -> LegacyService {
 	use legacy_rmcp::ServiceExt;
 	use legacy_rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
 	use legacy_rmcp::transport::SseClientTransport;
-	let transport = SseClientTransport::<reqwest::Client>::start(format!("http://{s}/sse"))
+	let transport = SseClientTransport::<legacyreqwest::Client>::start(format!("http://{s}/sse"))
 		.await
 		.unwrap();
 	let client_info = ClientInfo {

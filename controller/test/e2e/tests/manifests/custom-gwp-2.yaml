@@ -1,0 +1,7 @@
+gatewayClassParametersRefs:
+  kgateway:
+    name: custom-gwp-2
+    namespace: kgateway-test
+  agentgateway:
+    name: custom-agwp-2
+    namespace: kgateway-test

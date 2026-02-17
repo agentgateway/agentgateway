@@ -833,6 +833,25 @@ message BackendPolicySpec {
       repeated BackendPolicySpec inline_policies = 2;
     }
 
+    message BedrockGuardrails {
+      string identifier = 1;
+      string version = 2;
+      // AWS region where the guardrail is deployed (e.g., "us-west-2")
+      string region = 3;
+
+      repeated BackendPolicySpec inline_policies = 4;
+    }
+
+    message GoogleModelArmor {
+      string template_id = 1;
+      string project_id = 2;
+
+      // default: us-central1 
+      optional string location = 3;
+
+      repeated BackendPolicySpec inline_policies = 4;
+    }
+
     // Response sent when rejecting a request
     message RequestRejection {
       bytes body = 1;
@@ -846,6 +865,8 @@ message BackendPolicySpec {
       oneof kind {
         RegexRules regex = 2;
         Webhook webhook = 3;
+        GoogleModelArmor google_model_armor = 4;
+        BedrockGuardrails bedrock_guardrails = 5;
       }
     }
 
@@ -857,6 +878,8 @@ message BackendPolicySpec {
         RegexRules regex = 2;
         Webhook webhook = 3;
         Moderation openai_moderation = 4;
+        GoogleModelArmor google_model_armor = 5;
+        BedrockGuardrails bedrock_guardrails = 6;
       }
     }
 

@@ -1,0 +1,45 @@
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-example-disableall
+spec:
+  parentRefs:
+    - name: super-gateway
+  hostnames:
+    - "disableall.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+# TODO: add support for disable
+#apiVersion: gateway.kgateway.dev/v1alpha1
+#kind: AgentgatewayPolicy
+#metadata:
+#  name: insecure-route-policy2
+#spec:
+#  targetRefs:
+#  - group: gateway.networking.k8s.io
+#    kind: HTTPRoute
+#    name: route-example-disableall
+#  traffic:
+#    extAuth:
+#      disable: {}
+---
+## On a route that is not part of the gw gateway opt in
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: secure-route-policy2
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: route-example-disableall
+  traffic:
+    extAuth:
+      grpc: {}
+      backendRef:
+        name: ext-authz
+        port: 4444

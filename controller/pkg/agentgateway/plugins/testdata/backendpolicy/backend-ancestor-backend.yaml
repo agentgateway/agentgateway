@@ -1,0 +1,53 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: default
+spec:
+  static:
+    host: example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: AgentgatewayBackend
+    name: be
+    group: agentgateway.dev
+  backend:
+    tls:
+      mtlsCertificateRef:
+        - name: mtls
+---
+# Output
+output:
+- Policy:
+    backend:
+      backendTls: {}
+    key: default/agw:tls:default/be
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      backend:
+        name: be
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: be
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: secret default/mtls not found
+      reason: PartiallyValid
+      status: "True"
+      type: Accepted
+    controllerName: agentgateway.dev/agentgateway

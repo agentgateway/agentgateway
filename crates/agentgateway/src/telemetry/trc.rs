@@ -587,7 +587,7 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 mod traceparent {
 	use std::fmt;
 
-	use rand::Rng;
+	use rand::RngExt;
 
 	use crate::http::Request;
 

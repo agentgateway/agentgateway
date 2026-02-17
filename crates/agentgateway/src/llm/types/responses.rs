@@ -53,6 +53,26 @@ pub struct Response {
 pub struct Usage {
 	pub input_tokens: u64,
 	pub output_tokens: u64,
+	/// Breakdown of tokens used in a completion.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_tokens_details: Option<UsageInputDetails>,
+	/// Breakdown of tokens used in the prompt.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_tokens_details: Option<UsageOutputDetails>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct UsageOutputDetails {
+	pub reasoning_tokens: Option<u64>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct UsageInputDetails {
+	pub cached_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -84,6 +104,7 @@ impl ResponseBuilder {
 			billing: None,
 			conversation: None,
 			created_at: self.created_at,
+			completed_at: None,
 			error,
 			id: self.response_id.clone(),
 			incomplete_details,
@@ -350,6 +371,10 @@ impl RequestType for Request {
 	) -> Result<Vec<u8>, AIError> {
 		conversion::bedrock::from_responses::translate(self, provider, headers, prompt_caching)
 	}
+
+	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
+		self.to_openai()
+	}
 }
 
 impl ResponseType for Response {
@@ -362,6 +387,17 @@ impl ResponseType for Response {
 				.usage
 				.as_ref()
 				.map(|u| u.input_tokens + u.output_tokens),
+			reasoning_tokens: self.usage.as_ref().and_then(|u| {
+				u.output_tokens_details
+					.as_ref()
+					.and_then(|d| d.reasoning_tokens)
+			}),
+			cached_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.input_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens)
+			}),
+			cache_creation_input_tokens: None,
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
 				Some(

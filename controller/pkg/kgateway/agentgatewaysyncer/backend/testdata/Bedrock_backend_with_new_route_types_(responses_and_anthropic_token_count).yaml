@@ -1,0 +1,20 @@
+ai:
+  providerGroups:
+  - providers:
+    - bedrock:
+        region: us-east-1
+      name: backend
+inlinePolicies:
+- ai:
+    routes:
+      /v1/chat/completions: COMPLETIONS
+      /v1/embeddings: EMBEDDINGS
+      /v1/messages: MESSAGES
+      /v1/messages/count_tokens: ANTHROPIC_TOKEN_COUNT
+      /v1/models: MODELS
+      /v1/realtime: REALTIME
+      /v1/responses: RESPONSES
+key: test-ns/bedrock-with-new-routes
+name:
+  name: bedrock-with-new-routes
+  namespace: test-ns

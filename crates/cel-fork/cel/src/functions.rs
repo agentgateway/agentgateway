@@ -226,7 +226,7 @@ pub fn contains<'a>(
 				false
 			}
 		},
-		_ => false,
+		_ => return Err(ftx.error("contains does not support this type")),
 	}))
 }
 

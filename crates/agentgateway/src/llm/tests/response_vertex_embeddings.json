@@ -1,0 +1,22 @@
+{
+  "predictions": [
+    {
+      "embeddings": {
+        "values": [0.1, 0.2, 0.3],
+        "statistics": {
+          "token_count": 4,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "embeddings": {
+        "values": [0.4, 0.5, 0.6],
+        "statistics": {
+          "token_count": 5,
+          "truncated": false
+        }
+      }
+    }
+  ]
+}

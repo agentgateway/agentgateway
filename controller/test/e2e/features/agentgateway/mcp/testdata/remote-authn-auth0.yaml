@@ -1,0 +1,155 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend
+spec:
+  mcp:
+    targets:
+      - name: mcp-target
+        static:
+          host: mcp-website-fetcher.default.svc.cluster.local
+          port: 80
+          protocol: SSE
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-route
+spec:
+  parentRefs:
+    - name: gateway
+      namespace: agentgateway-base
+      sectionName: http
+  rules:
+  - matches:
+      # need to get redirect address from OAuth server as part of OAuth Authentication flow when testing with mcp inspector
+      - path:
+          type: PathPrefix
+          value: /.well-known/oauth-authorization-server
+    backendRefs:
+      - name: auth0-mock
+        port: 8443
+  - matches:
+      - path:
+          type: PathPrefix
+          value: /
+    backendRefs:
+      - name: mcp-backend
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: idp-route
+spec:
+  parentRefs:
+    - name: gateway
+      namespace: agentgateway-base
+      sectionName: http
+  rules:
+  - matches:
+      - path:
+          type: PathPrefix
+          value: /.well-known/oauth-protected-resource
+    backendRefs:
+      - name: auth0-mock
+        port: 8443
+  - matches:
+      - path:
+          type: PathPrefix
+          value: /register
+    backendRefs:
+      - name: auth0-mock
+        port: 8443
+  - matches:
+      - path:
+          type: PathPrefix
+          value: /token
+    backendRefs:
+      - name: auth0-mock
+        port: 8443
+  - matches:
+      - path:
+          type: PathPrefix
+          value: /.well-known/jwks.json
+    backendRefs:
+      - name: auth0-mock
+        port: 8443
+  - matches:
+      - path:
+          type: PathPrefix
+          value: /authorize
+    backendRefs:
+      - name: auth0-mock
+        port: 8443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-policy
+spec:
+  targetRefs:
+    - name: mcp-route
+      kind: HTTPRoute
+      group: gateway.networking.k8s.io
+  traffic:
+    transformation:
+      response:
+        body: 'request.path == "/.well-known/oauth-protected-resource" ? json(response.body).merge({"resource": "http://localhost:8080"}) : response.body'
+    cors:
+      allowOrigins:
+        - '*'
+      allowMethods:
+        - GET
+        - POST
+        - OPTIONS
+      allowHeaders:
+        - mcp-protocol-version
+        - content-type
+        - authorization
+      allowCredentials: true
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: auth0-mcp-authn-policy
+spec:
+  targetRefs:
+    - name: mcp-backend
+      kind: AgentgatewayBackend
+      group: agentgateway.dev
+  backend:
+    mcp:
+      authentication:
+        mode: Strict
+        issuer: https://kgateway.dev
+        jwks:
+          jwksPath: .well-known/jwks.json
+          backendRef:
+            group: ""
+            kind: Service
+            name: auth0-mock
+            port: 8443
+        provider: Auth0
+        audiences:
+          - "account"
+        resourceMetadata:
+          resource: http://mcp-website-fetcher.default.svc.cluster.local/mcp
+          scopesSupported: '["tools/call/fetch"]'
+          bearerMethodsSupported: '["header"]'
+          resourceDocumentation: http://mcp-website-fetcher.default.svc.cluster.local/docs
+          resourcePolicyUri: http://mcp-website-fetcher.default.svc.cluster.local/policies
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: idp-policy
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: auth0-mock
+  backend:
+    tls:
+      insecureSkipVerify: All

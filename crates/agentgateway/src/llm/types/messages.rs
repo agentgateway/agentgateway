@@ -107,6 +107,10 @@ pub struct Content {
 pub struct Usage {
 	pub input_tokens: u64,
 	pub output_tokens: u64,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_read_input_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -211,6 +215,15 @@ impl RequestType for Request {
 	) -> Result<Vec<u8>, AIError> {
 		conversion::bedrock::from_messages::translate(self, provider, headers)
 	}
+
+	fn to_vertex(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
+		if provider.is_anthropic_model(self.model.as_deref()) {
+			let body = self.to_anthropic()?;
+			provider.prepare_anthropic_message_body(body)
+		} else {
+			self.to_openai()
+		}
+	}
 }
 
 pub fn prepend_prompts_helper(
@@ -298,6 +311,9 @@ impl ResponseType for Response {
 			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
+			reasoning_tokens: None,
+			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
+			cached_input_tokens: self.usage.cache_read_input_tokens,
 			completion: if include_completion_in_log {
 				Some(
 					self

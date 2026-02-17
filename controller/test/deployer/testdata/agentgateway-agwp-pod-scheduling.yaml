@@ -1,0 +1,73 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: pod-scheduling-params
+  namespace: default
+spec:
+  image:
+    registry: ""
+    repository: agentgateway
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  deployment:
+    spec:
+      template:
+        spec:
+          nodeSelector:
+            node-type: agent
+            zone: us-west-1a
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/arch
+                        operator: In
+                        values:
+                          - amd64
+                          - arm64
+          tolerations:
+            - key: dedicated
+              operator: Equal
+              value: agent-gateway
+              effect: NoSchedule
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: DoNotSchedule
+              labelSelector:
+                matchLabels:
+                  app: agentgateway
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 2000
+            fsGroup: 3000
+            sysctls: null
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: pod-scheduling-params
+    namespace: default
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same

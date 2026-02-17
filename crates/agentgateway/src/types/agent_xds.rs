@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
@@ -316,6 +316,32 @@ fn convert_backend_ai_policy(
 					};
 					llm::policy::RequestGuardKind::OpenAIModeration(md)
 				},
+				Kind::GoogleModelArmor(gma) => {
+					let pols = gma
+						.inline_policies
+						.iter()
+						.map(BackendPolicy::try_from)
+						.collect::<Result<Vec<_>, _>>()?;
+					llm::policy::RequestGuardKind::GoogleModelArmor(llm::policy::GoogleModelArmor {
+						template_id: strng::new(&gma.template_id),
+						project_id: strng::new(&gma.project_id),
+						location: gma.location.as_ref().map(strng::new),
+						policies: pols,
+					})
+				},
+				Kind::BedrockGuardrails(bg) => {
+					let pols = bg
+						.inline_policies
+						.iter()
+						.map(BackendPolicy::try_from)
+						.collect::<Result<Vec<_>, _>>()?;
+					llm::policy::RequestGuardKind::BedrockGuardrails(llm::policy::BedrockGuardrails {
+						guardrail_identifier: strng::new(&bg.identifier),
+						guardrail_version: strng::new(&bg.version),
+						region: strng::new(&bg.region),
+						policies: pols,
+					})
+				},
 			};
 			Ok(llm::policy::RequestGuard { rejection, kind })
 		});
@@ -342,6 +368,32 @@ fn convert_backend_ai_policy(
 				},
 				response_guard::Kind::Webhook(wh) => {
 					llm::policy::ResponseGuardKind::Webhook(convert_webhook(wh).ok()?)
+				},
+				response_guard::Kind::GoogleModelArmor(gma) => {
+					let pols = gma
+						.inline_policies
+						.iter()
+						.filter_map(|p| BackendPolicy::try_from(p).ok())
+						.collect::<Vec<_>>();
+					llm::policy::ResponseGuardKind::GoogleModelArmor(llm::policy::GoogleModelArmor {
+						template_id: strng::new(&gma.template_id),
+						project_id: strng::new(&gma.project_id),
+						location: gma.location.as_ref().map(strng::new),
+						policies: pols,
+					})
+				},
+				response_guard::Kind::BedrockGuardrails(bg) => {
+					let pols = bg
+						.inline_policies
+						.iter()
+						.filter_map(|p| BackendPolicy::try_from(p).ok())
+						.collect::<Vec<_>>();
+					llm::policy::ResponseGuardKind::BedrockGuardrails(llm::policy::BedrockGuardrails {
+						guardrail_identifier: strng::new(&bg.identifier),
+						guardrail_version: strng::new(&bg.version),
+						region: strng::new(&bg.region),
+						policies: pols,
+					})
 				},
 			};
 			Some(llm::policy::ResponseGuard { rejection, kind })
@@ -504,13 +556,16 @@ impl TryFrom<(proto::agent::Protocol, Option<&proto::agent::TlsConfig>)> for Lis
 	}
 }
 
-impl TryFrom<&proto::agent::Bind> for Bind {
-	type Error = ProtoError;
-
-	fn try_from(s: &proto::agent::Bind) -> Result<Self, Self::Error> {
+impl Bind {
+	pub fn try_from_xds(s: &proto::agent::Bind, ipv6_enabled: bool) -> Result<Self, ProtoError> {
+		let address = if cfg!(target_family = "unix") && ipv6_enabled {
+			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), s.port as u16)
+		} else {
+			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), s.port as u16)
+		};
 		Ok(Self {
 			key: s.key.clone().into(),
-			address: SocketAddr::from((IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]), s.port as u16)),
+			address,
 			listeners: Default::default(),
 			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,

@@ -1,0 +1,35 @@
+name: Download cache and Upload
+
+# Debug the cache. Example to run:
+# KEY=setup-go-Linux-x64-ubuntu24-go-1.25.7-db3f66b86a16be31d89e16ce08f217df90c50b79a7cf6877f62fc3d1fc880727; VERSION="$(gh cache list --json id,key,version -q ".[] | select(.key == \"$KEY\").version")"; gh workflow run debug_cache.yml -f cache_key=$KEY -f version=$VERSION
+on:
+  workflow_dispatch:
+    inputs:
+      cache_key:
+        description: 'Cache key'
+        required: true
+        type: string
+      version:
+        description: 'Cache hash version'
+        required: true
+        type: string
+jobs:
+  cache-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore cache
+        uses: Andrej730/cache/restore@e294f7d180f76c94062d0251c60fe7362ce6667d
+        with:
+          path: .
+          version: ${{ github.event.inputs.version }}
+          key: ${{ github.event.inputs.cache_key }}
+
+      - name: Upload cached folder as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-artifact
+          path: |
+            /home/runner/work/**/*.tzst

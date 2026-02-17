@@ -1,0 +1,30 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 38
+description: src/llm/tests/response_bedrock_titan_embeddings.json
+info:
+  embedding:
+    - 0.1
+    - 0.2
+    - 0.3
+  inputTextTokenCount: 3
+---
+{
+  "object": "list",
+  "model": "amazon.titan-embed-text-v2:0",
+  "data": [
+    {
+      "index": 0,
+      "object": "embedding",
+      "embedding": [
+        0.1,
+        0.2,
+        0.3
+      ]
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 3,
+    "total_tokens": 3
+  }
+}

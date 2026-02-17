@@ -1,0 +1,86 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: grpc-header-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: test-gateway
+  hostnames:
+  - grpc.example.com
+  rules:
+  - matches:
+    - method:
+        service: example.Service
+        method: GetUser
+      headers:
+      - type: Exact
+        name: authorization
+        value: Bearer token
+    backendRefs:
+    - name: grpc-service
+      port: 9090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-service
+  namespace: default
+spec:
+  ports:
+  - port: 9090
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 9090
+          service:
+            hostname: grpc-service.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - grpc.example.com
+      key: default/grpc-header-route.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - headers:
+        - exact: Bearer token
+          name: authorization
+        path:
+          exact: /example.Service/GetUser
+      name:
+        kind: GRPCRoute
+        name: grpc-header-route
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: GRPCRoute
+  metadata:
+    name: grpc-header-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

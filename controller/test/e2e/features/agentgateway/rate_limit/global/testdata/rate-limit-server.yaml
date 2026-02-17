@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kgateway-test-extensions
+spec: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ratelimit-config
+  namespace: kgateway-test-extensions
+immutable: true
+data:
+  config.yaml: |
+    domain: api-gateway
+    descriptors:
+      - key: remote_address
+        rate_limit:
+          unit: minute
+          requests_per_unit: 1
+      - key: path
+        value: "/path1"
+        rate_limit:
+          unit: minute
+          requests_per_unit: 1
+      - key: path
+        value: "/path2"
+        rate_limit:
+          unit: minute
+          requests_per_unit: 2
+      - key: X-User-ID
+        rate_limit:
+          unit: minute
+          requests_per_unit: 1
+      - key: X-User-ID
+        value: user1
+        rate_limit:
+          unit: minute
+          requests_per_unit: 1
+      - key: service
+        value: premium-api
+        rate_limit:
+          unit: minute
+          requests_per_unit: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: kgateway-test-extensions
+spec:
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: kgateway-test-extensions
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.4.3
+        ports:
+        - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ratelimit
+  namespace: kgateway-test-extensions
+spec:
+  ports:
+  - port: 8081
+    name: grpc
+    targetPort: 8081
+    appProtocol: kubernetes.io/h2c
+  selector:
+    app.kubernetes.io/name: ratelimit
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ratelimit
+  namespace: kgateway-test-extensions
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ratelimit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ratelimit
+    spec:
+      initContainers:
+      - name: wait-for-redis
+        image: docker.io/envoyproxy/ratelimit:3e085e5b
+        command: ["/bin/sh", "-c", "until timeout 1 nc -z redis 6379; do echo waiting for redis; sleep .1; done"]
+      containers:
+      - name: ratelimit
+        image: docker.io/envoyproxy/ratelimit:3e085e5b
+        command: ["/bin/ratelimit"]
+        ports:
+        - containerPort: 8081
+          name: grpc
+        - containerPort: 6070
+          name: debug
+        env:
+        - name: USE_STATSD
+          value: "false"
+        - name: LOG_LEVEL
+          value: "debug"
+        - name: RUNTIME_ROOT
+          value: /data
+        - name: RUNTIME_SUBDIRECTORY
+          value: ratelimit
+        - name: RUNTIME_IGNOREDOTFILES
+          value: "true"
+        - name: REDIS_SOCKET_TYPE
+          value: "tcp"
+        - name: REDIS_URL
+          value: "redis:6379"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /data/ratelimit/config
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ratelimit-config

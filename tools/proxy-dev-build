@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -e
+
+get-tag () {
+  if [[ -n "${TAG:-""}" ]]
+  then
+    echo ${TAG}
+  else
+    echo `date +%s`
+  fi
+}
+
+profile="${1:-dev}"
+platform="${2:-}"
+tgt="${profile}"
+if [[ $tgt == "dev" ]]; then
+  tgt=debug
+fi
+
+cargo build --profile "${profile}" ${platform:+--target $platform} ${TIMINGS+--timings} || exit 1
+if [[ "${DRY_RUN}" == "" ]]; then
+  exit 0
+fi
+tag="$(get-tag)"
+dest="localhost:5000/agentgateway:${tag}"
+crane mutate --platform linux/amd64 $(
+  crane append --platform linux/amd64 \
+    -f <(tar -f - -c ./target/${platform:+$platform/}${tgt}/agentgateway --transform "s|./target/${platform:+$platform/}${tgt}/|/usr/bin/|") \
+    -t ${dest} \
+    -b istio/base
+) --entrypoint /usr/bin/agentgateway -t ${dest} 1>&2
+echo ${tag}
+echo ${dest} 1>&2

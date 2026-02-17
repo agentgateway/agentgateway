@@ -1,0 +1,14 @@
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: tcp-app-1
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+      namespace: agentgateway-base
+  rules:
+    - name: test
+      backendRefs:
+        - name: backend
+          port: 80

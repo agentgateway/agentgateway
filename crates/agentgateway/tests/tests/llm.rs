@@ -44,7 +44,7 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
 	} else if provider == "vertex" {
 		r#"
               projectId: $VERTEX_PROJECT
-              region: us-central1
+              region: us-east5
               "#
 	} else if provider == "azureOpenAI" {
 		r#"
@@ -149,7 +149,7 @@ mod openai {
 		let Some(gw) = setup("openAI", "OPENAI_API_KEY", "text-embedding-3-small").await else {
 			return;
 		};
-		send_embeddings(&gw).await;
+		send_embeddings(&gw, None).await;
 	}
 }
 
@@ -202,6 +202,23 @@ mod bedrock {
 			return;
 		};
 		send_messages(&gw, true).await;
+	}
+
+	#[tokio::test]
+	async fn embeddings_titan() {
+		let Some(gw) = setup("bedrock", "", "amazon.titan-embed-text-v2:0").await else {
+			return;
+		};
+		send_embeddings(&gw, None).await;
+	}
+
+	#[tokio::test]
+	async fn embeddings_cohere() {
+		let Some(gw) = setup("bedrock", "", "cohere.embed-english-v3").await else {
+			return;
+		};
+		// Cohere does not respect overriding the dimension count
+		send_embeddings(&gw, Some(1024)).await;
 	}
 
 	#[tokio::test]
@@ -308,7 +325,7 @@ mod vertex {
 
 	#[tokio::test]
 	async fn completions_to_anthropic() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_completions(&gw, false).await;
@@ -316,9 +333,9 @@ mod vertex {
 
 	#[tokio::test]
 	#[ignore]
-	/// TODO(https://github.com/agentgateway/agentgateway/pull/800) support this
+	/// TODO(https://github.com/agentgateway/agentgateway/pull/909) support this
 	async fn completions_streaming_to_anthropic() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_completions(&gw, true).await;
@@ -334,7 +351,7 @@ mod vertex {
 
 	#[tokio::test]
 	async fn messages() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_messages(&gw, false).await;
@@ -342,26 +359,23 @@ mod vertex {
 
 	#[tokio::test]
 	async fn messages_streaming() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_messages(&gw, true).await;
 	}
 
 	#[tokio::test]
-	#[ignore]
-	// During testing I have been unable to make embeddings work at all with Vertex, with or without Agentgateway.
-	// This is plausibly from using the OpenAI compatible endpoint?
 	async fn embeddings() {
 		let Some(gw) = setup("vertex", "", "text-embedding-004").await else {
 			return;
 		};
-		send_embeddings(&gw).await;
+		send_embeddings(&gw, None).await;
 	}
 
 	#[tokio::test]
 	async fn token_count() {
-		let Some(gw) = setup("vertex", "", "anthropic/claude-3-haiku").await else {
+		let Some(gw) = setup("vertex", "", "claude-haiku-4-5@20251001").await else {
 			return;
 		};
 		send_anthropic_token_count(&gw).await;
@@ -408,7 +422,7 @@ mod azureopenai {
 		let Some(gw) = setup("azureOpenAI", "", "text-embedding-3-small").await else {
 			return;
 		};
-		send_embeddings(&gw).await;
+		send_embeddings(&gw, None).await;
 	}
 }
 
@@ -467,7 +481,7 @@ fn assert_count_log(path: &str, test_id: &str) {
 	assert!(!stream, "unexpected streaming value: {stream}");
 }
 
-fn assert_embeddings_log(path: &str, test_id: &str) {
+fn assert_embeddings_log(path: &str, test_id: &str, expected: u64) {
 	let logs = agent_core::telemetry::testing::find(&[
 		("scope", "request"),
 		("http.path", path),
@@ -476,7 +490,7 @@ fn assert_embeddings_log(path: &str, test_id: &str) {
 	assert_eq!(logs.len(), 1, "{logs:?}");
 	let log = logs.first().unwrap();
 	let count = log.get("embeddings").unwrap().as_i64().unwrap();
-	assert_eq!(count, 64, "unexpected count tokens: {count}");
+	assert_eq!(count, expected as i64, "unexpected count tokens: {count}");
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
 	assert!(!stream, "unexpected streaming value: {stream}");
 	let dim_count = log
@@ -484,7 +498,7 @@ fn assert_embeddings_log(path: &str, test_id: &str) {
 		.unwrap()
 		.as_u64()
 		.unwrap();
-	assert_eq!(dim_count, 64, "unexpected dimension count: {dim_count}");
+	assert_eq!(dim_count, 256, "unexpected dimension count: {dim_count}");
 	let enc_format = log
 		.get("gen_ai.request.encoding_formats")
 		.unwrap()
@@ -573,19 +587,49 @@ async fn send_anthropic_token_count(gw: &AgentGateway) {
 	assert_count_log("/v1/messages/count_tokens", &gw.test_id);
 }
 
-async fn send_embeddings(gw: &AgentGateway) {
+async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) {
+	use http_body_util::BodyExt;
+
 	let resp = gw
 		.send_request_json(
 			"http://localhost/v1/embeddings",
 			json!({
-				"dimensions": 64,
-				"max_tokens": 16,
+				"dimensions": 256,
 				"encoding_format": "float",
 				"input": "banana"
 			}),
 		)
 		.await;
 
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert_embeddings_log("/v1/embeddings", &gw.test_id);
+	let status = resp.status();
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	assert_eq!(status, StatusCode::OK, "response: {body}");
+
+	assert_eq!(body["object"], "list");
+	let data = body["data"].as_array().expect("data array");
+	assert_eq!(data.len(), 1, "expected one embedding");
+	assert_eq!(data[0]["object"], "embedding");
+	assert_eq!(data[0]["index"], 0);
+	let embedding = data[0]["embedding"].as_array().expect("embedding array");
+	assert_eq!(
+		embedding.len(),
+		expected_dimensions.unwrap_or(256),
+		"expected {} dimensions",
+		expected_dimensions.unwrap_or(256)
+	);
+	assert!(body["model"].is_string(), "expected model in response");
+	let prompt_tokens = body["usage"]["prompt_tokens"].as_u64().unwrap();
+	let total_tokens = body["usage"]["total_tokens"].as_u64().unwrap();
+	assert!(prompt_tokens > 0, "expected non-zero prompt_tokens");
+	assert_eq!(
+		prompt_tokens, total_tokens,
+		"embeddings should have prompt_tokens == total_tokens"
+	);
+
+	assert_embeddings_log(
+		"/v1/embeddings",
+		&gw.test_id,
+		expected_dimensions.unwrap_or(256) as u64,
+	);
 }

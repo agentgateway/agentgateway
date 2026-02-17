@@ -11,7 +11,6 @@ pub fn evaluate_command() -> anyhow::Result<()> {
 			args.first().map(|s| s.as_str()).unwrap_or("xtask")
 		);
 	}
-
 	let expression = &args[2];
 	let v = if args.len() == 4 {
 		let json_input = &args[3];

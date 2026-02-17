@@ -1,0 +1,233 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: network1-gateway
+  namespace: default
+  labels:
+    topology.istio.io/network: network1
+spec:
+  gatewayClassName: istio-remote
+  addresses:
+    - type: IPAddress
+      value: 192.168.10.1
+  listeners:
+    - name: cross-network
+      port: 15008
+      protocol: HBONE
+    - name: xds-tls
+      port: 15012
+      protocol: TLS
+status:
+  addresses:
+    - type: IPAddress
+      value: 192.168.10.1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: network2-gateway
+  namespace: default
+  labels:
+    topology.istio.io/network: network2
+spec:
+  gatewayClassName: istio-remote
+  addresses:
+    - type: IPAddress
+      value: 192.168.20.1
+  listeners:
+    - name: cross-network
+      port: 15008
+      protocol: HBONE
+    - name: xds-tls
+      port: 15012
+      protocol: TLS
+status:
+  addresses:
+    - type: IPAddress
+      value: 192.168.20.1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: multi-network-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: example-gateway
+  hostnames:
+    - "api.example.com"
+  rules:
+    - backendRefs:
+        - name: api.example.com
+          kind: Hostname
+          group: networking.istio.io
+          port: 8080
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: api-service
+  namespace: default
+spec:
+  hosts:
+    - api.example.com
+  addresses:
+    - 240.240.0.10
+  location: MESH_INTERNAL
+  ports:
+    - number: 8080
+      name: http
+      protocol: HTTP
+  resolution: STATIC
+  endpoints:
+    - address: 10.0.0.100
+      network: network1
+      locality: us-west/zone1
+      serviceAccount: api-service
+      ports:
+        http: 8080
+      labels:
+        app: api-service
+        version: v1
+        security.istio.io/tlsMode: istio
+    - address: 10.0.1.100
+      network: network2
+      locality: us-east/zone1
+      serviceAccount: api-service
+      ports:
+        http: 8080
+      labels:
+        app: api-service
+        version: v1
+        security.istio.io/tlsMode: istio
+
+
+---
+# Output
+output:
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/example-gateway
+      port: 80
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/example-gateway
+      key: default/example-gateway.http
+      name:
+        gatewayName: example-gateway
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: api.example.com
+            namespace: default
+        weight: 1
+      hostnames:
+      - api.example.com
+      key: default/multi-network-route.0.0.http
+      listenerKey: default/example-gateway.http
+      name:
+        kind: HTTPRoute
+        name: multi-network-route
+        namespace: default
+- addresses:
+  - CgAAZA==
+  canonicalName: api-service
+  canonicalRevision: latest
+  clusterId: Kubernetes
+  locality:
+    region: us-west
+    zone: zone1
+  name: api-service
+  namespace: default
+  network: network1
+  networkGateway:
+    address:
+      address: wKgKAQ==
+      network: network1
+    hboneMtlsPort: 15008
+  serviceAccount: api-service
+  services:
+    default/api.example.com:
+      ports:
+      - servicePort: 8080
+        targetPort: 8080
+  uid: Kubernetes/networking.istio.io/ServiceEntry/default/api-service/10.0.0.100
+  workloadName: api-service
+  workloadType: POD
+- addresses:
+  - CgABZA==
+  canonicalName: api-service
+  canonicalRevision: latest
+  clusterId: Kubernetes
+  locality:
+    region: us-east
+    zone: zone1
+  name: api-service
+  namespace: default
+  network: network2
+  networkGateway:
+    address:
+      address: wKgUAQ==
+      network: network2
+    hboneMtlsPort: 15008
+  serviceAccount: api-service
+  services:
+    default/api.example.com:
+      ports:
+      - servicePort: 8080
+        targetPort: 8080
+  uid: Kubernetes/networking.istio.io/ServiceEntry/default/api-service/10.0.1.100
+  workloadName: api-service
+  workloadType: POD
+- addresses:
+  - wKgKAQ==
+  name: NetworkGateway/network1/192.168.10.1/15008
+  namespace: default
+  network: network1
+  serviceAccount: network1-gateway-istio-remote
+  uid: NetworkGateway/network1/192.168.10.1/15008
+- addresses:
+  - wKgUAQ==
+  name: NetworkGateway/network2/192.168.20.1/15008
+  namespace: default
+  network: network2
+  serviceAccount: network2-gateway-istio-remote
+  uid: NetworkGateway/network2/192.168.20.1/15008
+- addresses:
+  - address: 8PAACg==
+  canonical: true
+  hostname: api.example.com
+  name: api-service
+  namespace: default
+  ports:
+  - appProtocol: HTTP11
+    servicePort: 8080
+    targetPort: 8080
+status: []

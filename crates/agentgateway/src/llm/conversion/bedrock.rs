@@ -1,13 +1,172 @@
-use rand::Rng;
+use rand::RngExt;
 use tracing::trace;
 
 use crate::http::Response;
 use crate::llm::AIError;
+use crate::llm::types::completions::typed::UsagePromptDetails;
 use crate::llm::types::{bedrock, messages, responses};
 
 #[cfg(test)]
 #[path = "bedrock_tests.rs"]
 mod tests;
+
+pub mod from_embeddings {
+	use crate::json;
+	use crate::llm::AIError;
+	use crate::llm::bedrock::Provider;
+	use crate::llm::types;
+	use crate::llm::types::ResponseType;
+
+	pub fn translate(
+		req: &types::embeddings::Request,
+		provider: &Provider,
+	) -> Result<Vec<u8>, AIError> {
+		let typed = json::convert::<_, types::embeddings::typed::Request>(req)
+			.map_err(AIError::RequestMarshal)?;
+
+		let model = provider.model.as_deref().unwrap_or(&typed.model);
+
+		// Bedrock has two embedding model families with incompatible APIs:
+		// Cohere accepts batched text arrays; Titan accepts a single string.
+		if model.contains("cohere") {
+			let input = typed.input.as_strings();
+
+			let bedrock_req = types::bedrock::CohereEmbeddingRequest {
+				texts: input,
+				input_type: req
+					.rest
+					.get("input_type")
+					.and_then(|v| v.as_str())
+					.unwrap_or("search_query")
+					.to_string(),
+				truncate: req
+					.rest
+					.get("truncate")
+					.and_then(|v| v.as_str())
+					.map(|s| s.to_string()),
+			};
+			serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)
+		} else {
+			// Titan only accepts a single string; array input is rejected.
+			let input = match &typed.input {
+				types::embeddings::typed::EmbeddingInput::String(s) => s.to_string(),
+				types::embeddings::typed::EmbeddingInput::Array(_) => {
+					return Err(AIError::RequestParsing(serde::de::Error::custom(
+						"Titan requires a single string input",
+					)));
+				},
+			};
+			let bedrock_req = types::bedrock::AmazonTitanV2EmbeddingRequest {
+				input_text: input,
+				dimensions: typed.dimensions,
+				normalize: req.rest.get("normalize").and_then(|v| v.as_bool()),
+				// Map OpenAI encoding_format → Titan embedding_types (Base64→Binary, Float→Float)
+				embedding_types: typed.encoding_format.as_ref().map(|f| match f {
+					types::embeddings::typed::EncodingFormat::Base64 => {
+						vec![types::bedrock::BedrockEmbeddingType::Binary]
+					},
+					types::embeddings::typed::EncodingFormat::Float => {
+						vec![types::bedrock::BedrockEmbeddingType::Float]
+					},
+				}),
+			};
+			serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)
+		}
+	}
+
+	pub fn translate_response(
+		bytes: &[u8],
+		headers: &http::HeaderMap,
+		model: &str,
+	) -> Result<Box<dyn ResponseType>, AIError> {
+		if model.contains("cohere") {
+			let resp: types::bedrock::CohereEmbeddingResponse =
+				serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+
+			// Cohere doesn't include token counts in the JSON body;
+			// Bedrock surfaces them via response headers instead.
+			let prompt_tokens = headers
+				.get("x-amzn-bedrock-input-token-count")
+				.and_then(|v| v.to_str().ok())
+				.and_then(|v| v.parse::<u64>().ok())
+				.unwrap_or(0);
+
+			let typed_resp = types::embeddings::typed::Response {
+				object: "list".to_string(),
+				data: resp
+					.embeddings
+					.into_iter()
+					.enumerate()
+					.map(|(i, e)| types::embeddings::typed::Embedding {
+						object: "embedding".to_string(),
+						embedding: e,
+						index: i as u32,
+					})
+					.collect(),
+				model: model.to_string(),
+				usage: types::embeddings::typed::Usage {
+					prompt_tokens: prompt_tokens as u32,
+					total_tokens: prompt_tokens as u32,
+				},
+			};
+			// Convert the normalized internal typed response back to the passthrough-preserving OpenAI format
+			let openai_resp = json::convert::<_, types::embeddings::Response>(&typed_resp)
+				.map_err(AIError::ResponseParsing)?;
+			Ok(Box::new(openai_resp))
+		} else {
+			let mut resp: types::bedrock::AmazonTitanV2EmbeddingResponse =
+				serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+			let typed_resp = types::embeddings::typed::Response {
+				object: "list".to_string(),
+				data: vec![types::embeddings::typed::Embedding {
+					object: "embedding".to_string(),
+					// Zero-clone optimization: Move the large vector out of the response body
+					// to avoid expensive re-allocations during translation.
+					embedding: if !resp.embedding.is_empty() {
+						std::mem::take(&mut resp.embedding)
+					} else {
+						// When embedding_types is set, Titan returns results in embeddingsByType
+						// instead of the top-level embedding field.
+						resp
+							.embeddings_by_type
+							.remove("float")
+							.and_then(|v| serde_json::from_value::<Vec<f32>>(v).ok())
+							.unwrap_or_default()
+					},
+					index: 0,
+				}],
+				model: model.to_string(),
+				usage: types::embeddings::typed::Usage {
+					prompt_tokens: resp.input_text_token_count as u32,
+					total_tokens: resp.input_text_token_count as u32,
+				},
+			};
+			// Convert the normalized internal typed response back to the passthrough-preserving OpenAI format
+			let openai_resp = json::convert::<_, types::embeddings::Response>(&typed_resp)
+				.map_err(AIError::ResponseParsing)?;
+			Ok(Box::new(openai_resp))
+		}
+	}
+
+	pub fn translate_error(bytes: &bytes::Bytes) -> Result<bytes::Bytes, AIError> {
+		// Bedrock usually returns the same error format for all models
+		let res = serde_json::from_slice::<types::bedrock::ConverseErrorResponse>(bytes)
+			.map_err(AIError::ResponseMarshal)?;
+		let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
+			event_id: None,
+			error: crate::llm::types::completions::typed::ChatCompletionError {
+				r#type: "invalid_request_error".to_string(),
+				message: res.message,
+				param: None,
+				code: None,
+				event_id: None,
+			},
+		};
+		Ok(bytes::Bytes::from(
+			serde_json::to_vec(&m).map_err(AIError::ResponseMarshal)?,
+		))
+	}
+}
 
 pub mod from_completions {
 	use std::collections::HashMap;
@@ -22,6 +181,7 @@ pub mod from_completions {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
+	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::{AIError, LLMInfo, types};
 	use crate::telemetry::log::AsyncLog;
 	use crate::{json, parse};
@@ -100,11 +260,23 @@ pub mod from_completions {
 			None
 		};
 
-		// Build metadata from user field and x-bedrock-metadata header
+		// Build metadata from:
+		// - OpenAI `user` field (normalized as user_id)
+		// - OpenAI `metadata` field (agentgateway uses this to carry guardrail/model-armor knobs through Messages→Completions)
+		// - x-bedrock-metadata header (set by ExtAuthz or transformation policy)
 		let mut metadata = req
 			.user
 			.map(|user| HashMap::from([("user_id".to_string(), user)]))
 			.unwrap_or_default();
+
+		// Merge OpenAI request `metadata` when it is an object of string values
+		if let Some(serde_json::Value::Object(obj)) = &req.metadata {
+			for (k, v) in obj {
+				if let serde_json::Value::String(s) = v {
+					metadata.insert(k.clone(), s.clone());
+				}
+			}
+		}
 
 		// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
 		if let Some(header_metadata) = super::helpers::extract_metadata_from_headers(headers) {
@@ -444,6 +616,9 @@ pub mod from_completions {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
 
 						mk(
@@ -452,7 +627,12 @@ pub mod from_completions {
 								prompt_tokens: usage.input_tokens as u32,
 								completion_tokens: usage.output_tokens as u32,
 								total_tokens: usage.total_tokens as u32,
-								prompt_tokens_details: None,
+								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
+								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
+								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
+									cached_tokens: Some(i as u64),
+								}),
+								// TODO: can we get reasoning tokens?
 								completion_tokens_details: None,
 							}),
 						)
@@ -1070,6 +1250,9 @@ pub mod from_messages {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
 					}
 
@@ -1132,7 +1315,7 @@ pub mod from_responses {
 
 	use bytes::Bytes;
 	use helpers::*;
-	use rand::Rng;
+	use rand::RngExt;
 	use responses::{
 		AssistantRole, ErrorObject, FunctionToolCall, IncompleteDetails, InputTokenDetails,
 		OutputContent, OutputItem, OutputMessage, OutputStatus, OutputTextContent, OutputTokenDetails,
@@ -1853,6 +2036,9 @@ pub mod from_responses {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
+							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								usage.cache_write_input_tokens.map(|i| i as u64);
 						});
 					}
 
@@ -2217,8 +2403,15 @@ impl ConverseResponseAdapter {
 				prompt_tokens: token_usage.input_tokens as u32,
 				completion_tokens: token_usage.output_tokens as u32,
 				total_tokens: token_usage.total_tokens as u32,
-				prompt_tokens_details: None,
 				completion_tokens_details: None,
+
+				cache_read_input_tokens: token_usage.cache_read_input_tokens.map(|i| i as u64),
+				prompt_tokens_details: token_usage
+					.cache_read_input_tokens
+					.map(|i| UsagePromptDetails {
+						cached_tokens: Some(i as u64),
+					}),
+				cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
 			})
 			.unwrap_or_default();
 

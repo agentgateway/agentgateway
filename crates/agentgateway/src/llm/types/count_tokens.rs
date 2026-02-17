@@ -63,6 +63,11 @@ impl RequestType for Request {
 	fn to_bedrock_token_count(&self, headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
 		conversion::bedrock::from_anthropic_token_count::translate(self, headers)
 	}
+
+	fn to_vertex(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
+		let body = self.to_anthropic()?;
+		provider.prepare_anthropic_count_tokens_body(body)
+	}
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

@@ -24,7 +24,7 @@ async fn setup() -> (MockServer, Handler) {
 	let parsed = reqwest::Url::parse(&host).unwrap();
 	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
 	let encoder = config.session_encoder.clone();
-	let stores = Stores::new();
+	let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
 	let client = Client::new(
 		&client::Config {
 			resolver_cfg: ResolverConfig::default(),
@@ -56,6 +56,7 @@ async fn setup() -> (MockServer, Handler) {
 		icons: None,
 		title: None,
 		meta: None,
+		execution: None,
 		input_schema: Arc::new(
 			json!({ // Define a simple schema for testing
 					"type": "object",
@@ -101,6 +102,7 @@ async fn setup() -> (MockServer, Handler) {
 		icons: None,
 		title: None,
 		meta: None,
+		execution: None,
 		input_schema: Arc::new(
 			json!({
 				"type": "object",
@@ -148,8 +150,13 @@ async fn setup() -> (MockServer, Handler) {
 			parsed.port().unwrap_or(8080),
 		),
 	);
-	let upstream_client =
-		super::super::McpHttpClient::new(client, backend, BackendPolicies::default(), false);
+	let upstream_client = super::super::McpHttpClient::new(
+		client,
+		backend,
+		BackendPolicies::default(),
+		false,
+		"test-target".to_string(),
+	);
 	let handler = Handler::new(
 		upstream_client,
 		vec![
@@ -503,7 +510,7 @@ async fn test_call_tool_with_compressed_response() {
 async fn test_call_tool_response_wrapping() {
 	let (server, handler) = setup().await;
 
-	let test_cases = vec![
+	let test_cases = [
 		(false, Value::Null),
 		(
 			false,
@@ -807,4 +814,121 @@ async fn test_headers_not_in_schema_are_ignored() {
 		result.err()
 	);
 	assert_eq!(result.unwrap(), expected_response);
+}
+
+#[tokio::test]
+async fn test_call_tool_structured_content_fallback() {
+	// Test that CallToolResult has both content and structured_content populated
+	// This verifies our backwards compatibility fix for langchain-mcp-adapter
+	let (server, handler) = setup().await;
+
+	let user_id = "test123";
+	let expected_response = json!({ "id": user_id, "name": "Test User", "status": "active" });
+
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.mount(&server)
+		.await;
+
+	// Test the MCP message handling directly
+	use rmcp::model::*;
+
+	let request = JsonRpcRequest {
+		jsonrpc: JsonRpcVersion2_0,
+		id: RequestId::String("test-123".into()),
+		request: ClientRequest::CallToolRequest(CallToolRequest {
+			method: CallToolRequestMethod,
+			params: CallToolRequestParams {
+				meta: None,
+				task: None,
+				name: "get_user".into(),
+				arguments: Some(
+					json!({ "path": { "user_id": user_id } })
+						.as_object()
+						.unwrap()
+						.clone(),
+				),
+			},
+			extensions: Extensions::default(),
+		}),
+	};
+
+	let result = handler
+		.send_message(request, &IncomingRequestContext::empty())
+		.await;
+	assert!(result.is_ok(), "send_message should succeed");
+
+	let messages = result.unwrap();
+
+	// Convert Messages to Vec to inspect CallToolResult
+	use futures_util::StreamExt;
+	let mut message_stream = messages;
+	let message_result = message_stream
+		.next()
+		.await
+		.expect("Should receive at least one message");
+
+	// Handle the Result<JsonRpcMessage, ClientError> wrapper
+	let server_msg = message_result.expect("Message processing should succeed");
+
+	let JsonRpcMessage::Response(response) = server_msg else {
+		panic!("Should receive a Response message, got: {:?}", server_msg);
+	};
+
+	let ServerResult::CallToolResult(call_result) = &response.result else {
+		panic!(
+			"Response should contain CallToolResult, got: {:?}",
+			response.result
+		);
+	};
+
+	// Test 1: content field should NOT be empty (our backwards compatibility fix)
+	assert!(
+		!call_result.content.is_empty(),
+		"content field should not be empty after our fix"
+	);
+	assert_eq!(
+		call_result.content.len(),
+		1,
+		"content should have exactly one item"
+	);
+
+	// Test 2: structured_content should contain the original JSON
+	assert!(
+		call_result.structured_content.is_some(),
+		"structured_content should be populated"
+	);
+	let structured_content = call_result.structured_content.as_ref().unwrap();
+	assert_eq!(
+		*structured_content, expected_response,
+		"structured_content should contain original API response"
+	);
+
+	// Test 3: content[0] should contain serialized JSON as text
+	let content_item = call_result
+		.content
+		.first()
+		.expect("content should have at least one item");
+
+	let RawContent::Text(text_content) = &content_item.raw else {
+		panic!(
+			"content[0] should be Text content type, got: {:?}",
+			content_item.raw
+		);
+	};
+
+	let serialized_json = &text_content.text;
+	let parsed_from_content: serde_json::Value =
+		serde_json::from_str(serialized_json).expect("content should contain valid JSON string");
+	assert_eq!(
+		parsed_from_content, expected_response,
+		"content should contain serialized version of API response"
+	);
+
+	// Test 4: Both fields should represent the same data
+	assert_eq!(
+		parsed_from_content, *structured_content,
+		"content and structured_content should represent the same data"
+	);
 }

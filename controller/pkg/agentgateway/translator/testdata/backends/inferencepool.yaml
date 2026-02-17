@@ -1,0 +1,225 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: external-service-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: example-gateway
+  hostnames:
+    - "external.example.com"
+  rules:
+    - backendRefs:
+        - name: gateway-pool
+          kind: InferencePool
+          group: inference.networking.k8s.io
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: gateway-pool
+  namespace: default
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: gateway-pool-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: gateway
+  targetPorts:
+    - number: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: inference-pool
+  namespace: default
+spec:
+  targetRefs:
+    - name: gateway-pool
+      kind: InferencePool
+      group: inference.networking.k8s.io
+  validation:
+    hostname: my.inference.pool.example.com
+    wellKnownCACertificates: System
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-pool-endpoint-picker
+  namespace: default
+spec:
+  ports:
+    - port: 9002
+      protocol: TCP
+  selector:
+    app: gateway
+---
+# Output
+output:
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/example-gateway
+      port: 80
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/example-gateway
+      key: default/example-gateway.http
+      name:
+        gatewayName: example-gateway
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: example-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: gateway-pool.default.inference.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - external.example.com
+      key: default/external-service-route.0.0.http
+      listenerKey: default/example-gateway.http
+      name:
+        kind: HTTPRoute
+        name: external-service-route
+        namespace: default
+- resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+              namespace: default
+          failureMode: FAIL_CLOSED
+      key: default/gateway-pool:inference
+      name:
+        kind: InferencePool
+        name: gateway-pool
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool.default.inference.cluster.local
+          namespace: default
+- resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: default/gateway-pool:inferencetls
+      name:
+        kind: InferencePool
+        name: gateway-pool
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+          namespace: default
+          port: 9002
+- resource:
+    policy:
+      backend:
+        backendTls:
+          hostname: my.inference.pool.example.com
+      key: default/inference-pool:backend-tls:default/gateway-pool.default.inference.cluster.local
+      name:
+        kind: BackendTLSPolicy
+        name: inference-pool
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool.default.inference.cluster.local
+          namespace: default
+- canonical: true
+  hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+  name: gateway-pool-endpoint-picker
+  namespace: default
+  ports:
+  - servicePort: 9002
+- hostname: gateway-pool.default.inference.cluster.local
+  name: gateway-pool
+  namespace: default
+  ports:
+  - appProtocol: HTTP11
+    servicePort: 8080
+    targetPort: 8080
+status:
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: gateway-pool
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: All InferencePool references have been resolved
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: example-gateway
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: BackendTLSPolicy
+  metadata:
+    name: inference-pool
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: example-gateway
+      conditions:
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway

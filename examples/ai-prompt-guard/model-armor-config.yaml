@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            - googleModelArmor:
+                templateId: model-armor-template-id
+                projectId: model-armor-project-id
+                location: us-central1
+            response:
+            - googleModelArmor:
+                templateId: model-armor-template-id
+                projectId: model-armor-project-id
+                location: us-central1

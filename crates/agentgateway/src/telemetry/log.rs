@@ -367,6 +367,7 @@ impl CelLogging {
 		llm_response: Option<&'a LLMContext>,
 		mcp: Option<&'a ResourceType>,
 		end_time: Option<&'a str>,
+		source_context: Option<&'a cel::SourceContext>,
 	) -> Result<CelLoggingExecutor<'a>, cel::Error> {
 		let CelLogging {
 			cel_context: _,
@@ -375,7 +376,13 @@ impl CelLogging {
 			metric_fields,
 			tracing_sampler: _,
 		} = self;
-		let executor = cel::Executor::new_logger(req, resp, llm_response, mcp, end_time);
+		let executor = if req.is_none() && source_context.is_some() {
+			// TCP case: use new_tcp_logger
+			cel::Executor::new_tcp_logger(source_context, end_time)
+		} else {
+			// HTTP case: use new_logger
+			cel::Executor::new_logger(req, resp, llm_response, mcp, end_time)
+		};
 		Ok(CelLoggingExecutor {
 			executor,
 			filter,
@@ -517,6 +524,7 @@ impl RequestLog {
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
+			source_context: None,
 			response_bytes: 0,
 		}
 	}
@@ -573,6 +581,8 @@ pub struct RequestLog {
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<cel::RequestSnapshot>,
 	pub response_snapshot: Option<cel::ResponseSnapshot>,
+	/// Source context for TCP connections (where we don't have an HTTP request)
+	pub source_context: Option<cel::SourceContext>,
 
 	pub response_bytes: u64,
 }
@@ -689,6 +699,7 @@ impl Drop for DropOnLog {
 			llm_response.as_ref(),
 			mcp_cel.as_ref(),
 			Some(&end_time_str),
+			log.source_context.as_ref(),
 		) else {
 			tracing::warn!("failed to build CEL context");
 			return;

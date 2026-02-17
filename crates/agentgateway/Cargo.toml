@@ -98,8 +98,11 @@ prost.workspace = true
 rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
-rmcp = { version = "0.14", features = [
+
+rmcp = { version = "0.15", features = [
     "client",
+    "server",
+    "base64",
     "transport-child-process",
 ] }
 rustls-native-certs.workspace = true
@@ -175,7 +178,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "0.14", features = [
+rmcp = { version = "0.15", features = [
     "client",
     "server",
     "base64",
@@ -196,6 +199,13 @@ legacy-rmcp = { package = "rmcp", version = "0.10.0", features = ["transport-sse
 ] }
 wiremock.workspace = true
 reqwest.workspace = true
+# TODO(https://github.com/modelcontextprotocol/rust-sdk/pull/667)
+legacyreqwest = { package = "reqwest", version = "0.12", default-features = false, features = [
+    "http2",
+    "charset",
+    "macos-system-configuration",
+    "rustls-tls",
+] }
 
 [lints.clippy]
 # This rule makes code more confusing

@@ -31,6 +31,11 @@ use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
 use crate::*;
 
+// Windows has different output, for now easier to just not deal with it
+#[cfg(all(test, target_family = "unix"))]
+#[path = "local_tests.rs"]
+mod tests;
+
 impl NormalizedLocalConfig {
 	pub async fn from(
 		config: &crate::Config,
@@ -47,7 +52,7 @@ impl NormalizedLocalConfig {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
 	pub binds: Vec<Bind>,
 	pub policies: Vec<TargetedPolicy>,
@@ -934,6 +939,7 @@ async fn convert(
 				client.clone(),
 				idx,
 				l,
+				bind_name.clone(),
 				Some(frontend_policies.clone()),
 				gateway.clone(),
 			)
@@ -1028,6 +1034,7 @@ async fn convert_listener(
 	client: client::Client,
 	idx: usize,
 	l: LocalListener,
+	bind_key: Strng,
 	frontend_policies: Option<LocalFrontendPolicies>,
 	gateway: ListenerTarget,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
@@ -1082,7 +1089,8 @@ async fn convert_listener(
 		.unwrap_or_else(|| strng::format!("listener{}", idx));
 	let gateway_name = gateway.gateway_name.clone();
 	let gateway_namespace = gateway.gateway_namespace.clone();
-	let key: ListenerKey = strng::format!("{gateway_namespace}/{gateway_name}/{listener_name}");
+	let key: ListenerKey =
+		strng::format!("{gateway_namespace}/{gateway_name}/{bind_key}/{listener_name}");
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];

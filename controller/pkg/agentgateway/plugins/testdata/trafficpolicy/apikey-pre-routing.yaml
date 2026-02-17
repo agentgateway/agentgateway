@@ -1,0 +1,67 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: apikey-pre-routing
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    phase: PreRouting
+    apiKeyAuthentication:
+      mode: Strict
+      secretRef:
+        name: apikey-secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: apikey-secret
+  namespace: default
+type: Opaque
+data:
+  key1: dGVzdC1hcGkta2V5LTEyMw==
+  key2: ewogICJrZXkiOiAidGVzdC1hcGkta2V5LTQ1NiIsCiAgIm1ldGFkYXRhIjogeyJ1c2VyIjogImFkbWluIn0KfQ==
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/apikey-pre-routing:apikeyauth:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: apikey-pre-routing
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      apiKeyAuth:
+        apiKeys:
+        - key: test-api-key-123
+          metadata: {}
+        - key: test-api-key-456
+          metadata:
+            user: admin
+      phase: GATEWAY
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

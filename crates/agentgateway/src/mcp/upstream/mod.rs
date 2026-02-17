@@ -258,6 +258,7 @@ impl UpstreamGroup {
 						.expect("there must be a backend for SSE"),
 					target.backend_policies.clone(),
 					self.backend.stateful,
+					target.name.to_string(),
 				);
 				let client = sse::Client::new(upstream_client, path.into())?;
 
@@ -281,6 +282,7 @@ impl UpstreamGroup {
 						.expect("there must be a backend for MCP"),
 					target.backend_policies.clone(),
 					self.backend.stateful,
+					target.name.to_string(),
 				);
 				let client = streamablehttp::Client::new(http_client, path.into())?;
 
@@ -334,6 +336,7 @@ impl UpstreamGroup {
 						.expect("there must be a backend for OpenAPI"),
 					target.backend_policies.clone(),
 					self.backend.stateful,
+					target.name.to_string(),
 				);
 				upstream::Upstream::OpenAPI(Box::new(openapi::Handler::new(
 					http_client,

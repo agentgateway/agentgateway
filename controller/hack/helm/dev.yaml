@@ -1,0 +1,10 @@
+controller:
+  logLevel: debug
+  rollout:
+    # Instead of a RollingUpdate, minimize resource consumption and avoid the
+    # problem of confusing the old code for the new code by recreating pods:
+    strategy: Recreate
+    # strategy: RollingUpdate
+    # rollingUpdate:
+    #   maxSurge: 100%
+    #   maxUnavailable: 100%

@@ -1,0 +1,81 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-website-fetcher
+spec:
+  selector:
+    matchLabels:
+      app: mcp-website-fetcher
+  template:
+    metadata:
+      labels:
+        app: mcp-website-fetcher
+        app.kubernetes.io/name: mcp-website-fetcher
+    spec:
+      containers:
+      - name: mcp-website-fetcher
+        image: ghcr.io/kgateway-dev/mcp-website-fetcher:0.0.1
+        imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-website-fetcher
+  labels:
+    app: mcp-website-fetcher
+spec:
+  selector:
+    app: mcp-website-fetcher
+  ports:
+  - port: 80
+    targetPort: 8000
+    appProtocol: kgateway.dev/mcp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-admin-server
+  labels:
+    app: mcp-admin-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-admin-server
+  template:
+    metadata:
+      labels:
+        app: mcp-admin-server
+        app.kubernetes.io/name: mcp-admin-server
+    spec:
+      containers:
+        - name: mcp-admin-server
+          image: ghcr.io/kgateway-dev/mcp-admin-server:0.0.1
+          command: ["npx"]
+          args: ["-y","@modelcontextprotocol/server-everything","streamableHttp","--port","3001"]
+          ports:
+            - containerPort: 3001
+          readinessProbe:
+            tcpSocket: { port: 3001 }
+            periodSeconds: 1
+            failureThreshold: 60
+          livenessProbe:
+            tcpSocket: { port: 3001 }
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-admin-server
+  labels:
+    app: mcp-admin-server
+spec:
+  selector:
+    app: mcp-admin-server
+  ports:
+    - name: http
+      port: 80          # what your Backend references
+      targetPort: 3001  # containerPort above
+      appProtocol: kgateway.dev/mcp
+  type: ClusterIP

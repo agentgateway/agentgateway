@@ -30,4 +30,4 @@ event:
 data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":" you'd like to know more about?"}}],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
 
 event: 
-data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":47,"completion_tokens":264,"total_tokens":311}}
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[],"created":123,"model":"claude-opus-4-1-20250805","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":47,"completion_tokens":264,"total_tokens":311,"prompt_tokens_details":{"cached_tokens":0},"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}

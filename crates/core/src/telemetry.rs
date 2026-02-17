@@ -21,7 +21,7 @@ use once_cell::sync::{Lazy, OnceCell};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 use thiserror::Error;
-use tracing::{Event, Subscriber, error, field, info, warn};
+use tracing::{Event, Subscriber, field, info, warn};
 use tracing_core::Field;
 use tracing_core::field::Visit;
 use tracing_core::span::Record;

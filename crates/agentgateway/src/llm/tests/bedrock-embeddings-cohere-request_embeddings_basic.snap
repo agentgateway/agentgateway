@@ -1,0 +1,14 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "bedrock-embeddings-cohere: request_embeddings_basic"
+info:
+  model: text-embedding-3-small
+  input: hello world
+  dimensions: 1024
+---
+{
+  "texts": [
+    "hello world"
+  ],
+  "input_type": "search_query"
+}

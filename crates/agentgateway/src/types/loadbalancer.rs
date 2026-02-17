@@ -1,11 +1,10 @@
-use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use arc_swap::ArcSwap;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use rand::Rng;
+use rand::RngExt;
 use serde::ser::SerializeSeq;
+use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
@@ -55,7 +54,9 @@ pub struct EndpointSet<T> {
 	// Note: we could have both of these handled by the worker, but the add/remove come from XDS without any async support.
 	action_mutex: Arc<Mutex<()>>,
 }
-
+fn contains_target_port(ep: &Endpoint, wanted_target: u16) -> bool {
+	ep.port.values().any(|tp| *tp == wanted_target)
+}
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint) {
 		// Currently, buckets are not supported
@@ -83,11 +84,13 @@ impl EndpointSet<Endpoint> {
 					debug!("failed to fetch workload for {}", ep.workload_uid);
 					return None;
 				};
-				if wl.workload_ips.contains(&o.ip()) {
-					Some((ep.clone(), ep_info, wl))
-				} else {
-					None
+				if !wl.workload_ips.contains(&o.ip()) {
+					return None;
 				}
+				if !contains_target_port(ep, o.port()) {
+					return None;
+				}
+				Some((ep.clone(), ep_info, wl))
 			})
 		} else {
 			let index = iter.index();

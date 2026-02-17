@@ -1,13 +1,13 @@
+use super::*;
+use crate::cel::RequestSnapshot;
+use crate::http::authorization::PolicySet;
+use crate::http::{Body, jwt};
+use crate::mcp::{ResourceId, ResourceType};
 use ::http::Method;
 #[cfg(test)]
 use assert_matches::assert_matches;
 use divan::Bencher;
 use serde_json::json;
-
-use super::*;
-use crate::http::authorization::PolicySet;
-use crate::http::{Body, jwt};
-use crate::mcp::{ResourceId, ResourceType};
 
 fn create_policy_set(policies: Vec<&str>) -> PolicySet {
 	let mut policy_set = PolicySet::default();
@@ -32,7 +32,7 @@ fn test_rbac_reject_exact_match() {
 		"server".to_string(),
 		"increment".to_string(),
 	));
-	let exec = cel::Executor::new_mcp(&req, &mcp);
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), false);
 }
@@ -50,7 +50,7 @@ fn test_rbac_check_exact_match() {
 		"server".to_string(),
 		"increment".to_string(),
 	));
-	let exec = cel::Executor::new_mcp(&req, &mcp);
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
 }
@@ -68,7 +68,7 @@ fn test_rbac_target() {
 		"server".to_string(),
 		"increment".to_string(),
 	));
-	let exec = cel::Executor::new_mcp(&req, &mcp);
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
 
@@ -76,7 +76,7 @@ fn test_rbac_target() {
 		"not-server".to_string(),
 		"increment".to_string(),
 	));
-	let exec_different_target = cel::Executor::new_mcp(&req, &mcp);
+	let exec_different_target = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec_different_target), false);
 }
@@ -94,7 +94,7 @@ fn test_rbac_check_contains_match() {
 		"server".to_string(),
 		"increment".to_string(),
 	));
-	let exec = cel::Executor::new_mcp(&req, &mcp);
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
 }
@@ -112,7 +112,7 @@ fn test_rbac_check_nested_key_match() {
 		"server".to_string(),
 		"increment".to_string(),
 	));
-	let exec = cel::Executor::new_mcp(&req, &mcp);
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
 }
@@ -130,7 +130,7 @@ fn test_rbac_check_array_contains_match() {
 		"server".to_string(),
 		"increment".to_string(),
 	));
-	let exec = cel::Executor::new_mcp(&req, &mcp);
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
 }
@@ -147,13 +147,13 @@ fn bench(b: Bencher) {
 		"server".to_string(),
 		"increment".to_string(),
 	));
-	let exec = cel::Executor::new_mcp(&req, &mcp);
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	b.bench(|| {
 		rs.validate(&exec);
 	});
 }
 
-fn req(claims: serde_json::Value) -> http::Request {
+fn req(claims: serde_json::Value) -> Option<RequestSnapshot> {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com/mcp")
@@ -166,5 +166,6 @@ fn req(claims: serde_json::Value) -> http::Request {
 		inner: claims,
 		jwt: Default::default(),
 	});
-	req
+
+	Some(cel::snapshot_request(&mut req))
 }

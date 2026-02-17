@@ -1,0 +1,89 @@
+{{- if .Values.controller.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentgateway.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+    {{- with .Values.controller.service.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.controller.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.controller.service.type }}
+  {{- with .Values.controller.service.clusterIP }}
+  clusterIP: {{ . }}
+  {{- end }}
+  {{- with .Values.controller.service.clusterIPs }}
+  clusterIPs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.controller.service.externalIPs }}
+  externalIPs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.controller.service.externalName }}
+  externalName: {{ . }}
+  {{- end }}
+  {{- with .Values.controller.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  {{- with .Values.controller.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.controller.service.loadBalancerClass }}
+  loadBalancerClass: {{ . }}
+  {{- end }}
+  {{- with .Values.controller.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
+  {{- with .Values.controller.service.internalTrafficPolicy }}
+  internalTrafficPolicy: {{ . }}
+  {{- end }}
+  {{- if not (kindIs "invalid" .Values.controller.service.healthCheckNodePort) }}
+  healthCheckNodePort: {{ .Values.controller.service.healthCheckNodePort }}
+  {{- end }}
+  {{- with .Values.controller.service.sessionAffinity }}
+  sessionAffinity: {{ . }}
+  {{- end }}
+  {{- with .Values.controller.service.sessionAffinityConfig }}
+  sessionAffinityConfig:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.controller.service.ipFamilies }}
+  ipFamilies:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.controller.service.ipFamilyPolicy }}
+  ipFamilyPolicy: {{ . }}
+  {{- end }}
+  {{- if .Values.controller.service.publishNotReadyAddresses }}
+  publishNotReadyAddresses: true
+  {{- end }}
+  {{- if not (kindIs "invalid" .Values.controller.service.allocateLoadBalancerNodePorts) }}
+  allocateLoadBalancerNodePorts: {{ .Values.controller.service.allocateLoadBalancerNodePorts }}
+  {{- end }}
+  {{- with .Values.controller.service.trafficDistribution }}
+  trafficDistribution: {{ . }}
+  {{- end }}
+  ports:
+  - name: grpc-xds-agw
+    protocol: TCP
+    port: {{ .Values.controller.service.ports.agwGrpc }}
+    targetPort: grpc-xds-agw
+  - name: health
+    protocol: TCP
+    port: {{ .Values.controller.service.ports.health }}
+    targetPort: health
+  - name: metrics
+    protocol: TCP
+    port: {{ .Values.controller.service.ports.metrics }}
+    targetPort: metrics
+  selector:
+    {{- include "agentgateway.selectorLabels" . | nindent 4 }}
+{{- end }}

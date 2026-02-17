@@ -1,0 +1,209 @@
+# -- Set a list of image pull secrets for Kubernetes to use when pulling container images from your own private registry instead of the default agentgateway registry.
+imagePullSecrets: []
+
+# -- Additional labels to add to all resources created by the Helm chart.
+commonLabels: {}
+
+# -- Add a name to the default Helm base release, which is 'agentgateway'. If you set 'nameOverride: "foo", the name of the resources that the Helm release creates become 'agentgateway-foo', such as the deployment, service, and service account for the agentgateway control plane in the agentgateway-system namespace.
+nameOverride: ""
+
+# -- Override the full name of resources created by the Helm chart, which is 'agentgateway'. If you set 'fullnameOverride: "foo", the full name of the resources that the Helm release creates become 'foo', such as the deployment, service, and service account for the agentgateway control plane in the agentgateway-system namespace.
+fullnameOverride: ""
+
+# -- Configure the service account for the deployment.
+serviceAccount:
+  # -- Specify whether a service account should be created.
+  create: true
+  # -- Add annotations to the service account.
+  annotations: {}
+  # -- Set the name of the service account to use. If not set and create is true, a name is generated using the fullname template.
+  name: ""
+
+# -- Add annotations to the agentgateway deployment.
+deploymentAnnotations: {}
+
+# -- Add annotations to the agentgateway pods.
+podAnnotations:
+  prometheus.io/scrape: "true"
+
+# -- Set the pod-level security context. For example, 'fsGroup: 2000' sets the filesystem group to 2000.
+podSecurityContext: {}
+
+# -- Set the container-level security context, such as 'runAsNonRoot: true'.
+securityContext: {}
+
+# -- Configure resource requests and limits for the container, such as 'limits.cpu: 100m' or 'requests.memory: 128Mi'.
+resources: {}
+
+# -- Set node selector labels for pod scheduling, such as 'kubernetes.io/arch: amd64'.
+nodeSelector: {}
+
+# -- Set tolerations for pod scheduling, such as 'key: "nvidia.com/gpu"'.
+tolerations: []
+
+# -- Set affinity rules for pod scheduling, such as 'nodeAffinity:'.
+affinity: {}
+
+# -- Configure the agentgateway control plane deployment.
+controller:
+  # -- Set the number of controller pod replicas.
+  replicaCount: 1
+  # -- Set the priority class name for the controller pod.
+  priorityClassName: ""
+  # -- Set the log level for the controller.
+  logLevel: info
+  # -- Configure the controller container image.
+  image:
+    # -- Set the image registry for the controller.
+    registry: ""
+    # -- Set the image repository for the controller.
+    repository: controller
+    # -- Set the image pull policy for the controller.
+    pullPolicy: ""
+    # -- Set the image tag for the controller.
+    tag: ""
+  # -- Configure the controller service.
+  service:
+    # -- Create the controller Service.
+    enabled: true
+    # -- Service type.
+    type: ClusterIP
+    # -- Service ports.
+    ports:
+      agwGrpc: 9978
+      health: 9093
+      metrics: 9092
+    # -- Service annotations.
+    annotations: {}
+    # -- Extra labels for the Service.
+    extraLabels: {}
+    # -- Cluster IP address.
+    clusterIP: ""
+    # -- Cluster IPs for dual-stack.
+    clusterIPs: []
+    # -- External IP addresses.
+    externalIPs: []
+    # -- External name for ExternalName services.
+    externalName: ""
+    # -- Load balancer IP address.
+    loadBalancerIP: ""
+    # -- Allowed source ranges for load balancer.
+    loadBalancerSourceRanges: []
+    # -- Load balancer class.
+    loadBalancerClass: ""
+    # -- External traffic policy.
+    externalTrafficPolicy: ""
+    # -- Internal traffic policy.
+    internalTrafficPolicy: ""
+    # -- Health check node port.
+    healthCheckNodePort: null
+    # -- Session affinity.
+    sessionAffinity: ""
+    # -- Session affinity configuration.
+    sessionAffinityConfig: {}
+    # -- IP families.
+    ipFamilies: []
+    # -- IP family policy.
+    ipFamilyPolicy: ""
+    # -- Publish not ready addresses.
+    publishNotReadyAddresses: false
+    # -- Allocate load balancer node ports.
+    allocateLoadBalancerNodePorts: null
+    # -- Traffic distribution.
+    trafficDistribution: ""
+  # -- Add extra environment variables to the controller container.
+  extraEnv: {}
+  # -- Configure TLS settings for the xDS gRPC servers.
+  xds:
+    tls:
+      # -- Enable TLS encryption for xDS communication. When enabled, the agent gateway xDS server (port 9978) will use TLS. When TLS is enabled, you must create a Secret named 'agentgateway-xds-cert' in the agentgateway installation namespace. The Secret must be of type 'kubernetes.io/tls' with 'tls.crt', 'tls.key', and 'ca.crt' data fields present.
+      enabled: false
+  # -- Change the rollout strategy from the Kubernetes default of a RollingUpdate with 25% maxUnavailable, 25% maxSurge.
+  # E.g., to recreate pods, minimizing resources for the rollout but causing downtime:
+  # strategy:
+  #   type: Recreate
+  # E.g., to roll out as a RollingUpdate but with non-default parameters:
+  # strategy:
+  #   type: RollingUpdate
+  #   rollingUpdate:
+  #     maxSurge: 100%
+  strategy: {}
+  # -- Set pod disruption budget for the controller. Note that this does not
+  #    affect the data plane.
+  # E.g.:
+  #
+  # podDisruptionBudget:
+  #   minAvailable: 100%
+  podDisruptionBudget: {}
+  # -- Set horizontal pod autoscaler for the controller. Note that this does not
+  #    affect the data plane. The scaleTargetRef is automatically configured to
+  #    target the controller deployment.
+  # E.g.:
+  #
+  # horizontalPodAutoscaler:
+  #   minReplicas: 1
+  #   maxReplicas: 5
+  #   metrics:
+  #     - type: Resource
+  #       resource:
+  #         name: cpu
+  #         target:
+  #           type: Utilization
+  #           averageUtilization: 80
+  horizontalPodAutoscaler: {}
+  # -- Set vertical pod autoscaler for the controller. Note that this does not
+  #    affect the data plane. The targetRef is automatically configured to
+  #    target the controller deployment.
+  # E.g.:
+  #
+  # verticalPodAutoscaler:
+  #   updatePolicy:
+  #     updateMode: Auto
+  #   resourcePolicy:
+  #     containerPolicies:
+  #       - containerName: "*"
+  #         minAllowed:
+  #           cpu: 100m
+  #           memory: 128Mi
+  verticalPodAutoscaler: {}
+
+# -- Configure the agentgateway data plane deployment.
+proxy:
+  image:
+    # -- Set the default image registry.
+    # Set to override the global value.
+    registry: ""
+    # -- Set the default image repository.
+    repository: agentgateway
+    # -- Set the default image tag.
+    tag: ""
+
+# -- Configure the default container image for the components that Helm deploys. You can override these settings for each particular component in that component's section, such as 'controller.image' for the agentgateway control plane. If you use your own private registry, make sure to include the imagePullSecrets.
+image:
+  # -- Set the default image registry.
+  registry: cr.agentgateway.dev
+  # -- Set the default image tag.
+  tag: ""
+  # -- Set the default image pull policy.
+  pullPolicy: IfNotPresent
+  
+# -- Configure the integration with the Gateway API Inference Extension project, which lets you use agentgateway to route to AI inference workloads like LLMs that run locally in your Kubernetes cluster. Documentation for Inference Extension can be found here: https://kgateway.dev/docs/latest/agentgateway/inference/
+inferenceExtension:
+  # -- Enable Inference Extension support in the agentgateway controller.
+  enabled: false
+
+# -- List of namespace selectors (OR'ed): each entry can use 'matchLabels' or 'matchExpressions' (AND'ed within each entry if used together). Agentgateway includes the selected namespaces in config discovery. For more information, see the docs https://kgateway.dev/docs/latest/install/advanced/#namespace-discovery.
+discoveryNamespaceSelectors: []
+
+# -- Map of GatewayClass names to GatewayParameters references that will be set on
+#    the default GatewayClasses managed by kgateway. Each entry must define both the
+#    name and namespace of the GatewayParameters resource.
+#    The default GatewayClasses managed by kgateway are:
+#    - agentgateway
+#    Example:
+#    gatewayClassParametersRefs:
+#      agentgateway:
+#        name: shared-gwp
+#        namespace: kgateway-system
+gatewayClassParametersRefs: {}
+

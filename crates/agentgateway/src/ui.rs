@@ -16,6 +16,7 @@ use tower::ServiceExt;
 use tower_http::cors::CorsLayer;
 use tower_serve_static::ServeDir;
 
+use crate::cel::{self, ExecutorSerde};
 use crate::management::admin::{AdminFallback, AdminResponse};
 use crate::{Config, ConfigSource, client, yamlviajson};
 pub struct UiHandler {
@@ -49,6 +50,7 @@ impl UiHandler {
 		let router = Router::new()
 			// Redirect to the UI
 			.route("/config", get(get_config).post(write_config))
+			.route("/cel", axum::routing::post(handle_cel))
 			.nest_service("/ui", ui_service)
 			.route("/", get(|| async { Redirect::permanent("/ui") }))
 			.layer(add_cors_layer())
@@ -156,6 +158,69 @@ pub fn add_cors_layer() -> CorsLayer {
 		.allow_credentials(true)
 		.expose_headers([CONTENT_TYPE, CONTENT_LENGTH])
 		.max_age(Duration::from_secs(3600))
+}
+
+#[derive(serde::Deserialize)]
+struct CelRequest {
+	expression: String,
+	#[serde(default)]
+	data: Option<serde_json::Value>,
+}
+
+#[derive(serde::Serialize)]
+struct CelResponse {
+	result: Option<serde_json::Value>,
+	error: Option<String>,
+}
+
+async fn handle_cel(Json(request): Json<CelRequest>) -> Response {
+	// Compile the expression
+	let expression = match cel::Expression::new_strict(&request.expression) {
+		Ok(expr) => expr,
+		Err(e) => {
+			let resp = CelResponse {
+				result: None,
+				error: Some(format!("Failed to compile expression: {}", e)),
+			};
+			return (StatusCode::BAD_REQUEST, Json(resp)).into_response();
+		},
+	};
+
+	// Deserialize the input data or use empty data if not provided
+	let executor_serde: ExecutorSerde = match request.data {
+		Some(data) => match serde_json::from_value(data) {
+			Ok(serde) => serde,
+			Err(e) => {
+				let resp = CelResponse {
+					result: None,
+					error: Some(format!("Failed to parse input data: {}", e)),
+				};
+				return (StatusCode::BAD_REQUEST, Json(resp)).into_response();
+			},
+		},
+		_ => ExecutorSerde::default(),
+	};
+
+	// Create the executor and evaluate the expression
+	let executor = executor_serde.as_executor();
+	let resp = match executor.eval(&expression) {
+		Ok(value) => match value.json() {
+			Ok(json) => CelResponse {
+				result: Some(json),
+				error: None,
+			},
+			Err(e) => CelResponse {
+				result: None,
+				error: Some(format!("Failed to convert result to JSON: {}", e)),
+			},
+		},
+		Err(e) => CelResponse {
+			result: None,
+			error: Some(format!("Evaluation error: {}", e)),
+		},
+	};
+
+	(StatusCode::OK, Json(resp)).into_response()
 }
 
 impl AdminFallback for UiHandler {

@@ -12,10 +12,10 @@ fn main() {
 
 	let output = if cfg!(target_os = "windows") {
 		Command::new("powershell.exe")
-			.arg("../../common/scripts/report_build_info.ps1")
+			.arg("../../tools/report_build_info.ps1")
 			.output()
 	} else {
-		Command::new("../../common/scripts/report_build_info.sh").output()
+		Command::new("../../tools/report_build_info.sh").output()
 	};
 
 	match output {

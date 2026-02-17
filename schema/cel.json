@@ -131,10 +131,10 @@
           "type": "string"
         }
       },
-      "additionalProperties": false,
       "required": [
         "key"
-      ]
+      ],
+      "additionalProperties": true
     },
     "basicAuth": {
       "description": "`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.",
@@ -187,8 +187,35 @@
           "format": "uint64",
           "minimum": 0
         },
+        "cachedInputTokens": {
+          "description": "The number of tokens in the input/prompt read from cache (savings)",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "cacheCreationInputTokens": {
+          "description": "Tokens written to cache (costs)\nNot present with OpenAI",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "outputTokens": {
           "description": "The number of tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "reasoningTokens": {
+          "description": "The number of reasoning tokens in the output/completion.",
           "type": [
             "integer",
             "null"

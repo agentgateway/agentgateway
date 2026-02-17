@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dummy-idp
+  namespace: default
+  labels:
+    app: dummy-idp
+spec:
+  ports:
+    - name: http
+      port: 8443
+      targetPort: 8443
+  selector:
+    app.kubernetes.io/name: dummy-idp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dummy-idp
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dummy-idp
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: dummy-idp
+        app.kubernetes.io/name: dummy-idp
+        version: v1
+    spec:
+      containers:
+        - image: ghcr.io/agentgateway/dummy-idp:0.0.1
+          imagePullPolicy: IfNotPresent
+          name: dummy-idp
+          ports:
+            - containerPort: 8443

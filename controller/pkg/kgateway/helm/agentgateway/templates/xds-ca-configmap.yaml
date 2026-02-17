@@ -1,0 +1,12 @@
+{{- $gateway := .Values.agentgateway }}
+{{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kgateway.gateway.fullname" . }}-xds-ca
+  labels:
+    {{- include "kgateway.gateway.allLabels" . | nindent 4 }}
+data:
+  ca.crt: |
+{{ $gateway.xds.tls.caCert | indent 4 }}
+{{- end }}

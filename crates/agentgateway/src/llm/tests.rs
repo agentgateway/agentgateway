@@ -124,6 +124,80 @@ const COUNT_TOKENS_REQUESTS: &[&str] = &[
 	"request_count_tokens_basic",
 	"request_count_tokens_with_system",
 ];
+const EMBEDDINGS_REQUESTS: &[&str] = &["request_embeddings_basic", "request_embeddings_array"];
+
+#[tokio::test]
+async fn test_bedrock_embeddings() {
+	let titan_provider = bedrock::Provider {
+		model: Some(strng::new("amazon.titan-embed-text-v2:0")),
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let cohere_provider = bedrock::Provider {
+		model: Some(strng::new("cohere.embed-english-v3")),
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let titan_request = |i| conversion::bedrock::from_embeddings::translate(&i, &titan_provider);
+	let cohere_request = |i| conversion::bedrock::from_embeddings::translate(&i, &cohere_provider);
+
+	test_request(
+		"bedrock-embeddings-titan",
+		"request_embeddings_basic",
+		titan_request,
+	);
+	for r in EMBEDDINGS_REQUESTS {
+		test_request("bedrock-embeddings-cohere", r, cohere_request);
+	}
+
+	let titan_response = |i: Bytes| {
+		conversion::bedrock::from_embeddings::translate_response(
+			&i,
+			&http::HeaderMap::new(),
+			"amazon.titan-embed-text-v2:0",
+		)
+	};
+	let cohere_response = |i: Bytes| {
+		conversion::bedrock::from_embeddings::translate_response(
+			&i,
+			&http::HeaderMap::new(),
+			"cohere.embed-english-v3",
+		)
+	};
+
+	test_response(
+		"bedrock-embeddings-titan",
+		"response_bedrock_titan_embeddings",
+		titan_response,
+	);
+	test_response(
+		"bedrock-embeddings-cohere",
+		"response_bedrock_cohere_embeddings",
+		cohere_response,
+	);
+}
+
+#[tokio::test]
+async fn test_vertex_embeddings() {
+	let provider = vertex::Provider {
+		model: Some(strng::new("text-embedding-004")),
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project-123"),
+	};
+
+	let request = |i: types::embeddings::Request| i.to_vertex(&provider);
+	for r in EMBEDDINGS_REQUESTS {
+		test_request("vertex-embeddings", r, request);
+	}
+
+	let response =
+		|i: Bytes| conversion::vertex::from_embeddings::translate_response(&i, "text-embedding-004");
+	test_response("vertex-embeddings", "response_vertex_embeddings", response);
+}
 
 #[tokio::test]
 async fn test_bedrock_completions() {
@@ -260,7 +334,7 @@ async fn test_vertex_messages() {
 
 	let request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
 		let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
-		provider.prepare_anthropic_request_body(anthropic_body)
+		provider.prepare_anthropic_message_body(anthropic_body)
 	};
 
 	for r in MESSAGES_REQUESTS {
@@ -438,7 +512,7 @@ async fn test_vertex_count_tokens() {
 
 	let request = |input: types::count_tokens::Request| -> Result<Vec<u8>, AIError> {
 		let anthropic_body = input.to_anthropic()?;
-		provider.prepare_anthropic_request_body(anthropic_body)
+		provider.prepare_anthropic_count_tokens_body(anthropic_body)
 	};
 
 	for r in COUNT_TOKENS_REQUESTS {

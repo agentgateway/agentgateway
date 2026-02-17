@@ -1,0 +1,16 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "bedrock-embeddings-cohere: request_embeddings_array"
+info:
+  model: text-embedding-3-small
+  input:
+    - hello
+    - world
+---
+{
+  "texts": [
+    "hello",
+    "world"
+  ],
+  "input_type": "search_query"
+}

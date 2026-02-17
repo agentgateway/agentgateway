@@ -1,0 +1,90 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: backend-route
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "example.com"
+  rules:
+  - backendRefs:
+    - name: backend
+      port: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: backend2-route
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "example2.com"
+  rules:
+  - backendRefs:
+    - name: backend
+      port: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: tls-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: backend
+  - group: ""
+    kind: Service
+    name: backend2
+    sectionName: "443"
+  validation:
+    hostname: "localhost"
+    caCertificateRefs:
+    - group: ""
+      kind: ConfigMap
+      name: ca
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: google-route
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "foo.com"
+  rules:
+  - backendRefs:
+    - name: google
+      kind: AgentgatewayBackend
+      group: agentgateway.dev
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: google
+  namespace: agentgateway-base
+spec:
+  static:
+    host: google.com
+    port: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: wellknown-tls-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: agentgateway.dev
+    kind: AgentgatewayBackend
+    name: google
+  validation:
+    hostname: "google.com"
+    wellKnownCACertificates: System

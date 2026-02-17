@@ -1,0 +1,76 @@
+# This test validates deep merging of AgentgatewayParameters between GWC and GW.
+#
+# When GatewayClass sets some fields and Gateway sets other fields within the
+# same struct, the merging should preserve both. This test covers:
+#
+# 1. Istio field merging: GWC sets istio.caAddress, GW sets istio.trustDomain
+#    -> Both should be present in output
+#
+# 2. Resources field merging: GWC sets resources.limits, GW sets resources.requests
+#    -> Both should be present in output
+#
+# NOTE: We use a non-default caAddress value because the helm template has
+# a default fallback of "https://istiod.istio-system.svc:15012". Using that
+# default would mask potential bugs.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: gwc-params
+  namespace: default
+spec:
+  istio:
+    caAddress: https://my-custom-istiod.custom-namespace.svc:15012
+    # trustDomain intentionally not set - should come from Gateway AGWP
+  resources:
+    limits:
+      cpu: "2"
+      memory: 1Gi
+    # requests intentionally not set - should come from Gateway AGWP
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: gw-params
+  namespace: default
+spec:
+  istio:
+    # caAddress intentionally not set - should be preserved from GWC AGWP
+    trustDomain: my-custom-trust-domain
+  resources:
+    # limits intentionally not set - should be preserved from GWC AGWP
+    requests:
+      cpu: 500m
+      memory: 256Mi
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: gwc-params
+    namespace: default
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: gw-params
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same
