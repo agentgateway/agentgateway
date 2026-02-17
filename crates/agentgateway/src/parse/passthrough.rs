@@ -82,6 +82,7 @@ where
 			&mut *this.decoder,
 			this.handler,
 		) {
+			tracing::error!("howardjohn: frame error {e}");
 			return Poll::Ready(Some(Err(e)));
 		}
 		// We need more input data - poll the underlying body
@@ -94,6 +95,7 @@ where
 				Some(Ok(frame))
 			},
 			Some(Err(e)) => {
+				tracing::error!("howardjohn: frame error2 {e}");
 				return Poll::Ready(Some(Err(e)));
 			},
 			None => {
@@ -109,7 +111,10 @@ where
 			this.handler,
 		) {
 			Ok(_) => Poll::Ready(frame_to_send),
-			Err(e) => Poll::Ready(Some(Err(e))),
+			Err(e) => {
+				tracing::error!("howardjohn: frame error3 {e}");
+				Poll::Ready(Some(Err(e)))
+			},
 		}
 	}
 }

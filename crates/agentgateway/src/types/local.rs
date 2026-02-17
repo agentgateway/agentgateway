@@ -18,12 +18,12 @@ use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
 	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
 	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
-	TunnelProtocol, TypedResourceName,
+	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, MethodMatch,
+	OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, QueryMatch, ResourceName, Route,
+	RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
+	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
+	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
+	TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -128,6 +128,15 @@ pub struct LocalLLMModels {
 	/// requestHeaders modifies headers in requests to the LLM provider.
 	#[serde(default)]
 	request_headers: Option<filters::HeaderModifier>,
+
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	matches: Vec<LLMRouteMatch>,
+}
+
+#[apply(schema!)]
+pub struct LLMRouteMatch {
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub headers: Vec<HeaderMatch>,
 }
 
 #[apply(schema_de!)]
@@ -1095,10 +1104,22 @@ async fn convert_llm_config(
 	let transformation = http::transformation_cel::Transformation::try_from_local_config(
 		LocalTransformationConfig {
 			request: Some(http::transformation_cel::LocalTransform {
-				set: vec![(
-					strng::new("x-gateway-model-name"),
-					strng::new("json(request.body).model"),
-				)],
+				set: vec![
+					(
+						strng::new("x-gateway-model-name"),
+						strng::new(
+							r#"
+request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict") ?
+request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
+json(request.body).model
+"#,
+						),
+					),
+					(
+						strng::new("anthropic-beta"),
+						strng::new("request.headers['anthropic-beta'].split(',').filter(v, v.trim() in [])"),
+					),
+				],
 				add: vec![],
 				remove: vec![],
 				body: None,
@@ -1165,7 +1186,7 @@ async fn convert_llm_config(
 	routes.insert(model_list_route);
 
 	// Create routes and backends for each model
-	for model_config in &llm_config.models {
+	for (idx, model_config) in llm_config.models.iter().enumerate() {
 		let model_name = strng::new(&model_config.name);
 		let backend_key = strng::format!("llm:{}", model_config.name);
 		let p = model_config.params.clone();
@@ -1249,28 +1270,48 @@ async fn convert_llm_config(
 		all_backends.push(backend_with_policies);
 
 		// Create route for this model
-		let route_key = strng::format!("llm:model:{}", model_config.name);
-		let header_match = if model_config.name == "*" {
-			// TODO: support prefix and suffix wildcards too
-			HeaderMatch {
-				name: HeaderOrPseudo::Header(
-					HeaderName::from_bytes(b"x-gateway-model-name")
-						.map_err(|e| anyhow!("Invalid header name: {}", e))?,
-				),
-				value: HeaderValueMatch::Regex(regex::Regex::new(r".*").unwrap()),
-			}
+		// Index is needed because the same name can be used with different match criteria
+		let route_key = strng::format!("llm:model:{}:{idx}", model_config.name);
+		let user_matches = if model_config.matches.is_empty() {
+			vec![RouteMatch {
+				path: PathMatch::PathPrefix(strng::new("/")),
+				method: None,
+				headers: vec![],
+				query: vec![],
+			}]
 		} else {
-			HeaderMatch {
-				name: HeaderOrPseudo::Header(
-					HeaderName::from_bytes(b"x-gateway-model-name")
-						.map_err(|e| anyhow!("Invalid header name: {}", e))?,
-				),
-				value: HeaderValueMatch::Exact(
-					::http::HeaderValue::from_str(&model_config.name)
-						.map_err(|e| anyhow!("Invalid header value: {}", e))?,
-				),
-			}
+			model_config
+				.matches
+				.iter()
+				.map(|m| RouteMatch {
+					headers: m.headers.clone(),
+					path: PathMatch::PathPrefix(strng::new("/")),
+					method: None,
+					query: vec![],
+				})
+				.collect_vec()
 		};
+		let matches = user_matches
+			.into_iter()
+			.map(|mut m| {
+				let header_match = if model_config.name == "*" {
+					// TODO: support prefix and suffix wildcards too
+					HeaderMatch {
+						name: HeaderOrPseudo::Header(HeaderName::from_static("x-gateway-model-name")),
+						value: HeaderValueMatch::Regex(regex::Regex::new(r".*").unwrap()),
+					}
+				} else {
+					HeaderMatch {
+						name: HeaderOrPseudo::Header(HeaderName::from_static("x-gateway-model-name")),
+						value: HeaderValueMatch::Exact(
+							::http::HeaderValue::from_str(&model_config.name).unwrap(),
+						),
+					}
+				};
+				m.headers.push(header_match);
+				m
+			})
+			.collect_vec();
 
 		let model_route = Route {
 			key: route_key.clone(),
@@ -1281,12 +1322,7 @@ async fn convert_llm_config(
 				kind: None,
 			},
 			hostnames: vec![],
-			matches: vec![RouteMatch {
-				path: PathMatch::PathPrefix(strng::new("/")),
-				headers: vec![header_match],
-				method: None,
-				query: vec![],
-			}],
+			matches,
 			backends: vec![RouteBackendReference {
 				weight: 1,
 				backend: BackendReference::Backend(strng::format!("/{}", backend_key)),
@@ -1299,6 +1335,9 @@ async fn convert_llm_config(
 						crate::llm::RouteType::Completions,
 					),
 					(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
+					// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
+					(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
+					(strng::new(":streamRawPredict"), crate::llm::RouteType::Messages),
 					(
 						strng::new("/v1/responses"),
 						crate::llm::RouteType::Responses,

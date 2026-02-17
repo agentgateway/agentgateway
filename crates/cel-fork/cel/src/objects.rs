@@ -944,7 +944,7 @@ impl<'a> Value<'a> {
 							accu = Value::resolve(&comprehension.loop_step, ctx, &with_iter)?;
 						}
 					},
-					t => todo!("Support {t:?}"),
+					_ => return Err(crate::ExecutionError::NoSuchOverload),
 				}
 				let comp_resolver = SingleVarResolver::new(resolver, &comprehension.accu_var, accu);
 				Value::resolve(&comprehension.result, ctx, &comp_resolver)

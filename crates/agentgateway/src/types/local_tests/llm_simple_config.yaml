@@ -2,6 +2,7 @@ frontendPolicies:
   accessLog:
     add:
       user: request.headers["user-agent"]
+
 llm:
   policies:
     jwtAuth:
@@ -14,6 +15,11 @@ llm:
     params:
       model: claude-3-5-haiku-20241022
       apiKey: "sk-123"
+    matches:
+    - headers:
+      - name: "X-Org"
+        value:
+          exact: "engineering"
   - name: gemini-0.5-pro
     provider: vertex
     params:

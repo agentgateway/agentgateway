@@ -10,47 +10,12 @@ binds:
   listeners:
     llm:
       key: llm
-      gatewayName: llm
-      gatewayNamespace: internal
+      gatewayName: name
+      gatewayNamespace: ns
       listenerName: llm
       hostname: '*'
       protocol: HTTP
       routes:
-        llm:model:gemini-0.5-pro:
-          key: llm:model:gemini-0.5-pro
-          name: model:gemini-0.5-pro
-          namespace: internal
-          matches:
-          - headers:
-            - name: x-gateway-model-name
-              value:
-                exact: gemini-0.5-pro
-            path:
-              pathPrefix: /
-          backends:
-          - weight: 1
-            backend: /llm:gemini-0.5-pro
-          inlinePolicies:
-          - ai:
-              routes:
-                /v1/chat/completions: completions
-                /v1/embeddings: embeddings
-                /v1/responses: responses
-                /v1/messages: messages
-                '*': passthrough
-        llm:admin:model-list:
-          key: llm:admin:model-list
-          name: admin:model-list
-          namespace: internal
-          matches:
-          - path:
-              pathPrefix: /v1/models
-          - path:
-              pathPrefix: /models
-          inlinePolicies:
-          - directResponse:
-              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjgzOTE3LCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MTc3MTI4MzkxNywib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjgzOTE3LCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjgzOTE3LCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
-              status: 200
         llm:model:gpt-7-max:
           key: llm:model:gpt-7-max
           name: model:gpt-7-max
@@ -69,10 +34,76 @@ binds:
           - ai:
               routes:
                 /v1/chat/completions: completions
+                :streamRawPredict: messages
                 /v1/embeddings: embeddings
                 /v1/responses: responses
                 /v1/messages: messages
+                :rawPredict: messages
                 '*': passthrough
+        llm:model:gemini-0.5-pro:
+          key: llm:model:gemini-0.5-pro
+          name: model:gemini-0.5-pro
+          namespace: internal
+          matches:
+          - headers:
+            - name: x-gateway-model-name
+              value:
+                exact: gemini-0.5-pro
+            path:
+              pathPrefix: /
+          backends:
+          - weight: 1
+            backend: /llm:gemini-0.5-pro
+          inlinePolicies:
+          - ai:
+              routes:
+                /v1/chat/completions: completions
+                :streamRawPredict: messages
+                /v1/embeddings: embeddings
+                /v1/responses: responses
+                /v1/messages: messages
+                :rawPredict: messages
+                '*': passthrough
+        llm:model:claude-3-haiku:
+          key: llm:model:claude-3-haiku
+          name: model:claude-3-haiku
+          namespace: internal
+          matches:
+          - headers:
+            - name: x-org
+              value:
+                exact: engineering
+            - name: x-gateway-model-name
+              value:
+                exact: claude-3-haiku
+            path:
+              pathPrefix: /
+          backends:
+          - weight: 1
+            backend: /llm:claude-3-haiku
+          inlinePolicies:
+          - ai:
+              routes:
+                /v1/chat/completions: completions
+                :streamRawPredict: messages
+                /v1/embeddings: embeddings
+                /v1/responses: responses
+                /v1/messages: messages
+                :rawPredict: messages
+                '*': passthrough
+        llm:admin:model-list:
+          key: llm:admin:model-list
+          name: admin:model-list
+          namespace: internal
+          matches:
+          - path:
+              pathPrefix: /v1/models
+          - path:
+              pathPrefix: /models
+          inlinePolicies:
+          - directResponse:
+              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjg3OTUzLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MTc3MTI4Nzk1Mywib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjg3OTUzLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjoxNzcxMjg3OTUzLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
+              status: 200
         llm:model:gpt-3.5-turbo:
           key: llm:model:gpt-3.5-turbo
           name: model:gpt-3.5-turbo
@@ -91,34 +122,29 @@ binds:
           - ai:
               routes:
                 /v1/chat/completions: completions
+                :streamRawPredict: messages
                 /v1/embeddings: embeddings
                 /v1/responses: responses
                 /v1/messages: messages
-                '*': passthrough
-        llm:model:claude-3-haiku:
-          key: llm:model:claude-3-haiku
-          name: model:claude-3-haiku
-          namespace: internal
-          matches:
-          - headers:
-            - name: x-gateway-model-name
-              value:
-                exact: claude-3-haiku
-            path:
-              pathPrefix: /
-          backends:
-          - weight: 1
-            backend: /llm:claude-3-haiku
-          inlinePolicies:
-          - ai:
-              routes:
-                /v1/chat/completions: completions
-                /v1/embeddings: embeddings
-                /v1/responses: responses
-                /v1/messages: messages
+                :rawPredict: messages
                 '*': passthrough
       tcpRoutes: {}
 policies:
+- key: listener/0
+  name: null
+  target:
+    gateway:
+      gatewayName: name
+      gatewayNamespace: ns
+      listenerName: llm
+  policy:
+    traffic:
+      phase: gateway
+      jwtAuth:
+        mode: optional
+        providers:
+        - issuer: agentgateway.dev
+          keys: []
 - key: llm:transformation
   name:
     kind: Local
@@ -126,8 +152,8 @@ policies:
     namespace: internal
   target:
     gateway:
-      gatewayName: llm
-      gatewayNamespace: internal
+      gatewayName: name
+      gatewayNamespace: ns
       listenerName: llm
   policy:
     traffic:
@@ -156,8 +182,7 @@ policies:
     frontend:
       accessLog:
         add:
-          body: variables()
-          wtf: ba
+          user: request.headers["user-agent"]
 backends:
 - backend:
     ai:
@@ -186,6 +211,9 @@ backends:
                 evicted_until: null
           rejected: {}
   inlinePolicies:
+  - requestHeaderModifier:
+      remove:
+      - x-gateway-model-name
   - ai: {}
 - backend:
     ai:
@@ -216,6 +244,9 @@ backends:
                 evicted_until: null
           rejected: {}
   inlinePolicies:
+  - requestHeaderModifier:
+      remove:
+      - x-gateway-model-name
   - ai: {}
 - backend:
     ai:
@@ -243,6 +274,9 @@ backends:
                 evicted_until: null
           rejected: {}
   inlinePolicies:
+  - requestHeaderModifier:
+      remove:
+      - x-gateway-model-name
   - ai: {}
 - backend:
     ai:
@@ -267,6 +301,9 @@ backends:
                 evicted_until: null
           rejected: {}
   inlinePolicies:
+  - requestHeaderModifier:
+      remove:
+      - x-gateway-model-name
   - ai: {}
 workloads: []
 services: []
