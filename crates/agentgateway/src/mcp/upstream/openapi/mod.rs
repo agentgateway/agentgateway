@@ -623,9 +623,13 @@ impl Handler {
 					total: None,
 				},
 			),
-			ClientRequest::GetTaskInfoRequest(_) => {
-				Messages::from_result(id, GetTaskInfoResult { task: None })
-			},
+			ClientRequest::GetTaskInfoRequest(_) => Messages::from_result(
+				id,
+				GetTaskResult {
+					task: Task::default(),
+					meta: None,
+				},
+			),
 			ClientRequest::GetTaskResultRequest(_) => {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},

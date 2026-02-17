@@ -99,7 +99,7 @@ rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
-rmcp = { version = "0.15", features = [
+rmcp = { version = "0.16", features = [
     "client",
     "server",
     "base64",
@@ -178,7 +178,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "0.15", features = [
+rmcp = { version = "0.16", features = [
     "client",
     "server",
     "base64",

@@ -424,7 +424,7 @@ pub async fn mcp_streamable_client(
 	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
-		StreamableHttpClientTransport::<legacyreqwest::Client>::from_uri(format!("http://{s}/mcp"));
+		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
 	let client_info = ClientInfo {
 		meta: None,
 		protocol_version: Default::default(),

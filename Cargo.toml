@@ -114,7 +114,7 @@ once_cell = "1.21"
 openapiv3 = "2.2"
 opentelemetry = "0.31"
 opentelemetry-http = "0.31"
-opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = ["http-proto", "internal-logs", "trace", "grpc-tonic"] }
 opentelemetry-proto = { version = "0.31", features = ["gen-tonic"] }
 opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
 parking_lot = "0.12"
