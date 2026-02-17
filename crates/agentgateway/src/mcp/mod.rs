@@ -13,6 +13,7 @@ use std::io;
 use std::sync::Arc;
 
 use crate::http::SendDirectResponse;
+use crate::http::{Request, Uri};
 use crate::proxy::ProxyError;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
@@ -126,4 +127,8 @@ pub struct MCPInfo {
 	pub target_name: Option<String>,
 	pub resource: Option<MCPOperation>,
 	pub session_id: Option<String>,
+}
+
+pub(crate) fn pre_route_rewrite_uri(req: &Request) -> Option<Uri> {
+	auth::pre_route_rewrite_uri(req)
 }

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum_core::response::IntoResponse;
@@ -14,9 +16,51 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{McpAuthentication, McpIDP};
 
+const OAUTH_PROTECTED_RESOURCE_PREFIX: &str = "/.well-known/oauth-protected-resource";
+const OAUTH_AUTHORIZATION_SERVER_PREFIX: &str = "/.well-known/oauth-authorization-server";
+const CLIENT_REGISTRATION_SUFFIX: &str = "/client-registration";
+
 pub(super) fn is_well_known_endpoint(path: &str) -> bool {
-	path.starts_with("/.well-known/oauth-protected-resource")
-		|| path.starts_with("/.well-known/oauth-authorization-server")
+	path.starts_with(OAUTH_PROTECTED_RESOURCE_PREFIX)
+		|| path.starts_with(OAUTH_AUTHORIZATION_SERVER_PREFIX)
+}
+
+fn request_path(req: &Request) -> &str {
+	req
+		.extensions()
+		.get::<filters::OriginalUrl>()
+		.map(|u| u.0.path())
+		.unwrap_or_else(|| req.uri().path())
+}
+
+fn well_known_backend_path(path: &str) -> Option<String> {
+	let suffix = if let Some(s) = path.strip_prefix(OAUTH_PROTECTED_RESOURCE_PREFIX) {
+		s
+	} else if let Some(s) = dbg!(path.strip_prefix(OAUTH_AUTHORIZATION_SERVER_PREFIX)) {
+		return Some(s.strip_suffix(CLIENT_REGISTRATION_SUFFIX).unwrap_or(s).to_string());
+	} else {
+		return None;
+	};
+	if suffix.is_empty() || suffix == "/" {
+		return None;
+	}
+	Some(if suffix.starts_with('/') {
+		suffix.to_string()
+	} else {
+		format!("/{suffix}")
+	})
+}
+
+pub(crate) fn pre_route_rewrite_uri(req: &Request) -> Option<Uri> {
+	let new_path = well_known_backend_path(req.uri().path())?;
+	let new_path_and_query = if let Some(query) = req.uri().query() {
+		format!("{new_path}?{query}")
+	} else {
+		new_path
+	};
+	let mut parts = req.uri().clone().into_parts();
+	parts.path_and_query = Some(PathAndQuery::from_str(&new_path_and_query).ok()?);
+	Uri::from_parts(parts).ok()
 }
 
 pub(super) async fn apply_token_validation(
@@ -24,7 +68,7 @@ pub(super) async fn apply_token_validation(
 	auth: &McpAuthentication,
 ) -> Result<(), ProxyError> {
 	// skip well-known OAuth endpoints for authn
-	if is_well_known_endpoint(req.uri().path()) {
+	if is_well_known_endpoint(request_path(req)) {
 		return Ok(());
 	}
 	let has_claims = req.extensions().get::<Claims>().is_some();
@@ -54,11 +98,12 @@ pub(super) async fn enforce_authentication(
 	client: &PolicyClient,
 ) -> Result<Option<Response>, ProxyError> {
 	// skip well-known OAuth endpoints for authn
-	if !is_well_known_endpoint(req.uri().path()) {
+	let path = request_path(req).to_string();
+	if !is_well_known_endpoint(path.as_str()) {
 		apply_token_validation(req, auth).await?;
 	}
 
-	match req.uri().path() {
+	match path.as_str() {
 		// TODO: indicate this is a DirectResponse
 		path if path.ends_with("client-registration") => Ok(Some(
 			client_registration(req, auth, client.clone())
@@ -93,7 +138,7 @@ pub(super) fn create_auth_required_response(
 	req: &Request,
 	auth: &McpAuthentication,
 ) -> ProxyError {
-	let request_path = req.uri().path();
+	let request_path = request_path(req);
 	// If the `resource` is explicitly configured, use that as the base. otherwise, derive it from the
 	// the request URL
 	let proxy_url = auth
@@ -173,10 +218,9 @@ fn strip_oauth_protected_resource_prefix(req: &Request) -> String {
 		.unwrap_or_else(|| req.uri().clone());
 
 	let path = uri.path();
-	const OAUTH_PREFIX: &str = "/.well-known/oauth-protected-resource";
 
 	// Remove the oauth-protected-resource prefix and keep the remaining path
-	if let Some(remaining_path) = path.strip_prefix(OAUTH_PREFIX) {
+	if let Some(remaining_path) = path.strip_prefix(OAUTH_PROTECTED_RESOURCE_PREFIX) {
 		uri.to_string().replace(path, remaining_path)
 	} else {
 		// If the prefix is not found, return the original URI
@@ -282,4 +326,42 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::pre_route_rewrite_uri;
+	use crate::http::tests_common::request_for_uri;
+
+	#[test]
+	fn pre_route_rewrites_protected_resource_path() {
+		let req =
+			request_for_uri("http://example.com/.well-known/oauth-protected-resource/mcp/gitlab?foo=bar");
+		let rewritten = pre_route_rewrite_uri(&req).expect("path should be rewritten");
+		assert_eq!(rewritten.path(), "/mcp/gitlab");
+		assert_eq!(rewritten.query(), Some("foo=bar"));
+	}
+
+	#[test]
+	fn pre_route_rewrites_authorization_server_path() {
+		let req =
+			request_for_uri("http://example.com/.well-known/oauth-authorization-server/mcp/gitlab");
+		let rewritten = pre_route_rewrite_uri(&req).expect("path should be rewritten");
+		assert_eq!(rewritten.path(), "/mcp/gitlab");
+	}
+
+	#[test]
+	fn pre_route_rewrites_client_registration_path() {
+		let req = request_for_uri(
+			"http://example.com/.well-known/oauth-authorization-server/mcp/gitlab/client-registration",
+		);
+		let rewritten = pre_route_rewrite_uri(&req).expect("path should be rewritten");
+		assert_eq!(rewritten.path(), "/mcp/gitlab");
+	}
+
+	#[test]
+	fn pre_route_does_not_rewrite_unscoped_authorization_server_path() {
+		let req = request_for_uri("http://example.com/.well-known/oauth-authorization-server");
+		assert!(pre_route_rewrite_uri(&req).is_none());
+	}
 }
