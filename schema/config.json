@@ -3006,7 +3006,7 @@
       ]
     },
     "FailureMode": {
-      "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailOpen`, matching Envoy's default behavior\n(`failure_mode_deny=false`). When failing open, requests are allowed\nthrough despite the service failure. When failing closed, a 500\nInternal Server Error is returned.",
+      "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailOpen`, matching Envoy's default behavior\n(`failure_mode_deny=false`). When failing open, requests are allowed\nthrough despite the service failure. When failing closed, a 500\nInternal Server Error is returned.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files for compatibility,\nthough camelCase is the preferred format.",
       "oneOf": [
         {
           "description": "Allow the request through when the rate limit service is unavailable (default).",

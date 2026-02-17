@@ -12,6 +12,7 @@ fn make_rate_limit(descriptor_entries: Vec<DescriptorEntry>) -> RemoteRateLimit 
 		target: Arc::new(SimpleBackendReference::Invalid),
 		descriptors: Arc::new(DescriptorSet(descriptor_entries)),
 		timeout: None,
+		failure_mode: FailureMode::default(),
 	}
 }
 
@@ -500,6 +501,214 @@ fn build_request_non_string_cel_result_returns_none() {
 	assert!(
 		result.is_none(),
 		"expected None when CEL result is not string-convertible"
+	);
+}
+
+// --- FailureMode tests ---
+
+#[test]
+fn failure_mode_defaults_to_fail_open() {
+	let mode = FailureMode::default();
+	assert_eq!(mode, FailureMode::FailOpen);
+}
+
+#[test]
+fn failure_mode_serde_roundtrip() {
+	// Test failOpen
+	let json = serde_json::to_string(&FailureMode::FailOpen).unwrap();
+	assert_eq!(json, r#""failOpen""#);
+	let deserialized: FailureMode = serde_json::from_str(&json).unwrap();
+	assert_eq!(deserialized, FailureMode::FailOpen);
+
+	// Test failClosed
+	let json = serde_json::to_string(&FailureMode::FailClosed).unwrap();
+	assert_eq!(json, r#""failClosed""#);
+	let deserialized: FailureMode = serde_json::from_str(&json).unwrap();
+	assert_eq!(deserialized, FailureMode::FailClosed);
+}
+
+#[test]
+fn failure_mode_accepts_pascal_case_alias() {
+	// Test FailOpen (PascalCase alias for compatibility)
+	let deserialized: FailureMode = serde_json::from_str(r#""FailOpen""#).unwrap();
+	assert_eq!(deserialized, FailureMode::FailOpen);
+
+	// Test FailClosed (PascalCase alias for compatibility)
+	let deserialized: FailureMode = serde_json::from_str(r#""FailClosed""#).unwrap();
+	assert_eq!(deserialized, FailureMode::FailClosed);
+
+	// Serialization still uses camelCase (not the alias)
+	let json = serde_json::to_string(&FailureMode::FailOpen).unwrap();
+	assert_eq!(json, r#""failOpen""#);
+}
+
+// --- apply tests ---
+
+#[test]
+fn apply_ok_response_passes_through() {
+	use crate::http::tests_common::request_for_uri;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::Ok as i32,
+		statuses: vec![],
+		response_headers_to_add: vec![],
+		request_headers_to_add: vec![proto::HeaderValue {
+			key: "x-ratelimit-remaining".to_string(),
+			value: "99".to_string(),
+			raw_value: vec![],
+		}],
+		raw_body: vec![],
+		dynamic_metadata: None,
+		quota: None,
+	};
+	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
+	// Should not have a direct response (request is allowed)
+	assert!(result.direct_response.is_none());
+	// Request header should have been added
+	assert_eq!(req.headers().get("x-ratelimit-remaining").unwrap(), "99");
+}
+
+#[test]
+fn apply_over_limit_response_returns_429() {
+	use crate::http::tests_common::request_for_uri;
+	use ::http::StatusCode;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::OverLimit as i32,
+		statuses: vec![],
+		response_headers_to_add: vec![proto::HeaderValue {
+			key: "retry-after".to_string(),
+			value: "60".to_string(),
+			raw_value: vec![],
+		}],
+		request_headers_to_add: vec![],
+		raw_body: b"rate limit exceeded".to_vec(),
+		dynamic_metadata: None,
+		quota: None,
+	};
+	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
+	// Should have a direct response with 429
+	let direct = result.direct_response.unwrap();
+	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
+	assert_eq!(direct.headers().get("retry-after").unwrap(), "60");
+}
+
+// --- ProxyError mapping tests ---
+
+#[test]
+fn rate_limit_failed_maps_to_500() {
+	use ::http::StatusCode;
+
+	let err = ProxyError::RateLimitFailed;
+	let response = err.into_response();
+	assert_eq!(
+		response.status(),
+		StatusCode::INTERNAL_SERVER_ERROR,
+		"RateLimitFailed should map to 500, not 429"
+	);
+}
+
+#[test]
+fn rate_limit_exceeded_maps_to_429() {
+	use ::http::StatusCode;
+
+	let err = ProxyError::RateLimitExceeded {
+		limit: 10,
+		remaining: 0,
+		reset_seconds: 60,
+	};
+	let response = err.into_response();
+	assert_eq!(
+		response.status(),
+		StatusCode::TOO_MANY_REQUESTS,
+		"RateLimitExceeded should map to 429"
+	);
+}
+
+// --- Config deserialization tests ---
+
+#[test]
+fn config_with_failure_mode_deserializes() {
+	let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+failureMode: failOpen
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	assert_eq!(rrl.failure_mode, FailureMode::FailOpen);
+	assert_eq!(rrl.domain, "test");
+}
+
+#[test]
+fn config_with_fail_closed_deserializes() {
+	let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+failureMode: failClosed
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	assert_eq!(rrl.failure_mode, FailureMode::FailClosed);
+}
+
+#[test]
+fn config_with_pascal_case_aliases_deserializes() {
+	// Test FailOpen (PascalCase alias)
+	let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+failureMode: FailOpen
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	assert_eq!(rrl.failure_mode, FailureMode::FailOpen);
+
+	// Test FailClosed (PascalCase alias)
+	let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+failureMode: FailClosed
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	assert_eq!(rrl.failure_mode, FailureMode::FailClosed);
+}
+
+#[test]
+fn config_without_failure_mode_defaults_to_fail_open() {
+	let yaml = r#"
+domain: "test"
+host: "127.0.0.1:8081"
+descriptors:
+  - entries:
+      - key: "user"
+        value: '"test-user"'
+    type: "requests"
+"#;
+	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	assert_eq!(
+		rrl.failure_mode,
+		FailureMode::FailOpen,
+		"Missing failureMode should default to failOpen"
 	);
 }
 
