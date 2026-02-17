@@ -3651,6 +3651,7 @@ spec:
                                           - jwksPath
                                           type: object
                                         mode:
+                                          default: Strict
                                           description: validation mode for JWT authentication.
                                           enum:
                                           - Strict
@@ -6459,6 +6460,7 @@ spec:
                             - jwksPath
                             type: object
                           mode:
+                            default: Strict
                             description: validation mode for JWT authentication.
                             enum:
                             - Strict

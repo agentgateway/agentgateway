@@ -931,6 +931,7 @@ type MCPAuthentication struct {
 	JWKS RemoteJWKS `json:"jwks"`
 
 	// validation mode for JWT authentication.
+	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
 }
