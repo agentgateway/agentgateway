@@ -4,12 +4,9 @@ load('ext://restart_process', 'docker_build_with_restart')
 
 # Configuration
 version = 'v1.0.1-dev'
-git_revision = str(local('git rev-parse HEAD')).strip()
 cluster_name = 'kind'
 install_namespace = k8s_namespace()
 image_registry = 'localhost:5000'
-
-default_registry(image_registry)
 
 # Ensure Kind cluster exists
 allow_k8s_contexts('kind-' + cluster_name)
@@ -26,9 +23,9 @@ def run_controller_make(target):
 
 # Check if kind cluster exists, create if not
 if str(local('kind get clusters 2>/dev/null | grep -c "^' + cluster_name + '$" || true')).strip() == '0':
-    print('Creating kind cluster...')
-    local('ctlptl create cluster kind --name kind-' + cluster_name + ' --registry=ctlptl-registry')
-    fail("started kind cluster. run tilt again")
+    print('No kind cluster! create one and restart tilt after doing so. You can use this command:')
+    print('ctlptl create cluster kind --name kind-' + cluster_name + ' --registry=ctlptl-registry')
+    fail("started kind cluster. Create one and run tilt again")
 
 print('Installing Gateway API CRDs...')
 run_controller_make('gw-api-crds')
@@ -51,14 +48,14 @@ k8s_yaml(helm(
 
 local_resource(
   'go-compile-controller',
-  'make -C ./controller VERSION=' + version + ' GCFLAGS=all="-N -l" agentgateway-controller && mv ./controller/_output/pkg/agentgateway/agentgateway-$(go env GOOS)-$(go env GOARCH) ./hack/tilt/agentgateway-controller',
+  'make -C ./controller VERSION=' + version + ' GCFLAGS=all="-N -l" agentgateway-controller && mv ./controller/_output/pkg/agentgateway/agentgateway-linux-$(go env GOARCH) ./hack/tilt/agentgateway-controller',
   deps=['./controller/'],
   ignore=['./controller/_output/'],
 )
 
 # Build control plane Docker image
 docker_build_with_restart(
-    image_registry + '/agentgateway-controller' ,
+    image_registry + '/agentgateway-controller',
     context='./hack/tilt/',
     entrypoint='/usr/local/bin/agentgateway-controller',
     dockerfile_contents="""
@@ -97,7 +94,7 @@ k8s_yaml(helm(
         'proxy.image.repository=agentgateway',
         'proxy.image.tag=' + version,
     ],
-    values=['./controller/hack/helm/dev.yaml'] if os.path.exists('controller/hack/helm/dev.yaml') else [],
+    values=[config.main_dir + '/controller/hack/helm/dev.yaml'] if os.path.exists(config.main_dir + '/controller/hack/helm/dev.yaml') else [],
  ))
 
 k8s_resource('agentgateway',
@@ -109,7 +106,7 @@ k8s_resource('agentgateway',
 
 local_resource(
   'rust-compile-dataplane',
-  'cargo build && ln -f ./target/debug/agentgateway ./hack/tilt/agentgateway',
+  'cargo build && if [ -f "./hack/tilt/agentgateway" ]; then rm "./hack/tilt/agentgateway"; fi && mv ./target/debug/agentgateway ./hack/tilt/agentgateway',
   deps=['./crates',
         './Cargo.toml',
         './Cargo.lock',
