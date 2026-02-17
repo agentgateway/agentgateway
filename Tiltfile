@@ -141,10 +141,10 @@ k8s_yaml(blob("""
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
 metadata:
-  name: image-params
+  name: dataplane-dev-gwparams
 spec:
   image:
-    registry: ""
+    registry: "" # tilt will fill in the registry in the repository field, so leave it blank here (othewise it will be duplicated)
     repository: agentgateway
     tag: """ + version + """
   deployment:
@@ -153,6 +153,7 @@ spec:
         spec:
           containers:
           # Delete container-level securityContext so that Tilt can apply live updates
+          # (need root user, and file system to be writable for live updates)
           - name: agentgateway
             securityContext:
              $patch: delete
@@ -167,12 +168,11 @@ spec:
     parametersRef:
       group: agentgateway.dev
       kind: AgentgatewayParameters
-      name: image-params
+      name: dataplane-dev-gwparams
   listeners:
     - name: http
       protocol: HTTP
       port: 8080
 """))
-k8s_resource(workload='image-params', extra_pod_selectors={"gateway.networking.k8s.io/gateway-name":"tilt-gw"}, 
-# objects=[ "image-params:agentgatewayparameters"],
+k8s_resource(workload='dataplane-dev-gwparams', extra_pod_selectors={"gateway.networking.k8s.io/gateway-name":"tilt-gw"}, 
  resource_deps=['rust-compile-dataplane'])
