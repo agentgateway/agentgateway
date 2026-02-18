@@ -73,25 +73,25 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 			meta.SetStatusCondition(&finalConditions, lisCondition)
 
 			// Check if this is the Programmed condition and it's False
-				if lisCondition.Type == string(gwv1.ListenerConditionProgrammed) && lisCondition.Status == metav1.ConditionFalse {
-					invalidListeners = append(invalidListeners, string(lis.Name))
-					if lisCondition.Message != "" {
-						invalidMessages = append(invalidMessages, fmt.Sprintf("%s: %s", lis.Name, lisCondition.Message))
-					}
-				}
-
-				if lisCondition.Type == string(gwv1.ListenerConditionResolvedRefs) &&
-					lisCondition.Status == metav1.ConditionFalse &&
-					isGatewayBackendTLSResolvedRefsCondition(lisCondition.Reason, lisCondition.Message) &&
-					resolvedRefsReason == "" {
-					resolvedRefsReason = gwv1.GatewayConditionReason(lisCondition.Reason)
-					resolvedRefsMessage = lisCondition.Message
+			if lisCondition.Type == string(gwv1.ListenerConditionProgrammed) && lisCondition.Status == metav1.ConditionFalse {
+				invalidListeners = append(invalidListeners, string(lis.Name))
+				if lisCondition.Message != "" {
+					invalidMessages = append(invalidMessages, fmt.Sprintf("%s: %s", lis.Name, lisCondition.Message))
 				}
 			}
-			lisReport.Status.Conditions = finalConditions
 
-			finalListeners = append(finalListeners, lisReport.Status)
+			if lisCondition.Type == string(gwv1.ListenerConditionResolvedRefs) &&
+				lisCondition.Status == metav1.ConditionFalse &&
+				isGatewayBackendTLSResolvedRefsCondition(lisCondition.Reason, lisCondition.Message) &&
+				resolvedRefsReason == "" {
+				resolvedRefsReason = gwv1.GatewayConditionReason(lisCondition.Reason)
+				resolvedRefsMessage = lisCondition.Message
+			}
 		}
+		lisReport.Status.Conditions = finalConditions
+
+		finalListeners = append(finalListeners, lisReport.Status)
+	}
 
 	// If any listeners have Programmed=False, set Gateway Accepted=True with ListenersNotValid reason
 	if len(invalidListeners) > 0 {
@@ -113,6 +113,14 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 			Status:  metav1.ConditionFalse,
 			Reason:  resolvedRefsReason,
 			Message: resolvedRefsMessage,
+		})
+	} else if gw.Spec.TLS != nil && gw.Spec.TLS.Backend != nil {
+
+		gwReport.SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionResolvedRefs,
+			Status:  metav1.ConditionTrue,
+			Reason:  gwv1.GatewayReasonResolvedRefs,
+			Message: "All references were resolved",
 		})
 	}
 
