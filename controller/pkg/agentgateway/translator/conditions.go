@@ -25,8 +25,9 @@ type ConfigErrorReason = string
 
 const (
 	// InvalidTLS indicates an issue with TLS settings
-	InvalidTLS   = ConfigErrorReason(gwv1.ListenerReasonInvalidCertificateRef)
-	InvalidTLSCA = ConfigErrorReason(gwv1.ListenerReasonInvalidCACertificateRef)
+	InvalidTLS       = ConfigErrorReason(gwv1.ListenerReasonInvalidCertificateRef)
+	InvalidTLSCA     = ConfigErrorReason(gwv1.ListenerReasonInvalidCACertificateRef)
+	InvalidTLSCAKind = ConfigErrorReason(gwv1.ListenerReasonInvalidCACertificateKind)
 	// InvalidListenerRefNotPermitted indicates a listener reference was not permitted
 	InvalidListenerRefNotPermitted = ConfigErrorReason(gwv1.ListenerReasonRefNotPermitted)
 )

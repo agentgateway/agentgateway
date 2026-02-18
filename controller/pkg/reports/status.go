@@ -44,6 +44,8 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 	finalListeners := make([]gwv1.ListenerStatus, 0, len(gw.Spec.Listeners))
 	var invalidListeners []string
 	var invalidMessages []string
+	var resolvedRefsReason gwv1.GatewayConditionReason
+	var resolvedRefsMessage string
 
 	for _, lis := range gw.Spec.Listeners {
 		lisReport := gwReport.listener(string(lis.Name))
@@ -71,17 +73,25 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 			meta.SetStatusCondition(&finalConditions, lisCondition)
 
 			// Check if this is the Programmed condition and it's False
-			if lisCondition.Type == string(gwv1.ListenerConditionProgrammed) && lisCondition.Status == metav1.ConditionFalse {
-				invalidListeners = append(invalidListeners, string(lis.Name))
-				if lisCondition.Message != "" {
-					invalidMessages = append(invalidMessages, fmt.Sprintf("%s: %s", lis.Name, lisCondition.Message))
+				if lisCondition.Type == string(gwv1.ListenerConditionProgrammed) && lisCondition.Status == metav1.ConditionFalse {
+					invalidListeners = append(invalidListeners, string(lis.Name))
+					if lisCondition.Message != "" {
+						invalidMessages = append(invalidMessages, fmt.Sprintf("%s: %s", lis.Name, lisCondition.Message))
+					}
+				}
+
+				if lisCondition.Type == string(gwv1.ListenerConditionResolvedRefs) &&
+					lisCondition.Status == metav1.ConditionFalse &&
+					isGatewayBackendTLSResolvedRefsCondition(lisCondition.Reason, lisCondition.Message) &&
+					resolvedRefsReason == "" {
+					resolvedRefsReason = gwv1.GatewayConditionReason(lisCondition.Reason)
+					resolvedRefsMessage = lisCondition.Message
 				}
 			}
-		}
-		lisReport.Status.Conditions = finalConditions
+			lisReport.Status.Conditions = finalConditions
 
-		finalListeners = append(finalListeners, lisReport.Status)
-	}
+			finalListeners = append(finalListeners, lisReport.Status)
+		}
 
 	// If any listeners have Programmed=False, set Gateway Accepted=True with ListenersNotValid reason
 	if len(invalidListeners) > 0 {
@@ -95,6 +105,14 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 			Status:  metav1.ConditionTrue,
 			Reason:  gwv1.GatewayReasonListenersNotValid,
 			Message: message,
+		})
+	}
+	if resolvedRefsReason != "" {
+		gwReport.SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionResolvedRefs,
+			Status:  metav1.ConditionFalse,
+			Reason:  resolvedRefsReason,
+			Message: resolvedRefsMessage,
 		})
 	}
 
@@ -125,6 +143,14 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 	finalGwStatus.Conditions = finalConditions
 	finalGwStatus.Listeners = finalListeners
 	return &finalGwStatus
+}
+
+func isGatewayBackendTLSResolvedRefsCondition(reason, message string) bool {
+	if reason == string(gwv1.GatewayReasonInvalidClientCertificateRef) {
+		return true
+	}
+	return reason == string(gwv1.GatewayReasonRefNotPermitted) &&
+		strings.Contains(message, "clientCertificateRef")
 }
 
 func handleInvalidAddresses(report *GatewayReport, g *gwv1.Gateway) {
