@@ -138,10 +138,9 @@ func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
 	case gwv1.TCPProtocolType:
 		supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TCPRouteGVK)}
 	case gwv1.TLSProtocolType:
-		if l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModePassthrough {
-			supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TLSRouteGVK)}
-		} else {
-			supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TCPRouteGVK)}
+		supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TLSRouteGVK)}
+		if l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModeTerminate {
+			supported = append(supported, toRouteKind(wellknown.TCPRouteGVK))
 		}
 		// UDP route not support
 	}
