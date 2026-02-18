@@ -195,25 +195,39 @@ Notes:
 
 ---
 
-### Enterprise IDPs without exp claim
+### Customizing required claims
 
-Some enterprise identity providers issue JWT tokens without the standard `exp` (expiration) claim. To support these tokens, add `validationOptions`:
+By default, the `exp` (expiration) claim is required. You can customize which
+claims must be present via `jwtValidationOptions.requiredClaims`. Only the
+five RFC 7519 registered claims are recognized: `exp`, `nbf`, `aud`, `iss`,
+`sub`. Any other value is silently ignored by the underlying library. This
+only enforces **presence**; standard claims like `exp` have their values
+validated independently.
 
 ```yaml
+# Allow tokens without exp (e.g., enterprise IDPs that omit it)
 mcpAuthentication:
   issuer: https://enterprise-idp.example.com
   audiences:
     - https://api.mycompany.com/mcp
   jwks:
     url: https://enterprise-idp.example.com/.well-known/jwks.json
-  validationOptions:
-    allowMissingExp: true
+  jwtValidationOptions:
+    requiredClaims: []
+
+# Require both exp and nbf
+mcpAuthentication:
+  issuer: https://strict-idp.example.com
+  audiences:
+    - https://api.mycompany.com/mcp
+  jwks:
+    url: https://strict-idp.example.com/.well-known/jwks.json
+  jwtValidationOptions:
+    requiredClaims: ["exp", "nbf"]
 ```
 
-When `allowMissingExp` is `true`:
-- Tokens without `exp` are accepted
-- Tokens with `exp` are still validated (expired tokens rejected)
-- Signature, issuer, and audience are always validated
+Claims present in the token are still validated even if not listed as required.
+For example, an expired `exp` is rejected regardless of `requiredClaims`.
 
 > **Note:** Tokens without `exp` remain valid until the signing key is rotated.
 
