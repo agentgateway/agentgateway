@@ -83,8 +83,8 @@ func recordKubeState(ctx context.Context, kubectlCli *kubectl.Cli, f *os.File) {
 		"tcproutes.gateway.networking.k8s.io",
 		"tlsroutes.gateway.networking.k8s.io",
 		"udproutes.gateway.networking.k8s.io",
+		"listenersets.gateway.networking.k8s.io",
 		"xbackendtrafficpolicies.gateway.networking.x-k8s.io",
-		"xlistenersets.gateway.networking.x-k8s.io",
 		"xmeshes.gateway.networking.x-k8s.io",
 		// GIE
 		"inferencepools.inference.networking.k8s.io",

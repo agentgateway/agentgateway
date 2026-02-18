@@ -29,7 +29,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
-	gatewayx "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/api"
 	v1alpha2 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -777,7 +776,7 @@ func buildAgwDestination(
 
 var knownReferences = sets.New(
 	wellknown.GatewayGVK,
-	wellknown.XListenerSetGVK,
+	wellknown.ListenerSetGVK,
 	wellknown.ServiceGVK,
 	wellknown.ServiceEntryGVK,
 	wellknown.SecretGVK,
@@ -785,7 +784,7 @@ var knownReferences = sets.New(
 )
 var allowedParentReferences = sets.New(
 	wellknown.GatewayGVK,
-	wellknown.XListenerSetGVK,
+	wellknown.ListenerSetGVK,
 	wellknown.ServiceGVK,
 	wellknown.ServiceEntryGVK,
 )
@@ -1656,8 +1655,8 @@ func GvkFromObject(obj any) schema.GroupVersionKind {
 	switch obj.(type) {
 	case *gwv1.Gateway:
 		return wellknown.GatewayGVK
-	case *gatewayx.XListenerSet:
-		return wellknown.XListenerSetGVK
+	case *gwv1.ListenerSet:
+		return wellknown.ListenerSetGVK
 	default:
 		panic("Uknown GVK")
 	}

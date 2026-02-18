@@ -19,7 +19,6 @@ import (
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
@@ -56,7 +55,7 @@ type AgentGwStatusSyncer struct {
 
 	cacheSyncs []cache.InformerSynced
 
-	listenerSets       StatusSyncer[*gwxv1a1.XListenerSet, *gwxv1a1.ListenerSetStatus]
+	listenerSets       StatusSyncer[*gwv1.ListenerSet, *gwv1.ListenerSetStatus]
 	gateways           StatusSyncer[*gwv1.Gateway, *gwv1.GatewayStatus]
 	httpRoutes         StatusSyncer[*gwv1.HTTPRoute, *gwv1.HTTPRouteStatus]
 	grpcRoutes         StatusSyncer[*gwv1.GRPCRoute, *gwv1.GRPCRouteStatus]
@@ -154,12 +153,12 @@ func NewAgwStatusSyncer(
 				}
 			},
 		},
-		listenerSets: StatusSyncer[*gwxv1a1.XListenerSet, *gwxv1a1.ListenerSetStatus]{
+		listenerSets: StatusSyncer[*gwv1.ListenerSet, *gwv1.ListenerSetStatus]{
 			name:           "listenerSet",
 			controllerName: controllerName,
-			client:         kclient.NewFilteredDelayed[*gwxv1a1.XListenerSet](client, wellknown.XListenerSetGVR, f),
-			build: func(om metav1.ObjectMeta, s *gwxv1a1.ListenerSetStatus) *gwxv1a1.XListenerSet {
-				return &gwxv1a1.XListenerSet{
+			client:         kclient.NewFilteredDelayed[*gwv1.ListenerSet](client, wellknown.ListenerSetGVR, f),
+			build: func(om metav1.ObjectMeta, s *gwv1.ListenerSetStatus) *gwv1.ListenerSet {
+				return &gwv1.ListenerSet{
 					ObjectMeta: om,
 					Status:     *s,
 				}
@@ -250,7 +249,7 @@ func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status.Re
 	switch resource.GroupVersionKind {
 	case wellknown.GatewayGVK:
 		s.gateways.ApplyStatus(ctx, resource, statusObj)
-	case wellknown.XListenerSetGVK:
+	case wellknown.ListenerSetGVK:
 		s.listenerSets.ApplyStatus(ctx, resource, statusObj)
 	case wellknown.GRPCRouteGVK:
 		s.grpcRoutes.ApplyStatus(ctx, resource, statusObj)

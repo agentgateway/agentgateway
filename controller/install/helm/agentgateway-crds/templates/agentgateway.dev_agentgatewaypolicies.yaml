@@ -5015,12 +5015,12 @@ spec:
                 x-kubernetes-list-type: atomic
                 x-kubernetes-validations:
                 - message: targetRefs may only reference Gateway, HTTPRoute, GRPCRoute,
-                    XListenerSet, Service, or AgentgatewayBackend resources
+                    ListenerSet, Service, or AgentgatewayBackend resources
                   rule: self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind
                     == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') ||
                     (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group ==
-                    'gateway.networking.k8s.io') || (r.kind == 'XListenerSet' && r.group
-                    == 'gateway.networking.x-k8s.io'))
+                    'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group
+                    == 'gateway.networking.k8s.io'))
                 - message: Only one Kind of targetRef can be set on one policy
                   rule: self.all(l1, !self.exists(l2, l1.kind != l2.kind))
               targetSelectors:
@@ -5071,12 +5071,12 @@ spec:
                 type: array
                 x-kubernetes-validations:
                 - message: targetRefs may only reference Gateway, HTTPRoute, GRPCRoute,
-                    XListenerSet, Service, or AgentgatewayBackend resources
+                    ListenerSet, Service, or AgentgatewayBackend resources
                   rule: self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind
                     == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') ||
                     (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group ==
-                    'gateway.networking.k8s.io') || (r.kind == 'XListenerSet' && r.group
-                    == 'gateway.networking.x-k8s.io'))
+                    'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group
+                    == 'gateway.networking.k8s.io'))
                 - message: Only one Kind of targetRef can be set on one policy
                   rule: self.all(l1, !self.exists(l2, l1.kind != l2.kind))
               traffic:
@@ -6928,26 +6928,26 @@ spec:
             - message: the 'frontend' field can only target a Gateway
               rule: 'has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t,
                 t.kind == ''Gateway'' && !has(t.sectionName)) : true'
-            - message: the 'traffic' field can only target a Gateway, XListenerSet,
+            - message: the 'traffic' field can only target a Gateway, ListenerSet,
                 GRPCRoute, or HTTPRoute
               rule: 'has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t,
-                t.kind in [''Gateway'', ''HTTPRoute'', ''GRPCRoute'', ''XListenerSet''])
+                t.kind in [''Gateway'', ''HTTPRoute'', ''GRPCRoute'', ''ListenerSet''])
                 : true'
-            - message: the 'traffic' field can only target a Gateway, XListenerSet,
+            - message: the 'traffic' field can only target a Gateway, ListenerSet,
                 GRPCRoute, or HTTPRoute
               rule: 'has(self.traffic) && has(self.targetSelectors) ? self.targetSelectors.all(t,
-                t.kind in [''Gateway'', ''HTTPRoute'', ''GRPCRoute'', ''XListenerSet''])
+                t.kind in [''Gateway'', ''HTTPRoute'', ''GRPCRoute'', ''ListenerSet''])
                 : true'
             - message: the 'traffic.phase=PreRouting' field can only target a Gateway
-                or XListenerSet
+                or ListenerSet
               rule: 'has(self.targetRefs) && has(self.traffic) && has(self.traffic.phase)
                 && self.traffic.phase == ''PreRouting'' ? self.targetRefs.all(t, t.kind
-                in [''Gateway'', ''XListenerSet'']) : true'
+                in [''Gateway'', ''ListenerSet'']) : true'
             - message: the 'traffic.phase=PreRouting' field can only target a Gateway
-                or XListenerSet
+                or ListenerSet
               rule: 'has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase)
                 && self.traffic.phase == ''PreRouting'' ? self.targetSelectors.all(t,
-                t.kind in [''Gateway'', ''XListenerSet'']) : true'
+                t.kind in [''Gateway'', ''ListenerSet'']) : true'
             - message: exactly one of the fields in [targetRefs targetSelectors] must
                 be set
               rule: '[has(self.targetRefs),has(self.targetSelectors)].filter(x,x==true).size()

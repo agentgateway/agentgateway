@@ -4,6 +4,8 @@ go 1.25.1
 
 replace github.com/agentgateway/agentgateway/api => ./api
 
+replace istio.io/istio => github.com/davidjumani/istio v0.0.0-20260213193338-3d818a03de6b
+
 require (
 	// Also update AgentgatewayDefaultTag in pkg/deployer/wellknown.go and test/deployer/testdata/*
 	github.com/agentgateway/agentgateway/api v0.0.0
@@ -45,11 +47,13 @@ require (
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/controller-runtime v0.23.1
 	sigs.k8s.io/controller-tools v0.20.1
-	sigs.k8s.io/gateway-api v1.4.1
+	sigs.k8s.io/gateway-api v1.5.0-rc.1
 	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260220060139-0714e2462e76
 	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260220060139-0714e2462e76
 	sigs.k8s.io/yaml v1.6.0
 )
+
+require sigs.k8s.io/gateway-api/conformance v0.0.0-20260213173202-265da48be464
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -209,7 +213,7 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240409071808-615f978279ca // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/procfs v0.17.0 // indirect
+	github.com/prometheus/procfs v0.19.2 // indirect
 	github.com/redis/go-redis/extra/redisotel/v9 v9.7.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rubenv/sql-migrate v1.8.1 // indirect
