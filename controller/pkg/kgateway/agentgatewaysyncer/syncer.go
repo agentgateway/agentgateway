@@ -24,7 +24,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayx "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -238,12 +237,12 @@ func (s *Syncer) buildListenerSetCollection(
 	refGrants translator.ReferenceGrants,
 	krtopts krtutil.KrtOptions,
 ) (
-	krt.StatusCollection[*gatewayx.XListenerSet, gatewayx.ListenerSetStatus],
+	krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus],
 	krt.Collection[translator.ListenerSet],
 ) {
 	return translator.ListenerSetCollection(
 		s.controllerName,
-		s.agwCollections.XListenerSets,
+		s.agwCollections.ListenerSets,
 		s.agwCollections.Gateways,
 		gatewayClasses,
 		s.agwCollections.Namespaces,

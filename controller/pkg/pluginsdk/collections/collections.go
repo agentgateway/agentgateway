@@ -5,7 +5,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/kube/kubetypes"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
@@ -38,16 +37,9 @@ func NewCommonCollections(
 	filter := kclient.Filter{ObjectFilter: client.ObjectFilter()}
 	kubeRawGateways := krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.Gateway](client, wellknown.GatewayGVR, filter), krtOptions.ToOptions("KubeGateways")...)
 	gatewayClasses := krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.GatewayClass](client, wellknown.GatewayClassGVR, filter), krtOptions.ToOptions("KubeGatewayClasses")...)
-	var kubeRawListenerSets krt.Collection[*gwxv1a1.XListenerSet]
-	// ON_EXPERIMENTAL_PROMOTION : Remove this block
-	// Ref: https://github.com/kgateway-dev/kgateway/issues/12827
-	if settings.EnableExperimentalGatewayAPIFeatures {
-		kubeRawListenerSets = krt.WrapClient(kclient.NewDelayedInformer[*gwxv1a1.XListenerSet](client, wellknown.XListenerSetGVR, kubetypes.StandardInformer, filter), krtOptions.ToOptions("KubeListenerSets")...)
-	} else {
-		// If disabled, still build a collection but make it always empty
-		kubeRawListenerSets = krt.NewStaticCollection[*gwxv1a1.XListenerSet](nil, nil, krtOptions.ToOptions("disable/KubeListenerSets")...)
-	}
-	byParentRefIndex := krtpkg.UnnamedIndex(kubeRawListenerSets, func(in *gwxv1a1.XListenerSet) []TargetRefIndexKey {
+	kubeRawListenerSets := krt.WrapClient(kclient.NewDelayedInformer[*gwv1.ListenerSet](client, wellknown.ListenerSetGVR, kubetypes.StandardInformer, filter), krtOptions.ToOptions("KubeListenerSets")...)
+
+	byParentRefIndex := krtpkg.UnnamedIndex(kubeRawListenerSets, func(in *gwv1.ListenerSet) []TargetRefIndexKey {
 		pRef := in.Spec.ParentRef
 		ns := strOr(pRef.Namespace, "")
 		if ns == "" {

@@ -15,7 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayx "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
@@ -326,7 +325,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Name:          ls.Name,
 				ParentGateway: config.NamespacedName(obj),
 				ParentObject: ParentKey{
-					Kind:      wellknown.XListenerSetGVK,
+					Kind:      wellknown.ListenerSetGVK,
 					Name:      ls.Parent.Name,
 					Namespace: ls.Parent.Namespace,
 				},
@@ -371,7 +370,7 @@ func (g ListenerSet) Equals(other ListenerSet) bool {
 
 func ListenerSetCollection(
 	controllerName string,
-	listenerSets krt.Collection[*gatewayx.XListenerSet],
+	listenerSets krt.Collection[*gwv1.ListenerSet],
 	gateways krt.Collection[*gwv1.Gateway],
 	gatewayClasses krt.Collection[GatewayClass],
 	namespaces krt.Collection[*corev1.Namespace],
@@ -380,11 +379,11 @@ func ListenerSetCollection(
 	configMaps krt.Collection[*corev1.ConfigMap],
 	krtopts krtutil.KrtOptions,
 ) (
-	krt.StatusCollection[*gatewayx.XListenerSet, gatewayx.ListenerSetStatus],
+	krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus],
 	krt.Collection[ListenerSet],
 ) {
 	return krt.NewStatusManyCollection(listenerSets,
-		func(ctx krt.HandlerContext, obj *gatewayx.XListenerSet) (*gatewayx.ListenerSetStatus, []ListenerSet) {
+		func(ctx krt.HandlerContext, obj *gwv1.ListenerSet) (*gwv1.ListenerSetStatus, []ListenerSet) {
 			result := []ListenerSet{}
 			ls := obj.Spec
 			status := obj.Status.DeepCopy()
@@ -395,7 +394,7 @@ func ListenerSetCollection(
 				return nil, nil
 			}
 
-			pns := ptr.OrDefault(p.Namespace, gatewayx.Namespace(obj.Namespace))
+			pns := ptr.OrDefault(p.Namespace, gwv1.Namespace(obj.Namespace))
 			parentGwObj := ptr.Flatten(krt.FetchOne(ctx, gateways, krt.FilterKey(string(pns)+"/"+string(p.Name))))
 			if parentGwObj == nil {
 				// Cannot report status since we don't know if it is for us
@@ -434,7 +433,7 @@ func ListenerSetCollection(
 				originalStatus := slices.Map(status.Listeners, convertListenerSetStatusToStandardStatus)
 				hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, secrets, configMaps, grants, namespaces,
 					obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr)
-				status.Listeners = slices.Map(updatedStatus, convertStandardStatusToListenerSetStatus(l))
+				status.Listeners = slices.Map(updatedStatus, convertStandardStatusToListenerSetStatus)
 
 				if controllerName == constants.ManagedGatewayMeshController || controllerName == constants.ManagedGatewayEastWestController {
 					// Waypoint doesn't actually convert the routes to VirtualServices
@@ -536,24 +535,21 @@ func NamespaceAcceptedByAllowListeners(localNamespace string, parent *gwv1.Gatew
 	return ls.Matches(toNamespaceSet(localNamespaceObject.Name, localNamespaceObject.Labels))
 }
 
-func convertListenerSetToListener(l gatewayx.ListenerEntry) gwv1.Listener {
+func convertListenerSetToListener(l gwv1.ListenerEntry) gwv1.Listener {
 	// For now, structs are identical enough Go can cast them. I doubt this will hold up forever, but we can adjust as needed.
 	return gwv1.Listener(l)
 }
 
-func convertStandardStatusToListenerSetStatus(l gatewayx.ListenerEntry) func(e gwv1.ListenerStatus) gatewayx.ListenerEntryStatus {
-	return func(e gwv1.ListenerStatus) gatewayx.ListenerEntryStatus {
-		return gatewayx.ListenerEntryStatus{
-			Name:           e.Name,
-			Port:           l.Port,
-			SupportedKinds: e.SupportedKinds,
-			AttachedRoutes: e.AttachedRoutes,
-			Conditions:     e.Conditions,
-		}
+func convertStandardStatusToListenerSetStatus(e gwv1.ListenerStatus) gwv1.ListenerEntryStatus {
+	return gwv1.ListenerEntryStatus{
+		Name:           e.Name,
+		SupportedKinds: e.SupportedKinds,
+		AttachedRoutes: e.AttachedRoutes,
+		Conditions:     e.Conditions,
 	}
 }
 
-func convertListenerSetStatusToStandardStatus(e gatewayx.ListenerEntryStatus) gwv1.ListenerStatus {
+func convertListenerSetStatusToStandardStatus(e gwv1.ListenerEntryStatus) gwv1.ListenerStatus {
 	return gwv1.ListenerStatus{
 		Name:           e.Name,
 		SupportedKinds: e.SupportedKinds,
@@ -563,8 +559,8 @@ func convertListenerSetStatusToStandardStatus(e gatewayx.ListenerEntryStatus) gw
 }
 
 func reportListenerSetStatus(
-	obj *gatewayx.XListenerSet,
-	gs *gatewayx.ListenerSetStatus,
+	obj *gwv1.ListenerSet,
+	gs *gwv1.ListenerSetStatus,
 ) {
 	//internal, _, _, _, warnings, allUsable := r.ResolveGatewayInstances(parentGwObj.Namespace, gatewayServices, servers)
 

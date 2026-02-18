@@ -381,7 +381,7 @@ spec:
       kind: Backend
       name: dummy
 ---
-_err: "the 'traffic.phase=PreRouting' field can only target a Gateway or XListenerSet"
+_err: "the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
