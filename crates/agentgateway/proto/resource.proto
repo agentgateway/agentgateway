@@ -547,17 +547,13 @@ message FrontendPolicySpec {
   }
 }
 
-// JWT validation options.
-// Some identity providers (especially enterprise IDPs) issue tokens that don't
-// fully conform to RFC 7519 (e.g., missing `exp` claim). This allows making the
-// exp claim optional while still validating it if present.
-message ValidationOptions {
-  // Whether to allow tokens without the exp (expiration) claim.
-  // Default (false): exp required per RFC 7519.
-  // When true: exp claim is optional, but if present it is still validated.
-  // Expired tokens with an exp claim will still be rejected.
-  // Signature, issuer, and audience (if configured) are always validated regardless.
-  bool allow_missing_exp = 1;
+// JWT validation options controlling which claims must be present in a token.
+// Recognized values: "exp", "nbf", "aud", "iss", "sub".
+// Claims present in the token are still validated even if not listed as required.
+message JWTValidationOptions {
+  // Claims that must be present in the token before validation.
+  // Defaults to ["exp"]. Use an empty list to require no claims.
+  repeated string required_claims = 1;
 }
 
 message TrafficPolicySpec {
@@ -639,9 +635,8 @@ message TrafficPolicySpec {
       string inline = 3;
     }
 
-    // JWT validation options.
-    // Default (when not specified): exp required and validated per RFC 7519.
-    ValidationOptions validation_options = 4;
+    // JWT validation options controlling which claims must be present.
+    JWTValidationOptions jwt_validation_options = 4;
   }
   // JWT authentication configuration
   message JWT {
@@ -1017,9 +1012,8 @@ message BackendPolicySpec {
     ResourceMetadata resource_metadata = 5;
     // How the JWT validation should behave
     Mode mode = 6;
-    // JWT validation options.
-    // Default (when not specified): exp required and validated per RFC 7519.
-    ValidationOptions validation_options = 7;
+    // JWT validation options controlling which claims must be present.
+    JWTValidationOptions jwt_validation_options = 7;
   }
 
   oneof kind {

@@ -2019,10 +2019,8 @@ pub struct LocalMcpAuthentication {
 	pub jwks: FileInlineOrRemote,
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
-	/// JWT validation options.
-	/// Default: exp required and validated per RFC 7519. Set allowMissingExp: true to allow tokens without exp.
 	#[serde(default)]
-	pub validation_options: http::jwt::ValidationOptions,
+	pub jwt_validation_options: http::jwt::JWTValidationOptions,
 }
 
 impl LocalMcpAuthentication {
@@ -2050,7 +2048,7 @@ impl LocalMcpAuthentication {
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,
-			validation_options: self.validation_options.clone(),
+			jwt_validation_options: self.jwt_validation_options.clone(),
 		})
 	}
 
@@ -2481,8 +2479,7 @@ InvalidKeyData
 	}
 
 	#[test]
-	fn test_local_mcp_authentication_default_validation_options() {
-		// Test deserialization without validation_options (should use defaults)
+	fn test_local_mcp_authentication_default_jwt_validation_options() {
 		let yaml = r#"
 issuer: "https://example.com"
 audiences: ["aud1"]
@@ -2491,48 +2488,89 @@ resourceMetadata:
   mcpResourceUri: "mcp://test"
 "#;
 		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
-		// Default: allow_missing_exp = false (exp is required)
-		assert!(!auth.validation_options.allow_missing_exp);
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned()]),
+			"default required_claims should be [\"exp\"]"
+		);
 	}
 
 	#[test]
-	fn test_local_mcp_authentication_with_allow_missing_exp() {
-		// Test deserialization with validation_options.allow_missing_exp: true
+	fn test_local_mcp_authentication_jwt_validation_options_present_but_required_claims_missing() {
 		let yaml = r#"
-issuer: "https://enterprise-idp.example.com"
-audiences: ["enterprise-aud"]
+issuer: "https://example.com"
+audiences: ["aud1"]
 jwks: '{"keys":[]}'
 resourceMetadata:
   mcpResourceUri: "mcp://test"
-validationOptions:
-  allowMissingExp: true
+jwtValidationOptions: {}
 "#;
 		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
-		assert!(auth.validation_options.allow_missing_exp);
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned()]),
+			"omitted requiredClaims should default to [\"exp\"]"
+		);
 	}
 
 	#[test]
-	fn test_local_mcp_authentication_as_jwt_propagates_validation_options() {
+	fn test_local_mcp_authentication_with_empty_required_claims() {
 		let yaml = r#"
 issuer: "https://enterprise-idp.example.com"
 audiences: ["enterprise-aud"]
 jwks: '{"keys":[]}'
 resourceMetadata:
   mcpResourceUri: "mcp://test"
-validationOptions:
-  allowMissingExp: true
+jwtValidationOptions:
+  requiredClaims: []
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert!(
+			auth.jwt_validation_options.required_claims.is_empty(),
+			"required_claims should be empty"
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_with_custom_required_claims() {
+		let yaml = r#"
+issuer: "https://enterprise-idp.example.com"
+audiences: ["enterprise-aud"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions:
+  requiredClaims: ["exp", "nbf"]
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned(), "nbf".to_owned()])
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_as_jwt_propagates_jwt_validation_options() {
+		let yaml = r#"
+issuer: "https://enterprise-idp.example.com"
+audiences: ["enterprise-aud"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions:
+  requiredClaims: []
 "#;
 		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
 		let jwt_config = auth.as_jwt().unwrap();
 
-		// Verify validation_options is propagated to LocalJwtConfig
 		match jwt_config {
 			http::jwt::LocalJwtConfig::Single {
-				validation_options, ..
+				jwt_validation_options,
+				..
 			} => {
 				assert!(
-					validation_options.allow_missing_exp,
-					"validation_options should be propagated to LocalJwtConfig"
+					jwt_validation_options.required_claims.is_empty(),
+					"jwt_validation_options should be propagated to LocalJwtConfig"
 				);
 			},
 			_ => panic!("Expected LocalJwtConfig::Single"),

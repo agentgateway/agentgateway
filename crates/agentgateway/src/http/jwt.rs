@@ -1,5 +1,5 @@
 // Inspired by https://github.com/cdriehuys/axum-jwks/blob/main/axum-jwks/src/jwks.rs (MIT license)
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use ::cel::types::dynamic::DynamicType;
@@ -115,24 +115,24 @@ impl Debug for Jwt {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged, rename_all = "camelCase", deny_unknown_fields)]
+#[serde(untagged, deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum LocalJwtConfig {
+	#[serde(rename_all = "camelCase")]
 	Multi {
 		#[serde(default)]
 		mode: Mode,
 		providers: Vec<ProviderConfig>,
 	},
+	#[serde(rename_all = "camelCase")]
 	Single {
 		#[serde(default)]
 		mode: Mode,
 		issuer: String,
 		audiences: Option<Vec<String>>,
 		jwks: serdes::FileInlineOrRemote,
-		/// JWT validation options.
-		/// Default: exp required and validated per RFC 7519. Set allowMissingExp: true to allow tokens without exp.
 		#[serde(default)]
-		validation_options: ValidationOptions,
+		jwt_validation_options: JWTValidationOptions,
 	},
 }
 
@@ -143,10 +143,8 @@ pub struct ProviderConfig {
 	pub issuer: String,
 	pub audiences: Option<Vec<String>>,
 	pub jwks: serdes::FileInlineOrRemote,
-	/// JWT validation options.
-	/// Default: exp required and validated per RFC 7519. Set allowMissingExp: true to allow tokens without exp.
 	#[serde(default)]
-	pub validation_options: ValidationOptions,
+	pub jwt_validation_options: JWTValidationOptions,
 }
 
 #[apply(schema_enum!)]
@@ -164,35 +162,55 @@ pub enum Mode {
 	Permissive,
 }
 
-/// JWT validation options.
+/// JWT validation options controlling which claims must be present in a token.
 ///
-/// Some identity providers (especially enterprise IDPs) issue tokens that don't
-/// fully conform to RFC 7519 (e.g., missing `exp` claim). This allows making the
-/// exp claim optional while still validating it if present.
+/// The `required_claims` set specifies which RFC 7519 registered claims must
+/// exist in the token payload before validation proceeds. Only the following
+/// values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value
+/// is silently ignored by the underlying library.
 ///
-/// # Default
-/// By default, the `exp` (expiration) claim is required and validated per RFC 7519.
+/// This only enforces **presence**. Standard claims like `exp` and `nbf`
+/// have their values validated independently (e.g., expiry is always checked
+/// when the `exp` claim is present, regardless of this setting).
 ///
-/// # Example
-/// ```yaml
-/// # Require exp claim (default, RFC 7519 compliant)
-/// validationOptions:
-///   allowMissingExp: false
-///
-/// # Allow tokens without exp (for IDPs that omit exp)
-/// validationOptions:
-///   allowMissingExp: true
-/// ```
-#[derive(Default, Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+/// Defaults to `["exp"]`.
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct ValidationOptions {
-	/// Whether to allow tokens without the exp (expiration) claim.
-	/// Default: false (exp required per RFC 7519).
-	/// When true: exp claim is optional, but if present it is still validated.
-	/// Expired tokens with an exp claim will still be rejected.
-	#[serde(default)]
-	pub allow_missing_exp: bool,
+pub struct JWTValidationOptions {
+	/// Claims that must be present in the token before validation.
+	/// Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.
+	/// Defaults to ["exp"]. Use an empty list to require no claims.
+	#[serde(default = "default_required_claims")]
+	pub required_claims: HashSet<String>,
+}
+
+fn default_required_claims() -> HashSet<String> {
+	HashSet::from(["exp".to_owned()])
+}
+
+/// The only claim names the jsonwebtoken library actually enforces.
+const SUPPORTED_REQUIRED_CLAIMS: &[&str] = &["exp", "nbf", "aud", "iss", "sub"];
+
+/// Log a warning for each claim in `required_claims` that the library silently ignores.
+fn warn_unsupported_claims(required_claims: &HashSet<String>) {
+	for claim in required_claims {
+		if !SUPPORTED_REQUIRED_CLAIMS.contains(&claim.as_str()) {
+			tracing::warn!(
+				claim = %claim,
+				supported = ?SUPPORTED_REQUIRED_CLAIMS,
+				"ignoring unrecognized required claim; only exp, nbf, aud, iss, sub are enforced"
+			);
+		}
+	}
+}
+
+impl Default for JWTValidationOptions {
+	fn default() -> Self {
+		Self {
+			required_claims: default_required_claims(),
+		}
+	}
 }
 
 impl LocalJwtConfig {
@@ -204,14 +222,14 @@ impl LocalJwtConfig {
 				issuer,
 				audiences,
 				jwks,
-				validation_options,
+				jwt_validation_options,
 			} => (
 				mode,
 				vec![ProviderConfig {
 					issuer,
 					audiences,
 					jwks,
-					validation_options,
+					jwt_validation_options,
 				}],
 			),
 		};
@@ -223,7 +241,7 @@ impl LocalJwtConfig {
 				.load::<JwkSet>(client.clone())
 				.await
 				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.validation_options)?;
+			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
 			providers.push(provider);
 		}
 		Ok(Jwt { mode, providers })
@@ -235,8 +253,10 @@ impl Provider {
 		jwks: JwkSet,
 		issuer: String,
 		audiences: Option<Vec<String>>,
-		validation_options: ValidationOptions,
+		jwt_validation_options: JWTValidationOptions,
 	) -> Result<Provider, JwkError> {
+		warn_unsupported_claims(&jwt_validation_options.required_claims);
+
 		let mut keys = HashMap::new();
 		let to_supported_alg = |key_algorithm: Option<KeyAlgorithm>| match key_algorithm {
 			Some(key_alg) => jsonwebtoken::Algorithm::from_str(key_alg.to_string().as_str()).ok(),
@@ -297,12 +317,9 @@ impl Provider {
 			}
 			validation.set_issuer(std::slice::from_ref(&issuer));
 
-			// Apply validation options
-			// Make exp optional if configured (but still validate if present)
-			if validation_options.allow_missing_exp {
-				validation.required_spec_claims.remove("exp");
-				// Note: validate_exp remains true, so if exp IS present, it will be validated
-			}
+			// Override required_spec_claims with the user-configured set.
+			// validate_exp remains true, so exp is still validated if present.
+			validation.required_spec_claims = jwt_validation_options.required_claims.clone();
 
 			keys.insert(
 				kid,

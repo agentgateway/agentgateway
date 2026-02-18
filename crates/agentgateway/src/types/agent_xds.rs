@@ -199,15 +199,15 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 		})?;
 
 		let audiences = (!m.audiences.is_empty()).then(|| m.audiences.clone());
-		let validation_options = m
-			.validation_options
+		let jwt_validation_options = m
+			.jwt_validation_options
 			.as_ref()
-			.map(|vo| http::jwt::ValidationOptions {
-				allow_missing_exp: vo.allow_missing_exp,
+			.map(|vo| http::jwt::JWTValidationOptions {
+				required_claims: vo.required_claims.iter().cloned().collect(),
 			})
 			.unwrap_or_default();
 		let jwt_provider =
-			http::jwt::Provider::from_jwks(jwk_set, m.issuer.clone(), audiences, validation_options)
+			http::jwt::Provider::from_jwks(jwk_set, m.issuer.clone(), audiences, jwt_validation_options)
 				.map_err(|e| {
 					ProtoError::Generic(format!(
 						"failed to create JWT provider for MCP Authentication: {e}"
@@ -1326,15 +1326,20 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						} else {
 							Some(p.audiences.clone())
 						};
-						let validation_options = p
-							.validation_options
+						let jwt_validation_options = p
+							.jwt_validation_options
 							.as_ref()
-							.map(|vo| http::jwt::ValidationOptions {
-								allow_missing_exp: vo.allow_missing_exp,
+							.map(|vo| http::jwt::JWTValidationOptions {
+								required_claims: vo.required_claims.iter().cloned().collect(),
 							})
 							.unwrap_or_default();
-						http::jwt::Provider::from_jwks(jwk_set, p.issuer.clone(), audiences, validation_options)
-							.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
+						http::jwt::Provider::from_jwks(
+							jwk_set,
+							p.issuer.clone(),
+							audiences,
+							jwt_validation_options,
+						)
+						.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
 					})
 					.collect::<Result<Vec<_>, _>>()?;
 				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
