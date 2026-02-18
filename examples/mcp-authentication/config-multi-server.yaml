@@ -2,52 +2,6 @@
 binds:
 - listeners:
   - routes:
-    # Multi-server MCP passthrough example:
-    # - /mcp/notion routes to notion.so MCP
-    # - /mcp/atlassian routes to atlassian MCP
-    # Well-known MCP auth endpoints are derived pre-route from the backend path,
-    # so you don't need to add explicit /.well-known/* route matches for each server.
-    # This example intentionally omits mcpAuthentication; upstream handles auth.
-    # For full passthrough UX, pair this with response transformations that rewrite
-    # WWW-Authenticate/resource_metadata and protected-resource metadata through AGW.
-    - matches:
-      - path:
-          exact: /.well-known/oauth-authorization-server
-      policies:
-        transformations:
-          response:
-            body: |
-              {
-                "issuer": "https://mcp.notion.com",
-                "authorization_endpoint": request.scheme + "://" + request.host + "/authorize",
-                "token_endpoint": request.scheme + "://" + request.host + "/token",
-                "registration_endpoint": request.scheme + "://" + request.host + "/register",
-                "response_types_supported": [
-                  "code"
-                ],
-                "response_modes_supported": [
-                  "query"
-                ],
-                "grant_types_supported": [
-                  "authorization_code",
-                  "refresh_token"
-                ],
-                "token_endpoint_auth_methods_supported": [
-                  "client_secret_basic",
-                  "client_secret_post",
-                  "none"
-                ],
-                "revocation_endpoint": "https://mcp.notion.com/token",
-                "code_challenge_methods_supported": [
-                  "plain",
-                  "S256"
-                ]
-              }
-        directResponse:
-          status: 200
-          body: |
-            {
-            }
     - backends:
       - mcp:
           targets:
@@ -58,21 +12,6 @@ binds:
       - path:
           exact: /mcp/notion
       policies:
-        transformations:
-          response:
-            body: |
-              request.path.startsWith("/.well-known/oauth-protected-resource") ?
-                json(response.body).merge({
-                  "resource": request.scheme + "://" + request.host + request.path.stripPrefix("/.well-known/oauth-protected-resource") + "/mcp/notion",
-                  "authorization_servers": ["http://lo:3000/some/path"]
-                }) 
-              :
-              response.body
-            set:
-              "www-authenticate": |
-                response.code == 401 ?
-                'Bearer error="invalid_token", error_description="The access token is required", resource_metadata="' + request.scheme + "://" + request.host + '"/.well-known/oauth-protected-resource/mcp"' :
-                response.headers["www-authenticate"]
         cors:
           allowHeaders:
           - mcp-protocol-version
@@ -81,6 +20,12 @@ binds:
           - '*'
           exposeHeaders:
           - Mcp-Session-Id
+    - backends:
+      - mcp:
+          targets:
+          - name: notion
+            mcp:
+              host: https://mcp.notion.com/mcp
     - backends:
       - mcp:
           targets:

@@ -1234,6 +1234,7 @@ async fn make_backend_call(
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
 	};
+	let mut mcp_passthrough_rewrite: Option<crate::mcp::PassthroughProtectedResource> = None;
 
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
@@ -1245,6 +1246,20 @@ async fn make_backend_call(
 					.mcp_state
 					.should_passthrough(&base_policies, mcp_backend, &req)
 			{
+				if req.uri().path().contains("/.well-known/") {
+					req.headers_mut().remove(header::ACCEPT_ENCODING);
+				}
+				match crate::mcp::passthrough_well_known(&req) {
+					Some(crate::mcp::PassthroughWellKnown::UnsupportedAuthorizationServer) => {
+						return Err(ProxyResponse::from(ProxyError::RouteNotFound));
+					},
+					Some(crate::mcp::PassthroughWellKnown::ProtectedResource(rewrite)) => {
+						*req.uri_mut() = rewrite.upstream_uri.clone();
+						mcp_passthrough_rewrite = Some(rewrite);
+					},
+					None => {},
+				}
+
 				let target = super::resolve_simple_backend_with_policies(&be, inputs.as_ref())?;
 				let tgt = target.backend.target();
 				let policies = inputs
@@ -1604,6 +1619,13 @@ async fn make_backend_call(
 	};
 	// TODO: we currently do not support ImmediateResponse from inference router
 	let _ = maybe_inference.mutate_response(&mut resp).await?;
+	if let Some(rewrite) = &mcp_passthrough_rewrite {
+		crate::mcp::rewrite_passthrough_www_authenticate(&mut resp, rewrite)
+			.map_err(ProxyResponse::from)?;
+		crate::mcp::rewrite_passthrough_protected_resource_metadata(&mut resp, rewrite)
+			.await
+			.map_err(ProxyResponse::from)?;
+	}
 	Ok(resp)
 }
 
