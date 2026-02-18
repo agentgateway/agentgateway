@@ -129,6 +129,11 @@ pub struct MCPInfo {
 	pub session_id: Option<String>,
 }
 
+pub(crate) use auth::{
+	PassthroughProtectedResource, PassthroughWellKnown, passthrough_well_known,
+	rewrite_passthrough_protected_resource_metadata, rewrite_passthrough_www_authenticate,
+};
+
 pub(crate) fn pre_route_rewrite_uri(req: &Request) -> Option<Uri> {
 	auth::pre_route_rewrite_uri(req)
 }
