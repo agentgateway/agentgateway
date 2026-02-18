@@ -247,9 +247,6 @@ pub enum RequestResult {
 	Rejected(Response),
 }
 
-#[derive(Clone, Debug)]
-pub struct OverrideModel(pub String);
-
 impl AIProvider {
 	pub fn provider(&self) -> Strng {
 		match self {
@@ -1033,10 +1030,6 @@ impl AIProvider {
 
 		if let Some(provider_model) = &self.override_model() {
 			*req.model() = Some(provider_model.to_string());
-		} else if req.model().is_none()
-			&& let Some(m) = parts.extensions.get::<OverrideModel>()
-		{
-			*req.model() = Some(m.0.to_string());
 		} else if req.model().is_none() {
 			return Err(AIError::MissingField("model not specified".into()));
 		}

@@ -38,7 +38,6 @@ impl Provider {
 			Value::String(ANTHROPIC_VERSION.to_string()),
 		);
 		body.remove("model");
-		body.remove("output_config");
 
 		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
 	}
