@@ -5068,7 +5068,7 @@
       "type": "object",
       "properties": {
         "models": {
-          "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overriden\non a per-model basis.",
+          "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overridden\non a per-model basis.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalLLMModels"
@@ -5204,7 +5204,7 @@
           ]
         },
         "azureApiVersion": {
-          "description": "For Azure: the API version to sue",
+          "description": "For Azure: the API version to use",
           "type": [
             "string",
             "null"

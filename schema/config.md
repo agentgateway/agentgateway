@@ -2456,7 +2456,7 @@
 |`backends[].policies.tcp.connectTimeout.secs`||
 |`backends[].policies.tcp.connectTimeout.nanos`||
 |`llm`||
-|`llm.models`|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overriden<br>on a per-model basis.|
+|`llm.models`|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].name`|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
 |`llm.models[].params`|params customizes parameters for the outgoing request|
 |`llm.models[].params.model`|The model to send to the provider.<br>If unset, the same model will be used from the request.|
@@ -2465,7 +2465,7 @@
 |`llm.models[].params.vertexRegion`||
 |`llm.models[].params.vertexProject`||
 |`llm.models[].params.azureHost`|For Azure: the host of the deployment|
-|`llm.models[].params.azureApiVersion`|For Azure: the API version to sue|
+|`llm.models[].params.azureApiVersion`|For Azure: the API version to use|
 |`llm.models[].provider`|provider of the LLM we are connecting too|
 |`llm.models[].defaults`|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|overrides allows setting values for the request, overriding any existing values|

@@ -101,7 +101,7 @@ pub struct LocalConfig {
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
 	/// models defines the set of models that can be served by this gateway. The model name refers to the
-	/// model in the users request that is matched; the model sent to the actual LLM can be overriden
+	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
 	/// on a per-model basis.
 	models: Vec<LocalLLMModels>,
 	/// policies defines policies for handling incoming requests, before a model is selected
@@ -179,7 +179,7 @@ pub struct LocalLLMParams {
 	vertex_project: Option<Strng>,
 	/// For Azure: the host of the deployment
 	azure_host: Option<Strng>,
-	/// For Azure: the API version to sue
+	/// For Azure: the API version to use
 	azure_api_version: Option<Strng>,
 }
 
@@ -1103,14 +1103,14 @@ async fn convert(
 	// Convert llm config if present
 	if let Some(llm_config) = llm {
 		let (llm_bind, llm_policies, llm_backends) =
-			convert_llm_config(client.clone(), gateway.clone(), llm_config).await?;
+			convert_llm_config(client.clone(), config, gateway.clone(), llm_config).await?;
 		all_binds.push(llm_bind);
 		all_policies.extend_from_slice(&llm_policies);
 		all_backends.extend_from_slice(&llm_backends);
 	}
 	if let Some(mcp_config) = mcp {
 		let (mcp_bind, mcp_policies, mcp_backends) =
-			convert_mcp_config(client.clone(), gateway.clone(), mcp_config).await?;
+			convert_mcp_config(client.clone(), config, gateway.clone(), mcp_config).await?;
 		all_binds.push(mcp_bind);
 		all_policies.extend_from_slice(&mcp_policies);
 		all_backends.extend_from_slice(&mcp_backends);
@@ -1161,6 +1161,7 @@ fn llm_model_name_header_match(model_name: &str) -> anyhow::Result<HeaderValueMa
 
 async fn convert_llm_config(
 	client: client::Client,
+	config: &crate::Config,
 	gateway: ListenerTarget,
 	llm_config: LocalLLMConfig,
 ) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
@@ -1488,7 +1489,7 @@ json(request.body).model
 	listener_set.insert(listener);
 
 	// Create bind
-	let sockaddr = if cfg!(target_family = "unix") {
+	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
 		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), DEFAULT_LLM_PORT)
 	} else {
 		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_LLM_PORT)
@@ -1507,6 +1508,7 @@ json(request.body).model
 
 async fn convert_mcp_config(
 	client: client::Client,
+	config: &crate::Config,
 	gateway: ListenerTarget,
 	mcp_config: LocalSimpleMcpConfig,
 ) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
@@ -1561,7 +1563,7 @@ async fn convert_mcp_config(
 	let mut listener_set = ListenerSet::default();
 	listener_set.insert(listener);
 
-	let sockaddr = if cfg!(target_family = "unix") {
+	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
 		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
 	} else {
 		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
