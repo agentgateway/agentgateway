@@ -210,17 +210,17 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 			.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
 		{
 			proto::agent::backend_policy_spec::mcp_authentication::Mode::Optional => {
-				http::jwt::Mode::Optional
+				McpAuthenticationMode::Optional
 			},
 			proto::agent::backend_policy_spec::mcp_authentication::Mode::Strict => {
-				http::jwt::Mode::Strict
+				McpAuthenticationMode::Strict
 			},
 			proto::agent::backend_policy_spec::mcp_authentication::Mode::Permissive => {
-				http::jwt::Mode::Permissive
+				McpAuthenticationMode::Permissive
 			},
 		};
 
-		let jwt_validator = http::jwt::Jwt::from_providers(vec![jwt_provider], mode);
+		let jwt_validator = http::jwt::Jwt::from_providers(vec![jwt_provider], mode.into());
 		Ok(McpAuthentication {
 			issuer: m.issuer.clone(),
 			audiences: m.audiences.clone(),

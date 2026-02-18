@@ -148,7 +148,8 @@ impl App {
 				},
 				sm,
 			);
-			sse.handle(req).await
+
+			Box::pin(sse.handle(req)).await
 		} else {
 			let streamable = StreamableHttpService::new(
 				move || {

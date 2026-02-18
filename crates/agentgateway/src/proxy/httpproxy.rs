@@ -1377,60 +1377,50 @@ async fn make_backend_call(
 				| RouteType::AnthropicTokenCount
 				| RouteType::Embeddings => {
 					let r = match route_type {
-						RouteType::Completions => llm
-							.provider
-							.process_completions_request(
-								&backend_info,
-								llm_request_policies.llm.as_deref(),
-								req,
-								llm.tokenize,
-								&mut log,
-							)
-							.await
-							.map_err(|e| ProxyError::Processing(e.into()))?,
-						RouteType::Messages => llm
-							.provider
-							.process_messages_request(
-								&backend_info,
-								llm_request_policies.llm.as_deref(),
-								req,
-								llm.tokenize,
-								&mut log,
-							)
-							.await
-							.map_err(|e| ProxyError::Processing(e.into()))?,
-						RouteType::Responses => llm
-							.provider
-							.process_responses_request(
-								&backend_info,
-								llm_request_policies.llm.as_deref(),
-								req,
-								llm.tokenize,
-								&mut log,
-							)
-							.await
-							.map_err(|e| ProxyError::Processing(e.into()))?,
-						RouteType::Embeddings => llm
-							.provider
-							.process_embeddings_request(
-								&backend_info,
-								llm_request_policies.llm.as_deref(),
-								req,
-								llm.tokenize,
-								&mut log,
-							)
-							.await
-							.map_err(|e| ProxyError::Processing(e.into()))?,
-						RouteType::AnthropicTokenCount => llm
-							.provider
-							.process_count_tokens_request(
-								&backend_info,
-								req,
-								llm_request_policies.llm.as_deref(),
-								&mut log,
-							)
-							.await
-							.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::Completions => Box::pin(llm.provider.process_completions_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						))
+						.await
+						.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::Messages => Box::pin(llm.provider.process_messages_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						))
+						.await
+						.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::Responses => Box::pin(llm.provider.process_responses_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						))
+						.await
+						.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::Embeddings => Box::pin(llm.provider.process_embeddings_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						))
+						.await
+						.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::AnthropicTokenCount => Box::pin(llm.provider.process_count_tokens_request(
+							&backend_info,
+							req,
+							llm_request_policies.llm.as_deref(),
+							&mut log,
+						))
+						.await
+						.map_err(|e| ProxyError::Processing(e.into()))?,
 						_ => unreachable!(),
 					};
 					let (mut req, llm_request) = match r {
@@ -2004,7 +1994,7 @@ impl PolicyClient {
 	}
 
 	pub async fn simple_call(&self, req: Request) -> Result<Response, ProxyError> {
-		self.inputs.upstream.simple_call(req).await
+		Box::pin(self.inputs.upstream.simple_call(req)).await
 	}
 }
 trait OptLogger {

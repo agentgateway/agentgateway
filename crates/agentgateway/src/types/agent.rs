@@ -1978,7 +1978,34 @@ pub struct McpAuthentication {
 	pub provider: Option<McpIDP>,
 	pub resource_metadata: ResourceMetadata,
 	pub jwt_validator: Arc<crate::http::jwt::Jwt>,
-	pub mode: http::jwt::Mode,
+	pub mode: McpAuthenticationMode,
+}
+
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum McpAuthenticationMode {
+	/// A valid token, issued by a configured issuer, must be present.
+	/// This is the default option.
+	#[default]
+	Strict,
+	/// If a token exists, validate it.
+	/// Warning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,
+	/// which will not trigger clients to initiate an oauth flow.
+	Optional,
+	/// Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).
+	/// Warning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,
+	/// which will not trigger clients to initiate an oauth flow.
+	Permissive,
+}
+
+impl From<McpAuthenticationMode> for crate::http::jwt::Mode {
+	fn from(value: McpAuthenticationMode) -> crate::http::jwt::Mode {
+		match value {
+			McpAuthenticationMode::Strict => crate::http::jwt::Mode::Strict,
+			McpAuthenticationMode::Optional => crate::http::jwt::Mode::Optional,
+			McpAuthenticationMode::Permissive => crate::http::jwt::Mode::Permissive,
+		}
+	}
 }
 
 // Non-xds config for MCP authentication
@@ -1990,7 +2017,7 @@ pub struct LocalMcpAuthentication {
 	pub resource_metadata: ResourceMetadata,
 	pub jwks: FileInlineOrRemote,
 	#[serde(default)]
-	pub mode: http::jwt::Mode,
+	pub mode: McpAuthenticationMode,
 }
 
 impl LocalMcpAuthentication {
@@ -2014,7 +2041,7 @@ impl LocalMcpAuthentication {
 		};
 
 		Ok(http::jwt::LocalJwtConfig::Single {
-			mode: self.mode,
+			mode: self.mode.into(),
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,
