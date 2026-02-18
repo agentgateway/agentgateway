@@ -1129,6 +1129,36 @@ async fn convert(
 }
 
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
+
+fn llm_model_name_header_match(model_name: &str) -> anyhow::Result<HeaderValueMatch> {
+	let wildcard_count = model_name.matches('*').count();
+	if wildcard_count > 1 {
+		bail!("model name '{model_name}' may only include a single '*' wildcard");
+	}
+
+	if wildcard_count == 0 {
+		return Ok(HeaderValueMatch::Exact(::http::HeaderValue::from_str(
+			model_name,
+		)?));
+	}
+
+	if model_name == "*" {
+		return Ok(HeaderValueMatch::Regex(regex::Regex::new(r".*")?));
+	}
+
+	if let Some(suffix) = model_name.strip_prefix('*') {
+		let pattern = format!(".*{}", regex::escape(suffix));
+		return Ok(HeaderValueMatch::Regex(regex::Regex::new(&pattern)?));
+	}
+
+	if let Some(prefix) = model_name.strip_suffix('*') {
+		let pattern = format!("{}.*", regex::escape(prefix));
+		return Ok(HeaderValueMatch::Regex(regex::Regex::new(&pattern)?));
+	}
+
+	bail!("model name wildcard must be either at the beginning or the end: '{model_name}'")
+}
+
 async fn convert_llm_config(
 	client: client::Client,
 	gateway: ListenerTarget,
@@ -1333,24 +1363,14 @@ json(request.body).model
 		let matches = user_matches
 			.into_iter()
 			.map(|mut m| {
-				let header_match = if model_config.name == "*" {
-					// TODO: support prefix and suffix wildcards too
-					HeaderMatch {
-						name: HeaderOrPseudo::Header(HeaderName::from_static("x-gateway-model-name")),
-						value: HeaderValueMatch::Regex(regex::Regex::new(r".*").unwrap()),
-					}
-				} else {
-					HeaderMatch {
-						name: HeaderOrPseudo::Header(HeaderName::from_static("x-gateway-model-name")),
-						value: HeaderValueMatch::Exact(
-							::http::HeaderValue::from_str(&model_config.name).unwrap(),
-						),
-					}
+				let header_match = HeaderMatch {
+					name: HeaderOrPseudo::Header(HeaderName::from_static("x-gateway-model-name")),
+					value: llm_model_name_header_match(&model_config.name)?,
 				};
 				m.headers.push(header_match);
-				m
+				Ok(m)
 			})
-			.collect_vec();
+			.collect::<anyhow::Result<Vec<_>>>()?;
 
 		let model_route = Route {
 			key: route_key.clone(),
@@ -1455,7 +1475,7 @@ json(request.body).model
 			name: strng::new("llm:transformation"),
 			namespace: strng::new("internal"),
 		}),
-		key: strng::new("llm:transformation").into(),
+		key: strng::new("llm:transformation"),
 		target: PolicyTarget::Gateway(listener_target),
 		policy: PolicyType::from((
 			TrafficPolicy::Transformation(transformation),

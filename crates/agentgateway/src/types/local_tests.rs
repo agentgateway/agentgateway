@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::types::agent::HeaderValueMatch;
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
 
@@ -71,4 +72,33 @@ async fn test_llm_simple_config() {
 #[tokio::test]
 async fn test_mcp_simple_config() {
 	test_config_parsing("mcp_simple").await;
+}
+
+#[test]
+fn test_llm_model_name_header_match_valid_patterns() {
+	match super::llm_model_name_header_match("*").unwrap() {
+		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), ".*"),
+		other => panic!("expected regex for '*', got {other:?}"),
+	}
+
+	match super::llm_model_name_header_match("*gpt-4.1").unwrap() {
+		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), ".*gpt\\-4\\.1"),
+		other => panic!("expected regex for '*gpt-4.1', got {other:?}"),
+	}
+
+	match super::llm_model_name_header_match("gpt-4.1*").unwrap() {
+		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), "gpt\\-4\\.1.*"),
+		other => panic!("expected regex for 'gpt-4.1*', got {other:?}"),
+	}
+
+	match super::llm_model_name_header_match("gpt-4.1").unwrap() {
+		HeaderValueMatch::Exact(v) => assert_eq!(v, ::http::HeaderValue::from_static("gpt-4.1")),
+		other => panic!("expected exact header value for 'gpt-4.1', got {other:?}"),
+	}
+}
+
+#[test]
+fn test_llm_model_name_header_match_invalid_patterns() {
+	assert!(super::llm_model_name_header_match("*gpt*").is_err());
+	assert!(super::llm_model_name_header_match("g*pt").is_err());
 }
