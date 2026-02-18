@@ -5,6 +5,8 @@ use crate::types::local::NormalizedLocalConfig;
 use crate::*;
 
 async fn test_config_parsing(test_name: &str) {
+	// Make it static
+	super::STARTUP_TIMESTAMP.get_or_init(|| 0);
 	let test_dir = Path::new("src/types/local_tests");
 	let input_path = test_dir.join(format!("{}_config.yaml", test_name));
 
@@ -35,16 +37,14 @@ async fn test_config_parsing(test_name: &str) {
 	.await
 	.unwrap_or_else(|e| panic!("Failed to normalize config from: {:?} {e}", input_path));
 
-	let output_yaml = serdes::yamlviajson::to_string(&normalized)
-		.expect("Failed to serialize NormalizedLocalConfig to YAML");
-
 	insta::with_settings!({
 		description => format!("Config normalization test for {}: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML", test_name),
 		omit_expression => true,
 		prepend_module_to_snapshot => false,
 		snapshot_path => "local_tests",
+		sort_maps => true,
 	}, {
-		insta::assert_snapshot!(format!("{}_normalized", test_name), output_yaml);
+		insta::assert_yaml_snapshot!(format!("{}_normalized", test_name), normalized);
 	});
 }
 

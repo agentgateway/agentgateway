@@ -10,6 +10,7 @@ use crate::http::backendtls::LocalBackendTLS;
 use crate::http::filters::HeaderModifier;
 use crate::http::transformation_cel::LocalTransformationConfig;
 use crate::http::{HeaderName, HeaderOrPseudo, filters, retry, timeout};
+use crate::llm::policy::PromptGuard;
 use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider};
 use crate::llm::{anthropic, openai};
 use crate::mcp::McpAuthorization;
@@ -19,11 +20,11 @@ use crate::types::agent::{
 	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
 	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
 	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route,
-	RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
-	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
-	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
-	TrafficPolicy, TunnelProtocol, TypedResourceName,
+	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
+	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
+	TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -36,7 +37,6 @@ use itertools::Itertools;
 use macro_rules_attribute::apply;
 use openapiv3::OpenAPI;
 use secrecy::SecretString;
-use crate::llm::policy::PromptGuard;
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
@@ -1128,6 +1128,7 @@ async fn convert(
 	})
 }
 
+static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
 async fn convert_llm_config(
 	client: client::Client,
 	gateway: ListenerTarget,
@@ -1169,7 +1170,6 @@ json(request.body).model
 	)?;
 
 	// Get static startup unix timestamp
-	static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
 	let startup_timestamp = *STARTUP_TIMESTAMP.get_or_init(|| {
 		SystemTime::now()
 			.duration_since(UNIX_EPOCH)
@@ -1376,7 +1376,10 @@ json(request.body).model
 					(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
 					// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
 					(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
-					(strng::new(":streamRawPredict"), crate::llm::RouteType::Messages),
+					(
+						strng::new(":streamRawPredict"),
+						crate::llm::RouteType::Messages,
+					),
 					(
 						strng::new("/v1/responses"),
 						crate::llm::RouteType::Responses,
@@ -1413,7 +1416,14 @@ json(request.body).model
 	};
 
 	if let Some(pol) = llm_config.policies {
-		let route_pols = split_policies(client.clone(), FilterOrPolicy{authorization: pol.authorization.clone(), ..Default::default()}).await?;
+		let route_pols = split_policies(
+			client.clone(),
+			FilterOrPolicy {
+				authorization: pol.authorization.clone(),
+				..Default::default()
+			},
+		)
+		.await?;
 		let pols = split_policies(client.clone(), pol.gateway.into()).await?;
 
 		let pc = pols.route_policies.len();

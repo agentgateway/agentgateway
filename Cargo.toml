@@ -100,7 +100,7 @@ hyper-util = { version = "0.1", features = ["full"] }
 hyper-util-fork = { path = "crates/hyper-util-fork", features = ["full"] }
 include_dir = "0.7"
 indexmap = { version = "2.9", features = ["serde"] }
-insta = { version = "1.38", features = ["json", "redactions", "filters"] }
+insta = { version = "1.38", features = ["json", "redactions", "filters", "yaml"] }
 ipnet = { version = "2.11", features = ["serde"] }
 itertools = "0.14"
 jsonwebtoken = { version = "10.3", features = ["aws_lc_rs"] }

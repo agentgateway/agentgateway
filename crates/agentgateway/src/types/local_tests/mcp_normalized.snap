@@ -3,72 +3,72 @@ source: crates/agentgateway/src/types/local_tests.rs
 description: "Config normalization test for mcp: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
-- key: bind/3000
-  address: '[::]:3000'
-  protocol: http
-  tunnelProtocol: direct
-  listeners:
-    ns/name/bind/3000/listener0:
-      key: ns/name/bind/3000/listener0
-      gatewayName: name
-      gatewayNamespace: ns
-      listenerName: listener0
-      hostname: ''
-      protocol: HTTP
-      routes:
-        ns/name/bind/3000/listener0/default/route0:
-          key: ns/name/bind/3000/listener0/default/route0
-          name: route0
-          namespace: default
-          matches:
-          - path:
-              pathPrefix: /
-          backends:
-          - weight: 1
-            backend: /ns/name/bind/3000/listener0/default/route0/backend0
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+        routes:
+          ns/name/bind/3000/listener0/default/route0:
+            backends:
+              - backend: /ns/name/bind/3000/listener0/default/route0/backend0
+                inlinePolicies:
+                  - mcpAuthorization:
+                      rules:
+                        allow:
+                          - "mcp.tool.name == \"echo\""
+                          - "jwt.sub == \"test-user\" && mcp.tool.name == \"add\""
+                          - "mcp.tool.name == \"printEnv\" && jwt.nested.key == \"value\""
+                        deny: []
+                weight: 1
             inlinePolicies:
-            - mcpAuthorization:
-                rules:
-                  allow:
-                  - mcp.tool.name == "echo"
-                  - jwt.sub == "test-user" && mcp.tool.name == "add"
-                  - mcp.tool.name == "printEnv" && jwt.nested.key == "value"
-                  deny: []
-          inlinePolicies:
-          - cors:
-              allowCredentials: false
-              allowHeaders:
-              - '*'
-              allowOrigins:
-              - '*'
-              maxAge: null
-      tcpRoutes: {}
+              - cors:
+                  allowCredentials: false
+                  allowHeaders:
+                    - "*"
+                  allowOrigins:
+                    - "*"
+                  maxAge: ~
+            key: ns/name/bind/3000/listener0/default/route0
+            matches:
+              - path:
+                  pathPrefix: /
+            name: route0
+            namespace: default
+        tcpRoutes: {}
 policies: []
 backends:
-- backend:
-    host:
-      name: mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
-      namespace: ''
-      target: example.com:443
-  inlinePolicies:
-  - backendTLS: null
-- backend:
-    mcp:
-      name: ns/name/bind/3000/listener0/default/route0/backend0
-      namespace: ''
-      target:
-        targets:
-        - name: stdio
-          stdio:
-            cmd: npx
-            args:
-            - '@modelcontextprotocol/server-everything'
-        - name: remote
-          mcp:
-            backend:
-              backend: /mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
-            path: /mcp
-        stateful: true
-        alwaysUsePrefix: false
+  - backend:
+      host:
+        name: mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
+        namespace: ""
+        target: "example.com:443"
+    inlinePolicies:
+      - backendTLS: ~
+  - backend:
+      mcp:
+        name: ns/name/bind/3000/listener0/default/route0/backend0
+        namespace: ""
+        target:
+          targets:
+            - name: stdio
+              stdio:
+                cmd: npx
+                args:
+                  - "@modelcontextprotocol/server-everything"
+            - mcp:
+                backend:
+                  backend: /mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
+                path: /mcp
+              name: remote
+          stateful: true
+          alwaysUsePrefix: false
 workloads: []
 services: []
