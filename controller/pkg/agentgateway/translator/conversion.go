@@ -820,7 +820,7 @@ func NormalizeReference(group *gwv1.Group, kind *gwv1.Kind, defaultGVK schema.Gr
 // ToInternalParentReference converts a gwv1.ParentReference to a ParentKey.
 func ToInternalParentReference(p gwv1.ParentReference, localNamespace string) (ParentKey, error) {
 	ref := NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK)
-	if !allowedParentReferences.Contains(wellknown.GatewayGVK) {
+	if !allowedParentReferences.Contains(ref) {
 		return ParentKey{}, fmt.Errorf("unsupported Parent: %v/%v", p.Group, p.Kind)
 	}
 	return ParentKey{
@@ -1021,7 +1021,7 @@ type ParentKey struct {
 }
 
 func (p ParentKey) String() string {
-	return p.Kind.String() + "/" + p.Namespace + "/" + p.Name
+	return GVKString(p.Kind) + "/" + p.Namespace + "/" + p.Name
 }
 
 // ParentReference holds the parent key, section name and port for a parent reference.
@@ -1051,6 +1051,8 @@ type ParentInfo struct {
 	Hostnames []string
 	// OriginalHostname is the unprocessed form of Hostnames; how it appeared in users' config
 	OriginalHostname string
+	// Timestamp the parent was created - used in determining listener precedence
+	CreationTimestamp metav1.Time
 
 	SectionName    gwv1.SectionName
 	Port           gwv1.PortNumber
@@ -1188,6 +1190,7 @@ func BuildListener(
 	l gwv1.Listener,
 	listenerIndex int,
 	portErr error,
+	forListenerSet bool,
 ) ([]string, *TLSInfo, []gwv1.ListenerStatus, bool) {
 	listenerConditions := map[string]*Condition{
 		string(gwv1.ListenerConditionAccepted): {
@@ -1225,9 +1228,13 @@ func BuildListener(
 		// If there were no other errors, also check the Key/Cert are actually valid
 		err = validateTLS(tlsInfo)
 	}
-	log.Errorf("howardjohn: build tls %+v", err)
 	if err != nil {
-		if err.Reason == InvalidTLSCA ||
+		if forListenerSet {
+			listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
+				Reason:  string(gwv1.ListenerSetReasonListenersNotValid),
+				Message: err.Message,
+			}
+		} else if err.Reason == InvalidTLSCA ||
 			err.Reason == InvalidTLSCAKind ||
 			(err.Reason == string(gwv1.GatewayReasonRefNotPermitted) && strings.HasPrefix(err.Message, "caCertificateRef")) {
 			listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
