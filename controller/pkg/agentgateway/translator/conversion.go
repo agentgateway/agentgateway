@@ -1210,15 +1210,26 @@ func BuildListener(
 	}
 
 	ok := true
-	gwTls := resolveGatewayTLS(l.Port, gw.TLS)
-	tlsInfo, err := buildTLS(ctx, secrets, configMaps, grants, gwTls, l.TLS, obj)
+	gwFrontendTLS, gwBackendTLS := resolveGatewayTLS(l.Port, gw.TLS)
+	tlsInfo, err := buildTLS(ctx, secrets, configMaps, grants, gwFrontendTLS, l.TLS, obj)
+	var backendTLSErr *ConfigError
+	if err == nil {
+		// Resolve backend client cert references for status/reporting. Actual backend TLS behavior
+		// is implemented outside this repo.
+		backendTLSErr = resolveGatewayBackendTLS(ctx, secrets, grants, gwBackendTLS, obj)
+		if backendTLSErr != nil {
+			listenerConditions[string(gwv1.ListenerConditionResolvedRefs)].Error = backendTLSErr
+		}
+	}
 	if err == nil && tlsInfo != nil {
 		// If there were no other errors, also check the Key/Cert are actually valid
 		err = validateTLS(tlsInfo)
 	}
 	log.Errorf("howardjohn: build tls %+v", err)
 	if err != nil {
-		if err.Reason == InvalidTLSCA {
+		if err.Reason == InvalidTLSCA ||
+			err.Reason == InvalidTLSCAKind ||
+			(err.Reason == string(gwv1.GatewayReasonRefNotPermitted) && strings.HasPrefix(err.Message, "caCertificateRef")) {
 			listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
 				Reason:  string(gwv1.ListenerReasonNoValidCACertificate),
 				Message: err.Message,
@@ -1254,18 +1265,23 @@ func BuildListener(
 	return hostnames, tlsInfo, updatedStatus, ok
 }
 
-func resolveGatewayTLS(port gwv1.PortNumber, gw *gwv1.GatewayTLSConfig) *gwv1.TLSConfig {
-	if gw == nil || gw.Frontend == nil {
-		return nil
+func resolveGatewayTLS(port gwv1.PortNumber, gw *gwv1.GatewayTLSConfig) (*gwv1.TLSConfig, *gwv1.GatewayBackendTLS) {
+	if gw == nil {
+		return nil, nil
 	}
-	f := gw.Frontend
-	pp := slices.FindFunc(f.PerPort, func(portConfig gwv1.TLSPortConfig) bool {
-		return portConfig.Port == port
-	})
-	if pp != nil {
-		return &pp.TLS
+	var frontendTLS *gwv1.TLSConfig
+	if gw.Frontend != nil {
+		f := gw.Frontend
+		pp := slices.FindFunc(f.PerPort, func(portConfig gwv1.TLSPortConfig) bool {
+			return portConfig.Port == port
+		})
+		if pp != nil {
+			frontendTLS = &pp.TLS
+		} else {
+			frontendTLS = &f.Default
+		}
 	}
-	return &f.Default
+	return frontendTLS, gw.Backend
 }
 
 var supportedProtocols = sets.New(
@@ -1375,8 +1391,7 @@ func buildTLS(
 				return dummyTls, err
 			}
 			sameNamespace := cred.Source.Namespace == namespace
-			isSecret := cred.Kind == wellknown.SecretGVK.Kind
-			if isSecret && !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
+			if !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
 				return dummyTls, &ConfigError{
 					Reason: InvalidListenerRefNotPermitted,
 					Message: fmt.Sprintf(
@@ -1393,6 +1408,37 @@ func buildTLS(
 		return nil, nil
 	}
 	return nil, nil
+}
+
+func resolveGatewayBackendTLS(
+	ctx krt.HandlerContext,
+	secrets krt.Collection[*corev1.Secret],
+	grants ReferenceGrants,
+	backendTLS *gwv1.GatewayBackendTLS,
+	gw controllers.Object,
+) *ConfigError {
+	if backendTLS == nil || backendTLS.ClientCertificateRef == nil {
+		return nil
+	}
+	tlsRes, err := buildSecretReference(ctx, *backendTLS.ClientCertificateRef, gw, secrets)
+	if err != nil {
+		return &ConfigError{
+			Reason:  string(gwv1.GatewayReasonInvalidClientCertificateRef),
+			Message: err.Message,
+		}
+	}
+
+	namespace := gw.GetNamespace()
+	if tlsRes.Source.Namespace != namespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), tlsRes.Source, namespace) {
+		return &ConfigError{
+			Reason: string(gwv1.GatewayReasonRefNotPermitted),
+			Message: fmt.Sprintf(
+				"clientCertificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
+				backendTLS.ClientCertificateRef.Name, tlsRes.Source.Namespace, namespace,
+			),
+		}
+	}
+	return nil
 }
 
 func buildCaCertificateReference(
@@ -1449,7 +1495,7 @@ func buildCaCertificateReference(
 		res.Info.CaCert = certInfo.Cert
 	default:
 		return nil, &ConfigError{
-			Reason:  InvalidTLSCA,
+			Reason:  InvalidTLSCAKind,
 			Message: fmt.Sprintf("invalid CA certificate reference %v, only secret and configmap are allowed", plainObjectReferenceString(ref)),
 		}
 	}

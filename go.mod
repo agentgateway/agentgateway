@@ -54,7 +54,7 @@ require (
 )
 
 require sigs.k8s.io/gateway-api/conformance v0.0.0-20260213173202-265da48be464
-
+replace sigs.k8s.io/gateway-api/conformance => /home/john/go/src/sigs.k8s.io/gateway-api/conformance
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
