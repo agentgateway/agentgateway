@@ -191,3 +191,13 @@ rules:
   - get
   - list
   - watch
+{{- if .Values.inferenceExtension.enabled }}
+- apiGroups: ["inference.networking.k8s.io"]
+  resources: ["inferencepools"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["inference.networking.k8s.io"]
+  resources: ["inferencepools/status"]
+  verbs:
+    - patch
+    - update
+{{- end }}
