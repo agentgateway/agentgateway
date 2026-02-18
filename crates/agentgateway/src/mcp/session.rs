@@ -17,7 +17,7 @@ use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYP
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::http::Response;
+use crate::http::{Response, Uri};
 use crate::mcp::handler::{Relay, RelayInputs};
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
@@ -45,7 +45,13 @@ impl Session {
 			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
 			_ => None,
 		};
-		Self::handle_error(req_id, self.send_internal(parts, message).await).await
+		let req_uri = parts.uri.clone();
+		Self::handle_error(
+			req_id,
+			Some(req_uri),
+			self.send_internal(parts, message).await,
+		)
+		.await
 	}
 	/// send a message to upstream server(s), when using stateless mode. In stateless mode, every message
 	/// is wrapped in an InitializeRequest (except the actual InitializeRequest from the downstream).
@@ -92,6 +98,7 @@ impl Session {
 
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
+		let req_uri = parts.uri.clone();
 		let ctx = IncomingRequestContext::new(&parts);
 		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "delete_session");
 		let session_id = self.id.to_string();
@@ -99,7 +106,12 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await).await
+		Self::handle_error(
+			None,
+			Some(req_uri),
+			self.relay.send_fanout_deletion(ctx).await,
+		)
+		.await
 	}
 
 	/// forward_legacy_sse takes an upstream Response and forwards all messages to the SSE data stream.
@@ -149,6 +161,7 @@ impl Session {
 
 	/// get_stream establishes a stream for server-sent messages
 	pub async fn get_stream(&self, parts: Parts) -> Result<Response, ProxyError> {
+		let req_uri = parts.uri.clone();
 		let ctx = IncomingRequestContext::new(&parts);
 		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "get_stream");
 		let session_id = self.id.to_string();
@@ -156,17 +169,28 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_get(ctx).await).await
+		Self::handle_error(None, Some(req_uri), self.relay.send_fanout_get(ctx).await).await
 	}
 
 	async fn handle_error(
 		req_id: Option<RequestId>,
+		request_uri: Option<Uri>,
 		d: Result<Response, UpstreamError>,
 	) -> Result<Response, ProxyError> {
 		match d {
 			Ok(r) => Ok(r),
 			Err(UpstreamError::Http(ClientError::Status(resp))) => {
-				let resp = http::SendDirectResponse::new(*resp)
+				let mut response = *resp;
+				if let Some(request_uri) = request_uri.as_ref()
+					&& let Err(e) =
+						crate::mcp::rewrite_www_authenticate_for_request_uri(&mut response, request_uri)
+				{
+					tracing::warn!(
+						"failed to rewrite mcp upstream WWW-Authenticate header: {}",
+						e
+					);
+				}
+				let resp = http::SendDirectResponse::new(response)
 					.await
 					.map_err(ProxyError::Body)?;
 				Err(mcp::Error::UpstreamError(Box::new(resp)).into())

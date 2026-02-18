@@ -589,14 +589,7 @@ impl HTTPProxy {
 		if selected_route.is_none()
 			&& let Some(rewritten_uri) = crate::mcp::pre_route_rewrite_uri(&req)
 		{
-			tracing::error!("howardjohn: pre {rewritten_uri:?}");
-			let mut original_uri = req.uri().clone();
-			let oo = original_uri.clone();
-			let nn = oo
-				.path()
-				.strip_suffix(rewritten_uri.path())
-				.unwrap_or(oo.path());
-			tracing::error!("howardjohn: now {nn:?}");
+			let original_uri = req.uri().clone();
 			*req.uri_mut() = rewritten_uri;
 			let rewritten_selected = http::route::select_best_route(
 				inputs.stores.clone(),
@@ -606,11 +599,6 @@ impl HTTPProxy {
 				&selected_listener,
 				&req,
 			);
-			http::modify_url(&mut original_uri, |u| {
-				u.set_path(nn);
-				Ok(())
-			})
-			.unwrap();
 			*req.uri_mut() = original_uri;
 			selected_route = rewritten_selected.and_then(|(route, path_match)| {
 				route_has_mcp_backend(inputs.as_ref(), &route).then_some((route, path_match))
@@ -619,7 +607,6 @@ impl HTTPProxy {
 		let (selected_route, path_match) = selected_route
 			.ok_or(ProxyError::RouteNotFound)
 			.snapshot_on_err(log, &mut req)?;
-		tracing::error!("howardjohn: req: {}", req.uri());
 		log.route_name = Some(selected_route.name.clone());
 		// Record the matched path for tracing/logging span names
 		log.path_match = Some(match &path_match {
