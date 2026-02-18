@@ -590,6 +590,11 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 			if e.ParentKey.Kind != wellknown.GatewayGVK && e.ParentKey.Kind != wellknown.ListenerSetGVK {
 				return nil
 			}
+			k := RouteAttachment{
+				From:         from,
+				To:           e.ParentKey,
+				ListenerName: string(e.ParentSection),
+			}
 			return ptr.Of(&RouteAttachment{
 				From:         from,
 				To:           e.ParentKey,
@@ -605,12 +610,8 @@ type RouteAttachment struct {
 	ListenerName string
 }
 
-func GVKString(c schema.GroupVersionKind) string {
-	return c.Group + "/" + c.Version + "/" + c.Kind
-}
-
 func (r RouteAttachment) ResourceName() string {
-	return GVKString(r.From.Kind) + "/" + r.From.Name.String() + "/" + r.To.String() + "/" + r.ListenerName
+	return r.From.Kind.Kind + "/" + r.From.Name.String() + "->" + r.To.String() + "/" + r.ListenerName
 }
 
 func (r RouteAttachment) Equals(other RouteAttachment) bool {

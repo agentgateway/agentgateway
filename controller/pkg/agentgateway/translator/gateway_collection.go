@@ -434,7 +434,7 @@ func ListenerSetCollection(
 			if !NamespaceAcceptedByAllowListeners(obj.Namespace, parentGwObj, func(s string) *corev1.Namespace {
 				return ptr.Flatten(krt.FetchOne(ctx, namespaces, krt.FilterKey(s)))
 			}) {
-				//reportNotAllowedListenerSet(status, obj)
+				reportNotAllowedListenerSet(status, obj)
 				return status, nil
 			}
 
@@ -480,6 +480,24 @@ func ListenerSetCollection(
 			reportListenerSetStatus(obj, status)
 			return status, result
 		}, krtopts.ToOptions("ListenerSets")...)
+}
+
+func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.ListenerSet) {
+	notAllowedMessage := "Gateway does not allow ListenerSet attachment"
+	gatewayConditions := map[string]*Condition{
+		string(gwv1.GatewayConditionAccepted): {
+			Reason:  string(gwv1.ListenerSetReasonNotAllowed),
+			Status:  metav1.ConditionFalse,
+			Message: notAllowedMessage,
+		},
+		string(gwv1.GatewayConditionProgrammed): {
+			Reason:  string(gwv1.ListenerSetReasonNotAllowed),
+			Status:  metav1.ConditionFalse,
+			Message: notAllowedMessage,
+		},
+	}
+
+	status.Conditions = SetConditions(obj.Generation, status.Conditions, gatewayConditions)
 }
 
 // RouteParents holds information about things Routes can reference as parents.

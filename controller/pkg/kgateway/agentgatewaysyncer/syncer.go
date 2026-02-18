@@ -240,7 +240,6 @@ func (s *Syncer) buildFinalListenerSetStatus(
 		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.ListenerSet, gwv1.ListenerSetStatus]) *krt.ObjectWithStatus[*gwv1.ListenerSet, gwv1.ListenerSetStatus] {
 			// Skip if listenerset not allowed
 			if len(i.Status.Conditions) == 0 || i.Status.Conditions[0].Reason == string(gwv1.ListenerSetReasonNotAllowed) {
-				log.Errorf("howardjohn: SKIP")
 				return &i
 			}
 
@@ -255,8 +254,6 @@ func (s *Syncer) buildFinalListenerSetStatus(
 			for _, r := range routes {
 				counts[r.ListenerName]++
 			}
-			log.Errorf("howardjohn: counts %+v", counts)
-			log.Errorf("howardjohn: ls %v", len(i.Obj.Spec.Listeners))
 			for idx, l := range i.Obj.Spec.Listeners {
 				gatewayListener := krt.FetchOne(ctx, gatewayIndex, krt.FilterKey(utils.SectionedNamespacedName{
 					NamespacedName: types.NamespacedName{
