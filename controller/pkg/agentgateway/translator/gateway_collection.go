@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"istio.io/istio/pilot/pkg/util/protoconv"
 	"istio.io/istio/pkg/config"
@@ -11,6 +12,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
+	"istio.io/istio/pkg/util/sets"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -193,6 +195,7 @@ func (g ParentInfo) Equals(other ParentInfo) bool {
 		g.Port == other.Port &&
 		g.Protocol == other.Protocol &&
 		g.TLSPassthrough == other.TLSPassthrough &&
+		g.CreationTimestamp == other.CreationTimestamp &&
 		slices.EqualFunc(g.AllowedKinds, other.AllowedKinds, func(a, b gwv1.RouteGroupKind) bool {
 			return a.Kind == b.Kind && ptr.Equal(a.Group, b.Group)
 		}) &&
@@ -258,14 +261,14 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Reason:  gwv1.GatewayReasonInvalid,
 				Message: err.Message,
 			})
-			return rm.BuildGWStatus(context.Background(), *obj, nil), nil
+			return rm.BuildGWStatus(context.Background(), *obj, 0), nil
 		}
 
 		for i, l := range kgw.Listeners {
 			// Attached Routes count starts at 0 and gets updated later in the status syncer
 			// when the real count is available after route processing
 
-			hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.Grants, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil)
+			hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.Grants, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false)
 			status.Listeners = updatedStatus
 
 			lstatus := status.Listeners[i]
@@ -320,7 +323,22 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			result = append(result, res)
 		}
 		listenersFromSets := krt.Fetch(ctx, cfg.ListenerSets, krt.FilterIndex(cfg.listenerIndex, config.NamespacedName(obj)))
+		// Sort by listener precedence
+		// Ref: https://gateway-api.sigs.k8s.io/geps/gep-1713/#listener-precedence
+		// - ListenerSet ordered by creation time (oldest first)
+		// - ListenerSet ordered alphabetically by “{namespace}/{name}”
+		slices.SortFunc(listenersFromSets, func(a, b ListenerSet) int {
+			// primary sort: creation timestamp (oldest first)
+			if cmp := a.ParentInfo.CreationTimestamp.Compare(b.ParentInfo.CreationTimestamp.Time); cmp != 0 {
+				return cmp
+			}
+			// secondary sort: alphabetically by "{namespace}/{name}"
+			return strings.Compare(a.Parent.String(), b.Parent.String())
+		})
+
+		uniqueListenerSets := sets.New[types.NamespacedName]()
 		for _, ls := range listenersFromSets {
+			uniqueListenerSets.Insert(ls.Parent)
 			result = append(result, &GatewayListener{
 				Name:          ls.Name,
 				ParentGateway: config.NamespacedName(obj),
@@ -334,7 +352,8 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Valid:      ls.Valid,
 			})
 		}
-		gws := rm.BuildGWStatus(context.Background(), *obj, nil)
+
+		gws := rm.BuildGWStatus(context.Background(), *obj, int32(uniqueListenerSets.Len()))
 		return gws, result
 	}
 }
@@ -419,20 +438,13 @@ func ListenerSetCollection(
 				return status, nil
 			}
 
-			//gatewayServices, err := extractGatewayServices(domainSuffix, parentGwObj, classInfo)
-			//if len(gatewayServices) == 0 && err != nil {
-			//	// Short circuit if it's a hard failure
-			//	reportListenerSetStatus(context, parentGwObj, obj, status, gatewayServices, nil, err)
-			//	return status, nil
-			//}
-
 			for i, l := range ls.Listeners {
 				port, portErr := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port)
 				l.Port = port
 				standardListener := convertListenerSetToListener(l)
 				originalStatus := slices.Map(status.Listeners, convertListenerSetStatusToStandardStatus)
 				hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, secrets, configMaps, grants, namespaces,
-					obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr)
+					obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr, true)
 				status.Listeners = slices.Map(updatedStatus, convertStandardStatusToListenerSetStatus)
 
 				if controllerName == constants.ManagedGatewayMeshController || controllerName == constants.ManagedGatewayEastWestController {
@@ -580,6 +592,25 @@ func reportListenerSetStatus(
 		},
 	}
 
+	invalidListeners := []string{}
+	for _, l := range gs.Listeners {
+		for _, cond := range l.Conditions {
+			if cond.Type == string(gwv1.ListenerConditionAccepted) && cond.Status == metav1.ConditionFalse {
+				invalidListeners = append(invalidListeners, string(l.Name))
+			}
+		}
+	}
+	if len(invalidListeners) > 0 {
+		gatewayConditions[string(gwv1.ListenerSetConditionAccepted)].Error = &ConfigError{
+			Reason:  ConfigErrorReason(gwv1.ListenerSetReasonListenersNotValid),
+			Message: "Some listeners are not accepted: " + strings.Join(invalidListeners, ", "),
+		}
+		gatewayConditions[string(gwv1.ListenerSetConditionProgrammed)].Error = &ConfigError{
+			Reason:  ConfigErrorReason(gwv1.ListenerSetReasonListenersNotValid),
+			Message: "Some listeners are not accepted: " + strings.Join(invalidListeners, ", "),
+		}
+	}
+	// TODO: valid ones
 	//setProgrammedCondition(gatewayConditions, internal, gatewayServices, warnings, allUsable)
 
 	gs.Conditions = SetConditions(obj.Generation, gs.Conditions, gatewayConditions)

@@ -8,6 +8,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"k8s.io/apimachinery/pkg/types"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -185,6 +186,29 @@ type TypedNamespacedName struct {
 
 func (n TypedNamespacedName) String() string {
 	return n.Kind + "/" + n.NamespacedName.String()
+}
+
+var SectionedNamespacedNameIndexCollectionFunc = krt.WithIndexCollectionFromString(func(s string) SectionedNamespacedName {
+	parts := strings.Split(s, "/")
+	if len(parts) != 3 {
+		panic("invalid SectionedNamespacedName: " + s)
+	}
+	return SectionedNamespacedName{
+		NamespacedName: types.NamespacedName{
+			Namespace: parts[0],
+			Name:      parts[1],
+		},
+		SectionName: gwv1.SectionName(parts[2]),
+	}
+})
+
+type SectionedNamespacedName struct {
+	types.NamespacedName
+	SectionName gwv1.SectionName
+}
+
+func (n SectionedNamespacedName) String() string {
+	return n.NamespacedName.String() + "/" + string(n.SectionName)
 }
 
 type AncestorBackend struct {
