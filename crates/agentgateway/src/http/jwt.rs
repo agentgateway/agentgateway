@@ -147,9 +147,8 @@ pub struct ProviderConfig {
 	pub jwt_validation_options: JWTValidationOptions,
 }
 
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_enum!)]
+#[derive(Default)]
 pub enum Mode {
 	/// A valid token, issued by a configured issuer, must be present.
 	Strict,

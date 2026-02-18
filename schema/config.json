@@ -1336,22 +1336,22 @@
                               "mode": {
                                 "oneOf": [
                                   {
-                                    "description": "A valid token, issued by a configured issuer, must be present.",
+                                    "description": "A valid token, issued by a configured issuer, must be present.\nThis is the default option.",
                                     "type": "string",
                                     "const": "strict"
                                   },
                                   {
-                                    "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                                    "description": "If a token exists, validate it.\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
                                     "type": "string",
                                     "const": "optional"
                                   },
                                   {
-                                    "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                                    "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
                                     "type": "string",
                                     "const": "permissive"
                                   }
                                 ],
-                                "default": "optional"
+                                "default": "strict"
                               }
                             },
                             "additionalProperties": false,
@@ -16077,22 +16077,22 @@
                   "mode": {
                     "oneOf": [
                       {
-                        "description": "A valid token, issued by a configured issuer, must be present.",
+                        "description": "A valid token, issued by a configured issuer, must be present.\nThis is the default option.",
                         "type": "string",
                         "const": "strict"
                       },
                       {
-                        "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+                        "description": "If a token exists, validate it.\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
                         "type": "string",
                         "const": "optional"
                       },
                       {
-                        "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+                        "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
                         "type": "string",
                         "const": "permissive"
                       }
                     ],
-                    "default": "optional"
+                    "default": "strict"
                   }
                 },
                 "additionalProperties": false,

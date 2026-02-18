@@ -312,8 +312,8 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 		}
 	}
 
-	// default mode is Optional
-	mode := api.BackendPolicySpec_McpAuthentication_OPTIONAL
+	// default mode is Strict
+	mode := api.BackendPolicySpec_McpAuthentication_STRICT
 	if authnPolicy.Mode == agentgateway.JWTAuthenticationModeStrict {
 		mode = api.BackendPolicySpec_McpAuthentication_STRICT
 	} else if authnPolicy.Mode == agentgateway.JWTAuthenticationModePermissive {

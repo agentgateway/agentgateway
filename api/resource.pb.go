@@ -1171,7 +1171,7 @@ func (BackendPolicySpec_McpAuthentication_McpIDP) EnumDescriptor() ([]byte, []in
 type BackendPolicySpec_McpAuthentication_Mode int32
 
 const (
-	// Default mode - if a token exists, validate it
+	// if a token exists, validate it
 	BackendPolicySpec_McpAuthentication_OPTIONAL BackendPolicySpec_McpAuthentication_Mode = 0
 	// A valid token must be present
 	BackendPolicySpec_McpAuthentication_STRICT BackendPolicySpec_McpAuthentication_Mode = 1
