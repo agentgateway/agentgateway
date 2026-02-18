@@ -1216,7 +1216,14 @@ func BuildListener(
 		// If there were no other errors, also check the Key/Cert are actually valid
 		err = validateTLS(tlsInfo)
 	}
+	log.Errorf("howardjohn: build tls %+v", err)
 	if err != nil {
+		if err.Reason == InvalidTLSCA {
+			listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
+				Reason:  string(gwv1.ListenerReasonNoValidCACertificate),
+				Message: err.Message,
+			}
+		}
 		listenerConditions[string(gwv1.ListenerConditionResolvedRefs)].Error = err
 		listenerConditions[string(gwv1.GatewayConditionProgrammed)].Error = &ConfigError{
 			Reason:  string(gwv1.GatewayReasonInvalid),
@@ -1305,7 +1312,7 @@ func validateTLS(certInfo *TLSInfo) *ConfigError {
 	if certInfo.CaCert != nil {
 		if !x509.NewCertPool().AppendCertsFromPEM(certInfo.Cert) {
 			return &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference, the bundle is malformed"),
 			}
 		}
@@ -1411,14 +1418,14 @@ func buildCaCertificateReference(
 		cm := ptr.Flatten(krt.FetchOne(ctx, configMaps, krt.FilterObjectName(res.Source)))
 		if cm == nil {
 			return nil, &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference, configmap %v not found", res.Source),
 			}
 		}
 		certInfo, err := ExtractRootFromString(cm.Data)
 		if err != nil {
 			return nil, &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference %v, %v", plainObjectReferenceString(ref), err),
 			}
 		}
@@ -1428,21 +1435,21 @@ func buildCaCertificateReference(
 		scrt := ptr.Flatten(krt.FetchOne(ctx, secrets, krt.FilterObjectName(res.Source)))
 		if scrt == nil {
 			return nil, &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference, secret %v not found", res.Source),
 			}
 		}
 		certInfo, err := ExtractRoot(scrt.Data)
 		if err != nil {
 			return nil, &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference %v, %v", plainObjectReferenceString(ref), err),
 			}
 		}
 		res.Info.CaCert = certInfo.Cert
 	default:
 		return nil, &ConfigError{
-			Reason:  InvalidTLS,
+			Reason:  InvalidTLSCA,
 			Message: fmt.Sprintf("invalid CA certificate reference %v, only secret and configmap are allowed", plainObjectReferenceString(ref)),
 		}
 	}
