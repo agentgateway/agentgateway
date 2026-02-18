@@ -107,7 +107,7 @@ spec:
                                   apiVersion:
                                     description: |-
                                       The version of the Azure OpenAI API to use.
-                                      For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#api-specs).
+                                      For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classicreference#api-specs).
                                       If unset, defaults to "v1"
                                     maxLength: 64
                                     minLength: 1
@@ -115,7 +115,7 @@ spec:
                                   deploymentName:
                                     description: |-
                                       The name of the Azure OpenAI model deployment to use.
-                                      For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models).
+                                      For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
                                       This is required if ApiVersion is not 'v1'. For v1, the model can be set in the request.
                                     maxLength: 256
                                     minLength: 1
@@ -1180,7 +1180,7 @@ spec:
                                                 openAIModeration:
                                                   description: |-
                                                     openAIModeration passes prompt data through the OpenAI Moderations endpoint.
-                                                    See https://platform.openai.com/docs/api-reference/moderations for more information.
+                                                    See https://developers.openai.com/api/reference/resources/moderations for more information.
                                                   properties:
                                                     model:
                                                       description: model specifies
@@ -3092,7 +3092,7 @@ spec:
                           apiVersion:
                             description: |-
                               The version of the Azure OpenAI API to use.
-                              For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#api-specs).
+                              For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classicreference#api-specs).
                               If unset, defaults to "v1"
                             maxLength: 64
                             minLength: 1
@@ -3100,7 +3100,7 @@ spec:
                           deploymentName:
                             description: |-
                               The name of the Azure OpenAI model deployment to use.
-                              For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models).
+                              For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
                               This is required if ApiVersion is not 'v1'. For v1, the model can be set in the request.
                             maxLength: 256
                             minLength: 1
@@ -4810,7 +4810,7 @@ spec:
                                 openAIModeration:
                                   description: |-
                                     openAIModeration passes prompt data through the OpenAI Moderations endpoint.
-                                    See https://platform.openai.com/docs/api-reference/moderations for more information.
+                                    See https://developers.openai.com/api/reference/resources/moderations for more information.
                                   properties:
                                     model:
                                       description: model specifies the moderation

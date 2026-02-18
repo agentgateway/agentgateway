@@ -948,7 +948,7 @@ spec:
                                 openAIModeration:
                                   description: |-
                                     openAIModeration passes prompt data through the OpenAI Moderations endpoint.
-                                    See https://platform.openai.com/docs/api-reference/moderations for more information.
+                                    See https://developers.openai.com/api/reference/resources/moderations for more information.
                                   properties:
                                     model:
                                       description: model specifies the moderation
@@ -4723,7 +4723,7 @@ spec:
 
                                           For example, to rate limit based on the Client IP: `source.address`.
 
-                                          See https://agentgateway.dev/docs/reference/cel/ for more info.
+                                          See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
                                         maxLength: 16384
                                         minLength: 1
                                         type: string

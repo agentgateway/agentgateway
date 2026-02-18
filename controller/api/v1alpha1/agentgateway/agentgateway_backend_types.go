@@ -204,7 +204,7 @@ type LLMProvider struct {
 	Path LongString `json:"path,omitempty"`
 }
 
-// OpenAIConfig settings for the [OpenAI](https://platform.openai.com/docs/api-reference/streaming) LLM provider.
+// OpenAIConfig settings for the [OpenAI](https://developers.openai.com/api/docs/guides/streaming-responses) LLM provider.
 type OpenAIConfig struct {
 	// Optional: Override the model name, such as `gpt-4o-mini`.
 	// If unset, the model name is taken from the request.
@@ -212,7 +212,7 @@ type OpenAIConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
-// AzureOpenAIConfig settings for the [Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/) LLM provider.
+// AzureOpenAIConfig settings for the [Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classic) LLM provider.
 // +kubebuilder:validation:XValidation:message="deploymentName is required for this apiVersion",rule="!has(self.apiVersion) || self.apiVersion == 'v1' ? true : has(self.deploymentName)"
 type AzureOpenAIConfig struct {
 	// The endpoint for the Azure OpenAI API to use, such as `my-endpoint.openai.azure.com`.
@@ -221,13 +221,13 @@ type AzureOpenAIConfig struct {
 	Endpoint ShortString `json:"endpoint"`
 
 	// The name of the Azure OpenAI model deployment to use.
-	// For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models).
+	// For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
 	// This is required if ApiVersion is not 'v1'. For v1, the model can be set in the request.
 	// +optional
 	DeploymentName *ShortString `json:"deploymentName,omitempty"`
 
 	// The version of the Azure OpenAI API to use.
-	// For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#api-specs).
+	// For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classicreference#api-specs).
 	// If unset, defaults to "v1"
 	// +optional
 	ApiVersion *TinyString `json:"apiVersion,omitempty"`
@@ -241,7 +241,7 @@ type GeminiConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
-// VertexAIConfig settings for the [Vertex AI](https://cloud.google.com/vertex-ai/docs) LLM provider.
+// VertexAIConfig settings for the [Vertex AI](https://docs.cloud.google.com/vertex-ai/docs) LLM provider.
 type VertexAIConfig struct {
 	// Optional: Override the model name, such as `gpt-4o-mini`.
 	// If unset, the model name is taken from the request.
@@ -257,7 +257,7 @@ type VertexAIConfig struct {
 	Region TinyString `json:"region"`
 }
 
-// AnthropicConfig settings for the [Anthropic](https://docs.anthropic.com/en/release-notes/api) LLM provider.
+// AnthropicConfig settings for the [Anthropic](https://platform.claude.com/docs/en/release-notes/overview) LLM provider.
 type AnthropicConfig struct {
 	// Optional: Override the model name, such as `gpt-4o-mini`.
 	// If unset, the model name is taken from the request.

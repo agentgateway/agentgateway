@@ -1,7 +1,7 @@
 # CEL Functions
 
 The table below lists the CEL functions available in agentgateway.
-See the [CEL documentation](https://agentgateway.dev/docs/reference/cel/) for more information.
+See the [CEL documentation](https://agentgateway.dev/docs/standalone/latest/reference/cel/) for more information.
 
 ## Functions
 

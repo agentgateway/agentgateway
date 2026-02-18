@@ -1205,7 +1205,7 @@ type RateLimitDescriptorEntry struct {
 	//
 	// For example, to rate limit based on the Client IP: `source.address`.
 	//
-	// See https://agentgateway.dev/docs/reference/cel/ for more info.
+	// See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
 	// +required
 	Expression shared.CELExpression `json:"expression"`
 }

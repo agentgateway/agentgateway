@@ -187,7 +187,7 @@ image:
   # -- Set the default image pull policy.
   pullPolicy: IfNotPresent
   
-# -- Configure the integration with the Gateway API Inference Extension project, which lets you use agentgateway to route to AI inference workloads like LLMs that run locally in your Kubernetes cluster. Documentation for Inference Extension can be found here: https://kgateway.dev/docs/latest/agentgateway/inference/
+# -- Configure the integration with the Gateway API Inference Extension project, which lets you use agentgateway to route to AI inference workloads like LLMs that run locally in your Kubernetes cluster. Documentation for Inference Extension can be found here: https://agentgateway.dev/docs/kubernetes/latest/inference/
 inferenceExtension:
   # -- Enable Inference Extension support in the agentgateway controller.
   enabled: false
