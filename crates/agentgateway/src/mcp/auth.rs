@@ -67,7 +67,11 @@ fn normalize_identifier_suffix(suffix: &str) -> Option<String> {
 }
 
 fn request_origin(req: &Request) -> Option<String> {
-	let mut parts = request_uri(req).into_parts();
+	origin_from_uri(&request_uri(req))
+}
+
+fn origin_from_uri(uri: &Uri) -> Option<String> {
+	let mut parts = uri.clone().into_parts();
 	parts.path_and_query = Some(PathAndQuery::from_static(""));
 	Some(
 		Uri::from_parts(parts)
@@ -87,6 +91,24 @@ fn well_known_backend_path(path: &str) -> Option<String> {
 		return None;
 	};
 	normalize_identifier_suffix(suffix)
+}
+
+pub(crate) fn resource_metadata_for_request_uri(uri: &Uri) -> Option<String> {
+	let origin = origin_from_uri(uri)?;
+	let path = uri.path();
+	let identifier = if let Some(suffix) = path.strip_prefix(OAUTH_PROTECTED_RESOURCE_PREFIX) {
+		normalize_identifier_suffix(suffix)?
+	} else if let Some(suffix) = path.strip_prefix(OAUTH_AUTHORIZATION_SERVER_PREFIX) {
+		let suffix = suffix
+			.strip_suffix(CLIENT_REGISTRATION_SUFFIX)
+			.unwrap_or(suffix);
+		normalize_identifier_suffix(suffix)?
+	} else {
+		path.to_string()
+	};
+	Some(format!(
+		"{origin}{OAUTH_PROTECTED_RESOURCE_PREFIX}{identifier}"
+	))
 }
 
 pub(crate) fn pre_route_rewrite_uri(req: &Request) -> Option<Uri> {
@@ -168,6 +190,30 @@ pub(crate) fn rewrite_passthrough_www_authenticate(
 		.to_str()
 		.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
 	let updated = rewrite_www_authenticate_resource_metadata(current, &rewrite.resource_metadata)
+		.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
+	response
+		.headers_mut()
+		.insert(http::header::WWW_AUTHENTICATE, updated);
+	Ok(())
+}
+
+pub(crate) fn rewrite_www_authenticate_for_request_uri(
+	response: &mut Response,
+	request_uri: &Uri,
+) -> Result<(), ProxyError> {
+	if response.status() != StatusCode::UNAUTHORIZED {
+		return Ok(());
+	}
+	let Some(resource_metadata) = resource_metadata_for_request_uri(request_uri) else {
+		return Ok(());
+	};
+	let Some(current) = response.headers().get(http::header::WWW_AUTHENTICATE) else {
+		return Ok(());
+	};
+	let current = current
+		.to_str()
+		.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
+	let updated = rewrite_www_authenticate_resource_metadata(current, &resource_metadata)
 		.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
 	response
 		.headers_mut()
@@ -490,10 +536,10 @@ mod tests {
 	use super::{
 		OAUTH_PROTECTED_RESOURCE_PREFIX, PassthroughWellKnown, passthrough_well_known,
 		pre_route_rewrite_uri, rewrite_passthrough_protected_resource_metadata,
-		rewrite_passthrough_www_authenticate,
+		rewrite_passthrough_www_authenticate, rewrite_www_authenticate_for_request_uri,
 	};
 	use crate::http::tests_common::request_for_uri;
-	use crate::http::{Body, StatusCode};
+	use crate::http::{Body, StatusCode, Uri};
 	use serde_json::json;
 
 	#[test]
@@ -638,5 +684,27 @@ mod tests {
 			"resource_metadata=\"http://example.com/.well-known/oauth-protected-resource/mcp/notion\""
 		));
 		assert!(!header.contains("http://upstream/.well-known/oauth-protected-resource"));
+	}
+
+	#[test]
+	fn rewrite_www_authenticate_for_request_uri_for_mcp_path() {
+		let request_uri: Uri = "http://example.com/mcp/notion".parse().unwrap();
+		let mut response = ::http::Response::builder()
+			.status(StatusCode::UNAUTHORIZED)
+			.header(
+				http::header::WWW_AUTHENTICATE,
+				"Bearer error=\"invalid_token\", error_description=\"The access token is required\"",
+			)
+			.body(Body::empty())
+			.unwrap();
+		rewrite_www_authenticate_for_request_uri(&mut response, &request_uri).unwrap();
+		let header = response
+			.headers()
+			.get(http::header::WWW_AUTHENTICATE)
+			.and_then(|v| v.to_str().ok())
+			.unwrap_or_default();
+		assert!(header.contains(
+			"resource_metadata=\"http://example.com/.well-known/oauth-protected-resource/mcp/notion\""
+		));
 	}
 }
