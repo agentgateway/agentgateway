@@ -1021,7 +1021,7 @@ type ParentKey struct {
 }
 
 func (p ParentKey) String() string {
-	return GVKString(p.Kind) + "/" + p.Namespace + "/" + p.Name
+	return p.Kind.Kind + "/" + p.Namespace + "/" + p.Name
 }
 
 // ParentReference holds the parent key, section name and port for a parent reference.
