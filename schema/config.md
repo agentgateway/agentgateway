@@ -156,8 +156,8 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.(any)url`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`||
-|`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token. Only "exp", "nbf", "aud", "iss", "sub" are recognized; other values are silently ignored. Defaults to ["exp"].|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`||
@@ -663,16 +663,16 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)issuer`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)url`||
-|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present.|
-|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token. Only "exp", "nbf", "aud", "iss", "sub" are recognized; other values are silently ignored. Defaults to ["exp"].|
-|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options per provider.|
-|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token. Only "exp", "nbf", "aud", "iss", "sub" are recognized; other values are silently ignored. Defaults to ["exp"].|
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.(any)file`||
@@ -1526,16 +1526,16 @@
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)issuer`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)url`||
-|`binds[].listeners[].policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present.|
-|`binds[].listeners[].policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token. Only "exp", "nbf", "aud", "iss", "sub" are recognized; other values are silently ignored. Defaults to ["exp"].|
-|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options per provider.|
-|`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token. Only "exp", "nbf", "aud", "iss", "sub" are recognized; other values are silently ignored. Defaults to ["exp"].|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].policies.extAuthz.(any)(1)service`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.name`||
@@ -1723,8 +1723,8 @@
 |`policies[].policy.mcpAuthentication.jwks.(any)file`||
 |`policies[].policy.mcpAuthentication.jwks.(any)url`||
 |`policies[].policy.mcpAuthentication.mode`||
-|`policies[].policy.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present.|
-|`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token. Only "exp", "nbf", "aud", "iss", "sub" are recognized; other values are silently ignored. Defaults to ["exp"].|
+|`policies[].policy.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`||
@@ -2230,16 +2230,16 @@
 |`policies[].policy.jwtAuth.(any)(any)providers[].jwks`||
 |`policies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`policies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`policies[].policy.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`policies[].policy.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.jwtAuth.(any)(any)mode`||
 |`policies[].policy.jwtAuth.(any)(any)issuer`||
 |`policies[].policy.jwtAuth.(any)(any)audiences`||
 |`policies[].policy.jwtAuth.(any)(any)jwks`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)file`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
-|`policies[].policy.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present.|
-|`policies[].policy.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token. Only "exp", "nbf", "aud", "iss", "sub" are recognized; other values are silently ignored. Defaults to ["exp"].|
-|`policies[].policy.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options per provider.|
-|`policies[].policy.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token. Only "exp", "nbf", "aud", "iss", "sub" are recognized; other values are silently ignored. Defaults to ["exp"].|
+|`policies[].policy.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`policies[].policy.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`policies[].policy.basicAuth.htpasswd.(any)file`||
@@ -3025,12 +3025,16 @@
 |`llm.policies.jwtAuth.(any)(any)providers[].jwks`||
 |`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`llm.policies.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`llm.policies.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.jwtAuth.(any)(any)mode`||
 |`llm.policies.jwtAuth.(any)(any)issuer`||
 |`llm.policies.jwtAuth.(any)(any)audiences`||
 |`llm.policies.jwtAuth.(any)(any)jwks`||
 |`llm.policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`llm.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`llm.policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`llm.policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`llm.policies.extAuthz.(any)(1)service`||
 |`llm.policies.extAuthz.(any)(1)service.name`||
@@ -3342,6 +3346,8 @@
 |`mcp.policies.mcpAuthentication.jwks.(any)file`||
 |`mcp.policies.mcpAuthentication.jwks.(any)url`||
 |`mcp.policies.mcpAuthentication.mode`||
+|`mcp.policies.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`||
@@ -3847,12 +3853,16 @@
 |`mcp.policies.jwtAuth.(any)(any)providers[].jwks`||
 |`mcp.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`mcp.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`mcp.policies.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`mcp.policies.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.jwtAuth.(any)(any)mode`||
 |`mcp.policies.jwtAuth.(any)(any)issuer`||
 |`mcp.policies.jwtAuth.(any)(any)audiences`||
 |`mcp.policies.jwtAuth.(any)(any)jwks`||
 |`mcp.policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`mcp.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`mcp.policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value<br>is silently ignored by the underlying library.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`mcp.policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`mcp.policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`mcp.policies.basicAuth.htpasswd.(any)file`||

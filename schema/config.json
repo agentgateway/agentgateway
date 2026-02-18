@@ -1642,6 +1642,14 @@
         "mode": {
           "$ref": "#/$defs/McpAuthenticationMode",
           "default": "strict"
+        },
+        "jwtValidationOptions": {
+          "$ref": "#/$defs/JWTValidationOptions",
+          "default": {
+            "requiredClaims": [
+              "exp"
+            ]
+          }
         }
       },
       "additionalProperties": false,
@@ -1733,6 +1741,24 @@
           "const": "permissive"
         }
       ]
+    },
+    "JWTValidationOptions": {
+      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value\nis silently ignored by the underlying library.\n\nThis only enforces **presence**. Standard claims like `exp` and `nbf`\nhave their values validated independently (e.g., expiry is always checked\nwhen the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
+      "type": "object",
+      "properties": {
+        "requiredClaims": {
+          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are recognized; others are ignored.\nDefaults to [\"exp\"]. Use an empty list to require no claims.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "exp"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "A2aPolicy": {
       "type": "object",
@@ -3016,6 +3042,14 @@
             },
             "jwks": {
               "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            "jwtValidationOptions": {
+              "$ref": "#/$defs/JWTValidationOptions",
+              "default": {
+                "requiredClaims": [
+                  "exp"
+                ]
+              }
             }
           },
           "additionalProperties": false,
@@ -3062,6 +3096,14 @@
         },
         "jwks": {
           "$ref": "#/$defs/FileInlineOrRemote"
+        },
+        "jwtValidationOptions": {
+          "$ref": "#/$defs/JWTValidationOptions",
+          "default": {
+            "requiredClaims": [
+              "exp"
+            ]
+          }
         }
       },
       "additionalProperties": false,
