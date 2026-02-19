@@ -344,6 +344,42 @@ spec:
                                               required:
                                               - secretRef
                                               type: object
+                                            azure:
+                                              description: Azure specifies an Azure
+                                                authentication method for the backend.
+                                              properties:
+                                                managedIdentity:
+                                                  description: Details for managed
+                                                    identity authentication
+                                                  properties:
+                                                    clientId:
+                                                      type: string
+                                                    objectId:
+                                                      type: string
+                                                    resourceId:
+                                                      type: string
+                                                  required:
+                                                  - clientId
+                                                  - objectId
+                                                  - resourceId
+                                                  type: object
+                                                secretRef:
+                                                  description: |-
+                                                    SecretRef references a Kubernetes Secret containing the Azure credentials.
+                                                    The Secret must have keys "clientId", "tenantId", and "clientSecret".
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                              type: object
                                             gcp:
                                               description: |-
                                                 Auth specifies to use a Google  authentication method for the backend.
@@ -402,9 +438,9 @@ spec:
                                           type: object
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
-                                              [key secretRef passthrough aws gcp]
-                                              must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.gcp)].filter(x,x==true).size()
+                                              [key secretRef passthrough aws azure
+                                              gcp] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: http defines settings for managing
@@ -667,6 +703,42 @@ spec:
                                               required:
                                               - secretRef
                                               type: object
+                                            azure:
+                                              description: Azure specifies an Azure
+                                                authentication method for the backend.
+                                              properties:
+                                                managedIdentity:
+                                                  description: Details for managed
+                                                    identity authentication
+                                                  properties:
+                                                    clientId:
+                                                      type: string
+                                                    objectId:
+                                                      type: string
+                                                    resourceId:
+                                                      type: string
+                                                  required:
+                                                  - clientId
+                                                  - objectId
+                                                  - resourceId
+                                                  type: object
+                                                secretRef:
+                                                  description: |-
+                                                    SecretRef references a Kubernetes Secret containing the Azure credentials.
+                                                    The Secret must have keys "clientId", "tenantId", and "clientSecret".
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                              type: object
                                             gcp:
                                               description: |-
                                                 Auth specifies to use a Google  authentication method for the backend.
@@ -725,9 +797,9 @@ spec:
                                           type: object
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
-                                              [key secretRef passthrough aws gcp]
-                                              must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.gcp)].filter(x,x==true).size()
+                                              [key secretRef passthrough aws azure
+                                              gcp] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: http defines settings for managing
@@ -986,6 +1058,42 @@ spec:
                                               required:
                                               - secretRef
                                               type: object
+                                            azure:
+                                              description: Azure specifies an Azure
+                                                authentication method for the backend.
+                                              properties:
+                                                managedIdentity:
+                                                  description: Details for managed
+                                                    identity authentication
+                                                  properties:
+                                                    clientId:
+                                                      type: string
+                                                    objectId:
+                                                      type: string
+                                                    resourceId:
+                                                      type: string
+                                                  required:
+                                                  - clientId
+                                                  - objectId
+                                                  - resourceId
+                                                  type: object
+                                                secretRef:
+                                                  description: |-
+                                                    SecretRef references a Kubernetes Secret containing the Azure credentials.
+                                                    The Secret must have keys "clientId", "tenantId", and "clientSecret".
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                              type: object
                                             gcp:
                                               description: |-
                                                 Auth specifies to use a Google  authentication method for the backend.
@@ -1044,9 +1152,9 @@ spec:
                                           type: object
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
-                                              [key secretRef passthrough aws gcp]
-                                              must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.gcp)].filter(x,x==true).size()
+                                              [key secretRef passthrough aws azure
+                                              gcp] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: http defines settings for managing
@@ -1516,6 +1624,42 @@ spec:
                                               required:
                                               - secretRef
                                               type: object
+                                            azure:
+                                              description: Azure specifies an Azure
+                                                authentication method for the backend.
+                                              properties:
+                                                managedIdentity:
+                                                  description: Details for managed
+                                                    identity authentication
+                                                  properties:
+                                                    clientId:
+                                                      type: string
+                                                    objectId:
+                                                      type: string
+                                                    resourceId:
+                                                      type: string
+                                                  required:
+                                                  - clientId
+                                                  - objectId
+                                                  - resourceId
+                                                  type: object
+                                                secretRef:
+                                                  description: |-
+                                                    SecretRef references a Kubernetes Secret containing the Azure credentials.
+                                                    The Secret must have keys "clientId", "tenantId", and "clientSecret".
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                              type: object
                                             gcp:
                                               description: |-
                                                 Auth specifies to use a Google  authentication method for the backend.
@@ -1574,9 +1718,9 @@ spec:
                                           type: object
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
-                                              [key secretRef passthrough aws gcp]
-                                              must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.gcp)].filter(x,x==true).size()
+                                              [key secretRef passthrough aws azure
+                                              gcp] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: http defines settings for managing
@@ -1839,6 +1983,42 @@ spec:
                                               required:
                                               - secretRef
                                               type: object
+                                            azure:
+                                              description: Azure specifies an Azure
+                                                authentication method for the backend.
+                                              properties:
+                                                managedIdentity:
+                                                  description: Details for managed
+                                                    identity authentication
+                                                  properties:
+                                                    clientId:
+                                                      type: string
+                                                    objectId:
+                                                      type: string
+                                                    resourceId:
+                                                      type: string
+                                                  required:
+                                                  - clientId
+                                                  - objectId
+                                                  - resourceId
+                                                  type: object
+                                                secretRef:
+                                                  description: |-
+                                                    SecretRef references a Kubernetes Secret containing the Azure credentials.
+                                                    The Secret must have keys "clientId", "tenantId", and "clientSecret".
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                              type: object
                                             gcp:
                                               description: |-
                                                 Auth specifies to use a Google  authentication method for the backend.
@@ -1897,9 +2077,9 @@ spec:
                                           type: object
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
-                                              [key secretRef passthrough aws gcp]
-                                              must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.gcp)].filter(x,x==true).size()
+                                              [key secretRef passthrough aws azure
+                                              gcp] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: http defines settings for managing
@@ -2393,6 +2573,41 @@ spec:
                         required:
                         - secretRef
                         type: object
+                      azure:
+                        description: Azure specifies an Azure authentication method
+                          for the backend.
+                        properties:
+                          managedIdentity:
+                            description: Details for managed identity authentication
+                            properties:
+                              clientId:
+                                type: string
+                              objectId:
+                                type: string
+                              resourceId:
+                                type: string
+                            required:
+                            - clientId
+                            - objectId
+                            - resourceId
+                            type: object
+                          secretRef:
+                            description: |-
+                              SecretRef references a Kubernetes Secret containing the Azure credentials.
+                              The Secret must have keys "clientId", "tenantId", and "clientSecret".
+                            properties:
+                              name:
+                                default: ""
+                                description: |-
+                                  Name of the referent.
+                                  This field is effectively required, but due to backwards compatibility is
+                                  allowed to be empty. Instances of this type with an empty value here are
+                                  almost certainly wrong.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
                       gcp:
                         description: |-
                           Auth specifies to use a Google  authentication method for the backend.
@@ -2449,8 +2664,8 @@ spec:
                     type: object
                     x-kubernetes-validations:
                     - message: exactly one of the fields in [key secretRef passthrough
-                        aws gcp] must be set
-                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.gcp)].filter(x,x==true).size()
+                        aws azure gcp] must be set
+                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                         == 1'
                   http:
                     description: http defines settings for managing HTTP requests

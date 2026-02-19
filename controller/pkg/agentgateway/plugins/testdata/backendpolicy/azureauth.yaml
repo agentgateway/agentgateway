@@ -1,0 +1,57 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    auth:
+      azure:
+        managedIdentity:
+          objectId: mi-object-id
+          resourceId: my-resource-id
+          clientId: my-client-id
+---
+# Output
+output:
+- Policy:
+    backend:
+      auth:
+        azure:
+          explicitConfig:
+            managedIdentityCredential:
+              userAssignedIdentity:
+                clientId: my-client-id
+    key: backend/default/agw:backend-auth:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      route:
+        kind: HTTPRoute
+        name: test
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

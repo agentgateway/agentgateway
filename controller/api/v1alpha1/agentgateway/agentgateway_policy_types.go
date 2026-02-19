@@ -748,7 +748,7 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;gcp
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp
 type BackendAuth struct {
 	// key provides an inline key to use as the value of the Authorization header.
 	// This option is the least secure; usage of a Secret is preferred.
@@ -774,6 +774,11 @@ type BackendAuth struct {
 	//
 	// +optional
 	AWS *AwsAuth `json:"aws,omitempty"`
+
+	// Azure specifies an Azure authentication method for the backend.
+	//
+	// +optional
+	Azure *AzureAuth `json:"azure,omitempty"`
 
 	// Auth specifies to use a Google  authentication method for the backend.
 	// When omitted, we will try to use the default AWS SDK authentication methods.
@@ -811,6 +816,28 @@ type AwsAuth struct {
 	// The Secret must have keys "accessKey", "secretKey", and optionally "sessionToken".
 	// +required
 	SecretRef corev1.LocalObjectReference `json:"secretRef"`
+}
+
+type AzureAuth struct {
+	// SecretRef references a Kubernetes Secret containing the Azure credentials.
+	// The Secret must have keys "clientId", "tenantId", and "clientSecret".
+	//
+	// +optional
+	SecretRef corev1.LocalObjectReference `json:"secretRef,omitempty"`
+
+	// Details for managed identity authentication
+	//
+	// +optional
+	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
+}
+
+type AzureManagedIdentity struct {
+	// +required
+	ClientID string `json:"clientId"`
+	// +required
+	ObjectID string `json:"objectId"`
+	// +required
+	ResourceID string `json:"resourceId"`
 }
 
 type BackendAuthPassthrough struct {
@@ -886,7 +913,7 @@ const (
 	// RouteTypeEmbeddings processes OpenAI /v1/embeddings format requests
 	RouteTypeEmbeddings RouteType = "Embeddings"
 
-	//RouteTypeRealtime processes OpenAI /v1/realtime requests
+	// RouteTypeRealtime processes OpenAI /v1/realtime requests
 	RouteTypeRealtime RouteType = "Realtime"
 )
 
