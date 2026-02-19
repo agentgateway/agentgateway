@@ -83,7 +83,12 @@ futures = "0.3"
 futures-channel = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-google-cloud-auth = { version = "1.6", default-features = false, features = ["idtoken"] }
+google-cloud-auth = { version = "1.6", default-features = false, features = [
+    "idtoken",
+    # They use AWS-LC which is what we want so its fine. If they changed we would need to switch
+    # To installing a global default which is annoying so prefer to do it this way.
+    "default-rustls-provider",
+] }
 hashbrown = "0.16"
 h2 = "0.4"
 headers = "0.4"
