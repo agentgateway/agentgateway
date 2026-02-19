@@ -2541,9 +2541,10 @@ spec:
                         type: object
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [prompt promptGuard defaults
-                        overrides modelAliases promptCaching routes] must be set
-                      rule: '[has(self.prompt),has(self.promptGuard),has(self.defaults),has(self.overrides),has(self.modelAliases),has(self.promptCaching),has(self.routes)].filter(x,x==true).size()
+                    - message: at least one of the fields in [defaults modelAliases
+                        overrides prompt promptCaching promptGuard routes] must be
+                        set
+                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes)].filter(x,x==true).size()
                         >= 1'
                   auth:
                     description: auth defines settings for managing authentication
@@ -2880,9 +2881,9 @@ spec:
                         type: object
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [authorization authentication]
+                    - message: at least one of the fields in [authentication authorization]
                         must be set
-                      rule: '[has(self.authorization),has(self.authentication)].filter(x,x==true).size()
+                      rule: '[has(self.authentication),has(self.authorization)].filter(x,x==true).size()
                         >= 1'
                   tcp:
                     description: tcp defines settings for managing TCP connections
@@ -3049,9 +3050,9 @@ spec:
                         <= 1'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [tcp tls http auth mcp ai]
+                - message: at least one of the fields in [ai auth http mcp tcp tls]
                     must be set
-                  rule: '[has(self.tcp),has(self.tls),has(self.http),has(self.auth),has(self.mcp),has(self.ai)].filter(x,x==true).size()
+                  rule: '[has(self.ai),has(self.auth),has(self.http),has(self.mcp),has(self.tcp),has(self.tls)].filter(x,x==true).size()
                     >= 1'
               frontend:
                 description: |-
@@ -3104,9 +3105,9 @@ spec:
                             type: array
                         type: object
                         x-kubernetes-validations:
-                        - message: at least one of the fields in [remove add] must
+                        - message: at least one of the fields in [add remove] must
                             be set
-                          rule: '[has(self.remove),has(self.add)].filter(x,x==true).size()
+                          rule: '[has(self.add),has(self.remove)].filter(x,x==true).size()
                             >= 1'
                       filter:
                         description: |-
@@ -3182,11 +3183,11 @@ spec:
                         type: integer
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [maxBufferSize http1MaxHeaders
-                        http1IdleTimeout http2WindowSize http2ConnectionWindowSize
-                        http2FrameSize http2KeepaliveInterval http2KeepaliveTimeout]
-                        must be set
-                      rule: '[has(self.maxBufferSize),has(self.http1MaxHeaders),has(self.http1IdleTimeout),has(self.http2WindowSize),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout)].filter(x,x==true).size()
+                    - message: at least one of the fields in [http1IdleTimeout http1MaxHeaders
+                        http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
+                        http2KeepaliveTimeout http2WindowSize maxBufferSize] must
+                        be set
+                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2WindowSize),has(self.maxBufferSize)].filter(x,x==true).size()
                         >= 1'
                   tcp:
                     description: tcp defines settings on managing incoming TCP connections.
@@ -3287,9 +3288,10 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [handshakeTimeout] must
+                    - message: at least one of the fields in [alpnProtocols cipherSuites
+                        handshakeTimeout maxProtocolVersion minProtocolVersion] must
                         be set
-                      rule: '[has(self.handshakeTimeout)].filter(x,x==true).size()
+                      rule: '[has(self.alpnProtocols),has(self.cipherSuites),has(self.handshakeTimeout),has(self.maxProtocolVersion),has(self.minProtocolVersion)].filter(x,x==true).size()
                         >= 1'
                   tracing:
                     description: Tracing contains various settings for OpenTelemetry
@@ -3333,9 +3335,9 @@ spec:
                             type: array
                         type: object
                         x-kubernetes-validations:
-                        - message: at least one of the fields in [remove add] must
+                        - message: at least one of the fields in [add remove] must
                             be set
-                          rule: '[has(self.remove),has(self.add)].filter(x,x==true).size()
+                          rule: '[has(self.add),has(self.remove)].filter(x,x==true).size()
                             >= 1'
                       backendRef:
                         description: |-
@@ -3457,6 +3459,11 @@ spec:
                     - backendRef
                     type: object
                 type: object
+                x-kubernetes-validations:
+                - message: at least one of the fields in [accessLog http tcp tls tracing]
+                    must be set
+                  rule: '[has(self.accessLog),has(self.http),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
+                    >= 1'
               targetRefs:
                 description: targetRefs specifies the target resources by reference
                   to attach the policy to.
@@ -5031,9 +5038,9 @@ spec:
                         type: array
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [local global] must be
+                    - message: at least one of the fields in [global local] must be
                         set
-                      rule: '[has(self.local),has(self.global)].filter(x,x==true).size()
+                      rule: '[has(self.global),has(self.local)].filter(x,x==true).size()
                         >= 1'
                   retry:
                     description: retry defines the policy for retrying requests.
@@ -5236,9 +5243,9 @@ spec:
                             x-kubernetes-list-type: map
                         type: object
                         x-kubernetes-validations:
-                        - message: at least one of the fields in [set add remove body]
-                            must be set
-                          rule: '[has(self.set),has(self.add),has(self.remove),has(self.body)].filter(x,x==true).size()
+                        - message: at least one of the fields in [add body remove
+                            set] must be set
+                          rule: '[has(self.add),has(self.body),has(self.remove),has(self.set)].filter(x,x==true).size()
                             >= 1'
                       response:
                         description: response is used to modify the response path.
@@ -5333,9 +5340,9 @@ spec:
                             x-kubernetes-list-type: map
                         type: object
                         x-kubernetes-validations:
-                        - message: at least one of the fields in [set add remove body]
-                            must be set
-                          rule: '[has(self.set),has(self.add),has(self.remove),has(self.body)].filter(x,x==true).size()
+                        - message: at least one of the fields in [add body remove
+                            set] must be set
+                          rule: '[has(self.add),has(self.body),has(self.remove),has(self.set)].filter(x,x==true).size()
                             >= 1'
                     type: object
                     x-kubernetes-validations:
@@ -5347,10 +5354,8 @@ spec:
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,
                     extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? !has(self.rateLimit)
-                    && !has(self.cors) && !has(self.csrf) && !has(self.headerModifiers)
-                    && !has(self.hostRewrite) && !has(self.timeouts) && !has(self.retry)
-                    && !has(self.authorization): true'
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                    == 0 : true'
             type: object
             x-kubernetes-validations:
             - message: At least one of traffic, frontend, or backend must be provided.

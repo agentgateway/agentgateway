@@ -50,23 +50,15 @@ for VERSION in "${VERSIONS[@]}"; do
   rm -f "${ROOT_DIR}/api/${VERSION}/agentgateway/zz_generated.register.go.bak"
 done
 
-# Generate agentgateway CRDs and RBAC
-(cd "${REPO_ROOT}" && controller-gen crd:maxDescLen=50000 object rbac:roleName=agentgateway paths="${APIS_PKG}/api/${VERSION}/agentgateway" paths="${APIS_PKG}/api/${VERSION}/shared" \
-    output:crd:artifacts:config=${ROOT_DIR}/${AGENTGATEWAY_CRD_DIR} output:rbac:artifacts:config=${ROOT_DIR}/${AGENTGATEWAY_MANIFESTS_DIR})
-# Template the ClusterRole name to include the namespace
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  # On macOS, prefer gsed (GNU sed) if available
-  if command -v gsed &> /dev/null; then
-    gsed -i 's/name: agentgateway/name: agentgateway-{{ .Release.Namespace }}/g' "${ROOT_DIR}/${AGENTGATEWAY_MANIFESTS_DIR}/role.yaml"
-  else
-    # Fallback to macOS's native sed
-    sed -i '' 's/name: agentgateway/name: agentgateway-{{ .Release.Namespace }}/g' "${ROOT_DIR}/${AGENTGATEWAY_MANIFESTS_DIR}/role.yaml"
-  fi
-else
-  # For other OSes like Linux
-  sed -i 's/name: agentgateway/name: agentgateway-{{ .Release.Namespace }}/g' "${ROOT_DIR}/${AGENTGATEWAY_MANIFESTS_DIR}/role.yaml"
-fi
+# Generate objects and RBAC with stock controller-gen.
+(cd "${REPO_ROOT}" && controller-gen object paths="${APIS_PKG}/api/${VERSION}/agentgateway" paths="${APIS_PKG}/api/${VERSION}/shared")
 
+# Generate CRDs with custom kubebuilder validation markers.
+(cd "${REPO_ROOT}" && go run ./controller/hack/crdgen \
+    --max-desc-len 50000 \
+    --output-dir "${ROOT_DIR}/${AGENTGATEWAY_CRD_DIR}" \
+    --path "${APIS_PKG}/api/${VERSION}/agentgateway" \
+    --path "${APIS_PKG}/api/${VERSION}/shared")
 
 # throw away
 new_report="$(mktemp -t "$(basename "$0").api_violations.XXXXXX")"
@@ -80,4 +72,3 @@ new_report="$(mktemp -t "$(basename "$0").api_violations.XXXXXX")"
   --plural-exceptions "AgentgatewayParameters:AgentgatewayParameters")
 
 go generate ${ROOT_DIR}/pkg/...
-

@@ -32,10 +32,27 @@ These are the steps required to add a new CRD to be used in the Kubernetes Gatew
 - Avoid using slices with pointers (e.g. use `[]string` instead of `[]*string`). See: https://github.com/kubernetes/code-generator/issues/166
 - For time duration fields, use the `metav1.Duration` type and use CEL validation rules to ensure it is within the correct range.
 
+### Custom validation markers
+
+The CRD generation pipeline supports custom kubebuilder validation markers, implemented in
+`controller/hack/crdgen`.
+
+- `+kubebuilder:validation:AtLeastOneFieldSet` requires at least one field on the struct to be set.
+- `+kubebuilder:validation:ExactlyOneFieldSet` requires exactly one field on the struct to be set.
+- `+kubebuilder:validation:IfThenOnlyFields:if="...",fields=a;b;c,message="..."` requires that, when `if` is true,
+  only the listed fields may be set.
+
+Optional arguments for `AtLeastOneFieldSet` and `ExactlyOneFieldSet`:
+
+- `fields=a;b;c` to explicitly pick fields to count.
+- `exclude=a;b` to drop fields from the counted set.
+- `message="..."` to override the generated validation message.
+
+These markers are intended for struct/type comments (`markers.DescribesType`).
+
 ### Replicating Gateway API policies in TrafficPolicy API
 
 Gateway API policies may be replicated as a part of the TrafficPolicy API to enable policy attachment at different levels in the config hierarchy, such as at the Gateway, Gateway's listener, or route level. The following guidelines should be considered when doing so:
 - When the Gateway API types are considered sufficient to meet the requirements, they can be embedded as is in the TrafficPolicy API. TrafficPolicy's `cors` is an example where the Gateway API type `HTTPCORSFilter` is embedded directly.
 - When embedding the Gateway API type, it is important to consider whether the type is marked as `<gateway:experimental>`, as experimental types may introduce breaking changes and should be noted similarly in the TrafficPolicy API. It is discouraged to embed experimental types in the TrafficPolicy API. However, if there is a breaking change in the Gateway API type, it is recommended to replicate the previous version of that type into the TrafficPolicy API and not propagate the breaking change to the TrafficPolicy API.
 - When the Gateway API types are not sufficient and a more advanced API is required, a new type should be created in the TrafficPolicy API instead of embedding the Gateway API type. TrafficPolicy's `retry` and `timeouts` are examples that define new types instead of reusing the `HTTPRouteRetry` and `HTTPRouteTimeouts` types from the Gateway API.
-

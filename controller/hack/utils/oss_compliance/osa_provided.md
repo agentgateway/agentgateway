@@ -29,6 +29,7 @@ Name|Version|License
 [x/net](https://golang.org/x/net)|v0.50.0|BSD 3-clause "New" or "Revised" License
 [x/sync](https://golang.org/x/sync)|v0.19.0|BSD 3-clause "New" or "Revised" License
 [x/time](https://golang.org/x/time)|v0.14.0|BSD 3-clause "New" or "Revised" License
+[x/tools](https://golang.org/x/tools)|v0.41.0|BSD 3-clause "New" or "Revised" License
 [google.golang.org/grpc](https://google.golang.org/grpc)|v1.79.0|Apache License 2.0
 [google.golang.org/protobuf](https://google.golang.org/protobuf)|v1.36.11|BSD 3-clause "New" or "Revised" License
 [helm/v3](https://helm.sh/helm/v3)|v3.20.0|Apache License 2.0
@@ -42,6 +43,7 @@ Name|Version|License
 [klog/v2](https://k8s.io/klog/v2)|v2.130.1|Apache License 2.0
 [k8s.io/utils](https://k8s.io/utils)|v0.0.0-20260210185600-b8788abfbbc2|Apache License 2.0
 [sigs.k8s.io/controller-runtime](https://sigs.k8s.io/controller-runtime)|v0.23.1|Apache License 2.0
+[sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.20.0|Apache License 2.0
 [sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.4.1|Apache License 2.0
 [sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v0.0.0-20260212193201-47e9d05050a6|Apache License 2.0
 [gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260212193201-47e9d05050a6|Apache License 2.0
