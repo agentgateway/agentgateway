@@ -166,8 +166,9 @@ pub enum Mode {
 ///
 /// The `required_claims` set specifies which RFC 7519 registered claims must
 /// exist in the token payload before validation proceeds. Only the following
-/// values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Any other value
-/// is silently ignored by the underlying library.
+/// values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered
+/// claims such as `iat` and `jti` are **not** enforced by the underlying
+/// `jsonwebtoken` library and will be silently ignored.
 ///
 /// This only enforces **presence**. Standard claims like `exp` and `nbf`
 /// have their values validated independently (e.g., expiry is always checked
@@ -179,7 +180,8 @@ pub enum Mode {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct JWTValidationOptions {
 	/// Claims that must be present in the token before validation.
-	/// Only "exp", "nbf", "aud", "iss", "sub" are recognized; others are ignored.
+	/// Only "exp", "nbf", "aud", "iss", "sub" are enforced; others
+	/// (including "iat" and "jti") are ignored.
 	/// Defaults to ["exp"]. Use an empty list to require no claims.
 	#[serde(default = "default_required_claims")]
 	pub required_claims: HashSet<String>,
@@ -199,7 +201,7 @@ fn warn_unsupported_claims(required_claims: &HashSet<String>) {
 			tracing::warn!(
 				claim = %claim,
 				supported = ?SUPPORTED_REQUIRED_CLAIMS,
-				"ignoring unrecognized required claim; only exp, nbf, aud, iss, sub are enforced"
+				"ignoring unrecognized required claim"
 			);
 		}
 	}
