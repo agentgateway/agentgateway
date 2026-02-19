@@ -408,6 +408,21 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			Name:      "agentgateway with name over 63 characters",
 			InputFile: "agentgateway-long-gateway-name-over-63-chars",
 		},
+		{
+			Name:      "gateway with no listeners uses dummy port",
+			InputFile: "agentgateway-aws-nlb-dummy-port",
+			HelmValuesGeneratorOverride: func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator {
+				inputs.NoListenersDummyPort = 65443
+				return nil
+			},
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "port: 65443",
+					"dummy port 65443 should be used when Gateway has no listeners")
+				assert.Contains(t, outputYaml, "name: listener-65443",
+					"dummy port name should follow listener naming convention")
+			},
+		},
 	}
 
 	tester := DeployerTester{
