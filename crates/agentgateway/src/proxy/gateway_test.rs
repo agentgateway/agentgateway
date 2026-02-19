@@ -313,9 +313,7 @@ async fn cors_preflight_bypasses_basic_auth() {
 			target: route_target,
 			policy: TrafficPolicy::BasicAuth(
 				http::basicauth::LocalBasicAuth {
-					htpasswd: FileOrInline::Inline(
-						"user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00".to_string(),
-					),
+					htpasswd: FileOrInline::Inline("user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00".to_string()),
 					realm: Some("my-realm".into()),
 					mode: http::basicauth::Mode::Strict,
 				}
