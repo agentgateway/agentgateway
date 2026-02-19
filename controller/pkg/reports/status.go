@@ -119,6 +119,24 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 		})
 	}
 
+	if gw.Spec.TLS != nil && gw.Spec.TLS.Frontend != nil {
+		fe := gw.Spec.TLS.Frontend
+		hasInsecure := fe.Default.Validation != nil && fe.Default.Validation.Mode == gwv1.AllowInsecureFallback
+		for _, p := range fe.PerPort {
+			if p.TLS.Validation != nil && p.TLS.Validation.Mode == gwv1.AllowInsecureFallback {
+				hasInsecure = true
+			}
+		}
+		if hasInsecure {
+			gwReport.SetCondition(reporter.GatewayCondition{
+				Type:    gwv1.GatewayConditionInsecureFrontendValidationMode,
+				Status:  metav1.ConditionTrue,
+				Reason:  gwv1.GatewayReasonConfigurationChanged,
+				Message: "Insecure fallback mode enabled",
+			})
+		}
+	}
+
 	handleInvalidAddresses(gwReport, &gw)
 
 	addMissingGatewayConditions(r.Gateway(&gw), &gw)

@@ -531,6 +531,9 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
 		}
+		if obj.TLSInfo.MtlsFallbackEnabled {
+			tlsConfig.MtlsMode = api.TLSConfig_ALLOW_INSECURE_FALLBACK
+		}
 	}
 
 	switch obj.ParentInfo.Protocol {

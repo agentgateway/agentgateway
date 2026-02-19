@@ -136,9 +136,10 @@ func (g AgwTCPRoute) Equals(other AgwTCPRoute) bool {
 
 // TLSInfo contains the TLS certificate and key for a gateway listener.
 type TLSInfo struct {
-	Cert   []byte
-	CaCert []byte
-	Key    []byte `json:"-"`
+	Cert                []byte
+	Key                 []byte `json:"-"`
+	CaCert              []byte
+	MtlsFallbackEnabled bool
 }
 
 // PortBindings is a wrapper type that contains the listener on the gateway, as well as the status for the listener.
@@ -181,7 +182,8 @@ func (g GatewayListener) Equals(other GatewayListener) bool {
 	if g.TLSInfo != nil {
 		if !bytes.Equal(g.TLSInfo.Cert, other.TLSInfo.Cert) ||
 			!bytes.Equal(g.TLSInfo.Key, other.TLSInfo.Key) ||
-			!bytes.Equal(g.TLSInfo.CaCert, other.TLSInfo.CaCert) {
+			!bytes.Equal(g.TLSInfo.CaCert, other.TLSInfo.CaCert) ||
+			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled {
 			return false
 		}
 	}
@@ -423,7 +425,10 @@ func (g ListenerSet) Equals(other ListenerSet) bool {
 		return false
 	}
 	if g.TLSInfo != nil {
-		if !bytes.Equal(g.TLSInfo.Cert, other.TLSInfo.Cert) && !bytes.Equal(g.TLSInfo.Key, other.TLSInfo.Key) {
+		if !bytes.Equal(g.TLSInfo.Cert, other.TLSInfo.Cert) ||
+			!bytes.Equal(g.TLSInfo.Key, other.TLSInfo.Key) ||
+			!bytes.Equal(g.TLSInfo.CaCert, other.TLSInfo.CaCert) ||
+			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled {
 			return false
 		}
 	}
