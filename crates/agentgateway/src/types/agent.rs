@@ -16,6 +16,7 @@ use openapiv3::OpenAPI;
 use prometheus_client::encoding::EncodeLabelValue;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::server::danger::ClientCertVerifier;
 use rustls_pemfile::Item;
 use serde::{Serialize, Serializer};
 use serde_json::Value;
@@ -27,6 +28,7 @@ use crate::http::{
 };
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
+use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::local::SimpleLocalBackend;
 use crate::types::{agent, backend, frontend};
@@ -75,6 +77,8 @@ struct ServerTlsInputs {
 	key_pem: Vec<u8>,
 	// If present, require and verify client certificates using these roots.
 	root_pem: Option<Vec<u8>>,
+	// If true, request client certs but allow absent or invalid client certs.
+	allow_insecure_mtls: bool,
 	// Default ALPNs configured at creation time.
 	default_alpns: Alpns,
 }
@@ -151,7 +155,16 @@ impl ServerTLSConfig {
 		root_pem: Option<Vec<u8>>,
 		default_alpns: Alpns,
 	) -> anyhow::Result<Self> {
-		Self::from_pem_with_profile(cert_pem, key_pem, root_pem, default_alpns, None, None, None)
+		Self::from_pem_with_profile(
+			cert_pem,
+			key_pem,
+			root_pem,
+			default_alpns,
+			None,
+			None,
+			None,
+			false,
+		)
 	}
 
 	pub fn from_pem_with_profile(
@@ -162,11 +175,13 @@ impl ServerTLSConfig {
 		min_version: Option<TLSVersion>,
 		max_version: Option<TLSVersion>,
 		cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+		allow_insecure_mtls: bool,
 	) -> anyhow::Result<Self> {
 		let inputs = Arc::new(ServerTlsInputs {
 			cert_pem,
 			key_pem,
 			root_pem,
+			allow_insecure_mtls,
 			default_alpns,
 		});
 		let suites = cipher_suites.as_deref().filter(|s| !s.is_empty());
@@ -272,6 +287,11 @@ impl ServerTLSConfig {
 				provider,
 			)
 			.build()?;
+			let verify: Arc<dyn ClientCertVerifier> = if inputs.allow_insecure_mtls {
+				tls::insecure::AllowInsecureMtlsVerifier::new(verify)
+			} else {
+				verify
+			};
 			scb.with_client_cert_verifier(verify)
 		} else {
 			scb.with_no_client_auth()

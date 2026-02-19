@@ -102,6 +102,9 @@ impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 			}
 		};
 
+		let mtls_mode =
+			proto::agent::tls_config::MtlsMode::try_from(value.mtls_mode).unwrap_or_default();
+
 		match ServerTLSConfig::from_pem_with_profile(
 			value.cert.clone(),
 			value.private_key.clone(),
@@ -110,6 +113,7 @@ impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 			min_version,
 			max_version,
 			cipher_suites,
+			mtls_mode == proto::agent::tls_config::MtlsMode::AllowInsecureFallback,
 		) {
 			Ok(sc) => sc,
 			Err(e) => {
