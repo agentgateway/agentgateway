@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.21-labs
+# syntax=docker/dockerfile:1.11
 ARG BUILDER=base
 
 FROM docker.io/library/node:23.11.0-bookworm AS node
