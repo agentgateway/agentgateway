@@ -70,6 +70,16 @@ async fn apply_request_policies(
 	req: &mut Request,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
+	// CORS must run before authentication, authorization and rate limiting so that:
+	// 1. Preflight OPTIONS requests short-circuit without requiring credentials
+	// 2. CORS response headers are queued even if the request is later rejected,
+	//    allowing browsers to read error responses instead of seeing a CORS error
+	if let Some(c) = &policies.cors {
+		c.apply(req)
+			.map_err(ProxyError::from)?
+			.apply(response_policies.headers())?;
+	}
+
 	if let Some(j) = &policies.jwt {
 		j.apply(Some(log), req)
 			.await
@@ -91,16 +101,6 @@ async fn apply_request_policies(
 	if let Some(j) = &policies.authorization {
 		j.apply(req)
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
-	}
-
-	// CORS must run before rate limiting so that:
-	// 1. Preflight OPTIONS requests short-circuit without consuming rate limit quota
-	// 2. CORS response headers are queued even if the request is later rate-limited,
-	//    allowing browsers to read the 429 response instead of seeing a CORS error
-	if let Some(c) = &policies.cors {
-		c.apply(req)
-			.map_err(ProxyError::from)?
-			.apply(response_policies.headers())?;
 	}
 
 	for lrl in &policies.local_rate_limit {
