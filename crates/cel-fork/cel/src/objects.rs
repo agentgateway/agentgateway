@@ -650,22 +650,47 @@ impl<'a> Value<'a> {
 							}
 						},
 						operators::LOGICAL_OR => {
-							let left = resolve(&call.args[0])?;
-							return if left.to_bool()? {
-								left.into()
+
+							let left = try_bool(resolve(&call.args[0]));
+							return if Ok(true) == left {
+								Ok(true.into())
 							} else {
-								resolve(&call.args[1])
+								let right = if let Value::Bool(b) = resolve(&call.args[1])? {
+									Some(b)
+								} else {
+									None
+								};
+								match (&left, right) {
+									(Ok(false), Some(right)) => {
+										Ok(right.into())
+									}
+									(Err(_), Some(true)) => {
+										Ok(true.into())
+									}
+									(_, _) => Err(left.err().unwrap_or(ExecutionError::NoSuchOverload)),
+								}
 							};
 						},
 						operators::LOGICAL_AND => {
-							let left = resolve(&call.args[0])?;
-							return if !left.to_bool()? {
-								Value::Bool(false)
+							let left = try_bool(resolve(&call.args[0]));
+							return if Ok(false) == left {
+								Ok(false.into())
 							} else {
-								let right = resolve(&call.args[1])?;
-								Value::Bool(right.to_bool()?)
-							}
-							.into();
+								let right = if let Value::Bool(b) = resolve(&call.args[1])? {
+									Some(b)
+								} else {
+									None
+								};
+								match (&left, right) {
+									(Ok(true), Some(right)) => {
+										Ok(right.into())
+									}
+									(Err(_), Some(false)) => {
+										Ok(false.into())
+									}
+									(_, _) => Err(left.err().unwrap_or(ExecutionError::NoSuchOverload)),
+								}
+							};
 						},
 						operators::INDEX | operators::OPT_INDEX => {
 							let mut value: Value<'a> = resolve(&call.args[0])?;
@@ -1186,6 +1211,14 @@ impl<'a> ops::Rem<Value<'a>> for Value<'a> {
 	}
 }
 
+fn try_bool(val: ResolveResult) -> Result<bool, ExecutionError> {
+	match val {
+		Ok(Value::Bool(b)) => Ok(b),
+		Ok(_) => Err(ExecutionError::NoSuchOverload),
+		Err(err) => Result::Err(err),
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
@@ -1382,6 +1415,36 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn test_or_ignores_err_when_short_circuiting() {
+		let mut vars = MapResolver::new();
+		vars.add_variable_from_value("foo", 42);
+		vars.add_variable_from_value("bar", 42);
+		vars.add_variable_from_value("list", Value::List(ListValue::Owned(vec![].into())));
+		let context = Context::default();
+		let program = Program::compile("foo || bar > 0").unwrap();
+		let value = program.execute_with(&context, &vars);
+		assert_eq!(value, Ok(true.into()));
+
+		let program = Program::compile("foo || bar < 0").unwrap();
+		let value = program.execute_with(&context, &vars);
+		assert!(value.is_err());
+	}
+
+	#[test]
+	fn test_and_ignores_err_when_short_circuiting() {
+		let context = Context::default();
+		let mut vars = MapResolver::new();
+		vars.add_variable_from_value("foo", 42);
+		vars.add_variable_from_value("bar", 42);
+		let program = Program::compile("foo && bar < 0").unwrap();
+		let value = program.execute_with(&context, &vars);
+		assert_eq!(value, Ok(false.into()));
+
+		let program = Program::compile("foo && bar > 0").unwrap();
+		let value = program.execute_with(&context, &vars);
+		assert!(value.is_err());
+	}
 	#[test]
 	fn invalid_int_math() {
 		use ExecutionError::*;
