@@ -1075,18 +1075,13 @@ async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value)
 
 	// Ensure body finishes
 	let _ = res.into_body().collect().await.unwrap();
-	let logs = check_eventually(
-		Duration::from_secs(1),
-		|| async {
-			agent_core::telemetry::testing::find(&[("scope", "request"), ("http.path", &format!("/{r}"))])
-				.to_vec()
-		},
-		|log| log.len() == 1,
-	)
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", &format!("/{r}")),
+	])
 	.await
 	.unwrap();
-	let log = logs.first().unwrap();
-	let valid = is_json_subset(&want, log);
+	let valid = is_json_subset(&want, &log);
 	assert!(valid, "want={want:#?} got={log:#?}");
 }
 

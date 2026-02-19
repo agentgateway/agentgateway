@@ -450,18 +450,24 @@ async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
 	Some(gw)
 }
 
-fn assert_log(path: &str, streaming: bool, test_id: &str) {
-	assert_log_with_output_range(path, streaming, test_id, 1, 100);
+async fn assert_log(path: &str, streaming: bool, test_id: &str) {
+	assert_log_with_output_range(path, streaming, test_id, 1, 100).await;
 }
 
-fn assert_log_with_output_range(path: &str, streaming: bool, test_id: &str, min: i64, max: i64) {
-	let logs = agent_core::telemetry::testing::find(&[
+async fn assert_log_with_output_range(
+	path: &str,
+	streaming: bool,
+	test_id: &str,
+	min: i64,
+	max: i64,
+) {
+	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", path),
 		("req.id", test_id),
-	]);
-	assert_eq!(logs.len(), 1, "{logs:?}");
-	let log = logs.first().unwrap();
+	])
+	.await
+	.unwrap();
 	let output = log
 		.get("gen_ai.usage.output_tokens")
 		.unwrap()
@@ -475,28 +481,28 @@ fn assert_log_with_output_range(path: &str, streaming: bool, test_id: &str, min:
 	assert_eq!(stream, streaming, "unexpected streaming value: {stream}");
 }
 
-fn assert_count_log(path: &str, test_id: &str) {
-	let logs = agent_core::telemetry::testing::find(&[
+async fn assert_count_log(path: &str, test_id: &str) {
+	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", path),
 		("req.id", test_id),
-	]);
-	assert_eq!(logs.len(), 1, "{logs:?}");
-	let log = logs.first().unwrap();
+	])
+	.await
+	.unwrap();
 	let count = log.get("token.count").unwrap().as_u64().unwrap();
 	assert!(count > 1 && count < 100, "unexpected count tokens: {count}");
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
 	assert!(!stream, "unexpected streaming value: {stream}");
 }
 
-fn assert_embeddings_log(path: &str, test_id: &str, expected: u64) {
-	let logs = agent_core::telemetry::testing::find(&[
+async fn assert_embeddings_log(path: &str, test_id: &str, expected: u64) {
+	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", path),
 		("req.id", test_id),
-	]);
-	assert_eq!(logs.len(), 1, "{logs:?}");
-	let log = logs.first().unwrap();
+	])
+	.await
+	.unwrap();
 	let count = log.get("embeddings").unwrap().as_i64().unwrap();
 	assert_eq!(count, expected as i64, "unexpected count tokens: {count}");
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
@@ -529,7 +535,7 @@ fn require_env(var: &str) -> bool {
 
 async fn send_completions(gw: &AgentGateway, stream: bool) {
 	send_completions_request(gw, stream, None, None, "give me a 1 word answer").await;
-	assert_log("/v1/chat/completions", stream, &gw.test_id);
+	assert_log("/v1/chat/completions", stream, &gw.test_id).await;
 }
 
 async fn send_completions_request(
@@ -574,7 +580,7 @@ async fn send_responses(gw: &AgentGateway, stream: bool) {
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/responses", stream, &gw.test_id);
+	assert_log("/v1/responses", stream, &gw.test_id).await;
 }
 
 async fn send_messages(gw: &AgentGateway, stream: bool) {
@@ -592,7 +598,7 @@ async fn send_messages(gw: &AgentGateway, stream: bool) {
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/messages", stream, &gw.test_id);
+	assert_log("/v1/messages", stream, &gw.test_id).await;
 }
 
 async fn send_anthropic_token_count(gw: &AgentGateway) {
@@ -608,7 +614,7 @@ async fn send_anthropic_token_count(gw: &AgentGateway) {
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_count_log("/v1/messages/count_tokens", &gw.test_id);
+	assert_count_log("/v1/messages/count_tokens", &gw.test_id).await;
 }
 
 async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) {
@@ -655,7 +661,8 @@ async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) 
 		"/v1/embeddings",
 		&gw.test_id,
 		expected_dimensions.unwrap_or(256) as u64,
-	);
+	)
+	.await;
 }
 
 async fn send_adaptive_thinking(gw: &AgentGateway) {
@@ -686,7 +693,7 @@ async fn send_adaptive_thinking(gw: &AgentGateway) {
 	let content = body.get("content").unwrap().as_array().unwrap();
 	assert!(!content.is_empty(), "content should not be empty");
 
-	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 3000);
+	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 3000).await;
 }
 
 async fn send_structured_json_completions(gw: &AgentGateway) {
@@ -740,7 +747,7 @@ async fn send_structured_json_completions(gw: &AgentGateway) {
 		"structured output answer should not be empty"
 	);
 
-	assert_log_with_output_range("/v1/chat/completions", false, &gw.test_id, 1, 1000);
+	assert_log_with_output_range("/v1/chat/completions", false, &gw.test_id, 1, 1000).await;
 }
 
 async fn send_thinking(gw: &AgentGateway) {
@@ -769,7 +776,7 @@ async fn send_thinking(gw: &AgentGateway) {
 	let content = body.get("content").unwrap().as_array().unwrap();
 	assert!(!content.is_empty(), "content should not be empty");
 
-	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 1000);
+	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 1000).await;
 }
 
 async fn send_output_config_effort(gw: &AgentGateway) {
@@ -797,7 +804,7 @@ async fn send_output_config_effort(gw: &AgentGateway) {
 	let content = body.get("content").unwrap().as_array().unwrap();
 	assert!(!content.is_empty(), "content should not be empty");
 
-	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 1000);
+	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 1000).await;
 }
 
 async fn send_completions_reasoning_effort(gw: &AgentGateway) {
@@ -809,7 +816,7 @@ async fn send_completions_reasoning_effort(gw: &AgentGateway) {
 		"Summarize the benefits of automated testing in one sentence.",
 	)
 	.await;
-	assert_log_with_output_range("/v1/chat/completions", false, &gw.test_id, 1, 1000);
+	assert_log_with_output_range("/v1/chat/completions", false, &gw.test_id, 1, 1000).await;
 }
 
 async fn send_responses_reasoning_effort(gw: &AgentGateway) {
@@ -833,7 +840,7 @@ async fn send_responses_reasoning_effort(gw: &AgentGateway) {
 	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
 	assert_eq!(status, StatusCode::OK, "response: {body}");
 
-	assert_log_with_output_range("/v1/responses", false, &gw.test_id, 1, 2000);
+	assert_log_with_output_range("/v1/responses", false, &gw.test_id, 1, 2000).await;
 }
 
 async fn send_responses_thinking_budget(gw: &AgentGateway) {
@@ -860,7 +867,7 @@ async fn send_responses_thinking_budget(gw: &AgentGateway) {
 	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
 	assert_eq!(status, StatusCode::OK, "response: {body}");
 
-	assert_log_with_output_range("/v1/responses", false, &gw.test_id, 1, 2000);
+	assert_log_with_output_range("/v1/responses", false, &gw.test_id, 1, 2000).await;
 }
 
 async fn send_adaptive_thinking_expect_client_error(gw: &AgentGateway) {
