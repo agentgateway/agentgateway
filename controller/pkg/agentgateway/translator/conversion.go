@@ -1413,6 +1413,9 @@ func buildTLS(
 				}
 			}
 			tlsRes.Info.CaCert = cred.Info.CaCert
+			if gatewayTLS.Validation.Mode == gwv1.AllowInsecureFallback {
+				tlsRes.Info.MtlsFallbackEnabled = true
+			}
 		}
 		return &tlsRes.Info, nil
 	case gwv1.TLSModePassthrough:

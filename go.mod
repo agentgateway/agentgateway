@@ -38,7 +38,6 @@ require (
 	helm.sh/helm/v3 v3.20.0
 	istio.io/api v1.29.0-alpha.0.0.20260210161025-1d9832db7b28
 	istio.io/client-go v1.29.0-alpha.0.0.20260210161328-2c12cf6497ed
-	istio.io/istio v0.0.0-20260212134635-24eab8800c50
 	k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver v0.35.1
 	k8s.io/apimachinery v0.35.1
@@ -47,14 +46,19 @@ require (
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/controller-runtime v0.23.1
 	sigs.k8s.io/controller-tools v0.20.1
-	sigs.k8s.io/gateway-api v1.5.0-rc.1
+	sigs.k8s.io/gateway-api v1.3.1-0.20260219195741-21b9dfe8f024
 	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260220060139-0714e2462e76
 	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260220060139-0714e2462e76
 	sigs.k8s.io/yaml v1.6.0
 )
 
-require sigs.k8s.io/gateway-api/conformance v0.0.0-20260213173202-265da48be464
+require (
+	istio.io/istio v0.0.0-00010101000000-000000000000
+	sigs.k8s.io/gateway-api/conformance v0.0.0-20260213173202-265da48be464
+)
+
 replace sigs.k8s.io/gateway-api/conformance => /home/john/go/src/sigs.k8s.io/gateway-api/conformance
+
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
