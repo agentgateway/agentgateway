@@ -188,12 +188,12 @@ status:
   status:
     conditions:
     - lastTransitionTime: fake
-      message: 'Some listeners are not accepted: listenerset-without-reference-grant-listener'
+      message: ""
       reason: ListenersNotValid
       status: "False"
       type: Accepted
     - lastTransitionTime: fake
-      message: 'Some listeners are not accepted: listenerset-without-reference-grant-listener'
+      message: ""
       reason: ListenersNotValid
       status: "False"
       type: Programmed
@@ -284,7 +284,7 @@ status:
     namespace: gateway-conformance-infra
   spec: null
   status:
-    attachedListenerSets: 2
+    attachedListenerSets: 1
     conditions:
     - lastTransitionTime: fake
       message: ""

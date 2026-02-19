@@ -4,7 +4,7 @@ go 1.25.1
 
 replace github.com/agentgateway/agentgateway/api => ./api
 
-replace istio.io/istio => github.com/davidjumani/istio v0.0.0-20260213193338-3d818a03de6b
+replace istio.io/istio => /tmp/tmp.zZdncyj6QE/istio
 
 require (
 	// Also update AgentgatewayDefaultTag in pkg/deployer/wellknown.go and test/deployer/testdata/*
