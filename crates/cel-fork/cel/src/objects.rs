@@ -650,7 +650,6 @@ impl<'a> Value<'a> {
 							}
 						},
 						operators::LOGICAL_OR => {
-
 							let left = try_bool(resolve(&call.args[0]));
 							return if Ok(true) == left {
 								Ok(true.into())
@@ -661,12 +660,8 @@ impl<'a> Value<'a> {
 									None
 								};
 								match (&left, right) {
-									(Ok(false), Some(right)) => {
-										Ok(right.into())
-									}
-									(Err(_), Some(true)) => {
-										Ok(true.into())
-									}
+									(Ok(false), Some(right)) => Ok(right.into()),
+									(Err(_), Some(true)) => Ok(true.into()),
 									(_, _) => Err(left.err().unwrap_or(ExecutionError::NoSuchOverload)),
 								}
 							};
@@ -682,12 +677,8 @@ impl<'a> Value<'a> {
 									None
 								};
 								match (&left, right) {
-									(Ok(true), Some(right)) => {
-										Ok(right.into())
-									}
-									(Err(_), Some(false)) => {
-										Ok(false.into())
-									}
+									(Ok(true), Some(right)) => Ok(right.into()),
+									(Err(_), Some(false)) => Ok(false.into()),
 									(_, _) => Err(left.err().unwrap_or(ExecutionError::NoSuchOverload)),
 								}
 							};
