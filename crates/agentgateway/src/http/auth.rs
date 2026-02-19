@@ -95,6 +95,15 @@ pub enum AzureAuth {
 	},
 	/// Use implicit Azure auth. Note that this is for developer use-cases only!
 	DeveloperImplicit {},
+	/// Automatically detect authentication method based on environment.
+	/// Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.
+	Implicit {},
+}
+
+impl Default for AzureAuth {
+	fn default() -> Self {
+		Self::Implicit {}
+	}
 }
 
 #[apply(schema!)]
@@ -135,7 +144,7 @@ pub enum BackendAuth {
 	#[serde(rename = "aws")]
 	Aws(AwsAuth),
 	#[serde(rename = "azure")]
-	Azure(AzureAuth),
+	Azure(Option<AzureAuth>),
 }
 
 #[derive(Clone)]
@@ -177,7 +186,8 @@ pub async fn apply_backend_auth(
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
 		},
 		BackendAuth::Azure(azure_auth) => {
-			let token = azure::get_token(&backend_info.inputs.upstream, azure_auth)
+			let auth = azure_auth.as_ref().unwrap_or(&AzureAuth::Implicit {});
+			let token = azure::get_token(&backend_info.inputs.upstream, auth)
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
@@ -516,9 +526,10 @@ mod aws {
 }
 
 mod azure {
+	use std::sync::atomic::{AtomicUsize, Ordering};
 	use std::sync::Arc;
 
-	use azure_core::credentials::TokenCredential;
+	use azure_core::credentials::{AccessToken, TokenCredential, TokenRequestOptions};
 	use azure_identity::UserAssignedId;
 	use secrecy::ExposeSecret;
 	use tracing::trace;
@@ -527,6 +538,103 @@ mod azure {
 	use crate::http::auth::{AzureAuth, AzureAuthCredentialSource, AzureUserAssignedIdentity};
 
 	const SCOPES: &[&str] = &["https://cognitiveservices.azure.com/.default"];
+
+	/// A credential chain that mirrors the Azure Go SDK's DefaultAzureCredential.
+	///
+	/// DefaultAzureCredential is an opinionated, preconfigured chain of credentials
+	/// designed to support many environments along with the most common authentication
+	/// flows and developer tools.
+	///
+	/// The chain tries each credential in order, stopping when one provides a token:
+	///
+	/// 1. **EnvironmentCredential** - Reads `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and
+	///    `AZURE_CLIENT_SECRET` to authenticate as a service principal. Most often used
+	///    in server environments but can also be used locally.
+	/// 2. **WorkloadIdentityCredential** - If deployed to a Kubernetes host with Workload
+	///    Identity enabled (detected via `AZURE_FEDERATED_TOKEN_FILE`, `AZURE_TENANT_ID`,
+	///    `AZURE_CLIENT_ID`), authenticates using the federated token.
+	/// 3. **ManagedIdentityCredential** - If deployed to an Azure host with Managed Identity
+	///    enabled (App Service, Azure VMs via IMDS, etc.), authenticates using that identity.
+	///    Supports user-assigned identity via `AZURE_CLIENT_ID`.
+	/// 4. **DeveloperToolsCredential** - Falls back to developer tools: Azure CLI
+	///    (`az login`) and Azure Developer CLI (`azd auth login`).
+	///
+	/// Once a credential successfully provides a token, it is cached and used for all
+	/// subsequent token requests.
+	///
+	/// Reference: <https://learn.microsoft.com/azure/developer/go/azure-sdk-authentication>
+	struct DefaultAzureCredential {
+		sources: Vec<Arc<dyn TokenCredential>>,
+		/// Index of the source that first provided a token.
+		/// `usize::MAX` indicates no source has provided a token yet.
+		cached_source_index: AtomicUsize,
+	}
+
+	impl std::fmt::Debug for DefaultAzureCredential {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			f.write_str("DefaultAzureCredential")
+		}
+	}
+
+	#[async_trait::async_trait]
+	impl TokenCredential for DefaultAzureCredential {
+		async fn get_token(
+			&self,
+			scopes: &[&str],
+			options: Option<TokenRequestOptions<'_>>,
+		) -> azure_core::Result<AccessToken> {
+			// If a credential has previously succeeded, use it directly.
+			let cached_index = self.cached_source_index.load(Ordering::Relaxed);
+			if cached_index != usize::MAX {
+				if let Some(source) = self.sources.get(cached_index) {
+					return source.get_token(scopes, options).await;
+				}
+			}
+
+			// Try each credential in order, caching the first one that succeeds.
+			let mut errors = Vec::new();
+			for (index, source) in self.sources.iter().enumerate() {
+				match source.get_token(scopes, options.clone()).await {
+					Ok(token) => {
+						self.cached_source_index.store(index, Ordering::Relaxed);
+						return Ok(token);
+					},
+					Err(error) => {
+						trace!("DefaultAzureCredential: credential at index {index} failed: {error}");
+						errors.push(error);
+					},
+				}
+			}
+
+			Err(azure_core::Error::with_message_fn(
+				azure_core::error::ErrorKind::Credential,
+				|| {
+					format!(
+						"DefaultAzureCredential: all credentials failed:\n{}",
+						format_credential_errors(&errors)
+					)
+				},
+			))
+		}
+	}
+
+	fn format_credential_errors(errors: &[azure_core::Error]) -> String {
+		use std::error::Error;
+		errors
+			.iter()
+			.map(|e| {
+				let mut current: Option<&dyn Error> = Some(e);
+				let mut stack = vec![];
+				while let Some(err) = current.take() {
+					stack.push(err.to_string());
+					current = err.source();
+				}
+				stack.join(" - ")
+			})
+			.collect::<Vec<String>>()
+			.join("\n")
+	}
+
 	fn token_credential_from_auth(
 		client: &client::Client,
 		auth: &AzureAuth,
@@ -581,6 +689,139 @@ mod azure {
 				},
 			},
 			AzureAuth::DeveloperImplicit {} => Ok(azure_identity::DeveloperToolsCredential::new(None)?),
+			AzureAuth::Implicit {} => {
+				// Build a DefaultAzureCredential chain following the Azure Go SDK pattern.
+				// Each credential is tried in order; the first to succeed is cached and
+				// used for all subsequent requests.
+				//
+				// Order:
+				// 1. EnvironmentCredential (service principal via env vars)
+				// 2. WorkloadIdentityCredential (Kubernetes workload identity)
+				// 3. ManagedIdentityCredential (Azure VMs, App Service, etc.)
+				// 4. DeveloperToolsCredential (Azure CLI, Azure Developer CLI)
+				let mut sources: Vec<Arc<dyn TokenCredential>> = Vec::new();
+				let mut errors: Vec<String> = Vec::new();
+
+				// 1. EnvironmentCredential — authenticate as a service principal.
+				// Checks AZURE_TENANT_ID + AZURE_CLIENT_ID + AZURE_CLIENT_SECRET.
+				// This mirrors the Go SDK's EnvironmentCredential which also supports
+				// certificate and username/password flows, but client secret is the
+				// most common server-side pattern.
+				if let (Ok(tenant_id), Ok(client_id), Ok(client_secret)) = (
+					std::env::var("AZURE_TENANT_ID"),
+					std::env::var("AZURE_CLIENT_ID"),
+					std::env::var("AZURE_CLIENT_SECRET"),
+				) {
+					match azure_identity::ClientSecretCredential::new(
+						&tenant_id,
+						client_id,
+						azure_core::credentials::Secret::new(client_secret),
+						Some(azure_identity::ClientSecretCredentialOptions {
+							client_options: client_options.clone(),
+						}),
+					) {
+						Ok(cred) => {
+							trace!("DefaultAzureCredential: added EnvironmentCredential to chain");
+							sources.push(cred);
+						},
+						Err(e) => {
+							trace!(
+								"DefaultAzureCredential: EnvironmentCredential construction failed: {e}"
+							);
+							errors.push(format!("EnvironmentCredential: {e}"));
+						},
+					}
+				}
+
+				// 2. WorkloadIdentityCredential — Kubernetes workload identity.
+				// The constructor reads AZURE_FEDERATED_TOKEN_FILE, AZURE_TENANT_ID,
+				// and AZURE_CLIENT_ID internally and returns an error if they're not set.
+				match azure_identity::WorkloadIdentityCredential::new(Some(
+					azure_identity::WorkloadIdentityCredentialOptions {
+						credential_options: azure_identity::ClientAssertionCredentialOptions {
+							client_options: client_options.clone(),
+						},
+						..Default::default()
+					},
+				)) {
+					Ok(cred) => {
+						trace!(
+							"DefaultAzureCredential: added WorkloadIdentityCredential to chain"
+						);
+						sources.push(cred);
+					},
+					Err(e) => {
+						trace!(
+							"DefaultAzureCredential: WorkloadIdentityCredential not available: {e}"
+						);
+						errors.push(format!("WorkloadIdentityCredential: {e}"));
+					},
+				}
+
+				// 3. ManagedIdentityCredential — Azure VMs, App Service, etc.
+				// The constructor detects the managed identity source from env vars
+				// (IDENTITY_ENDPOINT, MSI_ENDPOINT, etc.) and defaults to IMDS.
+				// Supports user-assigned identity via AZURE_CLIENT_ID.
+				{
+					let mi_options = azure_identity::ManagedIdentityCredentialOptions {
+						user_assigned_id: std::env::var("AZURE_CLIENT_ID")
+							.ok()
+							.map(UserAssignedId::ClientId),
+						client_options: client_options.clone(),
+					};
+					match azure_identity::ManagedIdentityCredential::new(Some(mi_options)) {
+						Ok(cred) => {
+							trace!(
+								"DefaultAzureCredential: added ManagedIdentityCredential to chain"
+							);
+							sources.push(cred);
+						},
+						Err(e) => {
+							trace!(
+								"DefaultAzureCredential: ManagedIdentityCredential not available: {e}"
+							);
+							errors.push(format!("ManagedIdentityCredential: {e}"));
+						},
+					}
+				}
+
+				// 4. DeveloperToolsCredential — Azure CLI and Azure Developer CLI.
+				// This is the fallback for local development. The credential runs
+				// `az account get-access-token` or `azd auth token` under the hood.
+				match azure_identity::DeveloperToolsCredential::new(None) {
+					Ok(cred) => {
+						trace!(
+							"DefaultAzureCredential: added DeveloperToolsCredential to chain"
+						);
+						sources.push(cred);
+					},
+					Err(e) => {
+						trace!(
+							"DefaultAzureCredential: DeveloperToolsCredential construction failed: {e}"
+						);
+						errors.push(format!("DeveloperToolsCredential: {e}"));
+					},
+				}
+
+				if sources.is_empty() {
+					anyhow::bail!(
+						"DefaultAzureCredential: no credentials could be constructed. Errors:\n{}",
+						errors.join("\n")
+					);
+				}
+
+				if !errors.is_empty() {
+					trace!(
+						"DefaultAzureCredential: some credentials could not be constructed:\n{}",
+						errors.join("\n")
+					);
+				}
+
+				Ok(Arc::new(DefaultAzureCredential {
+					sources,
+					cached_source_index: AtomicUsize::new(usize::MAX),
+				}))
+			},
 		}
 	}
 	pub async fn get_token(

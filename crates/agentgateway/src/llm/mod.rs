@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
-use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{AwsAuth, AzureAuth, BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
 pub use crate::llm::types::{RequestType, ResponseType};
@@ -294,7 +294,14 @@ impl AIProvider {
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
-			AIProvider::AzureOpenAI(p) => (Target::Hostname(p.get_host(), 443), btls),
+			AIProvider::AzureOpenAI(p) => {
+				let bp = BackendPolicies {
+					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
+					backend_auth: Some(BackendAuth::Azure(None)),
+					..Default::default()
+				};
+				(Target::Hostname(p.get_host(), 443), bp)
+			},
 		}
 	}
 
