@@ -220,9 +220,12 @@ impl Expression {
 				debug!("ignoring failed expression: {}", err);
 				Self {
 					attributes: Default::default(),
-					expression: Self::new_strict("fail('the expression could not be compiled')")
-						.expect("must be valid")
-						.expression,
+					expression: Self::new_strict(format!(
+						"fail(\"the expression {:?} could not be compiled\")",
+						&expr
+					))
+					.expect("must be valid")
+					.expression,
 					original_expression: expr,
 				}
 			},
