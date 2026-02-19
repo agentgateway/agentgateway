@@ -93,8 +93,8 @@ func VerifyAllYAMLFilesReferenced(t *testing.T, testDataDir string, testCases []
 	var unreferencedGolden []string
 	for _, yamlFile := range yamlFiles {
 		baseName := filepath.Base(yamlFile)
-		if strings.HasSuffix(baseName, "-out.yaml") {
-			goldenName := strings.TrimSuffix(baseName, "-out.yaml")
+		if before, ok := strings.CutSuffix(baseName, "-out.yaml"); ok {
+			goldenName := before
 			if !referencedFiles[goldenName] {
 				unreferencedGolden = append(unreferencedGolden, baseName)
 			}
