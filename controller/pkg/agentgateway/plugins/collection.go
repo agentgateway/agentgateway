@@ -88,7 +88,7 @@ func NewAgwCollections(
 		ClusterID:       clusterID,
 
 		// Core Kubernetes resources
-		Namespaces: krt.NewInformer[*corev1.Namespace](commoncol.Client),
+		Namespaces: krt.NewInformer[*corev1.Namespace](commoncol.Client, commoncol.KrtOpts.ToOptions("informer/Namespaces")...),
 		Nodes: krt.NewFilteredInformer[*corev1.Node](commoncol.Client, kclient.Filter{
 			ObjectFilter: commoncol.Client.ObjectFilter(),
 		}, commoncol.KrtOpts.ToOptions("informer/Nodes")...),

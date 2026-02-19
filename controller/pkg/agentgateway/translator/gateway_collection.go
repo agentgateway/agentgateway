@@ -167,6 +167,7 @@ type GatewayListener struct {
 	ParentInfo   ParentInfo
 	TLSInfo      *TLSInfo
 	Valid        bool
+	Conflict     ListenerConflict
 }
 
 func (g GatewayListener) ResourceName() string {
@@ -184,7 +185,12 @@ func (g GatewayListener) Equals(other GatewayListener) bool {
 			return false
 		}
 	}
-	return g.Valid == other.Valid && g.Name == other.Name && g.ParentGateway == other.ParentGateway && g.ParentObject == other.ParentObject && g.ParentInfo.Equals(other.ParentInfo)
+	return g.Valid == other.Valid &&
+		g.Conflict == other.Conflict &&
+		g.Name == other.Name &&
+		g.ParentGateway == other.ParentGateway &&
+		g.ParentObject == other.ParentObject &&
+		g.ParentInfo.Equals(other.ParentInfo)
 }
 
 func (g ParentInfo) Equals(other ParentInfo) bool {
@@ -336,9 +342,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			return strings.Compare(a.Parent.String(), b.Parent.String())
 		})
 
-		uniqueListenerSets := sets.New[types.NamespacedName]()
 		for _, ls := range listenersFromSets {
-			uniqueListenerSets.Insert(ls.Parent)
 			result = append(result, &GatewayListener{
 				Name:          ls.Name,
 				ParentGateway: config.NamespacedName(obj),
@@ -352,17 +356,58 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Valid:      ls.Valid,
 			})
 		}
+		validateListenerConflicts(result)
+		uniqueListenerSets := sets.New[ParentKey]()
+		for _, ls := range result {
+			if !(ls.Valid && ls.Conflict == "" && ls.ParentObject.Kind == wellknown.ListenerSetGVK) {
+				continue
+			}
 
+			uniqueListenerSets.Insert(ls.ParentObject)
+		}
 		gws := rm.BuildGWStatus(context.Background(), *obj, int32(uniqueListenerSets.Len()))
 		return gws, result
 	}
 }
 
+type portProtocol struct {
+	hostnames sets.String
+	protocol  gwv1.ProtocolType
+}
+
+type ListenerConflict string
+
+const (
+	ListenerConflictHostname = "hostname"
+	ListenerConflictProtocol = "protocol"
+)
+
+func validateListenerConflicts(listeners []*GatewayListener) {
+	portMap := make(map[gwv1.PortNumber]*portProtocol)
+	for _, listener := range listeners {
+		hset := sets.New(listener.ParentInfo.Hostnames...)
+		if p, ok := portMap[listener.ParentInfo.Port]; ok {
+			if p.protocol == listener.ParentInfo.Protocol {
+				if p.hostnames.Intersection(hset).Len() == 0 {
+					p.hostnames = p.hostnames.Union(hset)
+				} else {
+					listener.Conflict = ListenerConflictHostname
+				}
+			} else {
+				listener.Conflict = ListenerConflictProtocol
+			}
+		} else {
+			portMap[listener.ParentInfo.Port] = &portProtocol{
+				hostnames: hset,
+				protocol:  listener.ParentInfo.Protocol,
+			}
+		}
+	}
+}
+
 type ListenerSet struct {
-	Name string `json:"name"`
-	// +krtEqualsTodo include parent gateway identity in equality check
-	Parent types.NamespacedName `json:"parent"`
-	// +krtEqualsTodo ensure parent metadata differences trigger equality
+	Name          string               `json:"name"`
+	Parent        types.NamespacedName `json:"parent"`
 	ParentInfo    ParentInfo           `json:"parentInfo"`
 	TLSInfo       *TLSInfo             `json:"tlsInfo"`
 	GatewayParent types.NamespacedName `json:"gatewayParent"`
@@ -382,9 +427,11 @@ func (g ListenerSet) Equals(other ListenerSet) bool {
 			return false
 		}
 	}
-	return g.Name == other.Name &&
+	return g.Valid == other.Valid &&
+		g.Name == other.Name &&
 		g.GatewayParent == other.GatewayParent &&
-		g.Valid == other.Valid
+		g.Parent == other.Parent &&
+		g.ParentInfo.Equals(other.ParentInfo)
 }
 
 func ListenerSetCollection(

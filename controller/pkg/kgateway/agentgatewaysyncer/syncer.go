@@ -20,6 +20,7 @@ import (
 	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
@@ -254,6 +255,7 @@ func (s *Syncer) buildFinalListenerSetStatus(
 			for _, r := range routes {
 				counts[r.ListenerName]++
 			}
+			log.Errorf("howardjohn: count %+v", counts)
 			for idx, l := range i.Obj.Spec.Listeners {
 				gatewayListener := krt.FetchOne(ctx, gatewayIndex, krt.FilterKey(utils.SectionedNamespacedName{
 					NamespacedName: types.NamespacedName{
@@ -263,29 +265,30 @@ func (s *Syncer) buildFinalListenerSetStatus(
 					SectionName: l.Name,
 				}.String()))
 				if len(gatewayListener.Objects) == 0 {
+					log.Errorf("howardjohn: skip gw")
 					continue
 				}
 
-				//obj := gatewayListener.Objects[0]
-				// TODO
-				//switch obj.State {
-				//case translator.LISTENER_HOSTNAME_CONFLICT:
-				//	invalidListenerCount++
-				//	ListenerMessageHostnameConflict := "Found conflicting hostnames on listeners, all listeners on a single port must have unique hostnames"
-				//	translator.ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, string(gwv1.ListenerReasonHostnameConflict), ListenerMessageHostnameConflict)
-				//case translator.LISTENER_PROTOCOL_CONFLICT:
-				//	invalidListenerCount++
-				//	ListenerMessageProtocolConflict := "Found conflicting protocols on listeners, a single port can only contain listeners with compatible protocols"
-				//	translator.ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, string(gwv1.ListenerReasonProtocolConflict), ListenerMessageProtocolConflict)
-				//case translator.LISTENER_INVALID:
-				//	invalidListenerCount++
-				//}
+				obj := gatewayListener.Objects[0]
+				if !obj.Valid {
+					invalidListenerCount++
+				} else {
+					if obj.Conflict == translator.ListenerConflictHostname {
+						invalidListenerCount++
+						ListenerMessageHostnameConflict := "Found conflicting hostnames on listeners, all listeners on a single port must have unique hostnames"
+						ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, string(gwv1.ListenerReasonHostnameConflict), ListenerMessageHostnameConflict)
+					} else if obj.Conflict == translator.ListenerConflictProtocol {
+						invalidListenerCount++
+						ListenerMessageProtocolConflict := "Found conflicting protocols on listeners, a single port can only contain listeners with compatible protocols"
+						ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, string(gwv1.ListenerReasonProtocolConflict), ListenerMessageProtocolConflict)
+					}
+				}
 				lsStatus.Listeners[idx].AttachedRoutes = counts[string(l.Name)]
 			}
 
 			if invalidListenerCount > 0 {
-				//listenerSetAccepted := invalidListenerCount < len(i.Obj.Spec.Listeners)
-				//translator.ReportListenerSetWithConflicts(lsStatus, i.Obj, listenerSetAccepted)
+				listenerSetAccepted := invalidListenerCount < len(i.Obj.Spec.Listeners)
+				ReportListenerSetWithConflicts(lsStatus, i.Obj, listenerSetAccepted)
 			}
 			return &krt.ObjectWithStatus[*gwv1.ListenerSet, gwv1.ListenerSetStatus]{
 				Obj:    i.Obj,
@@ -294,6 +297,52 @@ func (s *Syncer) buildFinalListenerSetStatus(
 		}, krtopts.ToOptions("ListenerSetFinalStatus")...)
 }
 
+func ReportListenerSetWithConflicts(status *gwv1.ListenerSetStatus, obj *gwv1.ListenerSet, accepted bool) {
+	condition := metav1.ConditionFalse
+	if accepted {
+		condition = metav1.ConditionTrue
+	}
+	programmedReason := gwv1.ListenerSetReasonListenersNotValid
+	if accepted {
+		programmedReason = gwv1.ListenerSetReasonProgrammed
+	}
+	// In case any listeners are invalid, this status should be set even if the gateway / listenerset is accepted
+	// https://github.com/kubernetes-sigs/gateway-api/blob/8fe8316f5792a7830a49c800f89fe689e0df042e/apisx/v1alpha1/xlistenerset_types.go#L396
+	gatewayConditions := map[string]*translator.Condition{
+		string(gwv1.GatewayConditionAccepted): {
+			Status: condition,
+			Reason: string(gwv1.ListenerSetReasonListenersNotValid),
+		},
+		string(gwv1.GatewayConditionProgrammed): {
+			Status: condition,
+			Reason: string(programmedReason),
+		},
+	}
+
+	status.Conditions = translator.SetConditions(obj.Generation, status.Conditions, gatewayConditions)
+}
+
+func ReportListenerSetListenerConflicts(status *gwv1.ListenerEntryStatus, obj *gwv1.ListenerSet, reason string, message string) {
+	gatewayConditions := map[string]*translator.Condition{
+		string(gwv1.ListenerConditionConflicted): {
+			Status:  metav1.ConditionTrue,
+			Reason:  reason,
+			Message: message,
+		},
+		string(gwv1.GatewayConditionAccepted): {
+			Status:  metav1.ConditionFalse,
+			Reason:  reason,
+			Message: message,
+		},
+		string(gwv1.GatewayConditionProgrammed): {
+			Status:  metav1.ConditionFalse,
+			Reason:  reason,
+			Message: message,
+		},
+	}
+
+	status.Conditions = translator.SetConditions(obj.Generation, status.Conditions, gatewayConditions)
+}
 func (s *Syncer) buildGatewayCollection(
 	gatewayClasses krt.Collection[translator.GatewayClass],
 	listenerSets krt.Collection[translator.ListenerSet],
@@ -371,7 +420,7 @@ func (s *Syncer) buildAgwResources(
 				Name:      gw.ParentGateway.Name,
 			})
 			// TODO: better handle conflicts of protocols. For now, we arbitrarily treat TLS > plain
-			if gw.Valid {
+			if gw.Valid && gw.Conflict == "" {
 				protocol = max(protocol, s.getBindProtocol(gw))
 			}
 		}
