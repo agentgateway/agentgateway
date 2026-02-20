@@ -228,10 +228,13 @@ fn waypoint_default_tcp_route(
 		None
 	})?;
 
-	let svc = stores.read_discovery().services.get_by_vip(&NetworkAddress {
-		network: network.clone(),
-		address: dst.ip(),
-	})?;
+	let svc = stores
+		.read_discovery()
+		.services
+		.get_by_vip(&NetworkAddress {
+			network: network.clone(),
+			address: dst.ip(),
+		})?;
 
 	// Verify the service is bound to this waypoint
 	let wp = svc.waypoint.as_ref()?;
@@ -260,7 +263,7 @@ fn waypoint_default_tcp_route(
 	}
 
 	Some(Arc::new(TCPRoute {
-		key: strng::literal!("_waypoint-default-tcp").into(),
+		key: strng::literal!("_waypoint-default-tcp"),
 		name: crate::types::agent::RouteName {
 			name: strng::literal!("_waypoint-default-tcp"),
 			namespace: svc.namespace.clone(),
@@ -333,9 +336,7 @@ mod tests {
 			discovery_store.insert_service_internal(svc);
 		}
 		Stores {
-			discovery: crate::store::DiscoveryStoreUpdater::new(
-				Arc::new(RwLock::new(discovery_store)),
-			),
+			discovery: crate::store::DiscoveryStoreUpdater::new(Arc::new(RwLock::new(discovery_store))),
 			binds: crate::store::BindStoreUpdater::new(Arc::new(RwLock::new(
 				crate::store::BindStore::with_ipv6_enabled(true),
 			))),
@@ -409,7 +410,10 @@ mod tests {
 		let self_addr = make_self_addr("my-waypoint", "istio-system");
 
 		let route = super::waypoint_default_tcp_route(&stores, &network, dst, Some(&self_addr));
-		assert!(route.is_some(), "should generate default TCP route for known service");
+		assert!(
+			route.is_some(),
+			"should generate default TCP route for known service"
+		);
 		let route = route.unwrap();
 		assert_eq!(route.key.as_str(), "_waypoint-default-tcp");
 		assert_eq!(route.backends.len(), 1);
@@ -456,7 +460,10 @@ mod tests {
 		let self_addr = make_self_addr("my-waypoint", "istio-system");
 
 		let route = super::waypoint_default_tcp_route(&stores, &network, dst, Some(&self_addr));
-		assert!(route.is_none(), "should reject service bound to different waypoint");
+		assert!(
+			route.is_none(),
+			"should reject service bound to different waypoint"
+		);
 	}
 
 	#[tokio::test]
@@ -476,7 +483,10 @@ mod tests {
 		let self_addr = make_self_addr("my-waypoint", "istio-system");
 
 		let route = super::waypoint_default_tcp_route(&stores, &network, dst, Some(&self_addr));
-		assert!(route.is_none(), "should reject service without waypoint config");
+		assert!(
+			route.is_none(),
+			"should reject service without waypoint config"
+		);
 	}
 
 	#[tokio::test]
@@ -500,7 +510,10 @@ mod tests {
 		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), 3306);
 
 		let route = super::waypoint_default_tcp_route(&stores, &network, dst, None);
-		assert!(route.is_none(), "should return None when self_addr not configured");
+		assert!(
+			route.is_none(),
+			"should return None when self_addr not configured"
+		);
 	}
 
 	#[tokio::test]
@@ -524,8 +537,18 @@ mod tests {
 		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 60)), 6379);
 		let self_addr = make_self_addr("test-wp", "default");
 
-		let route = super::select_best_route(None, hbone_listener(), &stores, &network, dst, Some(&self_addr));
-		assert!(route.is_some(), "HBONE listener should generate default TCP route");
+		let route = super::select_best_route(
+			None,
+			hbone_listener(),
+			&stores,
+			&network,
+			dst,
+			Some(&self_addr),
+		);
+		assert!(
+			route.is_some(),
+			"HBONE listener should generate default TCP route"
+		);
 		assert_eq!(route.unwrap().key.as_str(), "_waypoint-default-tcp");
 	}
 
@@ -550,6 +573,9 @@ mod tests {
 		});
 
 		let route = super::select_best_route(None, listener, &stores, &network, dst, None);
-		assert!(route.is_none(), "non-HBONE listener should not generate default route");
+		assert!(
+			route.is_none(),
+			"non-HBONE listener should not generate default route"
+		);
 	}
 }
