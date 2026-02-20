@@ -6,7 +6,6 @@ use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use agent_hbone::server::RequestParts;
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
@@ -124,6 +123,16 @@ pub enum AIProvider {
 	Anthropic(anthropic::Provider),
 	Bedrock(bedrock::Provider),
 	AzureOpenAI(azureopenai::Provider),
+}
+
+#[apply(schema!)]
+pub enum LocalModelAIProvider {
+	OpenAI,
+	Gemini,
+	Vertex,
+	Anthropic,
+	Bedrock,
+	AzureOpenAI,
 }
 
 trait Provider {
@@ -651,7 +660,7 @@ impl AIProvider {
 		let new_request = if original_format == InputFormat::CountTokens {
 			match self {
 				AIProvider::Anthropic(_) => req.to_anthropic()?,
-				AIProvider::Bedrock(_) => req.to_bedrock_token_count(parts.headers())?,
+				AIProvider::Bedrock(_) => req.to_bedrock_token_count(&parts.headers)?,
 				AIProvider::Vertex(provider) => {
 					let body = req.to_anthropic()?;
 					provider.prepare_anthropic_count_tokens_body(body)?
@@ -1006,10 +1015,10 @@ impl AIProvider {
 	async fn read_body_and_default_model<T: RequestType + DeserializeOwned>(
 		&self,
 		policies: Option<&Policy>,
-		req: Request,
+		hreq: Request,
 	) -> Result<(Parts, T), AIError> {
-		let buffer = http::buffer_limit(&req);
-		let (parts, body) = req.into_parts();
+		let buffer = http::buffer_limit(&hreq);
+		let (parts, body) = hreq.into_parts();
 		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
 			return Err(AIError::RequestTooLarge);
 		};

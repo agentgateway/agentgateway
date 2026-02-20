@@ -194,8 +194,7 @@ export default function PlaygroundPage() {
 
     const backend = route.route.backends[0]; // Use first backend to determine type
     if (backend.mcp) return "mcp";
-    if (backend.ai) return "a2a"; // Treat AI backends as A2A for now
-    return "http"; // Host, Service, etc.
+    return "http"; // AI, Host, Service, etc.
   };
 
   const updateRequestFromRoute = useCallback((routeInfo: RouteInfo) => {

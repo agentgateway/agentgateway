@@ -1,0 +1,51 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for mcp_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      mcp:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: mcp
+        listenerName: mcp
+        protocol: HTTP
+        routes:
+          "mcp:default":
+            backends:
+              - backend: /mcp
+                weight: 1
+            key: "mcp:default"
+            matches:
+              - path:
+                  pathPrefix: /
+            name: default
+            namespace: internal
+        tcpRoutes: {}
+policies: []
+backends:
+  - backend:
+      mcp:
+        name: mcp
+        namespace: ""
+        target:
+          targets:
+            - name: time
+              stdio:
+                cmd: uvx
+                args:
+                  - mcp-server-time
+            - name: everything
+              stdio:
+                cmd: npx
+                args:
+                  - "@modelcontextprotocol/server-everything"
+          stateful: true
+          alwaysUsePrefix: false
+workloads: []
+services: []

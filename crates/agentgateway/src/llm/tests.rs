@@ -4,7 +4,7 @@ use std::path::Path;
 use agent_core::strng;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::*;
 
@@ -118,7 +118,12 @@ const COMPLETION_REQUESTS: &[&str] = &[
 	"request_tool-call",
 	"request_reasoning",
 ];
-const MESSAGES_REQUESTS: &[&str] = &["request_anthropic_basic", "request_anthropic_tools"];
+const ANTHROPIC_COMPLETION_REQUESTS: &[&str] = &["request_reasoning_max"];
+const MESSAGES_REQUESTS: &[&str] = &[
+	"request_anthropic_basic",
+	"request_anthropic_tools",
+	"request_anthropic_reasoning",
+];
 const RESPONSES_REQUESTS: &[&str] = &["request_responses_basic", "request_responses_instructions"];
 const COUNT_TOKENS_REQUESTS: &[&str] = &[
 	"request_count_tokens_basic",
@@ -365,8 +370,147 @@ async fn test_passthrough() {
 #[tokio::test]
 async fn test_messages_to_completions() {
 	let request = |i| conversion::completions::from_messages::translate(&i);
-	test_request("anthropic", "request_anthropic_basic", request);
-	test_request("anthropic", "request_anthropic_tools", request);
+	for r in MESSAGES_REQUESTS {
+		test_request("anthropic", r, request);
+	}
+}
+
+#[test]
+fn test_adaptive_thinking_without_effort_maps_to_high_reasoning_effort() {
+	let request: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-opus-4-6",
+		"max_tokens": 256,
+		"thinking": {
+			"type": "adaptive"
+		},
+		"messages": [
+			{
+				"role": "user",
+				"content": "Give one concise insight."
+			}
+		]
+	}))
+	.expect("valid messages request");
+
+	let translated = conversion::completions::from_messages::translate(&request)
+		.expect("messages->completions translation");
+	let translated: Value =
+		serde_json::from_slice(&translated).expect("translated request should be valid json");
+
+	assert_eq!(translated.get("reasoning_effort"), Some(&json!("high")));
+}
+
+#[test]
+fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
+	let request: types::completions::Request = serde_json::from_value(json!({
+		"model": "claude-opus-4-6",
+		"messages": [
+			{ "role": "user", "content": "Give one concise insight." }
+		],
+		"reasoning_effort": "minimal"
+	}))
+	.expect("valid completions request");
+
+	let translated = conversion::messages::from_completions::translate(&request)
+		.expect("completions->messages translation");
+	let translated: Value =
+		serde_json::from_slice(&translated).expect("translated request should be valid json");
+
+	assert_eq!(
+		translated["thinking"],
+		json!({
+			"type": "enabled",
+			"budget_tokens": 1024
+		})
+	);
+	assert!(translated.get("output_config").is_none());
+}
+
+#[test]
+fn test_completions_json_schema_response_format_maps_to_anthropic_output_config() {
+	let request: types::completions::Request = serde_json::from_value(json!({
+		"model": "claude-opus-4-6",
+		"messages": [
+			{ "role": "user", "content": "Return one short summary." }
+		],
+		"response_format": {
+			"type": "json_schema",
+			"json_schema": {
+				"name": "summary_schema",
+				"schema": {
+					"type": "object",
+					"properties": { "summary": { "type": "string" } },
+					"required": ["summary"],
+					"additionalProperties": false
+				}
+			}
+		}
+	}))
+	.expect("valid completions request");
+
+	let translated = conversion::messages::from_completions::translate(&request)
+		.expect("completions->messages translation");
+	let translated: Value =
+		serde_json::from_slice(&translated).expect("translated request should be valid json");
+
+	assert_eq!(
+		translated["output_config"]["format"],
+		json!({
+			"type": "json_schema",
+			"schema": {
+				"type": "object",
+				"properties": { "summary": { "type": "string" } },
+				"required": ["summary"],
+				"additionalProperties": false
+			}
+		})
+	);
+}
+
+#[test]
+fn test_messages_output_config_format_maps_to_openai_response_format() {
+	let request: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-opus-4-6",
+		"max_tokens": 256,
+		"output_config": {
+			"format": {
+				"type": "json_schema",
+				"schema": {
+					"type": "object",
+					"properties": { "answer": { "type": "number" } },
+					"required": ["answer"],
+					"additionalProperties": false
+				}
+			}
+		},
+		"messages": [
+			{
+				"role": "user",
+				"content": "What is 2+2?"
+			}
+		]
+	}))
+	.expect("valid messages request");
+
+	let translated = conversion::completions::from_messages::translate(&request)
+		.expect("messages->completions translation");
+	let translated: Value =
+		serde_json::from_slice(&translated).expect("translated request should be valid json");
+
+	assert_eq!(translated["response_format"]["type"], json!("json_schema"));
+	assert_eq!(
+		translated["response_format"]["json_schema"]["name"],
+		json!("structured_output")
+	);
+	assert_eq!(
+		translated["response_format"]["json_schema"]["schema"],
+		json!({
+			"type": "object",
+			"properties": { "answer": { "type": "number" } },
+			"required": ["answer"],
+			"additionalProperties": false
+		})
+	);
 }
 
 #[tokio::test]
@@ -396,6 +540,9 @@ async fn test_completions_to_messages() {
 
 	let request = |i| conversion::messages::from_completions::translate(&i);
 	for r in COMPLETION_REQUESTS {
+		test_request("anthropic", r, request);
+	}
+	for r in ANTHROPIC_COMPLETION_REQUESTS {
 		test_request("anthropic", r, request);
 	}
 }

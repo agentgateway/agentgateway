@@ -558,14 +558,15 @@ impl<'a> FormatFields<'a> for IstioJsonFormat {
 /// Mod testing gives access to a test logger, which stores logs in memory for querying.
 /// Inspired by https://github.com/dbrgn/tracing-test
 pub mod testing {
+	use once_cell::sync::Lazy;
+	use serde_json::Value;
 	use std::collections::HashMap;
-	use std::fmt::{Display, Formatter};
+	use std::fmt::{Debug, Display, Formatter};
 	use std::io;
 	use std::io::IoSlice;
 	use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
-
-	use once_cell::sync::Lazy;
-	use serde_json::Value;
+	use std::time::{Duration, SystemTime};
+	use tracing::trace;
 	use tracing_subscriber::fmt;
 	use tracing_subscriber::fmt::writer::Tee;
 	use tracing_subscriber::layer::SubscriberExt;
@@ -599,6 +600,47 @@ pub mod testing {
 				},
 			}
 		}
+	}
+
+	/// check_eventually runs a function many times until it reaches the expected result.
+	/// If it doesn't the last result is returned
+	async fn check_eventually<F, CF, T, Fut>(dur: Duration, f: F, expected: CF) -> Result<T, T>
+	where
+		F: Fn() -> Fut,
+		Fut: Future<Output = T>,
+		T: Eq + Debug,
+		CF: Fn(&T) -> bool,
+	{
+		use std::ops::Add;
+		let mut delay = Duration::from_millis(10);
+		let end = SystemTime::now().add(dur);
+		let mut last: T;
+		let mut attempts = 0;
+		loop {
+			attempts += 1;
+			last = f().await;
+			if expected(&last) {
+				return Ok(last);
+			}
+			trace!("attempt {attempts} with delay {delay:?}");
+			if SystemTime::now().add(delay) > end {
+				return Err(last);
+			}
+			tokio::time::sleep(delay).await;
+			delay *= 2;
+		}
+	}
+
+	/// eventually_find waits until at least one log line matches the given keys.
+	/// If not found, panics
+	pub async fn eventually_find(want: &[(&str, &str)]) -> Option<Value> {
+		check_eventually(
+			Duration::from_secs(1),
+			|| async { find(want).into_iter().next() },
+			|log| log.is_some(),
+		)
+		.await
+		.unwrap()
 	}
 
 	/// assert_contains asserts the logs contain a line with the matching keys.

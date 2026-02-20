@@ -1914,6 +1914,7 @@ pub enum BackendPolicy {
 	BackendTLS(http::backendtls::BackendTLS),
 	BackendAuth(BackendAuth),
 	InferenceRouting(ext_proc::InferenceRouting),
+	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	SessionPersistence(http::sessionpersistence::Policy),
 

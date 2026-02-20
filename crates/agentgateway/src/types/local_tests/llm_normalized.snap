@@ -3,88 +3,88 @@ source: crates/agentgateway/src/types/local_tests.rs
 description: "Config normalization test for llm: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
-- key: bind/8080
-  address: '[::]:8080'
-  protocol: http
-  tunnelProtocol: direct
-  listeners:
-    ns/name/bind/8080/llm:
-      key: ns/name/bind/8080/llm
-      gatewayName: name
-      gatewayNamespace: ns
-      listenerName: llm
-      hostname: ''
-      protocol: HTTP
-      routes:
-        ns/name/bind/8080/llm/default/route0:
-          key: ns/name/bind/8080/llm/default/route0
-          name: route0
-          namespace: default
-          matches:
-          - path:
-              pathPrefix: /
-          backends:
-          - weight: 1
-            backend: /ns/name/bind/8080/llm/default/route0/backend0
-      tcpRoutes: {}
+  - key: bind/8080
+    address: "[::]:8080"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      ns/name/bind/8080/llm:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/8080/llm
+        listenerName: llm
+        protocol: HTTP
+        routes:
+          ns/name/bind/8080/llm/default/route0:
+            backends:
+              - backend: /ns/name/bind/8080/llm/default/route0/backend0
+                weight: 1
+            key: ns/name/bind/8080/llm/default/route0
+            matches:
+              - path:
+                  pathPrefix: /
+            name: route0
+            namespace: default
+        tcpRoutes: {}
 policies: []
 backends:
-- backend:
-    ai:
-      name: ns/name/bind/8080/llm/default/route0/backend0
-      namespace: ''
-      target:
-        providers:
-        - active:
-            anthropic:
-              endpoint:
-                name: anthropic
-                provider:
-                  anthropic: {}
-                hostOverride: null
-                pathOverride: null
-                tokenize: false
-              info:
-                health: 1.0
-                request_latency: 0.0
-                pending_requests: 0
-                total_requests: 0
-                evicted_until: null
-          rejected: {}
-        - active:
-            openai:
-              endpoint:
-                name: openai
-                provider:
-                  openAI: {}
-                hostOverride: null
-                pathOverride: null
-                tokenize: false
-              info:
-                health: 1.0
-                request_latency: 0.0
-                pending_requests: 0
-                total_requests: 0
-                evicted_until: null
-            overrides:
-              endpoint:
-                name: overrides
-                provider:
-                  openAI:
-                    model: some-model
-                hostOverride: example.com:443
-                pathOverride: /api/v1/chat/completions
-                tokenize: false
-                inlinePolicies:
-                - backendTLS: null
-                - backendAuth:
-                    key: <redacted>
-              info:
-                health: 1.0
-                request_latency: 0.0
-                pending_requests: 0
-                total_requests: 0
-                evicted_until: null
-          rejected: {}
+  - backend:
+      ai:
+        name: ns/name/bind/8080/llm/default/route0/backend0
+        namespace: ""
+        target:
+          providers:
+            - active:
+                anthropic:
+                  endpoint:
+                    name: anthropic
+                    provider:
+                      anthropic: {}
+                    hostOverride: ~
+                    pathOverride: ~
+                    tokenize: false
+                  info:
+                    health: 1
+                    request_latency: 0
+                    pending_requests: 0
+                    total_requests: 0
+                    evicted_until: ~
+              rejected: {}
+            - active:
+                openai:
+                  endpoint:
+                    name: openai
+                    provider:
+                      openAI: {}
+                    hostOverride: ~
+                    pathOverride: ~
+                    tokenize: false
+                  info:
+                    health: 1
+                    request_latency: 0
+                    pending_requests: 0
+                    total_requests: 0
+                    evicted_until: ~
+                overrides:
+                  endpoint:
+                    name: overrides
+                    provider:
+                      openAI:
+                        model: some-model
+                    hostOverride: "example.com:443"
+                    pathOverride: /api/v1/chat/completions
+                    tokenize: false
+                    inlinePolicies:
+                      - backendTLS: ~
+                      - backendAuth:
+                          key: "<redacted>"
+                  info:
+                    health: 1
+                    request_latency: 0
+                    pending_requests: 0
+                    total_requests: 0
+                    evicted_until: ~
+              rejected: {}
 workloads: []
 services: []

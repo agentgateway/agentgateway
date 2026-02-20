@@ -1,35 +1,42 @@
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
-
-use ::http::Uri;
-use agent_core::prelude::Strng;
-use anyhow::{Error, anyhow, bail};
-use itertools::Itertools;
-use macro_rules_attribute::apply;
-use openapiv3::OpenAPI;
+use std::sync::{Arc, OnceLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
+use crate::http::filters::HeaderModifier;
 use crate::http::transformation_cel::LocalTransformationConfig;
-use crate::http::{filters, retry, timeout};
-use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
+use crate::http::{HeaderName, HeaderOrPseudo, filters, retry, timeout};
+use crate::llm::policy::PromptGuard;
+use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider};
+use crate::llm::{anthropic, openai};
 use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, Listener, ListenerKey, ListenerName,
-	ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication, McpAuthentication,
-	McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase,
-	PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
-	RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies,
-	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
-	TargetedPolicy, TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName,
+	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
+	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
+	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
+	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
+	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
+	TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
 use crate::*;
+use ::http::Uri;
+use agent_core::prelude::Strng;
+use anyhow::{Error, anyhow, bail};
+use bytes::Bytes;
+use itertools::Itertools;
+use macro_rules_attribute::apply;
+use openapiv3::OpenAPI;
+use secrecy::SecretString;
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
@@ -85,6 +92,95 @@ pub struct LocalConfig {
 	services: Vec<Service>,
 	#[serde(default)]
 	backends: Vec<FullLocalBackend>,
+	#[serde(default)]
+	llm: Option<LocalLLMConfig>,
+	#[serde(default)]
+	mcp: Option<LocalSimpleMcpConfig>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMConfig {
+	/// models defines the set of models that can be served by this gateway. The model name refers to the
+	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
+	/// on a per-model basis.
+	models: Vec<LocalLLMModels>,
+	/// policies defines policies for handling incoming requests, before a model is selected
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	policies: Option<LocalLLMPolicy>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalSimpleMcpConfig {
+	#[serde(default = "default_simple_mcp_port")]
+	port: u16,
+	#[serde(flatten)]
+	backend: LocalMcpBackend,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	policies: Option<FilterOrPolicy>,
+}
+
+fn default_simple_mcp_port() -> u16 {
+	3000
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMModels {
+	/// name is the name of the model we are matching from a users request. If params.model is set, that
+	/// will be used in the request to the LLM provider. If not, the incoming model is used.
+	name: String,
+	/// params customizes parameters for the outgoing request
+	#[serde(default)]
+	params: LocalLLMParams,
+	/// provider of the LLM we are connecting too
+	provider: LocalModelAIProvider,
+
+	// Policies
+	/// defaults allows setting default values for the request. If these are not present in the request body, they will be set.
+	/// To override even when set, use `overrides`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	defaults: Option<HashMap<String, serde_json::Value>>,
+	/// overrides allows setting values for the request, overriding any existing values
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	overrides: Option<HashMap<String, serde_json::Value>>,
+	/// requestHeaders modifies headers in requests to the LLM provider.
+	#[serde(default)]
+	request_headers: Option<filters::HeaderModifier>,
+	/// guardrails to apply to the request or response
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	guardrails: Option<PromptGuard>,
+
+	/// matches specifies the conditions under which this model should be used in addition to matching the model name.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	matches: Vec<LLMRouteMatch>,
+}
+
+#[apply(schema!)]
+pub struct LLMRouteMatch {
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub headers: Vec<HeaderMatch>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct LocalLLMParams {
+	/// The model to send to the provider.
+	/// If unset, the same model will be used from the request.
+	#[serde(default)]
+	model: Option<Strng>,
+	/// An API key to attach to the request.
+	/// If unset this will be automatically detected from the environment.
+	#[serde(default)]
+	api_key: Option<String>,
+	// For Bedorkc: The AWS region to use
+	aws_region: Option<Strng>,
+	// For Vertex: The Google region to use
+	vertex_region: Option<Strng>,
+	// For Vertex: The Google project ID to use
+	vertex_project: Option<Strng>,
+	/// For Azure: the host of the deployment
+	azure_host: Option<Strng>,
+	/// For Azure: the API version to use
+	azure_api_version: Option<Strng>,
 }
 
 #[apply(schema_de!)]
@@ -633,6 +729,16 @@ where
 
 #[apply(schema_de!)]
 #[derive(Default)]
+struct LocalLLMPolicy {
+	#[serde(flatten)]
+	gateway: LocalGatewayPolicy,
+	/// Authorization policies for HTTP access.
+	#[serde(default)]
+	authorization: Option<Authorization>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
 struct LocalGatewayPolicy {
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
@@ -927,6 +1033,8 @@ async fn convert(
 		workloads,
 		services,
 		backends,
+		llm,
+		mcp,
 	} = i;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -935,15 +1043,8 @@ async fn convert(
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) = convert_listener(
-				client.clone(),
-				idx,
-				l,
-				bind_name.clone(),
-				Some(frontend_policies.clone()),
-				gateway.clone(),
-			)
-			.await?;
+			let (l, pol, backends) =
+				convert_listener(client.clone(), idx, l, bind_name.clone(), gateway.clone()).await?;
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
@@ -999,6 +1100,25 @@ async fn convert(
 		})
 	}
 
+	// Convert llm config if present
+	if let Some(llm_config) = llm {
+		let (llm_bind, llm_policies, llm_backends) =
+			convert_llm_config(client.clone(), config, gateway.clone(), llm_config).await?;
+		all_binds.push(llm_bind);
+		all_policies.extend_from_slice(&llm_policies);
+		all_backends.extend_from_slice(&llm_backends);
+	}
+	if let Some(mcp_config) = mcp {
+		let (mcp_bind, mcp_policies, mcp_backends) =
+			convert_mcp_config(client.clone(), config, gateway.clone(), mcp_config).await?;
+		all_binds.push(mcp_bind);
+		all_policies.extend_from_slice(&mcp_policies);
+		all_backends.extend_from_slice(&mcp_backends);
+	}
+
+	// Add frontend policies targeted to this listener
+	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
+
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
@@ -1006,6 +1126,460 @@ async fn convert(
 		workloads,
 		services,
 	})
+}
+
+static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
+
+fn llm_model_name_header_match(model_name: &str) -> anyhow::Result<HeaderValueMatch> {
+	let wildcard_count = model_name.matches('*').count();
+	if wildcard_count > 1 {
+		bail!("model name '{model_name}' may only include a single '*' wildcard");
+	}
+
+	if wildcard_count == 0 {
+		return Ok(HeaderValueMatch::Exact(::http::HeaderValue::from_str(
+			model_name,
+		)?));
+	}
+
+	if model_name == "*" {
+		return Ok(HeaderValueMatch::Regex(regex::Regex::new(r".*")?));
+	}
+
+	if let Some(suffix) = model_name.strip_prefix('*') {
+		let pattern = format!(".*{}", regex::escape(suffix));
+		return Ok(HeaderValueMatch::Regex(regex::Regex::new(&pattern)?));
+	}
+
+	if let Some(prefix) = model_name.strip_suffix('*') {
+		let pattern = format!("{}.*", regex::escape(prefix));
+		return Ok(HeaderValueMatch::Regex(regex::Regex::new(&pattern)?));
+	}
+
+	bail!("model name wildcard must be either at the beginning or the end: '{model_name}'")
+}
+
+async fn convert_llm_config(
+	client: client::Client,
+	config: &crate::Config,
+	gateway: ListenerTarget,
+	llm_config: LocalLLMConfig,
+) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
+	const DEFAULT_LLM_PORT: u16 = 4000;
+
+	let mut all_policies = vec![];
+	let mut all_backends = vec![];
+	let mut routes = RouteSet::default();
+
+	// Create transformation policy to set x-gateway-model-name header from request body
+	let transformation = http::transformation_cel::Transformation::try_from_local_config(
+		LocalTransformationConfig {
+			request: Some(http::transformation_cel::LocalTransform {
+				set: vec![
+					(
+						strng::new("x-gateway-model-name"),
+						strng::new(
+							r#"
+request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict") ?
+request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
+json(request.body).model
+"#,
+						),
+					),
+					(
+						strng::new("anthropic-beta"),
+						strng::new("request.headers['anthropic-beta'].split(',').filter(v, v.trim() in [])"),
+					),
+				],
+				add: vec![],
+				remove: vec![],
+				body: None,
+			}),
+			response: None,
+		},
+		false,
+	)?;
+
+	// Get static startup unix timestamp
+	let startup_timestamp = *STARTUP_TIMESTAMP.get_or_init(|| {
+		SystemTime::now()
+			.duration_since(UNIX_EPOCH)
+			.unwrap()
+			.as_secs()
+	});
+
+	// Create model list route
+	let model_list_body = serde_json::json!({
+		"data": llm_config
+			.models
+			.iter()
+			.map(|m| serde_json::json!({
+				"id": m.name,
+				"object": "model",
+				"created": startup_timestamp,
+				"owned_by": "openai"
+			}))
+			.collect::<Vec<_>>(),
+		"object": "list"
+	})
+	.to_string();
+
+	let model_list_route = Route {
+		key: strng::new("llm:admin:model-list"),
+		name: RouteName {
+			name: strng::new("admin:model-list"),
+			namespace: strng::new("internal"),
+			kind: None,
+			rule_name: None,
+		},
+		hostnames: vec![],
+		matches: vec![
+			RouteMatch {
+				path: PathMatch::PathPrefix(strng::new("/v1/models")),
+				headers: vec![],
+				method: None,
+				query: vec![],
+			},
+			RouteMatch {
+				path: PathMatch::PathPrefix(strng::new("/models")),
+				headers: vec![],
+				method: None,
+				query: vec![],
+			},
+		],
+		backends: vec![],
+		inline_policies: vec![TrafficPolicy::DirectResponse(filters::DirectResponse {
+			body: Bytes::copy_from_slice(model_list_body.as_bytes()),
+			status: ::http::StatusCode::OK,
+		})],
+	};
+	routes.insert(model_list_route);
+
+	// Create routes and backends for each model
+	for (idx, model_config) in llm_config.models.iter().enumerate() {
+		let model_name = strng::new(&model_config.name);
+		let backend_key = strng::format!("llm:{}", model_config.name);
+		let p = model_config.params.clone();
+		let model = p.model;
+
+		// Use provider from config and set the model name
+		let provider = match &model_config.provider {
+			LocalModelAIProvider::Anthropic => AIProvider::Anthropic(anthropic::Provider { model }),
+			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider { model }),
+			LocalModelAIProvider::Gemini => AIProvider::Gemini(crate::llm::gemini::Provider { model }),
+			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
+				model,
+
+				region: p.vertex_region,
+				project_id: p.vertex_project.context("vertex requires vertex_project")?,
+			}),
+			LocalModelAIProvider::Bedrock => AIProvider::Bedrock(crate::llm::bedrock::Provider {
+				model,
+				region: p.aws_region.context("bedrock requires aws_region")?,
+				guardrail_identifier: None,
+				guardrail_version: None,
+			}),
+			LocalModelAIProvider::AzureOpenAI => {
+				AIProvider::AzureOpenAI(crate::llm::azureopenai::Provider {
+					model,
+					host: p.azure_host.context("azure requires azure_host")?,
+					api_version: p.azure_api_version,
+				})
+			},
+		};
+
+		// Create backend auth policy
+		let mut pols = vec![];
+		if let Some(key) = p.api_key.as_ref() {
+			let backend_auth = BackendAuth::Key(SecretString::new(key.clone().into_boxed_str()));
+			pols.push(BackendPolicy::BackendAuth(backend_auth));
+		}
+
+		// Create AI backend
+		let named_provider = NamedAIProvider {
+			name: model_name.clone(),
+			provider,
+			host_override: None,
+			path_override: None,
+			tokenize: false,
+			inline_policies: pols,
+		};
+
+		let ai_backend = AIBackend {
+			providers: crate::types::loadbalancer::EndpointSet::new(vec![vec![(
+				model_name.clone(),
+				named_provider,
+			)]]),
+		};
+
+		let mut pols = vec![];
+		if let Some(mut rh) = model_config.request_headers.clone() {
+			rh.remove.push(strng::literal!("x-gateway-model-name"));
+			pols.push(BackendPolicy::RequestHeaderModifier(rh));
+		} else {
+			pols.push(BackendPolicy::RequestHeaderModifier(HeaderModifier {
+				remove: vec![strng::literal!("x-gateway-model-name")],
+				add: vec![],
+				set: vec![],
+			}));
+		}
+		pols.push(BackendPolicy::AI(Arc::new(llm::Policy {
+			defaults: model_config.defaults.clone(),
+			overrides: model_config.overrides.clone(),
+			prompt_guard: model_config.guardrails.clone(),
+			prompts: None,
+			model_aliases: Default::default(),
+			wildcard_patterns: Arc::new(vec![]),
+			prompt_caching: None,
+			routes: Default::default(),
+		})));
+		let backend_with_policies = BackendWithPolicies {
+			backend: Backend::AI(local_name(backend_key.clone()), ai_backend),
+			inline_policies: pols,
+		};
+		all_backends.push(backend_with_policies);
+
+		// Create route for this model
+		// Index is needed because the same name can be used with different match criteria
+		let route_key = strng::format!("llm:model:{}:{idx}", model_config.name);
+		let user_matches = if model_config.matches.is_empty() {
+			vec![RouteMatch {
+				path: PathMatch::PathPrefix(strng::new("/")),
+				method: None,
+				headers: vec![],
+				query: vec![],
+			}]
+		} else {
+			model_config
+				.matches
+				.iter()
+				.map(|m| RouteMatch {
+					headers: m.headers.clone(),
+					path: PathMatch::PathPrefix(strng::new("/")),
+					method: None,
+					query: vec![],
+				})
+				.collect_vec()
+		};
+		let matches = user_matches
+			.into_iter()
+			.map(|mut m| {
+				let header_match = HeaderMatch {
+					name: HeaderOrPseudo::Header(HeaderName::from_static("x-gateway-model-name")),
+					value: llm_model_name_header_match(&model_config.name)?,
+				};
+				m.headers.push(header_match);
+				Ok(m)
+			})
+			.collect::<anyhow::Result<Vec<_>>>()?;
+
+		let model_route = Route {
+			key: route_key.clone(),
+			name: RouteName {
+				name: strng::format!("model:{}", model_config.name),
+				namespace: strng::new("internal"),
+				rule_name: None,
+				kind: None,
+			},
+			hostnames: vec![],
+			matches,
+			backends: vec![RouteBackendReference {
+				weight: 1,
+				backend: BackendReference::Backend(strng::format!("/{}", backend_key)),
+				inline_policies: vec![],
+			}],
+			inline_policies: vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
+				routes: [
+					(
+						strng::new("/v1/chat/completions"),
+						crate::llm::RouteType::Completions,
+					),
+					(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
+					// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
+					(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
+					(
+						strng::new(":streamRawPredict"),
+						crate::llm::RouteType::Messages,
+					),
+					(
+						strng::new("/v1/responses"),
+						crate::llm::RouteType::Responses,
+					),
+					(
+						strng::new("/v1/embeddings"),
+						crate::llm::RouteType::Embeddings,
+					),
+					(strng::new("*"), crate::llm::RouteType::Passthrough),
+				]
+				.into_iter()
+				.collect(),
+				..Default::default()
+			}))],
+		};
+		routes.insert(model_route);
+	}
+
+	// Create listener
+	let listener_key: ListenerKey = strng::new("llm");
+	let listener_name = ListenerName {
+		gateway_name: gateway.gateway_name.clone(),
+		gateway_namespace: gateway.gateway_namespace.clone(),
+		listener_name: strng::new("llm"),
+		listener_set: None,
+	};
+	let listener = Listener {
+		key: listener_key.clone(),
+		name: listener_name.clone(),
+		hostname: strng::new("*"),
+		protocol: ListenerProtocol::HTTP,
+		routes,
+		tcp_routes: Default::default(),
+	};
+
+	if let Some(pol) = llm_config.policies {
+		let route_pols = split_policies(
+			client.clone(),
+			FilterOrPolicy {
+				authorization: pol.authorization.clone(),
+				..Default::default()
+			},
+		)
+		.await?;
+		let pols = split_policies(client.clone(), pol.gateway.into()).await?;
+
+		let pc = pols.route_policies.len();
+		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
+			let key = strng::format!("listener/{idx}");
+			all_policies.push(TargetedPolicy {
+				key: key.clone(),
+				name: None,
+				target: PolicyTarget::Gateway(listener_name.clone().into()),
+				policy: (pol, PolicyPhase::Gateway).into(),
+			})
+		}
+		for (idx, pol) in route_pols.route_policies.into_iter().enumerate() {
+			let key = strng::format!("listener/{}", pc + idx);
+			all_policies.push(TargetedPolicy {
+				key: key.clone(),
+				name: None,
+				target: PolicyTarget::Gateway(listener_name.clone().into()),
+				policy: (pol, PolicyPhase::Route).into(),
+			})
+		}
+	}
+
+	// Create transformation policy for the listener
+	let listener_target: ListenerTarget = listener_name.clone().into();
+	let transformation_policy = TargetedPolicy {
+		name: Some(TypedResourceName {
+			kind: strng::literal!("Local"),
+			name: strng::new("llm:transformation"),
+			namespace: strng::new("internal"),
+		}),
+		key: strng::new("llm:transformation"),
+		target: PolicyTarget::Gateway(listener_target),
+		policy: PolicyType::from((
+			TrafficPolicy::Transformation(transformation),
+			PolicyPhase::Gateway,
+		)),
+	};
+	all_policies.push(transformation_policy);
+
+	let mut listener_set = ListenerSet::default();
+	listener_set.insert(listener);
+
+	// Create bind
+	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
+		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), DEFAULT_LLM_PORT)
+	} else {
+		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_LLM_PORT)
+	};
+
+	let bind = Bind {
+		key: strng::format!("bind/{}", DEFAULT_LLM_PORT),
+		address: sockaddr,
+		protocol: BindProtocol::http,
+		listeners: listener_set,
+		tunnel_protocol: TunnelProtocol::Direct,
+	};
+
+	Ok((bind, all_policies, all_backends))
+}
+
+async fn convert_mcp_config(
+	client: client::Client,
+	config: &crate::Config,
+	gateway: ListenerTarget,
+	mcp_config: LocalSimpleMcpConfig,
+) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
+	let LocalSimpleMcpConfig {
+		port,
+		backend,
+		policies,
+	} = mcp_config;
+
+	let resolved_policies = if let Some(pol) = policies {
+		split_policies(client, pol).await?
+	} else {
+		ResolvedPolicies::default()
+	};
+
+	let mut routes = RouteSet::default();
+	let route = Route {
+		key: strng::new("mcp:default"),
+		name: RouteName {
+			name: strng::new("default"),
+			namespace: strng::new("internal"),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: vec![],
+		matches: default_matches(),
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			backend: BackendReference::Backend(strng::new("/mcp")),
+			inline_policies: resolved_policies.backend_policies,
+		}],
+		inline_policies: resolved_policies.route_policies,
+	};
+	routes.insert(route);
+
+	let listener_key: ListenerKey = strng::new("mcp");
+	let listener_name = ListenerName {
+		gateway_name: gateway.gateway_name.clone(),
+		gateway_namespace: gateway.gateway_namespace.clone(),
+		listener_name: strng::new("mcp"),
+		listener_set: None,
+	};
+	let listener = Listener {
+		key: listener_key,
+		name: listener_name,
+		hostname: strng::new("*"),
+		protocol: ListenerProtocol::HTTP,
+		routes,
+		tcp_routes: Default::default(),
+	};
+
+	let mut listener_set = ListenerSet::default();
+	listener_set.insert(listener);
+
+	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
+		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+	} else {
+		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
+	};
+
+	let bind = Bind {
+		key: strng::format!("bind/{}", port),
+		address: sockaddr,
+		protocol: BindProtocol::http,
+		listeners: listener_set,
+		tunnel_protocol: TunnelProtocol::Direct,
+	};
+
+	let backends = LocalBackend::MCP(backend).as_backends(local_name(strng::new("mcp")))?;
+
+	Ok((bind, vec![], backends))
 }
 
 fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
@@ -1035,7 +1609,6 @@ async fn convert_listener(
 	idx: usize,
 	l: LocalListener,
 	bind_key: Strng,
-	frontend_policies: Option<LocalFrontendPolicies>,
 	gateway: ListenerTarget,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalListener {
@@ -1094,16 +1667,6 @@ async fn convert_listener(
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
-
-	// Add frontend policies targeted to this listener
-	if let Some(frontend_pols) = frontend_policies {
-		let listener_target = ListenerTarget {
-			gateway_name: gateway_name.clone(),
-			gateway_namespace: gateway_namespace.clone(),
-			listener_name: None,
-		};
-		all_policies.extend_from_slice(&split_frontend_policies(listener_target, frontend_pols).await?);
-	}
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {

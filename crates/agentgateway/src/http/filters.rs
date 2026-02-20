@@ -146,6 +146,7 @@ impl UrlRewrite {
 
 #[apply(schema!)]
 pub struct DirectResponse {
+	#[serde(serialize_with = "serdes::serde_base64::serialize")]
 	pub body: Bytes,
 	#[serde(with = "http_serde::status_code")]
 	#[cfg_attr(feature = "schema", schemars(with = "std::num::NonZeroU16"))]

@@ -1,0 +1,27 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 108
+description: "anthropic: request_anthropic_reasoning"
+info:
+  model: claude-opus-4-6
+  max_tokens: 1024
+  thinking:
+    type: adaptive
+  output_config:
+    effort: high
+  messages:
+    - role: user
+      content: Give one concise insight about distributed consensus.
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Give one concise insight about distributed consensus."
+    }
+  ],
+  "model": "claude-opus-4-6",
+  "reasoning_effort": "high",
+  "max_completion_tokens": 1024,
+  "stream": false
+}

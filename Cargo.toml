@@ -83,7 +83,12 @@ futures = "0.3"
 futures-channel = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-google-cloud-auth = { version = "1.6", default-features = false, features = ["idtoken"] }
+google-cloud-auth = { version = "1.6", default-features = false, features = [
+    "idtoken",
+    # They use AWS-LC which is what we want so its fine. If they changed we would need to switch
+    # To installing a global default which is annoying so prefer to do it this way.
+    "default-rustls-provider",
+] }
 hashbrown = "0.16"
 h2 = "0.4"
 headers = "0.4"
@@ -100,7 +105,7 @@ hyper-util = { version = "0.1", features = ["full"] }
 hyper-util-fork = { path = "crates/hyper-util-fork", features = ["full"] }
 include_dir = "0.7"
 indexmap = { version = "2.9", features = ["serde"] }
-insta = { version = "1.38", features = ["json", "redactions", "filters"] }
+insta = { version = "1.38", features = ["json", "redactions", "filters", "yaml"] }
 ipnet = { version = "2.11", features = ["serde"] }
 itertools = "0.14"
 jsonwebtoken = { version = "10.3", features = ["aws_lc_rs"] }
