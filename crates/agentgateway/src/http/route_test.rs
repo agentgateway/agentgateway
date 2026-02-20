@@ -833,9 +833,7 @@ fn stores_with_services(services: Vec<Service>) -> Stores {
 		discovery_store.insert_service_internal(svc);
 	}
 	Stores {
-		discovery: crate::store::DiscoveryStoreUpdater::new(
-			Arc::new(RwLock::new(discovery_store)),
-		),
+		discovery: crate::store::DiscoveryStoreUpdater::new(Arc::new(RwLock::new(discovery_store))),
 		binds: crate::store::BindStoreUpdater::new(Arc::new(RwLock::new(
 			crate::store::BindStore::with_ipv6_enabled(true),
 		))),
@@ -898,7 +896,11 @@ async fn test_waypoint_hostname_match() {
 		namespace: strng::new("istio-system"),
 	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request("http://my-app.default.svc.cluster.local/", http::Method::GET, &[]);
+	let req = request(
+		"http://my-app.default.svc.cluster.local/",
+		http::Method::GET,
+		&[],
+	);
 	let listener = hbone_listener();
 
 	let result = super::select_best_route(
@@ -937,7 +939,11 @@ async fn test_waypoint_hostname_mismatch() {
 		namespace: strng::new("istio-system"),
 	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request("http://my-app.default.svc.cluster.local/", http::Method::GET, &[]);
+	let req = request(
+		"http://my-app.default.svc.cluster.local/",
+		http::Method::GET,
+		&[],
+	);
 	let listener = hbone_listener();
 
 	let result = super::select_best_route(
@@ -948,7 +954,10 @@ async fn test_waypoint_hostname_mismatch() {
 		&listener,
 		&req,
 	);
-	assert!(result.is_none(), "should reject service bound to a different waypoint");
+	assert!(
+		result.is_none(),
+		"should reject service bound to a different waypoint"
+	);
 }
 
 #[tokio::test]
@@ -974,7 +983,11 @@ async fn test_waypoint_hostname_fqdn_match() {
 		namespace: strng::new("istio-system"),
 	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request("http://my-app.default.svc.cluster.local/", http::Method::GET, &[]);
+	let req = request(
+		"http://my-app.default.svc.cluster.local/",
+		http::Method::GET,
+		&[],
+	);
 	let listener = hbone_listener();
 
 	let result = super::select_best_route(
@@ -1021,7 +1034,11 @@ async fn test_waypoint_address_match() {
 		namespace: strng::new("istio-system"),
 	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request("http://my-app.default.svc.cluster.local/", http::Method::GET, &[]);
+	let req = request(
+		"http://my-app.default.svc.cluster.local/",
+		http::Method::GET,
+		&[],
+	);
 	let listener = hbone_listener();
 
 	let result = super::select_best_route(
@@ -1069,7 +1086,11 @@ async fn test_waypoint_address_mismatch() {
 		namespace: strng::new("istio-system"),
 	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request("http://my-app.default.svc.cluster.local/", http::Method::GET, &[]);
+	let req = request(
+		"http://my-app.default.svc.cluster.local/",
+		http::Method::GET,
+		&[],
+	);
 	let listener = hbone_listener();
 
 	let result = super::select_best_route(
@@ -1080,7 +1101,10 @@ async fn test_waypoint_address_mismatch() {
 		&listener,
 		&req,
 	);
-	assert!(result.is_none(), "should reject service bound to a different waypoint address");
+	assert!(
+		result.is_none(),
+		"should reject service bound to a different waypoint address"
+	);
 }
 
 #[tokio::test]
@@ -1100,7 +1124,11 @@ async fn test_waypoint_no_waypoint_on_service() {
 		namespace: strng::new("istio-system"),
 	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request("http://my-app.default.svc.cluster.local/", http::Method::GET, &[]);
+	let req = request(
+		"http://my-app.default.svc.cluster.local/",
+		http::Method::GET,
+		&[],
+	);
 	let listener = hbone_listener();
 
 	let result = super::select_best_route(
@@ -1111,7 +1139,10 @@ async fn test_waypoint_no_waypoint_on_service() {
 		&listener,
 		&req,
 	);
-	assert!(result.is_none(), "should return None for service without waypoint");
+	assert!(
+		result.is_none(),
+		"should return None for service without waypoint"
+	);
 }
 
 #[tokio::test]
@@ -1133,7 +1164,11 @@ async fn test_waypoint_no_self_addr() {
 	);
 	let stores = stores_with_services(vec![svc]);
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request("http://my-app.default.svc.cluster.local/", http::Method::GET, &[]);
+	let req = request(
+		"http://my-app.default.svc.cluster.local/",
+		http::Method::GET,
+		&[],
+	);
 	let listener = hbone_listener();
 
 	let result = super::select_best_route(
@@ -1144,7 +1179,10 @@ async fn test_waypoint_no_self_addr() {
 		&listener,
 		&req,
 	);
-	assert!(result.is_none(), "should return None when self_addr is not configured");
+	assert!(
+		result.is_none(),
+		"should return None when self_addr is not configured"
+	);
 }
 
 #[tokio::test]

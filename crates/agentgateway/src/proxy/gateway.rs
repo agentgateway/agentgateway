@@ -906,16 +906,14 @@ impl Gateway {
 		// Determine protocol from service discovery to route HTTP vs TCP
 		let is_http = {
 			let discovery = pi.stores.read_discovery();
-			let svc = discovery.services.get_by_vip(
-				&crate::types::discovery::NetworkAddress {
+			let svc = discovery
+				.services
+				.get_by_vip(&crate::types::discovery::NetworkAddress {
 					network: pi.cfg.network.clone(),
 					address: socket_addr.ip(),
-				},
-			);
+				});
 			match svc {
-				Some(svc) => {
-				svc.port_is_http1(socket_addr.port()) || svc.port_is_http2(socket_addr.port())
-			}
+				Some(svc) => svc.port_is_http1(socket_addr.port()) || svc.port_is_http2(socket_addr.port()),
 				// If we can't find the service, default to HTTP (existing behavior)
 				None => true,
 			}
@@ -923,15 +921,7 @@ impl Gateway {
 
 		let socket = Socket::from_hbone(ext, socket_addr, con);
 		if is_http {
-			let _ = Self::proxy(
-				bind_name,
-				pi,
-				None,
-				socket,
-				policies.clone(),
-				drain,
-			)
-			.await;
+			let _ = Self::proxy(bind_name, pi, None, socket, policies.clone(), drain).await;
 		} else {
 			// TCP: create a synthetic HBONE listener for the TCP proxy path
 			let listener = Arc::new(Listener {

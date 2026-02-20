@@ -123,7 +123,7 @@ impl WaypointIdentity {
 					self.gateway, self.namespace
 				);
 				false
-			}
+			},
 		}
 	}
 }
