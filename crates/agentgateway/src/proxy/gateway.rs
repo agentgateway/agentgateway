@@ -851,41 +851,67 @@ impl Gateway {
 			},
 		};
 
-		let hbone_addr = match parsed_addr {
-			HboneAddress::SocketAddr(addr) => HboneAddress::from(addr),
-			HboneAddress::SvcHostname(hostname, port) => {
-				// Try service registry lookup
-				let hostname_str = hostname.to_string();
-				let svc = find_service_by_hostname(&pi.stores.read_discovery(), &hostname_str);
+		// Resolve the HBONE address to a socket address and detect the service protocol
+		// in a single discovery store lookup to avoid redundant read locks.
+		let (socket_addr, is_http) = {
+			let discovery = pi.stores.read_discovery();
+			let network = &pi.cfg.network;
 
-				let vip = if let Some(svc) = svc {
-					// Found in service registry, get VIP for current network
-					let network = &pi.cfg.network;
-					if let Some(vip) = svc
-						.vips
-						.iter()
-						.find(|vip| vip.network == *network)
-						.or_else(|| svc.vips.first())
-					{
-						vip.address
+			let resolved_addr = match parsed_addr {
+				HboneAddress::SocketAddr(addr) => addr,
+				HboneAddress::SvcHostname(hostname, port) => {
+					let hostname_str = hostname.to_string();
+					let svc = find_service_by_hostname(&discovery, &hostname_str);
+
+					let vip = if let Some(svc) = svc {
+						if let Some(vip) = svc
+							.vips
+							.iter()
+							.find(|vip| vip.network == *network)
+							.or_else(|| svc.vips.first())
+						{
+							vip.address
+						} else {
+							warn!(
+								bind=?bind_name,
+								hostname=%hostname_str,
+								"serve_waypoint_connect: no VIP found for service"
+							);
+							return;
+						}
 					} else {
 						warn!(
 							bind=?bind_name,
 							hostname=%hostname_str,
-							"serve_waypoint_connect: no VIP found for service"
+							"serve_waypoint_connect: no service found for hostname"
 						);
 						return;
-					}
-				} else {
-					warn!(
-						bind=?bind_name,
-						hostname=%hostname_str,
-						"serve_waypoint_connect: no service found for hostname"
-					);
-					return;
-				};
-				HboneAddress::from(SocketAddr::from((vip, port)))
-			},
+					};
+					SocketAddr::from((vip, port))
+				},
+			};
+
+			// Determine protocol: explicitly HTTP services use HTTP proxy,
+			// everything else (unknown protocol, TCP, no service) defaults to HTTP
+			// since HTTP is the most common protocol in Kubernetes environments.
+			let svc = discovery
+				.services
+				.get_by_vip(&crate::types::discovery::NetworkAddress {
+					network: network.clone(),
+					address: resolved_addr.ip(),
+				});
+			let is_http = match svc {
+				Some(svc) => {
+					// Only route to TCP if the service has an explicit non-HTTP protocol.
+					// Services without protocol annotations default to HTTP.
+					!svc.app_protocols.contains_key(&resolved_addr.port())
+						|| svc.port_is_http1(resolved_addr.port())
+						|| svc.port_is_http2(resolved_addr.port())
+				},
+				None => true,
+			};
+
+			(resolved_addr, is_http)
 		};
 
 		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
@@ -896,27 +922,6 @@ impl Gateway {
 			stream: resp,
 			buf: Bytes::new(),
 			drain_tx: None,
-		};
-
-		let socket_addr = hbone_addr
-			.socket_addr()
-			.ok_or_else(|| anyhow::anyhow!("hbone_addr should be resolved to SocketAddr"))
-			.unwrap();
-
-		// Determine protocol from service discovery to route HTTP vs TCP
-		let is_http = {
-			let discovery = pi.stores.read_discovery();
-			let svc = discovery
-				.services
-				.get_by_vip(&crate::types::discovery::NetworkAddress {
-					network: pi.cfg.network.clone(),
-					address: socket_addr.ip(),
-				});
-			match svc {
-				Some(svc) => svc.port_is_http1(socket_addr.port()) || svc.port_is_http2(socket_addr.port()),
-				// If we can't find the service, default to HTTP (existing behavior)
-				None => true,
-			}
 		};
 
 		let socket = Socket::from_hbone(ext, socket_addr, con);
