@@ -3012,12 +3012,16 @@
 |`llm.policies.jwtAuth.(any)(any)providers[].jwks`||
 |`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`llm.policies.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`llm.policies.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.jwtAuth.(any)(any)mode`||
 |`llm.policies.jwtAuth.(any)(any)issuer`||
 |`llm.policies.jwtAuth.(any)(any)audiences`||
 |`llm.policies.jwtAuth.(any)(any)jwks`||
 |`llm.policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`llm.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`llm.policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`llm.policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`llm.policies.extAuthz.(any)(1)service`||
 |`llm.policies.extAuthz.(any)(1)service.name`||
@@ -3328,6 +3332,8 @@
 |`mcp.policies.mcpAuthentication.jwks.(any)file`||
 |`mcp.policies.mcpAuthentication.jwks.(any)url`||
 |`mcp.policies.mcpAuthentication.mode`||
+|`mcp.policies.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`||
@@ -3832,12 +3838,16 @@
 |`mcp.policies.jwtAuth.(any)(any)providers[].jwks`||
 |`mcp.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`mcp.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
+|`mcp.policies.jwtAuth.(any)(any)providers[].jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`mcp.policies.jwtAuth.(any)(any)providers[].jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.jwtAuth.(any)(any)mode`||
 |`mcp.policies.jwtAuth.(any)(any)issuer`||
 |`mcp.policies.jwtAuth.(any)(any)audiences`||
 |`mcp.policies.jwtAuth.(any)(any)jwks`||
 |`mcp.policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`mcp.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`mcp.policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
+|`mcp.policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`mcp.policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`mcp.policies.basicAuth.htpasswd.(any)file`||
