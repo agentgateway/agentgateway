@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/mesh"
+	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/network"
 	"istio.io/istio/pkg/ptr"
@@ -281,7 +282,8 @@ func (s *Syncer) buildAgwResources(
 	binds := krt.NewManyCollection(ports, func(ctx krt.HandlerContext, object krt.IndexObject[string, *translator.GatewayListener]) []agwir.AgwResource {
 		port, _ := strconv.Atoi(object.Key)
 		uniq := sets.New[types.NamespacedName]()
-		var protocol = api.Bind_Protocol(0)
+		var bindProtocol = api.Bind_Protocol(0)
+		var tunnelProtocol = api.Bind_DIRECT
 		for _, gw := range object.Objects {
 			uniq.Insert(types.NamespacedName{
 				Namespace: gw.ParentGateway.Namespace,
@@ -289,15 +291,20 @@ func (s *Syncer) buildAgwResources(
 			})
 			// TODO: better handle conflicts of protocols. For now, we arbitrarily treat TLS > plain
 			if gw.Valid {
-				protocol = max(protocol, s.getBindProtocol(gw))
+				bindProtocol = max(bindProtocol, s.getBindProtocol(gw))
+				if tp := s.getTunnelProtocol(gw); tp != api.Bind_DIRECT {
+					tunnelProtocol = tp
+				}
 			}
 		}
+
 		return slices.Map(uniq.UnsortedList(), func(e types.NamespacedName) agwir.AgwResource {
 			bind := translator.AgwBind{
 				Bind: &api.Bind{
-					Key:      object.Key + "/" + e.String(),
-					Port:     uint32(port), //nolint:gosec // G115: port is always in valid port range
-					Protocol: protocol,
+					Key:            object.Key + "/" + e.String(),
+					Port:           uint32(port), //nolint:gosec // G115: port is always in valid port range
+					Protocol:       bindProtocol,
+					TunnelProtocol: tunnelProtocol,
 				},
 			}
 			return translator.ToResourceForGateway(e, bind)
@@ -422,12 +429,19 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 		return api.Protocol_TLS, tlsConfig, true
 	case gwv1.TCPProtocolType:
 		return api.Protocol_TCP, nil, true
+	// Istio ambient mesh waypoint protocols — after tunnel termination the inner
+	// protocol is HTTP, but HBONE must be signaled to the proxy so it activates
+	// the default passthrough route for unmatched service traffic.
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Protocol_HBONE, nil, true
 	default:
 		return api.Protocol_HTTP, nil, false // Unsupported protocol
 	}
 }
 
-// getProtocolAndTLSConfig extracts protocol and TLS configuration from a gateway
+// getBindProtocol maps a Gateway listener protocol to the agentgateway Bind protocol.
+// Istio ambient mesh waypoint protocols (HBONE) map to HTTP since the
+// inner protocol after tunnel termination is HTTP.
 func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Protocol {
 	switch obj.ParentInfo.Protocol {
 	case gwv1.HTTPProtocolType:
@@ -438,8 +452,22 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 		return api.Bind_TLS
 	case gwv1.TCPProtocolType:
 		return api.Bind_TCP
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Bind_HTTP // HBONE wraps HTTP — inner protocol is HTTP after tunnel termination
 	default:
 		return api.Bind_HTTP
+	}
+}
+
+// getTunnelProtocol determines the tunnel protocol for a Gateway listener.
+// Istio ambient mesh waypoint protocols require specific tunnel termination:
+//   - HBONE: HBONE_WAYPOINT — proxy terminates ztunnel's HBONE (HTTP/2 CONNECT over mTLS)
+func (s *Syncer) getTunnelProtocol(obj *translator.GatewayListener) api.Bind_TunnelProtocol {
+	switch obj.ParentInfo.Protocol {
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Bind_HBONE_WAYPOINT
+	default:
+		return api.Bind_DIRECT
 	}
 }
 
