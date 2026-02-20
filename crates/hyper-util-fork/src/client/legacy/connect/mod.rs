@@ -68,10 +68,8 @@ use std::sync::Arc;
 
 use ::http::Extensions;
 
-#[cfg(feature = "tokio")]
 pub use self::http::HttpInfo;
 
-#[cfg(feature = "tokio")]
 mod http;
 
 pub(crate) mod capture;

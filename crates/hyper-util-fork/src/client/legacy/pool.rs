@@ -65,7 +65,6 @@ pub enum Reservation<T> {
 	/// This connection could be used multiple times, the first one will be
 	/// reinserted into the `idle` pool, and the second will be given to
 	/// the `Checkout`.
-	#[cfg(feature = "http2")]
 	Shared(T, T),
 	/// This connection requires unique access. It will be returned after
 	/// use is complete.
@@ -201,30 +200,9 @@ impl<T: Poolable, K: Key> Pool<T, K> {
 		self.inner.as_ref().expect("enabled").lock().expect("lock")
 	}
 
-	// Used in client/tests.rs...
-	// #[cfg(test)]
-	// pub(super) fn h1_key(&self, s: &str) -> Key {
-	// Arc::new(s.to_string())
-	// }
-	//
-	// #[cfg(test)]
-	// pub(super) fn idle_count(&self, key: &Key) -> usize {
-	// self
-	// .locked()
-	// .idle
-	// .get(key)
-	// .map(|list| list.len())
-	// .unwrap_or(0)
-	// }
-
-	pub fn pooled(
-		&self,
-		#[cfg_attr(not(feature = "http2"), allow(unused_mut))] mut connecting: Connecting<T, K>,
-		value: T,
-	) -> Pooled<T, K> {
+	pub fn pooled(&self, mut connecting: Connecting<T, K>, value: T) -> Pooled<T, K> {
 		let (value, pool_ref) = if let Some(ref enabled) = self.inner {
 			match value.reserve() {
-				#[cfg(feature = "http2")]
 				Reservation::Shared(to_insert, to_return) => {
 					let mut inner = enabled.lock().unwrap();
 					inner.put(connecting.key.clone(), to_insert, enabled);
@@ -314,7 +292,6 @@ impl<'a, T: Poolable + 'a, K: Debug> IdlePopper<'a, T, K> {
 			}
 
 			let value = match entry.value.reserve() {
-				#[cfg(feature = "http2")]
 				Reservation::Shared(to_reinsert, to_checkout) => {
 					self.list.push(Idle {
 						idle_at: Instant::now(),
@@ -349,7 +326,6 @@ impl<T: Poolable, K: Key> PoolInner<T, K> {
 				if !tx.is_canceled() {
 					let reserved = value.take().expect("value already sent");
 					let reserved = match reserved.reserve() {
-						#[cfg(feature = "http2")]
 						Reservation::Shared(to_keep, to_send) => {
 							value = Some(to_keep);
 							to_send
@@ -828,10 +804,11 @@ mod tests {
 	use std::future::Future;
 	use std::hash::Hash;
 	use std::pin::Pin;
+	use std::sync::Arc;
 	use std::task::{self, Poll};
 	use std::time::Duration;
 
-	use super::{Connecting, Key, Pool, Poolable, Reservation, WeakOpt};
+	use super::{Connecting, Key, Pool, Poolable, Reservation, Ver, WeakOpt};
 	use crate::common::timer;
 	use crate::rt::{TokioExecutor, TokioTimer};
 

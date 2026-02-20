@@ -21,12 +21,6 @@
 //! [tower]: https://docs.rs/tower/latest/tower/
 //! [tower-svc]: https://docs.rs/tower/latest/tower/trait.Service.html
 
-#[cfg(feature = "service")]
-mod glue;
-#[cfg(any(feature = "client-legacy", feature = "service"))]
 mod oneshot;
 
-#[cfg(feature = "service")]
-pub use self::glue::{TowerToHyperService, TowerToHyperServiceFuture};
-#[cfg(any(feature = "client-legacy", feature = "service"))]
 pub(crate) use self::oneshot::Oneshot;
