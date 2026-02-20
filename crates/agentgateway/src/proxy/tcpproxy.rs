@@ -17,7 +17,7 @@ use crate::types::agent::{
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference,
 	TransportProtocol,
 };
-use crate::types::discovery::NetworkAddress;
+use crate::types::discovery::{NetworkAddress, WaypointIdentity, gatewayaddress::Destination};
 use crate::{ProxyInputs, Stores, *};
 
 #[derive(Clone)]
@@ -114,6 +114,7 @@ impl TCPProxy {
 			&self.inputs.stores,
 			&self.inputs.cfg.network,
 			self.target_address,
+			self.inputs.cfg.self_addr.as_ref(),
 		)
 		.ok_or(ProxyError::RouteNotFound)?;
 		log.route_name = Some(selected_route.name.clone());
@@ -188,6 +189,7 @@ fn select_best_route(
 	stores: &Stores,
 	network: &Strng,
 	dst: SocketAddr,
+	self_addr: Option<&WaypointIdentity>,
 ) -> Option<Arc<TCPRoute>> {
 	// TCP matching is much simpler than HTTP.
 	// We pick the best matching hostname, else fallback to precedence:
@@ -206,22 +208,57 @@ fn select_best_route(
 
 	// For HBONE waypoints, generate a default passthrough route to the service
 	if matches!(listener.protocol, ListenerProtocol::HBONE) {
-		return waypoint_default_tcp_route(stores, network, dst);
+		return waypoint_default_tcp_route(stores, network, dst, self_addr);
 	}
 	None
 }
 
 /// Generate a default TCP route for waypoint proxies, routing to the service
 /// identified by the destination VIP. Mirrors the HTTP default route in route.rs.
+/// Includes waypoint self-verification: the service must have a waypoint config
+/// that matches this proxy instance.
 fn waypoint_default_tcp_route(
 	stores: &Stores,
 	network: &Strng,
 	dst: SocketAddr,
+	self_addr: Option<&WaypointIdentity>,
 ) -> Option<Arc<TCPRoute>> {
+	let self_id = self_addr.or_else(|| {
+		warn!("waypoint requires self address for TCP routing");
+		None
+	})?;
+
 	let svc = stores.read_discovery().services.get_by_vip(&NetworkAddress {
 		network: network.clone(),
 		address: dst.ip(),
 	})?;
+
+	// Verify the service is bound to this waypoint
+	let wp = svc.waypoint.as_ref()?;
+	let is_ours = match &wp.destination {
+		Destination::Address(addr) => {
+			let stores_ref = stores.clone();
+			self_id.matches_address(addr, |ns, hostname| {
+				let discovery = stores_ref.read_discovery();
+				let self_svc = discovery.services.get_by_namespaced_host(
+					&crate::types::discovery::NamespacedHostname {
+						namespace: ns.clone(),
+						hostname: hostname.clone(),
+					},
+				)?;
+				Some(self_svc.vips.clone())
+			})
+		},
+		Destination::Hostname(n) => self_id.matches_hostname(n),
+	};
+	if !is_ours {
+		warn!(
+			"service {} is meant for waypoint {:?}, but we are {}.{}",
+			svc.hostname, wp.destination, self_id.gateway, self_id.namespace
+		);
+		return None;
+	}
+
 	Some(Arc::new(TCPRoute {
 		key: strng::literal!("_waypoint-default-tcp").into(),
 		name: crate::types::agent::RouteName {
@@ -286,7 +323,7 @@ mod tests {
 	use crate::store::Stores;
 	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
 	use crate::types::discovery::{
-		GatewayAddress, NamespacedHostname, NetworkAddress, Service,
+		GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
 		gatewayaddress::Destination,
 	};
 
@@ -327,6 +364,29 @@ mod tests {
 		}
 	}
 
+	fn make_self_addr(gateway: &str, namespace: &str) -> WaypointIdentity {
+		WaypointIdentity {
+			gateway: strng::new(gateway),
+			namespace: strng::new(namespace),
+		}
+	}
+
+	fn hbone_listener() -> Arc<crate::types::agent::Listener> {
+		Arc::new(crate::types::agent::Listener {
+			key: Default::default(),
+			name: crate::types::agent::ListenerName {
+				gateway_name: strng::EMPTY,
+				gateway_namespace: strng::EMPTY,
+				listener_name: strng::literal!("test"),
+				listener_set: None,
+			},
+			hostname: Default::default(),
+			protocol: ListenerProtocol::HBONE,
+			tcp_routes: Default::default(),
+			routes: Default::default(),
+		})
+	}
+
 	#[tokio::test]
 	async fn test_waypoint_default_tcp_route_for_known_service() {
 		let svc = make_service(
@@ -346,8 +406,9 @@ mod tests {
 		let stores = stores_with_services(vec![svc]);
 		let network = strng::literal!("network");
 		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), 3306);
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
 
-		let route = super::waypoint_default_tcp_route(&stores, &network, dst);
+		let route = super::waypoint_default_tcp_route(&stores, &network, dst, Some(&self_addr));
 		assert!(route.is_some(), "should generate default TCP route for known service");
 		let route = route.unwrap();
 		assert_eq!(route.key.as_str(), "_waypoint-default-tcp");
@@ -366,9 +427,80 @@ mod tests {
 		let stores = stores_with_services(vec![]);
 		let network = strng::literal!("network");
 		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 99)), 3306);
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
 
-		let route = super::waypoint_default_tcp_route(&stores, &network, dst);
+		let route = super::waypoint_default_tcp_route(&stores, &network, dst, Some(&self_addr));
 		assert!(route.is_none(), "should return None for unknown VIP");
+	}
+
+	#[tokio::test]
+	async fn test_waypoint_default_tcp_route_wrong_waypoint() {
+		// Service is bound to a different waypoint
+		let svc = make_service(
+			"mysql-db",
+			"default",
+			"mysql-db.default.svc.cluster.local",
+			"10.0.0.50",
+			"network",
+			Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: strng::new("istio-system"),
+					hostname: strng::new("other-waypoint"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+		);
+		let stores = stores_with_services(vec![svc]);
+		let network = strng::literal!("network");
+		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), 3306);
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
+
+		let route = super::waypoint_default_tcp_route(&stores, &network, dst, Some(&self_addr));
+		assert!(route.is_none(), "should reject service bound to different waypoint");
+	}
+
+	#[tokio::test]
+	async fn test_waypoint_default_tcp_route_no_waypoint_config() {
+		// Service has no waypoint configuration
+		let svc = make_service(
+			"mysql-db",
+			"default",
+			"mysql-db.default.svc.cluster.local",
+			"10.0.0.50",
+			"network",
+			None, // No waypoint
+		);
+		let stores = stores_with_services(vec![svc]);
+		let network = strng::literal!("network");
+		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), 3306);
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
+
+		let route = super::waypoint_default_tcp_route(&stores, &network, dst, Some(&self_addr));
+		assert!(route.is_none(), "should reject service without waypoint config");
+	}
+
+	#[tokio::test]
+	async fn test_waypoint_default_tcp_route_no_self_addr() {
+		let svc = make_service(
+			"mysql-db",
+			"default",
+			"mysql-db.default.svc.cluster.local",
+			"10.0.0.50",
+			"network",
+			Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: strng::new("istio-system"),
+					hostname: strng::new("my-waypoint"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+		);
+		let stores = stores_with_services(vec![svc]);
+		let network = strng::literal!("network");
+		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), 3306);
+
+		let route = super::waypoint_default_tcp_route(&stores, &network, dst, None);
+		assert!(route.is_none(), "should return None when self_addr not configured");
 	}
 
 	#[tokio::test]
@@ -379,27 +511,20 @@ mod tests {
 			"redis.default.svc.cluster.local",
 			"10.0.0.60",
 			"network",
-			None,
+			Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: strng::new("default"),
+					hostname: strng::new("test-wp"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
 		);
 		let stores = stores_with_services(vec![svc]);
 		let network = strng::literal!("network");
 		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 60)), 6379);
+		let self_addr = make_self_addr("test-wp", "default");
 
-		let listener = Arc::new(crate::types::agent::Listener {
-			key: Default::default(),
-			name: crate::types::agent::ListenerName {
-				gateway_name: strng::EMPTY,
-				gateway_namespace: strng::EMPTY,
-				listener_name: strng::literal!("test"),
-				listener_set: None,
-			},
-			hostname: Default::default(),
-			protocol: ListenerProtocol::HBONE,
-			tcp_routes: Default::default(),
-			routes: Default::default(),
-		});
-
-		let route = super::select_best_route(None, listener, &stores, &network, dst);
+		let route = super::select_best_route(None, hbone_listener(), &stores, &network, dst, Some(&self_addr));
 		assert!(route.is_some(), "HBONE listener should generate default TCP route");
 		assert_eq!(route.unwrap().key.as_str(), "_waypoint-default-tcp");
 	}
@@ -424,7 +549,7 @@ mod tests {
 			routes: Default::default(),
 		});
 
-		let route = super::select_best_route(None, listener, &stores, &network, dst);
+		let route = super::select_best_route(None, listener, &stores, &network, dst, None);
 		assert!(route.is_none(), "non-HBONE listener should not generate default route");
 	}
 }
