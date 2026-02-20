@@ -84,6 +84,50 @@ impl fmt::Display for NamespacedHostname {
 	}
 }
 
+/// Structured identity for a waypoint proxy, used for self-verification
+/// when routing HBONE waypoint traffic.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct WaypointIdentity {
+	pub gateway: Strng,
+	pub namespace: Strng,
+}
+
+impl WaypointIdentity {
+	/// Returns the full Kubernetes FQDN for this waypoint.
+	pub fn hostname(&self) -> Strng {
+		strng::format!("{}.{}.svc.cluster.local", self.gateway, self.namespace)
+	}
+
+	/// Checks whether this waypoint identity matches a NamespacedHostname waypoint destination.
+	/// Handles both short names (e.g., "waypoint") and FQDNs (e.g., "waypoint.ns.svc.cluster.local").
+	pub fn matches_hostname(&self, nh: &NamespacedHostname) -> bool {
+		if nh.namespace == self.namespace && nh.hostname == self.gateway {
+			return true;
+		}
+		// Also check if hostname is a full FQDN
+		nh.hostname == self.hostname()
+	}
+
+	/// Checks whether this waypoint identity matches an Address-based waypoint destination
+	/// by looking up this waypoint's own service VIPs.
+	pub fn matches_address(
+		&self,
+		addr: &NetworkAddress,
+		get_self_vips: impl FnOnce(&Strng, &Strng) -> Option<Vec<NetworkAddress>>,
+	) -> bool {
+		match get_self_vips(&self.namespace, &self.hostname()) {
+			Some(vips) => vips.contains(addr),
+			None => {
+				warn!(
+					"waypoint {}.{} cannot find own service for address verification",
+					self.gateway, self.namespace
+				);
+				false
+			},
+		}
+	}
+}
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct NetworkAddress {
 	pub network: Strng,

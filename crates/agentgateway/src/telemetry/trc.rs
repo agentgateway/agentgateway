@@ -540,10 +540,8 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	if !pm.node_id.is_empty() && !pm.pod_name.is_empty() && !pm.pod_namespace.is_empty() {
 		attrs.push(KeyValue::new("service.instance.id", pm.node_id.clone()));
 	}
-	if let Some(host) = cfg.self_addr.as_deref()
-		&& !host.is_empty()
-	{
-		attrs.push(KeyValue::new("host.name", host.to_string()));
+	if let Some(ref self_id) = cfg.self_addr {
+		attrs.push(KeyValue::new("host.name", self_id.hostname().to_string()));
 	}
 	// Use gateway name/namespace as authoritative service identity
 	let service_name = cfg.xds.gateway.to_string();

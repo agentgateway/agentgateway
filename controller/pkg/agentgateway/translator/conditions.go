@@ -2,6 +2,7 @@ package translator
 
 import (
 	"istio.io/istio/pilot/pkg/model/kstatus"
+	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/slices"
@@ -144,6 +145,13 @@ func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
 			supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TCPRouteGVK)}
 		}
 		// UDP route not support
+	// Istio ambient mesh waypoint protocols — after tunnel termination the inner
+	// protocol is HTTP, so HTTPRoute and GRPCRoute are both valid.
+	case gwv1.ProtocolType(protocol.HBONE):
+		supported = []gwv1.RouteGroupKind{
+			toRouteKind(wellknown.HTTPRouteGVK),
+			toRouteKind(wellknown.GRPCRouteGVK),
+		}
 	}
 	if l.AllowedRoutes != nil && len(l.AllowedRoutes.Kinds) > 0 {
 		// We need to filter down to only ones we actually support
