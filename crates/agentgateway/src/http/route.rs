@@ -12,7 +12,7 @@ use crate::types::agent::{
 	QueryValueMatch, Route, RouteBackendReference, RouteName,
 };
 use crate::types::discovery::gatewayaddress::Destination;
-use crate::types::discovery::{NamespacedHostname, NetworkAddress};
+use crate::types::discovery::{NetworkAddress, WaypointIdentity};
 use crate::*;
 
 #[cfg(any(test, feature = "internal_benches"))]
@@ -22,7 +22,7 @@ mod tests;
 pub fn select_best_route(
 	stores: Stores,
 	network: Strng,
-	self_addr: Option<Strng>,
+	self_addr: Option<&WaypointIdentity>,
 	dst: SocketAddr,
 	listener: &Listener,
 	request: &Request,
@@ -45,14 +45,12 @@ pub fn select_best_route(
 	// criteria.
 
 	let host = http::get_host(request).ok()?;
-	// TODO: ensure we actually serve this service
 	let (default_response, host) = if matches!(listener.protocol, ListenerProtocol::HBONE) {
-		let Some(self_addr) = self_addr else {
+		let Some(self_id) = self_addr else {
 			warn!("waypoint requires self address");
 			return None;
 		};
 		// We are going to get a VIP request. Look up the Service
-		// TODO: add a mode to fallback to a DFP backend
 		let svc = stores
 			.read_discovery()
 			.services
@@ -61,38 +59,29 @@ pub fn select_best_route(
 				address: dst.ip(),
 			})?;
 		let wp = svc.waypoint.as_ref()?;
-		// Make sure the service is actually bound to us. TODO: should we have a more explicit setup?
-		match &wp.destination {
-			Destination::Address(aadr) => {
-				// TODO: this is pretty sketchy
-				let Some(ns) = self_addr.split(".").nth(1) else {
-					warn!("waypoint cannot find self namespace");
-					return None;
-				};
-				let self_svc =
-					stores
-						.read_discovery()
-						.services
-						.get_by_namespaced_host(&NamespacedHostname {
-							namespace: ns.into(),
-							hostname: self_addr,
-						})?;
-				if !self_svc.vips.contains(aadr) {
-					warn!(
-						"service {} is meant for waypoint {}, but we are {:?}",
-						svc.hostname, aadr, self_svc.vips,
-					);
-				}
+		// Make sure the service is actually bound to us
+		let is_ours = match &wp.destination {
+			Destination::Address(addr) => {
+				let stores_ref = stores.clone();
+				self_id.matches_address(addr, |ns, hostname| {
+					let discovery = stores_ref.read_discovery();
+					let self_svc = discovery.services.get_by_namespaced_host(
+						&crate::types::discovery::NamespacedHostname {
+							namespace: ns.clone(),
+							hostname: hostname.clone(),
+						},
+					)?;
+					Some(self_svc.vips.clone())
+				})
 			},
-			Destination::Hostname(n) => {
-				if n.hostname != self_addr {
-					warn!(
-						"service {} is meant for waypoint {}, but we are {}",
-						svc.hostname, n.hostname, self_addr
-					);
-					return None;
-				}
-			},
+			Destination::Hostname(n) => self_id.matches_hostname(n),
+		};
+		if !is_ours {
+			warn!(
+				"service {} is meant for waypoint {:?}, but we are {}.{}",
+				svc.hostname, wp.destination, self_id.gateway, self_id.namespace
+			);
+			return None;
 		}
 		// TODO: only build this if we don't match one
 		let default_route = Route {

@@ -12,7 +12,7 @@ use serde::de::DeserializeOwned;
 use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields};
 use crate::telemetry::trc;
-use crate::types::discovery::Identity;
+use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::{
 	Address, Config, ConfigSource, NestedRawConfig, RawLoggingLevel, StringOrInt, ThreadingMode,
 	XDSConfig, cel, client, serdes, telemetry,
@@ -110,12 +110,10 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 	};
 
 	let self_addr = if !xds.namespace.is_empty() && !xds.gateway.is_empty() {
-		// TODO: this is bad
-		Some(strng::format!(
-			"{}.{}.svc.cluster.local",
-			xds.gateway,
-			xds.namespace
-		))
+		Some(WaypointIdentity {
+			gateway: xds.gateway.clone().into(),
+			namespace: xds.namespace.clone().into(),
+		})
 	} else {
 		None
 	};

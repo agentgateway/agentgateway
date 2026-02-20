@@ -581,7 +581,7 @@ impl HTTPProxy {
 		let (selected_route, path_match) = http::route::select_best_route(
 			inputs.stores.clone(),
 			inputs.cfg.network.clone(),
-			inputs.cfg.self_addr.clone(),
+			inputs.cfg.self_addr.as_ref(),
 			self.target_address,
 			&selected_listener,
 			&req,
