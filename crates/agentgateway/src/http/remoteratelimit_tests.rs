@@ -506,9 +506,9 @@ fn build_request_non_string_cel_result_returns_none() {
 // --- FailureMode tests ---
 
 #[test]
-fn failure_mode_defaults_to_fail_open() {
+fn failure_mode_defaults_to_fail_closed() {
 	let mode = FailureMode::default();
-	assert_eq!(mode, FailureMode::FailOpen);
+	assert_eq!(mode, FailureMode::FailClosed);
 }
 
 #[test]
@@ -693,7 +693,7 @@ descriptors:
 }
 
 #[test]
-fn config_without_failure_mode_defaults_to_fail_open() {
+fn config_without_failure_mode_defaults_to_fail_closed() {
 	let yaml = r#"
 domain: "test"
 host: "127.0.0.1:8081"
@@ -706,7 +706,7 @@ descriptors:
 	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
 	assert_eq!(
 		rrl.failure_mode,
-		FailureMode::FailOpen,
-		"Missing failureMode should default to failOpen"
+		FailureMode::FailClosed,
+		"Missing failureMode should default to failClosed"
 	);
 }
