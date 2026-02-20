@@ -567,11 +567,10 @@ message TrafficPolicySpec {
       TOKENS = 1;
     }
     // Defines how the proxy behaves when the remote rate limit service is
-    // unavailable or returns an error. Defaults to FAIL_OPEN, matching Envoy's
-    // default behavior (failure_mode_deny=false).
+    // unavailable or returns an error. Defaults to FAIL_CLOSED
     enum FailureMode {
-      FAIL_OPEN = 0;
-      FAIL_CLOSED = 1;
+      FAIL_CLOSED = 0;
+      FAIL_OPEN = 1;
     }
     message Descriptor {
       repeated Entry entries = 1;

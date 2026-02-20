@@ -1387,11 +1387,11 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					));
 				}
 				let failure_mode = match tps::remote_rate_limit::FailureMode::try_from(rrl.failure_mode) {
-					Ok(tps::remote_rate_limit::FailureMode::FailClosed) => {
-						http::remoteratelimit::FailureMode::FailClosed
+					Ok(tps::remote_rate_limit::FailureMode::FailOpen) => {
+						http::remoteratelimit::FailureMode::FailOpen
 					},
-					// Default to FailOpen (matches Envoy's default behavior)
-					_ => http::remoteratelimit::FailureMode::FailOpen,
+					// Default to FailClosed (proto default is FAIL_CLOSED = 0)
+					_ => http::remoteratelimit::FailureMode::FailClosed,
 				};
 				TrafficPolicy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),

@@ -655,7 +655,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries[].value`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].type`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)timeout`|Timeout for the request|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failOpen, allowing requests through on service failure.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`binds[].listeners[].routes[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers`||
@@ -2223,7 +2223,7 @@
 |`policies[].policy.remoteRateLimit.(any)descriptors[].entries[].value`||
 |`policies[].policy.remoteRateLimit.(any)descriptors[].type`||
 |`policies[].policy.remoteRateLimit.(any)timeout`|Timeout for the request|
-|`policies[].policy.remoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failOpen, allowing requests through on service failure.|
+|`policies[].policy.remoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`policies[].policy.jwtAuth`|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.(any)(any)mode`||
 |`policies[].policy.jwtAuth.(any)(any)providers`||
@@ -3847,7 +3847,7 @@
 |`mcp.policies.remoteRateLimit.(any)descriptors[].entries[].value`||
 |`mcp.policies.remoteRateLimit.(any)descriptors[].type`||
 |`mcp.policies.remoteRateLimit.(any)timeout`|Timeout for the request|
-|`mcp.policies.remoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failOpen, allowing requests through on service failure.|
+|`mcp.policies.remoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`mcp.policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`mcp.policies.jwtAuth.(any)(any)mode`||
 |`mcp.policies.jwtAuth.(any)(any)providers`||

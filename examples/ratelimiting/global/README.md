@@ -62,10 +62,10 @@ The 500 returned to the client happens in these conditions:
 - Service unreachable - the rate limit server at the configured host:port is down, refused connection, or DNS resolution failed.
 - Connection timeout - the gRPC call exceeded the configured timeout duration (or the underlying channel timeout).
 - gRPC transport error - TLS handshake failure, connection reset, broken pipe, etc.
-- gRPC application error - the rate limit server returns a non-OK gRPC status (e.g., UNAVAILABLE, INTERNAL, DEADLINE_EXCEEDED, PERMISSION_DENIED).
-The error path here is strictly about infrastructure/communication failures, which is exactly why the fail-open option exists. It lets one degrade gracefully when the rate limit service itself has an outage.
+- gRPC application error - the rate limit server returns a non-OK gRPC status if it cannot be reached.
+The error path here is strictly about infrastructure/communication failures, which is exactly why the fail-open option exists. It lets one degrade gracefully when the rate limit service itself has an outage.  
 
-<br><br>The `jwtAuth` configuration uses the example JWT keys and tokens included for demonstration purposes only.
+The `jwtAuth` configuration uses the example JWT keys and tokens included for demonstration purposes only.
 
 ```yaml
 policies:

@@ -449,24 +449,23 @@ func (TrafficPolicySpec_RemoteRateLimit_Type) EnumDescriptor() ([]byte, []int) {
 }
 
 // Defines how the proxy behaves when the remote rate limit service is
-// unavailable or returns an error. Defaults to FAIL_OPEN, matching Envoy's
-// default behavior (failure_mode_deny=false).
+// unavailable or returns an error. Defaults to FAIL_CLOSED
 type TrafficPolicySpec_RemoteRateLimit_FailureMode int32
 
 const (
-	TrafficPolicySpec_RemoteRateLimit_FAIL_OPEN   TrafficPolicySpec_RemoteRateLimit_FailureMode = 0
-	TrafficPolicySpec_RemoteRateLimit_FAIL_CLOSED TrafficPolicySpec_RemoteRateLimit_FailureMode = 1
+	TrafficPolicySpec_RemoteRateLimit_FAIL_CLOSED TrafficPolicySpec_RemoteRateLimit_FailureMode = 0
+	TrafficPolicySpec_RemoteRateLimit_FAIL_OPEN   TrafficPolicySpec_RemoteRateLimit_FailureMode = 1
 )
 
 // Enum value maps for TrafficPolicySpec_RemoteRateLimit_FailureMode.
 var (
 	TrafficPolicySpec_RemoteRateLimit_FailureMode_name = map[int32]string{
-		0: "FAIL_OPEN",
-		1: "FAIL_CLOSED",
+		0: "FAIL_CLOSED",
+		1: "FAIL_OPEN",
 	}
 	TrafficPolicySpec_RemoteRateLimit_FailureMode_value = map[string]int32{
-		"FAIL_OPEN":   0,
-		"FAIL_CLOSED": 1,
+		"FAIL_CLOSED": 0,
+		"FAIL_OPEN":   1,
 	}
 )
 
@@ -6926,7 +6925,7 @@ func (x *TrafficPolicySpec_RemoteRateLimit) GetFailureMode() TrafficPolicySpec_R
 	if x != nil {
 		return x.FailureMode
 	}
-	return TrafficPolicySpec_RemoteRateLimit_FAIL_OPEN
+	return TrafficPolicySpec_RemoteRateLimit_FAIL_CLOSED
 }
 
 type TrafficPolicySpec_LocalRateLimit struct {
@@ -10771,9 +10770,9 @@ const file_resource_proto_rawDesc = "" +
 	"\bREQUESTS\x10\x00\x12\n" +
 	"\n" +
 	"\x06TOKENS\x10\x01\"-\n" +
-	"\vFailureMode\x12\r\n" +
-	"\tFAIL_OPEN\x10\x00\x12\x0f\n" +
-	"\vFAIL_CLOSED\x10\x01\x1a\x8d\x02\n" +
+	"\vFailureMode\x12\x0f\n" +
+	"\vFAIL_CLOSED\x10\x00\x12\r\n" +
+	"\tFAIL_OPEN\x10\x01\x1a\x8d\x02\n" +
 	"\x0eLocalRateLimit\x12\x1d\n" +
 	"\n" +
 	"max_tokens\x18\x01 \x01(\x04R\tmaxTokens\x12&\n" +

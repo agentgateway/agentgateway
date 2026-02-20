@@ -25,26 +25,24 @@ pub mod proto {
 /// Defines how the proxy behaves when the remote rate limit service is
 /// unavailable or returns an error.
 ///
-/// Defaults to `FailOpen`, matching Envoy's default behavior
-/// (`failure_mode_deny=false`). When failing open, requests are allowed
-/// through despite the service failure. When failing closed, a 500
-/// Internal Server Error is returned.
+/// Defaults to `FailClosed`. When failing closed, a 500 Internal Server Error
+/// is returned when the service is unavailable. When failing open, requests are
+/// allowed through despite the service failure.
 ///
 /// # Configuration
 ///
 /// Both camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,
-/// `FailClosed`) are accepted in configuration files for compatibility,
-/// though camelCase is the preferred format.
+/// `FailClosed`) are accepted in configuration files
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum FailureMode {
-	/// Allow the request through when the rate limit service is unavailable (default).
+	/// Deny the request with a 500 status when the rate limit service is unavailable (default).
 	#[default]
-	#[serde(rename = "failOpen", alias = "FailOpen")]
-	FailOpen,
-	/// Deny the request with a 500 status when the rate limit service is unavailable.
 	#[serde(rename = "failClosed", alias = "FailClosed")]
 	FailClosed,
+	/// Allow the request through when the rate limit service is unavailable.
+	#[serde(rename = "failOpen", alias = "FailOpen")]
+	FailOpen,
 }
 
 #[apply(schema!)]
@@ -62,7 +60,7 @@ pub struct RemoteRateLimit {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub timeout: Option<Duration>,
 	/// Behavior when the remote rate limit service is unavailable or returns an error.
-	/// Defaults to failOpen, allowing requests through on service failure.
+	/// Defaults to failClosed, denying requests with a 500 status on service failure.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
 }
@@ -257,10 +255,6 @@ impl RemoteRateLimit {
 			Ok(resp) => Self::apply(req, resp).map(|x| (x, Some(r))),
 			Err(e) => {
 				if self.failure_mode == FailureMode::FailOpen {
-					warn!(
-						"ratelimit service failed (domain: {}, failure_mode: failOpen): {:?}; allowing request",
-						self.domain, e
-					);
 					Ok((PolicyResponse::default(), Some(r)))
 				} else {
 					Err(e)
@@ -295,10 +289,6 @@ impl RemoteRateLimit {
 			Ok(cr) => Self::apply(req, cr),
 			Err(e) => {
 				if self.failure_mode == FailureMode::FailOpen {
-					warn!(
-						"ratelimit service failed (domain: {}, failure_mode: failOpen): {:?}; allowing request",
-						self.domain, e
-					);
 					Ok(PolicyResponse::default())
 				} else {
 					Err(e)
@@ -340,7 +330,17 @@ impl RemoteRateLimit {
 		let resp = client.should_rate_limit(request).await;
 		trace!("check response: {:?}", resp);
 		if let Err(ref error) = resp {
-			warn!("rate limit request failed: {:?}", error);
+			let ignore = self.failure_mode == FailureMode::FailOpen;
+			warn!(
+				"ratelimit service failed (domain: {}): {:?}; {}",
+				self.domain,
+				error,
+				if ignore {
+					"failure will be ignored (failure_mode: failOpen)"
+				} else {
+					"denying request (failure_mode: failClosed)"
+				}
+			);
 		}
 		let cr = resp.map_err(|_| ProxyError::RateLimitFailed)?;
 
