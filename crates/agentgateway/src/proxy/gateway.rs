@@ -913,7 +913,9 @@ impl Gateway {
 				},
 			);
 			match svc {
-				Some(svc) => svc.app_protocols.get(&socket_addr.port()).is_some(),
+				Some(svc) => {
+				svc.port_is_http1(socket_addr.port()) || svc.port_is_http2(socket_addr.port())
+			}
 				// If we can't find the service, default to HTTP (existing behavior)
 				None => true,
 			}

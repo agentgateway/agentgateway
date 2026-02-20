@@ -453,7 +453,10 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 	case gwv1.TCPProtocolType:
 		return api.Bind_TCP
 	case gwv1.ProtocolType(protocol.HBONE):
-		return api.Bind_HTTP // HBONE wraps HTTP — inner protocol is HTTP after tunnel termination
+		// HBONE can wrap HTTP or TCP — the bind protocol defaults to HTTP since
+		// that's the most common case, but routing to the actual proxy path (HTTP
+		// vs TCP) is determined at runtime based on service protocol detection.
+		return api.Bind_HTTP
 	default:
 		return api.Bind_HTTP
 	}
