@@ -564,7 +564,7 @@ mod azure {
 	///
 	/// Reference: <https://learn.microsoft.com/azure/developer/go/azure-sdk-authentication>
 	struct DefaultAzureCredential {
-		sources: Vec<Arc<dyn TokenCredential>>,
+		sources: Vec<(&'static str, Arc<dyn TokenCredential>)>,
 		/// Index of the source that first provided a token.
 		/// `usize::MAX` indicates no source has provided a token yet.
 		cached_source_index: AtomicUsize,
@@ -586,21 +586,23 @@ mod azure {
 			// If a credential has previously succeeded, use it directly.
 			let cached_index = self.cached_source_index.load(Ordering::Relaxed);
 			if cached_index != usize::MAX {
-				if let Some(source) = self.sources.get(cached_index) {
+				if let Some((name, source)) = self.sources.get(cached_index) {
+					trace!("DefaultAzureCredential: using cached credential: {name}");
 					return source.get_token(scopes, options).await;
 				}
 			}
 
 			// Try each credential in order, caching the first one that succeeds.
 			let mut errors = Vec::new();
-			for (index, source) in self.sources.iter().enumerate() {
+			for (index, (name, source)) in self.sources.iter().enumerate() {
 				match source.get_token(scopes, options.clone()).await {
 					Ok(token) => {
+						trace!("DefaultAzureCredential: authenticated with {name}");
 						self.cached_source_index.store(index, Ordering::Relaxed);
 						return Ok(token);
 					},
 					Err(error) => {
-						trace!("DefaultAzureCredential: credential at index {index} failed: {error}");
+						trace!("DefaultAzureCredential: {name} failed: {error}");
 						errors.push(error);
 					},
 				}
@@ -635,7 +637,36 @@ mod azure {
 			.join("\n")
 	}
 
-	fn token_credential_from_auth(
+	/// The IMDS endpoint used by ManagedIdentityCredential when no other
+	/// managed-identity source is detected via environment variables.
+	const IMDS_ADDR: &str = "169.254.169.254:80";
+
+	/// Quick TCP probe timeout. If we can't connect to IMDS within this
+	/// duration, skip ManagedIdentityCredential to avoid the SDK's long
+	/// retry loop (~99 s with 5 retries + exponential backoff).
+	const IMDS_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
+	/// Returns true if IMDS appears reachable (TCP connect within timeout).
+	async fn imds_is_reachable() -> bool {
+		tokio::time::timeout(
+			IMDS_PROBE_TIMEOUT,
+			tokio::net::TcpStream::connect(IMDS_ADDR),
+		)
+		.await
+		.map(|r| r.is_ok())
+		.unwrap_or(false)
+	}
+
+	/// Returns true when a managed-identity env-var source is configured
+	/// (App Service, Service Fabric, Cloud Shell, Arc). In those cases we
+	/// skip the IMDS probe because the SDK will use the env-var endpoint
+	/// instead.
+	fn has_managed_identity_env_vars() -> bool {
+		std::env::var_os("IDENTITY_ENDPOINT").is_some()
+			|| std::env::var_os("MSI_ENDPOINT").is_some()
+	}
+
+	async fn token_credential_from_auth(
 		client: &client::Client,
 		auth: &AzureAuth,
 	) -> anyhow::Result<Arc<dyn TokenCredential>> {
@@ -699,7 +730,7 @@ mod azure {
 				// 2. WorkloadIdentityCredential (Kubernetes workload identity)
 				// 3. ManagedIdentityCredential (Azure VMs, App Service, etc.)
 				// 4. DeveloperToolsCredential (Azure CLI, Azure Developer CLI)
-				let mut sources: Vec<Arc<dyn TokenCredential>> = Vec::new();
+				let mut sources: Vec<(&'static str, Arc<dyn TokenCredential>)> = Vec::new();
 				let mut errors: Vec<String> = Vec::new();
 
 				// 1. EnvironmentCredential — authenticate as a service principal.
@@ -722,7 +753,7 @@ mod azure {
 					) {
 						Ok(cred) => {
 							trace!("DefaultAzureCredential: added EnvironmentCredential to chain");
-							sources.push(cred);
+							sources.push(("EnvironmentCredential", cred));
 						},
 						Err(e) => {
 							trace!(
@@ -748,7 +779,7 @@ mod azure {
 						trace!(
 							"DefaultAzureCredential: added WorkloadIdentityCredential to chain"
 						);
-						sources.push(cred);
+						sources.push(("WorkloadIdentityCredential", cred));
 					},
 					Err(e) => {
 						trace!(
@@ -762,26 +793,50 @@ mod azure {
 				// The constructor detects the managed identity source from env vars
 				// (IDENTITY_ENDPOINT, MSI_ENDPOINT, etc.) and defaults to IMDS.
 				// Supports user-assigned identity via AZURE_CLIENT_ID.
+				//
+				// When no env-var source is detected, the SDK falls back to IMDS at
+				// 169.254.169.254. If we're not on an Azure VM, the SDK's internal
+				// retry policy will hammer the unreachable endpoint for ~99 s before
+				// giving up. To avoid this, we do a quick 1 s TCP probe first.
 				{
-					let mi_options = azure_identity::ManagedIdentityCredentialOptions {
-						user_assigned_id: std::env::var("AZURE_CLIENT_ID")
-							.ok()
-							.map(UserAssignedId::ClientId),
-						client_options: client_options.clone(),
+					let should_try_mi = if has_managed_identity_env_vars() {
+						// A known endpoint is set (App Service, Service Fabric, etc.).
+						// Skip the IMDS probe — the SDK will use the env-var endpoint.
+						trace!("DefaultAzureCredential: managed-identity env vars detected, skipping IMDS probe");
+						true
+					} else {
+						let reachable = imds_is_reachable().await;
+						if reachable {
+							trace!("DefaultAzureCredential: IMDS is reachable");
+						} else {
+							trace!("DefaultAzureCredential: IMDS not reachable within {IMDS_PROBE_TIMEOUT:?}, skipping ManagedIdentityCredential");
+						}
+						reachable
 					};
-					match azure_identity::ManagedIdentityCredential::new(Some(mi_options)) {
-						Ok(cred) => {
-							trace!(
-								"DefaultAzureCredential: added ManagedIdentityCredential to chain"
-							);
-							sources.push(cred);
-						},
-						Err(e) => {
-							trace!(
-								"DefaultAzureCredential: ManagedIdentityCredential not available: {e}"
-							);
-							errors.push(format!("ManagedIdentityCredential: {e}"));
-						},
+
+					if should_try_mi {
+						let mi_options = azure_identity::ManagedIdentityCredentialOptions {
+							user_assigned_id: std::env::var("AZURE_CLIENT_ID")
+								.ok()
+								.map(UserAssignedId::ClientId),
+							client_options: client_options.clone(),
+						};
+						match azure_identity::ManagedIdentityCredential::new(Some(mi_options)) {
+							Ok(cred) => {
+								trace!(
+									"DefaultAzureCredential: added ManagedIdentityCredential to chain"
+								);
+								sources.push(("ManagedIdentityCredential", cred));
+							},
+							Err(e) => {
+								trace!(
+									"DefaultAzureCredential: ManagedIdentityCredential not available: {e}"
+								);
+								errors.push(format!("ManagedIdentityCredential: {e}"));
+							},
+						}
+					} else {
+						errors.push("ManagedIdentityCredential: IMDS not reachable (probe timed out)".to_string());
 					}
 				}
 
@@ -793,7 +848,7 @@ mod azure {
 						trace!(
 							"DefaultAzureCredential: added DeveloperToolsCredential to chain"
 						);
-						sources.push(cred);
+						sources.push(("DeveloperToolsCredential", cred));
 					},
 					Err(e) => {
 						trace!(
@@ -828,7 +883,7 @@ mod azure {
 		client: &client::Client,
 		auth: &AzureAuth,
 	) -> anyhow::Result<http::HeaderValue> {
-		let cred = token_credential_from_auth(client, auth)?;
+		let cred = token_credential_from_auth(client, auth).await?;
 		let token = cred.get_token(SCOPES, None).await?;
 		let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
 		hv.set_sensitive(true);
