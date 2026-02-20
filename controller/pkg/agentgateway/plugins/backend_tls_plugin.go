@@ -43,7 +43,7 @@ func NewBackendTLSPlugin(agw *AgwCollections) AgwPlugin {
 			wellknown.BackendTLSPolicyGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					st, o := krt.NewStatusManyCollection(agw.BackendTLSPolicies, func(krtctx krt.HandlerContext, btls *gwv1.BackendTLSPolicy) (*gwv1.PolicyStatus, []AgwPolicy) {
-						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.Ancestors, agw.ConfigMaps, agw.Services, backendTLSTarget, btls)
+						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.Ancestors, agw.ConfigMaps, agw.Secrets, agw.Services, backendTLSTarget, agw.Gateways, btls)
 					}, agw.KrtOpts.ToOptions("agentgateway/BackendTLSPolicy")...)
 					return convertStatusCollection(st), o
 				},
@@ -58,8 +58,10 @@ func translatePoliciesForBackendTLS(
 	controllerName string,
 	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
 	cfgmaps krt.Collection[*corev1.ConfigMap],
+	secrets krt.Collection[*corev1.Secret],
 	svcs krt.Collection[*corev1.Service],
 	targetIndex krt.IndexCollection[utils.TypedNamespacedName, *gwv1.BackendTLSPolicy],
+	gateways krt.Collection[*gwv1.Gateway],
 	btls *gwv1.BackendTLSPolicy,
 ) (*gwv1.PolicyStatus, []AgwPolicy) {
 	logger := logger.With("plugin_kind", "backendtls")
@@ -113,10 +115,21 @@ func translatePoliciesForBackendTLS(
 			Kind: string(target.Kind),
 		}
 
+		// TODO: does this need to account for listenersets
 		ancestorBackends := krt.Fetch(krtctx, ancestors, krt.FilterKey(tgtRef.String()))
 		for _, gwl := range ancestorBackends {
 			for _, i := range gwl.Objects {
 				uniqueGateways.Insert(i.Gateway)
+			}
+		}
+
+		var mtlsClientRef *gwv1.SecretObjectReference
+		if uniqueGateways.Len() == 1 {
+			// TODO: support from multiple gateways.
+			// This will require us to have per-gateway policies, not global ones.
+			gtw := ptr.Flatten(krt.FetchOne(krtctx, gateways, krt.FilterKey(uniqueGateways.UnsortedList()[0].String())))
+			if gtw != nil && gtw.Spec.TLS != nil && gtw.Spec.TLS.Backend != nil && gtw.Spec.TLS.Backend.ClientCertificateRef != nil {
+				mtlsClientRef = gtw.Spec.TLS.Backend.ClientCertificateRef
 			}
 		}
 
@@ -168,6 +181,50 @@ func translatePoliciesForBackendTLS(
 			continue
 		}
 
+		res := &api.BackendPolicySpec_BackendTLS{
+			Root: caCert,
+			// Used for mTLS, conditionally set below
+			Cert: nil,
+			Key:  nil,
+			// Validation.Hostname is a required value and validated with CEL
+			Hostname:              ptr.Of(string(btls.Spec.Validation.Hostname)),
+			VerifySubjectAltNames: sans,
+		}
+		if mtlsClientRef != nil {
+			skip := false
+			if mtlsClientRef.Namespace != nil {
+				// TODO Implement this later
+				logger.Warn("ignoring Gateway.spec.tls.backend; cross namespace not permitted")
+				skip = true
+			}
+			if mtlsClientRef.Kind != nil && *mtlsClientRef.Kind != wellknown.SecretKind {
+				logger.Warn("ignoring Gateway.spec.tls.backend; only Secret is allowed")
+				skip = true
+			}
+			if mtlsClientRef.Group != nil && string(*mtlsClientRef.Group) != wellknown.SecretGVK.Group {
+				logger.Warn("ignoring Gateway.spec.tls.backend; only core is allowed")
+				skip = true
+			}
+			if !skip {
+				nn := types.NamespacedName{
+					Namespace: btls.Namespace,
+					Name:      string(mtlsClientRef.Name),
+				}
+				scrt := ptr.Flatten(krt.FetchOne(krtctx, secrets, krt.FilterObjectName(nn)))
+				if scrt == nil {
+					logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
+				} else {
+					if _, err := sslutils.ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
+						logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
+					} else {
+
+					}
+					res.Cert = scrt.Data[corev1.TLSCertKey]
+					res.Key = scrt.Data[corev1.TLSPrivateKeyKey]
+				}
+			}
+		}
+
 		policy := &api.Policy{
 			Key:    btls.Namespace + "/" + btls.Name + backendTlsPolicySuffix + attachmentName(policyTarget),
 			Name:   TypedResourceName(wellknown.BackendTLSPolicyKind, btls),
@@ -175,15 +232,7 @@ func translatePoliciesForBackendTLS(
 			Kind: &api.Policy_Backend{
 				Backend: &api.BackendPolicySpec{
 					Kind: &api.BackendPolicySpec_BackendTls{
-						BackendTls: &api.BackendPolicySpec_BackendTLS{
-							Root: caCert,
-							// Used for mTLS, not part of the spec currently
-							Cert: nil,
-							Key:  nil,
-							// Validation.Hostname is a required value and validated with CEL
-							Hostname:              ptr.Of(string(btls.Spec.Validation.Hostname)),
-							VerifySubjectAltNames: sans,
-						},
+						BackendTls: res,
 					},
 				},
 			},
