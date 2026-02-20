@@ -11,7 +11,7 @@ use crate::parser::Expression;
 use crate::{IdedExpr, Value};
 
 fn is_lit(e: &Expr) -> bool {
-	matches!(e, Expr::Literal(_) | Expr::Inline(_) | Expr::Map(_))
+	matches!(e, Expr::Literal(_) | Expr::Inline(_))
 }
 
 fn as_value(e: IdedExpr) -> Value<'static> {
@@ -190,6 +190,7 @@ mod test {
 	use serde::{Serialize, Serializer};
 
 	use crate::common::ast::{CallExpr, Expr};
+
 	use crate::objects::{Opaque, OpaqueValue};
 	use crate::{Context, ExecutionError, FunctionContext, IdedExpr, Program, ResolveResult, Value};
 
