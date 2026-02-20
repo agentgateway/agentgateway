@@ -99,8 +99,12 @@ impl WaypointIdentity {
 	}
 
 	/// Checks whether this waypoint identity matches a NamespacedHostname waypoint destination.
-	/// The hostname from xDS is always a FQDN (e.g., "waypoint.ns.svc.cluster.local").
+	/// Handles both short names (e.g., "waypoint") and FQDNs (e.g., "waypoint.ns.svc.cluster.local").
 	pub fn matches_hostname(&self, nh: &NamespacedHostname) -> bool {
+		if nh.namespace == self.namespace && nh.hostname == self.gateway {
+			return true;
+		}
+		// Also check if hostname is a full FQDN
 		nh.hostname == self.hostname()
 	}
 
@@ -119,7 +123,7 @@ impl WaypointIdentity {
 					self.gateway, self.namespace
 				);
 				false
-			},
+			}
 		}
 	}
 }
