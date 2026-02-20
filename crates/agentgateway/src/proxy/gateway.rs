@@ -19,6 +19,8 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
+use agent_core::strng;
+
 use crate::proxy::ProxyError;
 use crate::store::{Event, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
@@ -896,22 +898,55 @@ impl Gateway {
 			drain_tx: None,
 		};
 
-		// TODO: for now, we only handle HTTP for waypoints. In the future, we should support other protocols.
-		// This could be done by sniffing at this layer, but is probably better handled by doing service-selection here
-		// and only falling back to sniffing when there is not an explicit protocol declaration
 		let socket_addr = hbone_addr
 			.socket_addr()
 			.ok_or_else(|| anyhow::anyhow!("hbone_addr should be resolved to SocketAddr"))
 			.unwrap();
-		let _ = Self::proxy(
-			bind_name,
-			pi,
-			None,
-			Socket::from_hbone(ext, socket_addr, con),
-			policies.clone(),
-			drain,
-		)
-		.await;
+
+		// Determine protocol from service discovery to route HTTP vs TCP
+		let is_http = {
+			let discovery = pi.stores.read_discovery();
+			let svc = discovery.services.get_by_vip(
+				&crate::types::discovery::NetworkAddress {
+					network: pi.cfg.network.clone(),
+					address: socket_addr.ip(),
+				},
+			);
+			match svc {
+				Some(svc) => svc.app_protocols.get(&socket_addr.port()).is_some(),
+				// If we can't find the service, default to HTTP (existing behavior)
+				None => true,
+			}
+		};
+
+		let socket = Socket::from_hbone(ext, socket_addr, con);
+		if is_http {
+			let _ = Self::proxy(
+				bind_name,
+				pi,
+				None,
+				socket,
+				policies.clone(),
+				drain,
+			)
+			.await;
+		} else {
+			// TCP: create a synthetic HBONE listener for the TCP proxy path
+			let listener = Arc::new(Listener {
+				key: Default::default(),
+				name: crate::types::agent::ListenerName {
+					gateway_name: strng::EMPTY,
+					gateway_namespace: strng::EMPTY,
+					listener_name: strng::literal!("_waypoint-tcp"),
+					listener_set: None,
+				},
+				hostname: Default::default(),
+				protocol: ListenerProtocol::HBONE,
+				tcp_routes: Default::default(),
+				routes: Default::default(),
+			});
+			Self::proxy_tcp(bind_name, pi, Some(listener), socket, drain).await;
+		}
 	}
 
 	/// serve_gateway_connect handles a single connection from a client.
