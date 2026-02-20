@@ -33,42 +33,174 @@ export function configDumpToLocalConfig(configDump: any): LocalConfig {
     .map((b: any) => (b.backend ? mapToBackend(b.backend) : null))
     .filter(Boolean);
 
+  // In XDS/Kubernetes mode, A2A policies are delivered as separate top-level
+  // policy objects targeting specific backends, rather than being inline on
+  // routes. Build a structured index so we can resolve them onto matching
+  // routes during mapping.
+  const a2aPolicyTargets = buildA2aPolicyTargets(configDump.policies || []);
+
   localConfig.binds = (configDump.binds || []).map((bind: any) =>
-    mapToBind(bind, backends as Backend[])
+    mapToBind(bind, backends as Backend[], a2aPolicyTargets)
   );
 
   return localConfig;
 }
 
-function mapToBind(bindData: any, backends: Backend[]): Bind {
+// Structured representation of an A2A policy target, mirroring the Rust
+// BackendTarget enum from the proxy's policy store. This avoids brittle
+// string-based matching by comparing structured fields directly.
+interface A2aServiceTarget {
+  kind: "service";
+  hostname: string;
+  namespace: string;
+  port?: number; // Optional: when absent, matches any port on the service
+}
+interface A2aBackendTarget {
+  kind: "backend";
+  name: string;
+  namespace: string;
+}
+type A2aPolicyTarget = A2aServiceTarget | A2aBackendTarget;
+
+// Extract A2A policy targets from the top-level policies array. Each policy
+// has a structured `target.backend` that is either a service reference
+// ({ service: { hostname, namespace, port? } }) or a named backend reference
+// ({ backend: { name, namespace } }).
+function buildA2aPolicyTargets(policies: any[]): A2aPolicyTarget[] {
+  const targets: A2aPolicyTarget[] = [];
+  for (const p of policies) {
+    // Only process policies that contain an A2A backend policy
+    if (!p?.policy?.backend?.a2a) continue;
+
+    const target = p?.target?.backend;
+    if (!target) continue;
+
+    if (target.service) {
+      const svc = target.service;
+      if (typeof svc.hostname === "string" && svc.hostname) {
+        targets.push({
+          kind: "service",
+          hostname: svc.hostname,
+          namespace: typeof svc.namespace === "string" ? svc.namespace : "",
+          port: typeof svc.port === "number" ? svc.port : undefined,
+        });
+      }
+    } else if (target.backend) {
+      const be = target.backend;
+      if (typeof be.name === "string" && be.name) {
+        targets.push({
+          kind: "backend",
+          name: be.name,
+          namespace: typeof be.namespace === "string" ? be.namespace : "",
+        });
+      }
+    }
+  }
+  return targets;
+}
+
+function mapToBind(bindData: any, backends: Backend[], a2aPolicyTargets: A2aPolicyTarget[]): Bind {
+  const address = typeof bindData.address === "string" ? bindData.address : "";
+  const parts = address.split(":");
+  let port = Number.parseInt(parts[parts.length - 1] ?? "", 10);
+  if (Number.isNaN(port)) {
+    port = 0;
+  }
   return {
-    port: parseInt(bindData.address.split(":")[1]),
+    port,
     listeners: Object.values(bindData.listeners || {}).map((listenerData: any) =>
-      mapToListener(listenerData, backends)
+      mapToListener(listenerData, backends, a2aPolicyTargets)
     ),
   };
 }
 
-function mapToListener(listenerData: any, backends: Backend[]): Listener {
+function mapToListener(
+  listenerData: any,
+  backends: Backend[],
+  a2aPolicyTargets: A2aPolicyTarget[]
+): Listener {
   return {
     name: listenerData.name,
     hostname: listenerData.hostname,
     protocol: listenerData.protocol as ListenerProtocol,
     tls: mapToTlsConfig(listenerData.tls),
     routes: Object.values(listenerData.routes || {}).map((routeData: any) =>
-      mapToRoute(routeData, backends)
+      mapToRoute(routeData, backends, a2aPolicyTargets)
     ),
   };
 }
 
-function mapToRoute(routeData: any, backends: Backend[]): Route {
-  return {
+function mapToRoute(
+  routeData: any,
+  backends: Backend[],
+  a2aPolicyTargets: A2aPolicyTarget[]
+): Route {
+  const rawBackends: any[] = routeData.backends || [];
+  const mappedBackends = rawBackends
+    .map((rb: any) => mapToRouteBackend(rb, backends))
+    .filter((b): b is Backend => b !== undefined);
+
+  // Check for inline A2A policies on route backends.
+  // A2A is a BackendPolicy, so it lives on RouteBackendReference.inline_policies
+  // (not route-level inlinePolicies which are TrafficPolicy).
+  const hasInlineA2a = rawBackends.some((rb: any) =>
+    (rb.inline_policies || []).some((p: any) => p?.a2a !== undefined)
+  );
+
+  // Resolve top-level A2A policies onto this route by matching route backend
+  // references against policy targets using structured field comparison.
+  // This mirrors the Rust proxy's BackendTargetRef matching logic.
+  const hasMatchingA2aPolicy = rawBackends.some((rb: any) =>
+    routeBackendMatchesA2aPolicy(rb, a2aPolicyTargets)
+  );
+
+  const route: Route = {
     name: routeData.name,
     ruleName: routeData.ruleName || "",
     hostnames: routeData.hostnames || [],
     matches: mapToMatches(routeData.matches),
-    backends: (routeData.backends || []).map((rb: any) => mapToRouteBackend(rb, backends)),
+    backends: mappedBackends,
   };
+
+  if (hasInlineA2a || hasMatchingA2aPolicy) {
+    route.policies = { a2a: {} };
+  }
+
+  return route;
+}
+
+// Match a route's backend reference against A2A policy targets using structured
+// field comparison. Handles both BackendReference variants from the config dump:
+//   - BackendReference::Service { name: { namespace, hostname }, port }
+//   - BackendReference::Backend(key)  (key is "namespace/name")
+function routeBackendMatchesA2aPolicy(rb: any, targets: A2aPolicyTarget[]): boolean {
+  if (targets.length === 0) return false;
+
+  // BackendReference::Service — flattened via #[serde(flatten)] into the
+  // RouteBackendReference, so fields appear at the top level of rb.
+  if (rb.service) {
+    const svc = rb.service;
+    const name = svc.name;
+    const rbHostname = typeof name === "string" ? name : (name?.hostname ?? "");
+    const rbNamespace = typeof name === "object" ? (name?.namespace ?? "") : "";
+    const rbPort = typeof svc.port === "number" ? svc.port : undefined;
+
+    return targets.some(
+      (t) =>
+        t.kind === "service" &&
+        t.hostname === rbHostname &&
+        t.namespace === rbNamespace &&
+        (t.port == null || t.port === rbPort)
+    );
+  }
+
+  // BackendReference::Backend(key) — serialized as { "backend": "namespace/name" }
+  if (typeof rb.backend === "string") {
+    const key = rb.backend; // e.g. "tenant-alpha/my-backend"
+    return targets.some((t) => t.kind === "backend" && key === `${t.namespace}/${t.name}`);
+  }
+
+  return false;
 }
 
 function mapToMatches(matchesData: any): Match[] {

@@ -371,8 +371,8 @@ pub mod typed {
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
 		FunctionObject, FunctionType, PredictionContent, ReasoningEffort, ResponseFormat,
-		ResponseModalities as ChatCompletionModalities, Role, ServiceTier, StopConfiguration as Stop,
-		ToolChoiceOptions, WebSearchOptions,
+		ResponseFormatJsonSchema, ResponseModalities as ChatCompletionModalities, Role, ServiceTier,
+		StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
 

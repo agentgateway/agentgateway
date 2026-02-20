@@ -91,6 +91,7 @@ func watchGw(
 		Dev:                        cfg.Dev,
 		ImageDefaults:              cfg.ImageDefaults,
 		ControlPlane:               cfg.ControlPlane,
+		NoListenersDummyPort:       cfg.CommonCollections.Settings.NoListenersDummyPort,
 		ImageInfo:                  cfg.ImageInfo,
 		CommonCollections:          cfg.CommonCollections,
 		AgentgatewayClassName:      cfg.AgentgatewayClassName,

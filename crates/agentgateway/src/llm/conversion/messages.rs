@@ -116,30 +116,36 @@ pub mod from_completions {
 			},
 			_ => None,
 		};
-		let thinking = if let Some(budget) = req.vendor_extensions.thinking_budget_tokens {
-			Some(messages::ThinkingInput::Enabled {
-				budget_tokens: budget,
+		let explicit_thinking_budget = req.vendor_extensions.thinking_budget_tokens;
+		let thinking = if let Some(budget_tokens) = explicit_thinking_budget {
+			Some(messages::ThinkingInput::Enabled { budget_tokens })
+		} else {
+			req
+				.reasoning_effort
+				.as_ref()
+				.and_then(reasoning_effort_to_enabled_budget)
+				.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens })
+		};
+
+		let response_format = match req.response_format {
+			Some(completions::ResponseFormat::JsonSchema { json_schema }) => json_schema
+				.schema
+				.map(|schema| messages::OutputFormat::JsonSchema { schema }),
+			Some(completions::ResponseFormat::JsonObject) => Some(messages::OutputFormat::JsonSchema {
+				schema: serde_json::json!({
+					"type": "object",
+					"additionalProperties": true
+				}),
+			}),
+			Some(completions::ResponseFormat::Text) | None => None,
+		};
+		let output_config = if response_format.is_some() {
+			Some(messages::OutputConfig {
+				effort: None,
+				format: response_format,
 			})
 		} else {
-			match &req.reasoning_effort {
-				// Arbitrary constants come from LiteLLM defaults.
-				// OpenRouter uses percentages which may be more appropriate though (https://openrouter.ai/docs/use-cases/reasoning-tokens#reasoning-effort-level)
-				// Note: Anthropic's minimum budget_tokens is 1024
-				Some(completions::ReasoningEffort::Minimal) | Some(completions::ReasoningEffort::Low) => {
-					Some(messages::ThinkingInput::Enabled {
-						budget_tokens: 1024,
-					})
-				},
-				Some(completions::ReasoningEffort::Medium) => Some(messages::ThinkingInput::Enabled {
-					budget_tokens: 2048,
-				}),
-				Some(completions::ReasoningEffort::High) | Some(completions::ReasoningEffort::Xhigh) => {
-					Some(messages::ThinkingInput::Enabled {
-						budget_tokens: 4096,
-					})
-				},
-				Some(completions::ReasoningEffort::None) | None => None,
-			}
+			None
 		};
 		messages::Request {
 			messages,
@@ -159,6 +165,16 @@ pub mod from_completions {
 			tool_choice,
 			metadata,
 			thinking,
+			output_config,
+		}
+	}
+
+	fn reasoning_effort_to_enabled_budget(effort: &completions::ReasoningEffort) -> Option<u64> {
+		match effort {
+			completions::ReasoningEffort::None => None,
+			completions::ReasoningEffort::Minimal | completions::ReasoningEffort::Low => Some(1024),
+			completions::ReasoningEffort::Medium => Some(2048),
+			completions::ReasoningEffort::High | completions::ReasoningEffort::Xhigh => Some(4096),
 		}
 	}
 

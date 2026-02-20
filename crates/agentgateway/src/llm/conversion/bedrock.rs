@@ -329,42 +329,26 @@ pub mod from_completions {
 		});
 		let tool_config = tools.map(|tools| bedrock::ToolConfiguration { tools, tool_choice });
 
-		// Handle thinking configuration similar to Anthropic
-		let thinking = if let Some(budget) = req.vendor_extensions.thinking_budget_tokens {
-			Some(serde_json::json!({
+		let explicit_thinking_budget = req.vendor_extensions.thinking_budget_tokens;
+		let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
+			req
+				.reasoning_effort
+				.as_ref()
+				.and_then(reasoning_effort_to_enabled_budget)
+		});
+
+		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
+			serde_json::json!({
 				"thinking": {
 					"type": "enabled",
 					"budget_tokens": budget
 				}
-			}))
-		} else {
-			match &req.reasoning_effort {
-				// Note: Anthropic's minimum budget_tokens is 1024
-				Some(completions::ReasoningEffort::Minimal) | Some(completions::ReasoningEffort::Low) => {
-					Some(serde_json::json!({
-						"thinking": {
-							"type": "enabled",
-							"budget_tokens": 1024
-						}
-					}))
-				},
-				Some(completions::ReasoningEffort::Medium) => Some(serde_json::json!({
-					"thinking": {
-						"type": "enabled",
-						"budget_tokens": 2048
-					}
-				})),
-				Some(completions::ReasoningEffort::High) | Some(completions::ReasoningEffort::Xhigh) => {
-					Some(serde_json::json!({
-						"thinking": {
-							"type": "enabled",
-							"budget_tokens": 4096
-						}
-					}))
-				},
-				Some(completions::ReasoningEffort::None) | None => None,
-			}
-		};
+			})
+		});
+		let output_config = req
+			.response_format
+			.as_ref()
+			.and_then(completions_response_format_to_bedrock_output_config);
 
 		let supports_caching = helpers::supports_prompt_caching(&model_id);
 		let system_content = if system_text.is_empty() {
@@ -400,9 +384,10 @@ pub mod from_completions {
 			messages,
 			system: system_content,
 			inference_config: Some(inference_config),
+			output_config,
 			tool_config,
 			guardrail_config,
-			additional_model_request_fields: thinking,
+			additional_model_request_fields,
 			prompt_variables: None,
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
@@ -425,6 +410,63 @@ pub mod from_completions {
 		}
 
 		bedrock_request
+	}
+
+	fn reasoning_effort_to_enabled_budget(effort: &completions::ReasoningEffort) -> Option<u64> {
+		match effort {
+			completions::ReasoningEffort::None => None,
+			completions::ReasoningEffort::Minimal | completions::ReasoningEffort::Low => Some(1024),
+			completions::ReasoningEffort::Medium => Some(2048),
+			completions::ReasoningEffort::High | completions::ReasoningEffort::Xhigh => Some(4096),
+		}
+	}
+
+	fn completions_response_format_to_bedrock_output_config(
+		response_format: &completions::ResponseFormat,
+	) -> Option<bedrock::OutputConfig> {
+		let (name, description, schema) = match response_format {
+			completions::ResponseFormat::Text => return None,
+			completions::ResponseFormat::JsonObject => (
+				None,
+				None,
+				std::borrow::Cow::Owned(
+					serde_json::json!({ "type": "object", "additionalProperties": true }),
+				),
+			),
+			completions::ResponseFormat::JsonSchema { json_schema } => {
+				let Some(schema) = json_schema.schema.as_ref() else {
+					tracing::warn!(
+						"Dropping response_format.json_schema for Bedrock conversion because schema is missing"
+					);
+					return None;
+				};
+				(
+					Some(json_schema.name.clone()),
+					json_schema.description.clone(),
+					std::borrow::Cow::Borrowed(schema),
+				)
+			},
+		};
+
+		let Ok(schema_json) = serde_json::to_string(schema.as_ref()) else {
+			tracing::warn!(
+				"Dropping structured output for Bedrock conversion: schema is not serializable"
+			);
+			return None;
+		};
+
+		Some(bedrock::OutputConfig {
+			text_format: Some(bedrock::OutputFormat {
+				r#type: bedrock::OutputFormatType::JsonSchema,
+				structure: bedrock::OutputFormatStructure {
+					json_schema: bedrock::JsonSchemaDefinition {
+						schema: schema_json,
+						name,
+						description,
+					},
+				},
+			}),
+		})
 	}
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
@@ -698,9 +740,39 @@ pub mod from_messages {
 		headers: Option<&http::HeaderMap>,
 	) -> bedrock::ConverseRequest {
 		let mut cache_points_used = 0;
+		// Converse placement note (AWS docs):
+		// - Anthropic-specific params are sent via additionalModelRequestFields for Converse:
+		//   https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-call.html
+		//   https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html
+		// - Adaptive thinking knob is thinking.type = "adaptive":
+		//   https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-adaptive-thinking.html
+		// - Effort knob is output_config.effort in Anthropic request shape:
+		//   https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
+		let requested_thinking = req.thinking.as_ref();
+		let requested_output_config = req.output_config.as_ref();
+		let output_config = requested_output_config
+			.and_then(|cfg| cfg.format.as_ref())
+			.and_then(messages_output_format_to_bedrock_output_config);
+		let requested_output_config_json = requested_output_config.and_then(|cfg| {
+			let mut output_config = serde_json::Map::new();
+			if let Some(effort) = cfg.effort {
+				output_config.insert("effort".to_string(), serde_json::json!(effort));
+			}
+			if output_config.is_empty() {
+				// Preserve an explicitly empty output_config when present in the input request.
+				if cfg.format.is_none() {
+					Some(serde_json::Value::Object(output_config))
+				} else {
+					None
+				}
+			} else {
+				Some(serde_json::Value::Object(output_config))
+			}
+		});
 
-		// Check if thinking is enabled (Bedrock constraint: thinking requires specific tool/temp settings)
-		let thinking_enabled = req.thinking.is_some();
+		// Bedrock applies strict inference/tool-choice constraints only to explicit extended thinking.
+		let thinking_enabled = requested_thinking
+			.is_some_and(|thinking| matches!(thinking, messages::ThinkingInput::Enabled { .. }));
 
 		// Convert system prompt to Bedrock format with cache point insertion
 		// Note: Anthropic MessagesRequest.system is Option<SystemPrompt>, Bedrock wants Option<Vec<SystemContentBlock>>
@@ -882,7 +954,7 @@ pub mod from_messages {
 		// Build inference config from typed fields
 		let inference_config = bedrock::InferenceConfiguration {
 			max_tokens: req.max_tokens,
-			// When thinking is enabled, temperature/top_p/top_k must be None (Bedrock constraint)
+			// Extended thinking requires temperature/top_p/top_k to be unset.
 			temperature: if thinking_enabled {
 				None
 			} else {
@@ -952,44 +1024,42 @@ pub mod from_messages {
 			None
 		};
 
-		// Convert thinking from typed field and handle beta headers
-		let mut additional_fields = req.thinking.map(|thinking| match thinking {
-			messages::ThinkingInput::Enabled { budget_tokens } => serde_json::json!({
-				"thinking": {
+		// Build Anthropic model-specific fields under Converse's additionalModelRequestFields.
+		let mut additional_fields = requested_thinking.map(|thinking| {
+			let thinking_json = match thinking {
+				messages::ThinkingInput::Enabled { budget_tokens } => serde_json::json!({
 					"type": "enabled",
 					"budget_tokens": budget_tokens
-				}
-			}),
-			messages::ThinkingInput::Disabled {} => serde_json::json!({
-				"thinking": {
+				}),
+				messages::ThinkingInput::Disabled {} => serde_json::json!({
 					"type": "disabled"
-				}
-			}),
+				}),
+				messages::ThinkingInput::Adaptive {} => serde_json::json!({
+					"type": "adaptive"
+				}),
+			};
+			serde_json::json!({ "thinking": thinking_json })
 		});
+		let mut upsert_additional_field = |key: &str, value: serde_json::Value| {
+			let fields =
+				additional_fields.get_or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+			fields
+				.as_object_mut()
+				.expect("additional model request fields must be a JSON object")
+				.insert(key.to_string(), value);
+		};
+
+		// Preserve explicit output_config in Anthropic's model-specific envelope.
+		if let Some(output_config) = requested_output_config_json {
+			upsert_additional_field("output_config", output_config);
+		}
 
 		// Extract beta headers from HTTP headers if provided
 		let beta_headers = headers.and_then(|h| helpers::extract_beta_headers(h).ok().flatten());
 
 		if let Some(beta_array) = beta_headers {
-			// Add beta headers to additionalModelRequestFields
-			match additional_fields {
-				Some(ref mut fields) => {
-					if let Some(existing_obj) = fields.as_object_mut() {
-						existing_obj.insert(
-							"anthropic_beta".to_string(),
-							serde_json::Value::Array(beta_array),
-						);
-					}
-				},
-				None => {
-					let mut fields = serde_json::Map::new();
-					fields.insert(
-						"anthropic_beta".to_string(),
-						serde_json::Value::Array(beta_array),
-					);
-					additional_fields = Some(serde_json::Value::Object(fields));
-				},
-			}
+			// Add beta headers to additionalModelRequestFields.
+			upsert_additional_field("anthropic_beta", serde_json::Value::Array(beta_array));
 		}
 
 		// Build guardrail configuration if provider has it configured
@@ -1024,6 +1094,7 @@ pub mod from_messages {
 			messages,
 			system: system_content,
 			inference_config: Some(inference_config),
+			output_config,
 			tool_config,
 			guardrail_config,
 			additional_model_request_fields: additional_fields,
@@ -1032,6 +1103,33 @@ pub mod from_messages {
 			request_metadata: metadata,
 			performance_config: None,
 		}
+	}
+
+	fn messages_output_format_to_bedrock_output_config(
+		format: &messages::OutputFormat,
+	) -> Option<bedrock::OutputConfig> {
+		let schema = match format {
+			messages::OutputFormat::JsonSchema { schema } => schema,
+		};
+		let Ok(schema_json) = serde_json::to_string(schema) else {
+			tracing::warn!(
+				"Dropping output_config.format for Bedrock conversion: schema is not serializable"
+			);
+			return None;
+		};
+
+		Some(bedrock::OutputConfig {
+			text_format: Some(bedrock::OutputFormat {
+				r#type: bedrock::OutputFormatType::JsonSchema,
+				structure: bedrock::OutputFormatStructure {
+					json_schema: bedrock::JsonSchemaDefinition {
+						schema: schema_json,
+						name: None,
+						description: None,
+					},
+				},
+			}),
+		})
 	}
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
@@ -1344,13 +1442,22 @@ pub mod from_responses {
 	) -> Result<Vec<u8>, AIError> {
 		let typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
+		let explicit_thinking_budget = extract_responses_thinking_budget_tokens(req);
 		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(typed, model_id, provider, headers, prompt_caching);
+		let xlated = translate_internal(
+			typed,
+			explicit_thinking_budget,
+			model_id,
+			provider,
+			headers,
+			prompt_caching,
+		);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
 	pub(super) fn translate_internal(
 		req: responses::CreateResponse,
+		explicit_thinking_budget: Option<u64>,
 		model_id: String,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
@@ -1610,6 +1717,25 @@ pub mod from_responses {
 			top_k: None,
 			stop_sequences: vec![],
 		};
+		let output_config = req
+			.text
+			.as_ref()
+			.and_then(responses_text_format_to_bedrock_output_config);
+		let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
+			req
+				.reasoning
+				.as_ref()
+				.and_then(|r| r.effort.as_ref())
+				.and_then(responses_reasoning_effort_to_enabled_budget)
+		});
+		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
+			serde_json::json!({
+				"thinking": {
+					"type": "enabled",
+					"budget_tokens": budget
+				}
+			})
+		});
 
 		// Convert tools from typed Responses API format to Bedrock format
 		let (tools, tool_choice) = if let Some(response_tools) = &req.tools {
@@ -1698,9 +1824,10 @@ pub mod from_responses {
 			messages,
 			system: system_content,
 			inference_config: Some(inference_config),
+			output_config,
 			tool_config,
 			guardrail_config,
-			additional_model_request_fields: None,
+			additional_model_request_fields,
 			prompt_variables: None,
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
@@ -1743,6 +1870,70 @@ pub mod from_responses {
 		);
 
 		bedrock_request
+	}
+
+	fn extract_responses_thinking_budget_tokens(req: &types::responses::Request) -> Option<u64> {
+		req
+			.vendor_extensions
+			.as_ref()
+			.and_then(|v| v.thinking_budget_tokens)
+	}
+
+	fn responses_reasoning_effort_to_enabled_budget(
+		effort: &responses::ReasoningEffort,
+	) -> Option<u64> {
+		match effort {
+			responses::ReasoningEffort::None => None,
+			responses::ReasoningEffort::Minimal | responses::ReasoningEffort::Low => Some(1024),
+			responses::ReasoningEffort::Medium => Some(2048),
+			responses::ReasoningEffort::High | responses::ReasoningEffort::Xhigh => Some(4096),
+		}
+	}
+
+	fn responses_text_format_to_bedrock_output_config(
+		text: &responses::ResponseTextParam,
+	) -> Option<bedrock::OutputConfig> {
+		let (name, description, schema) = match &text.format {
+			responses::TextResponseFormatConfiguration::Text => return None,
+			responses::TextResponseFormatConfiguration::JsonObject => (
+				None,
+				None,
+				std::borrow::Cow::Owned(
+					serde_json::json!({ "type": "object", "additionalProperties": true }),
+				),
+			),
+			responses::TextResponseFormatConfiguration::JsonSchema(json_schema) => {
+				let Some(schema) = json_schema.schema.as_ref() else {
+					tracing::warn!(
+						"Dropping text.format.json_schema for Bedrock conversion because schema is missing"
+					);
+					return None;
+				};
+				(
+					Some(json_schema.name.clone()),
+					json_schema.description.clone(),
+					std::borrow::Cow::Borrowed(schema),
+				)
+			},
+		};
+
+		let Ok(schema_json) = serde_json::to_string(schema.as_ref()) else {
+			tracing::warn!("Dropping text.format for Bedrock conversion: schema is not serializable");
+			return None;
+		};
+
+		Some(bedrock::OutputConfig {
+			text_format: Some(bedrock::OutputFormat {
+				r#type: bedrock::OutputFormatType::JsonSchema,
+				structure: bedrock::OutputFormatStructure {
+					json_schema: bedrock::JsonSchemaDefinition {
+						schema: schema_json,
+						name,
+						description,
+					},
+				},
+			}),
+		})
 	}
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {

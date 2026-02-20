@@ -148,6 +148,10 @@ type Settings struct {
 	// This corresponds to the value of the `grpc-xds-agw` port in the service.
 	AgentgatewayXdsServicePort uint32 `split_words:"true" default:"9978"`
 
+	// NoListenersDummyPort is the port exposed on the generated Service when a Gateway has no listeners.
+	// This keeps the LoadBalancer provisioned and address stable across transitions to zero listeners.
+	NoListenersDummyPort uint16 `split_words:"true" default:"443"`
+
 	// EnableInferExt defines whether to enable/disable support for Gateway API inference extension.
 	// If enabled, EnableAgentgateway should also be set to true. Enabling inference extension without agentgateway
 	// is deprecated in v2.1 and will not be supported in v2.2.

@@ -542,13 +542,6 @@ lint-charts: ## Lint the agentgateway charts
 # Release
 #----------------------------------------------------------------------------------
 
-GORELEASER_ARGS ?= --snapshot --clean
-GORELEASER_TIMEOUT ?= 60m
-GORELEASER_CURRENT_TAG ?= $(VERSION)
-
-.PHONY: release
-release: ## Create a release using goreleaser
-	GORELEASER_CURRENT_TAG=$(GORELEASER_CURRENT_TAG) goreleaser release $(GORELEASER_ARGS) --timeout $(GORELEASER_TIMEOUT)
 .PHONY: release-notes
 release-notes: ## Generate release notes (PREVIOUS_TAG required, CURRENT_TAG optional)
 	./hack/generate-release-notes.sh -p $(PREVIOUS_TAG) -c $(or $(CURRENT_TAG),HEAD)
@@ -626,7 +619,6 @@ kind-load-%:
 
 # Build an image and load it into the KinD cluster
 # Depends on: IMAGE_REGISTRY, VERSION, CLUSTER_NAME
-# Envoy image may be specified via ENVOY_IMAGE on the command line or at the top of this file
 kind-build-and-load-%: %-docker kind-load-% ; ## Use to build specified image and load it into kind
 
 # Update the docker image used by a deployment
@@ -646,7 +638,6 @@ kind-set-image-%:
 # You can reload an image, which means it will be rebuilt and reloaded into the kind cluster, and the deployment
 # will be updated to reference it
 # Depends on: IMAGE_REGISTRY, VERSION, INSTALL_NAMESPACE , CLUSTER_NAME
-# Envoy image may be specified via ENVOY_IMAGE on the command line or at the top of this file
 kind-reload-%: kind-build-and-load-% kind-set-image-% ; ## Use to build specified image, load it into kind, and restart its deployment
 
 .PHONY: kind-build-and-load ## Use to build all images and load them into kind

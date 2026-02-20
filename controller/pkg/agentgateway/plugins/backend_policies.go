@@ -519,6 +519,10 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		awsAuth, err := buildAwsAuthPolicy(ctx.Krt, auth.AWS, ctx.Collections.Secrets, policy.Namespace)
 		translatedAuth = awsAuth
 		errs = append(errs, err)
+	} else if auth.Azure != nil {
+		azureAuth, err := buildAzureAuthPolicy(ctx.Krt, auth.Azure, ctx.Collections.Secrets, policy.Namespace)
+		translatedAuth = azureAuth
+		errs = append(errs, err)
 	} else if auth.GCP != nil {
 		translatedAuth = buildGcpAuthPolicy(auth.GCP)
 	} else if auth.Passthrough != nil {
@@ -636,6 +640,114 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 						SecretAccessKey: secretAccessKey,
 						SessionToken:    sessionToken,
 						Region:          "",
+					},
+				},
+			},
+		},
+	}, errors.Join(errs...)
+}
+
+func buildAzureAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AzureAuth, secrets krt.Collection[*corev1.Secret], namespace string) (*api.BackendAuthPolicy, error) {
+	var errs []error
+	if auth == nil {
+		logger.Warn("using implicit Azure auth for AI backend")
+		return &api.BackendAuthPolicy{
+			Kind: &api.BackendAuthPolicy_Azure{
+				Azure: &api.Azure{
+					Kind: &api.Azure_DeveloperImplicit{
+						DeveloperImplicit: &api.AzureDeveloperImplicit{},
+					},
+				},
+			},
+		}, nil
+	}
+
+	if auth.SecretRef.Name != "" {
+		return buildAzureClientSecret(secrets, krtctx, auth, namespace, errs)
+	}
+
+	if auth.ManagedIdentity != nil {
+		uaid := &api.AzureManagedIdentityCredential_UserAssignedIdentity{}
+		if auth.ManagedIdentity.ClientID != "" {
+			uaid.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ClientId{
+				ClientId: auth.ManagedIdentity.ClientID,
+			}
+		} else if auth.ManagedIdentity.ObjectID != "" {
+			uaid.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ObjectId{
+				ObjectId: auth.ManagedIdentity.ObjectID,
+			}
+		} else if auth.ManagedIdentity.ResourceID != "" {
+			uaid.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ResourceId{
+				ResourceId: auth.ManagedIdentity.ResourceID,
+			}
+		} else {
+			errs = append(errs, errors.New("no valid User Assigned Identity identifier provided"))
+			return nil, errors.Join(errs...)
+		}
+		return &api.BackendAuthPolicy{
+			Kind: &api.BackendAuthPolicy_Azure{
+				Azure: &api.Azure{
+					Kind: &api.Azure_ExplicitConfig{
+						ExplicitConfig: &api.AzureExplicitConfig{
+							CredentialSource: &api.AzureExplicitConfig_ManagedIdentityCredential{
+								ManagedIdentityCredential: &api.AzureManagedIdentityCredential{
+									UserAssignedIdentity: uaid,
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil
+	}
+
+	errs = append(errs, errors.New("no valid Azure auth method provided"))
+	return nil, errors.Join(errs...)
+}
+
+func buildAzureClientSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.HandlerContext, auth *agentgateway.AzureAuth, namespace string, errs []error) (*api.BackendAuthPolicy, error) {
+	secret, err := kubeutils.GetSecret(secrets, krtctx, auth.SecretRef.Name, namespace)
+	if err != nil {
+		// Return nil auth policy if secret not found - this will be handled upstream
+		// TODO(npolshak): Add backend status errors https://github.com/kgateway-dev/kgateway/issues/11966
+		return nil, err
+	}
+
+	var clientID, tenantID, clientSecret string
+
+	// Extract client ID
+	if value, exists := kubeutils.GetSecretValue(secret, wellknown.ClientID); !exists {
+		errs = append(errs, errors.New("clientID is missing or not a valid string"))
+	} else {
+		clientID = value
+	}
+
+	// Extract tenant ID
+	if value, exists := kubeutils.GetSecretValue(secret, wellknown.TenantID); !exists {
+		errs = append(errs, errors.New("tenantID is missing or not a valid string"))
+	} else {
+		tenantID = value
+	}
+
+	// Extract client secret
+	if value, exists := kubeutils.GetSecretValue(secret, wellknown.ClientSecret); !exists {
+		errs = append(errs, errors.New("clientSecret is missing or not a valid string"))
+	} else {
+		clientSecret = value
+	}
+
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_Azure{
+			Azure: &api.Azure{
+				Kind: &api.Azure_ExplicitConfig{
+					ExplicitConfig: &api.AzureExplicitConfig{
+						CredentialSource: &api.AzureExplicitConfig_ClientSecret{
+							ClientSecret: &api.AzureClientSecret{
+								ClientSecret: clientSecret,
+								TenantId:     tenantID,
+								ClientId:     clientID,
+							},
+						},
 					},
 				},
 			},

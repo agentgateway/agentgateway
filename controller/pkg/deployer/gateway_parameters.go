@@ -10,6 +10,7 @@ type Inputs struct {
 	Dev                        bool
 	ImageDefaults              *agentgateway.Image
 	ControlPlane               ControlPlaneInfo
+	NoListenersDummyPort       uint16
 	ImageInfo                  *ImageInfo
 	CommonCollections          *collections.CommonCollections
 	AgentgatewayClassName      string

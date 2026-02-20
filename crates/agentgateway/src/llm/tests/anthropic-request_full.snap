@@ -134,5 +134,14 @@ info:
   },
   "metadata": {
     "user_id": "user_12345"
+  },
+  "output_config": {
+    "format": {
+      "type": "json_schema",
+      "schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
   }
 }

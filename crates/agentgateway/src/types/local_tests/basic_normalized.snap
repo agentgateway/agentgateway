@@ -3,54 +3,66 @@ source: crates/agentgateway/src/types/local_tests.rs
 description: "Config normalization test for basic: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
-- key: bind/3000
-  address: '[::]:3000'
-  protocol: http
-  tunnelProtocol: direct
-  listeners:
-    ns/name/bind/3000/listener0:
-      key: ns/name/bind/3000/listener0
-      gatewayName: name
-      gatewayNamespace: ns
-      listenerName: listener0
-      hostname: ''
-      protocol: HTTP
-      routes:
-        ns/name/bind/3000/listener0/default/route0:
-          key: ns/name/bind/3000/listener0/default/route0
-          name: route0
-          namespace: default
-          matches:
-          - path:
-              pathPrefix: /
-          backends:
-          - weight: 1
-            backend: /ns/name/bind/3000/listener0/default/route0/backend0
-          inlinePolicies:
-          - cors:
-              allowCredentials: false
-              allowHeaders:
-              - mcp-protocol-version
-              - content-type
-              - cache-control
-              allowOrigins:
-              - '*'
-              maxAge: null
-      tcpRoutes: {}
-policies: []
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+        routes:
+          ns/name/bind/3000/listener0/default/route0:
+            backends:
+              - backend: /ns/name/bind/3000/listener0/default/route0/backend0
+                weight: 1
+            inlinePolicies:
+              - cors:
+                  allowCredentials: false
+                  allowHeaders:
+                    - mcp-protocol-version
+                    - content-type
+                    - cache-control
+                  allowOrigins:
+                    - "*"
+                  maxAge: ~
+            key: ns/name/bind/3000/listener0/default/route0
+            matches:
+              - path:
+                  pathPrefix: /
+            name: route0
+            namespace: default
+        tcpRoutes: {}
+policies:
+  - key: frontend/accessLog
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: ~
+    policy:
+      frontend:
+        accessLog:
+          add:
+            user: "request.headers['user-agent']"
 backends:
-- backend:
-    mcp:
-      name: ns/name/bind/3000/listener0/default/route0/backend0
-      namespace: ''
-      target:
-        targets:
-        - name: everything
-          stdio:
-            cmd: npx
-            args:
-            - '@modelcontextprotocol/server-everything'
-        stateful: true
-        alwaysUsePrefix: false
+  - backend:
+      mcp:
+        name: ns/name/bind/3000/listener0/default/route0/backend0
+        namespace: ""
+        target:
+          targets:
+            - name: everything
+              stdio:
+                cmd: npx
+                args:
+                  - "@modelcontextprotocol/server-everything"
+          stateful: true
+          alwaysUsePrefix: false
 workloads: []
 services: []

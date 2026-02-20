@@ -114,6 +114,7 @@ fn test_metadata_from_header() {
 		tools: None,
 		tool_choice: None,
 		thinking: None,
+		output_config: None,
 	};
 
 	let out = super::from_messages::translate_internal(req, &provider, Some(&headers));
@@ -121,6 +122,377 @@ fn test_metadata_from_header() {
 
 	assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
 	assert_eq!(metadata.get("department"), Some(&"engineering".to_string()));
+}
+
+#[test]
+fn test_output_config_effort_without_thinking_is_passed_through() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: None,
+		tool_choice: None,
+		thinking: None,
+		output_config: Some(messages::typed::OutputConfig {
+			effort: Some(messages::typed::ThinkingEffort::High),
+			format: None,
+		}),
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"output_config": {
+				"effort": "high"
+			}
+		}))
+	);
+	let inference = out.inference_config.unwrap();
+	assert_eq!(inference.temperature, Some(0.7));
+	assert_eq!(inference.top_p, Some(0.8));
+	assert_eq!(inference.top_k, Some(50));
+}
+
+#[test]
+fn test_output_config_format_maps_to_converse_output_config() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let schema = json!({
+		"type": "object",
+		"properties": {
+			"answer": { "type": "number" }
+		},
+		"required": ["answer"],
+		"additionalProperties": false
+	});
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "What is 2+2?".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: None,
+		tool_choice: None,
+		thinking: None,
+		output_config: Some(messages::typed::OutputConfig {
+			effort: Some(messages::typed::ThinkingEffort::High),
+			format: Some(messages::typed::OutputFormat::JsonSchema {
+				schema: schema.clone(),
+			}),
+		}),
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"output_config": {
+				"effort": "high"
+			}
+		}))
+	);
+	assert_eq!(
+		out.output_config,
+		Some(types::bedrock::OutputConfig {
+			text_format: Some(types::bedrock::OutputFormat {
+				r#type: types::bedrock::OutputFormatType::JsonSchema,
+				structure: types::bedrock::OutputFormatStructure {
+					json_schema: types::bedrock::JsonSchemaDefinition {
+						schema: serde_json::to_string(&schema).unwrap(),
+						name: None,
+						description: None,
+					},
+				},
+			}),
+		})
+	);
+}
+
+#[test]
+fn test_explicit_empty_output_config_is_preserved() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: None,
+		tool_choice: None,
+		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
+		output_config: Some(messages::typed::OutputConfig {
+			effort: None,
+			format: None,
+		}),
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"thinking": {
+				"type": "adaptive"
+			},
+			"output_config": {}
+		}))
+	);
+
+	let inference = out.inference_config.unwrap();
+	assert_eq!(inference.temperature, Some(0.7));
+	assert_eq!(inference.top_p, Some(0.8));
+	assert_eq!(inference.top_k, Some(50));
+}
+
+#[test]
+fn test_thinking_and_output_config_are_both_passed_through() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_k: None,
+		top_p: None,
+		tools: None,
+		tool_choice: None,
+		thinking: Some(messages::typed::ThinkingInput::Enabled {
+			budget_tokens: 1024,
+		}),
+		output_config: Some(messages::typed::OutputConfig {
+			effort: Some(messages::typed::ThinkingEffort::High),
+			format: None,
+		}),
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": 1024
+			},
+			"output_config": {
+				"effort": "high"
+			}
+		}))
+	);
+}
+
+#[test]
+fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: Some(vec![messages::typed::Tool {
+			name: "lookup".to_string(),
+			description: Some("Lookup tool".to_string()),
+			input_schema: json!({
+				"type": "object",
+				"properties": {
+					"q": { "type": "string" }
+				},
+				"required": ["q"]
+			}),
+			cache_control: None,
+		}]),
+		tool_choice: Some(messages::typed::ToolChoice::Tool {
+			name: "lookup".to_string(),
+		}),
+		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
+		output_config: None,
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	let inference = out.inference_config.unwrap();
+	assert_eq!(inference.temperature, Some(0.7));
+	assert_eq!(inference.top_p, Some(0.8));
+	assert_eq!(inference.top_k, Some(50));
+
+	let tool_choice = out
+		.tool_config
+		.as_ref()
+		.and_then(|cfg| cfg.tool_choice.as_ref());
+	assert!(matches!(
+		tool_choice,
+		Some(types::bedrock::ToolChoice::Tool { name }) if name == "lookup"
+	));
+
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"thinking": {
+				"type": "adaptive"
+			}
+		}))
+	);
+}
+
+#[test]
+fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: Some(0.7),
+		top_k: Some(50),
+		top_p: Some(0.8),
+		tools: Some(vec![messages::typed::Tool {
+			name: "lookup".to_string(),
+			description: Some("Lookup tool".to_string()),
+			input_schema: json!({
+				"type": "object",
+				"properties": {
+					"q": { "type": "string" }
+				},
+				"required": ["q"]
+			}),
+			cache_control: None,
+		}]),
+		tool_choice: Some(messages::typed::ToolChoice::Auto),
+		thinking: Some(messages::typed::ThinkingInput::Enabled {
+			budget_tokens: 1024,
+		}),
+		output_config: None,
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None);
+	let inference = out.inference_config.unwrap();
+	assert_eq!(inference.temperature, None);
+	assert_eq!(inference.top_p, None);
+	assert_eq!(inference.top_k, None);
+
+	let tool_choice = out
+		.tool_config
+		.as_ref()
+		.and_then(|cfg| cfg.tool_choice.as_ref());
+	assert!(matches!(tool_choice, Some(types::bedrock::ToolChoice::Any)));
 }
 
 #[test]
@@ -194,6 +566,404 @@ fn test_metadata_from_completions_metadata_field() {
 	assert_eq!(md.get("user_id"), Some(&"user123".to_string()));
 	assert_eq!(md.get("department"), Some(&"engineering".to_string()));
 	assert!(!md.contains_key("nonstr"));
+}
+
+#[test]
+fn test_completions_json_schema_response_format_maps_to_converse_output_config() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let schema = json!({
+		"type": "object",
+		"properties": {
+			"summary": { "type": "string" }
+		},
+		"required": ["summary"],
+		"additionalProperties": false
+	});
+
+	let req = types::completions::typed::Request {
+		model: Some("anthropic.claude-3-sonnet".to_string()),
+		messages: vec![types::completions::typed::RequestMessage::User(
+			types::completions::typed::RequestUserMessage {
+				content: types::completions::typed::RequestUserMessageContent::Text(
+					"Summarize".to_string(),
+				),
+				name: None,
+			},
+		)],
+		stream: None,
+		temperature: None,
+		top_p: None,
+		max_completion_tokens: Some(16),
+		stop: None,
+		tools: None,
+		tool_choice: None,
+		parallel_tool_calls: None,
+		user: None,
+		vendor_extensions: Default::default(),
+		frequency_penalty: None,
+		logit_bias: None,
+		logprobs: None,
+		top_logprobs: None,
+		n: None,
+		modalities: None,
+		prediction: None,
+		audio: None,
+		presence_penalty: None,
+		response_format: Some(types::completions::typed::ResponseFormat::JsonSchema {
+			json_schema: types::completions::typed::ResponseFormatJsonSchema {
+				description: Some("Structured summary".to_string()),
+				name: "summary_schema".to_string(),
+				schema: Some(schema.clone()),
+				strict: Some(true),
+			},
+		}),
+		seed: None,
+		#[allow(deprecated)]
+		function_call: None,
+		#[allow(deprecated)]
+		functions: None,
+		metadata: None,
+		#[allow(deprecated)]
+		max_tokens: None,
+		service_tier: None,
+		web_search_options: None,
+		stream_options: None,
+		store: None,
+		reasoning_effort: None,
+	};
+
+	let out = super::from_completions::translate_internal(
+		req,
+		"anthropic.claude-3-sonnet".to_string(),
+		&provider,
+		None,
+		None,
+	);
+	assert_eq!(
+		out.output_config,
+		Some(types::bedrock::OutputConfig {
+			text_format: Some(types::bedrock::OutputFormat {
+				r#type: types::bedrock::OutputFormatType::JsonSchema,
+				structure: types::bedrock::OutputFormatStructure {
+					json_schema: types::bedrock::JsonSchemaDefinition {
+						schema: serde_json::to_string(&schema).unwrap(),
+						name: Some("summary_schema".to_string()),
+						description: Some("Structured summary".to_string()),
+					},
+				},
+			}),
+		})
+	);
+}
+
+#[test]
+fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = types::completions::typed::Request {
+		model: Some("anthropic.claude-3-sonnet".to_string()),
+		messages: vec![types::completions::typed::RequestMessage::User(
+			types::completions::typed::RequestUserMessage {
+				content: types::completions::typed::RequestUserMessageContent::Text(
+					"Deeply analyze this topic".to_string(),
+				),
+				name: None,
+			},
+		)],
+		stream: None,
+		temperature: None,
+		top_p: None,
+		max_completion_tokens: Some(64),
+		stop: None,
+		tools: None,
+		tool_choice: None,
+		parallel_tool_calls: None,
+		user: None,
+		vendor_extensions: Default::default(),
+		frequency_penalty: None,
+		logit_bias: None,
+		logprobs: None,
+		top_logprobs: None,
+		n: None,
+		modalities: None,
+		prediction: None,
+		audio: None,
+		presence_penalty: None,
+		response_format: None,
+		seed: None,
+		#[allow(deprecated)]
+		function_call: None,
+		#[allow(deprecated)]
+		functions: None,
+		metadata: None,
+		#[allow(deprecated)]
+		max_tokens: None,
+		service_tier: None,
+		web_search_options: None,
+		stream_options: None,
+		store: None,
+		reasoning_effort: Some(types::completions::typed::ReasoningEffort::Xhigh),
+	};
+
+	let out = super::from_completions::translate_internal(
+		req,
+		"anthropic.claude-3-sonnet".to_string(),
+		&provider,
+		None,
+		None,
+	);
+
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": 4096
+			}
+		}))
+	);
+}
+
+#[test]
+fn test_completions_explicit_thinking_budget_forces_enabled_thinking() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = types::completions::typed::Request {
+		model: Some("anthropic.claude-3-sonnet".to_string()),
+		messages: vec![types::completions::typed::RequestMessage::User(
+			types::completions::typed::RequestUserMessage {
+				content: types::completions::typed::RequestUserMessageContent::Text(
+					"Deeply analyze this topic".to_string(),
+				),
+				name: None,
+			},
+		)],
+		stream: None,
+		temperature: None,
+		top_p: None,
+		max_completion_tokens: Some(64),
+		stop: None,
+		tools: None,
+		tool_choice: None,
+		parallel_tool_calls: None,
+		user: None,
+		vendor_extensions: types::completions::typed::RequestVendorExtensions {
+			top_k: None,
+			thinking_budget_tokens: Some(3072),
+		},
+		frequency_penalty: None,
+		logit_bias: None,
+		logprobs: None,
+		top_logprobs: None,
+		n: None,
+		modalities: None,
+		prediction: None,
+		audio: None,
+		presence_penalty: None,
+		response_format: None,
+		seed: None,
+		#[allow(deprecated)]
+		function_call: None,
+		#[allow(deprecated)]
+		functions: None,
+		metadata: None,
+		#[allow(deprecated)]
+		max_tokens: None,
+		service_tier: None,
+		web_search_options: None,
+		stream_options: None,
+		store: None,
+		reasoning_effort: Some(types::completions::typed::ReasoningEffort::High),
+	};
+
+	let out = super::from_completions::translate_internal(
+		req,
+		"anthropic.claude-3-sonnet".to_string(),
+		&provider,
+		None,
+		None,
+	);
+
+	assert_eq!(
+		out.additional_model_request_fields,
+		Some(json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": 3072
+			}
+		}))
+	);
+}
+
+#[test]
+fn test_responses_json_schema_text_format_maps_to_converse_output_config() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let schema = json!({
+		"type": "object",
+		"properties": {
+			"city": { "type": "string" }
+		},
+		"required": ["city"],
+		"additionalProperties": false
+	});
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"max_output_tokens": 64,
+		"input": "Extract the city name.",
+		"text": {
+			"format": {
+				"type": "json_schema",
+				"name": "city_schema",
+				"description": "Structured city extraction",
+				"schema": schema
+			}
+		}
+	}))
+	.expect("valid responses request");
+
+	let translated = super::from_responses::translate(&req, &provider, None, None).unwrap();
+	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+
+	assert_eq!(
+		translated["outputConfig"]["textFormat"]["type"],
+		json!("json_schema")
+	);
+	assert_eq!(
+		translated["outputConfig"]["textFormat"]["structure"]["jsonSchema"]["name"],
+		json!("city_schema")
+	);
+	assert_eq!(
+		translated["outputConfig"]["textFormat"]["structure"]["jsonSchema"]["description"],
+		json!("Structured city extraction")
+	);
+	assert_eq!(
+		translated["outputConfig"]["textFormat"]["structure"]["jsonSchema"]["schema"],
+		serde_json::to_string(&schema).unwrap()
+	);
+}
+
+#[test]
+fn test_responses_reasoning_effort_maps_to_enabled_thinking_budget() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-5",
+		"max_output_tokens": 64,
+		"input": "Classify the intent.",
+		"reasoning": {
+			"effort": "high"
+		}
+	}))
+	.expect("valid responses request");
+
+	let translated = super::from_responses::translate(&req, &provider, None, None).unwrap();
+	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+
+	assert_eq!(
+		translated["additionalModelRequestFields"],
+		json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": 4096
+			}
+		})
+	);
+}
+
+#[test]
+fn test_responses_explicit_thinking_budget_forces_enabled_thinking() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-5",
+		"max_output_tokens": 64,
+		"input": "Classify the intent.",
+		"reasoning": {
+			"effort": "high"
+		},
+		"vendor_extensions": {
+			"thinking_budget_tokens": 3072
+		}
+	}))
+	.expect("valid responses request");
+
+	let translated = super::from_responses::translate(&req, &provider, None, None).unwrap();
+	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+
+	assert_eq!(
+		translated["additionalModelRequestFields"],
+		json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": 3072
+			}
+		})
+	);
+}
+
+#[test]
+fn test_responses_vendor_extension_thinking_budget_forces_enabled_thinking() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-5",
+		"max_output_tokens": 64,
+		"input": "Classify the intent.",
+		"vendor_extensions": {
+			"thinking_budget_tokens": 3072
+		}
+	}))
+	.expect("valid responses request");
+
+	let translated = super::from_responses::translate(&req, &provider, None, None).unwrap();
+	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+
+	assert_eq!(
+		translated["additionalModelRequestFields"],
+		json!({
+			"thinking": {
+				"type": "enabled",
+				"budget_tokens": 3072
+			}
+		})
+	);
 }
 
 #[test]

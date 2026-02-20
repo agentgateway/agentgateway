@@ -11,7 +11,7 @@ use crate::{llm, parse};
 
 pub mod from_messages {
 	use itertools::Itertools;
-	use messages::{ContentBlock, ThinkingInput, ToolResultContent, ToolResultContentPart};
+	use messages::{ContentBlock, ToolResultContent, ToolResultContentPart};
 	use types::completions::typed as completions;
 	use types::messages::typed as messages;
 
@@ -40,7 +40,39 @@ pub mod from_messages {
 			tool_choice,
 			metadata,
 			thinking,
+			output_config,
 		} = req;
+
+		let adaptive_thinking_requested = thinking
+			.as_ref()
+			.is_some_and(|t| matches!(t, messages::ThinkingInput::Adaptive {}));
+		let output_effort = output_config.as_ref().and_then(|cfg| cfg.effort);
+		let reasoning_effort = if adaptive_thinking_requested {
+			Some(match output_effort {
+				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
+				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
+				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
+				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Xhigh,
+				// Anthropic adaptive thinking defaults to high effort when omitted.
+				None => completions::ReasoningEffort::High,
+			})
+		} else {
+			None
+		};
+		let response_format = output_config
+			.as_ref()
+			.and_then(|cfg| cfg.format.as_ref())
+			.map(|format| match format {
+				messages::OutputFormat::JsonSchema { schema } => completions::ResponseFormat::JsonSchema {
+					json_schema: completions::ResponseFormatJsonSchema {
+						description: None,
+						name: "structured_output".to_string(),
+						schema: Some(schema.clone()),
+						strict: None,
+					},
+				},
+			});
+
 		let mut msgs: Vec<completions::RequestMessage> = Vec::new();
 
 		// Handle the system prompt (convert both string and block formats to string)
@@ -240,9 +272,9 @@ pub mod from_messages {
 
 			vendor_extensions: completions::RequestVendorExtensions {
 				top_k,
-				thinking_budget_tokens: thinking.and_then(|t| match t {
-					ThinkingInput::Enabled { budget_tokens } => Some(budget_tokens),
-					ThinkingInput::Disabled { .. } => None,
+				thinking_budget_tokens: thinking.as_ref().and_then(|t| match t {
+					messages::ThinkingInput::Enabled { budget_tokens } => Some(*budget_tokens),
+					_ => None,
 				}),
 			},
 
@@ -256,7 +288,7 @@ pub mod from_messages {
 			prediction: None,
 			audio: None,
 			presence_penalty: None,
-			response_format: None,
+			response_format,
 			seed: None,
 			#[allow(deprecated)]
 			function_call: None,
@@ -269,7 +301,7 @@ pub mod from_messages {
 			web_search_options: None,
 			stream_options: None,
 			store: None,
-			reasoning_effort: None,
+			reasoning_effort,
 		}
 	}
 }

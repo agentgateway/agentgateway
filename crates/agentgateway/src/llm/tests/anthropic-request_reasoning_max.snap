@@ -1,0 +1,29 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "anthropic: request_reasoning_max"
+info:
+  model: claude-opus-4-6
+  messages:
+    - role: user
+      content: Deeply analyze quantum gravity
+  reasoning_effort: xhigh
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Deeply analyze quantum gravity"
+        }
+      ]
+    }
+  ],
+  "model": "claude-opus-4-6",
+  "max_tokens": 4096,
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 4096
+  }
+}

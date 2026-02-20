@@ -1,0 +1,16 @@
+{
+  "model": "claude-opus-4-6",
+  "max_tokens": 1024,
+  "thinking": {
+    "type": "adaptive"
+  },
+  "output_config": {
+    "effort": "high"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Give one concise insight about distributed consensus."
+    }
+  ]
+}

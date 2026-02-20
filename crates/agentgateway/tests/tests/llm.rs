@@ -156,78 +156,82 @@ mod openai {
 mod bedrock {
 	use super::*;
 
-	#[tokio::test]
-	async fn completions() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
+	const MODEL_NOVA_PRO: &str = "us.amazon.nova-pro-v1:0";
+	const MODEL_TITAN_EMBED: &str = "amazon.titan-embed-text-v2:0";
+	const MODEL_COHERE_EMBED: &str = "cohere.embed-english-v3";
+	const MODEL_HAIKU_45_PROFILE: &str = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+	const MODEL_HAIKU_45_BASE: &str = "anthropic.claude-haiku-4-5-20251001-v1:0";
+	const MODEL_OPUS_46_PROFILE: &str = "us.anthropic.claude-opus-4-6-v1";
+
+	macro_rules! bedrock_test {
+		($(#[$meta:meta])* $name:ident, $model:expr, $send_fn:ident $(, $arg:expr)* $(,)?) => {
+			$(#[$meta])*
+			#[tokio::test]
+			async fn $name() {
+				let Some(gw) = setup("bedrock", "", $model).await else {
+					return;
+				};
+				$send_fn(&gw $(, $arg)*).await;
+			}
 		};
-		send_completions(&gw, false).await;
 	}
 
-	#[tokio::test]
-	async fn completions_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_completions(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn responses() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_responses(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn responses_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_responses(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn messages() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_messages(&gw, false).await;
-	}
-
-	#[tokio::test]
-	async fn messages_streaming() {
-		let Some(gw) = setup("bedrock", "", "us.amazon.nova-pro-v1:0").await else {
-			return;
-		};
-		send_messages(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn embeddings_titan() {
-		let Some(gw) = setup("bedrock", "", "amazon.titan-embed-text-v2:0").await else {
-			return;
-		};
-		send_embeddings(&gw, None).await;
-	}
-
-	#[tokio::test]
-	async fn embeddings_cohere() {
-		let Some(gw) = setup("bedrock", "", "cohere.embed-english-v3").await else {
-			return;
-		};
-		// Cohere does not respect overriding the dimension count
-		send_embeddings(&gw, Some(1024)).await;
-	}
-
-	#[tokio::test]
-	async fn token_count() {
-		let Some(gw) = setup("bedrock", "", "anthropic.claude-3-5-haiku-20241022-v1:0").await else {
-			return;
-		};
-		send_anthropic_token_count(&gw).await;
-	}
+	bedrock_test!(completions, MODEL_NOVA_PRO, send_completions, false);
+	bedrock_test!(
+		completions_streaming,
+		MODEL_NOVA_PRO,
+		send_completions,
+		true
+	);
+	bedrock_test!(responses, MODEL_NOVA_PRO, send_responses, false);
+	bedrock_test!(responses_streaming, MODEL_NOVA_PRO, send_responses, true);
+	bedrock_test!(messages, MODEL_NOVA_PRO, send_messages, false);
+	bedrock_test!(messages_streaming, MODEL_NOVA_PRO, send_messages, true);
+	bedrock_test!(embeddings_titan, MODEL_TITAN_EMBED, send_embeddings, None);
+	// Cohere does not respect overriding the dimension count.
+	bedrock_test!(
+		embeddings_cohere,
+		MODEL_COHERE_EMBED,
+		send_embeddings,
+		Some(1024)
+	);
+	bedrock_test!(token_count, MODEL_HAIKU_45_BASE, send_anthropic_token_count);
+	bedrock_test!(
+		structured_output_haiku_45,
+		MODEL_HAIKU_45_PROFILE,
+		send_structured_json_completions
+	);
+	bedrock_test!(thinking_haiku_45, MODEL_HAIKU_45_PROFILE, send_thinking);
+	bedrock_test!(
+		adaptive_thinking_rejected_haiku_45,
+		MODEL_HAIKU_45_PROFILE,
+		send_adaptive_thinking_expect_client_error
+	);
+	bedrock_test!(
+		completions_reasoning_effort_opus_46,
+		MODEL_OPUS_46_PROFILE,
+		send_completions_reasoning_effort
+	);
+	bedrock_test!(
+		responses_reasoning_effort_opus_46,
+		MODEL_OPUS_46_PROFILE,
+		send_responses_reasoning_effort
+	);
+	bedrock_test!(
+		responses_thinking_budget_opus_46,
+		MODEL_OPUS_46_PROFILE,
+		send_responses_thinking_budget
+	);
+	bedrock_test!(
+		adaptive_thinking_opus_46,
+		MODEL_OPUS_46_PROFILE,
+		send_adaptive_thinking
+	);
+	bedrock_test!(
+		output_config_effort_opus_46,
+		MODEL_OPUS_46_PROFILE,
+		send_output_config_effort
+	);
 }
 
 mod anthropic {
@@ -446,49 +450,59 @@ async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
 	Some(gw)
 }
 
-fn assert_log(path: &str, streaming: bool, test_id: &str) {
-	let logs = agent_core::telemetry::testing::find(&[
+async fn assert_log(path: &str, streaming: bool, test_id: &str) {
+	assert_log_with_output_range(path, streaming, test_id, 1, 100).await;
+}
+
+async fn assert_log_with_output_range(
+	path: &str,
+	streaming: bool,
+	test_id: &str,
+	min: i64,
+	max: i64,
+) {
+	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", path),
 		("req.id", test_id),
-	]);
-	assert_eq!(logs.len(), 1, "{logs:?}");
-	let log = logs.first().unwrap();
+	])
+	.await
+	.unwrap();
 	let output = log
 		.get("gen_ai.usage.output_tokens")
 		.unwrap()
 		.as_i64()
 		.unwrap();
 	assert!(
-		(1..100).contains(&output),
-		"unexpected output tokens: {output}"
+		(min..max).contains(&output),
+		"unexpected output tokens: {output}; expected [{min}, {max})"
 	);
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
 	assert_eq!(stream, streaming, "unexpected streaming value: {stream}");
 }
 
-fn assert_count_log(path: &str, test_id: &str) {
-	let logs = agent_core::telemetry::testing::find(&[
+async fn assert_count_log(path: &str, test_id: &str) {
+	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", path),
 		("req.id", test_id),
-	]);
-	assert_eq!(logs.len(), 1, "{logs:?}");
-	let log = logs.first().unwrap();
+	])
+	.await
+	.unwrap();
 	let count = log.get("token.count").unwrap().as_u64().unwrap();
 	assert!(count > 1 && count < 100, "unexpected count tokens: {count}");
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
 	assert!(!stream, "unexpected streaming value: {stream}");
 }
 
-fn assert_embeddings_log(path: &str, test_id: &str, expected: u64) {
-	let logs = agent_core::telemetry::testing::find(&[
+async fn assert_embeddings_log(path: &str, test_id: &str, expected: u64) {
+	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", path),
 		("req.id", test_id),
-	]);
-	assert_eq!(logs.len(), 1, "{logs:?}");
-	let log = logs.first().unwrap();
+	])
+	.await
+	.unwrap();
 	let count = log.get("embeddings").unwrap().as_i64().unwrap();
 	assert_eq!(count, expected as i64, "unexpected count tokens: {count}");
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
@@ -520,21 +534,37 @@ fn require_env(var: &str) -> bool {
 }
 
 async fn send_completions(gw: &AgentGateway, stream: bool) {
+	send_completions_request(gw, stream, None, None, "give me a 1 word answer").await;
+	assert_log("/v1/chat/completions", stream, &gw.test_id).await;
+}
+
+async fn send_completions_request(
+	gw: &AgentGateway,
+	stream: bool,
+	max_tokens: Option<u32>,
+	reasoning_effort: Option<&str>,
+	prompt: &str,
+) {
+	let mut req = json!({
+		"stream": stream,
+		"messages": [{
+			"role": "user",
+			"content": prompt
+		}]
+	});
+
+	if let Some(max_tokens) = max_tokens {
+		req["max_tokens"] = json!(max_tokens);
+	}
+	if let Some(reasoning_effort) = reasoning_effort {
+		req["reasoning_effort"] = json!(reasoning_effort);
+	}
+
 	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/chat/completions",
-			json!({
-			"stream": stream,
-				"messages": [{
-					"role": "user",
-					"content": "give me a 1 word answer"
-				}]
-			}),
-		)
+		.send_request_json("http://localhost/v1/chat/completions", req)
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/chat/completions", stream, &gw.test_id);
 }
 
 async fn send_responses(gw: &AgentGateway, stream: bool) {
@@ -550,7 +580,7 @@ async fn send_responses(gw: &AgentGateway, stream: bool) {
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/responses", stream, &gw.test_id);
+	assert_log("/v1/responses", stream, &gw.test_id).await;
 }
 
 async fn send_messages(gw: &AgentGateway, stream: bool) {
@@ -568,7 +598,7 @@ async fn send_messages(gw: &AgentGateway, stream: bool) {
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/messages", stream, &gw.test_id);
+	assert_log("/v1/messages", stream, &gw.test_id).await;
 }
 
 async fn send_anthropic_token_count(gw: &AgentGateway) {
@@ -584,7 +614,7 @@ async fn send_anthropic_token_count(gw: &AgentGateway) {
 		.await;
 
 	assert_eq!(resp.status(), StatusCode::OK);
-	assert_count_log("/v1/messages/count_tokens", &gw.test_id);
+	assert_count_log("/v1/messages/count_tokens", &gw.test_id).await;
 }
 
 async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) {
@@ -631,5 +661,238 @@ async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) 
 		"/v1/embeddings",
 		&gw.test_id,
 		expected_dimensions.unwrap_or(256) as u64,
+	)
+	.await;
+}
+
+async fn send_adaptive_thinking(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 4096,
+				"thinking": {
+					"type": "adaptive"
+				},
+				"output_config": {
+					"effort": "high"
+				},
+				"messages": [{
+					"role": "user",
+					"content": "Summarize the benefits of automated testing in one sentence."
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	let content = body.get("content").unwrap().as_array().unwrap();
+	assert!(!content.is_empty(), "content should not be empty");
+
+	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 3000).await;
+}
+
+async fn send_structured_json_completions(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/chat/completions",
+			json!({
+				"stream": false,
+				"messages": [{
+					"role": "user",
+					"content": "Return valid JSON with exactly one key named answer and a short string value."
+				}],
+				"response_format": {
+					"type": "json_schema",
+					"json_schema": {
+						"name": "answer_schema",
+						"strict": true,
+						"schema": {
+							"type": "object",
+							"additionalProperties": false,
+							"properties": {
+								"answer": {
+									"type": "string"
+								}
+							},
+							"required": ["answer"]
+						}
+					}
+				}
+			}),
+		)
+		.await;
+
+	let status = resp.status();
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	assert_eq!(status, StatusCode::OK, "response: {body}");
+
+	let content = body["choices"][0]["message"]["content"]
+		.as_str()
+		.expect("structured output content should be a string");
+	let parsed_content: serde_json::Value =
+		serde_json::from_str(content).expect("structured output content should be valid json");
+	let answer = parsed_content["answer"]
+		.as_str()
+		.expect("structured output should include answer string");
+	assert!(
+		!answer.is_empty(),
+		"structured output answer should not be empty"
+	);
+
+	assert_log_with_output_range("/v1/chat/completions", false, &gw.test_id, 1, 1000).await;
+}
+
+async fn send_thinking(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 4096,
+				"thinking": {
+					"type": "enabled",
+					"budget_tokens": 1024
+				},
+				"messages": [{
+					"role": "user",
+					"content": "Summarize the benefits of automated testing in one sentence."
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	let content = body.get("content").unwrap().as_array().unwrap();
+	assert!(!content.is_empty(), "content should not be empty");
+
+	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 1000).await;
+}
+
+async fn send_output_config_effort(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 4096,
+				"output_config": {
+					"effort": "high"
+				},
+				"messages": [{
+					"role": "user",
+					"content": "Summarize the benefits of automated testing in one sentence."
+				}]
+			}),
+		)
+		.await;
+
+	assert_eq!(resp.status(), StatusCode::OK);
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	let content = body.get("content").unwrap().as_array().unwrap();
+	assert!(!content.is_empty(), "content should not be empty");
+
+	assert_log_with_output_range("/v1/messages", false, &gw.test_id, 1, 1000).await;
+}
+
+async fn send_completions_reasoning_effort(gw: &AgentGateway) {
+	send_completions_request(
+		gw,
+		false,
+		Some(2048),
+		Some("low"),
+		"Summarize the benefits of automated testing in one sentence.",
+	)
+	.await;
+	assert_log_with_output_range("/v1/chat/completions", false, &gw.test_id, 1, 1000).await;
+}
+
+async fn send_responses_reasoning_effort(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/responses",
+			json!({
+				"max_output_tokens": 2048,
+				"input": "Summarize the benefits of automated testing in one sentence.",
+				"reasoning": {
+					"effort": "low"
+				}
+			}),
+		)
+		.await;
+
+	let status = resp.status();
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	assert_eq!(status, StatusCode::OK, "response: {body}");
+
+	assert_log_with_output_range("/v1/responses", false, &gw.test_id, 1, 2000).await;
+}
+
+async fn send_responses_thinking_budget(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/responses",
+			json!({
+				"max_output_tokens": 4096,
+				"input": "Summarize the benefits of automated testing in one sentence.",
+				"reasoning": {
+					"effort": "high"
+				},
+				"vendor_extensions": {
+					"thinking_budget_tokens": 3072
+				}
+			}),
+		)
+		.await;
+
+	let status = resp.status();
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	assert_eq!(status, StatusCode::OK, "response: {body}");
+
+	assert_log_with_output_range("/v1/responses", false, &gw.test_id, 1, 2000).await;
+}
+
+async fn send_adaptive_thinking_expect_client_error(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/messages",
+			json!({
+				"max_tokens": 4096,
+				"thinking": {
+					"type": "adaptive"
+				},
+				"messages": [{
+					"role": "user",
+					"content": "Summarize the benefits of automated testing in one sentence."
+				}]
+			}),
+		)
+		.await;
+	let status = resp.status();
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	assert!(
+		status.is_client_error(),
+		"expected client error for unsupported adaptive thinking, got status={status}, body={body}"
 	);
 }

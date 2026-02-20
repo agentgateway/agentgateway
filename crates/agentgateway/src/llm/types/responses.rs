@@ -32,7 +32,19 @@ pub struct Request {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub stream: Option<bool>,
 
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub vendor_extensions: Option<RequestVendorExtensions>,
+
 	// Everything else (tools, reasoning, etc.) - passthrough
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize, Default)]
+pub struct RequestVendorExtensions {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub thinking_budget_tokens: Option<u64>,
+
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -495,12 +507,12 @@ pub mod typed {
 		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
 		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
 		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
-		Response, ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
-		ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
+		ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
+		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
 		ResponseIncompleteEvent, ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent,
-		ResponseTextDeltaEvent, ResponseUsage, Role, Status, Tool, ToolChoiceFunction,
-		ToolChoiceOptions, ToolChoiceParam,
+		ResponseTextDeltaEvent, ResponseTextParam, ResponseUsage, Role, Status,
+		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 

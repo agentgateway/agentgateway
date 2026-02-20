@@ -5,7 +5,7 @@ This folder contains JSON schemas for various parts of the project.
 ## CEL
 
 The schema for the CEL expressions used in the rules.
-See the [CEL documentation](https://agentgateway.dev/docs/reference/cel/) for more details.
+See the [CEL documentation](https://agentgateway.dev/docs/standalone/latest/reference/cel/) for more details.
 
 * [Overview](./cel.md)
 * [JSON Schema](./cel.json)

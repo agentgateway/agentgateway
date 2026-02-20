@@ -1,0 +1,30 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: "vertex-messages: request_anthropic_reasoning"
+info:
+  model: claude-opus-4-6
+  max_tokens: 1024
+  thinking:
+    type: adaptive
+  output_config:
+    effort: high
+  messages:
+    - role: user
+      content: Give one concise insight about distributed consensus.
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Give one concise insight about distributed consensus."
+    }
+  ],
+  "anthropic_version": "vertex-2023-10-16",
+  "max_tokens": 1024,
+  "thinking": {
+    "type": "adaptive"
+  },
+  "output_config": {
+    "effort": "high"
+  }
+}

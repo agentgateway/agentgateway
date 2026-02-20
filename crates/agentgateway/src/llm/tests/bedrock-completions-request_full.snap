@@ -107,6 +107,16 @@ info:
       "END"
     ]
   },
+  "outputConfig": {
+    "textFormat": {
+      "type": "json_schema",
+      "structure": {
+        "jsonSchema": {
+          "schema": "{\"type\":\"object\",\"additionalProperties\":true}"
+        }
+      }
+    }
+  },
   "toolConfig": {
     "tools": [
       {

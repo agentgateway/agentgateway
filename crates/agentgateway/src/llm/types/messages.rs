@@ -626,6 +626,23 @@ pub mod typed {
 
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub thinking: Option<ThinkingInput>,
+
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub output_config: Option<OutputConfig>,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
+	pub struct OutputConfig {
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub effort: Option<ThinkingEffort>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub format: Option<OutputFormat>,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	#[serde(rename_all = "snake_case", tag = "type")]
+	pub enum OutputFormat {
+		JsonSchema { schema: serde_json::Value },
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -633,6 +650,16 @@ pub mod typed {
 	pub enum ThinkingInput {
 		Enabled { budget_tokens: u64 },
 		Disabled {},
+		Adaptive {},
+	}
+
+	#[derive(Clone, Copy, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	#[serde(rename_all = "snake_case")]
+	pub enum ThinkingEffort {
+		Low,
+		Medium,
+		High,
+		Max,
 	}
 
 	/// Response body for the Messages API.

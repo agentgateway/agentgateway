@@ -185,7 +185,8 @@ jobs:
       run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
     - name: Conformance
       run: |
-        make -C controller all-conformance
+        # TODO(https://github.com/agentgateway/agentgateway/issues/1014) make -C controller all-conformance
+        make -C controller agw-conformance
     - name: Upload cargo timings
       uses: actions/upload-artifact@v4
       with:

@@ -1,0 +1,326 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for llm_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/4000
+    address: "[::]:4000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      llm:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: llm
+        listenerName: llm
+        protocol: HTTP
+        routes:
+          "llm:admin:model-list":
+            inlinePolicies:
+              - directResponse:
+                  body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MCwib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
+                  status: 200
+            key: "llm:admin:model-list"
+            matches:
+              - path:
+                  pathPrefix: /v1/models
+              - path:
+                  pathPrefix: /models
+            name: "admin:model-list"
+            namespace: internal
+          "llm:model:claude-3-haiku:0":
+            backends:
+              - backend: "/llm:claude-3-haiku"
+                weight: 1
+            inlinePolicies:
+              - ai:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/messages: messages
+                    /v1/responses: responses
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+            key: "llm:model:claude-3-haiku:0"
+            matches:
+              - headers:
+                  - name: x-org
+                    value:
+                      exact: engineering
+                  - name: x-gateway-model-name
+                    value:
+                      exact: claude-3-haiku
+                path:
+                  pathPrefix: /
+            name: "model:claude-3-haiku"
+            namespace: internal
+          "llm:model:gemini-0.5-pro:1":
+            backends:
+              - backend: "/llm:gemini-0.5-pro"
+                weight: 1
+            inlinePolicies:
+              - ai:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/messages: messages
+                    /v1/responses: responses
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+            key: "llm:model:gemini-0.5-pro:1"
+            matches:
+              - headers:
+                  - name: x-gateway-model-name
+                    value:
+                      exact: gemini-0.5-pro
+                path:
+                  pathPrefix: /
+            name: "model:gemini-0.5-pro"
+            namespace: internal
+          "llm:model:gpt-3.5-turbo:3":
+            backends:
+              - backend: "/llm:gpt-3.5-turbo"
+                weight: 1
+            inlinePolicies:
+              - ai:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/messages: messages
+                    /v1/responses: responses
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+            key: "llm:model:gpt-3.5-turbo:3"
+            matches:
+              - headers:
+                  - name: x-gateway-model-name
+                    value:
+                      exact: gpt-3.5-turbo
+                path:
+                  pathPrefix: /
+            name: "model:gpt-3.5-turbo"
+            namespace: internal
+          "llm:model:gpt-7-max:2":
+            backends:
+              - backend: "/llm:gpt-7-max"
+                weight: 1
+            inlinePolicies:
+              - ai:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/messages: messages
+                    /v1/responses: responses
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+            key: "llm:model:gpt-7-max:2"
+            matches:
+              - headers:
+                  - name: x-gateway-model-name
+                    value:
+                      exact: gpt-7-max
+                path:
+                  pathPrefix: /
+            name: "model:gpt-7-max"
+            namespace: internal
+        tcpRoutes: {}
+policies:
+  - key: listener/0
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
+        jwtAuth:
+          mode: optional
+          providers:
+            - issuer: agentgateway.dev
+              keys: []
+        phase: gateway
+  - key: listener/1
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
+        authorization:
+          rules:
+            allow:
+              - "jwt.email.endsWith(\"@example.com\")"
+            deny: []
+        phase: route
+  - key: "llm:transformation"
+    name:
+      kind: Local
+      name: "llm:transformation"
+      namespace: internal
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
+        phase: gateway
+        transformation:
+          request:
+            add: []
+            set:
+              - - x-gateway-model-name
+                - "\nrequest.path.endsWith(\":streamRawPredict\") || request.path.endsWith(\":rawPredict\") ?\nrequest.path.regexReplace(\"^.*/publishers/anthropic/models/(.+?):.*\", \"${1}\") :\njson(request.body).model\n"
+              - - anthropic-beta
+                - "request.headers['anthropic-beta'].split(',').filter(v, v.trim() in [])"
+            remove: []
+            body: ~
+          response:
+            add: []
+            set: []
+            remove: []
+            body: ~
+  - key: frontend/accessLog
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: ~
+    policy:
+      frontend:
+        accessLog:
+          add:
+            user: "request.headers[\"user-agent\"]"
+backends:
+  - backend:
+      ai:
+        name: "llm:claude-3-haiku"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                claude-3-haiku:
+                  endpoint:
+                    name: claude-3-haiku
+                    provider:
+                      anthropic:
+                        model: claude-3-5-haiku-20241022
+                    hostOverride: ~
+                    pathOverride: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key: "<redacted>"
+                  info:
+                    health: 1
+                    request_latency: 0
+                    pending_requests: 0
+                    total_requests: 0
+                    evicted_until: ~
+              rejected: {}
+    inlinePolicies:
+      - requestHeaderModifier:
+          remove:
+            - x-gateway-model-name
+      - ai: {}
+  - backend:
+      ai:
+        name: "llm:gemini-0.5-pro"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                gemini-0.5-pro:
+                  endpoint:
+                    name: gemini-0.5-pro
+                    provider:
+                      vertex:
+                        model: claude-3-5-haiku-20241022
+                        region: global
+                        projectId: my-vertex-project
+                    hostOverride: ~
+                    pathOverride: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key: "<redacted>"
+                  info:
+                    health: 1
+                    request_latency: 0
+                    pending_requests: 0
+                    total_requests: 0
+                    evicted_until: ~
+              rejected: {}
+    inlinePolicies:
+      - requestHeaderModifier:
+          remove:
+            - x-gateway-model-name
+      - ai: {}
+  - backend:
+      ai:
+        name: "llm:gpt-7-max"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                gpt-7-max:
+                  endpoint:
+                    name: gpt-7-max
+                    provider:
+                      azureOpenAI:
+                        model: gpt-3.5-turbo
+                        host: my-azure-openai-endpoint.openai.azure.com
+                        apiVersion: v1
+                    hostOverride: ~
+                    pathOverride: ~
+                    tokenize: false
+                  info:
+                    health: 1
+                    request_latency: 0
+                    pending_requests: 0
+                    total_requests: 0
+                    evicted_until: ~
+              rejected: {}
+    inlinePolicies:
+      - requestHeaderModifier:
+          remove:
+            - x-gateway-model-name
+      - ai: {}
+  - backend:
+      ai:
+        name: "llm:gpt-3.5-turbo"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                gpt-3.5-turbo:
+                  endpoint:
+                    name: gpt-3.5-turbo
+                    provider:
+                      openAI: {}
+                    hostOverride: ~
+                    pathOverride: ~
+                    tokenize: false
+                  info:
+                    health: 1
+                    request_latency: 0
+                    pending_requests: 0
+                    total_requests: 0
+                    evicted_until: ~
+              rejected: {}
+    inlinePolicies:
+      - requestHeaderModifier:
+          remove:
+            - x-gateway-model-name
+      - ai: {}
+workloads: []
+services: []

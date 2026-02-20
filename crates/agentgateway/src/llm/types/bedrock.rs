@@ -149,6 +149,9 @@ pub struct ConverseRequest {
 	/// Inference parameters to pass to the model.
 	#[serde(rename = "inferenceConfig", skip_serializing_if = "Option::is_none")]
 	pub inference_config: Option<InferenceConfiguration>,
+	/// Output configuration for the model response.
+	#[serde(rename = "outputConfig", skip_serializing_if = "Option::is_none")]
+	pub output_config: Option<OutputConfig>,
 	/// Configuration information for the tools that the model can use.
 	#[serde(rename = "toolConfig", skip_serializing_if = "Option::is_none")]
 	pub tool_config: Option<ToolConfiguration>,
@@ -176,6 +179,48 @@ pub struct ConverseRequest {
 	/// Performance configuration.
 	#[serde(rename = "performanceConfig", skip_serializing_if = "Option::is_none")]
 	pub performance_config: Option<PerformanceConfiguration>,
+}
+
+#[derive(Clone, Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputConfig {
+	/// Structured output parameters to control the model's text response.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub text_format: Option<OutputFormat>,
+}
+
+#[derive(Clone, Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputFormat {
+	/// The type of structured output format.
+	pub r#type: OutputFormatType,
+	/// The structure that the model's output must adhere to.
+	pub structure: OutputFormatStructure,
+}
+
+#[derive(Clone, Serialize, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum OutputFormatType {
+	JsonSchema,
+}
+
+#[derive(Clone, Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputFormatStructure {
+	/// A JSON schema structure that the model's output must adhere to.
+	pub json_schema: JsonSchemaDefinition,
+}
+
+#[derive(Clone, Serialize, Debug, PartialEq)]
+pub struct JsonSchemaDefinition {
+	/// The JSON schema to constrain the model's output.
+	pub schema: String,
+	/// Optional name for the JSON schema.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub name: Option<String>,
+	/// Optional description of the JSON schema.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub description: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

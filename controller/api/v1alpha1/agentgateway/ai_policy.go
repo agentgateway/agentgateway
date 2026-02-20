@@ -217,7 +217,7 @@ type PromptguardRequest struct {
 	Webhook *Webhook `json:"webhook,omitempty"`
 
 	// openAIModeration passes prompt data through the OpenAI Moderations endpoint.
-	// See https://platform.openai.com/docs/api-reference/moderations for more information.
+	// See https://developers.openai.com/api/reference/resources/moderations for more information.
 	// +optional
 	OpenAIModeration *OpenAIModeration `json:"openAIModeration,omitempty"`
 

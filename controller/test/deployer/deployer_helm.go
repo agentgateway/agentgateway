@@ -90,10 +90,14 @@ func VerifyAllYAMLFilesReferenced(t *testing.T, testDataDir string, testCases []
 	}
 
 	var unreferenced []string
+	var unreferencedGolden []string
 	for _, yamlFile := range yamlFiles {
 		baseName := filepath.Base(yamlFile)
-		// Skip golden files
-		if strings.HasSuffix(baseName, "-out.yaml") {
+		if before, ok := strings.CutSuffix(baseName, "-out.yaml"); ok {
+			goldenName := before
+			if !referencedFiles[goldenName] {
+				unreferencedGolden = append(unreferencedGolden, baseName)
+			}
 			continue
 		}
 		inputName := strings.TrimSuffix(baseName, ".yaml")
@@ -103,6 +107,7 @@ func VerifyAllYAMLFilesReferenced(t *testing.T, testDataDir string, testCases []
 	}
 
 	require.Empty(t, unreferenced, "Found YAML files in %s without corresponding test cases: %v", testDataDir, unreferenced)
+	require.Empty(t, unreferencedGolden, "Found golden output files in %s without corresponding test cases: %v", testDataDir, unreferencedGolden)
 }
 
 // ExtractCommonObjs will return a collection containing only objects necessary for collections.CommonCollections,
