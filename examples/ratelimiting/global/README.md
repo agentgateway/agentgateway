@@ -38,6 +38,7 @@ policies:
   remoteRateLimit:
     domain: "agentgateway"
     host: "127.0.0.1:8081"
+    failureMode: failOpen
     descriptors:
       - entries:
           - key: "user"
@@ -46,6 +47,23 @@ policies:
             value: '"echo"'
         type: "requests"
 ```
+
+<br><br>The failureMode field controls how the gateway behaves when the remote rate limit service is unavailable or returns an error:
+- `failOpen` (default): Requests are allowed through when the rate limit service fails. This prevents a rate limit service outage from taking down all traffic. This matches [Envoy's default behavior](https://www.envoyproxy.io/docs/envoy/latest/api-v3/extensions/filters/http/ratelimit/v3/rate_limit.proto) (failure_mode_deny=false).
+- `failClosed`: Requests are denied with a `500 Internal Server Error` when the rate limit service fails. Use this when strict rate limiting is required and you prefer to reject traffic rather than allow potentially unlimited requests.
+
+> **Note!**
+>
+> Both camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`, `FailClosed`) are supported for compatibility, though camelCase is preferred.
+>
+>  When `failClosed` is active and the service fails, the response is `500` (not `429`), since the request was not actually rate-limited - the service was simply unreachable.
+
+The 500 returned to the client happens in these conditions:
+- Service unreachable - the rate limit server at the configured host:port is down, refused connection, or DNS resolution failed.
+- Connection timeout - the gRPC call exceeded the configured timeout duration (or the underlying channel timeout).
+- gRPC transport error - TLS handshake failure, connection reset, broken pipe, etc.
+- gRPC application error - the rate limit server returns a non-OK gRPC status if it cannot be reached.
+The error path here is strictly about infrastructure/communication failures, which is exactly why the fail-open option exists. It lets one degrade gracefully when the rate limit service itself has an outage.  
 
 The `jwtAuth` configuration uses the example JWT keys and tokens included for demonstration purposes only.
 

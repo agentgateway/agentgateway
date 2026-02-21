@@ -1353,12 +1353,20 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						"remote_rate_limit: target must be set".into(),
 					));
 				}
+				let failure_mode = match tps::remote_rate_limit::FailureMode::try_from(rrl.failure_mode) {
+					Ok(tps::remote_rate_limit::FailureMode::FailOpen) => {
+						http::remoteratelimit::FailureMode::FailOpen
+					},
+					// Default to FailClosed (proto default is FAIL_CLOSED = 0)
+					_ => http::remoteratelimit::FailureMode::FailClosed,
+				};
 				TrafficPolicy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),
 					target: Arc::new(target),
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
 					// Not supported over XDS; use a timeout on the backend itself
 					timeout: None,
+					failure_mode,
 				})
 			},
 			Some(tps::Kind::Csrf(csrf_spec)) => {
