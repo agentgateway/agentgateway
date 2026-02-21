@@ -143,6 +143,7 @@ dependencies = [
  "async-compression",
  "async-openai",
  "async-trait",
+ "async_singleflight",
  "atomic_float",
  "aws-config",
  "aws-credential-types",
@@ -160,6 +161,7 @@ dependencies = [
  "cel",
  "chrono",
  "clocksource",
+ "cookie",
  "core_affinity",
  "crossbeam",
  "divan",
@@ -196,6 +198,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "num_cpus",
+ "oauth2",
  "once_cell",
  "openapiv3",
  "opentelemetry",
@@ -575,6 +578,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "async_singleflight"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f73e25684fbd8c3133c63435327c100f7fcd0c96a172734640b7c96f77c71f21"
+dependencies = [
+ "pin-project",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
@@ -1647,6 +1661,17 @@ dependencies = [
  "getrandom 0.2.17",
  "once_cell",
  "tiny-keccak",
+]
+
+[[package]]
+name = "cookie"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ddef33a339a91ea89fb53151bd0a4689cfce27055c291dfa69945475d22c747"
+dependencies = [
+ "percent-encoding",
+ "time",
+ "version_check",
 ]
 
 [[package]]

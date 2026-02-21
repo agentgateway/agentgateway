@@ -654,6 +654,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)timeout`|Timeout for the request|
 |`binds[].listeners[].routes[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)forward`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].issuer`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].audiences`||
@@ -661,11 +662,24 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)forward`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)issuer`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)forward`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)issuer`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)audiences`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providerBackend`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.port`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.(any)file`||
@@ -702,6 +716,30 @@
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`binds[].listeners[].routes[].policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`binds[].listeners[].routes[].policies.oauth2.issuer`|OIDC issuer URL.|
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.name`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.port`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.oauth2.clientId`|OAuth2 client ID.|
+|`binds[].listeners[].routes[].policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`binds[].listeners[].routes[].policies.oauth2.clientSecret.(any)file`||
+|`binds[].listeners[].routes[].policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
+|`binds[].listeners[].routes[].policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`binds[].listeners[].routes[].policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
+|`binds[].listeners[].routes[].policies.oauth2.cookieName`|Session cookie base name.|
+|`binds[].listeners[].routes[].policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
+|`binds[].listeners[].routes[].policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
+|`binds[].listeners[].routes[].policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
+|`binds[].listeners[].routes[].policies.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
+|`binds[].listeners[].routes[].policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
+|`binds[].listeners[].routes[].policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
+|`binds[].listeners[].routes[].policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`binds[].listeners[].routes[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name`||
@@ -1509,6 +1547,7 @@
 |`binds[].listeners[].policies`||
 |`binds[].listeners[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)forward`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].issuer`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].audiences`||
@@ -1516,11 +1555,24 @@
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)forward`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)issuer`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)forward`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)issuer`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)audiences`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providerBackend`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.namespace`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.hostname`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.port`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].policies.extAuthz.(any)(1)service`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.name`||
@@ -1547,6 +1599,30 @@
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`binds[].listeners[].policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`binds[].listeners[].policies.oauth2.issuer`|OIDC issuer URL.|
+|`binds[].listeners[].policies.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.name`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.port`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.oauth2.clientId`|OAuth2 client ID.|
+|`binds[].listeners[].policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`binds[].listeners[].policies.oauth2.clientSecret.(any)file`||
+|`binds[].listeners[].policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
+|`binds[].listeners[].policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`binds[].listeners[].policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
+|`binds[].listeners[].policies.oauth2.cookieName`|Session cookie base name.|
+|`binds[].listeners[].policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
+|`binds[].listeners[].policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
+|`binds[].listeners[].policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
+|`binds[].listeners[].policies.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
+|`binds[].listeners[].policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
+|`binds[].listeners[].policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
+|`binds[].listeners[].policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`binds[].listeners[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].policies.extProc.(any)(1)service.name`||
@@ -2206,6 +2282,7 @@
 |`policies[].policy.remoteRateLimit.(any)timeout`|Timeout for the request|
 |`policies[].policy.jwtAuth`|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)forward`||
 |`policies[].policy.jwtAuth.(any)(any)providers`||
 |`policies[].policy.jwtAuth.(any)(any)providers[].issuer`||
 |`policies[].policy.jwtAuth.(any)(any)providers[].audiences`||
@@ -2213,11 +2290,24 @@
 |`policies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`policies[].policy.jwtAuth.(any)(any)providers[].jwks.(any)url`||
 |`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)forward`||
 |`policies[].policy.jwtAuth.(any)(any)issuer`||
 |`policies[].policy.jwtAuth.(any)(any)audiences`||
 |`policies[].policy.jwtAuth.(any)(any)jwks`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)file`||
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
+|`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)forward`||
+|`policies[].policy.jwtAuth.(any)(any)issuer`||
+|`policies[].policy.jwtAuth.(any)(any)audiences`||
+|`policies[].policy.jwtAuth.(any)(any)providerBackend`||
+|`policies[].policy.jwtAuth.(any)(any)providerBackend.(any)(1)service`||
+|`policies[].policy.jwtAuth.(any)(any)providerBackend.(any)(1)service.name`||
+|`policies[].policy.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.namespace`||
+|`policies[].policy.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.hostname`||
+|`policies[].policy.jwtAuth.(any)(any)providerBackend.(any)(1)service.port`||
+|`policies[].policy.jwtAuth.(any)(any)providerBackend.(any)(1)host`|Hostname or IP address|
+|`policies[].policy.jwtAuth.(any)(any)providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`policies[].policy.basicAuth.htpasswd.(any)file`||
@@ -2254,6 +2344,30 @@
 |`policies[].policy.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`policies[].policy.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`policies[].policy.oauth2.issuer`|OIDC issuer URL.|
+|`policies[].policy.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`policies[].policy.oauth2.providerBackend.(any)(1)service`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)service.name`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)service.port`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`policies[].policy.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.oauth2.clientId`|OAuth2 client ID.|
+|`policies[].policy.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`policies[].policy.oauth2.clientSecret.(any)file`||
+|`policies[].policy.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
+|`policies[].policy.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`policies[].policy.oauth2.scopes`|OAuth scopes requested during browser login flow.|
+|`policies[].policy.oauth2.cookieName`|Session cookie base name.|
+|`policies[].policy.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
+|`policies[].policy.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
+|`policies[].policy.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
+|`policies[].policy.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
+|`policies[].policy.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
+|`policies[].policy.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
+|`policies[].policy.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`policies[].policy.extProc`|Extend agentgateway with an external processor|
 |`policies[].policy.extProc.(any)(1)service`||
 |`policies[].policy.extProc.(any)(1)service.name`||
@@ -2990,6 +3104,7 @@
 |`llm.policies`|policies defines policies for handling incoming requests, before a model is selected|
 |`llm.policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`llm.policies.jwtAuth.(any)(any)mode`||
+|`llm.policies.jwtAuth.(any)(any)forward`||
 |`llm.policies.jwtAuth.(any)(any)providers`||
 |`llm.policies.jwtAuth.(any)(any)providers[].issuer`||
 |`llm.policies.jwtAuth.(any)(any)providers[].audiences`||
@@ -2997,11 +3112,24 @@
 |`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`llm.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
 |`llm.policies.jwtAuth.(any)(any)mode`||
+|`llm.policies.jwtAuth.(any)(any)forward`||
 |`llm.policies.jwtAuth.(any)(any)issuer`||
 |`llm.policies.jwtAuth.(any)(any)audiences`||
 |`llm.policies.jwtAuth.(any)(any)jwks`||
 |`llm.policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`llm.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`llm.policies.jwtAuth.(any)(any)mode`||
+|`llm.policies.jwtAuth.(any)(any)forward`||
+|`llm.policies.jwtAuth.(any)(any)issuer`||
+|`llm.policies.jwtAuth.(any)(any)audiences`||
+|`llm.policies.jwtAuth.(any)(any)providerBackend`||
+|`llm.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service`||
+|`llm.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name`||
+|`llm.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.namespace`||
+|`llm.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.hostname`||
+|`llm.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.port`||
+|`llm.policies.jwtAuth.(any)(any)providerBackend.(any)(1)host`|Hostname or IP address|
+|`llm.policies.jwtAuth.(any)(any)providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`llm.policies.extAuthz.(any)(1)service`||
 |`llm.policies.extAuthz.(any)(1)service.name`||
@@ -3028,6 +3156,30 @@
 |`llm.policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`llm.policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`llm.policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`llm.policies.oauth2.issuer`|OIDC issuer URL.|
+|`llm.policies.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`llm.policies.oauth2.providerBackend.(any)(1)service`||
+|`llm.policies.oauth2.providerBackend.(any)(1)service.name`||
+|`llm.policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`llm.policies.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`llm.policies.oauth2.providerBackend.(any)(1)service.port`||
+|`llm.policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`llm.policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.oauth2.clientId`|OAuth2 client ID.|
+|`llm.policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`llm.policies.oauth2.clientSecret.(any)file`||
+|`llm.policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
+|`llm.policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`llm.policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
+|`llm.policies.oauth2.cookieName`|Session cookie base name.|
+|`llm.policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
+|`llm.policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
+|`llm.policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
+|`llm.policies.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
+|`llm.policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
+|`llm.policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
+|`llm.policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`llm.policies.extProc`|Extend agentgateway with an external processor|
 |`llm.policies.extProc.(any)(1)service`||
 |`llm.policies.extProc.(any)(1)service.name`||
@@ -3810,6 +3962,7 @@
 |`mcp.policies.remoteRateLimit.(any)timeout`|Timeout for the request|
 |`mcp.policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`mcp.policies.jwtAuth.(any)(any)mode`||
+|`mcp.policies.jwtAuth.(any)(any)forward`||
 |`mcp.policies.jwtAuth.(any)(any)providers`||
 |`mcp.policies.jwtAuth.(any)(any)providers[].issuer`||
 |`mcp.policies.jwtAuth.(any)(any)providers[].audiences`||
@@ -3817,11 +3970,24 @@
 |`mcp.policies.jwtAuth.(any)(any)providers[].jwks.(any)file`||
 |`mcp.policies.jwtAuth.(any)(any)providers[].jwks.(any)url`||
 |`mcp.policies.jwtAuth.(any)(any)mode`||
+|`mcp.policies.jwtAuth.(any)(any)forward`||
 |`mcp.policies.jwtAuth.(any)(any)issuer`||
 |`mcp.policies.jwtAuth.(any)(any)audiences`||
 |`mcp.policies.jwtAuth.(any)(any)jwks`||
 |`mcp.policies.jwtAuth.(any)(any)jwks.(any)file`||
 |`mcp.policies.jwtAuth.(any)(any)jwks.(any)url`||
+|`mcp.policies.jwtAuth.(any)(any)mode`||
+|`mcp.policies.jwtAuth.(any)(any)forward`||
+|`mcp.policies.jwtAuth.(any)(any)issuer`||
+|`mcp.policies.jwtAuth.(any)(any)audiences`||
+|`mcp.policies.jwtAuth.(any)(any)providerBackend`||
+|`mcp.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service`||
+|`mcp.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name`||
+|`mcp.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.namespace`||
+|`mcp.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.name.hostname`||
+|`mcp.policies.jwtAuth.(any)(any)providerBackend.(any)(1)service.port`||
+|`mcp.policies.jwtAuth.(any)(any)providerBackend.(any)(1)host`|Hostname or IP address|
+|`mcp.policies.jwtAuth.(any)(any)providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`mcp.policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`mcp.policies.basicAuth.htpasswd.(any)file`||
@@ -3858,6 +4024,30 @@
 |`mcp.policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`mcp.policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
+|`mcp.policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`mcp.policies.oauth2.issuer`|OIDC issuer URL.|
+|`mcp.policies.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`mcp.policies.oauth2.providerBackend.(any)(1)service`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)service.name`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)service.port`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`mcp.policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.oauth2.clientId`|OAuth2 client ID.|
+|`mcp.policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`mcp.policies.oauth2.clientSecret.(any)file`||
+|`mcp.policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
+|`mcp.policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`mcp.policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
+|`mcp.policies.oauth2.cookieName`|Session cookie base name.|
+|`mcp.policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
+|`mcp.policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
+|`mcp.policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
+|`mcp.policies.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
+|`mcp.policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
+|`mcp.policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
+|`mcp.policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`mcp.policies.extProc`|Extend agentgateway with an external processor|
 |`mcp.policies.extProc.(any)(1)service`||
 |`mcp.policies.extProc.(any)(1)service.name`||

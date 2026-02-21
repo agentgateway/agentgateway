@@ -419,7 +419,7 @@ const (
 	PolicyPhasePostRouting PolicyPhase = "PostRouting"
 )
 
-// +kubebuilder:validation:XValidation:rule="has(self.phase) && self.phase == 'PreRouting' ? !has(self.rateLimit) && !has(self.cors) && !has(self.csrf) && !has(self.headerModifiers) && !has(self.hostRewrite) && !has(self.timeouts) && !has(self.retry) && !has(self.authorization): true",message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication"
+// +kubebuilder:validation:XValidation:rule="has(self.phase) && self.phase == 'PreRouting' ? !has(self.rateLimit) && !has(self.cors) && !has(self.csrf) && !has(self.headerModifiers) && !has(self.hostRewrite) && !has(self.timeouts) && !has(self.retry) && !has(self.authorization): true",message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication, and oauth2"
 type Traffic struct {
 	// The phase to apply the traffic policy to. If the phase is PreRouting, the targetRef must be a Gateway or a Listener.
 	// PreRouting is typically used only when a policy needs to influence the routing decision.
@@ -505,6 +505,10 @@ type Traffic struct {
 	// +optional
 	APIKeyAuthentication *APIKeyAuthentication `json:"apiKeyAuthentication,omitempty"`
 
+	// oauth2 authenticates users using OAuth2/OIDC browser login.
+	// +optional
+	OAuth2 *OAuth2 `json:"oauth2,omitempty"`
+
 	// direct response configures the policy to send a direct response to the client.
 	// +optional
 	DirectResponse *DirectResponse `json:"directResponse,omitempty"`
@@ -569,7 +573,7 @@ type JWTProvider struct {
 	JWKS JWKS `json:"jwks"`
 }
 
-// +kubebuilder:validation:ExactlyOneOf=remote;inline
+// +kubebuilder:validation:ExactlyOneOf=remote;inline;oidc
 type JWKS struct {
 	// remote specifies how to reach the JSON Web Key Set from a remote address.
 	// +optional
@@ -579,6 +583,9 @@ type JWKS struct {
 	// +kubebuilder:validation:MaxLength=65536
 	// +optional
 	Inline *string `json:"inline,omitempty"`
+	// oidc enables OIDC discovery-based key retrieval using the provider issuer.
+	// +optional
+	OIDC *OIDCJWKS `json:"oidc,omitempty"`
 }
 
 type RemoteJWKS struct {
@@ -597,6 +604,13 @@ type RemoteJWKS struct {
 	// can then be attached to the service/backend in order to set tls options for a connection to the remote jwks source.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+}
+
+type OIDCJWKS struct {
+	// providerBackendRef references the backend used for OIDC provider back-channel calls.
+	// Supported types are Service and AgentgatewayBackend.
+	// +optional
+	ProviderBackendRef *gwv1.BackendObjectReference `json:"providerBackendRef,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Strict;Optional
@@ -733,6 +747,89 @@ type APIKeyAuthentication struct {
 	//   client2: "k-456"
 	// +optional
 	SecretSelector *SecretSelector `json:"secretSelector,omitempty"`
+}
+
+// +kubebuilder:validation:ExactlyOneOf=clientSecret;clientSecretRef
+// +kubebuilder:validation:XValidation:rule="has(self.redirectUri) || (has(self.autoDetectRedirectUri) && self.autoDetectRedirectUri)",message="either redirectUri must be set or autoDetectRedirectUri must be true"
+type OAuth2 struct {
+	// issuer identifies the OIDC issuer URL.
+	// +required
+	Issuer LongString `json:"issuer"`
+
+	// providerBackendRef references the backend used for OAuth2/OIDC provider back-channel calls
+	// (discovery, JWKS, token exchange).
+	//
+	// Supported types: Service and AgentgatewayBackend.
+	// +optional
+	ProviderBackendRef *gwv1.BackendObjectReference `json:"providerBackendRef,omitempty"`
+
+	// clientId identifies the OAuth2/OIDC client.
+	// +required
+	ClientID ShortString `json:"clientId"`
+
+	// clientSecret provides the OAuth2 client secret inline.
+	// This option is the least secure; usage of clientSecretRef is preferred.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=4096
+	// +optional
+	ClientSecret *string `json:"clientSecret,omitempty"`
+
+	// clientSecretRef references a key in a Kubernetes Secret containing the OAuth2 client secret.
+	// +optional
+	ClientSecretRef *corev1.SecretKeySelector `json:"clientSecretRef,omitempty"`
+
+	// redirectUri specifies the callback URL for the OAuth2 authorization flow.
+	// +optional
+	RedirectURI *LongString `json:"redirectUri,omitempty"`
+
+	// autoDetectRedirectUri enables callback URL inference from request host/proxy headers when redirectUri is unset.
+	// +optional
+	AutoDetectRedirectURI *bool `json:"autoDetectRedirectUri,omitempty"`
+
+	// scopes specifies OAuth scopes requested during browser login flow.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Scopes []ShortString `json:"scopes,omitempty"`
+
+	// cookieName overrides the default OAuth2 session cookie name.
+	// +optional
+	CookieName *ShortString `json:"cookieName,omitempty"`
+
+	// passAccessToken forwards Authorization: Bearer <access_token> upstream after login.
+	// +optional
+	PassAccessToken *bool `json:"passAccessToken,omitempty"`
+
+	// signOutPath configures a local endpoint that clears the gateway OAuth2 session.
+	// +optional
+	SignOutPath *ShortString `json:"signOutPath,omitempty"`
+
+	// postLogoutRedirectUri configures where the IdP should redirect the user after OP logout.
+	// This URI must be registered with the IdP.
+	// +optional
+	PostLogoutRedirectURI *LongString `json:"postLogoutRedirectUri,omitempty"`
+
+	// passThroughMatchers are path prefixes that bypass OAuth2 authentication.
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	PassThroughMatchers []ShortString `json:"passThroughMatchers,omitempty"`
+
+	// denyRedirectMatchers are path prefixes that return 401 instead of browser redirect when unauthenticated.
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	DenyRedirectMatchers []ShortString `json:"denyRedirectMatchers,omitempty"`
+
+	// trustedProxyCidrs are CIDRs trusted to provide X-Forwarded-* headers for redirect URI inference.
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	TrustedProxyCIDRs []ShortString `json:"trustedProxyCidrs,omitempty"`
+
+	// refreshableCookieMaxAgeSeconds sets max age for refreshable OAuth2 sessions.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2592000
+	// +optional
+	RefreshableCookieMaxAgeSeconds *uint64 `json:"refreshableCookieMaxAgeSeconds,omitempty"`
 }
 
 type SecretSelector struct {

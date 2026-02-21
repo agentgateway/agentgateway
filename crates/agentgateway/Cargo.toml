@@ -17,6 +17,7 @@ tls-ring = ["rustls/ring", "tokio-rustls/ring"]
 internal_benches = ["divan"]
 
 [dependencies]
+cookie.workspace = true
 a2a-sdk.workspace = true
 agent-core.workspace = true
 agent-celx.workspace = true
@@ -26,6 +27,7 @@ anyhow.workspace = true
 arc-swap.workspace = true
 async-compression.workspace = true
 async-openai.workspace = true
+async_singleflight.workspace = true
 async-trait.workspace = true
 atomic_float.workspace = true
 aws-config.workspace = true
@@ -79,6 +81,7 @@ notify-debouncer-full.workspace = true
 notify.workspace = true
 num_cpus.workspace = true
 once_cell.workspace = true
+oauth2.workspace = true
 openapiv3.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry-proto.workspace = true

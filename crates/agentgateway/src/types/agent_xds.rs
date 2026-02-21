@@ -1286,30 +1286,48 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					tps::jwt::Mode::Strict => http::jwt::Mode::Strict,
 					tps::jwt::Mode::Permissive => http::jwt::Mode::Permissive,
 				};
-				let providers = jwt
-					.providers
-					.iter()
-					.map(|p| {
-						let jwks_json = match &p.jwks_source {
-							Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline.clone(),
-							None => {
-								return Err(ProtoError::Generic(
-									"JWT policy missing JWKS source".to_string(),
-								));
-							},
-						};
-						let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
-							.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
-						let audiences = if p.audiences.is_empty() {
-							None
-						} else {
-							Some(p.audiences.clone())
-						};
-						http::jwt::Provider::from_jwks(jwk_set, p.issuer.clone(), audiences)
-							.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
-					})
-					.collect::<Result<Vec<_>, _>>()?;
-				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
+				let mut providers = Vec::with_capacity(jwt.providers.len());
+				let mut oidc_infos = Vec::new();
+				for p in &jwt.providers {
+					let audiences = if p.audiences.is_empty() {
+						None
+					} else {
+						Some(p.audiences.clone())
+					};
+					match &p.jwks_source {
+						Some(tps::jwt_provider::JwksSource::Inline(inline)) => {
+							let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(inline)
+								.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
+							let provider =
+								http::jwt::Provider::from_jwks(jwk_set, p.issuer.clone(), audiences)
+									.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
+							providers.push(provider);
+						},
+						Some(tps::jwt_provider::JwksSource::Oidc(oidc)) => {
+							let provider_backend = match resolve_simple_reference(oidc.provider_backend.as_ref())?
+							{
+								SimpleBackendReference::Invalid => None,
+								backend => Some(backend),
+							};
+							oidc_infos.push(http::jwt::OidcInfo {
+								issuer: p.issuer.clone(),
+								audiences,
+								provider_backend,
+							});
+						},
+						None => {
+							return Err(ProtoError::Generic(
+								"JWT policy missing JWKS source".to_string(),
+							));
+						},
+					}
+				}
+				let jwt_auth = http::jwt::Jwt::from_providers_with_oidc_infos(
+					providers,
+					mode,
+					jwt.forward.unwrap_or(false),
+					oidc_infos,
+				);
 				TrafficPolicy::JwtAuth(jwt_auth)
 			},
 			Some(tps::Kind::Transformation(tp)) => {
@@ -1547,6 +1565,32 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					})
 					.collect::<Result<Vec<_>, _>>()?;
 				TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(keys, mode))
+			},
+			Some(tps::Kind::Oauth2(o)) => {
+				let provider_backend = match resolve_simple_reference(o.provider_backend.as_ref())? {
+					SimpleBackendReference::Invalid => None,
+					backend => Some(backend),
+				};
+				let policy = OAuth2Policy {
+					issuer: o.issuer.clone(),
+					provider_backend,
+					client_id: o.client_id.clone(),
+					client_secret: o.client_secret.clone().into(),
+					redirect_uri: o.redirect_uri.clone(),
+					auto_detect_redirect_uri: o.auto_detect_redirect_uri,
+					scopes: o.scopes.clone(),
+					cookie_name: o.cookie_name.clone(),
+					refreshable_cookie_max_age_seconds: o.refreshable_cookie_max_age_seconds,
+					pass_access_token: o.pass_access_token,
+					sign_out_path: o.sign_out_path.clone(),
+					post_logout_redirect_uri: o.post_logout_redirect_uri.clone(),
+					pass_through_matchers: o.pass_through_matchers.clone(),
+					deny_redirect_matchers: o.deny_redirect_matchers.clone(),
+					trusted_proxy_cidrs: o.trusted_proxy_cidrs.clone(),
+				};
+				crate::http::oauth2::OAuth2Filter::validate_policy(&policy)
+					.map_err(|e| ProtoError::Generic(format!("invalid oauth2 policy: {e}")))?;
+				TrafficPolicy::OAuth2(policy)
 			},
 			Some(tps::Kind::HostRewrite(hr)) => {
 				let mode = tps::host_rewrite::Mode::try_from(hr.mode)?;
@@ -1817,7 +1861,9 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 			.and_then(PolicyTarget::try_from)?;
 
 		let policy = match &p.kind {
-			Some(pol::Kind::Traffic(spec)) => PolicyType::Traffic(PhasedTrafficPolicy::try_from(spec)?),
+			Some(pol::Kind::Traffic(spec)) => {
+				PolicyType::Traffic(Box::new(PhasedTrafficPolicy::try_from(spec)?))
+			},
 			Some(pol::Kind::Backend(spec)) => PolicyType::Backend(BackendPolicy::try_from(spec)?),
 			Some(pol::Kind::Frontend(spec)) => PolicyType::Frontend(FrontendPolicy::try_from(spec)?),
 			None => return Err(ProtoError::MissingRequiredField),

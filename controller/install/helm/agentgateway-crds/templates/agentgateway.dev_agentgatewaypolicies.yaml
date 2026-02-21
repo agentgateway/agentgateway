@@ -4711,6 +4711,83 @@ spec:
                                   maxLength: 65536
                                   minLength: 2
                                   type: string
+                                oidc:
+                                  description: oidc enables OIDC discovery-based key
+                                    retrieval using the provider issuer.
+                                  properties:
+                                    providerBackendRef:
+                                      description: |-
+                                        providerBackendRef references the backend used for OIDC provider back-channel calls.
+                                        Supported types are Service and AgentgatewayBackend.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: |-
+                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                            When unspecified or empty string, core API group is inferred.
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: |-
+                                            Kind is the Kubernetes resource kind of the referent. For example
+                                            "Service".
+
+                                            Defaults to "Service" when not specified.
+
+                                            ExternalName services can refer to CNAME DNS records that may live
+                                            outside of the cluster and as such are difficult to reason about in
+                                            terms of conformance. They also may not be safe to forward to (see
+                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                            support ExternalName Services.
+
+                                            Support: Core (Services with a type other than ExternalName)
+
+                                            Support: Implementation-specific (Services with type ExternalName)
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: |-
+                                            Namespace is the namespace of the backend. When unspecified, the local
+                                            namespace is inferred.
+
+                                            Note that when a namespace different than the local namespace is specified,
+                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                            documentation for details.
+
+                                            Support: Core
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: |-
+                                            Port specifies the destination port number to use for this resource.
+                                            Port is required when the referent is a Kubernetes Service. In this
+                                            case, the port number is the service port number, not the target port.
+                                            For other resources, destination port might be derived from the referent
+                                            resource or this field.
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
+                                  type: object
                                 remote:
                                   description: remote specifies how to reach the JSON
                                     Web Key Set from a remote address.
@@ -4808,9 +4885,9 @@ spec:
                                   type: object
                               type: object
                               x-kubernetes-validations:
-                              - message: exactly one of the fields in [remote inline]
-                                  must be set
-                                rule: '[has(self.remote),has(self.inline)].filter(x,x==true).size()
+                              - message: exactly one of the fields in [remote inline
+                                  oidc] must be set
+                                rule: '[has(self.remote),has(self.inline),has(self.oidc)].filter(x,x==true).size()
                                   == 1'
                           required:
                           - issuer
@@ -4822,6 +4899,216 @@ spec:
                     required:
                     - providers
                     type: object
+                  oauth2:
+                    description: oauth2 authenticates users using OAuth2/OIDC browser
+                      login.
+                    properties:
+                      autoDetectRedirectUri:
+                        description: autoDetectRedirectUri enables callback URL inference
+                          from request host/proxy headers when redirectUri is unset.
+                        type: boolean
+                      clientId:
+                        description: clientId identifies the OAuth2/OIDC client.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      clientSecret:
+                        description: |-
+                          clientSecret provides the OAuth2 client secret inline.
+                          This option is the least secure; usage of clientSecretRef is preferred.
+                        maxLength: 4096
+                        minLength: 1
+                        type: string
+                      clientSecretRef:
+                        description: clientSecretRef references a key in a Kubernetes
+                          Secret containing the OAuth2 client secret.
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must
+                              be a valid secret key.
+                            type: string
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must
+                              be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      cookieName:
+                        description: cookieName overrides the default OAuth2 session
+                          cookie name.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      denyRedirectMatchers:
+                        description: denyRedirectMatchers are path prefixes that return
+                          401 instead of browser redirect when unauthenticated.
+                        items:
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                        maxItems: 64
+                        type: array
+                      issuer:
+                        description: issuer identifies the OIDC issuer URL.
+                        maxLength: 1024
+                        minLength: 1
+                        type: string
+                      passAccessToken:
+                        description: 'passAccessToken forwards Authorization: Bearer
+                          <access_token> upstream after login.'
+                        type: boolean
+                      passThroughMatchers:
+                        description: passThroughMatchers are path prefixes that bypass
+                          OAuth2 authentication.
+                        items:
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                        maxItems: 64
+                        type: array
+                      postLogoutRedirectUri:
+                        description: |-
+                          postLogoutRedirectUri configures where the IdP should redirect the user after OP logout.
+                          This URI must be registered with the IdP.
+                        maxLength: 1024
+                        minLength: 1
+                        type: string
+                      providerBackendRef:
+                        description: |-
+                          providerBackendRef references the backend used for OAuth2/OIDC provider back-channel calls
+                          (discovery, JWKS, token exchange).
+
+                          Supported types: Service and AgentgatewayBackend.
+                        properties:
+                          group:
+                            default: ""
+                            description: |-
+                              Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                              When unspecified or empty string, core API group is inferred.
+                            maxLength: 253
+                            pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                            type: string
+                          kind:
+                            default: Service
+                            description: |-
+                              Kind is the Kubernetes resource kind of the referent. For example
+                              "Service".
+
+                              Defaults to "Service" when not specified.
+
+                              ExternalName services can refer to CNAME DNS records that may live
+                              outside of the cluster and as such are difficult to reason about in
+                              terms of conformance. They also may not be safe to forward to (see
+                              CVE-2021-25740 for more information). Implementations SHOULD NOT
+                              support ExternalName Services.
+
+                              Support: Core (Services with a type other than ExternalName)
+
+                              Support: Implementation-specific (Services with type ExternalName)
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                            type: string
+                          name:
+                            description: Name is the name of the referent.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace is the namespace of the backend. When unspecified, the local
+                              namespace is inferred.
+
+                              Note that when a namespace different than the local namespace is specified,
+                              a ReferenceGrant object is required in the referent namespace to allow that
+                              namespace's owner to accept the reference. See the ReferenceGrant
+                              documentation for details.
+
+                              Support: Core
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          port:
+                            description: |-
+                              Port specifies the destination port number to use for this resource.
+                              Port is required when the referent is a Kubernetes Service. In this
+                              case, the port number is the service port number, not the target port.
+                              For other resources, destination port might be derived from the referent
+                              resource or this field.
+                            format: int32
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                        required:
+                        - name
+                        type: object
+                        x-kubernetes-validations:
+                        - message: Must have port for Service reference
+                          rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                            ? has(self.port) : true'
+                      redirectUri:
+                        description: redirectUri specifies the callback URL for the
+                          OAuth2 authorization flow.
+                        maxLength: 1024
+                        minLength: 1
+                        type: string
+                      refreshableCookieMaxAgeSeconds:
+                        description: refreshableCookieMaxAgeSeconds sets max age for
+                          refreshable OAuth2 sessions.
+                        format: int64
+                        maximum: 2592000
+                        minimum: 1
+                        type: integer
+                      scopes:
+                        description: scopes specifies OAuth scopes requested during
+                          browser login flow.
+                        items:
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                        maxItems: 64
+                        minItems: 1
+                        type: array
+                      signOutPath:
+                        description: signOutPath configures a local endpoint that
+                          clears the gateway OAuth2 session.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      trustedProxyCidrs:
+                        description: trustedProxyCidrs are CIDRs trusted to provide
+                          X-Forwarded-* headers for redirect URI inference.
+                        items:
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                        maxItems: 64
+                        type: array
+                    required:
+                    - clientId
+                    - issuer
+                    type: object
+                    x-kubernetes-validations:
+                    - message: either redirectUri must be set or autoDetectRedirectUri
+                        must be true
+                      rule: has(self.redirectUri) || (has(self.autoDetectRedirectUri)
+                        && self.autoDetectRedirectUri)
+                    - message: exactly one of the fields in [clientSecret clientSecretRef]
+                        must be set
+                      rule: '[has(self.clientSecret),has(self.clientSecretRef)].filter(x,x==true).size()
+                        == 1'
                   phase:
                     description: |-
                       The phase to apply the traffic policy to. If the phase is PreRouting, the targetRef must be a Gateway or a Listener.
@@ -5346,7 +5633,8 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,
-                    extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication
+                    extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication,
+                    and oauth2
                   rule: 'has(self.phase) && self.phase == ''PreRouting'' ? !has(self.rateLimit)
                     && !has(self.cors) && !has(self.csrf) && !has(self.headerModifiers)
                     && !has(self.hostRewrite) && !has(self.timeouts) && !has(self.retry)

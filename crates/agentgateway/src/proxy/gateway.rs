@@ -233,6 +233,7 @@ impl Gateway {
 				None,
 				pi.cfg.backend.clone(),
 				Some(pi.metrics.clone()),
+				pi.upstream.oidc().clone(),
 			);
 			pi.upstream = client;
 			let pi = Arc::new(pi);

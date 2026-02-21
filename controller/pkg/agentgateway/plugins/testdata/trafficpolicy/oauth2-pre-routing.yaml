@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oauth2-secret
+  namespace: default
+type: Opaque
+data:
+  client-secret: c3VwZXItc2VjcmV0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-discovery
+  namespace: default
+spec:
+  ports:
+  - port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth2-pre-routing
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    phase: PreRouting
+    oauth2:
+      issuer: https://issuer.example.com
+      providerBackendRef:
+        kind: Service
+        name: oauth2-discovery
+        port: 8080
+      clientId: agw-client
+      clientSecretRef:
+        name: oauth2-secret
+        key: client-secret
+      redirectUri: https://gateway.example.com/oauth2/callback
+      autoDetectRedirectUri: true
+      scopes:
+      - openid
+      - profile
+      cookieName: agw-session
+      passAccessToken: true
+      signOutPath: /logout
+      postLogoutRedirectUri: https://gateway.example.com/logout-complete
+      passThroughMatchers:
+      - /healthz
+      denyRedirectMatchers:
+      - /api
+      trustedProxyCidrs:
+      - 10.0.0.0/8
+      refreshableCookieMaxAgeSeconds: 3600
+
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/oauth2-pre-routing:oauth2:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: oauth2-pre-routing
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+    traffic:
+      oauth2:
+        autoDetectRedirectUri: true
+        clientId: agw-client
+        clientSecret: super-secret
+        cookieName: agw-session
+        denyRedirectMatchers:
+        - /api
+        issuer: https://issuer.example.com
+        passAccessToken: true
+        passThroughMatchers:
+        - /healthz
+        postLogoutRedirectUri: https://gateway.example.com/logout-complete
+        providerBackend:
+          port: 8080
+          service:
+            hostname: oauth2-discovery.default.svc.cluster.local
+            namespace: default
+        redirectUri: https://gateway.example.com/oauth2/callback
+        refreshableCookieMaxAgeSeconds: "3600"
+        scopes:
+        - openid
+        - profile
+        signOutPath: /logout
+        trustedProxyCidrs:
+        - 10.0.0.0/8
+      phase: GATEWAY
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

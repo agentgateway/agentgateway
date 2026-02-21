@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: oauth2
+      policies:
+        oauth2:
+          # Replace with your OIDC issuer (for example: https://accounts.google.com)
+          issuer: "https://issuer.example.com"
+          # Optional: route OIDC provider back-channel calls through a specific backend.
+          # Useful for private IdP connectivity and custom trust paths.
+          # providerBackend:
+          #   host: "idp.internal.example.com:443"
+          # Replace with your OAuth2 client ID.
+          clientId: "replace-with-client-id"
+
+          # Local/dev option: load secret from file (or set inline).
+          clientSecret:
+            file: ./examples/oauth2/client-secret.txt
+
+          # Alternative local inline secret:
+          # clientSecret: "replace-with-client-secret"
+
+          # Must exactly match the redirect URI configured in your IdP app.
+          redirectUri: "http://localhost:3000/_gateway/callback"
+          # Optional: enable only when you want callback inference from host/forwarded headers.
+          # autoDetectRedirectUri: true
+          # Optional: trust forwarded host/proto only from known proxy CIDRs.
+          # trustedProxyCidrs:
+          # - "10.0.0.0/8"
+          # Optional: API routes that should return 401 instead of redirecting to login.
+          # denyRedirectMatchers:
+          # - "/api"
+          scopes:
+          - openid
+          - profile
+          - email
+          # Keep access tokens out of upstream requests by default.
+          passAccessToken: false
+          # Local sign-out endpoint.
+          # - Always clears the gateway session cookie.
+          # - If the IdP exposes end_session_endpoint, gateway redirects there with id_token_hint.
+          signOutPath: "/logout"
+          # Optional IdP post-logout return URL.
+          # Must be pre-registered in your IdP and use https (or http on loopback).
+          # postLogoutRedirectUri: "http://localhost:3000/signed-out"
+      backends:
+      - host: localhost:8080

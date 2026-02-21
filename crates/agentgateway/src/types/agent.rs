@@ -1755,7 +1755,7 @@ impl From<TrafficPolicy> for PolicyType {
 }
 impl From<(TrafficPolicy, PolicyPhase)> for PolicyType {
 	fn from((p, phase): (TrafficPolicy, PolicyPhase)) -> Self {
-		Self::Traffic(PhasedTrafficPolicy { phase, policy: p })
+		Self::Traffic(Box::new(PhasedTrafficPolicy { phase, policy: p }))
 	}
 }
 
@@ -1779,7 +1779,7 @@ pub struct PhasedTrafficPolicy {
 #[serde(rename_all = "camelCase")]
 pub enum PolicyType {
 	Frontend(FrontendPolicy),
-	Traffic(PhasedTrafficPolicy),
+	Traffic(Box<PhasedTrafficPolicy>),
 	Backend(BackendPolicy),
 }
 
@@ -1898,6 +1898,8 @@ pub enum TrafficPolicy {
 	DirectResponse(filters::DirectResponse),
 	#[serde(rename = "cors")]
 	CORS(http::cors::Cors),
+	#[serde(rename = "oauth2")]
+	OAuth2(OAuth2Policy),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1926,6 +1928,39 @@ pub enum BackendPolicy {
 
 #[apply(schema!)]
 pub struct A2aPolicy {}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuth2Policy {
+	pub issuer: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub provider_backend: Option<SimpleBackendReference>,
+	pub client_id: String,
+	#[serde(skip_serializing)]
+	pub client_secret: secrecy::SecretString,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub redirect_uri: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub auto_detect_redirect_uri: Option<bool>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub scopes: Vec<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub cookie_name: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub refreshable_cookie_max_age_seconds: Option<u64>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub pass_access_token: Option<bool>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub sign_out_path: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub post_logout_redirect_uri: Option<String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub pass_through_matchers: Vec<String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub deny_redirect_matchers: Vec<String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub trusted_proxy_cidrs: Vec<String>,
+}
 
 #[apply(schema!)]
 pub struct Authorization(pub RuleSet);
@@ -2043,6 +2078,7 @@ impl LocalMcpAuthentication {
 
 		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: self.mode.into(),
+			forward: false,
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,

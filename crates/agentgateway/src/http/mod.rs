@@ -5,6 +5,8 @@ mod buflist;
 pub mod cors;
 pub mod jwt;
 pub mod localratelimit;
+pub mod oauth2;
+pub mod oidc;
 pub mod retry;
 pub mod route;
 
@@ -67,6 +69,13 @@ pub fn version_str(v: &http::Version) -> &'static str {
 		http::Version::HTTP_3 => "HTTP/3",
 		_ => "unknown",
 	}
+}
+
+pub(crate) fn is_loopback_host(host: &str) -> bool {
+	host.eq_ignore_ascii_case("localhost")
+		|| host
+			.parse::<std::net::IpAddr>()
+			.is_ok_and(|ip| ip.is_loopback())
 }
 
 /// A mutable handle that can represent either a request or a response

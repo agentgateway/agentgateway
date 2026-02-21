@@ -24,7 +24,11 @@ async fn setup() -> (MockServer, Handler) {
 	let parsed = reqwest::Url::parse(&host).unwrap();
 	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
 	let encoder = config.session_encoder.clone();
-	let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+	let oidc = Arc::new(crate::http::oidc::OidcProvider::new());
+	let stores = Stores::from_init(crate::store::StoresInit {
+		ipv6_enabled: config.ipv6_enabled,
+		oidc: oidc.clone(),
+	});
 	let client = Client::new(
 		&client::Config {
 			resolver_cfg: ResolverConfig::default(),
@@ -33,6 +37,7 @@ async fn setup() -> (MockServer, Handler) {
 		None,
 		BackendConfig::default(),
 		None,
+		oidc.clone(),
 	);
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),

@@ -33,9 +33,13 @@ impl StateManager {
 		client: client::Client,
 		xds_metrics: agent_xds::Metrics,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
+		oidc: Arc<crate::http::oidc::OidcProvider>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
-		let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+		let stores = Stores::from_init(crate::store::StoresInit {
+			ipv6_enabled: config.ipv6_enabled,
+			oidc,
+		});
 		let xds_client = if let Some(addr) = &xds.address {
 			let connector = control::grpc_connector(
 				client.clone(),
@@ -200,7 +204,7 @@ impl LocalClient {
 			self
 				.stores
 				.binds
-				.sync_local(config.binds, config.policies, config.backends, prev.binds);
+				.sync_local(config.binds, config.policies, config.backends, prev.binds)?;
 		let next_discovery =
 			self
 				.stores

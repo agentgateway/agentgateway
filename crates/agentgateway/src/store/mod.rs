@@ -29,18 +29,34 @@ pub struct Stores {
 	pub binds: binds::StoreUpdater,
 }
 
+#[derive(Clone, Debug)]
+pub struct StoresInit {
+	pub ipv6_enabled: bool,
+	pub oidc: Arc<crate::http::oidc::OidcProvider>,
+}
+
+impl Default for StoresInit {
+	fn default() -> Self {
+		Self {
+			ipv6_enabled: true,
+			oidc: Arc::new(crate::http::oidc::OidcProvider::new()),
+		}
+	}
+}
+
 impl Default for Stores {
 	fn default() -> Self {
-		Self::with_ipv6_enabled(true)
+		Self::from_init(StoresInit::default())
 	}
 }
 
 impl Stores {
-	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Stores {
+	pub fn from_init(init: StoresInit) -> Stores {
+		let StoresInit { ipv6_enabled, oidc } = init;
 		Stores {
 			discovery: discovery::StoreUpdater::new(Arc::new(RwLock::new(discovery::Store::new()))),
-			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::with_ipv6_enabled(
-				ipv6_enabled,
+			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::from_init(
+				binds::StoreInit { ipv6_enabled, oidc },
 			)))),
 		}
 	}
