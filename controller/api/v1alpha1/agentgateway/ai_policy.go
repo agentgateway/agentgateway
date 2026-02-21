@@ -134,7 +134,7 @@ type Webhook struct {
 
 // CustomResponse configures a response to return to the client if request content
 // is matched against a regex pattern and the action is `REJECT`.
-// +kubebuilder:validation:AtLeastOneOf=message;statusCode
+// +kubebuilder:validation:AtLeastOneFieldSet
 type CustomResponse struct {
 	// A custom response message to return to the client. If not specified, defaults to
 	// "The request was rejected due to inappropriate content".
@@ -155,7 +155,7 @@ type OpenAIModeration struct {
 	// +optional
 	Model *string `json:"model,omitempty"`
 	// policies controls policies for communicating with OpenAI.
-	// +kubebuilder:validation:AtLeastOneOf=tcp;tls;http;auth
+	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
@@ -174,7 +174,7 @@ type BedrockGuardrails struct {
 	Region ShortString `json:"region"`
 
 	// policies controls policies for communicating with AWS Bedrock Guardrails.
-	// +kubebuilder:validation:AtLeastOneOf=tcp;tls;http;auth
+	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
@@ -195,7 +195,7 @@ type GoogleModelArmor struct {
 	Location *ShortString `json:"location,omitempty"`
 
 	// policies controls policies for communicating with Google Model Armor.
-	// +kubebuilder:validation:AtLeastOneOf=tcp;tls;http;auth
+	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
@@ -279,7 +279,7 @@ type PromptguardResponse struct {
 //	    action: MASK
 //
 // ```
-// +kubebuilder:validation:AtLeastOneOf=request;response
+// +kubebuilder:validation:AtLeastOneFieldSet
 type AIPromptGuard struct {
 	// Prompt guards to apply to requests sent by the client.
 	// +kubebuilder:validation:MinItems=1

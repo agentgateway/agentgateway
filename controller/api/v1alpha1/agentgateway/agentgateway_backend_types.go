@@ -343,7 +343,7 @@ const (
 // +kubebuilder:validation:Enum=Stateful;Stateless
 type SessionRouting string
 
-// +kubebuilder:validation:AtLeastOneOf=namespaces;services
+// +kubebuilder:validation:AtLeastOneFieldSet
 type McpSelector struct {
 	// namespace is the label selector in which namespaces Services should be selected from.
 	// If unset, only the namespace of the AgentgatewayBackend is searched.

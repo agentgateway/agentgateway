@@ -2911,10 +2911,10 @@ spec:
                                         type: object
                                     type: object
                                     x-kubernetes-validations:
-                                    - message: at least one of the fields in [prompt
-                                        promptGuard defaults overrides modelAliases
-                                        promptCaching routes] must be set
-                                      rule: '[has(self.prompt),has(self.promptGuard),has(self.defaults),has(self.overrides),has(self.modelAliases),has(self.promptCaching),has(self.routes)].filter(x,x==true).size()
+                                    - message: at least one of the fields in [defaults
+                                        modelAliases overrides prompt promptCaching
+                                        promptGuard routes] must be set
+                                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes)].filter(x,x==true).size()
                                         >= 1'
                                   auth:
                                     description: auth defines settings for managing
@@ -3237,9 +3237,9 @@ spec:
                                         <= 1'
                                 type: object
                                 x-kubernetes-validations:
-                                - message: at least one of the fields in [tcp tls
-                                    http auth ai] must be set
-                                  rule: '[has(self.tcp),has(self.tls),has(self.http),has(self.auth),has(self.ai)].filter(x,x==true).size()
+                                - message: at least one of the fields in [ai auth
+                                    http tcp tls] must be set
+                                  rule: '[has(self.ai),has(self.auth),has(self.http),has(self.tcp),has(self.tls)].filter(x,x==true).size()
                                     >= 1'
                               port:
                                 description: Port specifies the port to send the requests
@@ -3981,9 +3981,9 @@ spec:
                                       type: object
                                   type: object
                                   x-kubernetes-validations:
-                                  - message: at least one of the fields in [authorization
-                                      authentication] must be set
-                                    rule: '[has(self.authorization),has(self.authentication)].filter(x,x==true).size()
+                                  - message: at least one of the fields in [authentication
+                                      authorization] must be set
+                                    rule: '[has(self.authentication),has(self.authorization)].filter(x,x==true).size()
                                       >= 1'
                                 tcp:
                                   description: tcp defines settings for managing TCP
@@ -4151,9 +4151,9 @@ spec:
                                       <= 1'
                               type: object
                               x-kubernetes-validations:
-                              - message: at least one of the fields in [tcp tls http
-                                  auth mcp] must be set
-                                rule: '[has(self.tcp),has(self.tls),has(self.http),has(self.auth),has(self.mcp)].filter(x,x==true).size()
+                              - message: at least one of the fields in [auth http
+                                  mcp tcp tls] must be set
+                                rule: '[has(self.auth),has(self.http),has(self.mcp),has(self.tcp),has(self.tls)].filter(x,x==true).size()
                                   >= 1'
                             port:
                               description: Port is the port number of the MCPBackend
@@ -6665,9 +6665,10 @@ spec:
                         type: object
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [prompt promptGuard defaults
-                        overrides modelAliases promptCaching routes] must be set
-                      rule: '[has(self.prompt),has(self.promptGuard),has(self.defaults),has(self.overrides),has(self.modelAliases),has(self.promptCaching),has(self.routes)].filter(x,x==true).size()
+                    - message: at least one of the fields in [defaults modelAliases
+                        overrides prompt promptCaching promptGuard routes] must be
+                        set
+                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes)].filter(x,x==true).size()
                         >= 1'
                   auth:
                     description: auth defines settings for managing authentication
@@ -7004,9 +7005,9 @@ spec:
                         type: object
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [authorization authentication]
+                    - message: at least one of the fields in [authentication authorization]
                         must be set
-                      rule: '[has(self.authorization),has(self.authentication)].filter(x,x==true).size()
+                      rule: '[has(self.authentication),has(self.authorization)].filter(x,x==true).size()
                         >= 1'
                   tcp:
                     description: tcp defines settings for managing TCP connections
@@ -7173,9 +7174,9 @@ spec:
                         <= 1'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [tcp tls http auth mcp ai]
+                - message: at least one of the fields in [ai auth http mcp tcp tls]
                     must be set
-                  rule: '[has(self.tcp),has(self.tls),has(self.http),has(self.auth),has(self.mcp),has(self.ai)].filter(x,x==true).size()
+                  rule: '[has(self.ai),has(self.auth),has(self.http),has(self.mcp),has(self.tcp),has(self.tls)].filter(x,x==true).size()
                     >= 1'
               static:
                 description: static represents a static hostname.
