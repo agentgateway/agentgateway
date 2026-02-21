@@ -1,0 +1,18 @@
+---
+source: crates/agentgateway/src/mcp/mcp_tests.rs
+expression: value
+---
+{
+  "code": -32042,
+  "message": "This request requires more information.",
+  "data": {
+    "elicitations": [
+      {
+        "mode": "url",
+        "message": "Authenticate to continue",
+        "elicitationId": "elicit-1",
+        "url": "https://example.com/auth"
+      }
+    ]
+  }
+}

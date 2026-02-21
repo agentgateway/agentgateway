@@ -689,6 +689,7 @@ impl Drop for DropOnLog {
 				Some(MCPOperation::Prompt) => Some(ResourceType::Prompt(resource)),
 				Some(MCPOperation::Tool) => Some(ResourceType::Tool(resource)),
 				Some(MCPOperation::Resource) => Some(ResourceType::Resource(resource)),
+				Some(MCPOperation::Task) => Some(ResourceType::Task(resource)),
 				_ => None,
 			}
 		});

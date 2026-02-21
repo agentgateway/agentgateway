@@ -137,10 +137,10 @@ func (s *testingSuite) testToolsListWithSession(sessionID string, extraHeaders m
 
 	mcpRequest := buildToolsListRequest(3)
 	headers := withSessionID(mcpHeaders(extraHeaders), sessionID)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest, "--max-time", "10")
-
-	_, body, err := s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+	resp, body, err := s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
 	s.Require().NoError(err, "tools/list request failed")
+	s.Require().NotNil(resp, "tools/list expected HTTP response")
+	s.Require().Equal(httpOKCode, resp.StatusCode, "tools/list unexpected status code")
 
 	// If session was replaced, some gateways emit a JSON error as SSE payload (HTTP 200).
 	// So parse SSE first, then decide.
@@ -148,9 +148,10 @@ func (s *testingSuite) testToolsListWithSession(sessionID string, extraHeaders m
 	if !ok {
 		s.T().Log("No SSE payload from tools/list; sending notifications/initialized and retrying once")
 		s.notifyInitialized(sessionID, extraHeaders)
-		s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest, "--max-time", "10")
-		_, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+		resp, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
 		s.Require().NoError(err, "tools/list retry request failed")
+		s.Require().NotNil(resp, "tools/list retry expected HTTP response")
+		s.Require().Equal(httpOKCode, resp.StatusCode, "tools/list retry unexpected status code")
 		payload, ok = FirstSSEDataPayload(body)
 	}
 	s.Require().True(ok, "expected SSE data payload in tools/list (after retry)")
@@ -158,12 +159,31 @@ func (s *testingSuite) testToolsListWithSession(sessionID string, extraHeaders m
 
 	var toolsResp ToolsListResponse
 	_ = json.Unmarshal([]byte(payload), &toolsResp)
-	if toolsResp.Error != nil && strings.Contains(toolsResp.Error.Message, "Session not found") {
-		// Re-init and retry once
-		s.T().Log("Session expired; re-initializing and retrying tools/list")
-		newID := s.initializeAndGetSessionID(extraHeaders)
-		s.testToolsListWithSession(newID, extraHeaders)
-		return
+	if toolsResp.Error != nil {
+		if isRetryableToolsListError(toolsResp.Error.Message) {
+			// Re-init and retry once on transient legacy-SSE/session failures.
+			s.T().Logf("Transient tools/list error; re-initializing and retrying: %s", toolsResp.Error.Message)
+			newID := s.initializeAndGetSessionID(extraHeaders)
+			mcpRequest = buildToolsListRequest(4)
+			headers = withSessionID(mcpHeaders(extraHeaders), newID)
+			resp, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+			s.Require().NoError(err, "tools/list retry request failed")
+			s.Require().NotNil(resp, "tools/list reinit retry expected HTTP response")
+			s.Require().Equal(httpOKCode, resp.StatusCode, "tools/list reinit retry unexpected status code")
+			payload, ok = FirstSSEDataPayload(body)
+			s.Require().True(ok, "expected SSE data payload in tools/list (reinit retry)")
+			s.Require().True(IsJSONValid(payload), "tools/list SSE payload is not valid JSON (reinit retry)")
+			_ = json.Unmarshal([]byte(payload), &toolsResp)
+			if toolsResp.Error == nil {
+				s.Require().NotNil(toolsResp.Result, "tools/list missing result")
+				s.T().Logf("tools: %d", len(toolsResp.Result.Tools))
+				s.Require().GreaterOrEqual(len(toolsResp.Result.Tools), 1, "expected at least one tool")
+				return
+			}
+			s.Require().Failf("tools/list", "tools/list returned error after reinit: %d %s", toolsResp.Error.Code, toolsResp.Error.Message)
+			return
+		}
+		s.Require().Failf("tools/list", "tools/list returned error: %d %s", toolsResp.Error.Code, toolsResp.Error.Message)
 	}
 
 	s.Require().NotNil(toolsResp.Result, "tools/list missing result")
@@ -334,10 +354,10 @@ func updateProtocolVersion(payload string) {
 func (s *testingSuite) mustListTools(sessionID, label string, routeHeaders map[string]string) []string {
 	mcpRequest := buildToolsListRequest(999)
 	headers := withRouteHeaders(withSessionID(mcpHeaders(nil), sessionID), routeHeaders)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest, "--max-time", "10")
-
-	_, body, err := s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+	resp, body, err := s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
 	s.Require().NoError(err, "%s request failed", label)
+	s.Require().NotNil(resp, "%s expected HTTP response", label)
+	s.Require().Equal(httpOKCode, resp.StatusCode, "%s unexpected status code", label)
 
 	payload, ok := FirstSSEDataPayload(body)
 	s.Require().True(ok, "%s expected SSE data payload", label)
@@ -348,13 +368,13 @@ func (s *testingSuite) mustListTools(sessionID, label string, routeHeaders map[s
 	}
 
 	if toolsResp.Error != nil {
-		// Common transient: session not warm yet; give it one nudge and retry once.
-		if strings.Contains(strings.ToLower(toolsResp.Error.Message), "session not found") ||
-			strings.Contains(strings.ToLower(toolsResp.Error.Message), "start sse client") {
+		// Common transient: session not warm yet or legacy SSE stream was dropped.
+		if isRetryableToolsListError(toolsResp.Error.Message) {
 			s.notifyInitializedWithHeaders(sessionID, routeHeaders)
-			s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest, "--max-time", "10")
-			_, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+			resp, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
 			s.Require().NoError(err, "%s retry request failed", label)
+			s.Require().NotNil(resp, "%s retry expected HTTP response", label)
+			s.Require().Equal(httpOKCode, resp.StatusCode, "%s retry unexpected status code", label)
 			payload, ok = FirstSSEDataPayload(body)
 			s.Require().True(ok, "%s expected SSE data payload (retry)", label)
 			s.Require().NoError(json.Unmarshal([]byte(payload), &toolsResp), "%s unmarshal failed (retry)", label)
@@ -370,6 +390,18 @@ func (s *testingSuite) mustListTools(sessionID, label string, routeHeaders map[s
 		names = append(names, tool.Name)
 	}
 	return names
+}
+
+func isRetryableToolsListError(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "session not found") ||
+		strings.Contains(lower, "start sse client")
+}
+
+func isRetryableInitializeError(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "start sse client") ||
+		strings.Contains(lower, "all upstreams failed to respond to fanout")
 }
 
 func (s *testingSuite) notifyInitializedWithHeaders(sessionID string, routeHeaders map[string]string) {
@@ -408,8 +440,11 @@ func (s *testingSuite) initializeSession(initBody string, hdr map[string]string,
 				s.Require().NotEmpty(sid, "%s initialize must return mcp-session-id header", label)
 				return sid
 			}
-			if initResp.Error != nil && !strings.Contains(strings.ToLower(initResp.Error.Message), "start sse client") {
-				s.Require().Failf(label, "initialize returned error: %v", initResp.Error)
+			if initResp.Error != nil {
+				if !isRetryableInitializeError(initResp.Error.Message) {
+					s.Require().Failf(label, "initialize returned error: %v", initResp.Error)
+				}
+				s.T().Logf("%s initialize transient error (attempt %d/%d): %s", label, attempt+1, len(backoffs)+1, initResp.Error.Message)
 			}
 		}
 
