@@ -1,9 +1,134 @@
+use std::collections::HashSet;
+
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{Jwt, Mode, Provider, TokenError};
+use super::{JWTValidationOptions, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
+
+// Deserialization: missing jwtValidationOptions defaults required_claims to ["exp"]
+#[test]
+fn test_deserialize_missing_jwt_validation_options_defaults_to_exp() {
+	let json = r#"{
+		"issuer": "https://example.com",
+		"jwks": { "url": "https://example.com/.well-known/jwks.json" }
+	}"#;
+	let config: LocalJwtConfig = serde_json::from_str(json).unwrap();
+	match config {
+		LocalJwtConfig::Single {
+			jwt_validation_options,
+			..
+		} => {
+			assert_eq!(
+				jwt_validation_options.required_claims,
+				HashSet::from(["exp".to_owned()]),
+				"missing jwtValidationOptions should default required_claims to [\"exp\"]"
+			);
+		},
+		_ => panic!("expected Single variant"),
+	}
+}
+
+// Deserialization: jwtValidationOptions present but requiredClaims omitted defaults to ["exp"]
+#[test]
+fn test_deserialize_jwt_validation_options_without_required_claims_defaults_to_exp() {
+	let json = r#"{
+		"issuer": "https://example.com",
+		"jwks": { "url": "https://example.com/.well-known/jwks.json" },
+		"jwtValidationOptions": {}
+	}"#;
+	let config: LocalJwtConfig = serde_json::from_str(json).unwrap();
+	match config {
+		LocalJwtConfig::Single {
+			jwt_validation_options,
+			..
+		} => {
+			assert_eq!(
+				jwt_validation_options.required_claims,
+				HashSet::from(["exp".to_owned()]),
+				"omitted requiredClaims should default to [\"exp\"]"
+			);
+		},
+		_ => panic!("expected Single variant"),
+	}
+}
+
+// Deserialization: explicit empty requiredClaims results in empty set
+#[test]
+fn test_deserialize_empty_required_claims() {
+	let json = r#"{
+		"issuer": "https://example.com",
+		"jwks": { "url": "https://example.com/.well-known/jwks.json" },
+		"jwtValidationOptions": { "requiredClaims": [] }
+	}"#;
+	let config: LocalJwtConfig = serde_json::from_str(json).unwrap();
+	match config {
+		LocalJwtConfig::Single {
+			jwt_validation_options,
+			..
+		} => {
+			assert!(
+				jwt_validation_options.required_claims.is_empty(),
+				"explicit empty requiredClaims should be empty"
+			);
+		},
+		_ => panic!("expected Single variant"),
+	}
+}
+
+// Deserialization: Multi variant with jwtValidationOptions per provider
+#[test]
+fn test_deserialize_multi_provider_with_jwt_validation_options() {
+	let json = r#"{
+		"providers": [
+			{
+				"issuer": "https://idp-1.example.com",
+				"jwks": { "url": "https://idp-1.example.com/.well-known/jwks.json" },
+				"jwtValidationOptions": { "requiredClaims": [] }
+			},
+			{
+				"issuer": "https://idp-2.example.com",
+				"jwks": { "url": "https://idp-2.example.com/.well-known/jwks.json" },
+				"jwtValidationOptions": { "requiredClaims": ["exp", "nbf"] }
+			}
+		]
+	}"#;
+	let config: LocalJwtConfig = serde_json::from_str(json).unwrap();
+	match config {
+		LocalJwtConfig::Multi { providers, .. } => {
+			assert_eq!(providers.len(), 2);
+			assert!(
+				providers[0]
+					.jwt_validation_options
+					.required_claims
+					.is_empty(),
+				"first provider should have empty required_claims"
+			);
+			assert_eq!(
+				providers[1].jwt_validation_options.required_claims,
+				HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
+				"second provider should require exp and nbf"
+			);
+		},
+		_ => panic!("expected Multi variant"),
+	}
+}
+
+// Deserialization: the old key name "validationOptions" is rejected
+#[test]
+fn test_deserialize_rejects_old_validation_options_key() {
+	let json = r#"{
+		"issuer": "https://example.com",
+		"jwks": { "url": "https://example.com/.well-known/jwks.json" },
+		"validationOptions": { "requiredClaims": [] }
+	}"#;
+	let result = serde_json::from_str::<LocalJwtConfig>(json);
+	assert!(
+		result.is_err(),
+		"old key 'validationOptions' should be rejected by deny_unknown_fields"
+	);
+}
 
 #[test]
 pub fn test_azure_jwks() {
@@ -27,6 +152,7 @@ pub fn test_azure_jwks() {
 		jwks,
 		"https://login.microsoftonline.com/test/v2.0".to_string(),
 		Some(vec!["test-aud".to_string()]),
+		JWTValidationOptions::default(),
 	)
 	.unwrap();
 	assert_eq!(
@@ -55,6 +181,7 @@ pub fn test_basic_jwks() {
 		jwks,
 		"https://example.com".to_string(),
 		Some(vec!["test-aud".to_string()]),
+		JWTValidationOptions::default(),
 	)
 	.unwrap();
 	assert_eq!(
@@ -87,6 +214,7 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 		jwks,
 		issuer.to_string(),
 		Some(vec![allowed_aud.to_string()]),
+		JWTValidationOptions::default(),
 	)
 	.unwrap();
 	// Test-only: allow synthetic tokens without a real signature
@@ -431,8 +559,13 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 	let kid1 = "kid-1";
 	let kid2 = "kid-2";
 
-	let mut provider1 =
-		Provider::from_jwks(jwks1, issuer1.to_string(), Some(vec![aud1.to_string()])).unwrap();
+	let mut provider1 = Provider::from_jwks(
+		jwks1,
+		issuer1.to_string(),
+		Some(vec![aud1.to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
 	#[allow(deprecated)]
 	{
 		provider1
@@ -443,8 +576,13 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 			.insecure_disable_signature_validation();
 	}
 
-	let mut provider2 =
-		Provider::from_jwks(jwks2, issuer2.to_string(), Some(vec![aud2.to_string()])).unwrap();
+	let mut provider2 = Provider::from_jwks(
+		jwks2,
+		issuer2.to_string(),
+		Some(vec![aud2.to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
 	#[allow(deprecated)]
 	{
 		provider2
@@ -480,4 +618,261 @@ pub fn test_validate_claims_multi_providers_accepts_both() {
 
 	assert!(jwt.validate_claims(&token1).is_ok());
 	assert!(jwt.validate_claims(&token2).is_ok());
+}
+
+// Helper to build a token without the exp claim
+fn build_unsigned_token_without_exp(kid: &str, iss: &str, aud: &str) -> String {
+	use base64::Engine as _;
+	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+	let header = json!({ "alg": "ES256", "kid": kid });
+	let payload = json!({ "iss": iss, "aud": aud, "sub": "test-user" });
+	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let s = URL_SAFE_NO_PAD.encode(b"sig");
+	format!("{h}.{p}.{s}")
+}
+
+// Helper to build a token with an expired exp claim
+fn build_unsigned_token_with_expired_exp(kid: &str, iss: &str, aud: &str) -> String {
+	use base64::Engine as _;
+	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+	let header = json!({ "alg": "ES256", "kid": kid });
+	// exp = 0 means expired (Unix epoch)
+	let payload = json!({ "iss": iss, "aud": aud, "sub": "test-user", "exp": 0 });
+	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let s = URL_SAFE_NO_PAD.encode(b"sig");
+	format!("{h}.{p}.{s}")
+}
+
+// Empty required_claims accepts tokens without exp claim
+#[test]
+pub fn test_empty_required_claims_accepts_token_without_exp() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "no-exp-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://no-exp-idp.example.com";
+	let aud = "no-exp-aud";
+	let kid = "no-exp-kid";
+
+	let jwt_validation_options = JWTValidationOptions {
+		required_claims: HashSet::new(),
+	};
+
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		jwt_validation_options,
+	)
+	.unwrap();
+
+	#[allow(deprecated)]
+	{
+		provider
+			.keys
+			.get_mut(kid)
+			.unwrap()
+			.validation
+			.insecure_disable_signature_validation();
+	}
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	let token = build_unsigned_token_without_exp(kid, issuer, aud);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		result.is_ok(),
+		"empty required_claims should accept tokens without exp claim"
+	);
+
+	let claims = result.unwrap();
+	assert_eq!(
+		claims.inner.get("sub"),
+		Some(&serde_json::Value::String("test-user".to_string()))
+	);
+}
+
+// Default required_claims (["exp"]): rejects tokens without exp claim
+#[test]
+pub fn test_default_required_claims_rejects_token_without_exp() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "default-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://default-idp.example.com";
+	let aud = "default-aud";
+	let kid = "default-kid";
+
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+
+	#[allow(deprecated)]
+	{
+		provider
+			.keys
+			.get_mut(kid)
+			.unwrap()
+			.validation
+			.insecure_disable_signature_validation();
+	}
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	let token = build_unsigned_token_without_exp(kid, issuer, aud);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		result.is_err(),
+		"default required_claims ([\"exp\"]) should reject tokens without exp claim"
+	);
+}
+
+// Empty required_claims still rejects expired tokens (exp is validated if present)
+#[test]
+pub fn test_empty_required_claims_still_rejects_expired_tokens() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "expired-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://expired-idp.example.com";
+	let aud = "expired-aud";
+	let kid = "expired-kid";
+
+	let jwt_validation_options = JWTValidationOptions {
+		required_claims: HashSet::new(),
+	};
+
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		jwt_validation_options,
+	)
+	.unwrap();
+
+	#[allow(deprecated)]
+	{
+		provider
+			.keys
+			.get_mut(kid)
+			.unwrap()
+			.validation
+			.insecure_disable_signature_validation();
+	}
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	let token = build_unsigned_token_with_expired_exp(kid, issuer, aud);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		result.is_err(),
+		"empty required_claims should still reject tokens with expired exp claim"
+	);
+}
+
+// Requiring additional claims (e.g., "nbf") rejects tokens missing those claims
+#[test]
+pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "nbf-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://nbf-idp.example.com";
+	let aud = "nbf-aud";
+	let kid = "nbf-kid";
+
+	let jwt_validation_options = JWTValidationOptions {
+		required_claims: HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
+	};
+
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		jwt_validation_options,
+	)
+	.unwrap();
+
+	#[allow(deprecated)]
+	{
+		provider
+			.keys
+			.get_mut(kid)
+			.unwrap()
+			.validation
+			.insecure_disable_signature_validation();
+	}
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	// Token with exp but without nbf should be rejected when nbf is required
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+	let token = build_unsigned_token(kid, issuer, aud, now + 600);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		result.is_err(),
+		"required_claims with nbf should reject tokens missing nbf claim"
+	);
 }

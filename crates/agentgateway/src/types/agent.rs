@@ -2019,6 +2019,8 @@ pub struct LocalMcpAuthentication {
 	pub jwks: FileInlineOrRemote,
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
+	#[serde(default)]
+	pub jwt_validation_options: http::jwt::JWTValidationOptions,
 }
 
 impl LocalMcpAuthentication {
@@ -2046,6 +2048,7 @@ impl LocalMcpAuthentication {
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,
+			jwt_validation_options: self.jwt_validation_options.clone(),
 		})
 	}
 
@@ -2473,5 +2476,104 @@ InvalidKeyData
 			.get_hostname(&HostnameMatchRef::Exact("old.example.com"))
 			.expect("route should be present");
 		assert_eq!(got.key, strng::new("tcp-2"));
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_default_jwt_validation_options() {
+		let yaml = r#"
+issuer: "https://example.com"
+audiences: ["aud1"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned()]),
+			"default required_claims should be [\"exp\"]"
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_jwt_validation_options_present_but_required_claims_missing() {
+		let yaml = r#"
+issuer: "https://example.com"
+audiences: ["aud1"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions: {}
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned()]),
+			"omitted requiredClaims should default to [\"exp\"]"
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_with_empty_required_claims() {
+		let yaml = r#"
+issuer: "https://enterprise-idp.example.com"
+audiences: ["enterprise-aud"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions:
+  requiredClaims: []
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert!(
+			auth.jwt_validation_options.required_claims.is_empty(),
+			"required_claims should be empty"
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_with_custom_required_claims() {
+		let yaml = r#"
+issuer: "https://enterprise-idp.example.com"
+audiences: ["enterprise-aud"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions:
+  requiredClaims: ["exp", "nbf"]
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned(), "nbf".to_owned()])
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_as_jwt_propagates_jwt_validation_options() {
+		let yaml = r#"
+issuer: "https://enterprise-idp.example.com"
+audiences: ["enterprise-aud"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions:
+  requiredClaims: []
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let jwt_config = auth.as_jwt().unwrap();
+
+		match jwt_config {
+			http::jwt::LocalJwtConfig::Single {
+				jwt_validation_options,
+				..
+			} => {
+				assert!(
+					jwt_validation_options.required_claims.is_empty(),
+					"jwt_validation_options should be propagated to LocalJwtConfig"
+				);
+			},
+			_ => panic!("Expected LocalJwtConfig::Single"),
+		}
 	}
 }

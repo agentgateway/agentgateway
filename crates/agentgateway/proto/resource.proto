@@ -547,6 +547,15 @@ message FrontendPolicySpec {
   }
 }
 
+// JWT validation options controlling which claims must be present in a token.
+// Recognized values: "exp", "nbf", "aud", "iss", "sub".
+// Claims present in the token are still validated even if not listed as required.
+message JWTValidationOptions {
+  // Claims that must be present in the token before validation.
+  // Defaults to ["exp"]. Use an empty list to require no claims.
+  repeated string required_claims = 1;
+}
+
 message TrafficPolicySpec {
   message RemoteRateLimit {
     string domain = 1;
@@ -625,6 +634,9 @@ message TrafficPolicySpec {
       // Inline JWKS as a JSON string
       string inline = 3;
     }
+
+    // JWT validation options controlling which claims must be present.
+    JWTValidationOptions jwt_validation_options = 4;
   }
   // JWT authentication configuration
   message JWT {
@@ -997,6 +1009,8 @@ message BackendPolicySpec {
     ResourceMetadata resource_metadata = 5;
     // How the JWT validation should behave
     Mode mode = 6;
+    // JWT validation options controlling which claims must be present.
+    JWTValidationOptions jwt_validation_options = 7;
   }
 
   oneof kind {
