@@ -45,9 +45,7 @@ impl RequestType for Request {
 	}
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
-		unimplemented!(
-			"get_messages is used for prompt guard; prompt guard is disable for token counting."
-		)
+		messages::get_messages_helper(&self.messages, &self.system)
 	}
 
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {

@@ -404,6 +404,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		}]),
 		tool_choice: Some(messages::typed::ToolChoice::Tool {
 			name: "lookup".to_string(),
+			disable_parallel_tool_use: None,
 		}),
 		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
 		output_config: None,
@@ -475,7 +476,9 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 			}),
 			cache_control: None,
 		}]),
-		tool_choice: Some(messages::typed::ToolChoice::Auto),
+		tool_choice: Some(messages::typed::ToolChoice::Auto {
+			disable_parallel_tool_use: None,
+		}),
 		thinking: Some(messages::typed::ThinkingInput::Enabled {
 			budget_tokens: 1024,
 		}),
