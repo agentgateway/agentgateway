@@ -105,7 +105,7 @@ fn cors_policy(allow_origins: Vec<&str>, allow_methods: Vec<&str>) -> cors::Cors
 }
 
 /// Verifies that a CORS preflight (OPTIONS) request returns 200 even when
-/// the rate limit is exhausted, because CORS runs before rate limiting.
+/// the rate limit is exhausted, because CORS runs before authentication and rate limiting.
 #[tokio::test]
 async fn cors_preflight_bypasses_ratelimit() {
 	let (_mock, bind, io) = basic_setup().await;
@@ -226,6 +226,272 @@ async fn cors_headers_present_on_ratelimited_response() {
 		res.hdr("access-control-allow-origin"),
 		"http://example.com",
 		"CORS headers must be present even on rate-limited responses"
+	);
+}
+
+/// Verifies that a CORS preflight (OPTIONS) request returns 200 even when
+/// API key authentication is required, because CORS runs before authentication
+/// and authorization.
+#[tokio::test]
+async fn cors_preflight_bypasses_api_key_auth() {
+	let (_mock, bind, io) = basic_setup().await;
+	let route_target = PolicyTarget::Route(RouteName {
+		name: "route".into(),
+		namespace: "".into(),
+		rule_name: None,
+		kind: None,
+	});
+
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			key: strng::new("cors"),
+			name: None,
+			target: route_target.clone(),
+			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
+				.into(),
+		})
+		.with_policy(TargetedPolicy {
+			key: strng::new("apikey"),
+			name: None,
+			target: route_target,
+			policy: TrafficPolicy::APIKey(
+				http::apikey::LocalAPIKeys {
+					keys: vec![http::apikey::LocalAPIKey {
+						key: http::apikey::APIKey::new("sk-123"),
+						metadata: None,
+					}],
+					mode: http::apikey::Mode::Strict,
+				}
+				.into(),
+			)
+			.into(),
+		});
+
+	// Request without credentials should be rejected
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 401);
+
+	// CORS preflight should succeed without any credentials
+	let res = send_request_headers(
+		io.clone(),
+		Method::OPTIONS,
+		"http://lo",
+		&[
+			("origin", "http://example.com"),
+			("access-control-request-method", "GET"),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
+}
+
+/// Verifies that a CORS preflight (OPTIONS) request returns 200 even when
+/// basic authentication is required, because CORS runs before authentication
+/// and authorization.
+#[tokio::test]
+async fn cors_preflight_bypasses_basic_auth() {
+	let (_mock, bind, io) = basic_setup().await;
+	let route_target = PolicyTarget::Route(RouteName {
+		name: "route".into(),
+		namespace: "".into(),
+		rule_name: None,
+		kind: None,
+	});
+
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			key: strng::new("cors"),
+			name: None,
+			target: route_target.clone(),
+			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
+				.into(),
+		})
+		.with_policy(TargetedPolicy {
+			key: strng::new("basic"),
+			name: None,
+			target: route_target,
+			policy: TrafficPolicy::BasicAuth(
+				http::basicauth::LocalBasicAuth {
+					htpasswd: FileOrInline::Inline("user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00".to_string()),
+					realm: Some("my-realm".into()),
+					mode: http::basicauth::Mode::Strict,
+				}
+				.try_into()
+				.unwrap(),
+			)
+			.into(),
+		});
+
+	// Request without credentials should be rejected
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 401);
+
+	// CORS preflight should succeed without any credentials
+	let res = send_request_headers(
+		io.clone(),
+		Method::OPTIONS,
+		"http://lo",
+		&[
+			("origin", "http://example.com"),
+			("access-control-request-method", "GET"),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
+}
+
+/// Verifies that a CORS preflight (OPTIONS) request returns 200 even when
+/// authorization rules would reject the request, because CORS runs before
+/// authorization.
+#[tokio::test]
+async fn cors_preflight_bypasses_authorization() {
+	let (_mock, bind, io) = basic_setup().await;
+	let route_target = PolicyTarget::Route(RouteName {
+		name: "route".into(),
+		namespace: "".into(),
+		rule_name: None,
+		kind: None,
+	});
+
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			key: strng::new("cors"),
+			name: None,
+			target: route_target.clone(),
+			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
+				.into(),
+		})
+		.with_policy(TargetedPolicy {
+			key: strng::new("apikey"),
+			name: None,
+			target: route_target.clone(),
+			policy: TrafficPolicy::APIKey(
+				http::apikey::LocalAPIKeys {
+					keys: vec![http::apikey::LocalAPIKey {
+						key: http::apikey::APIKey::new("sk-123"),
+						metadata: Some(json!({"group": "eng"})),
+					}],
+					mode: http::apikey::Mode::Strict,
+				}
+				.into(),
+			)
+			.into(),
+		})
+		.with_policy(TargetedPolicy {
+			key: strng::new("auth"),
+			name: None,
+			target: route_target,
+			policy: TrafficPolicy::Authorization(deser(json!({
+				"rules": ["apiKey.group == 'admin'"]
+			})))
+			.into(),
+		});
+
+	// Authenticated request should be rejected by authorization (403)
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("authorization", "bearer sk-123")],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+
+	// CORS preflight should still succeed without credentials
+	let res = send_request_headers(
+		io.clone(),
+		Method::OPTIONS,
+		"http://lo",
+		&[
+			("origin", "http://example.com"),
+			("access-control-request-method", "GET"),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
+}
+
+/// Verifies that when authentication or authorization rejects a cross-origin
+/// request, the response still carries CORS headers so browsers can read the
+/// error body.
+#[tokio::test]
+async fn cors_headers_present_on_auth_rejected_response() {
+	let (_mock, bind, io) = basic_setup().await;
+	let route_target = PolicyTarget::Route(RouteName {
+		name: "route".into(),
+		namespace: "".into(),
+		rule_name: None,
+		kind: None,
+	});
+
+	let _bind = bind
+		.with_policy(TargetedPolicy {
+			key: strng::new("cors"),
+			name: None,
+			target: route_target.clone(),
+			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
+				.into(),
+		})
+		.with_policy(TargetedPolicy {
+			key: strng::new("apikey"),
+			name: None,
+			target: route_target.clone(),
+			policy: TrafficPolicy::APIKey(
+				http::apikey::LocalAPIKeys {
+					keys: vec![http::apikey::LocalAPIKey {
+						key: http::apikey::APIKey::new("sk-123"),
+						metadata: Some(json!({"group": "eng"})),
+					}],
+					mode: http::apikey::Mode::Strict,
+				}
+				.into(),
+			)
+			.into(),
+		})
+		.with_policy(TargetedPolicy {
+			key: strng::new("auth"),
+			name: None,
+			target: route_target,
+			policy: TrafficPolicy::Authorization(deser(json!({
+				"rules": ["apiKey.group == 'admin'"]
+			})))
+			.into(),
+		});
+
+	// 401: missing credentials, CORS headers should still be present
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("origin", "http://example.com")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+	assert_eq!(
+		res.hdr("access-control-allow-origin"),
+		"http://example.com",
+		"CORS headers must be present on 401 responses"
+	);
+
+	// 403: valid key but fails authorization, CORS headers should still be present
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[
+			("origin", "http://example.com"),
+			("authorization", "bearer sk-123"),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 403);
+	assert_eq!(
+		res.hdr("access-control-allow-origin"),
+		"http://example.com",
+		"CORS headers must be present on 403 responses"
 	);
 }
 

@@ -18,72 +18,21 @@ features = ["full"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-base64 = { workspace = true, optional = true }
-bytes.workspace = true
-futures-channel = { workspace = true, optional = true }
+futures-channel = { workspace = true }
 futures-core.workspace = true
-futures-util = { workspace = true, optional = true }
+futures-util = { workspace = true }
 http.workspace = true
-http-body.workspace = true
 hyper.workspace = true
-ipnet = { workspace = true, optional = true }
-libc = { workspace = true, optional = true }
-percent-encoding = { workspace = true, optional = true }
 pin-project-lite.workspace = true
-socket2 = { workspace = true, features = ["all"], optional = true }
-tracing = { workspace = true, features = ["std"], optional = true }
-tokio = { workspace = true, optional = true }
-tower-service = { workspace = true, optional = true }
+tracing = { workspace = true, features = ["std"] }
+tokio = { workspace = true }
+tower-service = { workspace = true }
 
 [dev-dependencies]
 hyper = { workspace = true, features = ["full"] }
 bytes.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
-http-body-util.workspace = true
-tokio = { workspace = true, features = ["macros", "test-util", "signal"] }
-tokio-test.workspace = true
-pretty_env_logger.workspace = true
-
-[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
-pnet_datalink = "0.35.0"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-system-configuration = { version = "0.6.1", optional = true }
-
-[target.'cfg(windows)'.dependencies]
-windows-registry = { version = "0.5", optional = true }
+tokio = { workspace = true, features = ["macros", "test-util", "signal", "rt-multi-thread"] }
 
 [features]
-default = ["full"]
-
-# Shorthand to enable everything
-full = [
-    "client",
-    "client-legacy",
-    "server",
-    "server-auto",
-    "server-graceful",
-    "service",
-    "http1",
-    "http2",
-    "tokio",
-    "tracing",
-]
-
-client = ["hyper/client", "dep:tracing", "dep:futures-channel", "dep:tower-service"]
-client-legacy = ["client", "dep:socket2", "tokio/sync", "dep:libc", "dep:futures-util"]
-client-proxy = ["client", "dep:base64", "dep:ipnet", "dep:percent-encoding"]
-client-proxy-system = ["dep:system-configuration", "dep:windows-registry"]
-
-server = ["hyper/server"]
-server-auto = ["server", "http1", "http2"]
-server-graceful = ["server", "tokio/sync"]
-
-service = ["dep:tower-service"]
-
-http1 = ["hyper/http1"]
-http2 = ["hyper/http2"]
-
-tokio = ["dep:tokio", "tokio/net", "tokio/rt", "tokio/time"]
-
-tracing = ["dep:tracing"]
+default = []

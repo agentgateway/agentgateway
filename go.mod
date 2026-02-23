@@ -45,8 +45,8 @@ require (
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/controller-runtime v0.23.1
 	sigs.k8s.io/gateway-api v1.4.1
-	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260212193201-47e9d05050a6
-	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260212193201-47e9d05050a6
+	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260220060139-0714e2462e76
+	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260220060139-0714e2462e76
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -105,7 +105,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20251125145642-4e65d59e963e // indirect
 	oras.land/oras-go/v2 v2.6.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.32.1 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
 
 require (

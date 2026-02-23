@@ -745,6 +745,18 @@ mod tests {
 	}
 
 	#[test]
+	fn test_map_with_variable() {
+		assert_eq!(
+			test_script_vars(
+				r#"list.map(c, {"key": c}).size() == 2"#,
+				&[("list", vec!["a", "b"].into())]
+			),
+			Ok(true.into()),
+			"map with map literal containing variable"
+		);
+	}
+
+	#[test]
 	fn test_filter() {
 		[("filter list", "[1, 2, 3].filter(x, x > 2) == [3]")]
 			.iter()
