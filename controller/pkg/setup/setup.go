@@ -3,6 +3,7 @@ package setup
 import (
 	"context"
 
+	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/kube/kubetypes"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -41,6 +42,7 @@ type Options struct {
 	ExtraRunnables []func(ctx context.Context, commoncol *collections.CommonCollections, agw *agwplugins.AgwCollections, s *apisettings.Settings) (bool, manager.Runnable)
 	// ExtraAgwResourceStatusHandlers maps resource kinds to their status sync handlers for AgentGateway
 	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]agwplugins.AgwResourceStatusSyncHandler
+	KrtDebugger                    *krt.DebugHandler
 
 	AgentGatewaySyncerOptions []agentgatewaysyncer.AgentgatewaySyncerOption
 }
@@ -62,5 +64,6 @@ func New(opts Options) (setup.Server, error) {
 		setup.WithExtraManagerConfig(opts.ExtraManagerConfig...),
 		setup.WithExtraAgwResourceStatusHandlers(opts.ExtraAgwResourceStatusHandlers),
 		setup.WithAgentgatewaySyncerOptions(opts.AgentGatewaySyncerOptions),
+		setup.WithKrtDebugger(opts.KrtDebugger),
 	)
 }
