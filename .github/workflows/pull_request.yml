@@ -109,6 +109,10 @@ jobs:
           .github/workflows/cache-test
     - name: Lint
       run: make -C controller analyze
+    - name: go mod tidy
+      run: |
+        go mod tidy
+        git diff --exit-code go.mod go.sum
     - name: Gen
       # TODO: the rest of codegen
       run: make generate-apis check-clean-repo
