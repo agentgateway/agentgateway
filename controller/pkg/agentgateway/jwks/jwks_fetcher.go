@@ -37,10 +37,11 @@ type JwksHttpClient interface {
 }
 
 type JwksSource struct {
-	JwksURL   string
-	Ttl       time.Duration
-	Deleted   bool
-	TlsConfig *tls.Config
+	JwksURL string
+	Ttl     time.Duration
+	Deleted bool
+	// Exclude from JSON dump as this is not safe for marshaling
+	TlsConfig *tls.Config `json:"-"`
 }
 
 func (js JwksSource) ResourceName() string {
