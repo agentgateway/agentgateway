@@ -16,7 +16,6 @@ spec:
       containers:
       - name: mcp-website-fetcher
         image: ghcr.io/kgateway-dev/mcp-website-fetcher:0.0.1
-        imagePullPolicy: Always
 ---
 apiVersion: v1
 kind: Service
