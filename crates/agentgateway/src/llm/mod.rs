@@ -7,12 +7,14 @@ use ::http::{HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
+use bytes::{Buf, BytesMut};
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
+use tokio_util::codec::Decoder;
 
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
@@ -105,6 +107,8 @@ pub enum RouteType {
 	Models,
 	/// Send the request to the upstream LLM provider as-is
 	Passthrough,
+	/// Send the request to the upstream LLM provider as-is
+	ParsedPassthrough,
 	/// OpenAI /responses
 	Responses,
 	/// OpenAI /embeddings
@@ -159,6 +163,7 @@ pub enum InputFormat {
 	Embeddings,
 	Realtime,
 	CountTokens,
+	Detect,
 }
 
 impl InputFormat {
@@ -170,6 +175,7 @@ impl InputFormat {
 			InputFormat::Realtime => false,
 			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
+			InputFormat::Detect => false,
 		}
 	}
 }
@@ -572,6 +578,30 @@ impl AIProvider {
 			.await
 	}
 
+	pub async fn process_passthrough_request(
+		&self,
+		backend_info: &crate::http::auth::BackendInfo,
+		policies: Option<&Policy>,
+		req: Request,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		let (parts, req) = self
+			.read_body_and_default_model_allow_unknown::<types::detect::Request>(policies, req)
+			.await?;
+
+		self
+			.process_request(
+				backend_info,
+				policies,
+				InputFormat::Detect,
+				req,
+				parts,
+				false,
+				log,
+			)
+			.await
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	async fn process_request(
 		&self,
@@ -584,6 +614,9 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		match (self, original_format) {
+			(_, InputFormat::Detect) => {
+				// All providers support detect; this is a passthrough!
+			},
 			(_, InputFormat::Completions) => {
 				// All providers support completions input
 			},
@@ -704,6 +737,7 @@ impl AIProvider {
 		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		tracing::error!("howardjohn: process success... {req:?}");
 		if req.streaming {
 			return self
 				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
@@ -786,7 +820,9 @@ impl AIProvider {
 			let body = self.process_error(&req, &bytes)?;
 			(LLMResponse::default(), body)
 		} else {
+			tracing::error!("howardjohn: process success...");
 			let mut resp = self.process_success(&req, &bytes)?;
+			tracing::error!("howardjohn: process success!");
 
 			// Apply response prompt guard
 			if let Some(dr) = Policy::apply_response_prompt_guard(
@@ -833,7 +869,17 @@ impl AIProvider {
 		req: &LLMRequest,
 		bytes: &Bytes,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		match (self, req.input_format) {
+		match (self, dbg!(req.input_format)) {
+			(_, InputFormat::Detect) => Ok(Box::new(
+				serde_json::from_slice::<types::detect::Response>(bytes).map_err(|e| {
+					warn!(
+						error = %e,
+						body = %String::from_utf8_lossy(bytes),
+						"failed to parse completions response"
+					);
+					AIError::ResponseParsing(e)
+				})?,
+			)),
 			// Completions with OpenAI: just passthrough
 			(
 				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
@@ -953,6 +999,9 @@ impl AIProvider {
 				include_completion_in_log,
 				resp,
 			),
+			(_, InputFormat::Detect) => {
+				types::detect::passthrough_stream(AmendOnDrop::new(log, rate_limit), resp)
+			},
 			// Responses with OpenAI: just passthrough
 			(
 				AIProvider::OpenAI(_)
@@ -1040,6 +1089,20 @@ impl AIProvider {
 		policies: Option<&Policy>,
 		hreq: Request,
 	) -> Result<(Parts, T), AIError> {
+		let (p, mut r) = self
+			.read_body_and_default_model_allow_unknown::<T>(policies, hreq)
+			.await?;
+		if r.model().is_none() {
+			return Err(AIError::MissingField("model not specified".into()));
+		}
+		Ok((p, r))
+	}
+
+	async fn read_body_and_default_model_allow_unknown<T: RequestType + DeserializeOwned>(
+		&self,
+		policies: Option<&Policy>,
+		hreq: Request,
+	) -> Result<(Parts, T), AIError> {
 		let buffer = http::buffer_limit(&hreq);
 		let (parts, body) = hreq.into_parts();
 		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
@@ -1053,8 +1116,6 @@ impl AIProvider {
 
 		if let Some(provider_model) = &self.override_model() {
 			*req.model() = Some(provider_model.to_string());
-		} else if req.model().is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
 		}
 		Ok((parts, req))
 	}
@@ -1094,6 +1155,369 @@ impl AIProvider {
 				"this provider and format is not supported"
 			))),
 		}
+	}
+}
+
+#[derive(Default)]
+struct GuessedUsage {
+	input_tokens: Option<u64>,
+	output_tokens: Option<u64>,
+	total_tokens: Option<u64>,
+	reasoning_tokens: Option<u64>,
+	cache_creation_input_tokens: Option<u64>,
+	cached_input_tokens: Option<u64>,
+}
+
+fn guess_passthrough_input_format(path: &str) -> InputFormat {
+	if path.contains("/embeddings") {
+		InputFormat::Embeddings
+	} else if path.contains("/messages/count_tokens") {
+		InputFormat::CountTokens
+	} else if path.contains("/responses") {
+		InputFormat::Responses
+	} else if path.contains("/messages") {
+		InputFormat::Messages
+	} else {
+		InputFormat::Completions
+	}
+}
+
+fn guess_passthrough_request_model(
+	provider: &AIProvider,
+	parts: &Parts,
+	body_json: Option<&serde_json::Value>,
+) -> Strng {
+	if let Some(body_json) = body_json
+		&& let Some(model) = first_str_at_paths(
+			body_json,
+			&[
+				&["model"],
+				&["model_id"],
+				&["modelId"],
+				&["request", "model"],
+				&["modelSpec", "name"],
+			],
+		) {
+		return model;
+	}
+
+	if let Ok(url) = http::as_url(&parts.uri)
+		&& let Some((_, model)) = url.query_pairs().find(|(k, _)| k == "model")
+	{
+		return strng::new(model);
+	}
+
+	provider.override_model().unwrap_or_default()
+}
+
+fn guess_passthrough_streaming(parts: &Parts, body_json: Option<&serde_json::Value>) -> bool {
+	if let Some(body_json) = body_json
+		&& let Some(streaming) = first_bool_at_paths(body_json, &[&["stream"], &["streaming"]])
+	{
+		return streaming;
+	}
+
+	if let Ok(url) = http::as_url(&parts.uri)
+		&& let Some((_, stream)) = url.query_pairs().find(|(k, _)| k == "stream")
+	{
+		return stream.eq_ignore_ascii_case("true") || stream == "1";
+	}
+
+	false
+}
+
+fn guess_passthrough_request_params(body_json: Option<&serde_json::Value>) -> LLMRequestParams {
+	let Some(body_json) = body_json else {
+		return LLMRequestParams::default();
+	};
+
+	LLMRequestParams {
+		temperature: first_f64_at_paths(body_json, &[&["temperature"]]),
+		top_p: first_f64_at_paths(body_json, &[&["top_p"]]),
+		frequency_penalty: first_f64_at_paths(body_json, &[&["frequency_penalty"]]),
+		presence_penalty: first_f64_at_paths(body_json, &[&["presence_penalty"]]),
+		seed: first_i64_at_paths(body_json, &[&["seed"]]),
+		max_tokens: first_u64_at_paths(body_json, &[&["max_tokens"], &["max_output_tokens"]]),
+		encoding_format: first_str_at_paths(body_json, &[&["encoding_format"]]),
+		dimensions: first_u64_at_paths(body_json, &[&["dimensions"]]),
+	}
+}
+
+fn apply_passthrough_response_guess(llm_response: &mut LLMResponse, value: &serde_json::Value) {
+	if let Some(model) = first_str_at_paths(
+		value,
+		&[
+			&["model"],
+			&["message", "model"],
+			&["response", "model"],
+			&["result", "model"],
+			&["model_id"],
+			&["modelId"],
+		],
+	) {
+		llm_response.provider_model = Some(model);
+	}
+
+	let guessed_usage = GuessedUsage {
+		input_tokens: first_u64_at_paths(
+			value,
+			&[
+				&["usage", "input_tokens"],
+				&["usage", "prompt_tokens"],
+				&["usage", "inputTokenCount"],
+				&["message", "usage", "input_tokens"],
+				&["response", "usage", "input_tokens"],
+				&["response", "usage", "prompt_tokens"],
+				&["input_tokens"],
+				&["prompt_tokens"],
+			],
+		),
+		output_tokens: first_u64_at_paths(
+			value,
+			&[
+				&["usage", "output_tokens"],
+				&["usage", "completion_tokens"],
+				&["usage", "outputTokenCount"],
+				&["message", "usage", "output_tokens"],
+				&["response", "usage", "output_tokens"],
+				&["response", "usage", "completion_tokens"],
+				&["output_tokens"],
+				&["completion_tokens"],
+			],
+		),
+		total_tokens: first_u64_at_paths(
+			value,
+			&[
+				&["usage", "total_tokens"],
+				&["usage", "totalTokenCount"],
+				&["response", "usage", "total_tokens"],
+				&["total_tokens"],
+			],
+		),
+		reasoning_tokens: first_u64_at_paths(
+			value,
+			&[
+				&["usage", "completion_tokens_details", "reasoning_tokens"],
+				&["usage", "output_tokens_details", "reasoning_tokens"],
+				&[
+					"response",
+					"usage",
+					"completion_tokens_details",
+					"reasoning_tokens",
+				],
+				&[
+					"response",
+					"usage",
+					"output_tokens_details",
+					"reasoning_tokens",
+				],
+			],
+		),
+		cache_creation_input_tokens: first_u64_at_paths(
+			value,
+			&[
+				&["usage", "cache_creation_input_tokens"],
+				&["usage", "cache_write_input_tokens"],
+				&["message", "usage", "cache_creation_input_tokens"],
+				&["response", "usage", "cache_creation_input_tokens"],
+				&["response", "usage", "cache_write_input_tokens"],
+			],
+		),
+		cached_input_tokens: first_u64_at_paths(
+			value,
+			&[
+				&["usage", "prompt_tokens_details", "cached_tokens"],
+				&["usage", "input_tokens_details", "cached_tokens"],
+				&["usage", "cache_read_input_tokens"],
+				&["message", "usage", "cache_read_input_tokens"],
+				&["response", "usage", "input_tokens_details", "cached_tokens"],
+				&["response", "usage", "cache_read_input_tokens"],
+			],
+		),
+	};
+
+	if let Some(input_tokens) = guessed_usage.input_tokens {
+		llm_response.input_tokens = Some(input_tokens);
+	}
+	if let Some(output_tokens) = guessed_usage.output_tokens {
+		llm_response.output_tokens = Some(output_tokens);
+	}
+	if let Some(total_tokens) = guessed_usage.total_tokens {
+		llm_response.total_tokens = Some(total_tokens);
+	}
+	if let Some(reasoning_tokens) = guessed_usage.reasoning_tokens {
+		llm_response.reasoning_tokens = Some(reasoning_tokens);
+	}
+	if let Some(cache_creation_input_tokens) = guessed_usage.cache_creation_input_tokens {
+		llm_response.cache_creation_input_tokens = Some(cache_creation_input_tokens);
+	}
+	if let Some(cached_input_tokens) = guessed_usage.cached_input_tokens {
+		llm_response.cached_input_tokens = Some(cached_input_tokens);
+	}
+
+	if llm_response.total_tokens.is_none()
+		&& let (Some(input_tokens), Some(output_tokens)) =
+			(llm_response.input_tokens, llm_response.output_tokens)
+	{
+		llm_response.total_tokens = Some(input_tokens + output_tokens);
+	}
+}
+
+fn value_at_path<'a>(value: &'a serde_json::Value, path: &[&str]) -> Option<&'a serde_json::Value> {
+	let mut current = value;
+	for seg in path {
+		current = current.get(*seg)?;
+	}
+	Some(current)
+}
+
+fn first_str_at_paths(value: &serde_json::Value, paths: &[&[&str]]) -> Option<Strng> {
+	paths.iter().find_map(|path| {
+		value_at_path(value, path)
+			.and_then(serde_json::Value::as_str)
+			.map(strng::new)
+	})
+}
+
+fn first_bool_at_paths(value: &serde_json::Value, paths: &[&[&str]]) -> Option<bool> {
+	paths
+		.iter()
+		.find_map(|path| value_at_path(value, path))
+		.and_then(|v| {
+			v.as_bool().or_else(|| {
+				v.as_str().and_then(|s| {
+					if s.eq_ignore_ascii_case("true") || s == "1" {
+						Some(true)
+					} else if s.eq_ignore_ascii_case("false") || s == "0" {
+						Some(false)
+					} else {
+						None
+					}
+				})
+			})
+		})
+}
+
+fn first_u64_at_paths(value: &serde_json::Value, paths: &[&[&str]]) -> Option<u64> {
+	paths
+		.iter()
+		.find_map(|path| value_at_path(value, path))
+		.and_then(|v| {
+			v.as_u64()
+				.or_else(|| {
+					v.as_i64()
+						.and_then(|i| if i >= 0 { Some(i as u64) } else { None })
+				})
+				.or_else(|| {
+					v.as_f64().and_then(|f| {
+						if f.is_finite() && f >= 0.0 {
+							Some(f as u64)
+						} else {
+							None
+						}
+					})
+				})
+				.or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+		})
+}
+
+fn first_f64_at_paths(value: &serde_json::Value, paths: &[&[&str]]) -> Option<f64> {
+	paths
+		.iter()
+		.find_map(|path| value_at_path(value, path))
+		.and_then(|v| {
+			v.as_f64()
+				.or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+		})
+}
+
+fn first_i64_at_paths(value: &serde_json::Value, paths: &[&[&str]]) -> Option<i64> {
+	paths
+		.iter()
+		.find_map(|path| value_at_path(value, path))
+		.and_then(|v| {
+			v.as_i64()
+				.or_else(|| v.as_u64().and_then(|u| i64::try_from(u).ok()))
+				.or_else(|| v.as_str().and_then(|s| s.parse::<i64>().ok()))
+		})
+}
+
+fn is_json_content_type(resp: &Response) -> bool {
+	resp
+		.headers()
+		.get(header::CONTENT_TYPE)
+		.and_then(|v| v.to_str().ok())
+		.map(|v| {
+			let ct = v.to_ascii_lowercase();
+			ct.contains("application/json") || ct.contains("+json")
+		})
+		.unwrap_or(false)
+}
+
+fn is_sse_content_type(resp: &Response) -> bool {
+	resp
+		.headers()
+		.get(header::CONTENT_TYPE)
+		.and_then(|v| v.to_str().ok())
+		.map(|v| v.to_ascii_lowercase().contains("text/event-stream"))
+		.unwrap_or(false)
+}
+
+struct JsonValueDecoder {
+	limit: usize,
+	buffer: BytesMut,
+	overflowed: bool,
+	emitted: bool,
+}
+
+impl JsonValueDecoder {
+	fn new(limit: usize) -> Self {
+		Self {
+			limit,
+			buffer: BytesMut::new(),
+			overflowed: false,
+			emitted: false,
+		}
+	}
+}
+
+impl Decoder for JsonValueDecoder {
+	type Item = Option<serde_json::Value>;
+	type Error = std::io::Error;
+
+	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+		if src.is_empty() {
+			return Ok(None);
+		}
+
+		if !self.overflowed {
+			let remaining = self.limit.saturating_sub(self.buffer.len());
+			if src.len() <= remaining {
+				self.buffer.extend_from_slice(src);
+			} else {
+				self.buffer.extend_from_slice(&src[..remaining]);
+				self.overflowed = true;
+			}
+		}
+
+		src.advance(src.len());
+		Ok(None)
+	}
+
+	fn decode_eof(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+		let _ = self.decode(src)?;
+		if self.emitted {
+			return Ok(None);
+		}
+		self.emitted = true;
+
+		if self.overflowed {
+			return Ok(Some(None));
+		}
+
+		Ok(Some(
+			serde_json::from_slice::<serde_json::Value>(&self.buffer).ok(),
+		))
 	}
 }
 
