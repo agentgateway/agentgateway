@@ -155,6 +155,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		drain_tx,
 		shutdown,
 		tracer,
+		ready,
 	})
 }
 
@@ -162,9 +163,14 @@ pub struct Bound {
 	pub shutdown: signal::Shutdown,
 	drain_tx: drain::DrainTrigger,
 	tracer: Option<Arc<Tracer>>,
+	ready: readiness::Ready,
 }
 
 impl Bound {
+	pub fn readiness(&self) -> readiness::Ready {
+		self.ready.clone()
+	}
+
 	pub async fn wait_termination(self) -> anyhow::Result<()> {
 		// Wait for a signal to shutdown from explicit admin shutdown or signal
 		self.shutdown.wait().await;
