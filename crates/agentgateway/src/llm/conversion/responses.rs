@@ -3,11 +3,10 @@ use std::time::Instant;
 use agent_core::strng;
 
 use crate::http::Body;
-use crate::llm::{LLMInfo, types};
+use crate::llm::{AmendOnDrop, types};
 use crate::parse;
-use crate::telemetry::log::AsyncLog;
 
-pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) -> Body {
+pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
 	let mut saw_token = false;
 	parse::sse::json_passthrough::<types::responses::typed::ResponseStreamEvent>(
 		b,

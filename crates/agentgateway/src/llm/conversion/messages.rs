@@ -3,11 +3,10 @@ use std::time::Instant;
 use agent_core::strng;
 
 use crate::http::Body;
-use crate::llm::LLMInfo;
+use crate::llm::AmendOnDrop;
 use crate::llm::types::completions::typed as completions;
 use crate::llm::types::messages::typed as messages;
 use crate::parse;
-use crate::telemetry::log::AsyncLog;
 
 pub mod from_completions {
 	use std::collections::HashMap;
@@ -21,8 +20,8 @@ pub mod from_completions {
 	use crate::llm::types::completions::typed as completions;
 	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::types::messages::typed as messages;
-	use crate::llm::{AIError, LLMInfo, types};
-	use crate::telemetry::log::AsyncLog;
+	use crate::llm::{AIError, AmendOnDrop, types};
+
 	use crate::{json, parse};
 
 	/// translate an OpenAI completions request to an anthropic messages request
@@ -307,7 +306,7 @@ pub mod from_completions {
 		))
 	}
 
-	pub fn translate_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) -> Body {
+	pub fn translate_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
 		let mut message_id = None;
 		let mut model = String::new();
 		let created = chrono::Utc::now().timestamp() as u32;
@@ -437,7 +436,7 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 	}
 }
 
-pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AsyncLog<LLMInfo>) -> Body {
+pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
 	let mut saw_token = false;
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
 	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {

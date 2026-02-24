@@ -182,8 +182,8 @@ pub mod from_completions {
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
 	use crate::llm::types::completions::typed::UsagePromptDetails;
-	use crate::llm::{AIError, LLMInfo, types};
-	use crate::telemetry::log::AsyncLog;
+	use crate::llm::{AIError, AmendOnDrop, types};
+
 	use crate::{json, parse};
 
 	/// translate an OpenAI completions request to a Bedrock converse  request
@@ -507,7 +507,7 @@ pub mod from_completions {
 	pub fn translate_stream(
 		b: Body,
 		_buffer_limit: usize,
-		log: AsyncLog<LLMInfo>,
+		log: AmendOnDrop,
 		model: &str,
 		message_id: &str,
 	) -> Body {
@@ -719,8 +719,8 @@ pub mod from_messages {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, LLMInfo, types};
-	use crate::telemetry::log::AsyncLog;
+	use crate::llm::{AIError, AmendOnDrop, types};
+
 	use crate::{json, parse};
 
 	/// translate an Anthropic messages request to a Bedrock converse request
@@ -1167,7 +1167,7 @@ pub mod from_messages {
 	pub fn translate_stream(
 		b: Body,
 		_buffer_limit: usize,
-		log: AsyncLog<LLMInfo>,
+		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
 	) -> Body {
@@ -1429,8 +1429,8 @@ pub mod from_responses {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, LLMInfo, types};
-	use crate::telemetry::log::AsyncLog;
+	use crate::llm::{AIError, AmendOnDrop, types};
+
 	use crate::{json, parse};
 
 	/// translate an OpenAI responses request to a Bedrock converse request
@@ -1974,7 +1974,7 @@ pub mod from_responses {
 	pub fn translate_stream(
 		b: Body,
 		_buffer_limit: usize,
-		log: AsyncLog<LLMInfo>,
+		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
 	) -> Body {

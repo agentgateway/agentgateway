@@ -46,7 +46,7 @@ fn test_response(
 async fn test_streaming(
 	provider_name: &str,
 	test_name: &str,
-	xlate: impl Fn(Body, AsyncLog<LLMInfo>) -> Result<Body, AIError>,
+	xlate: impl Fn(Body, AmendOnDrop) -> Result<Body, AIError>,
 ) {
 	let test_dir = Path::new("src/llm/tests");
 
@@ -56,7 +56,8 @@ async fn test_streaming(
 		&fs::read(&input_path).unwrap_or_else(|_| panic!("{test_name}: Failed to read input file"));
 	let body = Body::from(provider.clone());
 	let log = AsyncLog::default();
-	let resp = xlate(body, log).expect("failed to translate stream");
+	let resp = xlate(body, AmendOnDrop::new(log, LLMResponsePolicies::default()))
+		.expect("failed to translate stream");
 	let resp_bytes = resp.collect().await.unwrap().to_bytes();
 	let resp_str = std::str::from_utf8(&resp_bytes).unwrap();
 
