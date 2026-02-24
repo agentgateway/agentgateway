@@ -190,6 +190,9 @@ func NewGatewayReconciler(
 	if r.agwParamClient != nil {
 		r.agwParamClient.AddEventHandler(agwParamEventHandler)
 	}
+	if controllerExtension != nil {
+		controllerExtension.Register(r.queue, agwParamEventHandler)
+	}
 
 	// Add a handler to reconcile the parent Gateway when child objects (Deployment, Service, etc.)
 	parentHandler := controllers.ObjectHandler(controllers.EnqueueForParentHandler(r.queue, gvk.KubernetesGateway))
