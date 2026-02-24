@@ -1,9 +1,21 @@
 use std::collections::HashSet;
 
-use http::Method;
-
 use super::*;
 use crate::http::Body;
+use http::Method;
+use serde_json::json;
+
+fn eval(expr: &str) -> Result<serde_json::Value, Error> {
+	let exec_serde = full_example_executor();
+	let exec = exec_serde.as_executor();
+	let exp = Expression::new_strict(expr)?;
+	Ok(
+		exec
+			.eval(&exp)?
+			.json()
+			.map_err(|e| Error::Variable(format!("{e}")))?,
+	)
+}
 
 fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 	let mut cb = ContextBuilder::new();
@@ -72,4 +84,12 @@ fn test_properties() {
 	// Test extauthz namespace recognition
 	test(r#"extauthz.user_id"#, &["extauthz.user_id"]);
 	test(r#"extauthz.role == "admin""#, &["extauthz.role"]);
+}
+
+#[test]
+fn map() {
+	let expr = r#"request.headers.map(v, v)"#;
+	let v = eval(expr).unwrap();
+	let v = v.as_array().unwrap();
+	assert!(v.contains(&json!("user-agent")), "{v:?}");
 }
