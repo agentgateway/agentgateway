@@ -7,12 +7,14 @@ use ::http::{HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
+use bytes::{Buf, BytesMut};
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
+use tokio_util::codec::Decoder;
 
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
@@ -105,6 +107,8 @@ pub enum RouteType {
 	Models,
 	/// Send the request to the upstream LLM provider as-is
 	Passthrough,
+	/// Send the request to the upstream LLM provider as-is
+	ParsedPassthrough,
 	/// OpenAI /responses
 	Responses,
 	/// OpenAI /embeddings
@@ -159,6 +163,7 @@ pub enum InputFormat {
 	Embeddings,
 	Realtime,
 	CountTokens,
+	Detect,
 }
 
 impl InputFormat {
@@ -170,6 +175,7 @@ impl InputFormat {
 			InputFormat::Realtime => false,
 			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
+			InputFormat::Detect => false,
 		}
 	}
 }
@@ -608,6 +614,55 @@ impl AIProvider {
 			.await
 	}
 
+	pub async fn process_passthrough_request(
+		&self,
+		backend_info: &crate::http::auth::BackendInfo,
+		policies: Option<&Policy>,
+		hreq: Request,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		// We don't use read_body_and_default_model here because we need a lot of special logic
+		// Unfortunately we buffer just due to how our interface works. Ideally we could not when
+		// it is not even JSON
+		let buffer = http::buffer_limit(&hreq);
+		let is_json = hreq
+			.headers()
+			.typed_get::<headers::ContentType>()
+			.map(|v| v == headers::ContentType::json())
+			.unwrap_or_default();
+		let (parts, body) = hreq.into_parts();
+		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
+			return Err(AIError::RequestTooLarge);
+		};
+
+		let mut req = if is_json {
+			if let Some(p) = policies {
+				p.unmarshal_request(&bytes)
+			} else {
+				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)
+			}.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
+		} else {
+			types::detect::Request::new_raw(bytes)
+		};
+
+		if let Some(provider_model) = &self.override_model() {
+			*req.model() = Some(provider_model.to_string());
+		}
+		// do not reject missing model
+
+		self
+			.process_request(
+				backend_info,
+				policies,
+				InputFormat::Detect,
+				req,
+				parts,
+				false,
+				log,
+			)
+			.await
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	async fn process_request(
 		&self,
@@ -620,6 +675,9 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		match (self, original_format) {
+			(_, InputFormat::Detect) => {
+				// All providers support detect; this is a passthrough!
+			},
 			(_, InputFormat::Completions) => {
 				// All providers support completions input
 			},
@@ -746,6 +804,7 @@ impl AIProvider {
 		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		tracing::error!("howardjohn: process success... {req:?}");
 		if req.streaming {
 			return self
 				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
@@ -828,7 +887,9 @@ impl AIProvider {
 			let body = self.process_error(&req, parts.status, &bytes)?;
 			(LLMResponse::default(), body)
 		} else {
+			tracing::error!("howardjohn: process success...");
 			let mut resp = self.process_success(&req, &bytes)?;
+			tracing::error!("howardjohn: process success!");
 
 			// Apply response prompt guard
 			if let Some(dr) = Policy::apply_response_prompt_guard(
@@ -875,7 +936,17 @@ impl AIProvider {
 		req: &LLMRequest,
 		bytes: &Bytes,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		match (self, req.input_format) {
+		match (self, dbg!(req.input_format)) {
+			(_, InputFormat::Detect) => Ok(Box::new(
+				serde_json::from_slice::<types::detect::Response>(bytes).map_err(|e| {
+					warn!(
+						error = %e,
+						body = %String::from_utf8_lossy(bytes),
+						"failed to parse completions response"
+					);
+					AIError::ResponseParsing(e)
+				})?,
+			)),
 			// Completions with OpenAI: just passthrough
 			(
 				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
@@ -1020,6 +1091,9 @@ impl AIProvider {
 					include_completion_in_log,
 					resp,
 				)
+			},
+			(_, InputFormat::Detect) => {
+				types::detect::passthrough_stream(AmendOnDrop::new(log, rate_limit), resp)
 			},
 			// Responses with OpenAI: just passthrough
 			(
