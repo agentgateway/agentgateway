@@ -359,7 +359,9 @@ pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
 		version: req.version(),
 		headers: req.headers().clone(),
 		body: req.extensions_mut().remove::<BufferedBody>(),
-		jwt: req.extensions_mut().remove::<jwt::Claims>(),
+		// This one we do not remove, as it's used downstream of the snapshot for auth in MCP case
+		// TODO: structure this better
+		jwt: req.extensions_mut().get::<jwt::Claims>().cloned(),
 		api_key: req.extensions_mut().remove::<apikey::Claims>(),
 		basic_auth: req.extensions_mut().remove::<basicauth::Claims>(),
 		backend: req.extensions_mut().remove::<BackendContext>(),
