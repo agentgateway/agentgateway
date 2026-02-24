@@ -48,7 +48,7 @@ k8s_yaml(helm(
 
 local_resource(
   'go-compile-controller',
-  'make -C ./controller VERSION=' + version + ' GCFLAGS=all="-N -l" agentgateway-controller && mv ./controller/_output/pkg/agentgateway/agentgateway-linux-$(go env GOARCH) ./hack/tilt/agentgateway-controller',
+  'make -C ./controller VERSION=' + version + ' GCFLAGS=all="-N -l" agentgateway-controller && mv ./controller/_output/pkg/agentgateway/agentgateway-linux-$(go env GOARCH) ./tools/tilt/agentgateway-controller',
   deps=['./controller/'],
   ignore=['./controller/_output/'],
 )
@@ -56,7 +56,7 @@ local_resource(
 # Build control plane Docker image
 docker_build_with_restart(
     image_registry + '/agentgateway-controller',
-    context='./hack/tilt/',
+    context='./tools/tilt/',
     entrypoint='/usr/local/bin/agentgateway-controller',
     dockerfile_contents="""
 FROM ubuntu:24.04
@@ -66,7 +66,7 @@ ENTRYPOINT /usr/local/bin/agentgateway-controller
     # Live update: sync Go binaries
     live_update=[
         # Sync Go code changes
-        sync('./hack/tilt/agentgateway-controller', '/usr/local/bin/agentgateway-controller'), 
+        sync('./tools/tilt/agentgateway-controller', '/usr/local/bin/agentgateway-controller'),
     ],
     only=[
         './agentgateway-controller',
@@ -106,16 +106,27 @@ k8s_resource('agentgateway',
 
 local_resource(
   'rust-compile-dataplane',
-  'cargo build && if [ -f "./hack/tilt/agentgateway" ]; then rm "./hack/tilt/agentgateway"; fi && mv ./target/debug/agentgateway ./hack/tilt/agentgateway',
+  '''
+    docker run --rm \
+      -v "$(pwd)":/app \
+      -v cargo-cache-tilt:/usr/local/cargo/registry \
+      -w /app \
+      rust:1.93.0-trixie \
+      bash -c "
+        cargo build && \
+        mkdir -p /app/tools/tilt && \
+        cp /app/target/debug/agentgateway /app/tools/tilt/agentgateway
+      "
+  ''',
   deps=['./crates',
         './Cargo.toml',
         './Cargo.lock',
         './.cargo'])
-# 
+#
 # Build data plane Docker image
 docker_build(
     'agentgateway',
-    context='./hack/tilt/',
+    context='./tools/tilt/',
     dockerfile_contents="""
 FROM ubuntu:24.04
 COPY start.sh /scripts/start.sh
@@ -124,7 +135,7 @@ COPY agentgateway /usr/local/bin/
 ENTRYPOINT ["/scripts/start.sh", "/usr/local/bin/agentgateway"]
     """,
     live_update=[
-        sync('./hack/tilt/agentgateway', '/usr/local/bin/agentgateway'),
+        sync('./tools/tilt/agentgateway', '/usr/local/bin/agentgateway'),
         run('/scripts/restart.sh'),
     ],
     only=[
@@ -174,5 +185,5 @@ spec:
       protocol: HTTP
       port: 8080
 """))
-k8s_resource(workload='dataplane-dev-gwparams', extra_pod_selectors={"gateway.networking.k8s.io/gateway-name":"tilt-gw"}, 
+k8s_resource(workload='dataplane-dev-gwparams', extra_pod_selectors={"gateway.networking.k8s.io/gateway-name":"tilt-gw"},
  resource_deps=['rust-compile-dataplane'])
