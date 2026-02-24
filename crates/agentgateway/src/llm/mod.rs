@@ -111,6 +111,7 @@ pub enum RouteType {
 	Embeddings,
 	/// OpenAI /realtime (websockets)
 	Realtime,
+	ResponsesWebsocket,
 	/// Anthropic /v1/messages/count_tokens
 	AnthropicTokenCount,
 }
@@ -156,6 +157,7 @@ pub enum InputFormat {
 	Completions,
 	Messages,
 	Responses,
+	ResponsesWebsocket,
 	Embeddings,
 	Realtime,
 	CountTokens,
@@ -168,6 +170,7 @@ impl InputFormat {
 			InputFormat::Messages => true,
 			InputFormat::Responses => true,
 			InputFormat::Realtime => false,
+			InputFormat::ResponsesWebsocket => false,
 			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
 		}
@@ -899,6 +902,9 @@ impl AIProvider {
 			(_, InputFormat::Realtime) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"realtime does not use this codepath"
 			))),
+			(_, InputFormat::ResponsesWebsocket) => Err(AIError::UnsupportedConversion(strng::literal!(
+				"responses Websocket does not use this codepath"
+			))),
 			(_, InputFormat::CountTokens) => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
 			},
@@ -996,6 +1002,11 @@ impl AIProvider {
 			(_, InputFormat::Realtime) => {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
 					"realtime does not use streaming codepath"
+				)));
+			},
+			(_, InputFormat::ResponsesWebsocket) => {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"responsesWebsocket does not use streaming codepath"
 				)));
 			},
 			(AIProvider::Anthropic(_), InputFormat::Responses) => {
