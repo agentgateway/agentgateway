@@ -9,12 +9,10 @@ fn eval(expr: &str) -> Result<serde_json::Value, Error> {
 	let exec_serde = full_example_executor();
 	let exec = exec_serde.as_executor();
 	let exp = Expression::new_strict(expr)?;
-	Ok(
-		exec
-			.eval(&exp)?
-			.json()
-			.map_err(|e| Error::Variable(format!("{e}")))?,
-	)
+	exec
+		.eval(&exp)?
+		.json()
+		.map_err(|e| Error::Variable(format!("{e}")))
 }
 
 fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
@@ -92,4 +90,27 @@ fn map() {
 	let v = eval(expr).unwrap();
 	let v = v.as_array().unwrap();
 	assert!(v.contains(&json!("user-agent")), "{v:?}");
+}
+
+#[test]
+fn map_filter_dynamic_bool() {
+	let expr = r#"[1, 2].map(x, llm.streaming, x + 1)"#;
+	assert_eq!(json!([]), eval(expr).unwrap());
+}
+
+#[test]
+fn dynamic_bool_in_logical_ops() {
+	assert_eq!(json!(false), eval(r#"false || llm.streaming"#).unwrap());
+	assert_eq!(json!(false), eval(r#"true && llm.streaming"#).unwrap());
+}
+
+#[test]
+fn dynamic_index_key() {
+	let expr = r#"{"bar": 1}[request.headers["foo"]]"#;
+	assert_eq!(json!(1), eval(expr).unwrap());
+}
+
+#[test]
+fn has_on_dynamic_map() {
+	assert_eq!(json!(true), eval(r#"has(request.headers.foo)"#).unwrap());
 }

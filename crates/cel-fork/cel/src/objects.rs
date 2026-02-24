@@ -654,7 +654,7 @@ impl<'a> Value<'a> {
 							return if Ok(true) == left {
 								Ok(true.into())
 							} else {
-								let right = if let Value::Bool(b) = resolve(&call.args[1])? {
+								let right = if let Value::Bool(b) = resolve_materialized(&call.args[1])? {
 									Some(b)
 								} else {
 									None
@@ -671,7 +671,7 @@ impl<'a> Value<'a> {
 							return if Ok(false) == left {
 								Ok(false.into())
 							} else {
-								let right = if let Value::Bool(b) = resolve(&call.args[1])? {
+								let right = if let Value::Bool(b) = resolve_materialized(&call.args[1])? {
 									Some(b)
 								} else {
 									None
@@ -685,7 +685,7 @@ impl<'a> Value<'a> {
 						},
 						operators::INDEX | operators::OPT_INDEX => {
 							let mut value: Value<'a> = resolve(&call.args[0])?;
-							let idx = resolve(&call.args[1])?;
+							let idx = resolve_materialized(&call.args[1])?;
 							let mut is_optional = call.func_name == operators::OPT_INDEX;
 
 							if let Ok(opt_val) = <&OptionalValue>::try_from(&value) {
@@ -759,7 +759,7 @@ impl<'a> Value<'a> {
 						},
 						operators::OPT_SELECT => {
 							let operand = resolve(&call.args[0])?;
-							let field_literal = resolve(&call.args[1])?;
+							let field_literal = resolve_materialized(&call.args[1])?;
 							let field = match field_literal {
 								Value::String(s) => s,
 								_ => {
@@ -871,7 +871,7 @@ impl<'a> Value<'a> {
 				}
 				let left: Value<'a> = resolve(left_op)?;
 				if select.test {
-					match &left {
+					match left.always_materialize().as_ref() {
 						Value::Map(map) => {
 							let b = map.contains_key(&KeyRef::String(select.field.as_str().into()));
 							Ok(Value::Bool(b))
@@ -933,7 +933,7 @@ impl<'a> Value<'a> {
 			},
 			Expr::Comprehension(comprehension) => {
 				let accu_init = resolve(&comprehension.accu_init)?;
-				let iter = resolve(&comprehension.iter_range)?;
+				let iter = resolve_materialized(&comprehension.iter_range)?;
 				let mut accu = accu_init;
 				match iter {
 					Value::List(items) => {
