@@ -949,9 +949,8 @@ impl AIProvider {
 				| AIProvider::Vertex(_),
 				InputFormat::Completions,
 			) => conversion::completions::passthrough_stream(
-				log,
+				AmendOnDrop::new(log, rate_limit),
 				include_completion_in_log,
-				rate_limit,
 				resp,
 			),
 			// Responses with OpenAI: just passthrough
@@ -961,31 +960,55 @@ impl AIProvider {
 				| AIProvider::AzureOpenAI(_)
 				| AIProvider::Vertex(_),
 				InputFormat::Responses,
-			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, log)),
+			) => resp.map(|b| {
+				conversion::responses::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
+			}),
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, log))
-			},
+			(AIProvider::Anthropic(_) | AIProvider::Vertex(_), InputFormat::Messages) => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
+			}),
 			// Supported paths with conversion...
-			(AIProvider::Anthropic(_), InputFormat::Completions) => {
-				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, log))
-			},
+			(AIProvider::Anthropic(_), InputFormat::Completions) => resp.map(|b| {
+				conversion::messages::from_completions::translate_stream(
+					b,
+					buffer,
+					AmendOnDrop::new(log, rate_limit),
+				)
+			}),
 			(AIProvider::Bedrock(_), InputFormat::Completions) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_completions::translate_stream(b, buffer, log, &model, &msg)
+					conversion::bedrock::from_completions::translate_stream(
+						b,
+						buffer,
+						AmendOnDrop::new(log, rate_limit),
+						&model,
+						&msg,
+					)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Messages) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_messages::translate_stream(b, buffer, log, &model, &msg)
+					conversion::bedrock::from_messages::translate_stream(
+						b,
+						buffer,
+						AmendOnDrop::new(log, rate_limit),
+						&model,
+						&msg,
+					)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_responses::translate_stream(b, buffer, log, &model, &msg)
+					conversion::bedrock::from_responses::translate_stream(
+						b,
+						buffer,
+						AmendOnDrop::new(log, rate_limit),
+						&model,
+						&msg,
+					)
 				})
 			},
 			(_, InputFormat::Messages) => {
@@ -1228,5 +1251,33 @@ fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo) {
 	}
 	if let Some(rrl) = rate_limit.remote_rate_limit {
 		rrl.amend_tokens(tokens_to_remove)
+	}
+}
+
+pub struct AmendOnDrop {
+	log: AsyncLog<llm::LLMInfo>,
+	pol: Option<LLMResponsePolicies>,
+}
+
+impl AmendOnDrop {
+	pub fn new(log: AsyncLog<llm::LLMInfo>, pol: LLMResponsePolicies) -> Self {
+		Self {
+			log,
+			pol: Some(pol),
+		}
+	}
+	pub fn non_atomic_mutate(&self, f: impl FnOnce(&mut llm::LLMInfo)) {
+		self.log.non_atomic_mutate(f);
+	}
+	pub fn report_rate_limit(&mut self) {
+		if let Some(pol) = self.pol.take() {
+			self.log.non_atomic_mutate(|r| amend_tokens(pol, r));
+		}
+	}
+}
+
+impl Drop for AmendOnDrop {
+	fn drop(&mut self) {
+		self.report_rate_limit();
 	}
 }
