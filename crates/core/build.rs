@@ -42,4 +42,5 @@ fn main() {
 	println!("cargo:rustc-env=AGENTGATEWAY_BUILD_PROFILE_NAME={profile_name}");
 	println!("cargo:rustc-env=AGENTGATEWAY_BUILD_TARGET={target}");
 	println!("cargo:rerun-if-env-changed=VERSION");
+	println!("cargo:rerun-if-env-changed=GIT_REVISION");
 }

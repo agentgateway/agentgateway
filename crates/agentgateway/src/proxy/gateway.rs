@@ -13,6 +13,7 @@ use futures_util::FutureExt;
 use http::StatusCode;
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto;
+use rand::RngExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio::task::{AbortHandle, JoinSet};
@@ -25,7 +26,9 @@ use crate::proxy::ProxyError;
 use crate::store::{Event, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
-use crate::transport::stream::{Extension, LoggingMode, Socket, TLSConnectionInfo};
+use crate::transport::stream::{
+	Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
+};
 use crate::types::agent::{
 	Bind, BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
@@ -305,10 +308,41 @@ impl Gateway {
 			};
 			let wait = drain_watch.wait_for_drain();
 			tokio::pin!(wait);
+			const BACKOFF_INITIAL: Duration = Duration::from_millis(5);
+			const BACKOFF_MAX: Duration = Duration::from_millis(100);
+			let mut backoff = BACKOFF_INITIAL;
 			// First, accept new connections until a drain is triggered
+			// NOTE: Do not use `Ok(...) = listener.accept()` as a select! pattern.
+			// If accept() returns Err, select! permanently disables that branch,
+			// hanging the loop. Match on the full Result instead.
 			let drain_mode = loop {
 				tokio::select! {
-					Ok((stream, _peer)) = listener.accept() => handle_stream(stream, &upgrader),
+					res = listener.accept() => match res {
+						Ok((stream, _peer)) => {
+							backoff = BACKOFF_INITIAL;
+							handle_stream(stream, &upgrader);
+						}
+						Err(e) => {
+							if is_accept_error_permanent(&e) {
+								error!(bind=?name, "fatal accept error, stopping listener: {e}");
+								return;
+							}
+							if is_accept_error_per_connection(&e) {
+								debug!(bind=?name, "per-connection accept error: {e}");
+								continue;
+							}
+							warn!(bind=?name, "accept error: {e}");
+							let jittered = Duration::from_millis(
+								rand::rng().random_range(0..=backoff.as_millis() as u64)
+							);
+							tokio::select! {
+								_ = tokio::time::sleep(jittered) => {},
+								res = &mut wait => { break res; }
+							}
+							backoff = (backoff * 2).min(BACKOFF_MAX);
+							continue;
+						}
+					},
 					res = &mut wait => {
 						break res;
 					}
@@ -327,9 +361,35 @@ impl Gateway {
 			};
 			tokio::pin!(drained_for_minimum);
 			// We still need to accept new connections during this time though, so race them
+			backoff = BACKOFF_INITIAL;
 			loop {
 				tokio::select! {
-					Ok((stream, _peer)) = listener.accept() => handle_stream(stream, &upgrader),
+					res = listener.accept() => match res {
+						Ok((stream, _peer)) => {
+							backoff = BACKOFF_INITIAL;
+							handle_stream(stream, &upgrader);
+						}
+						Err(e) => {
+							if is_accept_error_permanent(&e) {
+								error!(bind=?name, "fatal accept error during drain, stopping listener: {e}");
+								return;
+							}
+							if is_accept_error_per_connection(&e) {
+								debug!(bind=?name, "per-connection accept error during drain: {e}");
+								continue;
+							}
+							warn!(bind=?name, "accept error during drain: {e}");
+							let jittered = Duration::from_millis(
+								rand::rng().random_range(0..=backoff.as_millis() as u64)
+							);
+							tokio::select! {
+								_ = tokio::time::sleep(jittered) => {},
+								_ = &mut drained_for_minimum => { return; }
+							}
+							backoff = (backoff * 2).min(BACKOFF_MAX);
+							continue;
+						}
+					},
 					_ = &mut drained_for_minimum => {
 						// We are done! exit.
 						// This will stop accepting new connections
@@ -383,7 +443,17 @@ impl Gateway {
 					warn!(src.addr = %peer_addr, "proxy error: {e}");
 				}
 			},
-			BindProtocol::tcp => Self::proxy_tcp(bind_name, inputs, None, raw_stream, drain).await,
+			BindProtocol::tcp => {
+				Self::proxy_tcp(
+					bind_name,
+					inputs,
+					None,
+					raw_stream,
+					Arc::new(policies),
+					drain,
+				)
+				.await
+			},
 			BindProtocol::tls => {
 				match Self::maybe_terminate_tls(
 					inputs.clone(),
@@ -407,7 +477,15 @@ impl Gateway {
 							.await;
 						},
 						ListenerProtocol::TLS(_) => {
-							Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
+							Self::proxy_tcp(
+								bind_name,
+								inputs,
+								Some(selected_listener),
+								stream,
+								Arc::new(policies),
+								drain,
+							)
+							.await
 						},
 						_ => {
 							error!(
@@ -428,6 +506,84 @@ impl Gateway {
 
 							"failed to terminate TLS",
 						);
+					},
+				}
+			},
+			BindProtocol::auto => {
+				// Auto-detect: peek at first byte to distinguish TLS from plaintext HTTP.
+				// No timeout here — existing HTTP header_read_timeout and TLS handshake
+				// timeout handle slow/dead clients downstream.
+				let (ext, metrics, inner) = raw_stream.into_parts();
+				let mut rewind = Socket::new_rewind(inner);
+				let mut buf = [0u8; 1];
+				match tokio::io::AsyncReadExt::read_exact(&mut rewind, &mut buf).await {
+					Ok(_) => {
+						rewind.rewind();
+						let stream = Socket::from_rewind(ext, metrics, rewind);
+						if buf[0] == 0x16 {
+							// TLS ClientHello — dispatch as TLS
+							match Self::maybe_terminate_tls(
+								inputs.clone(),
+								stream,
+								&policies,
+								bind_name.clone(),
+								false,
+							)
+							.await
+							{
+								Ok((selected_listener, tls_stream)) => match selected_listener.protocol {
+									ListenerProtocol::HTTPS(_) => {
+										let _ = Self::proxy(
+											bind_name,
+											inputs,
+											Some(selected_listener),
+											tls_stream,
+											Arc::new(policies),
+											drain,
+										)
+										.await;
+									},
+									ListenerProtocol::TLS(_) => {
+										Self::proxy_tcp(
+											bind_name,
+											inputs,
+											Some(selected_listener),
+											tls_stream,
+											Arc::new(policies),
+											drain,
+										)
+										.await
+									},
+									_ => {
+										error!(
+											"invalid: TLS listener protocol is neither HTTPS nor TLS: {:?}",
+											selected_listener.protocol
+										)
+									},
+								},
+								Err(e) => {
+									event!(
+										target: "downstream connection",
+										parent: None,
+										tracing::Level::WARN,
+										src.addr = %peer_addr,
+										protocol = ?bind_protocol,
+										error = ?e.to_string(),
+										"failed to terminate TLS (auto-detected)",
+									);
+								},
+							}
+						} else {
+							// Plaintext HTTP
+							let err =
+								Self::proxy(bind_name, inputs, None, stream, Arc::new(policies), drain).await;
+							if let Err(e) = err {
+								warn!(src.addr = %peer_addr, "proxy error: {e}");
+							}
+						}
+					},
+					Err(e) => {
+						warn!(src.addr = %peer_addr, "auto-detect read failed: {e}");
 					},
 				}
 			},
@@ -483,7 +639,7 @@ impl Gateway {
 		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
-		stream: Socket,
+		mut stream: Socket,
 		policies: Arc<FrontendPolices>,
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
@@ -491,7 +647,11 @@ impl Gateway {
 		let server = auto_server(policies.http.as_ref());
 
 		// Precompute transport labels and metrics before moving `selected_listener` and `inputs`
-		let transport_protocol = if stream.ext::<TLSConnectionInfo>().is_some() {
+		let tcp = stream
+			.ext::<TCPConnectionInfo>()
+			.expect("tcp info must be set");
+		let tls = stream.ext::<TLSConnectionInfo>();
+		let transport_protocol = if tls.is_some() {
 			TransportProtocol::https
 		} else {
 			TransportProtocol::http
@@ -515,6 +675,18 @@ impl Gateway {
 			.downstream_connection
 			.get_or_create(&transport_labels)
 			.inc();
+
+		let src = crate::cel::SourceContext {
+			address: tcp.peer_addr.ip(),
+			port: tcp.peer_addr.port(),
+			tls: tls.and_then(|t| t.src_identity.clone()),
+		};
+		if let Some(network_authorization) = policies.network_authorization.as_ref()
+			&& let Err(e) = network_authorization.apply(&src)
+		{
+			anyhow::bail!("network authorization denied: {e}");
+		}
+		stream.ext_mut().insert(src);
 
 		let transport_metrics = inputs.metrics.clone();
 		let proxy = super::httpproxy::HTTPProxy {
@@ -566,6 +738,7 @@ impl Gateway {
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
 		stream: Socket,
+		policies: Arc<FrontendPolices>,
 		_drain: DrainWatcher,
 	) {
 		let selected_listener = match selected_listener {
@@ -588,7 +761,7 @@ impl Gateway {
 			selected_listener,
 			target_address,
 		};
-		proxy.proxy(stream).await
+		proxy.proxy(stream, policies).await
 	}
 
 	// maybe_terminate_tls will observe the TLS handshake, and once the client hello has been received, select
@@ -634,7 +807,7 @@ impl Gateway {
 			let ch = start.client_hello();
 			let sni = ch.server_name().unwrap_or_default();
 			let best = listeners
-				.best_match(sni)
+				.best_match_tls(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
 			match best.protocol.tls(tls_pol) {
 				Some(Err(e)) => {
@@ -945,7 +1118,15 @@ impl Gateway {
 				tcp_routes: Default::default(),
 				routes: Default::default(),
 			});
-			Self::proxy_tcp(bind_name, pi, Some(listener), socket, drain).await;
+			Self::proxy_tcp(
+				bind_name,
+				pi,
+				Some(listener),
+				socket,
+				policies.clone(),
+				drain,
+			)
+			.await;
 		}
 	}
 
@@ -1055,6 +1236,26 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 	}
 
 	b
+}
+
+/// The listening socket itself is broken; retrying won't help.
+/// EBADF/ENOTSOCK: fd is dead on all platforms.
+/// EINVAL: permanent on Linux (socket not listening), transient on macOS (can recover).
+fn is_accept_error_permanent(e: &std::io::Error) -> bool {
+	match e.raw_os_error() {
+		Some(libc::EBADF | libc::ENOTSOCK) => true,
+		#[cfg(target_os = "linux")]
+		Some(libc::EINVAL) => true,
+		_ => false,
+	}
+}
+
+/// Per-connection failure (client gone during handshake); harmless, no backoff needed.
+fn is_accept_error_per_connection(e: &std::io::Error) -> bool {
+	matches!(
+		e.raw_os_error(),
+		Some(libc::ECONNABORTED | libc::ECONNRESET | libc::EPERM)
+	)
 }
 
 fn build_response(status: StatusCode) -> ::http::Response<()> {
