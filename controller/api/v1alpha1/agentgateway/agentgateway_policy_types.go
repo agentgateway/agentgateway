@@ -420,7 +420,7 @@ const (
 	PolicyPhasePostRouting PolicyPhase = "PostRouting"
 )
 
-// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication"
+// +kubebuilder:validation:XValidation:rule="has(self.phase) && self.phase == 'PreRouting' ? !has(self.rateLimit) && !has(self.cors) && !has(self.csrf) && !has(self.headerModifiers) && !has(self.hostRewrite) && !has(self.timeouts) && !has(self.retry) && !has(self.authorization) && !has(self.directResponse): true",message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication"
 type Traffic struct {
 	// The phase to apply the traffic policy to. If the phase is PreRouting, the targetRef must be a Gateway or a Listener.
 	// PreRouting is typically used only when a policy needs to influence the routing decision.
