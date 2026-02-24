@@ -347,6 +347,9 @@
         "params"
       ]
     },
+    "llmRequest": {
+      "description": "`llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;\npolicies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests."
+    },
     "source": {
       "description": "`source` contains attributes about the source of the request.",
       "type": [

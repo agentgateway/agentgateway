@@ -47,6 +47,7 @@
 |`llm.params.max_tokens`||
 |`llm.params.encoding_format`||
 |`llm.params.dimensions`||
+|`llmRequest`|`llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;<br>policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.|
 |`source`|`source` contains attributes about the source of the request.|
 |`source.address`|The IP address of the downstream connection.|
 |`source.port`|The port of the downstream connection.|

@@ -1,9 +1,10 @@
 package agentgateway
 
 import (
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 // AIPromptEnrichment defines the config to enrich requests sent to the LLM provider by appending and prepending system prompts.

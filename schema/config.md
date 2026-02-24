@@ -583,6 +583,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.headers.remove`||
 |`binds[].listeners[].routes[].policies.ai.defaults`||
 |`binds[].listeners[].routes[].policies.ai.overrides`||
+|`binds[].listeners[].routes[].policies.ai.transformation`||
 |`binds[].listeners[].routes[].policies.ai.prompts`||
 |`binds[].listeners[].routes[].policies.ai.prompts.append`||
 |`binds[].listeners[].routes[].policies.ai.prompts.append[].role`||
@@ -865,6 +866,7 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.promptGuard.response[].rejection.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.defaults`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.overrides`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.transformation`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts.append`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.ai.prompts.append[].role`||
@@ -1056,6 +1058,7 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].rejection.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.defaults`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.overrides`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.transformation`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.prompts`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.prompts.append`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.prompts.append[].role`||
@@ -1246,6 +1249,7 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.defaults`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.overrides`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.transformation`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.prompts`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.prompts.append`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.prompts.append[].role`||
@@ -1411,6 +1415,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.remove`||
 |`binds[].listeners[].routes[].backends[].policies.ai.defaults`||
 |`binds[].listeners[].routes[].backends[].policies.ai.overrides`||
+|`binds[].listeners[].routes[].backends[].policies.ai.transformation`||
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts`||
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts.append`||
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts.append[].role`||
@@ -2135,6 +2140,7 @@
 |`policies[].policy.ai.promptGuard.response[].rejection.headers.remove`||
 |`policies[].policy.ai.defaults`||
 |`policies[].policy.ai.overrides`||
+|`policies[].policy.ai.transformation`||
 |`policies[].policy.ai.prompts`||
 |`policies[].policy.ai.prompts.append`||
 |`policies[].policy.ai.prompts.append[].role`||
@@ -2394,6 +2400,7 @@
 |`backends[].policies.ai.promptGuard.response[].rejection.headers.remove`||
 |`backends[].policies.ai.defaults`||
 |`backends[].policies.ai.overrides`||
+|`backends[].policies.ai.transformation`||
 |`backends[].policies.ai.prompts`||
 |`backends[].policies.ai.prompts.append`||
 |`backends[].policies.ai.prompts.append[].role`||
@@ -2469,6 +2476,7 @@
 |`llm.models[].provider`|provider of the LLM we are connecting too|
 |`llm.models[].defaults`|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|overrides allows setting values for the request, overriding any existing values|
+|`llm.models[].transformation`|transformation allows setting values from CEL expressions for the request, overriding any existing values.|
 |`llm.models[].requestHeaders`|requestHeaders modifies headers in requests to the LLM provider.|
 |`llm.models[].requestHeaders.add`||
 |`llm.models[].requestHeaders.set`||
@@ -2522,6 +2530,7 @@
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.promptGuard`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.defaults`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.overrides`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.transformation`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts.append`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.ai.prompts.append[].role`||
@@ -2613,6 +2622,7 @@
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.promptGuard`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.defaults`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.overrides`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.transformation`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts.append`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.ai.prompts.append[].role`||
@@ -2704,6 +2714,7 @@
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.promptGuard`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.defaults`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.overrides`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.transformation`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts.append`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.ai.prompts.append[].role`||
@@ -2822,6 +2833,7 @@
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.promptGuard`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.defaults`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.overrides`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.transformation`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts.append`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.ai.prompts.append[].role`||
@@ -2913,6 +2925,7 @@
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.promptGuard`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.defaults`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.overrides`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.transformation`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts.append`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.ai.prompts.append[].role`||
@@ -3187,6 +3200,7 @@
 |`mcp.targets[].policies.ai.promptGuard.response[].rejection.headers.remove`||
 |`mcp.targets[].policies.ai.defaults`||
 |`mcp.targets[].policies.ai.overrides`||
+|`mcp.targets[].policies.ai.transformation`||
 |`mcp.targets[].policies.ai.prompts`||
 |`mcp.targets[].policies.ai.prompts.append`||
 |`mcp.targets[].policies.ai.prompts.append[].role`||
@@ -3739,6 +3753,7 @@
 |`mcp.policies.ai.promptGuard.response[].rejection.headers.remove`||
 |`mcp.policies.ai.defaults`||
 |`mcp.policies.ai.overrides`||
+|`mcp.policies.ai.transformation`||
 |`mcp.policies.ai.prompts`||
 |`mcp.policies.ai.prompts.append`||
 |`mcp.policies.ai.prompts.append[].role`||

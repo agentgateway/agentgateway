@@ -1765,6 +1765,15 @@
           ],
           "additionalProperties": true
         },
+        "transformation": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "prompts": {
           "anyOf": [
             {
@@ -2696,6 +2705,9 @@
         }
       ]
     },
+    "Expression": {
+      "type": "string"
+    },
     "PromptEnrichment": {
       "type": "object",
       "properties": {
@@ -3350,9 +3362,6 @@
           "additionalProperties": false
         }
       ]
-    },
-    "Expression": {
-      "type": "string"
     },
     "FailureMode": {
       "oneOf": [
@@ -5121,6 +5130,16 @@
             "null"
           ],
           "additionalProperties": true
+        },
+        "transformation": {
+          "description": "transformation allows setting values from CEL expressions for the request, overriding any existing values.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
         },
         "requestHeaders": {
           "description": "requestHeaders modifies headers in requests to the LLM provider.",

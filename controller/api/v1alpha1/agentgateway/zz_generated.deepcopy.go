@@ -798,10 +798,12 @@ func (in *BackendAI) DeepCopyInto(out *BackendAI) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.TransformationPolicy != nil {
-		in, out := &in.TransformationPolicy, &out.TransformationPolicy
+	if in.Transformations != nil {
+		in, out := &in.Transformations, &out.Transformations
 		*out = make([]FieldTransformation, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	if in.ModelAliases != nil {
 		in, out := &in.ModelAliases, &out.ModelAliases

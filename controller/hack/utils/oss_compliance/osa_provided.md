@@ -43,10 +43,10 @@ Name|Version|License
 [klog/v2](https://k8s.io/klog/v2)|v2.130.1|Apache License 2.0
 [k8s.io/utils](https://k8s.io/utils)|v0.0.0-20260210185600-b8788abfbbc2|Apache License 2.0
 [sigs.k8s.io/controller-runtime](https://sigs.k8s.io/controller-runtime)|v0.23.1|Apache License 2.0
-[sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.20.0|Apache License 2.0
+[sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.20.1|Apache License 2.0
 [sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.4.1|Apache License 2.0
-[sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v0.0.0-20260212193201-47e9d05050a6|Apache License 2.0
-[gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260212193201-47e9d05050a6|Apache License 2.0
+[sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v0.0.0-20260220060139-0714e2462e76|Apache License 2.0
+[gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260220060139-0714e2462e76|Apache License 2.0
 [sigs.k8s.io/yaml](https://sigs.k8s.io/yaml)|v1.6.0|MIT License
 [cmd/goimports](https://golang.org/x/tools/cmd/goimports)|latest|MIT License
 [gogo/protobuf](https://github.com/gogo/protobuf)|latest|MIT License
