@@ -1035,7 +1035,7 @@ async fn handle_upgrade(
 			.await;
 		} else if let Some(log) = log.as_ref()
 			&& let Some(llm_req) = dbg!(&log.llm_request).as_ref()
-			&& llm_req.input_format == InputFormat::Realtime
+			&& llm_req.input_format == InputFormat::ResponsesWebsocket
 		{
 			tracing::error!("howardjohn: PARSE");
 			let llm = log.llm_response.clone();

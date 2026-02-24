@@ -35,6 +35,7 @@ impl<IO> Parser<IO> {
 		let Ok(data) = str::from_utf8(&data) else {
 			return;
 		};
+		tracing::error!("howardjohn: got event {data}");
 		if data.contains("response.done") {
 			let Ok(typed) = serde_json::from_str::<ResponseDoneEvent>(data) else {
 				return;
