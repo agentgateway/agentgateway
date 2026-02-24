@@ -439,7 +439,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, mut req) = self
-			.read_body_and_default_model::<types::completions::Request>(policies, req)
+			.read_body_and_default_model::<types::completions::Request>(policies, req, log)
 			.await?;
 
 		// If a user doesn't request usage, we will not get token information which we need
@@ -476,7 +476,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, req) = self
-			.read_body_and_default_model::<types::messages::Request>(policies, req)
+			.read_body_and_default_model::<types::messages::Request>(policies, req, log)
 			.await?;
 
 		self
@@ -501,7 +501,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, req) = self
-			.read_body_and_default_model::<types::embeddings::Request>(policies, req)
+			.read_body_and_default_model::<types::embeddings::Request>(policies, req, log)
 			.await?;
 
 		self
@@ -526,7 +526,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		let (mut parts, req) = self
-			.read_body_and_default_model::<types::responses::Request>(policies, req)
+			.read_body_and_default_model::<types::responses::Request>(policies, req, log)
 			.await?;
 
 		// Strip client-specific headers that cause AWS signature mismatches for Bedrock
@@ -556,7 +556,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, req) = self
-			.read_body_and_default_model::<types::count_tokens::Request>(policies, req)
+			.read_body_and_default_model::<types::count_tokens::Request>(policies, req, log)
 			.await?;
 
 		self
@@ -1016,6 +1016,7 @@ impl AIProvider {
 		&self,
 		policies: Option<&Policy>,
 		hreq: Request,
+		log: &mut Option<&mut RequestLog>,
 	) -> Result<(Parts, T), AIError> {
 		let buffer = http::buffer_limit(&hreq);
 		let (parts, body) = hreq.into_parts();
@@ -1023,7 +1024,7 @@ impl AIProvider {
 			return Err(AIError::RequestTooLarge);
 		};
 		let mut req: T = if let Some(p) = policies {
-			p.unmarshal_request(&bytes)?
+			p.unmarshal_request(&bytes, log)?
 		} else {
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
 		};

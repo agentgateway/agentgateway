@@ -55,6 +55,9 @@ pub struct Executor<'a> {
 	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub llm: ExtensionOrDirect<'a, LLMContext>,
 
+	#[dynamic(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
+	pub llm_request: Option<&'a serde_json::Value>,
+
 	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<&'a ResourceType>,
 
@@ -246,6 +249,14 @@ impl<'a> Executor<'a> {
 			this.set_request_snapshot(req);
 		}
 		this.mcp = Some(mcp);
+		this
+	}
+	pub fn new_llm(req: Option<&'a RequestSnapshot>, llm_body: &'a serde_json::Value) -> Self {
+		let mut this = Self::new_empty();
+		if let Some(req) = req {
+			this.set_request_snapshot(req);
+		}
+		this.llm_request = Some(llm_body);
 		this
 	}
 	pub fn new_logger(
@@ -922,6 +933,11 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub llm: Option<LLMContext>,
 
+	/// `llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;
+	/// policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.
+	#[serde(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
+	pub llm_request: Option<serde_json::Value>,
+
 	/// `source` contains attributes about the source of the request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub source: Option<SourceContext>,
@@ -1001,6 +1017,7 @@ impl ExecutorSerde {
 				body: ExtensionOrDirect::Direct(resp.body.as_ref()),
 			});
 		}
+		exec.llm_request = self.llm_request.as_ref();
 
 		// Set all the ExtensionOrDirect fields
 		exec.source = ExtensionOrDirect::Direct(self.source.as_ref());
@@ -1069,6 +1086,9 @@ pub fn full_example_executor() -> ExecutorSerde {
 		basic_auth: Some(basicauth::Claims {
 			username: "alice".into(),
 		}),
+		llm_request: Some(json!({
+			"model": "provider/model"
+		})),
 		llm: Some(LLMContext {
 			streaming: false,
 			request_model: "gpt-4".into(),

@@ -305,6 +305,10 @@ impl LLMRequestPolicies {
 			prompt_guard: be.prompt_guard.clone().or_else(|| re.prompt_guard.clone()),
 			defaults: be.defaults.clone().or_else(|| re.defaults.clone()),
 			overrides: be.overrides.clone().or_else(|| re.overrides.clone()),
+			transformation: be
+				.transformation
+				.clone()
+				.or_else(|| re.transformation.clone()),
 			prompts: be.prompts.clone().or_else(|| re.prompts.clone()),
 			model_aliases: merged_aliases,
 			wildcard_patterns: merged_wildcard_patterns,

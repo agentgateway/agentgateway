@@ -1,6 +1,7 @@
 package agentgateway
 
 import (
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -342,6 +343,20 @@ type FieldDefault struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +required
 	Value apiextensionsv1.JSON `json:"value"`
+}
+
+// FieldTransformation maps a request JSON field to a CEL expression string.
+// The expression is evaluated against the current request body and its result
+// is assigned to the configured field.
+type FieldTransformation struct {
+	// The name of the field to set.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Field ShortString `json:"field"`
+
+	// CEL expression used to compute the field value.
+	// +required
+	Expression shared.CELExpression `json:"expression"`
 }
 
 // PromptCachingConfig configures automatic prompt caching for supported LLM providers.

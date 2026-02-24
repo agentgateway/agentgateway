@@ -1971,7 +1971,7 @@ impl PolicyClient {
 		self.internal_call_with_policies(req, backend, pols).await
 	}
 
-	pub fn internal_call_with_policies<'a>(
+	fn internal_call_with_policies<'a>(
 		&'a self,
 		req: Request,
 		backend: Backend,
@@ -1985,6 +1985,8 @@ impl PolicyClient {
 				&backend,
 				pols,
 				MustSnapshot::new(&mut req),
+				// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
+				// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
 				None,
 				&mut Default::default(),
 			)

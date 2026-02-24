@@ -416,6 +416,18 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		}
 		translatedAIPolicy.Overrides[def.Field] = val
 	}
+	for _, xfm := range aiSpec.TransformationPolicy {
+		if translatedAIPolicy.TransformationPolicy == nil {
+			translatedAIPolicy.TransformationPolicy = make(map[string]string)
+		}
+
+		if !isCEL(xfm.Expression) {
+			errs = append(errs, fmt.Errorf("transformation %q is not a valid CEL expression: %v", xfm.Field, xfm.Expression))
+		}
+
+		// Still set it so it wipes out the value on error, mirroring the header value.
+		translatedAIPolicy.TransformationPolicy[xfm.Field] = string(xfm.Expression)
+	}
 
 	if aiSpec.PromptGuard != nil {
 		if translatedAIPolicy.PromptGuard == nil {

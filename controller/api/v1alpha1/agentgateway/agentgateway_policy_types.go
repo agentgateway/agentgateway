@@ -865,6 +865,12 @@ type BackendAI struct {
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
 	Overrides []FieldDefault `json:"overrides,omitempty"`
+	// Provide CEL transformations to compute and set fields in the request body.
+	// The expression result overwrites any existing value for that field.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	TransformationPolicy []FieldTransformation `json:"transformationPolicy,omitempty"`
 
 	// ModelAliases maps friendly model names to actual provider model names.
 	// Example: {"fast": "gpt-3.5-turbo", "smart": "gpt-4-turbo"}

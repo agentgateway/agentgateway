@@ -411,6 +411,19 @@ fn convert_backend_ai_policy(
 				.map(|(k, v)| serde_json::from_str(v).map(|v| (k.clone(), v)))
 				.collect::<Result<_, _>>()?,
 		),
+		transformation: if ai.transformation.is_empty() {
+			None
+		} else {
+			Some(
+				ai.transformation
+					.iter()
+					.map(|(k, v)| {
+						let ve = cel::Expression::new_permissive(v);
+						Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
+					})
+					.collect::<Result<_, _>>()?,
+			)
+		},
 		prompts: ai.prompts.as_ref().map(convert_prompt_enrichment),
 		model_aliases: ai
 			.model_aliases
@@ -2107,6 +2120,12 @@ mod tests {
 				]
 				.into_iter()
 				.collect(),
+				transformation: vec![(
+					"system".to_string(),
+					"\"Always answer in JSON\"".to_string(),
+				)]
+				.into_iter()
+				.collect(),
 				prompt_guard: None,
 				prompts: None,
 				model_aliases: Default::default(),
@@ -2131,6 +2150,10 @@ mod tests {
 				.overrides
 				.as_ref()
 				.expect("overrides should be set");
+			let transformation_policy = ai_policy
+				.transformation
+				.as_ref()
+				.expect("transformation_policy should be set");
 
 			// Verify defaults have correct types and values
 			let temp_val = defaults.get("temperature").unwrap();
@@ -2157,6 +2180,7 @@ mod tests {
 			let array_val = overrides.get("array_value").unwrap();
 			assert!(array_val.is_array(), "array_value should be an array");
 			assert_eq!(array_val, &json!([1, 2, 3]));
+			assert!(transformation_policy.get("system").is_some());
 
 			// Verify routes conversion
 			assert_eq!(ai_policy.routes.len(), 2);

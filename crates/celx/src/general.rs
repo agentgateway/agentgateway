@@ -79,6 +79,7 @@ pub fn variables<'a, 'rf>(ftx: &mut FunctionContext<'a, 'rf>) -> ResolveResult<'
 		"apiKey",
 		"basicAuth",
 		"llm",
+		"llmRequest",
 		"source",
 		"mcp",
 		"backend",

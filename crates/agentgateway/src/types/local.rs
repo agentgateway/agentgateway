@@ -142,6 +142,9 @@ pub struct LocalLLMModels {
 	/// overrides allows setting values for the request, overriding any existing values
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	overrides: Option<HashMap<String, serde_json::Value>>,
+	/// transformation allows setting values from CEL expressions for the request, overriding any existing values.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	transformation: Option<HashMap<String, Arc<cel::Expression>>>,
 	/// requestHeaders modifies headers in requests to the LLM provider.
 	#[serde(default)]
 	request_headers: Option<filters::HeaderModifier>,
@@ -1326,6 +1329,7 @@ json(request.body).model
 		pols.push(BackendPolicy::AI(Arc::new(llm::Policy {
 			defaults: model_config.defaults.clone(),
 			overrides: model_config.overrides.clone(),
+			transformation: model_config.transformation.clone(),
 			prompt_guard: model_config.guardrails.clone(),
 			prompts: None,
 			model_aliases: Default::default(),

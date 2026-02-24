@@ -1,17 +1,17 @@
-use ::http::HeaderMap;
-use bytes::Bytes;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
 use crate::http::filters::HeaderModifier;
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::RequestLog;
 use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
 use crate::types::local::LocalBackendPolicies;
 use crate::*;
+use ::http::HeaderMap;
+use bytes::Bytes;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod webhook;
 
@@ -110,6 +110,8 @@ pub struct Policy {
 	pub defaults: Option<HashMap<String, serde_json::Value>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub overrides: Option<HashMap<String, serde_json::Value>>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub transformation: Option<HashMap<String, Arc<cel::Expression>>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompts: Option<PromptEnrichment>,
 	#[serde(
@@ -307,24 +309,53 @@ impl Policy {
 		wildcard.unwrap_or(crate::llm::RouteType::Completions)
 	}
 
-	pub fn unmarshal_request<T: DeserializeOwned>(&self, bytes: &Bytes) -> Result<T, AIError> {
-		if self.defaults.is_none() && self.overrides.is_none() {
+	pub fn unmarshal_request<T: DeserializeOwned>(
+		&self,
+		bytes: &Bytes,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<T, AIError> {
+		if self.defaults.is_none() && self.overrides.is_none() && self.transformation.is_none() {
 			// Fast path: directly bytes to typed
 			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);
 		}
 		// Slow path: bytes --> json (transform) --> typed
 		let v: serde_json::Value =
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+		let exec = cel::Executor::new_llm(log.as_ref().and_then(|x| x.request_snapshot.as_ref()), &v);
+		let to_set: Vec<_> = self
+			.transformation
+			.iter()
+			.flatten()
+			.map(|(k, expr)| (k, Self::eval_transformation_expression(expr, &exec)))
+			.collect();
+
 		let serde_json::Value::Object(mut map) = v else {
 			return Err(AIError::MissingField("request must be an object".into()));
 		};
 		for (k, v) in self.overrides.iter().flatten() {
 			map.insert(k.clone(), v.clone());
 		}
+		for (k, v) in to_set.into_iter() {
+			match v {
+				Some(v) => {
+					map.insert(k.clone(), v);
+				},
+				None => {
+					map.remove(k);
+				},
+			}
+		}
 		for (k, v) in self.defaults.iter().flatten() {
 			map.entry(k.clone()).or_insert_with(|| v.clone());
 		}
 		serde_json::from_value(serde_json::Value::Object(map)).map_err(AIError::RequestParsing)
+	}
+
+	fn eval_transformation_expression(
+		expression: &cel::Expression,
+		exec: &cel::Executor<'_>,
+	) -> Option<serde_json::Value> {
+		exec.eval(expression).ok()?.json().ok()
 	}
 
 	pub async fn apply_prompt_guard(
@@ -1318,4 +1349,43 @@ fn test_model_alias_pattern_validation() {
 	let pattern = ModelAliasPattern::from_wildcard("test.*").unwrap();
 	assert!(pattern.matches("test.v1"));
 	assert!(!pattern.matches("testXv1")); // X doesn't match literal dot
+}
+
+#[test]
+fn test_unmarshal_request_with_transformation_policy() {
+	use serde_json::json;
+
+	let policy = Policy {
+		transformation: Some(
+			[
+				(
+					"max_tokens".to_string(),
+					Arc::new(cel::Expression::new_strict("min(llmRequest.max_tokens, 50)").unwrap()),
+				),
+				(
+					"model".to_string(),
+					Arc::new(
+						cel::Expression::new_strict(
+							r#"
+				llmRequest.model.split("/").with(m,
+					m.size() == 2 ? m[1] : m[0]
+				)"#,
+						)
+						.unwrap(),
+					),
+				),
+			]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+
+	let input = Bytes::from_static(br#"{"model":"provider/model","max_tokens":999}"#);
+	let out: serde_json::Value = policy
+		.unmarshal_request(&input, &mut None)
+		.expect("request should unmarshal");
+
+	assert_eq!(out.get("model"), Some(&json!("model")));
+	assert_eq!(out.get("max_tokens"), Some(&json!(50)));
 }
