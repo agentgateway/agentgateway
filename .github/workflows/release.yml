@@ -434,6 +434,19 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
 
+  push-helm-charts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    needs:
+      - setup
+      - push-controller-image
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
       - name: Push helm charts
         run: make -C controller release-charts
         env:
@@ -509,6 +522,7 @@ jobs:
     - push-image
     - musl-push-image
     - push-controller-image
+    - push-helm-charts
     - build
     runs-on: ubuntu-latest
     permissions:
