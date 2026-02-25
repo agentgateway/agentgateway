@@ -325,7 +325,7 @@ impl RemoteRateLimit {
 			// We drop the entire set if we cannot eval one; emit trace to aid debugging
 			match exec.eval(lookup) {
 				Ok(value) => {
-					let Some(string_value) = cel::value_as_string(&value) else {
+					let Ok(string_value) = value.as_string() else {
 						trace!(
 							"ratelimit descriptor value not convertible to string: key={}, expr={:?}",
 							k, lookup

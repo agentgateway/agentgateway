@@ -2,11 +2,11 @@ use std::fmt::Debug;
 use std::net::IpAddr;
 use std::sync::Arc;
 
+use crate::Value;
+use crate::objects::StringValue;
 use cel::objects::KeyRef;
 use cel::{to_value, types};
 use vector_map::VecMap;
-
-use crate::Value;
 
 pub fn maybe_materialize_optional<T: DynamicType>(t: &Option<T>) -> Value<'_> {
 	match t {
@@ -359,8 +359,29 @@ where
 }
 
 impl DynamicType for serde_json::Value {
+	fn auto_materialize(&self) -> bool {
+		!matches!(
+			self,
+			serde_json::Value::Array(_) | serde_json::Value::Object(_)
+		)
+	}
 	fn materialize(&self) -> Value<'_> {
-		to_value(self).unwrap()
+		match self {
+			serde_json::Value::Null => Value::Null,
+			serde_json::Value::Bool(v) => Value::Bool(*v),
+			serde_json::Value::Number(v) => {
+				if v.is_i64() {
+					Value::Int(v.as_i64().unwrap())
+				} else if v.is_u64() {
+					Value::UInt(v.as_u64().unwrap())
+				} else {
+					Value::Float(v.as_f64().unwrap())
+				}
+			},
+			serde_json::Value::String(v) => Value::String(StringValue::Borrowed(v.as_str())),
+			serde_json::Value::Array(v) => to_value(v).unwrap(),
+			serde_json::Value::Object(v) => to_value(v).unwrap(),
+		}
 	}
 
 	fn field(&self, field: &str) -> Option<Value<'_>> {
