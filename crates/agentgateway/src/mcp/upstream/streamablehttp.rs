@@ -35,17 +35,17 @@ impl Client {
 		})
 	}
 
-	pub fn get_session_state(&self) -> Option<http::sessionpersistence::MCPSession> {
-		let session_id = self.session_id.load().clone()?;
+	pub fn get_session_state(&self) -> http::sessionpersistence::MCPSession {
+		let session_id = self.session_id.load().clone();
 		let backend = self.http_client.pinned_backend();
-		Some(http::sessionpersistence::MCPSession {
-			session: session_id.to_string(),
+		http::sessionpersistence::MCPSession {
+			session: session_id.map(|s| s.to_string()),
 			backend,
-		})
+		}
 	}
 
-	pub fn set_session_id(&self, s: &str, pinned: Option<SocketAddr>) {
-		self.session_id.store(Some(Arc::new(s.to_string())));
+	pub fn set_session_id(&self, s: Option<&str>, pinned: Option<SocketAddr>) {
+		self.session_id.store(s.map(|s| Arc::new(s.to_string())));
 		if let Some(pinned) = pinned {
 			self.http_client.pin_backend(ResolvedDestination(pinned));
 		}

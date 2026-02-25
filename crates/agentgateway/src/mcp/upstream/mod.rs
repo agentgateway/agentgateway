@@ -101,12 +101,12 @@ pub(crate) enum Upstream {
 impl Upstream {
 	pub fn get_session_state(&self) -> Option<http::sessionpersistence::MCPSession> {
 		match self {
-			Upstream::McpStreamable(c) => c.get_session_state(),
+			Upstream::McpStreamable(c) => Some(c.get_session_state()),
 			_ => None,
 		}
 	}
 
-	pub fn set_session_id(&self, id: &str, pinned: Option<SocketAddr>) {
+	pub fn set_session_id(&self, id: Option<&str>, pinned: Option<SocketAddr>) {
 		match self {
 			Upstream::McpStreamable(c) => c.set_session_id(id, pinned),
 			Upstream::McpSSE(_) => {},
@@ -168,9 +168,7 @@ impl Upstream {
 						StreamableHttpPostResponse::Json(_, sid) => sid.as_ref(),
 						StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
 					};
-					if let Some(sid) = sid {
-						c.set_session_id(sid.as_ref(), None)
-					}
+					c.set_session_id(sid.map(|s| s.as_str()), None)
 				}
 				res.try_into().map_err(Into::into)
 			},

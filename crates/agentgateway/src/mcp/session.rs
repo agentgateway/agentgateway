@@ -227,7 +227,7 @@ impl Session {
 							.await;
 						if let Some(sessions) = self.relay.get_sessions() {
 							let s = http::sessionpersistence::SessionState::MCP(
-								http::sessionpersistence::MCPSessionState { sessions },
+								http::sessionpersistence::MCPSessionState::new(sessions),
 							);
 							if let Ok(id) = s.encode(&self.encoder) {
 								self.id = id.into();

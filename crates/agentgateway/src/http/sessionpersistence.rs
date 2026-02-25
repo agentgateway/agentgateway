@@ -34,12 +34,34 @@ pub struct HTTPSessionState {
 pub struct MCPSessionState {
 	#[serde(rename = "s")]
 	pub sessions: Vec<MCPSession>,
+	/// When an upstream has no session, we need to add our own randomness to avoid session collisions.
+	/// This is mostly for logging/etc purposes
+	#[serde(default, rename = "r", skip_serializing_if = "Option::is_none")]
+	random_identifier: Option<String>,
+}
+
+fn session_id() -> String {
+	uuid::Uuid::new_v4().to_string()
+}
+
+impl MCPSessionState {
+	pub fn new(sessions: Vec<MCPSession>) -> Self {
+		let random_identifier = if sessions.iter().any(|s| s.session.is_none()) {
+			Some(session_id())
+		} else {
+			None
+		};
+		Self {
+			sessions,
+			random_identifier,
+		}
+	}
 }
 
 #[apply(schema!)]
 pub struct MCPSession {
-	#[serde(rename = "s")]
-	pub session: String,
+	#[serde(default, rename = "s", skip_serializing_if = "Option::is_none")]
+	pub session: Option<String>,
 	#[serde(default, rename = "b", skip_serializing_if = "Option::is_none")]
 	pub backend: Option<SocketAddr>,
 }

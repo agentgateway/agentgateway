@@ -102,7 +102,7 @@ impl Relay {
 
 	pub fn set_sessions(&self, sessions: Vec<MCPSession>) {
 		for ((_, us), session) in self.upstreams.iter_named().zip(sessions) {
-			us.set_session_id(&session.session, session.backend);
+			us.set_session_id(session.session.as_deref(), session.backend);
 		}
 	}
 	pub fn count(&self) -> usize {
