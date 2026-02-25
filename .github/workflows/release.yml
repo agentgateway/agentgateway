@@ -15,8 +15,9 @@ on:
         type: boolean
 
 env:
-  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
-  CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository }}-controller
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
+  CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
+  CHART_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/charts
 
 jobs:
   setup:
@@ -432,6 +433,11 @@ jobs:
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+
+      - name: Push helm charts
+        run: make -C controller release-charts
+        env:
+          IMAGE_REGISTRY: ${{ env.CHART_REGISTRY_IMAGE }}
 
   build:
     if: ${{ github.event_name == 'push' || ! github.event.inputs.skip_gh_release }}

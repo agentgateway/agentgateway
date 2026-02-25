@@ -480,14 +480,11 @@ kind-load-extproc-server:
 #----------------------------------------------------------------------------------
 
 HELM ?= helm
-# It would be nice to use actual semver '--version', as Helm docs clearly state
-# is intended (and yet is not enforced by 'helm lint'). Here we say '--version
-# v2.0.0', not '--version 2.0.0', e.g. To do it cleanly, you'd probably
-# repackage all published versions' charts and republish as vA.B.C and A.B.C
-# both. Users would be surprised if their installation recipes had to change on
-# some patch or minor version release. ('--app-version v2.0.0' is acceptable
-# and in fact preferred since it matches our git tags and OCI image tags.)
-HELM_PACKAGE_ARGS ?= --version $(VERSION) --app-version $(VERSION)
+# Publish charts with both semver variants to preserve compatibility.
+# Keep VERSION as-is for image tags and other release identifiers.
+HELM_CHART_VERSION_NO_V ?= $(patsubst v%,%,$(VERSION))
+HELM_CHART_VERSION_V ?= v$(HELM_CHART_VERSION_NO_V)
+HELM_PACKAGE_ARGS ?= --version $(HELM_CHART_VERSION_NO_V) --app-version $(HELM_CHART_VERSION_NO_V)
 HELM_CHART_DIR_AGW=install/helm/agentgateway
 HELM_CHART_DIR_AGW_CRD=install/helm/agentgateway-crds
 HELM_ADDITIONAL_VALUES ?= hack/helm/dev.yaml
@@ -507,18 +504,20 @@ package-agentgateway-crd-chart: ## Package the agentgateway crd chart
 	$(HELM) package $(HELM_PACKAGE_ARGS) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
 	$(HELM) repo index $(TEST_ASSET_DIR);
 
-# VERSION_NO_V strips the leading 'v' from VERSION (e.g., v2.0.0 -> 2.0.0)
-VERSION_NO_V := $(patsubst v%,%,$(VERSION))
 CHART_NAMES := agentgateway agentgateway-crds
 
 .PHONY: release-charts
-release-charts: ## Release the agentgateway charts (publishes both vX.Y.Z and X.Y.Z tags)
-	@for v in $(VERSION) $(VERSION_NO_V); do \
-		$(MAKE) package-agentgateway-charts VERSION=$$v; \
-		for chart in $(CHART_NAMES); do \
-			$(HELM) push $(TEST_ASSET_DIR)/$$chart-$$v.tgz oci://$(IMAGE_REGISTRY)/charts; \
-		done; \
-	done
+release-charts: package-agentgateway-charts
+	mkdir -p $(TEST_ASSET_DIR); \
+	$(HELM) package --version $(HELM_CHART_VERSION_V) --app-version $(HELM_CHART_VERSION_V) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW); \
+	$(HELM) repo index $(TEST_ASSET_DIR);
+	mkdir -p $(TEST_ASSET_DIR); \
+	$(HELM) package --version $(HELM_CHART_VERSION_V) --app-version $(HELM_CHART_VERSION_V) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
+	$(HELM) repo index $(TEST_ASSET_DIR);
+	@for chart in $(CHART_NAMES); do \
+		$(HELM) push $(TEST_ASSET_DIR)/$$chart-$(HELM_CHART_VERSION_NO_V).tgz oci://$(IMAGE_REGISTRY)/charts; \
+		$(HELM) push $(TEST_ASSET_DIR)/$$chart-$(HELM_CHART_VERSION_V).tgz oci://$(IMAGE_REGISTRY)/charts; \
+	done;
 
 .PHONY: deploy-agentgateway-crd-chart
 deploy-agentgateway-crd-chart: ## Deploy the agentgateway crd chart
