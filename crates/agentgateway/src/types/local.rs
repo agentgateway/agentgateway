@@ -100,6 +100,8 @@ pub struct LocalConfig {
 
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	port: Option<u16>,
 	/// models defines the set of models that can be served by this gateway. The model name refers to the
 	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
 	/// on a per-model basis.
@@ -111,16 +113,12 @@ pub struct LocalLLMConfig {
 
 #[apply(schema_de!)]
 pub struct LocalSimpleMcpConfig {
-	#[serde(default = "default_simple_mcp_port")]
-	port: u16,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	port: Option<u16>,
 	#[serde(flatten)]
 	backend: LocalMcpBackend,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<FilterOrPolicy>,
-}
-
-fn default_simple_mcp_port() -> u16 {
-	3000
 }
 
 #[apply(schema_de!)]
@@ -1169,6 +1167,7 @@ async fn convert_llm_config(
 	llm_config: LocalLLMConfig,
 ) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	const DEFAULT_LLM_PORT: u16 = 4000;
+	let port = llm_config.port.unwrap_or(DEFAULT_LLM_PORT);
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -1494,13 +1493,13 @@ json(request.body).model
 
 	// Create bind
 	let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), DEFAULT_LLM_PORT)
+		SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
 	} else {
-		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_LLM_PORT)
+		SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
 	};
 
 	let bind = Bind {
-		key: strng::format!("bind/{}", DEFAULT_LLM_PORT),
+		key: strng::format!("bind/{}", port),
 		address: sockaddr,
 		protocol: BindProtocol::http,
 		listeners: listener_set,
@@ -1516,11 +1515,13 @@ async fn convert_mcp_config(
 	gateway: ListenerTarget,
 	mcp_config: LocalSimpleMcpConfig,
 ) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
+	const DEFAULT_MCP_PORT: u16 = 3000;
 	let LocalSimpleMcpConfig {
 		port,
 		backend,
 		policies,
 	} = mcp_config;
+	let port = port.unwrap_or(DEFAULT_MCP_PORT);
 
 	let resolved_policies = if let Some(pol) = policies {
 		split_policies(client, pol).await?

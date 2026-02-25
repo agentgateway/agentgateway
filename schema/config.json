@@ -5118,6 +5118,15 @@
     "LocalLLMConfig": {
       "type": "object",
       "properties": {
+        "port": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
         "models": {
           "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overridden\non a per-model basis.",
           "type": "array",
@@ -5388,11 +5397,13 @@
       "type": "object",
       "properties": {
         "port": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint16",
           "minimum": 0,
-          "maximum": 65535,
-          "default": 3000
+          "maximum": 65535
         },
         "targets": {
           "type": "array",
