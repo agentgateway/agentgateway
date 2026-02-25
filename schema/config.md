@@ -762,6 +762,8 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.port`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.path`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.schema`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.schema.(any)file`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].(1)openapi.schema.(any)url`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].name`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestHeaderModifier`|Headers to be modified in the request.|
@@ -3096,6 +3098,8 @@
 |`mcp.targets[].(1)openapi.port`||
 |`mcp.targets[].(1)openapi.path`||
 |`mcp.targets[].(1)openapi.schema`||
+|`mcp.targets[].(1)openapi.schema.(any)file`||
+|`mcp.targets[].(1)openapi.schema.(any)url`||
 |`mcp.targets[].name`||
 |`mcp.targets[].policies`||
 |`mcp.targets[].policies.requestHeaderModifier`|Headers to be modified in the request.|

@@ -634,7 +634,6 @@ pub enum LocalMcpTargetSpec {
 	OpenAPI {
 		#[serde(flatten)]
 		backend: McpBackendHost,
-		#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 		schema: serdes::FileInlineOrRemote,
 	},
 }
