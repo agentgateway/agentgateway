@@ -36,21 +36,21 @@ pub fn insert_all(ctx: &mut Context) {
 
 pub fn base64_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
 	// The Go library requires bytes, but we accept strings too.
-	let v = v.load(ftx)?;
+	let v = v.load(ftx)?.always_materialize_owned();
 	use base64::Engine;
 	Ok(
 		base64::prelude::BASE64_STANDARD
-			.encode(v.as_bytes()?)
+			.encode(v.as_bytes_pre_materialized()?)
 			.into(),
 	)
 }
 
 pub fn base64_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
 	// The Go library requires strings, but we accept bytes too.
-	let v = v.load(ftx)?;
+	let v = v.load(ftx)?.always_materialize_owned();
 	use base64::Engine;
 	base64::prelude::BASE64_STANDARD
-		.decode(v.as_bytes()?)
+		.decode(v.as_bytes_pre_materialized()?)
 		.map(|v| v.into())
 		.map_err(|e| ftx.error(e))
 }
