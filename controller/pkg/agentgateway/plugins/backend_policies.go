@@ -417,8 +417,8 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		translatedAIPolicy.Overrides[def.Field] = val
 	}
 	for _, xfm := range aiSpec.Transformations {
-		if translatedAIPolicy.Transformation == nil {
-			translatedAIPolicy.Transformation = make(map[string]string)
+		if translatedAIPolicy.Transformations == nil {
+			translatedAIPolicy.Transformations = make(map[string]string)
 		}
 
 		if !isCEL(xfm.Expression) {
@@ -426,7 +426,7 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		}
 
 		// Still set it so it wipes out the value on error, mirroring the header value.
-		translatedAIPolicy.Transformation[xfm.Field] = string(xfm.Expression)
+		translatedAIPolicy.Transformations[xfm.Field] = string(xfm.Expression)
 	}
 
 	if aiSpec.PromptGuard != nil {

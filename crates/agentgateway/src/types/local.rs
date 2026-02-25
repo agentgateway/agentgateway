@@ -1329,7 +1329,7 @@ json(request.body).model
 		pols.push(BackendPolicy::AI(Arc::new(llm::Policy {
 			defaults: model_config.defaults.clone(),
 			overrides: model_config.overrides.clone(),
-			transformation: model_config.transformation.clone(),
+			transformations: model_config.transformation.clone(),
 			prompt_guard: model_config.guardrails.clone(),
 			prompts: None,
 			model_aliases: Default::default(),

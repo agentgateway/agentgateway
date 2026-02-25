@@ -2543,6 +2543,7 @@ spec:
                         description: |-
                           Provide CEL transformations to compute and set fields in the request body.
                           The expression result overwrites any existing value for that field.
+                          This has a higher priority than 'overrides' if both are set for the same key.
                         items:
                           description: |-
                             FieldTransformation maps a request JSON field to a CEL expression string.

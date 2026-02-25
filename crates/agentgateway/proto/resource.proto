@@ -887,7 +887,7 @@ message BackendPolicySpec {
     map<string, string> overrides = 3;
     // CEL transformation expressions to evaluate and set in the LLM request.
     // Expressions are evaluated against the current request body and behave like overrides.
-    map<string, string> transformation = 8;
+    map<string, string> transformations = 8;
     PromptEnrichment prompts = 4;
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;

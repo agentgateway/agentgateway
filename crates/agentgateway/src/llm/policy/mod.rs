@@ -111,7 +111,7 @@ pub struct Policy {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub overrides: Option<HashMap<String, serde_json::Value>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub transformation: Option<HashMap<String, Arc<cel::Expression>>>,
+	pub transformations: Option<HashMap<String, Arc<cel::Expression>>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompts: Option<PromptEnrichment>,
 	#[serde(
@@ -314,7 +314,7 @@ impl Policy {
 		bytes: &Bytes,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<T, AIError> {
-		if self.defaults.is_none() && self.overrides.is_none() && self.transformation.is_none() {
+		if self.defaults.is_none() && self.overrides.is_none() && self.transformations.is_none() {
 			// Fast path: directly bytes to typed
 			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);
 		}
@@ -323,7 +323,7 @@ impl Policy {
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
 		let exec = cel::Executor::new_llm(log.as_ref().and_then(|x| x.request_snapshot.as_ref()), &v);
 		let to_set: Vec<_> = self
-			.transformation
+			.transformations
 			.iter()
 			.flatten()
 			.map(|(k, expr)| (k, Self::eval_transformation_expression(expr, &exec)))
@@ -1356,7 +1356,7 @@ fn test_unmarshal_request_with_transformation_policy() {
 	use serde_json::json;
 
 	let policy = Policy {
-		transformation: Some(
+		transformations: Some(
 			[
 				(
 					"max_tokens".to_string(),

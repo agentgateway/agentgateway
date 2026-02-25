@@ -1765,7 +1765,7 @@
           ],
           "additionalProperties": true
         },
-        "transformation": {
+        "transformations": {
           "type": [
             "object",
             "null"

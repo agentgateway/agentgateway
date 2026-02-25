@@ -411,11 +411,11 @@ fn convert_backend_ai_policy(
 				.map(|(k, v)| serde_json::from_str(v).map(|v| (k.clone(), v)))
 				.collect::<Result<_, _>>()?,
 		),
-		transformation: if ai.transformation.is_empty() {
+		transformations: if ai.transformations.is_empty() {
 			None
 		} else {
 			Some(
-				ai.transformation
+				ai.transformations
 					.iter()
 					.map(|(k, v)| {
 						let ve = cel::Expression::new_permissive(v);
@@ -2120,7 +2120,7 @@ mod tests {
 				]
 				.into_iter()
 				.collect(),
-				transformation: vec![(
+				transformations: vec![(
 					"system".to_string(),
 					"\"Always answer in JSON\"".to_string(),
 				)]
@@ -2151,7 +2151,7 @@ mod tests {
 				.as_ref()
 				.expect("overrides should be set");
 			let transformation_policy = ai_policy
-				.transformation
+				.transformations
 				.as_ref()
 				.expect("transformation_policy should be set");
 
