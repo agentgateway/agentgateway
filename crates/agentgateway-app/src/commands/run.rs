@@ -1,4 +1,3 @@
-use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -99,7 +98,7 @@ fn spawn_readiness(_: &Bound) {}
 #[cfg(unix)]
 fn spawn_readiness(bound: &Bound) {
 	use std::os::fd::{FromRawFd, OwnedFd};
-	if let Some(ready_fd) = env::var("READY_FD")
+	if let Some(ready_fd) = std::env::var("READY_FD")
 		.ok()
 		.and_then(|v| {
 			let fd: i32 = v.parse().ok()?;
