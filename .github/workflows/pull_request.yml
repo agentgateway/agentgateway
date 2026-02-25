@@ -2,9 +2,11 @@ name: Branch
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - "main"
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - "main"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -21,7 +23,9 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os:
+        - ubuntu-24.04
+        - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6
@@ -31,7 +35,7 @@ jobs:
         toolchain: "${{ env.RUST_VERSION }}"
     - uses: Swatinem/rust-cache@v2
       # Github cache is too tiny to handle the full matrix :-(
-      if: ${{ matrix.os == 'ubuntu-latest' }}
+      if: ${{ matrix.os == 'ubuntu-24.04' }}
       with:
         # Github cache will restore from 'main' OR the current branch.
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
@@ -40,16 +44,16 @@ jobs:
     - name: Test
       run: make test
     - name: Validate
-      if: ${{ matrix.os == 'ubuntu-latest' }}
+      if: ${{ matrix.os == 'ubuntu-24.04' }}
       run: make validate
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
-        node-version: 23
+        node-version: 24
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -69,15 +73,15 @@ jobs:
 
   #### UI jobs ####
   ui-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ui
     steps:
     - uses: actions/checkout@v6
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
-        node-version: 23
+        node-version: 24
     - name: Lint
       run: |
         npm ci
@@ -85,7 +89,7 @@ jobs:
 
   #### Controller jobs ####
   controller-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
     - uses: actions/setup-go@v6
@@ -98,7 +102,7 @@ jobs:
       run: go test -race ./...
 
   controller-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
     - uses: actions/setup-go@v6
@@ -118,7 +122,7 @@ jobs:
       run: make generate-apis check-clean-repo
 
   controller-e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
     - name: Install Rust
@@ -147,13 +151,13 @@ jobs:
         CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
     - name: Archive bug report directory on failure
       if: ${{ failure() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: bug-report
         path: ./controller/_test/bug_report/kind
         retention-days: 2
     - name: Upload cargo timings
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: cargo-timings-e2e
         path: target/cargo-timings/cargo-timing*.html
@@ -164,7 +168,7 @@ jobs:
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
 
   controller-conformance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
     - name: Install Rust
@@ -191,7 +195,7 @@ jobs:
       run: |
         make -C controller all-conformance
     - name: Upload cargo timings
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: cargo-timings-conformance
         path: target/cargo-timings/cargo-timing*.html
@@ -201,12 +205,12 @@ jobs:
         cat-yamls () {
           local files=("$@")
           local count=$#
-          
+
           for ((i=0; i<count-1; i++)); do
           cat "${files[i]}"
           echo -e "\n---"
           done
-          
+
           if [ $count -gt 0 ]; then
           cat "${files[count-1]}"
           fi

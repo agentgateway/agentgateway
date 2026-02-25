@@ -15,10 +15,10 @@ on:
         type: string
 jobs:
   cache-upload:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Restore cache
         uses: Andrej730/cache/restore@e294f7d180f76c94062d0251c60fe7362ce6667d
@@ -28,7 +28,7 @@ jobs:
           key: ${{ github.event.inputs.cache_key }}
 
       - name: Upload cached folder as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cache-artifact
           path: |
