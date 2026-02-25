@@ -448,6 +448,10 @@ jobs:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Helm login to ${{ env.CHART_REGISTRY_IMAGE_BASE }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login ${{ env.CHART_REGISTRY_IMAGE_BASE }} -u ${{ github.repository_owner }} --password-stdin
+
       - name: Push helm charts
         run: make -C controller release-charts
         env:
