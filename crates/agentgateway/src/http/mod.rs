@@ -601,9 +601,14 @@ pub fn response_buffer_limit(resp: &Response) -> usize {
 		.unwrap_or(2_097_152)
 }
 
-pub async fn read_body(req: Request) -> Result<Bytes, axum_core::Error> {
+pub async fn read_req_body(req: Request) -> Result<Bytes, axum_core::Error> {
 	let lim = buffer_limit(&req);
 	read_body_with_limit(req.into_body(), lim).await
+}
+
+pub async fn read_resp_body(resp: Response) -> Result<Bytes, axum_core::Error> {
+	let lim = response_buffer_limit(&resp);
+	read_body_with_limit(resp.into_body(), lim).await
 }
 
 pub async fn read_response_body(

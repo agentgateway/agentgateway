@@ -17,7 +17,7 @@ use prometheus_client::encoding::EncodeLabelValue;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls_pemfile::Item;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::http::auth::BackendAuth;
@@ -1166,37 +1166,9 @@ pub struct StreamableHTTPTargetSpec {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct OpenAPITarget {
 	pub backend: SimpleBackendReference,
-	#[serde(deserialize_with = "de_openapi")]
+	#[serde(skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	pub schema: Arc<OpenAPI>,
-}
-
-pub fn de_openapi<'a, D>(deserializer: D) -> Result<Arc<OpenAPI>, D::Error>
-where
-	D: serde::Deserializer<'a>,
-{
-	#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-	#[serde(rename_all = "camelCase", deny_unknown_fields)]
-	enum Serde {
-		File(PathBuf),
-		Inline(String),
-		// Remote()
-	}
-	let s = Serde::deserialize(deserializer)?;
-
-	let s = match s {
-		Serde::File(f) => {
-			let f = std::fs::read(f).map_err(serde::de::Error::custom)?;
-			String::from_utf8(f).map_err(serde::de::Error::custom)?
-		},
-		Serde::Inline(s) => s,
-	};
-	// OpenAPI can be huge, so grow our stack
-	let schema: OpenAPI = stacker::grow(2 * 1024 * 1024, || {
-		yamlviajson::from_str(s.as_str()).map_err(serde::de::Error::custom)
-	})?;
-
-	Ok(Arc::new(schema))
 }
 
 #[derive(Debug, Clone, Default)]

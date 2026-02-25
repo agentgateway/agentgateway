@@ -13,6 +13,7 @@ pub use serde_with;
 
 use crate::client::Client;
 use crate::http::Body;
+use openapiv3::OpenAPI;
 
 /// Serde yaml represents things different than just as "JSON in YAML format".
 /// We don't want this. Instead, we transcode YAML via the JSON module.
@@ -380,6 +381,29 @@ impl FileInlineOrRemote {
 			},
 		};
 		serde_json::from_str(&s).map_err(Into::into)
+	}
+
+	pub async fn load_openapi_schema(&self, client: Client) -> anyhow::Result<OpenAPI> {
+		let s = match self {
+			FileInlineOrRemote::File { file } => fs_err::tokio::read_to_string(file).await?,
+			FileInlineOrRemote::Inline(s) => s.clone(),
+			FileInlineOrRemote::Remote { url } => {
+				let resp = client
+					.simple_call(
+						::http::Request::builder()
+							.uri(url)
+							.body(Body::empty())
+							.expect("builder should succeed"),
+					)
+					.await
+					.context(format!("fetch {url}"))?;
+				let body_bytes = crate::http::read_resp_body(resp).await?;
+				String::from_utf8(body_bytes.to_vec())?
+			},
+		};
+		stacker::grow(2 * 1024 * 1024, || {
+			yamlviajson::from_str::<OpenAPI>(s.as_str())
+		})
 	}
 }
 
