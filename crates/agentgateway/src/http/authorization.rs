@@ -148,8 +148,9 @@ impl RuleSets {
 		if rule_sets.iter().any(|r| r.allows(exec)) {
 			return true;
 		}
-		// Else deny
-		false
+		// If only deny rules exist (no allow rules), default to allow (denylist semantics).
+		// If allow rules exist but none matched, default to deny (allowlist semantics).
+		!rule_sets.iter().any(|r| r.has_allow_rules())
 	}
 
 	pub fn is_empty(&self) -> bool {
@@ -164,6 +165,10 @@ impl RuleSet {
 
 	pub fn has_rules(&self) -> bool {
 		!self.rules.allow.is_empty() || !self.rules.deny.is_empty()
+	}
+
+	pub fn has_allow_rules(&self) -> bool {
+		!self.rules.allow.is_empty()
 	}
 	pub fn denies(&self, exec: &cel::Executor) -> bool {
 		if self.rules.deny.is_empty() {

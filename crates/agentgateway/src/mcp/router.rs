@@ -116,6 +116,9 @@ impl App {
 
 		let mut ctx = ContextBuilder::new();
 		authorization_policies.register(&mut ctx);
+		// Also register on the log's context so that `take_and_snapshot` knows to
+		// capture request attributes (e.g. headers) needed by authorization CEL expressions.
+		authorization_policies.register(log.cel.ctx());
 		ctx.maybe_buffer_request_body(&mut req).await;
 
 		// `response` is not valid here, since we run authz first
