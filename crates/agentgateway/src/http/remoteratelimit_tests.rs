@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::*;
 use crate::cel;
+use crate::http::jwt;
 use crate::http::localratelimit::RateLimitType;
 
 /// Helper: build a `RemoteRateLimit` with the given descriptor entries.
@@ -500,4 +501,41 @@ fn build_request_non_string_cel_result_returns_none() {
 		result.is_none(),
 		"expected None when CEL result is not string-convertible"
 	);
+}
+
+/// When a descriptor uses a CEL expression that returns a Dynamic value (e.g. `jwt.sub`),
+/// we materialize it before string conversion so the descriptor is populated.
+/// This covers the always_materialize_owned() path in eval_descriptor.
+#[test]
+fn build_request_jwt_sub_descriptor_evaluates_with_materialization() {
+	let entry = make_descriptor_entry(vec![("user", "jwt.sub")], RateLimitType::Requests);
+	let rl = make_rate_limit(vec![entry]);
+
+	let mut req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let serde_json::Value::Object(claims) = serde_json::json!({
+		"iss": "https://example.com",
+		"sub": "rate-limit-user",
+		"exp": 9999999999_i64,
+	}) else {
+		unreachable!()
+	};
+	req.extensions_mut().insert(jwt::Claims {
+		inner: claims,
+		jwt: Default::default(),
+	});
+
+	let result = rl.build_request(&req, RateLimitType::Requests, None);
+	assert!(
+		result.is_some(),
+		"expected Some when jwt.sub evaluates (with materialization) to a string"
+	);
+	let request = result.unwrap();
+	assert_eq!(request.descriptors.len(), 1);
+	assert_eq!(request.descriptors[0].entries.len(), 1);
+	assert_eq!(request.descriptors[0].entries[0].key, "user");
+	assert_eq!(request.descriptors[0].entries[0].value, "rate-limit-user");
 }

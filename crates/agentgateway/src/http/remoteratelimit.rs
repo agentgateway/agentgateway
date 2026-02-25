@@ -134,6 +134,14 @@ impl RemoteRateLimit {
 			.filter(|e| e.limit_type == limit_type)
 		{
 			if let Some(rl_entries) = Self::eval_descriptor(req, &desc_entry.entries) {
+				// Rate limit servers require each descriptor to have at least one entry.
+				if rl_entries.is_empty() {
+					trace!(
+						"ratelimit skipping descriptor with no entries for domain={}, type={:?}",
+						self.domain, limit_type,
+					);
+					continue;
+				}
 				// Trace evaluated descriptor key/value pairs for visibility
 				let kv_pairs: Vec<String> = rl_entries
 					.iter()
@@ -317,6 +325,9 @@ impl RemoteRateLimit {
 			// We drop the entire set if we cannot eval one; emit trace to aid debugging
 			match exec.eval(lookup) {
 				Ok(value) => {
+					// CEL 2.0 may return Value::Dynamic for nested lookups (e.g. jwt.sub);
+					// materialize so value_as_string can handle string-like values.
+					let value = value.always_materialize_owned();
 					let Some(string_value) = cel::value_as_string(&value) else {
 						trace!(
 							"ratelimit descriptor value not convertible to string: key={}, expr={:?}",
