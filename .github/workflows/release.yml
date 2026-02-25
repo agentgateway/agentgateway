@@ -539,6 +539,7 @@ jobs:
         files: outputs/agentgateway-*
         tag_name: ${{ github.ref_name }}
         body: "Automated release of ${{ github.ref_name }}."
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       if: startsWith(github.ref, 'refs/tags/')
