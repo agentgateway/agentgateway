@@ -17,7 +17,8 @@ on:
 env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
-  CHART_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/charts
+  # Note: /charts is added to this
+  CHART_REGISTRY_IMAGE_BASE: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   setup:
@@ -450,7 +451,7 @@ jobs:
       - name: Push helm charts
         run: make -C controller release-charts
         env:
-          IMAGE_REGISTRY: ${{ env.CHART_REGISTRY_IMAGE }}
+          IMAGE_REGISTRY: ${{ env.CHART_REGISTRY_IMAGE_BASE }}
 
   build:
     if: ${{ github.event_name == 'push' || ! github.event.inputs.skip_gh_release }}
