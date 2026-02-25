@@ -325,9 +325,6 @@ impl RemoteRateLimit {
 			// We drop the entire set if we cannot eval one; emit trace to aid debugging
 			match exec.eval(lookup) {
 				Ok(value) => {
-					// CEL 2.0 may return Value::Dynamic for nested lookups (e.g. jwt.sub);
-					// materialize so value_as_string can handle string-like values.
-					let value = value.always_materialize_owned();
 					let Some(string_value) = cel::value_as_string(&value) else {
 						trace!(
 							"ratelimit descriptor value not convertible to string: key={}, expr={:?}",
