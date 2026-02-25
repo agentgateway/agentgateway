@@ -36,7 +36,7 @@ fn spawn_subprocess(args: &OneshotArgs) -> anyhow::Result<SpawnedSubprocess> {
 	configure_subprocess_output(&mut command, args.agentgateway_output.as_ref())?;
 	unsafe {
 		command.pre_exec(move || {
-			// Terminate when parent terminates...
+			#[cfg(target_os = "linux")]
 			if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) != 0 {
 				return Err(std::io::Error::last_os_error());
 			}
