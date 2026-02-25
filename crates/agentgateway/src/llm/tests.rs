@@ -368,6 +368,102 @@ async fn test_passthrough() {
 }
 
 #[tokio::test]
+async fn test_process_passthrough_request_guesses_model_and_params_without_mutating_body() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: Some(strng::new("fallback-model")),
+	});
+	let body = r#"{
+		"modelId": "gpt-4.1-nano",
+		"stream": true,
+		"temperature": "0.4",
+		"max_output_tokens": 64
+	}"#;
+	let req = ::http::Request::builder()
+		.uri("http://localhost/v1/custom")
+		.body(Body::from(body))
+		.expect("build request");
+
+	let (req, llm_request) = provider
+		.process_passthrough_request(req)
+		.await
+		.expect("process passthrough request");
+
+	let body_bytes = req
+		.into_body()
+		.collect()
+		.await
+		.expect("collect body")
+		.to_bytes();
+	assert_eq!(
+		String::from_utf8(body_bytes.to_vec()).expect("utf8 body"),
+		body,
+		"passthrough request body should not be mutated"
+	);
+	assert_eq!(llm_request.request_model.as_str(), "gpt-4.1-nano");
+	assert!(llm_request.streaming);
+	assert_eq!(llm_request.params.temperature, Some(0.4));
+	assert_eq!(llm_request.params.max_tokens, Some(64));
+}
+
+#[test]
+fn test_apply_passthrough_response_guess_openai_usage_shape() {
+	let mut llm_response = LLMResponse::default();
+	let body = json!({
+		"model": "gpt-4.1-mini",
+		"usage": {
+			"prompt_tokens": 12,
+			"completion_tokens": 7,
+			"total_tokens": 19,
+			"prompt_tokens_details": {
+				"cached_tokens": 2
+			},
+			"completion_tokens_details": {
+				"reasoning_tokens": 3
+			}
+		}
+	});
+
+	apply_passthrough_response_guess(&mut llm_response, &body);
+
+	assert_eq!(llm_response.provider_model.as_deref(), Some("gpt-4.1-mini"));
+	assert_eq!(llm_response.input_tokens, Some(12));
+	assert_eq!(llm_response.output_tokens, Some(7));
+	assert_eq!(llm_response.total_tokens, Some(19));
+	assert_eq!(llm_response.cached_input_tokens, Some(2));
+	assert_eq!(llm_response.reasoning_tokens, Some(3));
+}
+
+#[test]
+fn test_apply_passthrough_response_guess_nested_usage_shape() {
+	let mut llm_response = LLMResponse::default();
+	let body = json!({
+		"type": "response.completed",
+		"response": {
+			"model": "gpt-4.1",
+			"usage": {
+				"input_tokens": 20,
+				"output_tokens": 5,
+				"input_tokens_details": {
+					"cached_tokens": 4
+				},
+				"output_tokens_details": {
+					"reasoning_tokens": 2
+				}
+			}
+		}
+	});
+
+	apply_passthrough_response_guess(&mut llm_response, &body);
+
+	assert_eq!(llm_response.provider_model.as_deref(), Some("gpt-4.1"));
+	assert_eq!(llm_response.input_tokens, Some(20));
+	assert_eq!(llm_response.output_tokens, Some(5));
+	assert_eq!(llm_response.total_tokens, Some(25));
+	assert_eq!(llm_response.cached_input_tokens, Some(4));
+	assert_eq!(llm_response.reasoning_tokens, Some(2));
+}
+
+#[tokio::test]
 async fn test_messages_to_completions() {
 	let request = |i| conversion::completions::from_messages::translate(&i);
 	for r in MESSAGES_REQUESTS {

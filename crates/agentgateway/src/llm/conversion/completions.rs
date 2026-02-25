@@ -4,7 +4,7 @@ use agent_core::strng;
 use tracing::debug;
 
 use crate::http::Response;
-use crate::llm::{amend_tokens, types};
+use crate::llm::{AmendOnDrop, amend_tokens, types};
 use crate::store::LLMResponsePolicies;
 use crate::telemetry::log::AsyncLog;
 use crate::{llm, parse};
@@ -307,9 +307,8 @@ pub mod from_messages {
 }
 
 pub fn passthrough_stream(
-	log: AsyncLog<llm::LLMInfo>,
+	mut log: AmendOnDrop,
 	include_completion_in_log: bool,
-	rate_limit: LLMResponsePolicies,
 	resp: Response,
 ) -> Response {
 	let mut completion = include_completion_in_log.then(String::new);
@@ -317,7 +316,6 @@ pub fn passthrough_stream(
 	resp.map(|b| {
 		let mut seen_provider = false;
 		let mut saw_token = false;
-		let mut rate_limit = Some(rate_limit);
 		parse::sse::json_passthrough::<types::completions::typed::StreamResponse>(
 			b,
 			buffer_limit,
@@ -355,11 +353,9 @@ pub fn passthrough_stream(
 								if let Some(c) = completion.take() {
 									r.response.completion = Some(vec![c]);
 								}
-
-								if let Some(rl) = rate_limit.take() {
-									amend_tokens(rl, r);
-								}
 							});
+
+							log.report_rate_limit();
 						}
 					},
 					Some(Err(e)) => {
