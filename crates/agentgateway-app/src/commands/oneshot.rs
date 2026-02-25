@@ -37,6 +37,7 @@ fn spawn_subprocess(args: &OneshotArgs) -> anyhow::Result<SpawnedSubprocess> {
 	unsafe {
 		command.pre_exec(move || {
 			#[cfg(target_os = "linux")]
+			// Terminate when parent terminates...
 			if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) != 0 {
 				return Err(std::io::Error::last_os_error());
 			}
