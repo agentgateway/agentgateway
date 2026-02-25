@@ -43,6 +43,17 @@ jobs:
       if: ${{ matrix.os == 'ubuntu-latest' }}
       run: make validate
 
+  check-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "${{ env.RUST_VERSION }}"
+    - name: Check
+      run: cargo check --all-targets
+
   lint:
     runs-on: ubuntu-latest
     steps:
