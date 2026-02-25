@@ -477,15 +477,12 @@ jobs:
             features: jemalloc
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-            # TODO: arm64 build fails with jemalloc for some reason?
+            # TODO: arm64 build fails with jemalloc for some reason? https://github.com/tikv/jemallocator/issues/146
             features: default
           - os: macos-26
             target: aarch64-apple-darwin
             features: default
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            features: default
-          - os: windows-latest
+          - os: windows-2025
             target: x86_64-pc-windows-msvc
             features: default
     steps:
@@ -549,8 +546,6 @@ jobs:
         mkdir outputs
         mv release-binary-macos-26/agentgateway outputs/agentgateway-darwin-arm64
         sha256sum outputs/agentgateway-darwin-arm64 > outputs/agentgateway-darwin-arm64.sha256
-        mv release-binary-macos-15-intel/agentgateway outputs/agentgateway-darwin-amd64
-        sha256sum outputs/agentgateway-darwin-amd64 > outputs/agentgateway-darwin-amd64.sha256
         mv release-binary-ubuntu-24.04/agentgateway outputs/agentgateway-linux-amd64
         sha256sum outputs/agentgateway-linux-amd64 > outputs/agentgateway-linux-amd64.sha256
         mv release-binary-ubuntu-24.04-arm/agentgateway outputs/agentgateway-linux-arm64
