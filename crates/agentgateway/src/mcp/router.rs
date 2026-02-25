@@ -4,7 +4,6 @@ use agent_core::prelude::Strng;
 use axum::response::Response;
 
 use crate::ProxyInputs;
-use crate::cel::ContextBuilder;
 use crate::http::authorization::RuleSets;
 use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
