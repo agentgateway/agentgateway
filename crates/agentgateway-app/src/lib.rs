@@ -77,17 +77,20 @@ struct Cli {
 	#[command(flatten)]
 	run: RunArgs,
 
+	#[cfg(target_os = "linux")]
 	#[command(subcommand)]
 	command: Option<Commands>,
 }
 
 pub fn run() -> anyhow::Result<()> {
 	let args = Cli::parse();
+	#[cfg(target_os = "linux")]
 	match args.command {
-		#[cfg(unix)]
 		Some(Commands::Oneshot(oneshot)) => commands::oneshot::execute(oneshot),
 		None => commands::run::execute(args.run),
 	}
+	#[cfg(not(target_os = "linux"))]
+	commands::run::execute(args.run)
 }
 
 pub(crate) fn read_config_contents(
