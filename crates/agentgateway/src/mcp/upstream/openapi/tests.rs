@@ -1087,60 +1087,60 @@ async fn test_openapi_from_url() {
 		.find(|b| matches!(b.backend, Backend::MCP(_, _)));
 	assert!(mcp_backend.is_some(), "Should contain an MCP backend");
 
-	if let Some(backend_with_policies) = mcp_backend {
-		if let Backend::MCP(_, mcp_backend) = &backend_with_policies.backend {
-			assert_eq!(mcp_backend.targets.len(), 1);
+	if let Some(backend_with_policies) = mcp_backend
+		&& let Backend::MCP(_, mcp_backend) = &backend_with_policies.backend
+	{
+		assert_eq!(mcp_backend.targets.len(), 1);
 
-			// Verify the target was converted to OpenAPI
-			let target = &mcp_backend.targets[0];
-			assert_eq!(target.name.as_str(), "users-api");
+		// Verify the target was converted to OpenAPI
+		let target = &mcp_backend.targets[0];
+		assert_eq!(target.name.as_str(), "users-api");
 
-			// Verify it's an OpenAPI target spec with the fetched schema
-			if let crate::types::agent::McpTargetSpec::OpenAPI(openapi_target) = &target.spec {
-				let schema = &openapi_target.schema;
-				assert_eq!(schema.openapi, "3.0.0");
-				assert_eq!(schema.info.title, "User API");
-				assert_eq!(schema.info.version, "1.0.0");
+		// Verify it's an OpenAPI target spec with the fetched schema
+		if let crate::types::agent::McpTargetSpec::OpenAPI(openapi_target) = &target.spec {
+			let schema = &openapi_target.schema;
+			assert_eq!(schema.openapi, "3.0.0");
+			assert_eq!(schema.info.title, "User API");
+			assert_eq!(schema.info.version, "1.0.0");
 
-				// Check if paths contains the expected paths
-				let has_users_path = schema.paths.paths.contains_key("/users");
-				assert!(has_users_path, "Schema should contain /users path");
+			// Check if paths contains the expected paths
+			let has_users_path = schema.paths.paths.contains_key("/users");
+			assert!(has_users_path, "Schema should contain /users path");
 
-				let has_users_id_path = schema.paths.paths.contains_key("/users/{user_id}");
-				assert!(
-					has_users_id_path,
-					"Schema should contain /users/{{user_id}} path"
-				);
+			let has_users_id_path = schema.paths.paths.contains_key("/users/{user_id}");
+			assert!(
+				has_users_id_path,
+				"Schema should contain /users/{{user_id}} path"
+			);
 
-				// Verify the path details were preserved
-				if let Some(path_item_ref) = schema.paths.paths.get("/users/{user_id}") {
-					match path_item_ref {
-						ReferenceOr::Item(path_item) => {
-							if let Some(get_op) = &path_item.get {
-								assert_eq!(get_op.summary.as_deref(), Some("Get user details"));
-							}
-						},
-						ReferenceOr::Reference { reference: _ } => {
-							panic!("Expected path item, got reference");
-						},
-					}
+			// Verify the path details were preserved
+			if let Some(path_item_ref) = schema.paths.paths.get("/users/{user_id}") {
+				match path_item_ref {
+					ReferenceOr::Item(path_item) => {
+						if let Some(get_op) = &path_item.get {
+							assert_eq!(get_op.summary.as_deref(), Some("Get user details"));
+						}
+					},
+					ReferenceOr::Reference { reference: _ } => {
+						panic!("Expected path item, got reference");
+					},
 				}
-
-				if let Some(path_item_ref) = schema.paths.paths.get("/users") {
-					match path_item_ref {
-						ReferenceOr::Item(path_item) => {
-							if let Some(post_op) = &path_item.post {
-								assert_eq!(post_op.summary.as_deref(), Some("Create a new user"));
-							}
-						},
-						ReferenceOr::Reference { reference: _ } => {
-							panic!("Expected path item, got reference");
-						},
-					}
-				}
-			} else {
-				panic!("Expected OpenAPI target spec, got {:?}", target.spec);
 			}
+
+			if let Some(path_item_ref) = schema.paths.paths.get("/users") {
+				match path_item_ref {
+					ReferenceOr::Item(path_item) => {
+						if let Some(post_op) = &path_item.post {
+							assert_eq!(post_op.summary.as_deref(), Some("Create a new user"));
+						}
+					},
+					ReferenceOr::Reference { reference: _ } => {
+						panic!("Expected path item, got reference");
+					},
+				}
+			}
+		} else {
+			panic!("Expected OpenAPI target spec, got {:?}", target.spec);
 		}
 	}
 }
