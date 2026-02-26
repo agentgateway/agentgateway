@@ -555,7 +555,7 @@ jobs:
         sha256sum outputs/agentgateway-linux-amd64 > outputs/agentgateway-linux-amd64.sha256
         mv release-binary-ubuntu-24.04-arm/agentgateway outputs/agentgateway-linux-arm64
         sha256sum outputs/agentgateway-linux-arm64 > outputs/agentgateway-linux-arm64.sha256
-        mv release-binary-windows-latest/agentgateway.exe outputs/agentgateway-windows-amd64.exe
+        mv release-binary-windows-2025/agentgateway.exe outputs/agentgateway-windows-amd64.exe
         sha256sum outputs/agentgateway-windows-amd64.exe > outputs/agentgateway-windows-amd64.exe.sha256
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
