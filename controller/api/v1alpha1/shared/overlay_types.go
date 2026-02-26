@@ -7,16 +7,18 @@ type ObjectMetadata struct {
 	// Map of string keys and values that can be used to organize and categorize
 	// (scope and select) objects. May match selectors of replication controllers
 	// and services.
+	// A null value signals deletion of that key from the target object's labels.
 	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels
 	// +optional
-	Labels map[string]string `json:"labels,omitempty"`
+	Labels map[string]*string `json:"labels,omitempty"`
 
 	// Annotations is an unstructured key value map stored with a resource that may be
 	// set by external tools to store and retrieve arbitrary metadata. They are not
 	// queryable and should be preserved when modifying objects.
+	// A null value signals deletion of that key from the target object's annotations.
 	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations
 	// +optional
-	Annotations map[string]string `json:"annotations,omitempty"`
+	Annotations map[string]*string `json:"annotations,omitempty"`
 }
 
 // KubernetesResourceOverlay provides a mechanism to customize generated

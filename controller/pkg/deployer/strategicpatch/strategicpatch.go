@@ -190,15 +190,14 @@ func applyOverlay(obj client.Object, overlay *shared.KubernetesResourceOverlay, 
 }
 
 // buildMetadataPatch converts ObjectMetadata into a JSON-compatible map where
-// empty string values become nil (JSON null). This is needed because YAML null
-// deserializes to "" in map[string]string, and SMP uses null to delete map keys.
+// nil pointer values become nil (JSON null). SMP uses null to delete map keys.
 func buildMetadataPatch(meta *shared.ObjectMetadata) map[string]any {
 	result := make(map[string]any)
 	if meta.Labels != nil {
-		result["labels"] = stringMapToNullable(meta.Labels)
+		result["labels"] = ptrMapToNullable(meta.Labels)
 	}
 	if meta.Annotations != nil {
-		result["annotations"] = stringMapToNullable(meta.Annotations)
+		result["annotations"] = ptrMapToNullable(meta.Annotations)
 	}
 	if len(result) == 0 {
 		return nil
@@ -206,15 +205,15 @@ func buildMetadataPatch(meta *shared.ObjectMetadata) map[string]any {
 	return result
 }
 
-// stringMapToNullable converts a map[string]string to map[string]any where
-// empty string values become nil (JSON null), enabling key deletion via SMP.
-func stringMapToNullable(m map[string]string) map[string]any {
+// ptrMapToNullable converts a map[string]*string to map[string]any where
+// nil pointer values become nil (JSON null), enabling key deletion via SMP.
+func ptrMapToNullable(m map[string]*string) map[string]any {
 	result := make(map[string]any, len(m))
 	for k, v := range m {
-		if v == "" {
+		if v == nil {
 			result[k] = nil
 		} else {
-			result[k] = v
+			result[k] = *v
 		}
 	}
 	return result
@@ -269,17 +268,16 @@ func deserializeToObject(data []byte, gvk schema.GroupVersionKind) (client.Objec
 }
 
 // mergeMetadataMap merges overlay values into existing metadata.
-// Empty string values in the overlay cause the key to be deleted
-// since YAML null deserializes to "" in map[string]string.
-func mergeMetadataMap(existing, overlay map[string]string) map[string]string {
+// Nil pointer values in the overlay cause the key to be deleted.
+func mergeMetadataMap(existing map[string]string, overlay map[string]*string) map[string]string {
 	if existing == nil {
 		existing = make(map[string]string)
 	}
 	for k, v := range overlay {
-		if v == "" {
+		if v == nil {
 			delete(existing, k)
 		} else {
-			existing[k] = v
+			existing[k] = *v
 		}
 	}
 	return existing

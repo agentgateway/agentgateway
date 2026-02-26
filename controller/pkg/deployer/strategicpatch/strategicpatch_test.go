@@ -41,8 +41,8 @@ func TestOverlayApplier_ApplyOverlays_MetadataLabels(t *testing.T) {
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
 				Deployment: &shared.KubernetesResourceOverlay{
 					Metadata: &shared.ObjectMetadata{
-						Labels: map[string]string{
-							"custom-label": "custom-value",
+						Labels: map[string]*string{
+							"custom-label": ptr.To("custom-value"),
 						},
 					},
 				},
@@ -74,16 +74,15 @@ func TestOverlayApplier_ApplyOverlays_MetadataLabels(t *testing.T) {
 }
 
 func TestOverlayApplier_ApplyOverlays_MetadataLabelDeletion(t *testing.T) {
-	// Empty string values in overlay labels should delete existing keys.
-	// This is how YAML null is represented in map[string]string.
+	// Nil pointer values in overlay labels should delete existing keys.
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
 				Deployment: &shared.KubernetesResourceOverlay{
 					Metadata: &shared.ObjectMetadata{
-						Labels: map[string]string{
-							"label-to-delete": "",
-							"new-label":       "new-value",
+						Labels: map[string]*string{
+							"label-to-delete": nil,
+							"new-label":       ptr.To("new-value"),
 						},
 					},
 				},
@@ -111,7 +110,7 @@ func TestOverlayApplier_ApplyOverlays_MetadataLabelDeletion(t *testing.T) {
 	require.NoError(t, err)
 
 	result := objs[0].(*appsv1.Deployment)
-	assert.NotContains(t, result.Labels, "label-to-delete", "empty string overlay value should delete the label")
+	assert.NotContains(t, result.Labels, "label-to-delete", "nil overlay value should delete the label")
 	assert.Equal(t, "keep-value", result.Labels["label-to-keep"], "unaffected labels should remain")
 	assert.Equal(t, "new-value", result.Labels["new-label"], "new labels should be added")
 }
@@ -122,8 +121,8 @@ func TestOverlayApplier_ApplyOverlays_MetadataAnnotations(t *testing.T) {
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
 				Service: &shared.KubernetesResourceOverlay{
 					Metadata: &shared.ObjectMetadata{
-						Annotations: map[string]string{
-							"custom-annotation": "custom-value",
+						Annotations: map[string]*string{
+							"custom-annotation": ptr.To("custom-value"),
 						},
 					},
 				},
@@ -315,17 +314,17 @@ func TestOverlayApplier_ApplyOverlays_MultipleObjects(t *testing.T) {
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
 				Deployment: &shared.KubernetesResourceOverlay{
 					Metadata: &shared.ObjectMetadata{
-						Labels: map[string]string{"app": "modified"},
+						Labels: map[string]*string{"app": ptr.To("modified")},
 					},
 				},
 				Service: &shared.KubernetesResourceOverlay{
 					Metadata: &shared.ObjectMetadata{
-						Labels: map[string]string{"svc": "modified"},
+						Labels: map[string]*string{"svc": ptr.To("modified")},
 					},
 				},
 				ServiceAccount: &shared.KubernetesResourceOverlay{
 					Metadata: &shared.ObjectMetadata{
-						Labels: map[string]string{"sa": "modified"},
+						Labels: map[string]*string{"sa": ptr.To("modified")},
 					},
 				},
 			},

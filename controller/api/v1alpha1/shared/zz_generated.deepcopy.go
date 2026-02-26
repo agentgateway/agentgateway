@@ -200,16 +200,34 @@ func (in *ObjectMetadata) DeepCopyInto(out *ObjectMetadata) {
 	*out = *in
 	if in.Labels != nil {
 		in, out := &in.Labels, &out.Labels
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]*string, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
 		}
 	}
 	if in.Annotations != nil {
 		in, out := &in.Annotations, &out.Annotations
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]*string, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
 		}
 	}
 }
