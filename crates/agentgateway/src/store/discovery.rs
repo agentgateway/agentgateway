@@ -15,7 +15,10 @@ use types::proto::workload::{
 	Address as XdsAddress, PortList, Service as XdsService, Workload as XdsWorkload,
 };
 
-use crate::types::discovery::{Endpoint, InboundProtocol, NetworkMode, Service, Workload};
+use crate::types::discovery::{
+	DiscoveryDefaults, Endpoint, InboundProtocol, NetworkMode, Service, Workload,
+	workload_and_services_from_xds,
+};
 use crate::*;
 
 #[derive(Debug)]
@@ -23,6 +26,11 @@ pub struct Store {
 	pub workloads: WorkloadStore,
 
 	pub services: ServiceStore,
+
+	/// Defaults used when XDS workload resources omit fields (e.g. trust domain).
+	/// Built from `AgentgatewayParameters` / env so we can add more defaults
+	/// later without changing the store shape.
+	pub defaults: DiscoveryDefaults,
 }
 
 impl Store {}
@@ -35,6 +43,9 @@ impl Default for Store {
 
 impl Store {
 	pub fn new() -> Store {
+		Store::with_defaults(DiscoveryDefaults::default())
+	}
+	pub fn with_defaults(defaults: DiscoveryDefaults) -> Store {
 		Store {
 			workloads: WorkloadStore {
 				insert_notifier: Sender::new(()),
@@ -42,6 +53,7 @@ impl Store {
 				by_uid: Default::default(),
 			},
 			services: Default::default(),
+			defaults,
 		}
 	}
 	pub fn insert_address(&mut self, a: XdsAddress) -> anyhow::Result<()> {
@@ -64,8 +76,9 @@ impl Store {
 		// object, which doesn't include Services.
 		// In theory, I think we could avoid this if Workload::try_from returning the services.
 		// let services = w.services.clone();
-		// Convert the workload.
-		let (workload, services): (Workload, HashMap<String, PortList>) = w.try_into()?;
+		// Convert the workload, using the configured default trust domain as fallback.
+		let (workload, services): (Workload, HashMap<String, PortList>) =
+			workload_and_services_from_xds(w, self.defaults.default_trust_domain.clone())?;
 		let workload = Arc::new(workload);
 
 		// First, remove the entry entirely to make sure things are cleaned up properly.
@@ -519,9 +532,16 @@ pub struct StoreUpdater {
 }
 
 impl StoreUpdater {
-	/// Creates a new updater for the given stores.
+	/// Creates a new updater backed by a pre-built `Store`.
 	pub fn new(state: Arc<RwLock<Store>>) -> Self {
 		Self { state }
+	}
+	/// Creates a new updater with the given discovery defaults (e.g. default trust
+	/// domain when XDS workload resources omit fields).
+	pub fn with_defaults(defaults: DiscoveryDefaults) -> Self {
+		Self {
+			state: Arc::new(RwLock::new(Store::with_defaults(defaults))),
+		}
 	}
 	pub fn read(&self) -> std::sync::RwLockReadGuard<'_, Store> {
 		self.state.read().expect("mutex acquired")
@@ -638,4 +658,37 @@ pub struct LocalWorkload {
 	#[serde(flatten)]
 	pub workload: Workload,
 	pub services: HashMap<String, HashMap<u16, u16>>,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// Minimal XDS workload with empty trust_domain for store tests.
+	fn minimal_xds_workload(trust_domain: &str) -> XdsWorkload {
+		XdsWorkload {
+			uid: "test-uid".to_string(),
+			addresses: vec![Bytes::from_static(&[127, 0, 0, 1])],
+			trust_domain: trust_domain.to_string(),
+			..Default::default()
+		}
+	}
+
+	#[test]
+	fn test_insert_workload_uses_default_trust_domain() {
+		let defaults = DiscoveryDefaults {
+			default_trust_domain: strng::literal!("custom.trust.domain"),
+		};
+		let mut store = Store::with_defaults(defaults);
+		store
+			.insert_workload(minimal_xds_workload(""))
+			.expect("insert_workload");
+
+		let w = store
+			.workloads
+			.by_uid
+			.get(&strng::literal!("test-uid"))
+			.unwrap();
+		assert_eq!(w.trust_domain.as_str(), "custom.trust.domain");
+	}
 }

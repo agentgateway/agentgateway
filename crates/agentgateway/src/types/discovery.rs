@@ -20,6 +20,40 @@ use crate::types::proto::workload::{
 use crate::types::proto::{ProtoError, workload};
 use crate::*;
 
+/// Default values used when converting XDS workload resources that omit certain
+/// fields. Populated from `AgentgatewayParameters` / env (e.g. `TRUST_DOMAIN`)
+/// so the discovery store can stay decoupled from the full app config while
+/// remaining easy to extend with more defaults (e.g. default service account,
+/// cluster ID) later.
+#[derive(Debug, Clone)]
+pub struct DiscoveryDefaults {
+	/// Trust domain used when an XDS workload has an empty `trust_domain`.
+	pub default_trust_domain: Strng,
+}
+
+impl Default for DiscoveryDefaults {
+	fn default() -> Self {
+		Self {
+			default_trust_domain: strng::literal!("cluster.local"),
+		}
+	}
+}
+
+impl DiscoveryDefaults {
+	/// Build discovery defaults from the main app config (e.g. CA trust domain
+	/// from `AgentgatewayParameters.spec.ca.trustDomain` / `TRUST_DOMAIN`).
+	pub fn from_config(config: &crate::Config) -> Self {
+		let default_trust_domain = config
+			.ca
+			.as_ref()
+			.map(|ca| ca.identity.trust_domain())
+			.unwrap_or_else(|| strng::literal!("cluster.local"));
+		Self {
+			default_trust_domain,
+		}
+	}
+}
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct NamespacedHostname {
@@ -633,96 +667,108 @@ impl TryFrom<XdsWorkload> for Workload {
 impl TryFrom<XdsWorkload> for (Workload, HashMap<String, PortList>) {
 	type Error = ProtoError;
 	fn try_from(resource: XdsWorkload) -> Result<Self, Self::Error> {
-		let wp = match &resource.waypoint {
-			Some(w) => Some(GatewayAddress::try_from(w)?),
-			None => None,
-		};
-
-		let network_gw = match &resource.network_gateway {
-			Some(w) => Some(GatewayAddress::try_from(w)?),
-			None => None,
-		};
-
-		let addresses = resource
-			.addresses
-			.iter()
-			.map(byte_to_ip)
-			.collect::<Result<Vec<_>, _>>()?;
-
-		let workload_type = resource.workload_type().as_str_name().to_lowercase();
-		let services: Vec<NamespacedHostname> = resource
-			.services
-			.keys()
-			.map(|namespaced_host| match namespaced_host.split_once('/') {
-				Some((namespace, hostname)) => Ok(NamespacedHostname {
-					namespace: namespace.into(),
-					hostname: hostname.into(),
-				}),
-				None => Err(ProtoError::NamespacedHostnameParse(namespaced_host.clone())),
-			})
-			.collect::<Result<_, _>>()?;
-		let wl = Workload {
-			workload_ips: addresses,
-			waypoint: wp,
-			network_gateway: network_gw,
-
-			protocol: InboundProtocol::from(workload::TunnelProtocol::try_from(
-				resource.tunnel_protocol,
-			)?),
-			network_mode: NetworkMode::from(workload::NetworkMode::try_from(resource.network_mode)?),
-
-			uid: resource.uid.into(),
-			name: resource.name.into(),
-			namespace: resource.namespace.into(),
-			trust_domain: {
-				let result = resource.trust_domain;
-				if result.is_empty() {
-					"cluster.local".into()
-				} else {
-					result.into()
-				}
-			},
-			service_account: {
-				let result = resource.service_account;
-				if result.is_empty() {
-					"default".into()
-				} else {
-					result.into()
-				}
-			},
-			node: resource.node.into(),
-			hostname: resource.hostname.into(),
-			network: resource.network.into(),
-			workload_name: resource.workload_name.into(),
-			workload_type: workload_type.into(),
-			canonical_name: resource.canonical_name.into(),
-			canonical_revision: resource.canonical_revision.into(),
-
-			status: HealthStatus::from(workload::WorkloadStatus::try_from(resource.status)?),
-
-			authorization_policies: resource
-				.authorization_policies
-				.iter()
-				.map(strng::new)
-				.collect(),
-
-			locality: resource.locality.map(Locality::from).unwrap_or_default(),
-
-			cluster_id: {
-				let result = resource.cluster_id;
-				if result.is_empty() {
-					"Kubernetes".into()
-				} else {
-					result.into()
-				}
-			},
-
-			capacity: resource.capacity.unwrap_or(1),
-			services,
-		};
-		// Return back part we did not use (service) so it can be consumed without cloning
-		Ok((wl, resource.services))
+		workload_and_services_from_xds(resource, strng::literal!("cluster.local"))
 	}
+}
+
+/// Converts an XDS workload proto into a `(Workload, services)` pair, using
+/// `default_trust_domain` when the proto's `trust_domain` field is empty.
+/// This allows callers that know the locally-configured trust domain (e.g. from
+/// `AgentgatewayParameters.spec.ca.trustDomain`) to override the built-in
+/// `"cluster.local"` fallback.
+pub fn workload_and_services_from_xds(
+	resource: XdsWorkload,
+	default_trust_domain: Strng,
+) -> Result<(Workload, HashMap<String, PortList>), ProtoError> {
+	let wp = match &resource.waypoint {
+		Some(w) => Some(GatewayAddress::try_from(w)?),
+		None => None,
+	};
+
+	let network_gw = match &resource.network_gateway {
+		Some(w) => Some(GatewayAddress::try_from(w)?),
+		None => None,
+	};
+
+	let addresses = resource
+		.addresses
+		.iter()
+		.map(byte_to_ip)
+		.collect::<Result<Vec<_>, _>>()?;
+
+	let workload_type = resource.workload_type().as_str_name().to_lowercase();
+	let services: Vec<NamespacedHostname> = resource
+		.services
+		.keys()
+		.map(|namespaced_host| match namespaced_host.split_once('/') {
+			Some((namespace, hostname)) => Ok(NamespacedHostname {
+				namespace: namespace.into(),
+				hostname: hostname.into(),
+			}),
+			None => Err(ProtoError::NamespacedHostnameParse(namespaced_host.clone())),
+		})
+		.collect::<Result<_, _>>()?;
+	let wl = Workload {
+		workload_ips: addresses,
+		waypoint: wp,
+		network_gateway: network_gw,
+
+		protocol: InboundProtocol::from(workload::TunnelProtocol::try_from(
+			resource.tunnel_protocol,
+		)?),
+		network_mode: NetworkMode::from(workload::NetworkMode::try_from(resource.network_mode)?),
+
+		uid: resource.uid.into(),
+		name: resource.name.into(),
+		namespace: resource.namespace.into(),
+		trust_domain: {
+			let result = resource.trust_domain;
+			if result.is_empty() {
+				default_trust_domain
+			} else {
+				result.into()
+			}
+		},
+		service_account: {
+			let result = resource.service_account;
+			if result.is_empty() {
+				"default".into()
+			} else {
+				result.into()
+			}
+		},
+		node: resource.node.into(),
+		hostname: resource.hostname.into(),
+		network: resource.network.into(),
+		workload_name: resource.workload_name.into(),
+		workload_type: workload_type.into(),
+		canonical_name: resource.canonical_name.into(),
+		canonical_revision: resource.canonical_revision.into(),
+
+		status: HealthStatus::from(workload::WorkloadStatus::try_from(resource.status)?),
+
+		authorization_policies: resource
+			.authorization_policies
+			.iter()
+			.map(strng::new)
+			.collect(),
+
+		locality: resource.locality.map(Locality::from).unwrap_or_default(),
+
+		cluster_id: {
+			let result = resource.cluster_id;
+			if result.is_empty() {
+				"Kubernetes".into()
+			} else {
+				result.into()
+			}
+		},
+
+		capacity: resource.capacity.unwrap_or(1),
+		services,
+	};
+	// Return back part we did not use (service) so it can be consumed without cloning
+	Ok((wl, resource.services))
 }
 
 pub fn byte_to_ip(b: &Bytes) -> Result<IpAddr, ProtoError> {
@@ -868,5 +914,38 @@ impl TryFrom<XdsScope> for LoadBalancerScopes {
 			XdsScope::Network => Ok(LoadBalancerScopes::Network),
 			_ => Err(ProtoError::EnumParse("invalid target".to_string())),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// Minimal XDS workload with empty trust_domain for conversion tests.
+	fn minimal_xds_workload(trust_domain: &str) -> XdsWorkload {
+		XdsWorkload {
+			uid: "test-uid".to_string(),
+			addresses: vec![Bytes::from_static(&[127, 0, 0, 1])],
+			trust_domain: trust_domain.to_string(),
+			..Default::default()
+		}
+	}
+
+	#[test]
+	fn test_workload_and_services_from_xds_default_trust_domain() {
+		// Empty trust_domain in proto -> custom default is applied.
+		let w = minimal_xds_workload("");
+		let default_td = strng::literal!("my.trust.domain");
+		let (workload, _services) = workload_and_services_from_xds(w, default_td).unwrap();
+		assert_eq!(workload.trust_domain.as_str(), "my.trust.domain");
+	}
+
+	#[test]
+	fn test_workload_and_services_from_xds_explicit_trust_domain() {
+		// Non-empty trust_domain in proto -> preserved.
+		let w = minimal_xds_workload("cluster.local");
+		let default_td = strng::literal!("other.trust.domain");
+		let (workload, _services) = workload_and_services_from_xds(w, default_td).unwrap();
+		assert_eq!(workload.trust_domain.as_str(), "cluster.local");
 	}
 }

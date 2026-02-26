@@ -2,6 +2,8 @@ mod binds;
 
 use std::sync::Arc;
 
+use agent_core::prelude::*;
+
 pub use binds::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
 	RoutePath, RoutePolicies, Store as BindStore,
@@ -10,12 +12,12 @@ use serde::{Serialize, Serializer};
 mod discovery;
 use std::sync::RwLock;
 
+use crate::store;
+use crate::types::discovery::DiscoveryDefaults;
 pub use binds::PreviousState as BindPreviousState;
 pub use discovery::{
 	LocalWorkload, PreviousState as DiscoveryPreviousState, Store as DiscoveryStore, WorkloadStore,
 };
-
-use crate::store;
 
 #[derive(Clone, Debug)]
 pub enum Event<T> {
@@ -37,8 +39,12 @@ impl Default for Stores {
 
 impl Stores {
 	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Stores {
+		Stores::new(ipv6_enabled, DiscoveryDefaults::default())
+	}
+
+	pub fn new(ipv6_enabled: bool, discovery_defaults: DiscoveryDefaults) -> Stores {
 		Stores {
-			discovery: discovery::StoreUpdater::new(Arc::new(RwLock::new(discovery::Store::new()))),
+			discovery: discovery::StoreUpdater::with_defaults(discovery_defaults),
 			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::with_ipv6_enabled(
 				ipv6_enabled,
 			)))),
