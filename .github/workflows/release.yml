@@ -450,7 +450,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Helm login to ${{ env.CHART_REGISTRY_IMAGE_BASE }}
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | ./tools/helm registry login ${{ env.CHART_REGISTRY_IMAGE_BASE }} -u ${{ github.repository_owner }} --password-stdin
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | ./tools/helm registry login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
       - name: Push helm charts
         run: make -C controller release-charts
