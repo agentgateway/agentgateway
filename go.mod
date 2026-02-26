@@ -4,8 +4,6 @@ go 1.25.1
 
 replace github.com/agentgateway/agentgateway/api => ./api
 
-replace istio.io/istio => github.com/davidjumani/istio v0.0.0-20260225180601-9b58c914789e
-
 require (
 	// Also update AgentgatewayDefaultTag in pkg/deployer/wellknown.go and test/deployer/testdata/*
 	github.com/agentgateway/agentgateway/api v0.0.0
@@ -38,6 +36,7 @@ require (
 	helm.sh/helm/v3 v3.20.0
 	istio.io/api v1.29.0-alpha.0.0.20260224232148-8364b3863ae8
 	istio.io/client-go v1.29.0-alpha.0.0.20260224232748-1f028d1029d4
+	istio.io/istio v0.0.0-20260226223414-e4dd300708de
 	k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver v0.35.1
 	k8s.io/apimachinery v0.35.1
@@ -45,19 +44,12 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/controller-runtime v0.23.1
-	sigs.k8s.io/controller-tools v0.20.1
-	sigs.k8s.io/gateway-api v1.5.0-rc.2
-	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260220060139-0714e2462e76
-	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260220060139-0714e2462e76
+	sigs.k8s.io/gateway-api v1.5.0-rc.3
+	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260212193201-47e9d05050a6
+	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260212193201-47e9d05050a6
+	sigs.k8s.io/gateway-api/conformance v1.5.0-rc.3
 	sigs.k8s.io/yaml v1.6.0
 )
-
-require (
-	istio.io/istio v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/gateway-api/conformance v0.0.0-20260213173202-265da48be464
-)
-
-replace sigs.k8s.io/gateway-api/conformance => /home/john/go/src/sigs.k8s.io/gateway-api/conformance
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
