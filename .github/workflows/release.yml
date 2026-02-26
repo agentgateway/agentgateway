@@ -15,14 +15,14 @@ on:
         type: boolean
 
 env:
-  REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
-  CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
-  # Note: /charts is added to this
-  CHART_REGISTRY_IMAGE_BASE: ghcr.io/${{ github.repository_owner }}
   CARGO_TERM_COLOR: always
   CI: true
   RUST_VERSION: "1.93.1"
   GO_VERSION: "1.25.7"
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
+  CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
+  # Note: /charts is added to this
+  CHART_REGISTRY_IMAGE_BASE: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   setup:

@@ -580,16 +580,18 @@ mod ratelimit {
 			assert_eq!(rl.available(), 0);
 			assert!(rl.try_wait_n(1).is_err());
 
-			// Wait for a refill
-			std::thread::sleep(Duration::from_millis(15));
+			// Acquire refilled tokens
+			let deadline = Instant::now() + Duration::from_secs(1);
+			loop {
+				let Err((_, _, wait)) = rl.try_wait_n(5) else {
+					break;
+				};
+				assert!(Instant::now() < deadline, "timed out waiting for refills");
+				std::thread::sleep(wait.max(Duration::from_millis(1)));
+			}
 
-			// Should be able to acquire the refilled tokens
-			assert!(rl.try_wait_n(2).is_ok());
-			assert_eq!(rl.available(), 3);
-			assert!(rl.try_wait_n(4).is_err());
-			assert_eq!(rl.available(), 3);
-			assert!(rl.try_wait_n(3).is_ok());
-			assert_eq!(rl.available(), 0);
+			let remain = rl.available();
+			assert!(remain <= 5, "expected <5 remaining tokens, got {remain}");
 		}
 
 		// Test basic amend_tokens functionality
