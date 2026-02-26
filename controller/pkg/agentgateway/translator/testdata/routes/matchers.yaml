@@ -44,7 +44,7 @@ output:
         weight: 1
       hostnames:
       - api.example.com
-      key: default/exact-match-route.0.0.http
+      key: default/exact-match-route.0.http
       listenerKey: default/test-gateway.http
       matches:
       - headers:
@@ -70,7 +70,7 @@ output:
         weight: 1
       hostnames:
       - api.example.com
-      key: default/exact-match-route.1.0.http
+      key: default/exact-match-route.1.http
       listenerKey: default/test-gateway.http
       matches:
       - path:

@@ -151,7 +151,7 @@ output:
         weight: 1
       hostnames:
       - example.com
-      key: default/request-multiple-mirrors-headers.0.0.http
+      key: default/request-multiple-mirrors-headers.0.http
       listenerKey: default/test-gateway.http
       matches:
       - path:
@@ -203,7 +203,7 @@ output:
         weight: 1
       hostnames:
       - example.com
-      key: default/request-multiple-mirrors-headers.1.0.http
+      key: default/request-multiple-mirrors-headers.1.http
       listenerKey: default/test-gateway.http
       matches:
       - path:
@@ -238,7 +238,7 @@ output:
         weight: 1
       hostnames:
       - example.com
-      key: default/request-multiple-mirrors-headers.2.0.http
+      key: default/request-multiple-mirrors-headers.2.http
       listenerKey: default/test-gateway.http
       matches:
       - path:
@@ -266,7 +266,7 @@ output:
     route:
       hostnames:
       - example.com
-      key: default/request-multiple-mirrors-headers.3.0.http
+      key: default/request-multiple-mirrors-headers.3.http
       listenerKey: default/test-gateway.http
       matches:
       - path:
@@ -293,7 +293,7 @@ output:
         weight: 1
       hostnames:
       - example.com
-      key: default/request-multiple-mirrors-headers.4.0.http
+      key: default/request-multiple-mirrors-headers.4.http
       listenerKey: default/test-gateway.http
       matches:
       - path:
@@ -319,7 +319,7 @@ output:
         weight: 1
       hostnames:
       - example.com
-      key: default/request-multiple-mirrors-headers.5.0.http
+      key: default/request-multiple-mirrors-headers.5.http
       listenerKey: default/test-gateway.http
       matches:
       - path:
@@ -347,7 +347,7 @@ output:
     route:
       hostnames:
       - example.com
-      key: default/request-multiple-mirrors-headers.6.0.http
+      key: default/request-multiple-mirrors-headers.6.http
       listenerKey: default/test-gateway.http
       matches:
       - path:

@@ -106,7 +106,7 @@ output:
         weight: 1
       hostnames:
       - external.example.com
-      key: default/external-service-route.0.0.http
+      key: default/external-service-route.0.http
       listenerKey: default/example-gateway.http
       name:
         kind: HTTPRoute

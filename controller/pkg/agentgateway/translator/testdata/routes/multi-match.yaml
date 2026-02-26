@@ -12,7 +12,10 @@ spec:
   - matches:
     - path:
         type: PathPrefix
-        value: /api
+        value: /api1
+    - path:
+        type: PathPrefix
+        value: /api2
     backendRefs:
     - name: test-service
       port: 80
@@ -37,7 +40,9 @@ output:
       listenerKey: default/test-gateway.http
       matches:
       - path:
-          pathPrefix: /api
+          pathPrefix: /api1
+      - path:
+          pathPrefix: /api2
       name:
         kind: HTTPRoute
         name: test-route

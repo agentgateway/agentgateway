@@ -41,9 +41,9 @@ import (
 
 // ConvertHTTPRouteToAgw converts a HTTPRouteRule to an agentgateway HTTPRoute
 func ConvertHTTPRouteToAgw(ctx RouteContext, r gwv1.HTTPRouteRule,
-	obj *gwv1.HTTPRoute, pos int, matchPos int,
+	obj *gwv1.HTTPRoute, pos int,
 ) (*api.Route, *reporter.RouteCondition) {
-	routeRuleKey := strconv.Itoa(pos) + "." + strconv.Itoa(matchPos)
+	routeRuleKey := strconv.Itoa(pos)
 	res := &api.Route{
 		// unique for route rule
 		Key:  utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey),

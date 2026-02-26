@@ -121,7 +121,7 @@ output:
             hostname: infra-backend-v2.default.svc.cluster.local
             namespace: default
         weight: 1
-      key: default/test-route.0.0.http
+      key: default/test-route.0.http
       listenerKey: default/test-gateway.http
       name:
         kind: HTTPRoute

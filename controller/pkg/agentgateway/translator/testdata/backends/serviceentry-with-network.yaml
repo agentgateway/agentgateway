@@ -150,7 +150,7 @@ output:
         weight: 1
       hostnames:
       - api.example.com
-      key: default/multi-network-route.0.0.http
+      key: default/multi-network-route.0.http
       listenerKey: default/example-gateway.http
       name:
         kind: HTTPRoute

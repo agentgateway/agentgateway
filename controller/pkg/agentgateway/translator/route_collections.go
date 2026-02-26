@@ -49,19 +49,9 @@ func AgwRouteCollection(
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
-					// split the rule to make sure each rule has up to one match
-					matches := slices.Reference(r.Matches)
-					if len(matches) == 0 {
-						matches = append(matches, nil)
-					}
-					for idx, m := range matches {
-						if m != nil {
-							r.Matches = []gwv1.HTTPRouteMatch{*m}
-						}
-						res, err := ConvertHTTPRouteToAgw(ctx, r, obj, n, idx)
-						if !yield(AgwRoute{Route: res}, err) {
-							return
-						}
+					res, err := ConvertHTTPRouteToAgw(ctx, r, obj, n)
+					if !yield(AgwRoute{Route: res}, err) {
+						return
 					}
 				}
 			}
