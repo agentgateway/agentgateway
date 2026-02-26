@@ -30,6 +30,9 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
+      # Help debug what exact was input for this since Github doesn't expose it.
+      - name: Output Inputs
+        run: echo "${{ toJSON(github.event.inputs) }}"
       - name: Set canonical VERSION
         id: version
         run: |
@@ -557,8 +560,25 @@ jobs:
       with:
         files: outputs/agentgateway-*
         tag_name: ${{ github.ref_name }}
-        body: "Automated release of ${{ github.ref_name }}."
         generate_release_notes: true
+        body: |
+          🎉 Welcome to the ${{ env.VERSION }} release of the agentgateway project!
+
+          ## Artifacts
+
+          **Docker images** are available:
+          * `cr.agentgateway.dev/agentgateway:${{ env.VERSION }}`
+          * `cr.agentgateway.dev/controller:${{ env.VERSION }}`
+
+          **Helm charts** are available:
+          * `cr.agentgateway.dev/charts/agentgateway:${{ env.VERSION }}`
+          * `cr.agentgateway.dev/charts/agentgateway-crds:${{ env.VERSION }}`
+
+          **Binaries** are available below.
+
+          ## Quick Start
+
+          Follow the [Kubernetes](https://agentgateway.dev/docs/kubernetes/latest/quickstart/) or [Standalone](https://agentgateway.dev/docs/standalone/latest/quickstart/) quick start guide to get started!
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       if: startsWith(github.ref, 'refs/tags/')
