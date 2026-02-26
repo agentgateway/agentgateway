@@ -73,6 +73,49 @@ func TestOverlayApplier_ApplyOverlays_MetadataLabels(t *testing.T) {
 	assert.Equal(t, "existing-value", result.Labels["existing-label"])
 }
 
+func TestOverlayApplier_ApplyOverlays_MetadataLabelDeletion(t *testing.T) {
+	// Empty string values in overlay labels should delete existing keys.
+	// This is how YAML null is represented in map[string]string.
+	params := &agentgateway.AgentgatewayParameters{
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
+				Deployment: &shared.KubernetesResourceOverlay{
+					Metadata: &shared.ObjectMetadata{
+						Labels: map[string]string{
+							"label-to-delete": "",
+							"new-label":       "new-value",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	applier := NewOverlayApplier(params)
+	deployment := &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-deployment",
+			Labels: map[string]string{
+				"label-to-delete": "old-value",
+				"label-to-keep":   "keep-value",
+			},
+		},
+	}
+	objs := []client.Object{deployment}
+
+	objs, err := applier.ApplyOverlays(objs)
+	require.NoError(t, err)
+
+	result := objs[0].(*appsv1.Deployment)
+	assert.NotContains(t, result.Labels, "label-to-delete", "empty string overlay value should delete the label")
+	assert.Equal(t, "keep-value", result.Labels["label-to-keep"], "unaffected labels should remain")
+	assert.Equal(t, "new-value", result.Labels["new-label"], "new labels should be added")
+}
+
 func TestOverlayApplier_ApplyOverlays_MetadataAnnotations(t *testing.T) {
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{

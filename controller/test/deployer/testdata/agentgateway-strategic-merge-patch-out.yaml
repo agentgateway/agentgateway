@@ -67,7 +67,6 @@ metadata:
     deployment-overlay-annotation: from-overlay
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: ""
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     deployment-overlay-label1: from-overlay

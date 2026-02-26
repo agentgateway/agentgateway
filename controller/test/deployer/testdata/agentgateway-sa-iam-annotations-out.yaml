@@ -60,7 +60,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app.kubernetes.io/instance: ""
     app.kubernetes.io/managed-by: kgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1

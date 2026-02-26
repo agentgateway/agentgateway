@@ -237,9 +237,14 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 				assert.Contains(t, outputYaml, "service-overlay-annotation: from-overlay",
 					"service annotation from overlay should be present")
 
-				// Label nulled to empty string
-				assert.Contains(t, outputYaml, `app.kubernetes.io/managed-by: ""`,
-					"label should be nulled to empty string")
+				// Label removed from Deployment via null value in overlay.
+				// Verify managed-by is absent from the Deployment labels by checking
+				// that instance is immediately followed by name (no managed-by between them).
+				// This substring only appears in the Deployment section (other resources
+				// still have managed-by between these labels).
+				assert.Contains(t, outputYaml,
+					"app.kubernetes.io/instance: gw\n    app.kubernetes.io/name: gw\n    app.kubernetes.io/version: 1.0.0-ci1\n    deployment-overlay-label1",
+					"managed-by label should be removed from Deployment via null overlay")
 
 				// Volume mount added via merge
 				assert.Contains(t, outputYaml, "mountPath: /etc/custom-config",
