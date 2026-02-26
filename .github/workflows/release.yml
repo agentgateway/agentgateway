@@ -537,6 +537,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
     steps:
     - name: Download Artifacts
       uses: actions/download-artifact@v4
