@@ -446,9 +446,8 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 			HeaderName::from_static("x-agent-name"),
 			HeaderValue::from_static(agent_name),
 		);
-		let config =
-			StreamableHttpClientTransportConfig::with_uri(format!("http://{addr}/mcp"))
-				.custom_headers(headers);
+		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{addr}/mcp"))
+			.custom_headers(headers);
 		let transport = StreamableHttpClientTransport::from_config(config);
 		let client_info = ClientInfo {
 			meta: None,

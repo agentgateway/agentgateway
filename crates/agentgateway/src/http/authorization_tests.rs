@@ -217,10 +217,7 @@ fn test_stacked_deny_policies() {
 	assert_matches!(rs.validate(&exec), false);
 
 	// "echo" is not denied by either policy, so it should be allowed
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"echo".to_string(),
-	));
+	let mcp = ResourceType::Tool(ResourceId::new("server".to_string(), "echo".to_string()));
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	assert_matches!(rs.validate(&exec), true);
 }
