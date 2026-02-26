@@ -17,7 +17,10 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::FileInlineOrRemote;
 use crate::store::{BackendPolicies, Stores};
 use crate::types::agent::{Backend, ResourceName, SimpleBackend, Target};
-use crate::types::local::{LocalBackend, LocalMcpBackend, LocalMcpTarget, LocalMcpTargetSpec, McpBackendHost, McpStatefulMode};
+use crate::types::local::{
+	LocalBackend, LocalMcpBackend, LocalMcpTarget, LocalMcpTargetSpec, McpBackendHost,
+	McpStatefulMode,
+};
 use crate::{BackendConfig, ProxyInputs, client, mcp};
 
 // Helper to create a handler and mock server for tests
@@ -937,199 +940,207 @@ async fn test_call_tool_structured_content_fallback() {
 }
 
 #[tokio::test]
- async fn test_openapi_from_url() {
- 	// Test creating LocalMcpTargetSpec::OpenAPI with URL schema and converting to runtime backend
- 	let server = MockServer::start().await;
+async fn test_openapi_from_url() {
+	// Test creating LocalMcpTargetSpec::OpenAPI with URL schema and converting to runtime backend
+	let server = MockServer::start().await;
 
-    // Mock OpenAPI schema response
- 	let openapi_json = json!({
- 		"openapi": "3.0.0",
- 		"info": {
- 			"title": "User API",
- 			"version": "1.0.0"
- 		},
- 		"paths": {
- 			"/users/{user_id}": {
- 				"get": {
- 					"summary": "Get user details",
- 					"parameters": [
- 						{
- 							"name": "user_id",
- 							"in": "path",
- 							"required": true,
- 							"schema": {
- 								"type": "string"
- 							}
- 						}
- 					],
- 					"responses": {
- 						"200": {
- 							"description": "User details",
- 							"content": {
- 								"application/json": {
- 									"schema": {
- 										"type": "object",
- 										"properties": {
- 											"id": {"type": "string"},
- 											"name": {"type": "string"}
- 										}
- 									}
- 								}
- 							}
- 						}
- 					}
- 				}
- 			},
- 			"/users": {
- 				"post": {
- 					"summary": "Create a new user",
- 					"requestBody": {
- 						"required": true,
- 						"content": {
- 							"application/json": {
- 								"schema": {
- 									"type": "object",
- 									"properties": {
- 										"name": {"type": "string"},
- 										"email": {"type": "string"}
- 									},
- 									"required": ["name", "email"]
- 								}
- 							}
- 						}
- 					},
- 					"responses": {
- 						"201": {
- 							"description": "User created",
- 							"content": {
- 								"application/json": {
- 									"schema": {
- 										"type": "object",
- 										"properties": {
- 											"id": {"type": "string"},
- 											"name": {"type": "string"},
- 											"email": {"type": "string"}
- 										}
- 									}
- 								}
- 							}
- 						}
- 					}
- 				}
- 			}
- 		}
- 	});
+	// Mock OpenAPI schema response
+	let openapi_json = json!({
+		"openapi": "3.0.0",
+		"info": {
+			"title": "User API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/users/{user_id}": {
+				"get": {
+					"summary": "Get user details",
+					"parameters": [
+						{
+							"name": "user_id",
+							"in": "path",
+							"required": true,
+							"schema": {
+								"type": "string"
+							}
+						}
+					],
+					"responses": {
+						"200": {
+							"description": "User details",
+							"content": {
+								"application/json": {
+									"schema": {
+										"type": "object",
+										"properties": {
+											"id": {"type": "string"},
+											"name": {"type": "string"}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"/users": {
+				"post": {
+					"summary": "Create a new user",
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"name": {"type": "string"},
+										"email": {"type": "string"}
+									},
+									"required": ["name", "email"]
+								}
+							}
+						}
+					},
+					"responses": {
+						"201": {
+							"description": "User created",
+							"content": {
+								"application/json": {
+									"schema": {
+										"type": "object",
+										"properties": {
+											"id": {"type": "string"},
+											"name": {"type": "string"},
+											"email": {"type": "string"}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	});
 
- 	Mock::given(method("GET"))
- 		.and(path("/openapi.json"))
- 		.respond_with(ResponseTemplate::new(200).set_body_json(&openapi_json))
- 		.mount(&server)
- 		.await;
+	Mock::given(method("GET"))
+		.and(path("/openapi.json"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&openapi_json))
+		.mount(&server)
+		.await;
 
- 	// Create client
- 	let client = Client::new(
- 		&client::Config {
- 			resolver_cfg: ResolverConfig::default(),
- 			resolver_opts: ResolverOpts::default(),
- 		},
- 		None,
- 		BackendConfig::default(),
- 		None,
- 	);
+	// Create client
+	let client = Client::new(
+		&client::Config {
+			resolver_cfg: ResolverConfig::default(),
+			resolver_opts: ResolverOpts::default(),
+		},
+		None,
+		BackendConfig::default(),
+		None,
+	);
 
- 	// Create LocalMcpTargetSpec::OpenAPI with remote URL schema
- 	let schema_url = format!("{}/openapi.json", server.uri());
+	// Create LocalMcpTargetSpec::OpenAPI with remote URL schema
+	let schema_url = format!("{}/openapi.json", server.uri());
 
- 	// Use serde_json to create McpBackendHost since fields are private
- 	let backend_json = json!({
- 		"host": "https://api.users.com"
- 	});
- 	let backend: McpBackendHost = serde_json::from_value(backend_json).unwrap();
+	// Use serde_json to create McpBackendHost since fields are private
+	let backend_json = json!({
+		"host": "https://api.users.com"
+	});
+	let backend: McpBackendHost = serde_json::from_value(backend_json).unwrap();
 
- 	let local_target_spec = LocalMcpTargetSpec::OpenAPI {
- 		backend,
- 		schema: FileInlineOrRemote::Remote {
- 			url: schema_url.parse().unwrap(),
- 		},
- 	};
+	let local_target_spec = LocalMcpTargetSpec::OpenAPI {
+		backend,
+		schema: FileInlineOrRemote::Remote {
+			url: schema_url.parse().unwrap(),
+		},
+	};
 
- 	// Create a LocalBackend::MCP to test the full conversion pipeline
- 	let local_backend = LocalBackend::MCP(LocalMcpBackend {
- 		targets: vec![Arc::new(LocalMcpTarget {
- 			name: "users-api".into(),
- 			spec: local_target_spec,
- 			policies: None,
- 		})],
- 		stateful_mode: McpStatefulMode::Stateful,
- 		prefix_mode: None,
- 	});
+	// Create a LocalBackend::MCP to test the full conversion pipeline
+	let local_backend = LocalBackend::MCP(LocalMcpBackend {
+		targets: vec![Arc::new(LocalMcpTarget {
+			name: "users-api".into(),
+			spec: local_target_spec,
+			policies: None,
+		})],
+		stateful_mode: McpStatefulMode::Stateful,
+		prefix_mode: None,
+	});
 
- 	// Convert to runtime backends
- 	let backend_name = ResourceName::new("test-users".into(), "".into());
- 	let result = local_backend.as_backends(backend_name, client).await;
+	// Convert to runtime backends
+	let backend_name = ResourceName::new("test-users".into(), "".into());
+	let result = local_backend.as_backends(backend_name, client).await;
 
- 	// Verify the conversion succeeded
- 	assert!(result.is_ok(), "Should successfully convert LocalBackend::MCP with remote OpenAPI schema");
- 	let backends = result.unwrap();
+	// Verify the conversion succeeded
+	assert!(
+		result.is_ok(),
+		"Should successfully convert LocalBackend::MCP with remote OpenAPI schema"
+	);
+	let backends = result.unwrap();
 
- 	// Should have at least one backend
- 	assert!(!backends.is_empty(), "Should have at least one backend");
+	// Should have at least one backend
+	assert!(!backends.is_empty(), "Should have at least one backend");
 
- 	// Find the MCP backend
- 	let mcp_backend = backends.iter().find(|b| matches!(b.backend, Backend::MCP(_, _)));
- 	assert!(mcp_backend.is_some(), "Should contain an MCP backend");
+	// Find the MCP backend
+	let mcp_backend = backends
+		.iter()
+		.find(|b| matches!(b.backend, Backend::MCP(_, _)));
+	assert!(mcp_backend.is_some(), "Should contain an MCP backend");
 
- 	if let Some(backend_with_policies) = mcp_backend {
- 		if let Backend::MCP(_, mcp_backend) = &backend_with_policies.backend {
- 			assert_eq!(mcp_backend.targets.len(), 1);
+	if let Some(backend_with_policies) = mcp_backend {
+		if let Backend::MCP(_, mcp_backend) = &backend_with_policies.backend {
+			assert_eq!(mcp_backend.targets.len(), 1);
 
- 			// Verify the target was converted to OpenAPI
- 			let target = &mcp_backend.targets[0];
- 			assert_eq!(target.name.as_str(), "users-api");
+			// Verify the target was converted to OpenAPI
+			let target = &mcp_backend.targets[0];
+			assert_eq!(target.name.as_str(), "users-api");
 
- 			// Verify it's an OpenAPI target spec with the fetched schema
- 			if let crate::types::agent::McpTargetSpec::OpenAPI(openapi_target) = &target.spec {
- 				let schema = &openapi_target.schema;
- 				assert_eq!(schema.openapi, "3.0.0");
- 				assert_eq!(schema.info.title, "User API");
- 				assert_eq!(schema.info.version, "1.0.0");
+			// Verify it's an OpenAPI target spec with the fetched schema
+			if let crate::types::agent::McpTargetSpec::OpenAPI(openapi_target) = &target.spec {
+				let schema = &openapi_target.schema;
+				assert_eq!(schema.openapi, "3.0.0");
+				assert_eq!(schema.info.title, "User API");
+				assert_eq!(schema.info.version, "1.0.0");
 
- 				// Check if paths contains the expected paths
- 				let has_users_path = schema.paths.paths.contains_key("/users");
- 				assert!(has_users_path, "Schema should contain /users path");
+				// Check if paths contains the expected paths
+				let has_users_path = schema.paths.paths.contains_key("/users");
+				assert!(has_users_path, "Schema should contain /users path");
 
- 				let has_users_id_path = schema.paths.paths.contains_key("/users/{user_id}");
- 				assert!(has_users_id_path, "Schema should contain /users/{{user_id}} path");
+				let has_users_id_path = schema.paths.paths.contains_key("/users/{user_id}");
+				assert!(
+					has_users_id_path,
+					"Schema should contain /users/{{user_id}} path"
+				);
 
- 				// Verify the path details were preserved
- 				if let Some(path_item_ref) = schema.paths.paths.get("/users/{user_id}") {
- 					match path_item_ref {
- 						ReferenceOr::Item(path_item) => {
- 							if let Some(get_op) = &path_item.get {
- 								assert_eq!(get_op.summary.as_deref(), Some("Get user details"));
- 							}
- 						}
- 						ReferenceOr::Reference { reference: _ } => {
- 							panic!("Expected path item, got reference");
- 						}
- 					}
- 				}
+				// Verify the path details were preserved
+				if let Some(path_item_ref) = schema.paths.paths.get("/users/{user_id}") {
+					match path_item_ref {
+						ReferenceOr::Item(path_item) => {
+							if let Some(get_op) = &path_item.get {
+								assert_eq!(get_op.summary.as_deref(), Some("Get user details"));
+							}
+						},
+						ReferenceOr::Reference { reference: _ } => {
+							panic!("Expected path item, got reference");
+						},
+					}
+				}
 
- 				if let Some(path_item_ref) = schema.paths.paths.get("/users") {
- 					match path_item_ref {
- 						ReferenceOr::Item(path_item) => {
- 							if let Some(post_op) = &path_item.post {
- 								assert_eq!(post_op.summary.as_deref(), Some("Create a new user"));
- 							}
- 						}
- 						ReferenceOr::Reference { reference: _ } => {
- 							panic!("Expected path item, got reference");
- 						}
- 					}
- 				}
- 			} else {
- 				panic!("Expected OpenAPI target spec, got {:?}", target.spec);
- 			}
- 		}
- 	}
- }
+				if let Some(path_item_ref) = schema.paths.paths.get("/users") {
+					match path_item_ref {
+						ReferenceOr::Item(path_item) => {
+							if let Some(post_op) = &path_item.post {
+								assert_eq!(post_op.summary.as_deref(), Some("Create a new user"));
+							}
+						},
+						ReferenceOr::Reference { reference: _ } => {
+							panic!("Expected path item, got reference");
+						},
+					}
+				}
+			} else {
+				panic!("Expected OpenAPI target spec, got {:?}", target.spec);
+			}
+		}
+	}
+}

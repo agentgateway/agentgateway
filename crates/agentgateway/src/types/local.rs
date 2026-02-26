@@ -438,7 +438,11 @@ impl LocalBackend {
 		})
 	}
 
-	pub async fn as_backends(&self, name: ResourceName, client: client::Client) -> anyhow::Result<Vec<BackendWithPolicies>> {
+	pub async fn as_backends(
+		&self,
+		name: ResourceName,
+		client: client::Client,
+	) -> anyhow::Result<Vec<BackendWithPolicies>> {
 		Ok(match self {
 			LocalBackend::Service { .. } => vec![], // These stay as references
 			LocalBackend::Opaque(tgt) => vec![Backend::Opaque(name, tgt.clone()).into()],
@@ -481,7 +485,7 @@ impl LocalBackend {
 							let openapi_schema = schema.load_openapi_schema(client.clone()).await?;
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
-								schema: openapi_schema.into()
+								schema: openapi_schema.into(),
 							})
 						},
 					};
@@ -1579,7 +1583,9 @@ async fn convert_mcp_config(
 		tunnel_protocol: TunnelProtocol::Direct,
 	};
 
-	let backends = LocalBackend::MCP(backend).as_backends(local_name(strng::new("mcp")), client).await?;
+	let backends = LocalBackend::MCP(backend)
+		.as_backends(local_name(strng::new("mcp")), client)
+		.await?;
 
 	Ok((bind, vec![], backends))
 }
@@ -1755,7 +1761,10 @@ async fn convert_route(
 			LocalBackend::Dynamic {} => BackendReference::Backend("dynamic".into()),
 			_ => BackendReference::Backend(strng::format!("/{}", backend_key)),
 		};
-		let backends = b.backend.as_backends(be_name.clone(), client.clone()).await?;
+		let backends = b
+			.backend
+			.as_backends(be_name.clone(), client.clone())
+			.await?;
 		let bref = RouteBackendReference {
 			weight: b.weight,
 			backend: bref,
