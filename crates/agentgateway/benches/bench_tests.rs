@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::Write;
-
 use divan::Bencher;
 // #[global_allocator]
 // static ALLOC: divan::AllocProfiler = divan::AllocProfiler::system();
@@ -23,6 +20,9 @@ pub fn with_profiling(f: impl FnOnce()) {
 
 #[cfg(target_family = "unix")]
 pub fn with_profiling(f: impl FnOnce()) {
+	use std::fs::File;
+	use std::io::Write;
+
 	use pprof::protos::Message;
 	let guard = pprof::ProfilerGuardBuilder::default()
 		.frequency(1000)
