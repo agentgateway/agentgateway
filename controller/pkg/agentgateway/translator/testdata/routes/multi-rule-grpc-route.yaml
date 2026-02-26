@@ -40,7 +40,7 @@ output:
         weight: 1
       hostnames:
       - grpc.example.com
-      key: default/multi-rule-grpc-route.0.http
+      key: default/multi-rule-grpc-route.0.grpc.http
       listenerKey: default/test-gateway.http
       matches:
       - path:
@@ -63,7 +63,7 @@ output:
         weight: 1
       hostnames:
       - grpc.example.com
-      key: default/multi-rule-grpc-route.1.http
+      key: default/multi-rule-grpc-route.1.grpc.http
       listenerKey: default/test-gateway.http
       matches:
       - path:

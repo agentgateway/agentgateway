@@ -29,7 +29,7 @@ output:
             hostname: example-grpc-svc.default.svc.cluster.local
             namespace: default
         weight: 1
-      key: default/example-grpc-route.0.http
+      key: default/example-grpc-route.0.grpc.http
       listenerKey: default/test-gateway.http
       matches:
       - path:

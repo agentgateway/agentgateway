@@ -181,7 +181,8 @@ func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 	routeRuleKey := strconv.Itoa(pos)
 	res := &api.Route{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey),
+		// Add .grpc suffix to distinguish from HTTP
+		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey) + ".grpc",
 		Name:        utils.RouteName(wellknown.GRPCRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
