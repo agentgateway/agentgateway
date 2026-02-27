@@ -136,87 +136,73 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 	return objs, nil
 }
 
-// applyOverlay applies a KubernetesResourceOverlay to a single object using
-// a unified strategic merge patch. Both metadata (labels/annotations) and spec
-// overlays are combined into a single SMP patch and applied atomically.
+// applyOverlay applies a KubernetesResourceOverlay to a single object.
 func applyOverlay(obj client.Object, overlay *shared.KubernetesResourceOverlay, gvk schema.GroupVersionKind) (client.Object, error) {
-	patch := make(map[string]json.RawMessage)
-
+	// Apply metadata first
 	if overlay.Metadata != nil {
-		metaPatch := buildMetadataPatch(overlay.Metadata)
-		if metaPatch != nil {
-			metaBytes, err := json.Marshal(metaPatch)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal metadata patch: %w", err)
+		if overlay.Metadata.Labels != nil {
+			existingLabels := obj.GetLabels()
+			if existingLabels == nil {
+				existingLabels = make(map[string]string)
 			}
-			patch["metadata"] = metaBytes
+			maps.Copy(existingLabels, overlay.Metadata.Labels)
+			obj.SetLabels(existingLabels)
+		}
+		if overlay.Metadata.Annotations != nil {
+			existingAnnotations := obj.GetAnnotations()
+			if existingAnnotations == nil {
+				existingAnnotations = make(map[string]string)
+			}
+			maps.Copy(existingAnnotations, overlay.Metadata.Annotations)
+			obj.SetAnnotations(existingAnnotations)
 		}
 	}
 
+	// Apply spec overlay using strategic merge patch if present
 	if overlay.Spec != nil && len(overlay.Spec.Raw) > 0 {
-		patch["spec"] = overlay.Spec.Raw
+		return applySpecOverlay(obj, overlay.Spec.Raw, gvk)
 	}
 
-	if len(patch) == 0 {
-		return obj, nil
-	}
+	return obj, nil
+}
 
+// applySpecOverlay applies a spec overlay using strategic merge patch semantics.
+func applySpecOverlay(obj client.Object, patchBytes []byte, gvk schema.GroupVersionKind) (client.Object, error) {
+	// Get the schema for strategic merge patch
 	dataObj, err := getDataObjectForGVK(gvk)
 	if err != nil {
 		return nil, fmt.Errorf("unsupported kind %s for strategic merge patch: %w", gvk.Kind, err)
 	}
 
+	// Serialize the original object to JSON
 	originalBytes, err := json.Marshal(obj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal original object: %w", err)
 	}
 
-	patchBytes, err := json.Marshal(patch)
+	// The patch from the user is for the spec field, but strategic merge patch
+	// expects the full object structure. Wrap the patch in a spec field.
+	wrappedPatch := map[string]json.RawMessage{
+		"spec": patchBytes,
+	}
+	wrappedPatchBytes, err := json.Marshal(wrappedPatch)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal patch: %w", err)
+		return nil, fmt.Errorf("failed to marshal wrapped patch: %w", err)
 	}
 
-	patchedBytes, err := strategicpatch.StrategicMergePatch(originalBytes, patchBytes, dataObj)
+	// Apply strategic merge patch
+	patchedBytes, err := strategicpatch.StrategicMergePatch(originalBytes, wrappedPatchBytes, dataObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply strategic merge patch: %w", err)
 	}
 
+	// Deserialize back to the object
 	patchedObj, err := deserializeToObject(patchedBytes, gvk)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize patched object: %w", err)
 	}
 
 	return patchedObj, nil
-}
-
-// buildMetadataPatch converts ObjectMetadata into a JSON-compatible map where
-// nil pointer values become nil (JSON null). SMP uses null to delete map keys.
-func buildMetadataPatch(meta *shared.ObjectMetadata) map[string]any {
-	result := make(map[string]any)
-	if meta.Labels != nil {
-		result["labels"] = ptrMapToNullable(meta.Labels)
-	}
-	if meta.Annotations != nil {
-		result["annotations"] = ptrMapToNullable(meta.Annotations)
-	}
-	if len(result) == 0 {
-		return nil
-	}
-	return result
-}
-
-// ptrMapToNullable converts a map[string]*string to map[string]any where
-// nil pointer values become nil (JSON null), enabling key deletion via SMP.
-func ptrMapToNullable(m map[string]*string) map[string]any {
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		if v == nil {
-			result[k] = nil
-		} else {
-			result[k] = *v
-		}
-	}
-	return result
 }
 
 // getDataObjectForGVK returns an empty object of the appropriate type for strategic merge patch.
@@ -265,22 +251,6 @@ func deserializeToObject(data []byte, gvk schema.GroupVersionKind) (client.Objec
 	clientObj.GetObjectKind().SetGroupVersionKind(gvk)
 
 	return clientObj, nil
-}
-
-// mergeMetadataMap merges overlay values into existing metadata.
-// Nil pointer values in the overlay cause the key to be deleted.
-func mergeMetadataMap(existing map[string]string, overlay map[string]*string) map[string]string {
-	if existing == nil {
-		existing = make(map[string]string)
-	}
-	for k, v := range overlay {
-		if v == nil {
-			delete(existing, k)
-		} else {
-			existing[k] = *v
-		}
-	}
-	return existing
 }
 
 // createPodDisruptionBudget creates a PodDisruptionBudget for the given Deployment
@@ -368,10 +338,20 @@ func createVerticalPodAutoscaler(deployment *appsv1.Deployment, overlay *shared.
 	// Apply the overlay - for VPA we need to handle it specially since it's unstructured
 	if overlay.Metadata != nil {
 		if overlay.Metadata.Labels != nil {
-			vpa.SetLabels(mergeMetadataMap(vpa.GetLabels(), overlay.Metadata.Labels))
+			existingLabels := vpa.GetLabels()
+			if existingLabels == nil {
+				existingLabels = make(map[string]string)
+			}
+			maps.Copy(existingLabels, overlay.Metadata.Labels)
+			vpa.SetLabels(existingLabels)
 		}
 		if overlay.Metadata.Annotations != nil {
-			vpa.SetAnnotations(mergeMetadataMap(vpa.GetAnnotations(), overlay.Metadata.Annotations))
+			existingAnnotations := vpa.GetAnnotations()
+			if existingAnnotations == nil {
+				existingAnnotations = make(map[string]string)
+			}
+			maps.Copy(existingAnnotations, overlay.Metadata.Annotations)
+			vpa.SetAnnotations(existingAnnotations)
 		}
 	}
 
