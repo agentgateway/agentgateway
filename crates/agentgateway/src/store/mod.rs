@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 pub use binds::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
-	RoutePath, RoutePolicies, Store as BindStore,
+	RoutePath, RoutePolicies, Store as BindStore, StoreUpdater as BindStoreUpdater,
 };
 use serde::{Serialize, Serializer};
 mod discovery;
@@ -12,7 +12,8 @@ use std::sync::RwLock;
 
 pub use binds::PreviousState as BindPreviousState;
 pub use discovery::{
-	LocalWorkload, PreviousState as DiscoveryPreviousState, Store as DiscoveryStore, WorkloadStore,
+	LocalWorkload, PreviousState as DiscoveryPreviousState, Store as DiscoveryStore,
+	StoreUpdater as DiscoveryStoreUpdater, WorkloadStore,
 };
 
 use crate::store;
