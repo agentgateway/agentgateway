@@ -1,5 +1,4 @@
 use std::io;
-use std::io::Cursor;
 use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -10,6 +9,8 @@ use ::http::uri::Authority;
 use agent_xds::ClientTrait;
 use anyhow::Error;
 use rustls::ClientConfig;
+use rustls::pki_types::CertificateDer;
+use rustls_pki_types::pem::PemObject;
 use secrecy::{ExposeSecret, SecretString};
 use tonic::body::Body;
 use tower::Service;
@@ -34,15 +35,13 @@ impl RootCert {
 		let roots = match self {
 			RootCert::File(f) => {
 				let certfile = tokio::fs::read(f).await?;
-				let mut reader = std::io::BufReader::new(Cursor::new(certfile));
-				let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+				let certs = CertificateDer::pem_slice_iter(&certfile).collect::<Result<Vec<_>, _>>()?;
 				let mut roots = rustls::RootCertStore::empty();
 				roots.add_parsable_certificates(certs);
 				roots
 			},
 			RootCert::Static(b) => {
-				let mut reader = std::io::BufReader::new(Cursor::new(b));
-				let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+				let certs = CertificateDer::pem_slice_iter(b).collect::<Result<Vec<_>, _>>()?;
 				let mut roots = rustls::RootCertStore::empty();
 				roots.add_parsable_certificates(certs);
 				roots

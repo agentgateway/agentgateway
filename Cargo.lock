@@ -226,7 +226,6 @@ dependencies = [
  "rstest",
  "rustls",
  "rustls-native-certs",
- "rustls-pemfile",
  "rustls-pki-types",
  "schemars 1.0.4",
  "secrecy",

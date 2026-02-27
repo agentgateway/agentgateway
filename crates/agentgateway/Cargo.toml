@@ -104,7 +104,6 @@ rmcp = { version = "0.16", features = [
     "transport-child-process",
 ] }
 rustls-native-certs.workspace = true
-rustls-pemfile.workspace = true
 rustls-pki-types.workspace = true
 rustls.workspace = true
 schemars = { workspace = true, optional = true }
