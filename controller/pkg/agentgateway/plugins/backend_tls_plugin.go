@@ -124,12 +124,14 @@ func translatePoliciesForBackendTLS(
 		}
 
 		var mtlsClientRef *gwv1.SecretObjectReference
+		var mtlsClientRefNamespace string
 		if uniqueGateways.Len() == 1 {
 			// TODO: support from multiple gateways.
 			// This will require us to have per-gateway policies, not global ones.
 			gtw := ptr.Flatten(krt.FetchOne(krtctx, gateways, krt.FilterKey(uniqueGateways.UnsortedList()[0].String())))
 			if gtw != nil && gtw.Spec.TLS != nil && gtw.Spec.TLS.Backend != nil && gtw.Spec.TLS.Backend.ClientCertificateRef != nil {
 				mtlsClientRef = gtw.Spec.TLS.Backend.ClientCertificateRef
+				mtlsClientRefNamespace = gtw.Namespace
 			}
 		}
 
@@ -207,7 +209,7 @@ func translatePoliciesForBackendTLS(
 			}
 			if !skip {
 				nn := types.NamespacedName{
-					Namespace: btls.Namespace,
+					Namespace: mtlsClientRefNamespace,
 					Name:      string(mtlsClientRef.Name),
 				}
 				scrt := ptr.Flatten(krt.FetchOne(krtctx, secrets, krt.FilterObjectName(nn)))
