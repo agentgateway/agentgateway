@@ -107,10 +107,6 @@ func RunForDirectory[Status any, Output any](t *testing.T, base string, run func
 	defaults, defaultsErr := file.AsString(filepath.Join(base, "_defaults.yaml"))
 	for _, f := range file.ReadDirOrFail(t, base) {
 		name := filepath.Base(f)
-		if name != "listenerset-hostnameconflict.yaml" {
-			// TODO DO NOT MERGE
-			continue
-		}
 		if name == "_defaults.yaml" {
 			continue
 		}

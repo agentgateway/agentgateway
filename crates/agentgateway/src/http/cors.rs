@@ -184,10 +184,6 @@ impl Cors {
 				return Ok(Default::default());
 			}
 		}
-		// If not a preflight, and origin is not allowed, do nothing (let it pass through without CORS headers).
-		if !is_preflight && !origin_allowed {
-			return Ok(Default::default());
-		}
 
 		if req.method() == Method::OPTIONS {
 			// Handle preflight request
