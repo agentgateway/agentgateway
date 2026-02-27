@@ -217,10 +217,9 @@ func translatePoliciesForBackendTLS(
 					if _, err := sslutils.ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
 						logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
 					} else {
-
+						res.Cert = scrt.Data[corev1.TLSCertKey]
+						res.Key = scrt.Data[corev1.TLSPrivateKeyKey]
 					}
-					res.Cert = scrt.Data[corev1.TLSCertKey]
-					res.Key = scrt.Data[corev1.TLSPrivateKeyKey]
 				}
 			}
 		}
