@@ -255,7 +255,6 @@ func (s *Syncer) buildFinalListenerSetStatus(
 			for _, r := range routes {
 				counts[r.ListenerName]++
 			}
-			log.Errorf("howardjohn: count %+v", counts)
 			for idx, l := range i.Obj.Spec.Listeners {
 				gatewayListener := krt.FetchOne(ctx, gatewayIndex, krt.FilterKey(utils.SectionedNamespacedName{
 					NamespacedName: types.NamespacedName{
@@ -265,7 +264,6 @@ func (s *Syncer) buildFinalListenerSetStatus(
 					SectionName: l.Name,
 				}.String()))
 				if len(gatewayListener.Objects) == 0 {
-					log.Errorf("howardjohn: skip gw")
 					continue
 				}
 

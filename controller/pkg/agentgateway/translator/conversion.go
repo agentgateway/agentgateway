@@ -889,7 +889,6 @@ func ReferenceAllowed(
 		if len(parent.Hostnames) > 0 {
 			matched := false
 			hostMatched := false
-			log.Errorf("howardjohn: check against hostnames %+v", parent.Hostnames)
 		out:
 			for _, routeHostname := range hostnames {
 				for _, parentHostNamespace := range parent.Hostnames {
@@ -1086,7 +1085,6 @@ func FilteredReferences(parents []RouteParentReference) []RouteParentReference {
 	ret := make([]RouteParentReference, 0, len(parents))
 	for _, p := range parents {
 		if p.DeniedReason != nil {
-			log.Errorf("howardjohn: skip parent %v: %v", p.ParentKey, p.DeniedReason)
 			// We should filter this out
 			continue
 		}
@@ -1260,9 +1258,7 @@ func BuildListener(
 		ok = false
 	}
 
-	log.Errorf("howardjohn: for %v.%v hostname matches are....", config.NamespacedName(obj), l.Name)
 	hostnames := buildHostnameMatch(ctx, obj.GetNamespace(), namespaces, l)
-	log.Errorf("howardjohn: for %v.%v hostname matches are %v", config.NamespacedName(obj), l.Name, hostnames)
 	// TODO: do we need this?
 	_, perr := listenerProtocolToAgw(l.Protocol)
 	if perr != nil {
@@ -1615,16 +1611,13 @@ func buildHostnameMatch(ctx krt.HandlerContext, localNamespace string, namespace
 func namespacesFromSelector(ctx krt.HandlerContext, localNamespace string, namespaceCol krt.Collection[*corev1.Namespace], lr *gwv1.AllowedRoutes) []string {
 	// Default is to allow only the same namespace
 	if lr == nil || lr.Namespaces == nil || lr.Namespaces.From == nil || *lr.Namespaces.From == gwv1.NamespacesFromSame {
-		log.Errorf("howardjohn: same namespace only %v", localNamespace)
 		return []string{localNamespace}
 	}
 	if *lr.Namespaces.From == gwv1.NamespacesFromAll {
-		log.Errorf("howardjohn: explicit all namespace")
 		return []string{"*"}
 	}
 
 	if lr.Namespaces.Selector == nil {
-		panic("howardjohn: wtf")
 		// Should never happen, invalid config
 		return []string{"*"}
 	}
@@ -1636,13 +1629,10 @@ func namespacesFromSelector(ctx krt.HandlerContext, localNamespace string, names
 	if err != nil {
 		return nil
 	}
-	log.Errorf("howardjohn: selector: %+v", ls)
 	namespaces := []string{}
 	namespaceObjects := krt.Fetch(ctx, namespaceCol)
-	log.Errorf("howardjohn: fetched %+v namespaces", len(namespaceObjects))
 	for _, ns := range namespaceObjects {
 		if ls.Matches(toNamespaceSet(ns.Name, ns.Labels)) {
-			log.Errorf("howardjohn: namespace match! %v", ns.Name)
 			namespaces = append(namespaces, ns.Name)
 		}
 	}
