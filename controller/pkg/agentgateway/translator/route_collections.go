@@ -590,11 +590,6 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 			if e.ParentKey.Kind != wellknown.GatewayGVK && e.ParentKey.Kind != wellknown.ListenerSetGVK {
 				return nil
 			}
-			k := RouteAttachment{
-				From:         from,
-				To:           e.ParentKey,
-				ListenerName: string(e.ParentSection),
-			}
 			return ptr.Of(&RouteAttachment{
 				From:         from,
 				To:           e.ParentKey,
