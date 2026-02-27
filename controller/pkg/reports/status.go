@@ -110,7 +110,6 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 			Message: resolvedRefsMessage,
 		})
 	} else if gw.Spec.TLS != nil && gw.Spec.TLS.Backend != nil {
-
 		gwReport.SetCondition(reporter.GatewayCondition{
 			Type:    gwv1.GatewayConditionResolvedRefs,
 			Status:  metav1.ConditionTrue,
