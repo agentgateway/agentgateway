@@ -54,6 +54,12 @@ status:
       status: "True"
       type: Accepted
     - lastTransitionTime: fake
+      message: invalid certificate reference /Secret/backend-client.default, secret
+        not found
+      reason: InvalidClientCertificateRef
+      status: "False"
+      type: ResolvedRefs
+    - lastTransitionTime: fake
       message: Successfully programmed Gateway
       reason: Programmed
       status: "True"

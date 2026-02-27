@@ -240,7 +240,7 @@ type TLSConfig_MTLSMode int32
 
 const (
 	TLSConfig_STRICT TLSConfig_MTLSMode = 0
-	// Request a TLS certificate, but if one is not presented or invalid, allow the connection
+	// Request a TLS certificate, but if one is not presented or invalid, allow the connection.
 	TLSConfig_ALLOW_INSECURE_FALLBACK TLSConfig_MTLSMode = 1
 )
 
