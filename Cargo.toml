@@ -30,7 +30,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.0.0" # We do not use this version
 edition = "2024"
 rust-version = "1.90"
 license = "Apache-2.0"

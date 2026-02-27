@@ -28,7 +28,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agent-celx"
-version = "0.7.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "agent-core"
-version = "0.7.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "agent-hbone"
-version = "0.7.0"
+version = "0.0.0"
 dependencies = [
  "agent-core",
  "anyhow",
@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "agentgateway"
-version = "0.7.0"
+version = "0.0.0"
 dependencies = [
  "a2a-sdk",
  "agent-celx",
@@ -273,7 +273,7 @@ dependencies = [
 
 [[package]]
 name = "agentgateway-app"
-version = "0.7.0"
+version = "0.0.0"
 dependencies = [
  "agent-core",
  "agentgateway",
