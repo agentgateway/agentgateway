@@ -8,6 +8,8 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::future::{poll_fn, Future};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::task::{self, Poll};
 use std::time::Duration;
 
@@ -25,25 +27,18 @@ use super::pool::{self, Ver};
 use crate::common::{lazy as hyper_lazy, timer, Exec, Lazy, SyncWrapper};
 
 type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+const H2_ESTIMATED_MAX_STREAMS: usize = 20;
 
 /// A Client to make outgoing HTTP requests.
 ///
 /// `Client` is cheap to clone and cloning is the recommended way to share a `Client`. The
 /// underlying connection pool will be reused.
 pub struct Client<C, B, PK: pool::Key = DefaultPoolKey> {
-	config: Config,
 	connector: C,
 	exec: Exec,
 	h1_builder: hyper::client::conn::http1::Builder,
 	h2_builder: hyper::client::conn::http2::Builder<Exec>,
 	pool: pool::Pool<PoolClient<B>, PK>,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Config {
-	retry_canceled_requests: bool,
-	set_host: bool,
-	ver: Ver,
 }
 
 /// Client errors
@@ -227,7 +222,7 @@ where
 					error,
 					connection_reused,
 				}) => {
-					if !self.config.retry_canceled_requests || !connection_reused {
+					if !connection_reused {
 						// if client disabled, don't retry
 						// a fresh connection means we definitely can't retry
 						return Err(error);
@@ -264,22 +259,20 @@ where
 				trace!("Connection is HTTP/1, but request was HTTP/2");
 			}
 
-			if self.config.set_host {
-				let uri = req.uri().clone();
-				req.headers_mut().entry(HOST).or_insert_with(|| {
-					let hostname = uri.host().expect("authority implies host");
-					if let Some(port) = get_non_default_port(&uri) {
-						let mut s = String::with_capacity(hostname.len() + port.as_str().len() + 1);
+			let uri = req.uri().clone();
+			req.headers_mut().entry(HOST).or_insert_with(|| {
+				let hostname = uri.host().expect("authority implies host");
+				if let Some(port) = get_non_default_port(&uri) {
+					let mut s = String::with_capacity(hostname.len() + port.as_str().len() + 1);
 						s.push_str(hostname);
 						s.push(':');
 						s.push_str(port.as_str());
-						HeaderValue::from_maybe_shared(hyper::body::Bytes::from(s))
-					} else {
-						HeaderValue::from_str(hostname)
-					}
-					.expect("uri host is valid header value")
-				});
-			}
+					HeaderValue::from_maybe_shared(hyper::body::Bytes::from(s))
+				} else {
+					HeaderValue::from_str(hostname)
+				}
+				.expect("uri host is valid header value")
+			});
 
 			// CONNECT always sends authority-form, so check it first...
 			if req.method() == Method::CONNECT {
@@ -293,12 +286,24 @@ where
 			authority_form(req.uri_mut());
 		}
 
+		if pooled.is_http2() {
+			if let Err(err) = poll_fn(|cx| pooled.poll_ready(cx)).await {
+				return Err(TrySendError::Retryable {
+					connection_reused: pooled.is_reused() || pooled.is_http2(),
+					error: e!(Canceled, err).with_connect_info(pooled.conn_info.clone()),
+					req,
+				});
+			}
+		}
+
 		let mut res = match pooled.try_send_request(req).await {
 			Ok(res) => res,
 			Err(mut err) => {
+				// TODO: Drop?
+				pooled.release_h2_stream_slot();
 				return if let Some(req) = err.take_message() {
 					Err(TrySendError::Retryable {
-						connection_reused: pooled.is_reused(),
+						connection_reused: pooled.is_reused() || pooled.is_http2(),
 						error: e!(Canceled, err.into_error()).with_connect_info(pooled.conn_info.clone()),
 						req,
 					})
@@ -306,13 +311,17 @@ where
 					Err(TrySendError::Nope(
 						e!(SendRequest, err.into_error()).with_connect_info(pooled.conn_info.clone()),
 					))
-				}
+				};
 			},
 		};
 
 		// If the Connector included 'extra' info, add to Response...
 		if let Some(extra) = &pooled.conn_info.extra {
 			extra.set(res.extensions_mut());
+		}
+
+		if let Some(guard) = pooled.take_h2_stream_guard() {
+			res.extensions_mut().insert(guard);
 		}
 
 		// If pooled is HTTP/2, we can toss this reference immediately.
@@ -357,10 +366,6 @@ where
 				Ok(pooled) => return Ok(pooled),
 				Err(ClientConnectError::Normal(err)) => return Err(err),
 				Err(ClientConnectError::CheckoutIsClosed(reason)) => {
-					if !self.config.retry_canceled_requests {
-						return Err(e!(Connect, reason));
-					}
-
 					trace!(
 						"unstarted request canceled, trying again (reason={:?})",
 						reason,
@@ -387,6 +392,42 @@ where
 				.map_err(ClientConnectError::Normal);
 		}
 
+		if dst.version == Version::HTTP_2 {
+			return match self
+				.pool
+				.h2_acquire(pool_key.clone(), H2_ESTIMATED_MAX_STREAMS)
+			{
+				pool::H2Acquire::Pooled(pooled) => Ok(pooled),
+				pool::H2Acquire::Checkout(checkout) => checkout.await.map_err(|err| {
+					if err.is_canceled() {
+						ClientConnectError::CheckoutIsClosed(err)
+					} else {
+						ClientConnectError::Normal(e!(Connect, err))
+					}
+				}),
+				pool::H2Acquire::Connecting(connecting) => {
+					drop(connecting);
+					match self.connect_to(dst, pool_key).await {
+						Ok(pooled) => Ok(pooled),
+						Err(err) if err.is_canceled() => {
+							self
+								.pool
+								.checkout(pool_key.clone())
+								.await
+								.map_err(|checkout_err| {
+									if checkout_err.is_canceled() {
+										ClientConnectError::CheckoutIsClosed(checkout_err)
+									} else {
+										ClientConnectError::Normal(e!(Connect, checkout_err))
+									}
+								})
+						},
+						Err(err) => Err(ClientConnectError::Normal(err)),
+					}
+				},
+			};
+		}
+
 		// This actually races 2 different futures to try to get a ready
 		// connection the fastest, and to reduce connection churn.
 		//
@@ -402,8 +443,6 @@ where
 		//   and then be inserted into the pool as an idle connection.
 		let checkout = self.pool.checkout(pool_key.clone());
 		let connect = self.connect_to(dst, pool_key);
-		let is_ver_h2 = self.config.ver == Ver::Http2;
-
 		// The order of the `select` is depended on below...
 
 		match future::select(checkout, connect).await {
@@ -453,13 +492,7 @@ where
 			},
 			Either::Right((Err(err), checkout)) => {
 				if err.is_canceled() {
-					checkout.await.map_err(move |err| {
-						if is_ver_h2 && err.is_canceled() {
-							ClientConnectError::CheckoutIsClosed(err)
-						} else {
-							ClientConnectError::Normal(e!(Connect, err))
-						}
-					})
+					checkout.await.map_err(ClientConnectError::CheckoutIsClosed)
 				} else {
 					Err(ClientConnectError::Normal(err))
 				}
@@ -497,7 +530,7 @@ where
 			// If the pool_key is for HTTP/2, and there is already a
 			// connection being established, then this can't take a
 			// second lock. The "connect_to" future is Canceled.
-			let connecting = match pool.connecting(pkc, ver) {
+			let connecting = match pool.connecting(pkc, ver, H2_ESTIMATED_MAX_STREAMS) {
 				Some(lock) => lock,
 				None => {
 					let canceled = e!(Canceled);
@@ -516,7 +549,7 @@ where
 						// then we need to convert our pool checkout into
 						// a single HTTP2 one.
 						let connecting = if connected.alpn == Alpn::H2 && !is_ver_h2 {
-							match connecting.alpn_h2(&pool) {
+							match connecting.alpn_h2(&pool, H2_ESTIMATED_MAX_STREAMS) {
 								Some(lock) => {
 									trace!("ALPN negotiated h2, updating pool");
 									lock
@@ -549,7 +582,10 @@ where
 									// Wait for 'conn' to ready up before we
 									// declare this tx as usable
 									tx.ready().await.map_err(Error::tx)?;
-									PoolTx::Http2(tx)
+									PoolTx::Http2 {
+										tx,
+										load: Arc::new(H2Load::new(H2_ESTIMATED_MAX_STREAMS)),
+									}
 								}
 							} else {
 								{
@@ -645,6 +681,7 @@ where
 								PoolClient {
 									conn_info: connected,
 									tx,
+									h2_slot_reserved: false,
 								},
 							))
 						}))
@@ -677,7 +714,6 @@ where
 impl<C: Clone, B, PK: pool::Key> Clone for Client<C, B, PK> {
 	fn clone(&self) -> Client<C, B, PK> {
 		Client {
-			config: self.config,
 			exec: self.exec.clone(),
 			h1_builder: self.h1_builder.clone(),
 			h2_builder: self.h2_builder.clone(),
@@ -727,11 +763,63 @@ impl Future for ResponseFuture {
 struct PoolClient<B> {
 	conn_info: Connected,
 	tx: PoolTx<B>,
+	h2_slot_reserved: bool,
 }
 
 enum PoolTx<B> {
 	Http1(hyper::client::conn::http1::SendRequest<B>),
-	Http2(hyper::client::conn::http2::SendRequest<B>),
+	Http2 {
+		tx: hyper::client::conn::http2::SendRequest<B>,
+		load: Arc<H2Load>,
+	},
+}
+
+struct H2Load {
+	active_streams: AtomicUsize,
+	max_streams: AtomicUsize,
+}
+
+impl H2Load {
+	fn new(max_streams: usize) -> Self {
+		Self {
+			active_streams: AtomicUsize::new(0),
+			max_streams: AtomicUsize::new(max_streams.max(1)),
+		}
+	}
+
+	fn try_reserve_stream_slot(&self) -> bool {
+		self
+			.active_streams
+			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+				let max = self.max_streams.load(Ordering::Acquire);
+				if active < max {
+					Some(active + 1)
+				} else {
+					None
+				}
+			})
+			.is_ok()
+	}
+
+	fn release_stream_slot(&self) {
+		let prev = self.active_streams.fetch_sub(1, Ordering::AcqRel);
+		debug_assert!(prev > 0, "active_streams must be > 0 before release");
+	}
+}
+
+#[derive(Clone)]
+struct H2StreamGuard {
+	load: Arc<H2Load>,
+	released: bool,
+}
+
+impl Drop for H2StreamGuard {
+	fn drop(&mut self) {
+		if !self.released {
+			self.released = true;
+			self.load.release_stream_slot();
+		}
+	}
 }
 
 impl<B> PoolClient<B> {
@@ -741,7 +829,7 @@ impl<B> PoolClient<B> {
 	) -> Poll<Result<(), Error>> {
 		match self.tx {
 			PoolTx::Http1(ref mut tx) => tx.poll_ready(cx).map_err(Error::closed),
-			PoolTx::Http2(_) => Poll::Ready(Ok(())),
+			PoolTx::Http2 { ref mut tx, .. } => tx.poll_ready(cx).map_err(Error::closed),
 		}
 	}
 
@@ -752,14 +840,43 @@ impl<B> PoolClient<B> {
 	fn is_http2(&self) -> bool {
 		match self.tx {
 			PoolTx::Http1(_) => false,
-			PoolTx::Http2(_) => true,
+			PoolTx::Http2 { .. } => true,
 		}
 	}
 
 	fn is_ready(&self) -> bool {
 		match self.tx {
 			PoolTx::Http1(ref tx) => tx.is_ready(),
-			PoolTx::Http2(ref tx) => tx.is_ready(),
+			// HTTP/2 readiness for pooled reuse is tracked via stream-slot accounting.
+			// A cloned SendRequest may report not-ready even though the shared
+			// connection is still reusable, so don't gate pool checkout on tx.is_ready().
+			PoolTx::Http2 { .. } => true,
+		}
+	}
+
+	fn take_h2_stream_guard(&mut self) -> Option<H2StreamGuard> {
+		if !self.h2_slot_reserved {
+			return None;
+		}
+
+		self.h2_slot_reserved = false;
+		match &self.tx {
+			PoolTx::Http2 { load, .. } => Some(H2StreamGuard {
+				load: Arc::clone(load),
+				released: false,
+			}),
+			PoolTx::Http1(_) => None,
+		}
+	}
+
+	fn release_h2_stream_slot(&mut self) {
+		if !self.h2_slot_reserved {
+			return;
+		}
+
+		self.h2_slot_reserved = false;
+		if let PoolTx::Http2 { load, .. } = &self.tx {
+			load.release_stream_slot();
 		}
 	}
 }
@@ -774,7 +891,7 @@ impl<B: Body + 'static> PoolClient<B> {
 	{
 		match self.tx {
 			PoolTx::Http1(ref mut tx) => Either::Left(tx.try_send_request(req)),
-			PoolTx::Http2(ref mut tx) => Either::Right(tx.try_send_request(req)),
+			PoolTx::Http2 { ref mut tx, .. } => Either::Right(tx.try_send_request(req)),
 		}
 	}
 }
@@ -784,7 +901,11 @@ where
 	B: Send + 'static,
 {
 	fn is_open(&self) -> bool {
-		self.is_ready()
+		match self.tx {
+			PoolTx::Http1(ref tx) => tx.is_ready(),
+			// Capacity is transient, but closed senders must be evicted.
+			PoolTx::Http2 { ref tx, .. } => !tx.is_closed(),
+		}
 	}
 
 	fn reserve(self) -> pool::Reservation<Self> {
@@ -792,17 +913,30 @@ where
 			PoolTx::Http1(tx) => pool::Reservation::Unique(PoolClient {
 				conn_info: self.conn_info,
 				tx: PoolTx::Http1(tx),
+				h2_slot_reserved: false,
 			}),
-			PoolTx::Http2(tx) => {
-				let b = PoolClient {
+			PoolTx::Http2 { tx, load } => {
+				if !load.try_reserve_stream_slot() {
+					return pool::Reservation::Unavailable(PoolClient {
+						conn_info: self.conn_info,
+						tx: PoolTx::Http2 { tx, load },
+						h2_slot_reserved: false,
+					});
+				}
+				let pooled = PoolClient {
 					conn_info: self.conn_info.clone(),
-					tx: PoolTx::Http2(tx.clone()),
+					tx: PoolTx::Http2 {
+						tx: tx.clone(),
+						load: load.clone(),
+					},
+					h2_slot_reserved: false,
 				};
-				let a = PoolClient {
+				let checked_out = PoolClient {
 					conn_info: self.conn_info,
-					tx: PoolTx::Http2(tx),
+					tx: PoolTx::Http2 { tx, load },
+					h2_slot_reserved: true,
 				};
-				pool::Reservation::Shared(a, b)
+				pool::Reservation::Shared(pooled, checked_out)
 			},
 		}
 	}
@@ -903,7 +1037,6 @@ fn is_schema_secure(uri: &Uri) -> bool {
 /// ```
 #[derive(Clone)]
 pub struct Builder {
-	client_config: Config,
 	exec: Exec,
 	h1_builder: hyper::client::conn::http1::Builder,
 	h2_builder: hyper::client::conn::http2::Builder<Exec>,
@@ -919,11 +1052,6 @@ impl Builder {
 	{
 		let exec = Exec::new(executor);
 		Self {
-			client_config: Config {
-				retry_canceled_requests: true,
-				set_host: true,
-				ver: Ver::Auto,
-			},
 			exec: exec.clone(),
 			h1_builder: hyper::client::conn::http1::Builder::new(),
 			h2_builder: hyper::client::conn::http2::Builder::new(exec),
@@ -1170,29 +1298,6 @@ impl Builder {
 		self
 	}
 
-	/// Set whether HTTP/0.9 responses should be tolerated.
-	///
-	/// Default is false.
-	pub fn http09_responses(&mut self, val: bool) -> &mut Self {
-		self.h1_builder.http09_responses(val);
-		self
-	}
-
-	/// Set whether the connection **must** use HTTP/2.
-	///
-	/// The destination must either allow HTTP2 Prior Knowledge, or the
-	/// `Connect` should be configured to do use ALPN to upgrade to `h2`
-	/// as part of the connection process. This will not make the `Client`
-	/// utilize ALPN by itself.
-	///
-	/// Note that setting this to true prevents HTTP/1 from being allowed.
-	///
-	/// Default is false.
-	pub fn http2_only(&mut self, val: bool) -> &mut Self {
-		self.client_config.ver = if val { Ver::Http2 } else { Ver::Auto };
-		self
-	}
-
 	/// Configures the maximum number of pending reset streams allowed before a GOAWAY will be sent.
 	///
 	/// This will default to the default value set by the [`h2` crate](https://crates.io/crates/h2).
@@ -1356,35 +1461,6 @@ impl Builder {
 		self
 	}
 
-	/// Set whether to retry requests that get disrupted before ever starting
-	/// to write.
-	///
-	/// This means a request that is queued, and gets given an idle, reused
-	/// connection, and then encounters an error immediately as the idle
-	/// connection was found to be unusable.
-	///
-	/// When this is set to `false`, the related `ResponseFuture` would instead
-	/// resolve to an `Error::Cancel`.
-	///
-	/// Default is `true`.
-	#[inline]
-	pub fn retry_canceled_requests(&mut self, val: bool) -> &mut Self {
-		self.client_config.retry_canceled_requests = val;
-		self
-	}
-
-	/// Set whether to automatically add the `Host` header to requests.
-	///
-	/// If true, and a request does not include a `Host` header, one will be
-	/// added automatically, derived from the authority of the `Uri`.
-	///
-	/// Default is `true`.
-	#[inline]
-	pub fn set_host(&mut self, val: bool) -> &mut Self {
-		self.client_config.set_host = val;
-		self
-	}
-
 	/// Combine the configuration of this builder with a connector to create a `Client`, with a custom pooling key.
 	/// A function to extract the pool key from the request is required.
 	pub fn build<C, B, PK>(&self, connector: C) -> Client<C, B, PK>
@@ -1397,7 +1473,6 @@ impl Builder {
 		let exec = self.exec.clone();
 		let timer = self.pool_timer.clone();
 		Client {
-			config: self.client_config,
 			exec: exec.clone(),
 			h1_builder: self.h1_builder.clone(),
 			h2_builder: self.h2_builder.clone(),
@@ -1410,7 +1485,6 @@ impl Builder {
 impl fmt::Debug for Builder {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("Builder")
-			.field("client_config", &self.client_config)
 			.field("pool_config", &self.pool_config)
 			.finish()
 	}

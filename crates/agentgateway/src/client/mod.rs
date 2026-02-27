@@ -200,6 +200,7 @@ impl Connector {
 		transport: Transport,
 		http: bool,
 	) -> Result<Socket, http::Error> {
+		tracing::error!("howardjohn: start connect");
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
 		let tls = match transport.application() {
@@ -303,6 +304,7 @@ impl Connector {
 		);
 
 		socket.with_logging(LoggingMode::Upstream);
+		tracing::error!("howardjohn: done connect");
 		Ok(socket)
 	}
 
