@@ -129,7 +129,7 @@ impl Gateway {
 		Gateway { drain, pi }
 	}
 
-	pub async fn run(self) {
+	pub async fn run(self) -> anyhow::Result<()> {
 		let drain = self.drain.clone();
 		let subdrain = self.drain.clone();
 		let mut js = JoinSet::new();
@@ -172,9 +172,12 @@ impl Gateway {
 								.build()
 								.unwrap()
 								.block_on(async {
-									let _ = Self::run_bind(pi.clone(), subdrain.clone(), b.clone())
+									if let Err(e) = Self::run_bind(pi.clone(), subdrain.clone(), b.clone())
 										.in_current_span()
-										.await;
+										.await
+									{
+										panic!("bind task failed on core {}: {}", id.id, e);
+									}
 								})
 						})
 					})
@@ -202,7 +205,17 @@ impl Gateway {
 					handle_bind(&mut js, res);
 				}
 				Some(res) = js.join_next() => {
-					warn!("bind complete {res:?}");
+					match res {
+						Ok(Ok(())) => {
+							debug!("bind task completed successfully");
+						}
+						Ok(Err(e)) => {
+							return Err(e.context("bind task failed"));
+						}
+						Err(e) => {
+							return Err(anyhow::anyhow!("bind task panicked: {}", e));
+						}
+					}
 				}
 				_ = &mut wait => {
 					info!("stop listening for binds; drain started");
@@ -210,7 +223,7 @@ impl Gateway {
 						info!("bind complete {res:?}");
 					}
 					info!("binds drained");
-					return
+					return Ok(())
 				}
 			}
 		}

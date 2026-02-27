@@ -134,8 +134,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 			// Wait for XDS to be ready
 			let _ = xds_rx_for_proxy.changed().await;
 			// Now run
-			gw.run().in_current_span().await;
-			Ok(())
+			gw.run().in_current_span().await
 		}),
 	})?;
 
@@ -235,10 +234,14 @@ fn new_data_plane_pool(
 					match join_result {
 						Ok(result) => {
 							if let Err(e) = result {
-								warn!("data plane task failed: {e}");
+								error!("data plane task failed: {e}");
+								std::process::exit(1);
 							}
 						},
-						Err(e) => warn!("failed joining data plane task: {e}"),
+						Err(e) => {
+							error!("data plane task panicked: {e}");
+							std::process::exit(1);
+						}
 					}
 				}
 			}
