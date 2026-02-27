@@ -152,7 +152,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -274,7 +274,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests-musl
@@ -427,7 +427,7 @@ jobs:
         with:
           images: ${{ env.CONTROLLER_REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/controller-digests
@@ -569,12 +569,14 @@ jobs:
           ## Artifacts
 
           **Docker images** are available:
-          * `cr.agentgateway.dev/agentgateway:${{ env.VERSION }}`
-          * `cr.agentgateway.dev/controller:${{ env.VERSION }}`
+          * `cr.agentgateway.dev/agentgateway:v${{ env.VERSION }}`
+          * `cr.agentgateway.dev/controller:v${{ env.VERSION }}`
 
           **Helm charts** are available:
           * `cr.agentgateway.dev/charts/agentgateway:${{ env.VERSION }}`
+          * `cr.agentgateway.dev/charts/agentgateway:v${{ env.VERSION }}`
           * `cr.agentgateway.dev/charts/agentgateway-crds:${{ env.VERSION }}`
+          * `cr.agentgateway.dev/charts/agentgateway-crds:v${{ env.VERSION }}`
 
           **Binaries** are available below.
 
