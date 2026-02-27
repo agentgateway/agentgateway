@@ -33,9 +33,9 @@ Name|Version|License
 [google.golang.org/grpc](https://google.golang.org/grpc)|v1.79.0|Apache License 2.0
 [google.golang.org/protobuf](https://google.golang.org/protobuf)|v1.36.11|BSD 3-clause "New" or "Revised" License
 [helm/v3](https://helm.sh/helm/v3)|v3.20.0|Apache License 2.0
-[istio.io/api](https://istio.io/api)|v1.29.0-alpha.0.0.20260210161025-1d9832db7b28|Apache License 2.0
-[istio.io/client-go](https://istio.io/client-go)|v1.29.0-alpha.0.0.20260210161328-2c12cf6497ed|Apache License 2.0
-[istio.io/istio](https://istio.io/istio)|v0.0.0-20260212134635-24eab8800c50|Apache License 2.0
+[istio.io/api](https://istio.io/api)|v1.29.0-alpha.0.0.20260224232148-8364b3863ae8|Apache License 2.0
+[istio.io/client-go](https://istio.io/client-go)|v1.29.0-alpha.0.0.20260224232748-1f028d1029d4|Apache License 2.0
+[istio.io/istio](https://istio.io/istio)|v0.0.0-20260226223414-e4dd300708de|Apache License 2.0
 [k8s.io/api](https://k8s.io/api)|v0.35.1|Apache License 2.0
 [k8s.io/apiextensions-apiserver](https://k8s.io/apiextensions-apiserver)|v0.35.1|Apache License 2.0
 [k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.35.1|Apache License 2.0
@@ -44,9 +44,10 @@ Name|Version|License
 [k8s.io/utils](https://k8s.io/utils)|v0.0.0-20260210185600-b8788abfbbc2|Apache License 2.0
 [sigs.k8s.io/controller-runtime](https://sigs.k8s.io/controller-runtime)|v0.23.1|Apache License 2.0
 [sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.20.1|Apache License 2.0
-[sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.4.1|Apache License 2.0
+[sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.5.0|Apache License 2.0
 [sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v0.0.0-20260220060139-0714e2462e76|Apache License 2.0
 [gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260220060139-0714e2462e76|Apache License 2.0
+[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v0.0.0-20260227221300-1db2d092bd3c|Apache License 2.0
 [sigs.k8s.io/yaml](https://sigs.k8s.io/yaml)|v1.6.0|MIT License
 [cmd/goimports](https://golang.org/x/tools/cmd/goimports)|latest|MIT License
 [gogo/protobuf](https://github.com/gogo/protobuf)|latest|MIT License

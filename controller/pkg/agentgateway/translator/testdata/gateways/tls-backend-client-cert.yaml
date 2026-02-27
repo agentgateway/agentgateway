@@ -5,12 +5,17 @@ metadata:
   namespace: default
 spec:
   gatewayClassName: agentgateway
+  tls:
+    backend:
+      clientCertificateRef:
+        group: ""
+        kind: Secret
+        name: backend-client
+        namespace: default
   listeners:
-    - name: tls
-      port: 443
-      protocol: TLS
-      tls:
-        mode: Passthrough
+    - name: http
+      port: 80
+      protocol: HTTP
 ---
 # Output
 output:
@@ -19,21 +24,20 @@ output:
     Namespace: default
   resource:
     bind:
-      key: 443/default/test-gateway
-      port: 443
-      protocol: TLS
+      key: 80/default/test-gateway
+      port: 80
 - gateway:
     Name: test-gateway
     Namespace: default
   resource:
     listener:
-      bindKey: 443/default/test-gateway
-      key: default/test-gateway.tls
+      bindKey: 80/default/test-gateway
+      key: default/test-gateway.http
       name:
         gatewayName: test-gateway
         gatewayNamespace: default
-        listenerName: tls
-      protocol: TLS
+        listenerName: http
+      protocol: HTTP
 status:
 - apiVersion: gateway.networking.k8s.io/v1
   kind: Gateway
@@ -49,6 +53,12 @@ status:
       reason: Accepted
       status: "True"
       type: Accepted
+    - lastTransitionTime: fake
+      message: invalid certificate reference /Secret/backend-client.default, secret
+        not found
+      reason: InvalidClientCertificateRef
+      status: "False"
+      type: ResolvedRefs
     - lastTransitionTime: fake
       message: Successfully programmed Gateway
       reason: Programmed
@@ -73,11 +83,14 @@ status:
         status: "True"
         type: Programmed
       - lastTransitionTime: fake
-        message: No errors found
-        reason: ResolvedRefs
-        status: "True"
+        message: invalid certificate reference /Secret/backend-client.default, secret
+          not found
+        reason: InvalidClientCertificateRef
+        status: "False"
         type: ResolvedRefs
-      name: tls
+      name: http
       supportedKinds:
       - group: gateway.networking.k8s.io
-        kind: TLSRoute
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

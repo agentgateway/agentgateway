@@ -35,7 +35,7 @@ const (
 
 // TODO: refactor this struct + methods to better reflect the usage now in proxy_syncer
 
-func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attachedRoutes map[string]uint) *gwv1.GatewayStatus {
+func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attachedListeners int32) *gwv1.GatewayStatus {
 	gwReport := r.Gateway(&gw)
 	if gwReport == nil {
 		return nil
@@ -44,16 +44,13 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 	finalListeners := make([]gwv1.ListenerStatus, 0, len(gw.Spec.Listeners))
 	var invalidListeners []string
 	var invalidMessages []string
+	var resolvedRefsReason gwv1.GatewayConditionReason
+	var resolvedRefsMessage string
 
 	for _, lis := range gw.Spec.Listeners {
 		lisReport := gwReport.listener(string(lis.Name))
 		AddMissingListenerConditions(lisReport)
 		// Get attached routes for this listener
-		if attachedRoutes != nil {
-			if count, exists := attachedRoutes[string(lis.Name)]; exists {
-				lisReport.Status.AttachedRoutes = int32(count) //nolint:gosec // G115: route count is always non-negative
-			}
-		}
 
 		finalConditions := make([]metav1.Condition, 0, len(lisReport.Status.Conditions))
 		oldLisStatusIndex := slices.IndexFunc(gw.Status.Listeners, func(l gwv1.ListenerStatus) bool {
@@ -77,6 +74,14 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 					invalidMessages = append(invalidMessages, fmt.Sprintf("%s: %s", lis.Name, lisCondition.Message))
 				}
 			}
+
+			if lisCondition.Type == string(gwv1.ListenerConditionResolvedRefs) &&
+				lisCondition.Status == metav1.ConditionFalse &&
+				isGatewayBackendTLSResolvedRefsCondition(lisCondition.Reason, lisCondition.Message) &&
+				resolvedRefsReason == "" {
+				resolvedRefsReason = gwv1.GatewayConditionReason(lisCondition.Reason)
+				resolvedRefsMessage = lisCondition.Message
+			}
 		}
 		lisReport.Status.Conditions = finalConditions
 
@@ -96,6 +101,39 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 			Reason:  gwv1.GatewayReasonListenersNotValid,
 			Message: message,
 		})
+	}
+	if resolvedRefsReason != "" {
+		gwReport.SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionResolvedRefs,
+			Status:  metav1.ConditionFalse,
+			Reason:  resolvedRefsReason,
+			Message: resolvedRefsMessage,
+		})
+	} else if gw.Spec.TLS != nil && gw.Spec.TLS.Backend != nil {
+		gwReport.SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionResolvedRefs,
+			Status:  metav1.ConditionTrue,
+			Reason:  gwv1.GatewayReasonResolvedRefs,
+			Message: "All references were resolved",
+		})
+	}
+
+	if gw.Spec.TLS != nil && gw.Spec.TLS.Frontend != nil {
+		fe := gw.Spec.TLS.Frontend
+		hasInsecure := fe.Default.Validation != nil && fe.Default.Validation.Mode == gwv1.AllowInsecureFallback
+		for _, p := range fe.PerPort {
+			if p.TLS.Validation != nil && p.TLS.Validation.Mode == gwv1.AllowInsecureFallback {
+				hasInsecure = true
+			}
+		}
+		if hasInsecure {
+			gwReport.SetCondition(reporter.GatewayCondition{
+				Type:    gwv1.GatewayConditionInsecureFrontendValidationMode,
+				Status:  metav1.ConditionTrue,
+				Reason:  gwv1.GatewayReasonConfigurationChanged,
+				Message: "Insecure fallback mode enabled",
+			})
+		}
 	}
 
 	handleInvalidAddresses(gwReport, &gw)
@@ -124,7 +162,16 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 	finalGwStatus.Addresses = gw.Status.Addresses
 	finalGwStatus.Conditions = finalConditions
 	finalGwStatus.Listeners = finalListeners
+	finalGwStatus.AttachedListenerSets = &attachedListeners
 	return &finalGwStatus
+}
+
+func isGatewayBackendTLSResolvedRefsCondition(reason, message string) bool {
+	if reason == string(gwv1.GatewayReasonInvalidClientCertificateRef) {
+		return true
+	}
+	return reason == string(gwv1.GatewayReasonRefNotPermitted) &&
+		strings.Contains(message, "clientCertificateRef")
 }
 
 func handleInvalidAddresses(report *GatewayReport, g *gwv1.Gateway) {

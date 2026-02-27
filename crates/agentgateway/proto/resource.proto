@@ -150,6 +150,13 @@ message TLSConfig {
     TLS_V1_3 = 4;
   }
 
+  enum MTLSMode {
+    STRICT = 0;
+
+    // Request a TLS certificate, but if one is not presented or invalid, allow the connection.
+    ALLOW_INSECURE_FALLBACK = 1;
+  }
+
   // Cipher suites supported by agentgateway
   // Keep in sync with `crates/agentgateway/src/transport/tls.rs` (`ALL_CIPHER_SUITES`).
   enum CipherSuite {
@@ -176,6 +183,7 @@ message TLSConfig {
   repeated CipherSuite cipher_suites = 4;
   optional TLSVersion min_version = 5;
   optional TLSVersion max_version = 6;
+  MTLSMode mtls_mode = 7;
 }
 
 enum Protocol {

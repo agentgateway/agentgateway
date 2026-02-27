@@ -2080,6 +2080,7 @@ impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 			self.min_tls_version.map(Into::into),
 			self.max_tls_version.map(Into::into),
 			self.cipher_suites,
+			false,
 		)
 	}
 }

@@ -25,7 +25,9 @@ type ConfigErrorReason = string
 
 const (
 	// InvalidTLS indicates an issue with TLS settings
-	InvalidTLS = ConfigErrorReason(gwv1.ListenerReasonInvalidCertificateRef)
+	InvalidTLS       = ConfigErrorReason(gwv1.ListenerReasonInvalidCertificateRef)
+	InvalidTLSCA     = ConfigErrorReason(gwv1.ListenerReasonInvalidCACertificateRef)
+	InvalidTLSCAKind = ConfigErrorReason(gwv1.ListenerReasonInvalidCACertificateKind)
 	// InvalidListenerRefNotPermitted indicates a listener reference was not permitted
 	InvalidListenerRefNotPermitted = ConfigErrorReason(gwv1.ListenerReasonRefNotPermitted)
 )
@@ -138,10 +140,9 @@ func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
 	case gwv1.TCPProtocolType:
 		supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TCPRouteGVK)}
 	case gwv1.TLSProtocolType:
-		if l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModePassthrough {
-			supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TLSRouteGVK)}
-		} else {
-			supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TCPRouteGVK)}
+		supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TLSRouteGVK)}
+		if l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModeTerminate {
+			supported = append(supported, toRouteKind(wellknown.TCPRouteGVK))
 		}
 		// UDP route not support
 	}

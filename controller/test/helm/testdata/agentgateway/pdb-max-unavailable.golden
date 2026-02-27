@@ -164,6 +164,7 @@ rules:
   - gateways
   - grpcroutes
   - httproutes
+  - listenersets
   - referencegrants
   - tcproutes
   - tlsroutes
@@ -179,6 +180,7 @@ rules:
   - gateways/status
   - grpcroutes/status
   - httproutes/status
+  - listenersets/status
   - tcproutes/status
   - tlsroutes/status
   verbs:
@@ -195,21 +197,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - gateway.networking.x-k8s.io
-  resources:
-  - xlistenersets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - gateway.networking.x-k8s.io
-  resources:
-  - xlistenersets/status
-  verbs:
-  - patch
-  - update
 - apiGroups:
   - networking.istio.io
   resources:

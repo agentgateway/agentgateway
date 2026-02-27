@@ -456,25 +456,25 @@ spec:
           expression: 'request.headers["x-custom"]'
         remove:
           - http.method
-#---
-#apiVersion: agentgateway.dev/v1alpha1
-#kind: AgentgatewayPolicy
-#metadata:
-#  name: traffic-tracing-http
-#spec:
-#  targetRefs:
-#    - group: gateway.networking.k8s.io
-#      kind: Gateway
-#      name: dummy
-#  frontend:
-#    tracing:
-#      backendRef:
-#        name: otel-collector
-#        kind: Service
-#        port: 4318
-#      protocol: HTTP
-#      randomSampling: '0.1'
-#      clientSampling: '1.0'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-tracing-http
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    tracing:
+      backendRef:
+        name: otel-collector
+        kind: Service
+        port: 4318
+      protocol: HTTP
+      randomSampling: '0.1'
+      clientSampling: '1.0'
 #---
 #apiVersion: agentgateway.dev/v1alpha1
 #kind: AgentgatewayPolicy

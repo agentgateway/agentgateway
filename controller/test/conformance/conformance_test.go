@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"istio.io/istio/pkg/ptr"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -77,8 +78,28 @@ func TestConformance(t *testing.T) {
 		options.SkipTests = append(options.SkipTests, string(features.GatewayStaticAddressesFeature.Name))
 	}
 	options.Debug = true
+	options.TimeoutConfig.CreateTimeout = time.Second * 15
+	options.TimeoutConfig.DeleteTimeout = time.Second * 15
+	options.TimeoutConfig.GetTimeout = time.Second * 15
+	options.TimeoutConfig.GatewayMustHaveAddress = time.Second * 15
+	options.TimeoutConfig.GatewayMustHaveCondition = time.Second * 15
+	options.TimeoutConfig.GatewayStatusMustHaveListeners = time.Second * 15
+	options.TimeoutConfig.GatewayListenersMustHaveConditions = time.Second * 15
+	options.TimeoutConfig.ListenerSetMustHaveCondition = time.Second * 15
+	options.TimeoutConfig.ListenerSetListenersMustHaveConditions = time.Second * 15
+	options.TimeoutConfig.GWCMustBeAccepted = time.Second * 15
+	options.TimeoutConfig.HTTPRouteMustNotHaveParents = time.Second * 15
+	options.TimeoutConfig.HTTPRouteMustHaveCondition = time.Second * 15
+	options.TimeoutConfig.TLSRouteMustHaveCondition = time.Second * 15
+	options.TimeoutConfig.RouteMustHaveParents = time.Second * 15
+	options.TimeoutConfig.ManifestFetchTimeout = time.Second * 15
+	options.TimeoutConfig.MaxTimeToConsistency = time.Second * 15
+	options.TimeoutConfig.NamespacesMustBeReady = time.Second * 15
+	options.TimeoutConfig.RequestTimeout = time.Second * 15
+	options.TimeoutConfig.LatestObservedGenerationSet = time.Second * 15
+	options.TimeoutConfig.DefaultTestTimeout = time.Second * 15
 
-	t.Logf("Running conformance tests with\nprofiles: %+v\n", profiles)
+	t.Logf("Running conformance tests with\nprofiles: %+v %v\n", profiles, options.RunTest)
 	conformance.RunConformanceWithOptions(t, options)
 }
 

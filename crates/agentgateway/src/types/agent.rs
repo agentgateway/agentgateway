@@ -6,6 +6,7 @@ use std::io::Cursor;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use hashbrown::Equivalent;
@@ -16,6 +17,7 @@ use openapiv3::OpenAPI;
 use prometheus_client::encoding::EncodeLabelValue;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::server::danger::ClientCertVerifier;
 use rustls_pemfile::Item;
 use serde::{Serialize, Serializer};
 use serde_json::Value;
@@ -27,6 +29,7 @@ use crate::http::{
 };
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
+use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::local::SimpleLocalBackend;
 use crate::types::{agent, backend, frontend};
@@ -75,6 +78,8 @@ struct ServerTlsInputs {
 	key_pem: Vec<u8>,
 	// If present, require and verify client certificates using these roots.
 	root_pem: Option<Vec<u8>>,
+	// If true, request client certs but allow absent or invalid certs as insecure fallback.
+	allow_insecure_mtls: bool,
 	// Default ALPNs configured at creation time.
 	default_alpns: Alpns,
 }
@@ -124,6 +129,8 @@ pub struct ServerTLSConfig {
 	base_config: Option<Arc<ServerConfig>>,
 	/// Original inputs required to rebuild a fresh `ServerConfig` for a given profile.
 	inputs: Option<Arc<ServerTlsInputs>>,
+	/// Original strict verifier used when ALLOW_INSECURE_FALLBACK is enabled.
+	insecure_fallback_verifier: Option<Arc<dyn ClientCertVerifier>>,
 	per_profile_config: Arc<RwLock<HashMap<ServerTlsProfileKey, Arc<ServerConfig>>>>,
 }
 
@@ -141,6 +148,7 @@ impl ServerTLSConfig {
 		Self {
 			base_config: Some(config),
 			inputs: None,
+			insecure_fallback_verifier: None,
 			per_profile_config: Arc::new(Default::default()),
 		}
 	}
@@ -151,9 +159,19 @@ impl ServerTLSConfig {
 		root_pem: Option<Vec<u8>>,
 		default_alpns: Alpns,
 	) -> anyhow::Result<Self> {
-		Self::from_pem_with_profile(cert_pem, key_pem, root_pem, default_alpns, None, None, None)
+		Self::from_pem_with_profile(
+			cert_pem,
+			key_pem,
+			root_pem,
+			default_alpns,
+			None,
+			None,
+			None,
+			false,
+		)
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub fn from_pem_with_profile(
 		cert_pem: Vec<u8>,
 		key_pem: Vec<u8>,
@@ -162,24 +180,27 @@ impl ServerTLSConfig {
 		min_version: Option<TLSVersion>,
 		max_version: Option<TLSVersion>,
 		cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+		allow_insecure_mtls: bool,
 	) -> anyhow::Result<Self> {
 		let inputs = Arc::new(ServerTlsInputs {
 			cert_pem,
 			key_pem,
 			root_pem,
+			allow_insecure_mtls,
 			default_alpns,
 		});
 		let suites = cipher_suites.as_deref().filter(|s| !s.is_empty());
-		let base = Arc::new(Self::build_server_config(
+		let (base, insecure_fallback_verifier) = Self::build_server_config(
 			&inputs,
 			None,
 			min_version,
 			max_version,
 			suites.unwrap_or(&[]),
-		)?);
+		)?;
 		Ok(Self {
-			base_config: Some(base),
+			base_config: Some(Arc::new(base)),
 			inputs: Some(inputs),
+			insecure_fallback_verifier,
 			per_profile_config: Arc::new(Default::default()),
 		})
 	}
@@ -189,6 +210,7 @@ impl ServerTLSConfig {
 		Self {
 			base_config: None,
 			inputs: None,
+			insecure_fallback_verifier: None,
 			per_profile_config: Arc::new(Default::default()),
 		}
 	}
@@ -233,15 +255,49 @@ impl ServerTLSConfig {
 			return Ok(Arc::clone(cached_config));
 		}
 
-		let built = Arc::new(Self::build_server_config(
+		let (base, _insecure_fallback_verifier) = Self::build_server_config(
 			&inputs,
 			Some(&key.alpns),
 			key.min_version,
 			key.max_version,
 			&key.cipher_suites,
-		)?);
-		writer.insert(key, Arc::clone(&built));
-		Ok(built)
+		)?;
+		let base = Arc::new(base);
+		writer.insert(key.clone(), Arc::clone(&base));
+		Ok(base)
+	}
+
+	pub fn allow_insecure_mtls(&self) -> bool {
+		self
+			.inputs
+			.as_ref()
+			.is_some_and(|inputs| inputs.allow_insecure_mtls)
+	}
+
+	pub fn include_src_identity_for_connection(&self, conn: &rustls::ServerConnection) -> bool {
+		if !self.allow_insecure_mtls() {
+			return true;
+		}
+
+		let Some(peer_certs) = conn.peer_certificates() else {
+			return false;
+		};
+		let Some((end_entity, intermediates)) = peer_certs.split_first() else {
+			return false;
+		};
+
+		let Some(verifier) = self.insecure_fallback_verifier.as_ref() else {
+			return false;
+		};
+
+		let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+			Ok(duration) => rustls::pki_types::UnixTime::since_unix_epoch(duration),
+			Err(_) => return false,
+		};
+
+		verifier
+			.verify_client_cert(end_entity, intermediates, now)
+			.is_ok()
 	}
 
 	fn build_server_config(
@@ -250,7 +306,7 @@ impl ServerTLSConfig {
 		min_version: Option<TLSVersion>,
 		max_version: Option<TLSVersion>,
 		cipher_suites: &[crate::transport::tls::CipherSuite],
-	) -> anyhow::Result<ServerConfig> {
+	) -> anyhow::Result<(ServerConfig, Option<Arc<dyn ClientCertVerifier>>)> {
 		let provider = if cipher_suites.is_empty() {
 			crate::transport::tls::provider()
 		} else {
@@ -262,6 +318,8 @@ impl ServerTLSConfig {
 			.with_protocol_versions(&versions)
 			.expect("server config must be valid");
 
+		let mut insecure_fallback_verifier = None;
+
 		let scb = if let Some(root) = &inputs.root_pem {
 			let mut roots_store = rustls::RootCertStore::empty();
 			let mut reader = std::io::BufReader::new(Cursor::new(root.as_slice()));
@@ -272,6 +330,12 @@ impl ServerTLSConfig {
 				provider,
 			)
 			.build()?;
+			let verify: Arc<dyn ClientCertVerifier> = if inputs.allow_insecure_mtls {
+				insecure_fallback_verifier = Some(verify.clone());
+				tls::insecure::AllowInsecureMtlsVerifier::new(verify)
+			} else {
+				verify
+			};
 			scb.with_client_cert_verifier(verify)
 		} else {
 			scb.with_no_client_auth()
@@ -283,7 +347,7 @@ impl ServerTLSConfig {
 		sc.alpn_protocols = alpns
 			.map(|a| a.to_vec())
 			.unwrap_or_else(|| inputs.default_alpns.clone());
-		Ok(sc)
+		Ok((sc, insecure_fallback_verifier))
 	}
 }
 
@@ -382,6 +446,22 @@ impl ListenerProtocol {
 			ListenerProtocol::HTTPS(t) => Some(t.config_for(tls)),
 			ListenerProtocol::TLS(t) => t.as_ref().map(|t| t.config_for(tls)),
 			_ => None,
+		}
+	}
+
+	pub fn allow_insecure_mtls(&self) -> bool {
+		match self {
+			ListenerProtocol::HTTPS(t) => t.allow_insecure_mtls(),
+			ListenerProtocol::TLS(Some(t)) => t.allow_insecure_mtls(),
+			_ => false,
+		}
+	}
+
+	pub fn include_src_identity_for_connection(&self, conn: &rustls::ServerConnection) -> bool {
+		match self {
+			ListenerProtocol::HTTPS(t) => t.include_src_identity_for_connection(conn),
+			ListenerProtocol::TLS(Some(t)) => t.include_src_identity_for_connection(conn),
+			_ => true,
 		}
 	}
 }

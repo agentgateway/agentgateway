@@ -34,9 +34,9 @@ require (
 	google.golang.org/grpc v1.79.0
 	google.golang.org/protobuf v1.36.11
 	helm.sh/helm/v3 v3.20.0
-	istio.io/api v1.29.0-alpha.0.0.20260210161025-1d9832db7b28
-	istio.io/client-go v1.29.0-alpha.0.0.20260210161328-2c12cf6497ed
-	istio.io/istio v0.0.0-20260212134635-24eab8800c50
+	istio.io/api v1.29.0-alpha.0.0.20260224232148-8364b3863ae8
+	istio.io/client-go v1.29.0-alpha.0.0.20260224232748-1f028d1029d4
+	istio.io/istio v0.0.0-20260226223414-e4dd300708de
 	k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver v0.35.1
 	k8s.io/apimachinery v0.35.1
@@ -45,11 +45,14 @@ require (
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/controller-runtime v0.23.1
 	sigs.k8s.io/controller-tools v0.20.1
-	sigs.k8s.io/gateway-api v1.4.1
+	sigs.k8s.io/gateway-api v1.5.0
 	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260220060139-0714e2462e76
 	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260220060139-0714e2462e76
+	sigs.k8s.io/gateway-api/conformance v1.5.0-rc.3
 	sigs.k8s.io/yaml v1.6.0
 )
+
+replace sigs.k8s.io/gateway-api/conformance => github.com/howardjohn/gateway-api/conformance v0.0.0-20260227221300-1db2d092bd3c
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -192,7 +195,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.17 // indirect
-	github.com/miekg/dns v1.1.69 // indirect
+	github.com/miekg/dns v1.1.72 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -209,7 +212,7 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240409071808-615f978279ca // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/procfs v0.17.0 // indirect
+	github.com/prometheus/procfs v0.19.2 // indirect
 	github.com/redis/go-redis/extra/redisotel/v9 v9.7.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rubenv/sql-migrate v1.8.1 // indirect
