@@ -421,6 +421,8 @@ github.com/hashicorp/memberlist v0.1.3/go.mod h1:ajVTdAv/9Im8oMAAj5G31PhhMCZJV2p
 github.com/hashicorp/serf v0.8.2/go.mod h1:6hOLApaqBFA1NXqRQAsxw9QxuDEvNxSQRwA/JwenrHc=
 github.com/hinshun/vt10x v0.0.0-20180616224451-1954e6464174/go.mod h1:DqJ97dSdRW1W22yXSB90986pcOyQ7r45iio1KN2ez1A=
 github.com/hinshun/vt10x v0.0.0-20180809195222-d55458df857c/go.mod h1:DqJ97dSdRW1W22yXSB90986pcOyQ7r45iio1KN2ez1A=
+github.com/howardjohn/gateway-api/conformance v0.0.0-20260227221300-1db2d092bd3c h1:U3Q6NGiaJ0O/kcGjaICdHuKbOZSgk3pMHvbu+FVrozE=
+github.com/howardjohn/gateway-api/conformance v0.0.0-20260227221300-1db2d092bd3c/go.mod h1:mcvYR0Zll1i5hmcKn+jNbWdZTBls6s5GU+FPUFIceXw=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/huandu/xstrings v1.5.0 h1:2ag3IFq9ZDANvthTwTiqSSZLjDc+BedvHPAp5tJy2TI=
 github.com/huandu/xstrings v1.5.0/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
@@ -1203,8 +1205,6 @@ sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260220060139-0714e2462e76 h
 sigs.k8s.io/gateway-api-inference-extension v0.0.0-20260220060139-0714e2462e76/go.mod h1:GxVs/m8v3O+wICL74nrDqfO1yeXEfrsGS03vzXYtZoE=
 sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260220060139-0714e2462e76 h1:XauVWtKVPuNrpzVRJVpgoyGD6U3P9jxm4aGKYRpKJPU=
 sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260220060139-0714e2462e76/go.mod h1:n+dkKGgLEdvx6W08kTQKPMbQDW5AtlayFAipEIgv4RA=
-sigs.k8s.io/gateway-api/conformance v1.5.0-rc.3 h1:08X/rf8yD+Ah0+w9faytHcY+pdkD98onhgdDRZwLOrY=
-sigs.k8s.io/gateway-api/conformance v1.5.0-rc.3/go.mod h1:mcvYR0Zll1i5hmcKn+jNbWdZTBls6s5GU+FPUFIceXw=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 h1:IpInykpT6ceI+QxKBbEflcR5EXP7sU1kvOlxwZh5txg=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730/go.mod h1:mdzfpAEoE6DHQEN0uh9ZbOCuHbLK5wOm7dK4ctXE9Tg=
 sigs.k8s.io/kustomize/api v0.21.0 h1:I7nry5p8iDJbuRdYS7ez8MUvw7XVNPcIP5GkzzuXIIQ=
