@@ -531,9 +531,12 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 					Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
 						crate::http::auth::AzureAuth::DeveloperImplicit {}
 					},
+					Some(proto::agent::azure::Kind::Implicit(_)) => {
+						crate::http::auth::AzureAuth::Implicit {}
+					},
 					None => return Err(ProtoError::MissingRequiredField),
 				};
-				BackendAuth::Azure(azure_auth)
+				BackendAuth::Azure(Some(azure_auth))
 			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})

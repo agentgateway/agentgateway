@@ -245,6 +245,7 @@ message Azure {
   oneof kind {
     AzureExplicitConfig explicit_config = 1;
     AzureDeveloperImplicit developer_implicit = 2;
+    AzureImplicit implicit = 3;
   }
 }
 
@@ -301,6 +302,10 @@ message AzureWorkloadIdentityCredential {}
 
 // Use implicit Azure authentication for developer use-cases only
 message AzureDeveloperImplicit {}
+
+// Automatically detect authentication method based on environment.
+// Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.
+message AzureImplicit {}
 
 message RouteMatch {
   PathMatch path = 1;
