@@ -153,7 +153,7 @@ message TLSConfig {
   enum MTLSMode {
     STRICT = 0;
 
-    // Request a TLS certificate, but if one is not presented or invalid, allow the connection
+    // Request a TLS certificate, but if one is not presented or invalid, allow the connection.
     ALLOW_INSECURE_FALLBACK = 1;
   }
 

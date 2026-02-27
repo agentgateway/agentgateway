@@ -660,7 +660,16 @@ impl Gateway {
 							protocol,
 						})
 						.observe(tls_dur.as_secs_f64());
-					Ok((best, Socket::from_tls(ext, counter, tls.into())?))
+					let (_, ssl) = tls.get_ref();
+					// Rustls doesn't give us a way to say "The client certificate was present, but not verifier,
+					// but should be allowed, but should not be used"
+					// which is the behavior we want for insecure fallback.
+					// So we check again...
+					let include_src_identity = best.protocol.include_src_identity_for_connection(ssl);
+					Ok((
+						best,
+						Socket::from_tls_with_identity(ext, counter, tls.into(), include_src_identity)?,
+					))
 				},
 				None => {
 					let sni = sni.to_string();
