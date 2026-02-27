@@ -167,6 +167,7 @@ impl ServerTLSConfig {
 		)
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub fn from_pem_with_profile(
 		cert_pem: Vec<u8>,
 		key_pem: Vec<u8>,

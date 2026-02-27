@@ -586,10 +586,8 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 		}
 
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
-		log.Errorf("howardjohn: %v: %v -> %v", config.NamespacedName(obj), len(parentRefs), len(FilteredReferences(parentRefs)))
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **RouteAttachment {
 			if e.ParentKey.Kind != wellknown.GatewayGVK && e.ParentKey.Kind != wellknown.ListenerSetGVK {
-				log.Errorf("howardjohn: SKIP kind")
 				return nil
 			}
 			k := RouteAttachment{
@@ -597,7 +595,6 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 				To:           e.ParentKey,
 				ListenerName: string(e.ParentSection),
 			}
-			log.Errorf("howardjohn: gen %v", k)
 			return ptr.Of(&RouteAttachment{
 				From:         from,
 				To:           e.ParentKey,

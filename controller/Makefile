@@ -561,7 +561,7 @@ kind-create: ## Create a KinD cluster
 	kind get clusters | grep $(CLUSTER_NAME) || kind create cluster --name $(CLUSTER_NAME) --image kindest/node:$(CLUSTER_NODE_VERSION)
 
 CONFORMANCE_CHANNEL ?= experimental
-CONFORMANCE_VERSION ?= GIE_CRD_VERSION ?= $(go list -m -f '{{.Version}}' sigs.k8s.io/gateway-api)
+CONFORMANCE_VERSION ?= $(shell go list -m -f '{{.Version}}' sigs.k8s.io/gateway-api)
 .PHONY: gw-api-crds
 gw-api-crds: ## Install the Gateway API CRDs. HACK: Use SSA to avoid the issue with the CRD annotations being too long.
 ifeq ($(shell echo $(CONFORMANCE_VERSION) | grep -q '^v[0-9]' && echo yes),yes)

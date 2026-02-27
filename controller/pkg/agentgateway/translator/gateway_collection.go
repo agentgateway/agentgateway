@@ -367,6 +367,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 
 			uniqueListenerSets.Insert(ls.ParentObject)
 		}
+		//nolint:gosec // G115: this will not overflow
 		gws := rm.BuildGWStatus(context.Background(), *obj, int32(uniqueListenerSets.Len()))
 		return gws, result
 	}
