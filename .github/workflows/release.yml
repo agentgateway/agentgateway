@@ -529,6 +529,7 @@ jobs:
   release:
     if: ${{ github.event_name == 'push' || ! github.event.inputs.skip_gh_release }}
     needs:
+    - setup
     - push-image
     - musl-push-image
     - push-controller-image
