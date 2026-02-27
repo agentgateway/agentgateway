@@ -2,7 +2,6 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
-use std::io::Cursor;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
@@ -16,7 +15,7 @@ use openapiv3::OpenAPI;
 use prometheus_client::encoding::EncodeLabelValue;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-use rustls_pemfile::Item;
+use rustls_pki_types::pem::{PemObject, SectionKind};
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 
@@ -264,8 +263,7 @@ impl ServerTLSConfig {
 
 		let scb = if let Some(root) = &inputs.root_pem {
 			let mut roots_store = rustls::RootCertStore::empty();
-			let mut reader = std::io::BufReader::new(Cursor::new(root.as_slice()));
-			let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+			let certs = CertificateDer::pem_slice_iter(root).collect::<Result<Vec<_>, _>>()?;
 			roots_store.add_parsable_certificates(certs);
 			let verify = rustls::server::WebPkiClientVerifier::builder_with_provider(
 				Arc::new(roots_store),
@@ -335,28 +333,32 @@ impl serde::Serialize for ServerTLSConfig {
 	}
 }
 
-pub fn parse_cert(mut cert: &[u8]) -> Result<Vec<CertificateDer<'static>>, anyhow::Error> {
-	let mut reader = std::io::BufReader::new(Cursor::new(&mut cert));
-	let parsed: Result<Vec<_>, _> = rustls_pemfile::read_all(&mut reader).collect();
-	parsed?
+pub fn parse_cert(cert: &[u8]) -> Result<Vec<CertificateDer<'static>>, anyhow::Error> {
+	let parsed = <(SectionKind, Vec<u8>)>::pem_slice_iter(cert).collect::<Result<Vec<_>, _>>()?;
+	if parsed.is_empty() {
+		return Err(anyhow!("no certificate"));
+	}
+
+	parsed
 		.into_iter()
-		.map(|p| {
-			let Item::X509Certificate(der) = p else {
+		.map(|(kind, der)| {
+			if kind != SectionKind::Certificate {
 				return Err(anyhow!("no certificate"));
-			};
-			Ok(der)
+			}
+			Ok(CertificateDer::from(der))
 		})
-		.collect::<Result<Vec<_>, _>>()
+		.collect()
 }
 
-pub fn parse_key(mut key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
-	let mut reader = std::io::BufReader::new(Cursor::new(&mut key));
-	let parsed = rustls_pemfile::read_one(&mut reader)?;
-	let parsed = parsed.ok_or_else(|| anyhow!("no key"))?;
-	match parsed {
-		Item::Pkcs8Key(c) => Ok(PrivateKeyDer::Pkcs8(c)),
-		Item::Pkcs1Key(c) => Ok(PrivateKeyDer::Pkcs1(c)),
-		Item::Sec1Key(c) => Ok(PrivateKeyDer::Sec1(c)),
+pub fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
+	let (kind, der) = <(SectionKind, Vec<u8>)>::from_pem_slice(key).map_err(|e| match e {
+		rustls_pki_types::pem::Error::NoItemsFound => anyhow!("no key"),
+		_ => anyhow!(e),
+	})?;
+	match kind {
+		SectionKind::PrivateKey => Ok(PrivateKeyDer::Pkcs8(der.into())),
+		SectionKind::RsaPrivateKey => Ok(PrivateKeyDer::Pkcs1(der.into())),
+		SectionKind::EcPrivateKey => Ok(PrivateKeyDer::Sec1(der.into())),
 		_ => Err(anyhow!("unsupported key")),
 	}
 }
@@ -2292,13 +2294,8 @@ InvalidKeyData
 
 		let result = parse_key(invalid_key);
 		assert!(result.is_err());
-		// Check for actual error message that rustls_pemfile returns
 		let error_msg = result.unwrap_err().to_string();
-		assert!(
-			error_msg.contains("failed to fill whole buffer")
-				|| error_msg.contains("no key")
-				|| error_msg.contains("unsupported key")
-		);
+		assert!(error_msg.contains("base64 decode error") || error_msg.contains("no key"));
 	}
 
 	#[test]

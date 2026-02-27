@@ -1,15 +1,9 @@
 // Mock Istio Certificate Service for testing HBONE mTLS
-//
-// Since rcgen doesn't support CSR parsing (https://github.com/rustls/rcgen/issues/228),
-// we generate certificates with a static key and return the private key in the cert chain.
-// This is a test-only approach - real CAs never return private keys.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
 
-use rand::Rng;
-use rcgen::{ExtendedKeyUsagePurpose, Issuer, KeyPair, KeyUsagePurpose, SanType, SerialNumber};
+use rcgen::{CertificateSigningRequestParams, Issuer, KeyPair};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
@@ -36,55 +30,19 @@ impl IstioCertificateService for MockCaService {
 		&self,
 		req: Request<IstioCertificateRequest>,
 	) -> Result<Response<IstioCertificateResponse>, Status> {
-		// We ignore the CSR since rcgen doesn't support parsing it
-		// Instead, generate a certificate with a static key
-		// Parse the CSR to get the public key and subject info
+		// Parse the CSR from the request
 		let csr_pem = req.into_inner().csr;
-
-		// Generate random serial number (159 bits)
-		let serial_number = {
-			let mut data = [0u8; 20];
-			rand::rng().fill_bytes(&mut data);
-			data[0] &= 0x7f;
-			data
-		};
-
-		// Set up certificate parameters from CSR
-		let csr = rcgen::CertificateSigningRequestParams::from_pem(csr_pem.as_str())
+		let csr = CertificateSigningRequestParams::from_pem(&csr_pem)
 			.map_err(|e| Status::internal(format!("Failed to parse CSR: {}", e)))?;
-		let mut params = csr.params;
 
-		params.not_before = SystemTime::now().into();
-		params.not_after = (SystemTime::now() + Duration::from_secs(365 * 24 * 60 * 60)).into();
-		params.serial_number = Some(SerialNumber::from_slice(&serial_number));
-
-		params.key_usages = vec![
-			KeyUsagePurpose::DigitalSignature,
-			KeyUsagePurpose::KeyEncipherment,
-		];
-		params.extended_key_usages = vec![
-			ExtendedKeyUsagePurpose::ServerAuth,
-			ExtendedKeyUsagePurpose::ClientAuth,
-		];
-
-		// Set SPIFFE ID as SAN (you may want to extract this from the CSR instead)
-		let spiffe_id = "spiffe://cluster.local/ns/default/sa/default";
-		params.subject_alt_names =
-			vec![SanType::URI(spiffe_id.try_into().map_err(|e| {
-				Status::internal(format!("Failed to create SAN: {}", e))
-			})?)];
-
-		// Use the CA key to sign
-		let ca_kp = &*self.ca_key;
-		let issuer = Issuer::from_ca_cert_pem(&self.ca_cert_pem, ca_kp)
-			.map_err(|e| Status::internal(format!("Failed to load CA cert: {}", e)))?;
-
-		// Sign the certificate with CA using the public key from the CSR
-		let cert = params
-			.signed_by(&csr.public_key, &issuer)
+		// Sign with CA issuer
+		let issuer = Issuer::from_ca_cert_pem(self.ca_cert_pem.as_str(), &*self.ca_key)
+			.map_err(|e| Status::internal(format!("Failed to load CA issuer: {}", e)))?;
+		let cert = csr
+			.signed_by(&issuer)
 			.map_err(|e| Status::internal(format!("Failed to sign certificate: {}", e)))?;
-		let cert_pem = cert.pem();
 
+		let cert_pem = cert.pem();
 		let cert_chain = vec![cert_pem, self.ca_cert_pem.to_string()];
 
 		Ok(Response::new(IstioCertificateResponse { cert_chain }))

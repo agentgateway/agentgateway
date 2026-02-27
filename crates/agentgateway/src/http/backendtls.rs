@@ -1,10 +1,9 @@
-use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use once_cell::sync::Lazy;
 use rustls::ClientConfig;
-use rustls_pki_types::ServerName;
+use rustls_pki_types::{CertificateDer, ServerName, pem::PemObject};
 use serde::Serializer;
 
 use crate::transport;
@@ -159,8 +158,7 @@ impl ResolvedBackendTLS {
 	pub fn try_into(self) -> anyhow::Result<BackendTLS> {
 		let mut roots = rustls::RootCertStore::empty();
 		if let Some(root) = self.root {
-			let mut reader = std::io::BufReader::new(Cursor::new(root));
-			let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+			let certs = CertificateDer::pem_slice_iter(&root).collect::<Result<Vec<_>, _>>()?;
 			roots.add_parsable_certificates(certs);
 		} else {
 			// TODO: we probably should do this once globally!
