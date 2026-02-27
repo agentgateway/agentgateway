@@ -52,6 +52,8 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
+replace sigs.k8s.io/gateway-api/conformance => github.com/howardjohn/gateway-api/conformance v0.0.0-20260227221300-1db2d092bd3c
+
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
