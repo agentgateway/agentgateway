@@ -3055,12 +3055,15 @@ name = "hyper-util-fork"
 version = "0.1.14"
 dependencies = [
  "bytes",
+ "divan",
  "futures-channel",
  "futures-core",
  "futures-util",
  "http 1.4.0",
+ "http-body-util",
  "hyper",
  "pin-project-lite",
+ "pprof",
  "tokio",
  "tower-service",
  "tracing",

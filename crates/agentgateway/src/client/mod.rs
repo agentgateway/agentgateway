@@ -193,6 +193,7 @@ impl Connector {
 		ep: SocketAddr,
 		transport: Transport,
 	) -> Result<Socket, http::Error> {
+		tracing::error!("howardjohn: start connect");
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
 		let skip_dns = transport.skip_dns_resolution();
@@ -278,6 +279,7 @@ impl Connector {
 		);
 
 		socket.with_logging(LoggingMode::Upstream);
+		tracing::error!("howardjohn: done connect");
 		Ok(socket)
 	}
 

@@ -31,8 +31,15 @@ tower-service = { workspace = true }
 [dev-dependencies]
 hyper = { workspace = true, features = ["full"] }
 bytes.workspace = true
+http-body-util.workspace = true
+divan.workspace = true
+pprof.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
 tokio = { workspace = true, features = ["macros", "test-util", "signal", "rt-multi-thread"] }
 
 [features]
 default = []
+
+[[bench]]
+name = "pooling_client"
+harness = false
