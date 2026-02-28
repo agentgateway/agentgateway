@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use agent_core::metrics::CustomField;
 use agent_core::strng;
 use agent_core::strng::{RichStrng, Strng};
-use agent_core::telemetry::{OtelLogSink, OptionExt, ValueBag, debug, display};
+use agent_core::telemetry::{OptionExt, OtelLogSink, ValueBag, debug, display};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::{FzHashSet, FzStringMap};
@@ -1114,9 +1114,8 @@ impl opentelemetry_sdk::logs::LogExporter for TokioGrpcLogExporter {
 			if is_shutdown {
 				return Err(OTelSdkError::AlreadyShutdown);
 			}
-			let req = opentelemetry_proto::tonic::collector::logs::v1::ExportLogsServiceRequest {
-				resource_logs,
-			};
+			let req =
+				opentelemetry_proto::tonic::collector::logs::v1::ExportLogsServiceRequest { resource_logs };
 			handle
 				.spawn(async move { client.export(req).await })
 				.await
@@ -1158,7 +1157,9 @@ fn build_resource(defaults: Option<&trc::GlobalResourceDefaults>) -> Resource {
 impl OtelAccessLogger {
 	pub fn new(cfg: &OtlpConfig) -> anyhow::Result<Self> {
 		if cfg.endpoint.is_empty() {
-			return Err(anyhow::anyhow!("OTLP log endpoint is not configured; set logging.otlp.otlpEndpoint or tracing.otlpEndpoint"));
+			return Err(anyhow::anyhow!(
+				"OTLP log endpoint is not configured; set logging.otlp.otlpEndpoint or tracing.otlpEndpoint"
+			));
 		}
 
 		let defaults = trc::global_resource_defaults();
@@ -1234,18 +1235,18 @@ impl OtelLogSink for OtelAccessLogger {
 
 			match k {
 				"trace.id" => {
-					if let Some(s) = v.to_str() {
-						if let Ok(id) = u128::from_str_radix(&s, 16) {
-							trace_id_val = Some(id);
-						}
+					if let Some(s) = v.to_str()
+						&& let Ok(id) = u128::from_str_radix(&s, 16)
+					{
+						trace_id_val = Some(id);
 					}
 					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 				},
 				"span.id" => {
-					if let Some(s) = v.to_str() {
-						if let Ok(id) = u64::from_str_radix(&s, 16) {
-							span_id_val = Some(id);
-						}
+					if let Some(s) = v.to_str()
+						&& let Ok(id) = u64::from_str_radix(&s, 16)
+					{
+						span_id_val = Some(id);
 					}
 					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
 				},

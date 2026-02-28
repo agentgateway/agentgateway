@@ -242,7 +242,9 @@ where
 	D: serde::Deserializer<'de>,
 	T: serde::Deserialize<'de> + Default,
 {
-	Ok(Some(Option::<T>::deserialize(deserializer)?.unwrap_or_default()))
+	Ok(Some(
+		Option::<T>::deserialize(deserializer)?.unwrap_or_default(),
+	))
 }
 
 #[apply(schema_de!)]

@@ -312,24 +312,22 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.logging
 				.as_ref()
 				.and_then(|l| l.otlp.as_ref())
-				.map(|otlp_cfg| {
-					crate::telemetry::log::OtlpConfig {
-						endpoint: otlp_cfg
-							.otlp_endpoint
-							.clone()
-							.or_else(|| otlp.clone())
-							.unwrap_or_default(),
-						headers: if otlp_cfg.headers.is_empty() {
-							otlp_headers.clone()
-						} else {
-							otlp_cfg.headers.clone()
-						},
-						protocol: otlp_cfg.otlp_protocol.unwrap_or(otlp_protocol),
-						path: otlp_cfg
-							.path
-							.clone()
-							.unwrap_or_else(|| "/v1/logs".to_string()),
-					}
+				.map(|otlp_cfg| crate::telemetry::log::OtlpConfig {
+					endpoint: otlp_cfg
+						.otlp_endpoint
+						.clone()
+						.or_else(|| otlp.clone())
+						.unwrap_or_default(),
+					headers: if otlp_cfg.headers.is_empty() {
+						otlp_headers.clone()
+					} else {
+						otlp_cfg.headers.clone()
+					},
+					protocol: otlp_cfg.otlp_protocol.unwrap_or(otlp_protocol),
+					path: otlp_cfg
+						.path
+						.clone()
+						.unwrap_or_else(|| "/v1/logs".to_string()),
 				});
 			telemetry::log::Config {
 				filter: raw

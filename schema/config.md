@@ -40,6 +40,11 @@
 |`config.logging.fields.add`||
 |`config.logging.level`||
 |`config.logging.format`||
+|`config.logging.otlp`||
+|`config.logging.otlp.otlpEndpoint`||
+|`config.logging.otlp.headers`||
+|`config.logging.otlp.otlpProtocol`||
+|`config.logging.otlp.path`|OTLP path. Default is /v1/logs|
 |`config.metrics`||
 |`config.metrics.remove`||
 |`config.metrics.fields`||

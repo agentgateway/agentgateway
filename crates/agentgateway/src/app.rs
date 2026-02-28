@@ -8,8 +8,8 @@ use prometheus_client::registry::Registry;
 use tokio::task::JoinSet;
 
 use crate::control::caclient;
-use crate::telemetry::{log, trc};
 use crate::telemetry::trc::Tracer;
+use crate::telemetry::{log, trc};
 use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
 
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
@@ -29,7 +29,10 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		match log::OtelAccessLogger::new(otlp_cfg) {
 			Ok(logger) => {
 				agent_core::telemetry::set_otel_log_sink(Box::new(logger));
-				info!("OTLP log export enabled, endpoint={}, protocol={:?}", otlp_cfg.endpoint, otlp_cfg.protocol);
+				info!(
+					"OTLP log export enabled, endpoint={}, protocol={:?}",
+					otlp_cfg.endpoint, otlp_cfg.protocol
+				);
 			},
 			Err(e) => {
 				warn!("failed to initialize OTLP log exporter: {e}");
