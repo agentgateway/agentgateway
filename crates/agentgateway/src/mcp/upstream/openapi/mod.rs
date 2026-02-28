@@ -623,17 +623,15 @@ impl Handler {
 					total: None,
 				},
 			),
-			ClientRequest::GetTaskInfoRequest(_) => Messages::from_result(
-				id,
-				GetTaskResult {
-					task: Task::default(),
-					meta: None,
-				},
-			),
+			ClientRequest::GetTaskInfoRequest(_) => {
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			},
 			ClientRequest::GetTaskResultRequest(_) => {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
-			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
+			ClientRequest::CancelTaskRequest(_) => {
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			},
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult { contents: vec![] })
 			},

@@ -681,14 +681,12 @@ impl Drop for DropOnLog {
 
 		let mcp = log.mcp_status.take();
 		let mcp_cel = mcp.as_ref().and_then(|m| {
-			let resource = ResourceId::new(
-				m.target_name.as_deref()?.to_string(),
-				m.resource_name.as_deref()?.to_string(),
-			);
+			let resource = ResourceId::new(m.target_name.as_deref()?, m.resource_name.as_deref()?);
 			match m.resource {
 				Some(MCPOperation::Prompt) => Some(ResourceType::Prompt(resource)),
 				Some(MCPOperation::Tool) => Some(ResourceType::Tool(resource)),
 				Some(MCPOperation::Resource) => Some(ResourceType::Resource(resource)),
+				Some(MCPOperation::Task) => Some(ResourceType::Task(resource)),
 				_ => None,
 			}
 		});

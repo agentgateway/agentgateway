@@ -1,0 +1,8 @@
+---
+source: crates/agentgateway/src/mcp/mcp_tests.rs
+expression: value
+---
+{
+  "code": -32602,
+  "message": "tool not found"
+}

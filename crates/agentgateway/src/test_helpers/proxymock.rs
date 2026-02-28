@@ -399,6 +399,17 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendPolicy>,
 	) -> Self {
+		self.with_mcp_backend_policies_with_prefix(b, stateful, legacy_sse, policies, false)
+	}
+
+	pub fn with_mcp_backend_policies_with_prefix(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+		policies: Vec<BackendPolicy>,
+		always_use_prefix: bool,
+	) -> Self {
 		let opb = Backend::Opaque(
 			ResourceName::new(strng::format!("basic-{}", b), "".into()),
 			Target::Address(b),
@@ -422,7 +433,8 @@ impl TestBind {
 					},
 				})],
 				stateful,
-				always_use_prefix: false,
+				always_use_prefix,
+				allow_degraded: false,
 			},
 		);
 		{
@@ -470,6 +482,7 @@ impl TestBind {
 					.collect_vec(),
 				stateful,
 				always_use_prefix: false,
+				allow_degraded: false,
 			},
 		);
 		{

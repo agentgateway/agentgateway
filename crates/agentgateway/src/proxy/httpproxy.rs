@@ -1977,10 +1977,12 @@ impl PolicyClient {
 		backend: Backend,
 		pols: BackendPolicies,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
-		let mut req = Some(req);
+		let inputs = self.inputs.clone();
 		Box::pin(async move {
+			let mut req = Some(req);
+			let mut response_policies = ResponsePolicies::default();
 			make_backend_call(
-				self.inputs.clone(),
+				inputs,
 				Arc::new(LLMRequestPolicies::default()),
 				&backend,
 				pols,
@@ -1988,7 +1990,7 @@ impl PolicyClient {
 				// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
 				// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
 				None,
-				&mut Default::default(),
+				&mut response_policies,
 			)
 			.await
 			.map_err(ProxyResponse::downcast)

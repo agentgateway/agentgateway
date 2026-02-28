@@ -47,6 +47,7 @@ clocksource.workspace = true
 core_affinity.workspace = true
 crossbeam.workspace = true
 divan = { workspace = true, optional = true }
+flagset.workspace = true
 frozen-collections.workspace = true
 fs-err = { workspace = true }
 futures-core.workspace = true
@@ -71,6 +72,7 @@ include_dir.workspace = true
 indexmap = { workspace = true }
 ipnet.workspace = true
 itertools.workspace = true
+vector-map.workspace = true
 jemalloc_pprof = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
@@ -97,11 +99,12 @@ prost.workspace = true
 rand.workspace = true
 rcgen.workspace = true
 regex.workspace = true
-
-rmcp = { version = "0.16", features = [
-    "client",
-    "server",
+rmcp = { version = "0.17", features = [
+    "macros",
     "base64",
+    "elicitation",
+    "server",
+    "client",
     "transport-child-process",
 ] }
 rustls-native-certs.workspace = true
@@ -143,8 +146,6 @@ uuid.workspace = true
 x509-parser.workspace = true
 reqwest.workspace = true
 websocket-sans-io.workspace = true
-vector-map.workspace = true
-flagset.workspace = true
 
 
 # Linux only dependencies
@@ -177,20 +178,22 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "0.16", features = [
-    "client",
-    "server",
+rmcp = { version = "0.17", features = [
+    "macros",
     "base64",
+    "elicitation",
+    "server",
     "transport-child-process",
-    "transport-streamable-http-client-reqwest",
-    "transport-streamable-http-client",
     "transport-streamable-http-server",
+    "transport-streamable-http-client",
+    "transport-streamable-http-client-reqwest",
     "reqwest",
     "auth",
 ] }
 # We need SSE client for testing but they removed it for some reason :-(
 # https://github.com/modelcontextprotocol/rust-sdk/pull/562
-legacy-rmcp = { package = "rmcp", version = "0.10.0", features = ["transport-sse-server",
+legacy-rmcp = { package = "rmcp", version = "0.10.0", features = [
+    "transport-sse-server",
     "transport-sse-client",
     "transport-sse-client-reqwest",
     "client",
@@ -198,13 +201,6 @@ legacy-rmcp = { package = "rmcp", version = "0.10.0", features = ["transport-sse
 ] }
 wiremock.workspace = true
 reqwest.workspace = true
-# TODO(https://github.com/modelcontextprotocol/rust-sdk/pull/667)
-legacyreqwest = { package = "reqwest", version = "0.12", default-features = false, features = [
-    "http2",
-    "charset",
-    "macos-system-configuration",
-    "rustls-tls",
-] }
 
 [lints.clippy]
 # This rule makes code more confusing

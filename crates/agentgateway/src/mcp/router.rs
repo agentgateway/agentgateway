@@ -99,6 +99,7 @@ impl App {
 			McpBackendGroup {
 				targets: nt,
 				stateful: backend.stateful,
+				allow_degraded: backend.allow_degraded,
 			}
 		};
 		let sm = self.session.clone();
@@ -164,11 +165,11 @@ impl App {
 		}
 	}
 }
-
 #[derive(Debug, Clone)]
 pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
+	pub allow_degraded: bool,
 }
 
 #[derive(Debug)]

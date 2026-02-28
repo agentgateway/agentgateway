@@ -507,6 +507,31 @@
                 "resource"
               ],
               "additionalProperties": false
+            },
+            {
+              "description": "The task being accessed",
+              "type": "object",
+              "properties": {
+                "task": {
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "description": "The target of the resource",
+                      "type": "string",
+                      "default": ""
+                    },
+                    "name": {
+                      "description": "The name of the resource",
+                      "type": "string",
+                      "default": ""
+                    }
+                  }
+                }
+              },
+              "required": [
+                "task"
+              ],
+              "additionalProperties": false
             }
           ]
         },

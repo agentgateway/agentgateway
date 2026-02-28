@@ -3835,6 +3835,10 @@
               "type": "null"
             }
           ]
+        },
+        "allowDegraded": {
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -5445,6 +5449,10 @@
               "type": "null"
             }
           ]
+        },
+        "allowDegraded": {
+          "type": "boolean",
+          "default": false
         },
         "policies": {
           "anyOf": [

@@ -1,0 +1,27 @@
+---
+source: crates/agentgateway/src/mcp/mcp_tests.rs
+expression: value
+---
+{
+  "protocolVersion": "2025-06-18",
+  "capabilities": {
+    "completions": {},
+    "prompts": {},
+    "resources": {},
+    "tools": {},
+    "tasks": {
+      "requests": {
+        "tools": {
+          "call": {}
+        }
+      },
+      "list": {},
+      "cancel": {}
+    }
+  },
+  "serverInfo": {
+    "name": "rmcp",
+    "version": "<redacted>"
+  },
+  "instructions": "This server provides counter tools and prompts."
+}

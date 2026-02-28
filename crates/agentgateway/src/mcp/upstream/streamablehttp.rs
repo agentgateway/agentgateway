@@ -67,7 +67,32 @@ impl Client {
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let message = ClientJsonRpcMessage::notification(req);
-		self.send_message(message, ctx).await
+		let response = self.send_message(message, ctx).await?;
+		Self::reject_jsonrpc_error("notification", response)
+	}
+	pub async fn send_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), ClientError> {
+		let response = self.send_message(message, ctx).await?;
+		let _ = Self::reject_jsonrpc_error("client message", response)?;
+		Ok(())
+	}
+	fn reject_jsonrpc_error(
+		operation: &str,
+		response: StreamableHttpPostResponse,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		match response {
+			StreamableHttpPostResponse::Json(ServerJsonRpcMessage::Error(err), _) => {
+				Err(ClientError::new(anyhow!(
+					"{operation}: upstream returned JSON-RPC error {:?}: {}",
+					err.error.code,
+					err.error.message
+				)))
+			},
+			other => Ok(other),
+		}
 	}
 	async fn send_message(
 		&self,
@@ -97,16 +122,12 @@ impl Client {
 			return Ok(StreamableHttpPostResponse::Accepted);
 		}
 
-		if !resp.status().is_success() {
-			return Err(ClientError::Status(Box::new(resp)));
-		}
-
-		let content_type = resp.headers().get(CONTENT_TYPE);
 		let session_id = resp
 			.headers()
 			.get(HEADER_SESSION_ID)
 			.and_then(|v| v.to_str().ok())
 			.map(|s| s.to_string());
+		let content_type = resp.headers().get(CONTENT_TYPE);
 
 		match content_type {
 			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
@@ -153,11 +174,8 @@ impl Client {
 
 		ctx.apply(&mut req);
 
-		let resp = self.http_client.call(req).await?;
+		self.http_client.call(req).await?;
 
-		if !resp.status().is_success() {
-			return Err(ClientError::Status(Box::new(resp)));
-		}
 		Ok(StreamableHttpPostResponse::Accepted)
 	}
 	pub async fn get_event_stream(
@@ -176,10 +194,6 @@ impl Client {
 		ctx.apply(&mut req);
 
 		let resp = self.http_client.call(req).await?;
-
-		if !resp.status().is_success() {
-			return Err(ClientError::Status(Box::new(resp)));
-		}
 
 		let content_type = resp.headers().get(CONTENT_TYPE);
 		let session_id = resp
@@ -211,5 +225,26 @@ impl Client {
 			);
 		}
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn reject_jsonrpc_error_returns_err_for_error_message() {
+		let message = serde_json::from_str::<ServerJsonRpcMessage>(
+			r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"boom"}}"#,
+		)
+		.expect("valid json-rpc error");
+		let response = StreamableHttpPostResponse::Json(message, None);
+
+		let result = Client::reject_jsonrpc_error("client message", response);
+
+		assert!(
+			result.is_err(),
+			"json-rpc error should be propagated as error"
+		);
 	}
 }

@@ -8,7 +8,7 @@ use std::io;
 
 pub(crate) use client::McpHttpClient;
 pub use openapi::ParseError as OpenAPIParseError;
-use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
+use rmcp::model::{ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use thiserror::Error;
 use tokio::process::Command;
@@ -85,8 +85,6 @@ pub enum UpstreamError {
 	Stdio(#[from] io::Error),
 	#[error("upstream closed on send")]
 	Send,
-	#[error("upstream closed on receive")]
-	Recv,
 }
 
 // UpstreamTarget defines a source for MCP information.
@@ -195,6 +193,26 @@ impl Upstream {
 		}
 		Ok(())
 	}
+
+	pub(crate) async fn send_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		match &self {
+			Upstream::McpStdio(c) => {
+				c.send_raw(message, ctx).await?;
+			},
+			Upstream::McpSSE(c) => {
+				c.send_client_message(message, ctx).await?;
+			},
+			Upstream::McpStreamable(c) => {
+				c.send_client_message(message, ctx).await?;
+			},
+			Upstream::OpenAPI(_) => {},
+		}
+		Ok(())
+	}
 }
 
 #[derive(Debug)]
@@ -202,44 +220,61 @@ pub(crate) struct UpstreamGroup {
 	backend: McpBackendGroup,
 	client: PolicyClient,
 	by_name: IndexMap<Strng, Arc<upstream::Upstream>>,
-
-	// If we have 1 target only, we don't prefix everything with 'target_'.
-	// Else this is empty
-	pub default_target_name: Option<String>,
-	pub is_multiplexing: bool,
 }
 
 impl UpstreamGroup {
+	/// Returns the number of successfully initialized upstream targets.
+	///
+	/// This may be less than the configured target count when some targets
+	/// fail during startup and are skipped.
 	pub fn size(&self) -> usize {
-		self.backend.targets.len()
+		self.by_name.len()
 	}
 
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
-		let mut is_multiplexing = false;
-		let default_target_name = if backend.targets.len() != 1 {
-			is_multiplexing = true;
-			None
-		} else if backend.targets[0].always_use_prefix {
-			None
-		} else {
-			Some(backend.targets[0].name.to_string())
-		};
 		let mut s = Self {
 			backend,
 			client,
 			by_name: IndexMap::new(),
-			default_target_name,
-			is_multiplexing,
 		};
 		s.setup_connections()?;
 		Ok(s)
 	}
 
-	pub(crate) fn setup_connections(&mut self) -> Result<(), mcp::Error> {
+	fn setup_connections(&mut self) -> Result<(), mcp::Error> {
+		let mut failures = Vec::new();
 		for tgt in &self.backend.targets {
 			debug!("initializing target: {}", tgt.name);
-			let transport = self.setup_upstream(tgt.as_ref())?;
-			self.by_name.insert(tgt.name.clone(), Arc::new(transport));
+			match self.setup_upstream(tgt.as_ref()) {
+				Ok(transport) => {
+					self.by_name.insert(tgt.name.clone(), Arc::new(transport));
+				},
+				Err(e) => {
+					if !self.backend.allow_degraded {
+						return Err(e);
+					}
+					warn!(upstream_name = %tgt.name, error = %e, "failed to initialize MCP target; skipping");
+					failures.push((tgt.name.clone(), e));
+				},
+			}
+		}
+		if !failures.is_empty() && !self.by_name.is_empty() {
+			warn!(
+				failed_targets = failures.len(),
+				total_targets = self.backend.targets.len(),
+				initialized_targets = self.by_name.len(),
+				"MCP upstream group initialized in degraded mode"
+			);
+		} else if !self.backend.targets.is_empty() && self.by_name.is_empty() {
+			let reason = failures
+				.into_iter()
+				.map(|(name, err)| format!("{name}: {err}"))
+				.collect::<Vec<_>>()
+				.join("; ");
+			return Err(mcp::Error::SendError(
+				None,
+				format!("all MCP targets failed to initialize: {reason}"),
+			));
 		}
 		Ok(())
 	}
@@ -349,5 +384,112 @@ impl UpstreamGroup {
 		};
 
 		Ok(target)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+
+	use super::UpstreamGroup;
+	use crate::mcp::router::{McpBackendGroup, McpTarget};
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::types::agent::McpTargetSpec;
+
+	fn stdio_target(name: &str, cmd: &str) -> Arc<McpTarget> {
+		Arc::new(McpTarget {
+			name: name.into(),
+			spec: McpTargetSpec::Stdio {
+				cmd: cmd.to_string(),
+				args: vec![],
+				env: Default::default(),
+			},
+			backend_policies: Default::default(),
+			backend: None,
+			always_use_prefix: false,
+		})
+	}
+
+	#[cfg(target_family = "unix")]
+	#[tokio::test]
+	async fn setup_connections_skips_failed_targets_and_keeps_healthy_ones() {
+		// async runtime required because stdio setup uses Tokio child-process internals
+		let test = crate::test_helpers::proxymock::setup_proxy_test("{}").expect("setup_proxy_test");
+		let backend = McpBackendGroup {
+			targets: vec![
+				stdio_target("healthy", "true"),
+				stdio_target("missing", "__agw_missing_command__"),
+			],
+			stateful: false,
+			allow_degraded: true,
+		};
+
+		let group = UpstreamGroup::new(
+			PolicyClient {
+				inputs: test.inputs(),
+			},
+			backend,
+		)
+		.expect("at least one target should initialize");
+
+		assert_eq!(group.size(), 1, "only healthy targets should be counted");
+		assert!(
+			group.get("healthy").is_ok(),
+			"healthy target should be available"
+		);
+		assert!(
+			group.get("missing").is_err(),
+			"failed target should not be available"
+		);
+	}
+
+	#[cfg(target_family = "unix")]
+	#[tokio::test]
+	async fn setup_connections_fails_on_any_target_failure_by_default() {
+		let test = crate::test_helpers::proxymock::setup_proxy_test("{}").expect("setup_proxy_test");
+		let backend = McpBackendGroup {
+			targets: vec![
+				stdio_target("healthy", "true"),
+				stdio_target("missing", "__agw_missing_command__"),
+			],
+			stateful: false,
+			allow_degraded: false,
+		};
+
+		let err = UpstreamGroup::new(
+			PolicyClient {
+				inputs: test.inputs(),
+			},
+			backend,
+		)
+		.expect_err("should fail because allow_degraded is false");
+
+		assert!(err.to_string().contains("failed to start stdio server"));
+	}
+
+	#[tokio::test]
+	async fn setup_connections_errors_when_all_targets_fail() {
+		let test = crate::test_helpers::proxymock::setup_proxy_test("{}").expect("setup_proxy_test");
+		let backend = McpBackendGroup {
+			targets: vec![
+				stdio_target("missing-a", "__agw_missing_command_a__"),
+				stdio_target("missing-b", "__agw_missing_command_b__"),
+			],
+			stateful: false,
+			allow_degraded: true,
+		};
+
+		let err = UpstreamGroup::new(
+			PolicyClient {
+				inputs: test.inputs(),
+			},
+			backend,
+		)
+		.expect_err("all failed targets should error");
+		let msg = err.to_string();
+		assert!(
+			msg.contains("all MCP targets failed to initialize"),
+			"unexpected error: {msg}"
+		);
 	}
 }

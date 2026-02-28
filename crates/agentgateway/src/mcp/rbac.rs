@@ -56,6 +56,8 @@ pub enum ResourceType {
 	Prompt(ResourceId),
 	/// The resource being accessed
 	Resource(ResourceId),
+	/// The task being accessed
+	Task(ResourceId),
 }
 
 impl cel::DynamicType for ResourceType {
@@ -64,6 +66,7 @@ impl cel::DynamicType for ResourceType {
 			ResourceType::Tool(t) => ("tool", t),
 			ResourceType::Prompt(t) => ("prompt", t),
 			ResourceType::Resource(t) => ("resource", t),
+			ResourceType::Task(t) => ("task", t),
 		};
 		Value::Map(MapValue::Borrow(VecMap::from_iter([(
 			KeyRef::String(n.into()),
@@ -76,6 +79,7 @@ impl cel::DynamicType for ResourceType {
 			(ResourceType::Tool(t), "tool") => Some(t.materialize()),
 			(ResourceType::Prompt(t), "prompt") => Some(t.materialize()),
 			(ResourceType::Resource(t), "resource") => Some(t.materialize()),
+			(ResourceType::Task(t), "task") => Some(t.materialize()),
 			_ => None,
 		}
 	}
@@ -94,8 +98,11 @@ pub struct ResourceId {
 }
 
 impl ResourceId {
-	pub fn new(target: String, id: String) -> Self {
-		Self { target, id }
+	pub fn new(target: impl Into<String>, id: impl Into<String>) -> Self {
+		Self {
+			target: target.into(),
+			id: id.into(),
+		}
 	}
 }
 

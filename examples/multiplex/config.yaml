@@ -5,6 +5,8 @@ binds:
   - routes:
     - backends:
       - mcp:
+          # Multiplexing multiple MCP servers. Tools will be prefixed with "<name>__"
+          # following the SEP-993 consensus for model gateways.
           targets:
           - name: time
             stdio:

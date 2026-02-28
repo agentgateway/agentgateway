@@ -34,9 +34,16 @@ build-target:
 
 # lint
 .PHONY: lint
+LINT_CARGO_ARGS ?=
 lint:
 	cargo fmt --check
-	cargo clippy --all-targets -- -D warnings
+	cargo clippy --all-targets $(LINT_CARGO_ARGS) -- -D warnings
+
+.PHONY: lint-local
+LOCAL_PACKAGES = -p a2a-sdk -p agentgateway -p cel -p cel-derive -p agent-celx -p agent-core -p agent-hbone -p agent-xds
+lint-local:
+	cargo fmt --check
+	cargo clippy --all-targets $(LOCAL_PACKAGES) -- -D warnings
 
 .PHONY: fix-lint
 fix-lint:
@@ -49,8 +56,14 @@ format:
 
 # test
 .PHONY: test
+TEST_RUST_MIN_STACK ?= 8388608
+TEST_CARGO_ARGS ?=
 test:
-	cargo test --all-targets
+	RUST_MIN_STACK=$(TEST_RUST_MIN_STACK) cargo test --all-targets $(TEST_CARGO_ARGS)
+
+.PHONY: test-local
+test-local:
+	RUST_MIN_STACK=$(TEST_RUST_MIN_STACK) cargo test --all-targets $(LOCAL_PACKAGES)
 
 # clean
 .PHONY: clean

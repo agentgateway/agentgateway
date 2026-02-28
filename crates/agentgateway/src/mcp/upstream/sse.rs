@@ -226,6 +226,15 @@ impl Client {
 		let stream = self.get_stream(ctx).await?;
 		stream.send_notification(req, ctx).await
 	}
+
+	pub async fn send_client_message(
+		&self,
+		msg: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		let stream = self.get_stream(ctx).await?;
+		stream.send_raw(msg, ctx).await
+	}
 }
 
 fn message_endpoint(base: Uri, endpoint: String) -> Result<Uri, http::uri::InvalidUri> {

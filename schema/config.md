@@ -939,6 +939,7 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.tcp.connectTimeout.nanos`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.statefulMode`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.prefixMode`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.allowDegraded`||
 |`binds[].listeners[].routes[].backends[].(1)ai`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)name`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider`||
@@ -3291,6 +3292,7 @@
 |`mcp.targets[].policies.tcp.connectTimeout.nanos`||
 |`mcp.statefulMode`||
 |`mcp.prefixMode`||
+|`mcp.allowDegraded`||
 |`mcp.policies`||
 |`mcp.policies.requestHeaderModifier`|Headers to be modified in the request.|
 |`mcp.policies.requestHeaderModifier.add`||

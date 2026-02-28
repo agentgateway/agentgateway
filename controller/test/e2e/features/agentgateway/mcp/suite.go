@@ -4,10 +4,8 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
@@ -188,40 +186,15 @@ func (s *testingSuite) TestDynamicMCPAdminVsUserTools() {
 	}
 }
 
-// runDynamicRoutingCase initializes a session with optional route headers, asserts
-// initialize response correctness, warms the session, and returns the tool names.
+// runDynamicRoutingCase initializes a session with optional route headers via the
+// shared retrying initialize helper, warms the session, and returns the tool names.
 func (s *testingSuite) runDynamicRoutingCase(clientName string, routeHeaders map[string]string, label string) []string {
 	initBody := buildInitializeRequest(clientName, 0)
 	headers := withRouteHeaders(mcpHeaders(nil), routeHeaders)
 
-	// Deterministic 200 with retry/backoff
-	s.waitForMCP200(8080, headers, initBody, label,
-		100*time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, 1*time.Second)
-
-	// Get full response for logging + session extraction
-	// nolint: bodyclose // false positive
-	resp, body, err := s.execCurlMCP(headers, initBody, "--max-time", "10")
-	s.Require().NoError(err, "%s initialize failed", label)
-	s.T().Logf("%s initialize body: %s", label, body)
-
-	sid := ExtractMCPSessionID(resp)
-	s.Require().NotEmpty(sid, "%s initialize must return mcp-session-id header", label)
+	// Reuse the shared initialize path so transient fanout/session startup races are retried consistently.
+	sid := s.initializeSession(initBody, headers, label)
 	s.notifyInitializedWithHeaders(sid, routeHeaders)
-
-	payload, ok := FirstSSEDataPayload(body)
-	s.Require().True(ok, "%s initialize must return SSE payload", label)
-
-	var initResp InitializeResponse
-	s.Require().NoError(json.Unmarshal([]byte(payload), &initResp), "%s initialize payload must be JSON", label)
-	s.Require().Nil(initResp.Error, "%s initialize returned error: %+v", label, initResp.Error)
-	s.Require().NotNil(initResp.Result, "%s initialize missing result", label)
-
-	// Update the global protocol version from the server response
-	updateProtocolVersion(payload)
-
-	// Now validate that the protocol version matches what we sent
-	s.Require().Equal(mcpProto, initResp.Result.ProtocolVersion, "protocolVersion mismatch")
-	s.Require().NotEmpty(initResp.Result.ServerInfo.Name, "serverInfo.name must be set")
 
 	tools := s.mustListTools(sid, label+" tools/list", routeHeaders)
 	return tools

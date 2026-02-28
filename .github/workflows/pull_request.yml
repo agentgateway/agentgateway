@@ -46,6 +46,8 @@ jobs:
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
         save-if: ${{ github.ref == 'refs/heads/main' }}
     - name: Test
+      env:
+        RUST_MIN_STACK: 8388608
       run: make test
     - name: Validate
       if: ${{ matrix.validate }}

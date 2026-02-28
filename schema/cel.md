@@ -69,6 +69,9 @@
 |`mcp.(any)(1)resource`||
 |`mcp.(any)(1)resource.target`|The target of the resource|
 |`mcp.(any)(1)resource.name`|The name of the resource|
+|`mcp.(any)(1)task`||
+|`mcp.(any)(1)task.target`|The target of the resource|
+|`mcp.(any)(1)task.name`|The name of the resource|
 |`backend`|`backend` contains information about the backend being used.|
 |`backend.name`|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
 |`backend.type`|The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.|

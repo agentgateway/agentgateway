@@ -1,0 +1,138 @@
+---
+source: crates/agentgateway/src/mcp/mcp_tests.rs
+expression: value
+---
+{
+  "tools": [
+    {
+      "name": "decrement",
+      "description": "Decrement the counter by 1",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "echo",
+      "description": "Repeat what you say",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Map_of_AnyValue",
+        "type": "object",
+        "additionalProperties": true
+      },
+      "execution": {
+        "taskSupport": "optional"
+      }
+    },
+    {
+      "name": "echo_http",
+      "description": "Echo HTTP attributes",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "get_value",
+      "description": "Get the current counter value",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "increment",
+      "description": "Increment the counter by 1",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "say_hello",
+      "description": "Say hello to the client",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "sum",
+      "description": "Calculate the sum of two numbers",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "StructRequest",
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "b": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ]
+      }
+    },
+    {
+      "name": "test_elicitation_roundtrip",
+      "description": "Round-trip form elicitation for testing",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "test_roots_roundtrip",
+      "description": "Round-trip roots/list for testing",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "test_session_id",
+      "description": "Return upstream MCP session id header",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "test_task_forbidden",
+      "description": "Return task-forbidden tool for validation",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "test_task_required",
+      "description": "Return task-required tool for validation",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "execution": {
+        "taskSupport": "required"
+      }
+    },
+    {
+      "name": "test_url_elicitation_required",
+      "description": "Return URL elicitation required error for testing",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ]
+}
