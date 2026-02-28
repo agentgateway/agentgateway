@@ -12,6 +12,7 @@ mod worker;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Write as FmtWrite};
 use std::str::FromStr;
+use std::sync::OnceLock;
 use std::time::Instant;
 use std::{env, fmt, io};
 
@@ -39,6 +40,23 @@ pub static APPLICATION_START_TIME: Lazy<Instant> = Lazy::new(Instant::now);
 static LOG_HANDLE: OnceCell<LogHandle> = OnceCell::new();
 static DEFAULT_LEVEL: OnceCell<String> = OnceCell::new();
 static NON_BLOCKING: OnceCell<(NonBlocking, bool)> = OnceCell::new();
+
+pub trait OtelLogSink: Send + Sync {
+	fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]);
+	fn shutdown(&self);
+}
+
+static OTEL_LOG_SINK: OnceLock<Box<dyn OtelLogSink>> = OnceLock::new();
+
+pub fn set_otel_log_sink(sink: Box<dyn OtelLogSink>) {
+	let _ = OTEL_LOG_SINK.set(sink);
+}
+
+pub fn shutdown_otel_log_sink() {
+	if let Some(sink) = OTEL_LOG_SINK.get() {
+		sink.shutdown();
+	}
+}
 
 pub trait OptionExt<T>: Sized {
 	fn display(&self) -> Option<ValueBag>
@@ -156,6 +174,10 @@ pub fn log(level: &str, target: &str, kv: &[(&str, Option<ValueBag>)]) {
 		buf.clear();
 		Ok::<(), anyhow::Error>(())
 	});
+
+	if let Some(sink) = OTEL_LOG_SINK.get() {
+		sink.emit(level, target, kv);
+	}
 }
 
 pub fn setup_logging(default_level: &str, json: bool) -> nonblocking::WorkerGuard {

@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# Example: OTLP log export for access logs
+# Access logs are exported as OTel LogRecords via OTLP alongside the default stdout output.
+# The OTLP endpoint, protocol, and headers inherit from the tracing config unless overridden.
+config:
+  tracing:
+    otlpEndpoint: http://localhost:4317
+    randomSampling: true
+  logging:
+    # Presence of `otlp` enables OTLP log export. All fields are optional.
+    # Endpoint, protocol, and headers inherit from the tracing config when not set.
+    otlp: {}
+    # To customize, replace `otlp: {}` with:
+    # otlp:
+    #   otlpEndpoint: http://localhost:4317
+    #   otlpProtocol: grpc
+    #   path: /v1/logs
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

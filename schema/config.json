@@ -390,6 +390,53 @@
               "type": "null"
             }
           ]
+        },
+        "otlp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawLoggingOtlp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawLoggingOtlp": {
+      "type": "object",
+      "properties": {
+        "otlpEndpoint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "otlpProtocol": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Protocol"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "grpc"
+        },
+        "path": {
+          "description": "OTLP path. Default is /v1/logs",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

@@ -6,6 +6,15 @@ services:
     ports:
     - "127.0.0.1:16686:16686"
     - "127.0.0.1:14268:14268"
-    - "127.0.0.1:4317:4317"
     environment:
     - COLLECTOR_OTLP_ENABLED=true
+
+  otel-collector:
+    container_name: otel-collector
+    image: otel/opentelemetry-collector-contrib:0.146.0
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "127.0.0.1:4317:4317"
+    depends_on:
+      - jaeger

@@ -1,15 +1,17 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll, ready};
 use std::time::{Duration, Instant};
 
 use agent_core::metrics::CustomField;
 use agent_core::strng;
 use agent_core::strng::{RichStrng, Strng};
-use agent_core::telemetry::{OptionExt, ValueBag, debug, display};
+use agent_core::telemetry::{OtelLogSink, OptionExt, ValueBag, debug, display};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::{FzHashSet, FzStringMap};
@@ -36,6 +38,12 @@ use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
+
+use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
+use opentelemetry::{Key, KeyValue};
+use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
+use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -92,6 +100,7 @@ pub struct Config {
 	pub excluded_metrics: FzHashSet<String>,
 	pub level: String,
 	pub format: crate::LoggingFormat,
+	pub otlp: Option<OtlpConfig>,
 }
 
 #[derive(serde::Serialize, Default, Clone, Debug)]
@@ -1037,5 +1046,225 @@ where
 
 	fn size_hint(&self) -> SizeHint {
 		self.body.size_hint()
+	}
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct OtlpConfig {
+	pub endpoint: String,
+	pub headers: HashMap<String, String>,
+	pub protocol: trc::Protocol,
+	pub path: String,
+}
+
+pub struct OtelAccessLogger {
+	provider: SdkLoggerProvider,
+	logger: opentelemetry_sdk::logs::SdkLogger,
+}
+
+impl std::fmt::Debug for OtelAccessLogger {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("OtelAccessLogger").finish()
+	}
+}
+
+fn to_any_value(v: &ValueBag) -> AnyValue {
+	if let Some(b) = v.to_str() {
+		AnyValue::String(b.to_string().into())
+	} else if let Some(b) = v.to_i64() {
+		AnyValue::Int(b)
+	} else if let Some(b) = v.to_f64() {
+		AnyValue::Double(b)
+	} else if let Some(b) = v.to_bool() {
+		AnyValue::Boolean(b)
+	} else {
+		AnyValue::String(v.to_string().into())
+	}
+}
+
+struct TokioGrpcLogExporter {
+	client: opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient<
+		tonic::transport::Channel,
+	>,
+	is_shutdown: AtomicBool,
+	resource: opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema,
+	runtime: tokio::runtime::Handle,
+}
+
+impl std::fmt::Debug for TokioGrpcLogExporter {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("TokioGrpcLogExporter").finish()
+	}
+}
+
+impl opentelemetry_sdk::logs::LogExporter for TokioGrpcLogExporter {
+	fn export(
+		&self,
+		batch: opentelemetry_sdk::logs::LogBatch<'_>,
+	) -> impl std::future::Future<Output = opentelemetry_sdk::error::OTelSdkResult> + Send {
+		use opentelemetry_proto::transform::logs::tonic::group_logs_by_resource_and_scope;
+		use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
+
+		let is_shutdown = self.is_shutdown.load(Ordering::Relaxed);
+		let mut client = self.client.clone();
+		let resource_logs = group_logs_by_resource_and_scope(batch, &self.resource);
+		let handle = self.runtime.clone();
+
+		async move {
+			if is_shutdown {
+				return Err(OTelSdkError::AlreadyShutdown);
+			}
+			let req = opentelemetry_proto::tonic::collector::logs::v1::ExportLogsServiceRequest {
+				resource_logs,
+			};
+			handle
+				.spawn(async move { client.export(req).await })
+				.await
+				.map_err(|e| OTelSdkError::InternalFailure(e.to_string()))?
+				.map(|_| ())
+				.map_err(|e| OTelSdkError::InternalFailure(e.to_string())) as OTelSdkResult
+		}
+	}
+
+	fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+		self.is_shutdown.store(true, Ordering::Relaxed);
+		Ok(())
+	}
+
+	fn set_resource(&mut self, resource: &opentelemetry_sdk::Resource) {
+		self.resource = resource.into();
+	}
+}
+
+fn build_resource(defaults: Option<&trc::GlobalResourceDefaults>) -> Resource {
+	let mut resource_builder = Resource::builder();
+	if let Some(d) = defaults {
+		for kv in &d.attrs {
+			resource_builder = resource_builder.with_attribute(kv.clone());
+		}
+	}
+	resource_builder = resource_builder.with_service_name(
+		defaults
+			.and_then(|d| d.service_name.clone())
+			.unwrap_or_else(|| "agentgateway".to_string()),
+	);
+	resource_builder = resource_builder.with_attribute(KeyValue::new(
+		"service.version",
+		agent_core::version::BuildInfo::new().version,
+	));
+	resource_builder.build()
+}
+
+impl OtelAccessLogger {
+	pub fn new(cfg: &OtlpConfig) -> anyhow::Result<Self> {
+		let defaults = trc::global_resource_defaults();
+		let resource = build_resource(defaults);
+
+		let provider = if cfg.protocol == trc::Protocol::Grpc {
+			let channel = tonic::transport::Channel::from_shared(cfg.endpoint.clone())
+				.map_err(|e| anyhow::anyhow!("invalid OTLP log endpoint: {e}"))?
+				.connect_lazy();
+			let client =
+				opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient::new(channel);
+			let exporter = TokioGrpcLogExporter {
+				client,
+				is_shutdown: AtomicBool::new(false),
+				resource: Default::default(),
+				runtime: tokio::runtime::Handle::current(),
+			};
+			SdkLoggerProvider::builder()
+				.with_resource(resource)
+				.with_batch_exporter(exporter)
+				.build()
+		} else {
+			let exporter = opentelemetry_otlp::LogExporter::builder()
+				.with_http()
+				.with_endpoint(format!(
+					"{}/{}",
+					cfg.endpoint.strip_suffix("/").unwrap_or(&cfg.endpoint),
+					cfg.path.strip_prefix("/").unwrap_or(&cfg.path),
+				))
+				.with_headers(cfg.headers.clone())
+				.build()?;
+			SdkLoggerProvider::builder()
+				.with_resource(resource)
+				.with_batch_exporter(exporter)
+				.build()
+		};
+
+		let logger = provider.logger("agentgateway.access");
+
+		Ok(Self { provider, logger })
+	}
+}
+
+impl OtelLogSink for OtelAccessLogger {
+	fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
+		let severity = match level {
+			"error" => Severity::Error,
+			"warn" => Severity::Warn,
+			"info" => Severity::Info,
+			"debug" => Severity::Debug,
+			"trace" => Severity::Trace,
+			_ => Severity::Info,
+		};
+		let severity_text: &'static str = match level {
+			"error" => "ERROR",
+			"warn" => "WARN",
+			"info" => "INFO",
+			"debug" => "DEBUG",
+			"trace" => "TRACE",
+			_ => "INFO",
+		};
+
+		let mut record = self.logger.create_log_record();
+		record.set_severity_number(severity);
+		record.set_severity_text(severity_text);
+		record.set_target(target.to_string());
+
+		let mut trace_id_val: Option<u128> = None;
+		let mut span_id_val: Option<u64> = None;
+
+		for &(k, ref v) in kv {
+			let Some(v) = v else { continue };
+
+			match k {
+				"trace.id" => {
+					if let Some(s) = v.to_str() {
+						if let Ok(id) = u128::from_str_radix(&s, 16) {
+							trace_id_val = Some(id);
+						}
+					}
+					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
+				},
+				"span.id" => {
+					if let Some(s) = v.to_str() {
+						if let Ok(id) = u64::from_str_radix(&s, 16) {
+							span_id_val = Some(id);
+						}
+					}
+					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
+				},
+				_ => {
+					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
+				},
+			}
+		}
+
+		if let Some(tid) = trace_id_val {
+			record.set_trace_context(
+				opentelemetry::trace::TraceId::from(tid),
+				span_id_val
+					.map(opentelemetry::trace::SpanId::from)
+					.unwrap_or(opentelemetry::trace::SpanId::INVALID),
+				None,
+			);
+		}
+
+		self.logger.emit(record);
+	}
+
+	fn shutdown(&self) {
+		let _ = self.provider.shutdown();
 	}
 }
