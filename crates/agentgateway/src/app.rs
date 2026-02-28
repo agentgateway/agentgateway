@@ -60,13 +60,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let oidc = Arc::new(crate::http::oidc::OidcProvider::new());
 
 	// TODO: use for XDS
-	let control_client = client::Client::new(
-		&config.dns,
-		None,
-		config.backend.clone(),
-		None,
-		oidc.clone(),
-	);
+	let control_client = client::Client::new(&config.dns, None, config.backend.clone(), None);
 	let ca = if let Some(cfg) = &config.ca {
 		Some(Arc::new(caclient::CaClient::new(
 			control_client.clone(),
@@ -90,7 +84,6 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		pool,
 		config.backend.clone(),
 		Some(metrics_handle.clone()),
-		oidc.clone(),
 	);
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
@@ -133,6 +126,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		tracer: tracer.clone(),
 		metrics: metrics_handle.clone(),
 		upstream: client.clone(),
+		oidc: oidc.clone(),
 		ca,
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),

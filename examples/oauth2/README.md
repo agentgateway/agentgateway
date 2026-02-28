@@ -2,24 +2,36 @@
 
 This example shows how to protect a route with agentgateway's built-in OAuth2/OIDC policy.
 
-It supports `clientSecret` as inline or file-based local configuration, and optional `providerBackend` for private IdP back-channel connectivity.
+It supports `clientSecret` as inline or file-based local configuration, and flat provider settings using either `issuer` or explicit endpoint fields.
 
 ### Running the example
+
+Quick scripted browser demo (starts Keycloak + backend + gateway):
+
+```bash
+./examples/oauth2/run-browser-demo.sh start
+```
+
+For testing from another machine on your LAN:
+
+```bash
+PUBLIC_HOST=192.168.1.50 ./examples/oauth2/run-browser-demo.sh start
+```
 
 1. Create an OAuth2/OIDC app in your identity provider.
 2. Configure an allowed callback/redirect URI of:
 
 ```text
-http://localhost:3000/_gateway/callback
+http://localhost:3000/oauth2/callback
 ```
 
 3. Update `examples/oauth2/config.yaml` with your provider values:
 
-- `issuer`
+- `issuer` or `authorizationEndpoint`/`tokenEndpoint`
 - optionally `providerBackend` (for private IdP/back-channel routing)
 - `clientId`
 - `clientSecret` (inline or file)
-- `redirectUri` (recommended and deterministic in production)
+- `redirectUri` (required; should be explicit and deterministic in production)
 - optionally `postLogoutRedirectUri` (for IdP logout redirect after `signOutPath`)
 
 4. Start a local upstream app:
@@ -49,7 +61,7 @@ Local/dev file-based:
 
 ```yaml
 clientSecret:
-  file: ./examples/oauth2/client-secret.txt
+  file: ./examples/oauth2/client-secret.example.txt
 ```
 
 Inline:
@@ -66,20 +78,47 @@ Local config can route OIDC discovery/token/JWKS calls through a dedicated backe
 policies:
   oauth2:
     issuer: "https://issuer.example.com"
+    clientId: "replace-with-client-id"
+    clientSecret:
+      file: ./examples/oauth2/client-secret.example.txt
+    redirectUri: "http://localhost:3000/oauth2/callback"
     providerBackend:
       host: "idp.internal.example.com:443"
 ```
 
-Controller/XDS (`AgentgatewayPolicy`) uses `providerBackendRef` for the same behavior:
+Controller/XDS (`AgentgatewayPolicy`) uses `backendRef` for the same behavior:
 
 ```yaml
 traffic:
   oauth2:
     issuer: https://issuer.example.com
-    providerBackendRef:
+    clientId: replace-with-client-id
+    clientSecret:
+      secretRef:
+        name: oauth2-client
+        key: client-secret
+    redirectUri: https://gateway.example.com/oauth2/callback
+    backendRef:
       kind: Service
       name: oauth2-discovery
       port: 8080
+```
+
+Explicit non-OIDC OAuth2 providers can be configured without discovery:
+
+```yaml
+traffic:
+  oauth2:
+    authorizationEndpoint: https://provider.example.com/oauth/authorize
+    tokenEndpoint: https://provider.example.com/oauth/token
+    tokenEndpointAuthMethodsSupported:
+    - client_secret_post
+    clientId: replace-with-client-id
+    clientSecret:
+      secretRef:
+        name: oauth2-client
+        key: client-secret
+    redirectUri: https://gateway.example.com/oauth2/callback
 ```
 
 ### CEL identity claim examples
@@ -89,11 +128,9 @@ You can use that in `authorization` and `transformations` policies.
 
 ### Optional hardening knobs
 
-- `autoDetectRedirectUri: true` only when you intentionally want redirect inference from request headers.
-- `providerBackend` when your issuer/JWKS/token endpoints are private or must be reached through a specific internal backend path.
-- `trustedProxyCidrs` to allow `X-Forwarded-Host` and `X-Forwarded-Proto` from known proxy ranges.
-- `denyRedirectMatchers` for API paths that should return `401` instead of browser redirects.
-- `passAccessToken` defaults to `false` (explicitly set `true` only when upstream requires it).
+- `providerBackend` (local config) when provider back-channel calls must go through a specific internal backend path.
+- `backendRef` (controller/XDS `AgentgatewayPolicy`) for the same provider back-channel routing behavior.
+- `backendAuth.passthrough` forwards the OAuth2 access token upstream when your backend requires it.
 - `postLogoutRedirectUri` must be `https` (or `http` on loopback), and cannot include URL fragments or userinfo.
 
 Allow only one user (`sub`) on a protected route:
@@ -104,7 +141,7 @@ policies:
     issuer: "https://issuer.example.com"
     clientId: "replace-with-client-id"
     clientSecret:
-      file: ./examples/oauth2/client-secret.txt
+      file: ./examples/oauth2/client-secret.example.txt
   authorization:
     rules:
     - 'jwt.sub == "user-123"'
@@ -118,7 +155,7 @@ policies:
     issuer: "https://issuer.example.com"
     clientId: "replace-with-client-id"
     clientSecret:
-      file: ./examples/oauth2/client-secret.txt
+      file: ./examples/oauth2/client-secret.example.txt
   transformations:
     request:
       set:

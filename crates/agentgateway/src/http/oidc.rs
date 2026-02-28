@@ -30,6 +30,7 @@ type SharedError = Arc<Error>;
 type SharedResult<T> = Result<T, SharedError>;
 type MetadataSingleflight = Arc<UnaryGroup<MetadataCacheKey, SharedResult<Arc<OidcMetadata>>>>;
 type ValidatorSingleflight = Arc<UnaryGroup<ValidatorCacheKey, SharedResult<Arc<Jwt>>>>;
+type ExchangeSingleflight = Arc<UnaryGroup<ExchangeCacheKey, SharedResult<TokenResponse>>>;
 type RefreshSingleflight = Arc<UnaryGroup<RefreshCacheKey, SharedResult<TokenResponse>>>;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -58,6 +59,12 @@ pub struct OidcProvider {
 	validator_cache: RwLock<HashMap<ValidatorCacheKey, CachedValidator>>,
 	// Per (issuer + audiences + provider backend) singleflight work gate for JWKS/validator refresh.
 	validator_singleflight: ValidatorSingleflight,
+	// Per (token endpoint + client + code + code verifier + redirect URI + provider backend)
+	// singleflight work gate for authorization-code exchange.
+	exchange_singleflight: ExchangeSingleflight,
+	// Short-lived cache for successful authorization-code exchanges.
+	// This smooths over immediate duplicate callback requests that race after the first success.
+	exchange_result_cache: RwLock<HashMap<ExchangeCacheKey, CachedExchangeResult>>,
 	// Per (token endpoint + client + refresh token + provider backend) singleflight work gate
 	// for refresh-token exchange.
 	refresh_singleflight: RefreshSingleflight,
@@ -76,8 +83,15 @@ struct CachedMetadata {
 	fetched_at: Instant,
 }
 
+#[derive(Debug, Clone)]
+struct CachedExchangeResult {
+	token: TokenResponse,
+	exchanged_at: Instant,
+}
+
 mod cache_keys {
 	use super::*;
+	use aws_lc_rs::digest;
 
 	#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 	pub(crate) enum ProviderBackendCacheKey {
@@ -178,6 +192,43 @@ mod cache_keys {
 	}
 
 	#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+	pub(crate) struct ExchangeCacheKey {
+		pub(crate) token_endpoint: String,
+		pub(crate) client_id: String,
+		pub(crate) code_hash: [u8; 32],
+		pub(crate) code_verifier_hash: Option<[u8; 32]>,
+		pub(crate) redirect_uri: String,
+		pub(crate) provider_backend: ProviderBackendCacheKey,
+	}
+
+	fn hash_sensitive(value: &str) -> [u8; 32] {
+		let digest = digest::digest(&digest::SHA256, value.as_bytes());
+		let mut out = [0u8; 32];
+		out.copy_from_slice(digest.as_ref());
+		out
+	}
+
+	impl ExchangeCacheKey {
+		pub(crate) fn new(
+			token_endpoint: &str,
+			client_id: &str,
+			code: &str,
+			code_verifier: Option<&str>,
+			redirect_uri: &str,
+			provider_backend: Option<&SimpleBackendReference>,
+		) -> Self {
+			Self {
+				token_endpoint: token_endpoint.to_string(),
+				client_id: client_id.to_string(),
+				code_hash: hash_sensitive(code),
+				code_verifier_hash: code_verifier.map(hash_sensitive),
+				redirect_uri: redirect_uri.to_string(),
+				provider_backend: ProviderBackendCacheKey::from_ref(provider_backend),
+			}
+		}
+	}
+
+	#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 	pub(crate) struct RefreshCacheKey {
 		pub(crate) token_endpoint: String,
 		pub(crate) client_id: String,
@@ -202,13 +253,13 @@ mod cache_keys {
 	}
 }
 
-use cache_keys::{MetadataCacheKey, RefreshCacheKey, ValidatorCacheKey};
+use cache_keys::{ExchangeCacheKey, MetadataCacheKey, RefreshCacheKey, ValidatorCacheKey};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OidcMetadata {
 	pub authorization_endpoint: String,
 	pub token_endpoint: String,
-	pub jwks_uri: String,
+	pub jwks_uri: Option<String>,
 	#[serde(default)]
 	pub end_session_endpoint: Option<String>,
 	#[serde(default)]
@@ -296,6 +347,8 @@ const VALIDATOR_TTL: Duration = Duration::from_secs(300);
 const OIDC_HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 const OIDC_TOKEN_OPERATION_TIMEOUT: Duration = Duration::from_secs(20);
 const OIDC_HTTP_RESPONSE_LIMIT: usize = 2_097_152;
+const EXCHANGE_RESULT_TTL: Duration = Duration::from_secs(10);
+const EXCHANGE_RESULT_CACHE_MAX_ENTRIES: usize = 256;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 struct OidcTokenExtraFields {
@@ -350,6 +403,8 @@ impl OidcProvider {
 			metadata_singleflight: Arc::new(UnaryGroup::new()),
 			validator_cache: RwLock::new(HashMap::new()),
 			validator_singleflight: Arc::new(UnaryGroup::new()),
+			exchange_singleflight: Arc::new(UnaryGroup::new()),
+			exchange_result_cache: RwLock::new(HashMap::new()),
 			refresh_singleflight: Arc::new(UnaryGroup::new()),
 		}
 	}
@@ -404,7 +459,13 @@ impl OidcProvider {
 		// independent of provider backend routing.
 		Self::validate_endpoint_url(&metadata.authorization_endpoint, "authorization_endpoint")?;
 		Self::validate_endpoint_url(&metadata.token_endpoint, "token_endpoint")?;
-		Self::validate_endpoint_url(&metadata.jwks_uri, "jwks_uri")?;
+		Self::validate_endpoint_url(
+			metadata
+				.jwks_uri
+				.as_deref()
+				.ok_or_else(|| Error::Discovery("jwks_uri is missing".to_string()))?,
+			"jwks_uri",
+		)?;
 		if let Some(end_session_endpoint) = metadata.end_session_endpoint.as_deref() {
 			Self::validate_endpoint_url(end_session_endpoint, "end_session_endpoint")?;
 		}
@@ -642,7 +703,12 @@ impl OidcProvider {
 					// 4. Slow Path: Network Call (singleflight work gate is held for this cache key)
 					// Initialize Jwt validator using the discovered jwks_uri
 					let jwks_req = ::http::Request::builder()
-						.uri(&metadata.jwks_uri)
+						.uri(
+							metadata
+								.jwks_uri
+								.as_deref()
+								.ok_or_else(|| Error::Discovery("jwks_uri is missing".to_string()))?,
+						)
 						.body(crate::http::Body::empty())
 						.map_err(|e| Error::Internal(e.to_string()))?;
 					let jwks_resp =
@@ -797,40 +863,103 @@ impl OidcProvider {
 		}
 	}
 
+	async fn get_cached_exchange_result(&self, key: &ExchangeCacheKey) -> Option<TokenResponse> {
+		let now = Instant::now();
+		let cache = self.exchange_result_cache.read().await;
+		cache.get(key).and_then(|entry| {
+			(now.duration_since(entry.exchanged_at) <= EXCHANGE_RESULT_TTL).then(|| entry.token.clone())
+		})
+	}
+
+	async fn put_cached_exchange_result(&self, key: ExchangeCacheKey, token: TokenResponse) {
+		let now = Instant::now();
+		let mut cache = self.exchange_result_cache.write().await;
+		cache.retain(|_, entry| now.duration_since(entry.exchanged_at) <= EXCHANGE_RESULT_TTL);
+		if cache.len() >= EXCHANGE_RESULT_CACHE_MAX_ENTRIES
+			&& let Some(oldest_key) = cache
+				.iter()
+				.min_by_key(|(_, entry)| entry.exchanged_at)
+				.map(|(existing_key, _)| existing_key.clone())
+		{
+			cache.remove(&oldest_key);
+		}
+		cache.insert(
+			key,
+			CachedExchangeResult {
+				token,
+				exchanged_at: now,
+			},
+		);
+	}
+
 	pub async fn exchange_code(
 		&self,
 		ctx: OidcCallContext<'_>,
 		req: ExchangeCodeRequest<'_>,
 	) -> Result<TokenResponse, Error> {
-		let oauth_client = Self::oauth2_client(req.metadata, req.client_id, req.client_secret)?;
-		let redirect_url = oauth2::RedirectUrl::new(req.redirect_uri.to_string())
-			.map_err(|e| Error::Internal(format!("invalid redirect URI: {e}")))?;
-		let oauth_client = oauth_client.set_redirect_uri(redirect_url);
-		let mut token_req = oauth_client.exchange_code(AuthorizationCode::new(req.code.to_string()));
-
-		if let Some(cv) = req.code_verifier {
-			token_req = token_req.set_pkce_verifier(PkceCodeVerifier::new(cv.to_string()));
+		let key = ExchangeCacheKey::new(
+			&req.metadata.token_endpoint,
+			req.client_id,
+			req.code,
+			req.code_verifier,
+			req.redirect_uri,
+			ctx.provider_backend,
+		);
+		if let Some(token) = self.get_cached_exchange_result(&key).await {
+			return Ok(token);
 		}
+		let cache_key = key.clone();
 
-		let transport = OidcTransportContext::from_call_context(ctx);
-		let oauth_http_client = |request: OAuth2HttpRequest| {
-			let transport = transport.clone();
-			async move { Self::oauth_http_call(transport, request).await }
-		};
-		let token_response = tokio::time::timeout(
-			OIDC_TOKEN_OPERATION_TIMEOUT,
-			token_req.request_async(&oauth_http_client),
-		)
-		.await
-		.map_err(|_| Error::Exchange("token exchange timed out".to_string()))?
-		.map_err(
-			|e: RequestTokenError<OAuthHttpClientError, BasicErrorResponse>| {
-				Error::Exchange(e.to_string())
-			},
-		)?;
-		let token_response = Self::convert_token_response(token_response);
-		Self::validate_token_type(&token_response)?;
-		Ok(token_response)
+		let shared_result = self
+			.exchange_singleflight
+			.work(&key, async {
+				let result: Result<TokenResponse, Error> = async {
+					let oauth_client = Self::oauth2_client(req.metadata, req.client_id, req.client_secret)?;
+					let redirect_url = oauth2::RedirectUrl::new(req.redirect_uri.to_string())
+						.map_err(|e| Error::Internal(format!("invalid redirect URI: {e}")))?;
+					let oauth_client = oauth_client.set_redirect_uri(redirect_url);
+					let mut token_req =
+						oauth_client.exchange_code(AuthorizationCode::new(req.code.to_string()));
+
+					if let Some(cv) = req.code_verifier {
+						token_req = token_req.set_pkce_verifier(PkceCodeVerifier::new(cv.to_string()));
+					}
+
+					let transport = OidcTransportContext::from_call_context(ctx);
+					let oauth_http_client = |request: OAuth2HttpRequest| {
+						let transport = transport.clone();
+						async move { Self::oauth_http_call(transport, request).await }
+					};
+					let token_response = tokio::time::timeout(
+						OIDC_TOKEN_OPERATION_TIMEOUT,
+						token_req.request_async(&oauth_http_client),
+					)
+					.await
+					.map_err(|_| Error::Exchange("token exchange timed out".to_string()))?
+					.map_err(
+						|e: RequestTokenError<OAuthHttpClientError, BasicErrorResponse>| {
+							Error::Exchange(e.to_string())
+						},
+					)?;
+					let token_response = Self::convert_token_response(token_response);
+					Self::validate_token_type(&token_response)?;
+					Ok(token_response)
+				}
+				.await;
+
+				match result {
+					Ok(token) => {
+						self
+							.put_cached_exchange_result(cache_key.clone(), token.clone())
+							.await;
+						Ok(token)
+					},
+					Err(err) => Err(Arc::new(err)),
+				}
+			})
+			.await;
+
+		shared_result.map_err(|err| err.as_ref().clone())
 	}
 
 	pub async fn refresh_token(
@@ -910,13 +1039,7 @@ mod tests {
 			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
 		};
-		crate::client::Client::new(
-			&cfg,
-			None,
-			Default::default(),
-			None,
-			Arc::new(OidcProvider::new()),
-		)
+		crate::client::Client::new(&cfg, None, Default::default(), None)
 	}
 
 	fn test_ctx(client: &crate::client::Client) -> OidcCallContext<'_> {
@@ -1023,7 +1146,10 @@ mod tests {
 
 		while let Some(res) = set.join_next().await {
 			let metadata = res.expect("task join").expect("metadata fetch");
-			assert_eq!(metadata.jwks_uri, format!("{issuer}/jwks"));
+			assert_eq!(
+				metadata.jwks_uri.as_deref(),
+				Some(format!("{issuer}/jwks").as_str())
+			);
 		}
 	}
 
@@ -1219,6 +1345,123 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn exchange_code_is_singleflight_per_key() {
+		let server = MockServer::start().await;
+		let token_response = json!({
+			"access_token": "access-token",
+			"token_type": "Bearer",
+			"expires_in": 3600
+		});
+
+		Mock::given(method("POST"))
+			.and(path("/token"))
+			.respond_with(
+				ResponseTemplate::new(200)
+					.set_delay(Duration::from_millis(150))
+					.set_body_json(token_response),
+			)
+			.expect(1)
+			.mount(&server)
+			.await;
+
+		let provider = Arc::new(OidcProvider::new());
+		let client = make_test_client();
+		let metadata = OidcMetadata {
+			authorization_endpoint: format!("{}/authorize", server.uri()),
+			token_endpoint: format!("{}/token", server.uri()),
+			jwks_uri: None,
+			end_session_endpoint: None,
+			token_endpoint_auth_methods_supported: vec!["client_secret_post".to_string()],
+		};
+
+		let mut set = JoinSet::new();
+		for _ in 0..16 {
+			let provider = provider.clone();
+			let client = client.clone();
+			let metadata = metadata.clone();
+			set.spawn(async move {
+				provider
+					.exchange_code(
+						test_ctx(&client),
+						ExchangeCodeRequest {
+							metadata: &metadata,
+							code: "code-123",
+							client_id: "client-123",
+							client_secret: "secret-123",
+							redirect_uri: "http://localhost:3000/oauth2/callback",
+							code_verifier: Some("verifier-123"),
+						},
+					)
+					.await
+			});
+		}
+
+		while let Some(res) = set.join_next().await {
+			let token = res.expect("task join").expect("token exchange");
+			assert_eq!(token.access_token, "access-token");
+		}
+	}
+
+	#[tokio::test]
+	async fn exchange_code_replay_uses_recent_success_cache() {
+		let server = MockServer::start().await;
+		let token_response = json!({
+			"access_token": "access-token",
+			"token_type": "Bearer",
+			"expires_in": 3600
+		});
+
+		Mock::given(method("POST"))
+			.and(path("/token"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(token_response))
+			.expect(1)
+			.mount(&server)
+			.await;
+
+		let provider = OidcProvider::new();
+		let client = make_test_client();
+		let metadata = OidcMetadata {
+			authorization_endpoint: format!("{}/authorize", server.uri()),
+			token_endpoint: format!("{}/token", server.uri()),
+			jwks_uri: None,
+			end_session_endpoint: None,
+			token_endpoint_auth_methods_supported: vec!["client_secret_post".to_string()],
+		};
+
+		let first = provider
+			.exchange_code(
+				test_ctx(&client),
+				ExchangeCodeRequest {
+					metadata: &metadata,
+					code: "code-123",
+					client_id: "client-123",
+					client_secret: "secret-123",
+					redirect_uri: "http://localhost:3000/oauth2/callback",
+					code_verifier: Some("verifier-123"),
+				},
+			)
+			.await
+			.expect("first exchange should succeed");
+		assert_eq!(first.access_token, "access-token");
+
+		let replay = provider
+			.exchange_code(
+				test_ctx(&client),
+				ExchangeCodeRequest {
+					metadata: &metadata,
+					code: "code-123",
+					client_id: "client-123",
+					client_secret: "secret-123",
+					redirect_uri: "http://localhost:3000/oauth2/callback",
+					code_verifier: Some("verifier-123"),
+				},
+			)
+			.await
+			.expect("duplicate exchange should use recent success cache");
+		assert_eq!(replay.access_token, "access-token");
+	}
+
+	#[tokio::test]
 	async fn metadata_cache_refreshes_after_ttl() {
 		let server = MockServer::start().await;
 		let issuer = server.uri();
@@ -1242,7 +1485,10 @@ mod tests {
 			.get_metadata(test_ctx(&client), &issuer)
 			.await
 			.expect("first metadata fetch");
-		assert_eq!(first.jwks_uri, format!("{issuer}/jwks"));
+		assert_eq!(
+			first.jwks_uri.as_deref(),
+			Some(format!("{issuer}/jwks").as_str())
+		);
 
 		{
 			let key = MetadataCacheKey::new(&issuer, None);
@@ -1255,7 +1501,10 @@ mod tests {
 			.get_metadata(test_ctx(&client), &issuer)
 			.await
 			.expect("metadata fetch after ttl");
-		assert_eq!(second.jwks_uri, format!("{issuer}/jwks"));
+		assert_eq!(
+			second.jwks_uri.as_deref(),
+			Some(format!("{issuer}/jwks").as_str())
+		);
 	}
 
 	#[tokio::test]
@@ -1346,6 +1595,9 @@ mod tests {
 		.await
 		.expect("metadata fetch should not hang after cancellation")
 		.expect("metadata fetch after cancellation should succeed");
-		assert_eq!(recovered.jwks_uri, format!("{issuer}/jwks"));
+		assert_eq!(
+			recovered.jwks_uri.as_deref(),
+			Some(format!("{issuer}/jwks").as_str())
+		);
 	}
 }

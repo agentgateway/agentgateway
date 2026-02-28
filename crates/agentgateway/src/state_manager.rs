@@ -38,7 +38,6 @@ impl StateManager {
 		let xds = &config.xds;
 		let stores = Stores::from_init(crate::store::StoresInit {
 			ipv6_enabled: config.ipv6_enabled,
-			oidc,
 		});
 		let xds_client = if let Some(addr) = &xds.address {
 			let connector = control::grpc_connector(
@@ -68,6 +67,7 @@ impl StateManager {
 				stores: stores.clone(),
 				cfg: cfg.clone(),
 				client,
+				oidc,
 				gateway: ListenerTarget {
 					gateway_name: xds.gateway.clone(),
 					gateway_namespace: xds.namespace.clone(),
@@ -98,6 +98,7 @@ pub struct LocalClient {
 	pub cfg: ConfigSource,
 	pub stores: Stores,
 	pub client: Client,
+	pub oidc: Arc<crate::http::oidc::OidcProvider>,
 	pub gateway: ListenerTarget,
 }
 
@@ -193,6 +194,7 @@ impl LocalClient {
 		let config = crate::types::local::NormalizedLocalConfig::from(
 			&self.config,
 			self.client.clone(),
+			self.oidc.clone(),
 			self.gateway.clone(),
 			config_content.as_str(),
 		)

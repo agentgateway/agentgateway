@@ -63,7 +63,13 @@ pub(super) async fn apply_token_validation(
 	);
 	auth
 		.jwt_validator
-		.apply(&client.inputs.upstream, None, None, req)
+		.apply(
+			&client.inputs.upstream,
+			client.inputs.oidc.as_ref(),
+			None,
+			None,
+			req,
+		)
 		.await
 		.map_err(|e| {
 			create_auth_required_response(ProxyError::JwtAuthenticationFailure(e), req, auth)

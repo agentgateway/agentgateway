@@ -51,17 +51,39 @@ func (j *JwksStorePolicyController) Init(ctx context.Context) {
 	// Otherwise changes to one policy (removal for example) could result in disruption of traffic for other policies (while ConfigMaps are re-synced)
 	j.jwks = krt.NewManyCollection(j.agw.AgentgatewayPolicies, func(kctx krt.HandlerContext, p *agentgateway.AgentgatewayPolicy) []jwks.JwksSource {
 		toret := make([]jwks.JwksSource, 0)
+		pctx := plugins.PolicyCtx{Krt: kctx, Collections: j.agw}
 
 		// enqueue Traffic JWT providers (if present)
 		if p.Spec.Traffic != nil && p.Spec.Traffic.JWTAuthentication != nil {
 			for _, provider := range p.Spec.Traffic.JWTAuthentication.Providers {
-				if provider.JWKS.Remote == nil {
-					continue
-				}
-
-				if s := j.buildJwksSource(kctx, p.Name, p.Namespace, provider.JWKS.Remote); s != nil {
+				switch {
+				case provider.JWKS.Remote != nil:
+					if s := j.buildJwksSource(kctx, p.Name, p.Namespace, provider.JWKS.Remote); s != nil {
+						toret = append(toret, *s)
+					}
+				case provider.JWKS.OIDC != nil:
+					s, err := plugins.ResolveOIDCJWKSSource(pctx, p.Name, p.Namespace, string(provider.Issuer), provider.JWKS.OIDC.BackendRef)
+					if err != nil {
+						polLogger.Error("error resolving oidc jwks source", "error", err, "policy", p.Name, "issuer", provider.Issuer)
+						continue
+					}
 					toret = append(toret, *s)
 				}
+			}
+		}
+
+		if p.Spec.Traffic != nil && p.Spec.Traffic.OAuth2 != nil && p.Spec.Traffic.OAuth2.Issuer != nil {
+			s, err := plugins.ResolveOIDCJWKSSource(
+				pctx,
+				p.Name,
+				p.Namespace,
+				string(*p.Spec.Traffic.OAuth2.Issuer),
+				p.Spec.Traffic.OAuth2.BackendRef,
+			)
+			if err != nil {
+				polLogger.Error("error resolving oauth2 oidc jwks source", "error", err, "policy", p.Name, "issuer", *p.Spec.Traffic.OAuth2.Issuer)
+			} else {
+				toret = append(toret, *s)
 			}
 		}
 

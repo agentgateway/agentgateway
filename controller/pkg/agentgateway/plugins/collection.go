@@ -9,6 +9,7 @@ import (
 	"istio.io/istio/pkg/kube/kubetypes"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -16,11 +17,13 @@ import (
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	kgwversioned "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
+	utilkrt "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
 )
 
 type AgwCollections struct {
@@ -44,15 +47,16 @@ type AgwCollections struct {
 	ServiceEntries  krt.Collection[*networkingclient.ServiceEntry]
 
 	// Gateway API resources
-	GatewayClasses     krt.Collection[*gwv1.GatewayClass]
-	Gateways           krt.Collection[*gwv1.Gateway]
-	HTTPRoutes         krt.Collection[*gwv1.HTTPRoute]
-	GRPCRoutes         krt.Collection[*gwv1.GRPCRoute]
-	TCPRoutes          krt.Collection[*gwv1a2.TCPRoute]
-	TLSRoutes          krt.Collection[*gwv1a2.TLSRoute]
-	ReferenceGrants    krt.Collection[*gwv1b1.ReferenceGrant]
-	BackendTLSPolicies krt.Collection[*gwv1.BackendTLSPolicy]
-	XListenerSets      krt.Collection[*gwxv1a1.XListenerSet]
+	GatewayClasses                krt.Collection[*gwv1.GatewayClass]
+	Gateways                      krt.Collection[*gwv1.Gateway]
+	HTTPRoutes                    krt.Collection[*gwv1.HTTPRoute]
+	GRPCRoutes                    krt.Collection[*gwv1.GRPCRoute]
+	TCPRoutes                     krt.Collection[*gwv1a2.TCPRoute]
+	TLSRoutes                     krt.Collection[*gwv1a2.TLSRoute]
+	ReferenceGrants               krt.Collection[*gwv1b1.ReferenceGrant]
+	BackendTLSPolicies            krt.Collection[*gwv1.BackendTLSPolicy]
+	BackendTLSPoliciesByTargetRef krt.Index[utils.TypedNamespacedName, *gwv1.BackendTLSPolicy]
+	XListenerSets                 krt.Collection[*gwxv1a1.XListenerSet]
 
 	// Extended resources
 	InferencePools krt.Collection[*inf.InferencePool]
@@ -60,6 +64,7 @@ type AgwCollections struct {
 	// agentgateway resources
 	Backends             krt.Collection[*agentgateway.AgentgatewayBackend]
 	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
+	PoliciesByTargetRef  krt.Index[targetRefIndexKey, *agentgateway.AgentgatewayPolicy]
 
 	// ControllerName is the name of the Gateway controller.
 	ControllerName string
@@ -159,4 +164,29 @@ func NewAgwCollections(
 func (c *AgwCollections) SetupIndexes() {
 	c.SecretsByNamespace = krt.NewNamespaceIndex(c.Secrets)
 	c.ServicesByNamespace = krt.NewNamespaceIndex(c.Services)
+	c.PoliciesByTargetRef = utilkrt.UnnamedIndex(c.AgentgatewayPolicies, func(in *agentgateway.AgentgatewayPolicy) []targetRefIndexKey {
+		keys := make([]targetRefIndexKey, 0, len(in.Spec.TargetRefs))
+		for _, ref := range in.Spec.TargetRefs {
+			keys = append(keys, targetRefIndexKey{
+				Name:      string(ref.Name),
+				Kind:      string(ref.Kind),
+				Group:     string(ref.Group),
+				Namespace: in.Namespace,
+			})
+		}
+		return keys
+	})
+	c.BackendTLSPoliciesByTargetRef = utilkrt.UnnamedIndex(c.BackendTLSPolicies, func(in *gwv1.BackendTLSPolicy) []utils.TypedNamespacedName {
+		keys := make([]utils.TypedNamespacedName, 0, len(in.Spec.TargetRefs))
+		for _, ref := range in.Spec.TargetRefs {
+			keys = append(keys, utils.TypedNamespacedName{
+				NamespacedName: types.NamespacedName{
+					Name:      string(ref.Name),
+					Namespace: in.Namespace,
+				},
+				Kind: string(ref.Kind),
+			})
+		}
+		return keys
+	})
 }

@@ -611,9 +611,8 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 	let oidc = Arc::new(crate::http::oidc::OidcProvider::new());
 	let stores = Stores::from_init(crate::store::StoresInit {
 		ipv6_enabled: config.ipv6_enabled,
-		oidc: oidc.clone(),
 	});
-	let client = client::Client::new(&config.dns, None, Default::default(), None, oidc.clone());
+	let client = client::Client::new(&config.dns, None, Default::default(), None);
 	let (drain_tx, drain_rx) = drain::new();
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),
@@ -624,6 +623,7 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 			Default::default(),
 		)),
 		upstream: client.clone(),
+		oidc,
 		ca: None,
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),

@@ -1,8 +1,6 @@
-use std::collections::HashSet;
-use std::sync::Arc;
-
 use itertools::Itertools;
 use serde_json::json;
+use std::collections::HashSet;
 
 use super::{JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
 use crate::http::oidc::OidcProvider;
@@ -137,13 +135,7 @@ fn make_test_client() -> crate::client::Client {
 		resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 		resolver_opts: hickory_resolver::config::ResolverOpts::default(),
 	};
-	crate::client::Client::new(
-		&cfg,
-		None,
-		Default::default(),
-		None,
-		Arc::new(OidcProvider::new()),
-	)
+	crate::client::Client::new(&cfg, None, Default::default(), None)
 }
 
 #[test]
@@ -500,9 +492,16 @@ pub async fn test_apply_strict_missing_token() {
 
 	// Minimal RequestLog
 	let mut req_log = make_min_req_log();
+	let oidc = OidcProvider::new();
 
 	let res = jwt
-		.apply(&make_test_client(), None, Some(&mut req_log), &mut req)
+		.apply(
+			&make_test_client(),
+			&oidc,
+			None,
+			Some(&mut req_log),
+			&mut req,
+		)
 		.await;
 	assert!(matches!(res, Err(super::TokenError::Missing)));
 }
@@ -519,8 +518,9 @@ pub async fn test_apply_permissive_no_token_ok() {
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
+	let oidc = OidcProvider::new();
 	let res = jwt
-		.apply(&make_test_client(), None, Some(&mut log), &mut req)
+		.apply(&make_test_client(), &oidc, None, Some(&mut log), &mut req)
 		.await;
 	assert!(res.is_ok());
 	assert!(req.extensions().get::<super::Claims>().is_none());
@@ -542,8 +542,9 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 		crate::http::HeaderValue::from_static("Bearer invalid-token"),
 	);
 	let mut log = make_min_req_log();
+	let oidc = OidcProvider::new();
 	let res = jwt
-		.apply(&make_test_client(), None, Some(&mut log), &mut req)
+		.apply(&make_test_client(), &oidc, None, Some(&mut log), &mut req)
 		.await;
 	assert!(res.is_ok());
 	// Header should remain present on failure in permissive mode
@@ -579,8 +580,9 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
 	);
 	let mut log = make_min_req_log();
+	let oidc = OidcProvider::new();
 	let res = jwt
-		.apply(&make_test_client(), None, Some(&mut log), &mut req)
+		.apply(&make_test_client(), &oidc, None, Some(&mut log), &mut req)
 		.await;
 	assert!(res.is_ok());
 	assert!(
@@ -604,8 +606,9 @@ pub async fn test_apply_optional_no_token_ok() {
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
+	let oidc = OidcProvider::new();
 	let res = jwt
-		.apply(&make_test_client(), None, Some(&mut log), &mut req)
+		.apply(&make_test_client(), &oidc, None, Some(&mut log), &mut req)
 		.await;
 	assert!(res.is_ok());
 	assert!(req.extensions().get::<super::Claims>().is_none());
@@ -627,8 +630,9 @@ pub async fn test_apply_optional_invalid_token_err() {
 		crate::http::HeaderValue::from_static("Bearer invalid-token"),
 	);
 	let mut log = make_min_req_log();
+	let oidc = OidcProvider::new();
 	let res = jwt
-		.apply(&make_test_client(), None, Some(&mut log), &mut req)
+		.apply(&make_test_client(), &oidc, None, Some(&mut log), &mut req)
 		.await;
 	assert!(matches!(res, Err(TokenError::InvalidHeader(_))));
 }
@@ -655,8 +659,9 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
 	);
 	let mut log = make_min_req_log();
+	let oidc = OidcProvider::new();
 	let res = jwt
-		.apply(&make_test_client(), None, Some(&mut log), &mut req)
+		.apply(&make_test_client(), &oidc, None, Some(&mut log), &mut req)
 		.await;
 	assert!(res.is_ok());
 	assert!(
@@ -690,8 +695,9 @@ pub async fn test_apply_optional_valid_token_preserves_header_when_forward_enabl
 		.headers_mut()
 		.insert(crate::http::header::AUTHORIZATION, authz_value.clone());
 	let mut log = make_min_req_log();
+	let oidc = OidcProvider::new();
 	let res = jwt
-		.apply(&make_test_client(), None, Some(&mut log), &mut req)
+		.apply(&make_test_client(), &oidc, None, Some(&mut log), &mut req)
 		.await;
 	assert!(res.is_ok());
 	assert_eq!(

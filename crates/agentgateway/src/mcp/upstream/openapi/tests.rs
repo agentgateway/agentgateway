@@ -33,7 +33,6 @@ async fn setup() -> (MockServer, Handler) {
 	let oidc = Arc::new(crate::http::oidc::OidcProvider::new());
 	let stores = Stores::from_init(crate::store::StoresInit {
 		ipv6_enabled: config.ipv6_enabled,
-		oidc: oidc.clone(),
 	});
 	let client = Client::new(
 		&client::Config {
@@ -43,7 +42,6 @@ async fn setup() -> (MockServer, Handler) {
 		None,
 		BackendConfig::default(),
 		None,
-		oidc.clone(),
 	);
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),
@@ -54,6 +52,7 @@ async fn setup() -> (MockServer, Handler) {
 			Default::default(),
 		)),
 		upstream: client.clone(),
+		oidc,
 		ca: None,
 
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),

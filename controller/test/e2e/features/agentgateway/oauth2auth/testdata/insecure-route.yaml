@@ -12,4 +12,3 @@ spec:
   - backendRefs:
     - name: backend
       port: 80
-

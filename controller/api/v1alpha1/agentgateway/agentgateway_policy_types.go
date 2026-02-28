@@ -608,10 +608,10 @@ type RemoteJWKS struct {
 }
 
 type OIDCJWKS struct {
-	// providerBackendRef references the backend used for OIDC provider back-channel calls.
+	// backendRef references the backend used for OIDC provider back-channel calls.
 	// Supported types are Service and AgentgatewayBackend.
 	// +optional
-	ProviderBackendRef *gwv1.BackendObjectReference `json:"providerBackendRef,omitempty"`
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Strict;Optional
@@ -750,43 +750,59 @@ type APIKeyAuthentication struct {
 	SecretSelector *SecretSelector `json:"secretSelector,omitempty"`
 }
 
-// +kubebuilder:validation:ExactlyOneOf=clientSecret;clientSecretRef
-// +kubebuilder:validation:XValidation:rule="has(self.redirectUri) || (has(self.autoDetectRedirectUri) && self.autoDetectRedirectUri)",message="either redirectUri must be set or autoDetectRedirectUri must be true"
+// +kubebuilder:validation:XValidation:rule="has(self.issuer) || (has(self.authorizationEndpoint) && has(self.tokenEndpoint))",message="issuer or both authorizationEndpoint and tokenEndpoint must be set"
+// +kubebuilder:validation:XValidation:rule="has(self.issuer) ? (!has(self.authorizationEndpoint) && !has(self.tokenEndpoint) && !has(self.endSessionEndpoint) && !has(self.tokenEndpointAuthMethodsSupported)) : true",message="issuer may not be combined with explicit OAuth2 endpoint fields"
+// +kubebuilder:validation:XValidation:rule="has(self.clientSecret)",message="clientSecret must be set"
+// +kubebuilder:validation:XValidation:rule="has(self.redirectUri)",message="redirectUri must be set"
 type OAuth2 struct {
-	// issuer identifies the OIDC issuer URL.
-	// +required
-	Issuer LongString `json:"issuer"`
+	// issuer enables OIDC discovery-based provider configuration.
+	// When set, authorizationEndpoint, tokenEndpoint, endSessionEndpoint, and
+	// tokenEndpointAuthMethodsSupported are discovered by the controller.
+	// +optional
+	Issuer *LongString `json:"issuer,omitempty"`
 
-	// providerBackendRef references the backend used for OAuth2/OIDC provider back-channel calls
-	// (discovery, JWKS, token exchange).
+	// authorizationEndpoint is the provider authorization endpoint for non-discovery OAuth2 providers.
+	// +optional
+	AuthorizationEndpoint *LongString `json:"authorizationEndpoint,omitempty"`
+
+	// tokenEndpoint is the provider token endpoint for non-discovery OAuth2 providers.
+	// +optional
+	TokenEndpoint *LongString `json:"tokenEndpoint,omitempty"`
+
+	// backendRef references the backend used for provider back-channel calls
+	// (discovery, JWKS, token exchange, and optional logout).
 	//
 	// Supported types: Service and AgentgatewayBackend.
 	// +optional
-	ProviderBackendRef *gwv1.BackendObjectReference `json:"providerBackendRef,omitempty"`
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
+	// endSessionEndpoint configures the provider logout endpoint for explicit OAuth2 providers.
+	// This may only be set when using explicit authorizationEndpoint/tokenEndpoint configuration.
+	// +optional
+	EndSessionEndpoint *LongString `json:"endSessionEndpoint,omitempty"`
+
+	// tokenEndpointAuthMethodsSupported configures the client auth methods supported by the token endpoint
+	// for explicit OAuth2 providers. Example values include `client_secret_post` and `client_secret_basic`.
+	// +kubebuilder:validation:MaxItems=8
+	// +optional
+	TokenEndpointAuthMethodsSupported []ShortString `json:"tokenEndpointAuthMethodsSupported,omitempty"`
 
 	// clientId identifies the OAuth2/OIDC client.
 	// +required
 	ClientID ShortString `json:"clientId"`
 
-	// clientSecret provides the OAuth2 client secret inline.
-	// This option is the least secure; usage of clientSecretRef is preferred.
-	//
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=4096
-	// +optional
-	ClientSecret *string `json:"clientSecret,omitempty"`
-
-	// clientSecretRef references a key in a Kubernetes Secret containing the OAuth2 client secret.
-	// +optional
-	ClientSecretRef *corev1.SecretKeySelector `json:"clientSecretRef,omitempty"`
+	// clientSecret configures the OAuth2 client secret inline or from a Kubernetes Secret.
+	// +required
+	ClientSecret OAuth2ClientSecret `json:"clientSecret"`
 
 	// redirectUri specifies the callback URL for the OAuth2 authorization flow.
-	// +optional
-	RedirectURI *LongString `json:"redirectUri,omitempty"`
+	// +required
+	RedirectURI LongString `json:"redirectUri"`
 
-	// autoDetectRedirectUri enables callback URL inference from request host/proxy headers when redirectUri is unset.
+	// allowInsecureRedirectUri allows non-loopback `http://` redirect URIs for OAuth2 development setups.
+	// When false (default), redirectUri/postLogoutRedirectUri only allow `https://` and `http://` loopback hosts.
 	// +optional
-	AutoDetectRedirectURI *bool `json:"autoDetectRedirectUri,omitempty"`
+	AllowInsecureRedirectURI bool `json:"allowInsecureRedirectUri,omitempty"`
 
 	// scopes specifies OAuth scopes requested during browser login flow.
 	// +kubebuilder:validation:MinItems=1
@@ -798,10 +814,6 @@ type OAuth2 struct {
 	// +optional
 	CookieName *ShortString `json:"cookieName,omitempty"`
 
-	// passAccessToken forwards Authorization: Bearer <access_token> upstream after login.
-	// +optional
-	PassAccessToken *bool `json:"passAccessToken,omitempty"`
-
 	// signOutPath configures a local endpoint that clears the gateway OAuth2 session.
 	// +optional
 	SignOutPath *ShortString `json:"signOutPath,omitempty"`
@@ -811,26 +823,38 @@ type OAuth2 struct {
 	// +optional
 	PostLogoutRedirectURI *LongString `json:"postLogoutRedirectUri,omitempty"`
 
-	// passThroughMatchers are path prefixes that bypass OAuth2 authentication.
-	// +kubebuilder:validation:MaxItems=64
-	// +optional
-	PassThroughMatchers []ShortString `json:"passThroughMatchers,omitempty"`
-
-	// denyRedirectMatchers are path prefixes that return 401 instead of browser redirect when unauthenticated.
-	// +kubebuilder:validation:MaxItems=64
-	// +optional
-	DenyRedirectMatchers []ShortString `json:"denyRedirectMatchers,omitempty"`
-
-	// trustedProxyCidrs are CIDRs trusted to provide X-Forwarded-* headers for redirect URI inference.
-	// +kubebuilder:validation:MaxItems=64
-	// +optional
-	TrustedProxyCIDRs []ShortString `json:"trustedProxyCidrs,omitempty"`
-
 	// refreshableCookieMaxAgeSeconds sets max age for refreshable OAuth2 sessions.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=2592000
 	// +optional
 	RefreshableCookieMaxAgeSeconds *uint64 `json:"refreshableCookieMaxAgeSeconds,omitempty"`
+}
+
+// +kubebuilder:validation:ExactlyOneOf=inline;secretRef
+type OAuth2ClientSecret struct {
+	// inline provides the OAuth2 client secret inline.
+	// This option is the least secure; usage of secretRef is preferred.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=4096
+	// +optional
+	Inline *string `json:"inline,omitempty"`
+
+	// secretRef references a key in a Kubernetes Secret containing the OAuth2 client secret.
+	// +optional
+	SecretRef *OAuth2SecretRef `json:"secretRef,omitempty"`
+}
+
+type OAuth2SecretRef struct {
+	// name is the name of the Kubernetes Secret containing the OAuth2 client secret.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// key is the key within the Secret data map that stores the OAuth2 client secret.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	Key string `json:"key"`
 }
 
 type SecretSelector struct {

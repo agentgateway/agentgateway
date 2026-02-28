@@ -14,7 +14,7 @@ use serde_json::{Map, Value};
 
 use crate::client::Client;
 use crate::http::Request;
-use crate::http::oidc::OidcCallContext;
+use crate::http::oidc::{OidcCallContext, OidcProvider};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::SimpleBackendReference;
@@ -251,7 +251,11 @@ impl Default for JWTValidationOptions {
 }
 
 impl LocalJwtConfig {
-	pub async fn try_into(self, client: Client) -> Result<Jwt, JwkError> {
+	pub async fn try_into(
+		self,
+		client: Client,
+		oidc_provider: Arc<OidcProvider>,
+	) -> Result<Jwt, JwkError> {
 		match self {
 			LocalJwtConfig::Multi {
 				mode,
@@ -316,8 +320,7 @@ impl LocalJwtConfig {
 					});
 				}
 
-				let manager = client.oidc().clone();
-				let (_metadata, jwt) = manager
+				let (_metadata, jwt) = oidc_provider
 					.get_info(
 						OidcCallContext::new(&client, None, provider_backend.as_ref()),
 						&issuer,
@@ -536,6 +539,7 @@ impl Jwt {
 	pub async fn apply(
 		&self,
 		client: &Client,
+		oidc_provider: &OidcProvider,
 		policy_client: Option<&PolicyClient>,
 		log: Option<&mut RequestLog>,
 		req: &mut Request,
@@ -562,8 +566,7 @@ impl Jwt {
 					"Unknown key ID, attempting dynamic OIDC refresh for {}",
 					oidc.issuer
 				);
-				match client
-					.oidc()
+				match oidc_provider
 					.validate_token(
 						OidcCallContext::new(client, policy_client, oidc.provider_backend.as_ref()),
 						&oidc.issuer,

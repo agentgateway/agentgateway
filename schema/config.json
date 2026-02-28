@@ -3540,11 +3540,31 @@
       "type": "object",
       "properties": {
         "issuer": {
-          "description": "OIDC issuer URL.",
-          "type": "string"
+          "description": "OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "authorizationEndpoint": {
+          "description": "Explicit authorization endpoint for non-discovery OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpoint": {
+          "description": "Explicit token endpoint for non-discovery OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "providerBackend": {
-          "description": "Optional provider backend used for OIDC back-channel calls.",
+          "description": "Optional provider backend used for provider back-channel calls.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackend"
@@ -3553,6 +3573,22 @@
               "type": "null"
             }
           ]
+        },
+        "endSessionEndpoint": {
+          "description": "Optional end-session endpoint for explicit OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpointAuthMethodsSupported": {
+          "description": "Optional token endpoint auth methods supported by explicit OAuth2 providers.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         },
         "clientId": {
           "description": "OAuth2 client ID.",
@@ -3563,20 +3599,13 @@
           "$ref": "#/$defs/FileOrInline"
         },
         "redirectUri": {
-          "description": "Explicit callback URL (recommended for multi-proxy deployments).",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
+          "description": "Explicit callback URL configured with the upstream provider.",
+          "type": "string"
         },
-        "autoDetectRedirectUri": {
-          "description": "Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.\nPrefer explicit `redirectUri` in production.",
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "default": null
+        "allowInsecureRedirectUri": {
+          "description": "Allow non-loopback `http://` redirect URIs for local development only.",
+          "type": "boolean",
+          "default": false
         },
         "scopes": {
           "description": "OAuth scopes requested during browser login flow.",
@@ -3604,14 +3633,6 @@
           "minimum": 0,
           "default": null
         },
-        "passAccessToken": {
-          "description": "Forward `Authorization: Bearer <access_token>` upstream after login (default: false).",
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "default": null
-        },
         "signOutPath": {
           "description": "Sign-out path that clears the local OAuth2 session.",
           "type": [
@@ -3627,37 +3648,13 @@
             "null"
           ],
           "default": null
-        },
-        "passThroughMatchers": {
-          "description": "Route path prefixes that bypass OAuth2 auth.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": []
-        },
-        "denyRedirectMatchers": {
-          "description": "Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": []
-        },
-        "trustedProxyCidrs": {
-          "description": "Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": []
         }
       },
       "additionalProperties": false,
       "required": [
-        "issuer",
         "clientId",
-        "clientSecret"
+        "clientSecret",
+        "redirectUri"
       ]
     },
     "ExtProc": {

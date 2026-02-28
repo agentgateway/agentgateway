@@ -113,7 +113,7 @@
       "additionalProperties": false
     },
     "jwt": {
-      "description": "`jwt` contains claims from a verified JWT token or OAuth2/OIDC `id_token`.\nThis is present when either the JWT or OAuth2 policy injects claims.",
+      "description": "`jwt` contains claims from a verified JWT token or OAuth2/OIDC `id_token`.\nThis is populated only when claims are available from authentication policies.",
       "type": [
         "object",
         "null"

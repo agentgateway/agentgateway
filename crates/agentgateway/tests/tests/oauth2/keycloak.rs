@@ -580,7 +580,8 @@ binds:
           scopes:
           - openid
           - profile
-          passAccessToken: true
+        backendAuth:
+          passthrough: {{}}
       backends:
       - host: {upstream}
 "#

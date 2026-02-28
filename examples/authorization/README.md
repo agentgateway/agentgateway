@@ -66,7 +66,7 @@ traffic:
       audiences: ["test.agentgateway.dev"]
       jwks:
         oidc:
-          providerBackendRef:
+          backendRef:
             kind: Service
             name: idp-discovery
             port: 8443

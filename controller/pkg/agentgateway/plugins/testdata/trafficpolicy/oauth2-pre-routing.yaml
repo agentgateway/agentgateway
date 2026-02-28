@@ -29,30 +29,25 @@ spec:
   traffic:
     phase: PreRouting
     oauth2:
-      issuer: https://issuer.example.com
-      providerBackendRef:
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      endSessionEndpoint: https://issuer.example.com/logout
+      backendRef:
         kind: Service
         name: oauth2-discovery
         port: 8080
       clientId: agw-client
-      clientSecretRef:
-        name: oauth2-secret
-        key: client-secret
+      clientSecret:
+        secretRef:
+          name: oauth2-secret
+          key: client-secret
       redirectUri: https://gateway.example.com/oauth2/callback
-      autoDetectRedirectUri: true
       scopes:
       - openid
       - profile
       cookieName: agw-session
-      passAccessToken: true
       signOutPath: /logout
       postLogoutRedirectUri: https://gateway.example.com/logout-complete
-      passThroughMatchers:
-      - /healthz
-      denyRedirectMatchers:
-      - /api
-      trustedProxyCidrs:
-      - 10.0.0.0/8
       refreshableCookieMaxAgeSeconds: 3600
 
 ---
@@ -70,30 +65,25 @@ output:
         namespace: default
     traffic:
       oauth2:
-        autoDetectRedirectUri: true
+        authorizationEndpoint: https://issuer.example.com/authorize
         clientId: agw-client
         clientSecret: super-secret
         cookieName: agw-session
-        denyRedirectMatchers:
-        - /api
-        issuer: https://issuer.example.com
-        passAccessToken: true
-        passThroughMatchers:
-        - /healthz
+        endSessionEndpoint: https://issuer.example.com/logout
         postLogoutRedirectUri: https://gateway.example.com/logout-complete
         providerBackend:
           port: 8080
           service:
             hostname: oauth2-discovery.default.svc.cluster.local
             namespace: default
+        providerId: https://issuer.example.com/authorize
         redirectUri: https://gateway.example.com/oauth2/callback
         refreshableCookieMaxAgeSeconds: "3600"
         scopes:
         - openid
         - profile
         signOutPath: /logout
-        trustedProxyCidrs:
-        - 10.0.0.0/8
+        tokenEndpoint: https://issuer.example.com/token
       phase: GATEWAY
 status:
   ancestors:

@@ -97,9 +97,15 @@ async fn apply_request_policies(
 	if policies.oauth2.is_none()
 		&& let Some(j) = &policies.jwt
 	{
-		j.apply(&client.inputs.upstream, Some(&client), Some(log), req)
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+		j.apply(
+			&client.inputs.upstream,
+			client.inputs.oidc.as_ref(),
+			Some(&client),
+			Some(log),
+			req,
+		)
+		.await
+		.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;
@@ -278,9 +284,15 @@ async fn apply_gateway_policies(
 	if policies.oauth2.is_none()
 		&& let Some(j) = &policies.jwt
 	{
-		j.apply(&client.inputs.upstream, Some(&client), Some(log), req)
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+		j.apply(
+			&client.inputs.upstream,
+			client.inputs.oidc.as_ref(),
+			Some(&client),
+			Some(log),
+			req,
+		)
+		.await
+		.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;

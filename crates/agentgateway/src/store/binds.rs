@@ -49,12 +49,6 @@ pub struct Store {
 	policies_by_key: HashMap<PolicyKey, Arc<TargetedPolicy>>,
 	policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
 
-	compiled_oauth2: HashMap<PolicyKey, Arc<http::oauth2::OAuth2Filter>>,
-	// Intentionally std::sync::RwLock: this cache is accessed only from sync codepaths
-	// (no `.await` while locked), and Store itself is already externally synchronized.
-	inline_compiled_oauth2: std::sync::RwLock<HashMap<u64, Vec<Arc<http::oauth2::OAuth2Filter>>>>,
-	oidc: Arc<http::oidc::OidcProvider>,
-
 	backends: HashMap<BackendKey, Arc<BackendWithPolicies>>,
 
 	// Listeners we got before a Bind arrived
@@ -203,7 +197,7 @@ pub struct RoutePolicies {
 	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub direct_response: Option<filters::DirectResponse>,
-	pub oauth2: Option<Arc<http::oauth2::OAuth2Filter>>,
+	pub oauth2: Option<Arc<http::oauth2::OAuth2>>,
 	pub cors: Option<http::cors::Cors>,
 }
 
@@ -215,7 +209,7 @@ pub struct GatewayPolicies {
 	pub transformation: Option<http::transformation_cel::Transformation>,
 	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
 	pub api_key: Option<http::apikey::APIKeyAuthentication>,
-	pub oauth2: Option<Arc<http::oauth2::OAuth2Filter>>,
+	pub oauth2: Option<Arc<http::oauth2::OAuth2>>,
 }
 
 impl GatewayPolicies {
@@ -344,15 +338,11 @@ pub struct LLMResponsePolicies {
 #[derive(Clone)]
 pub struct StoreInit {
 	pub ipv6_enabled: bool,
-	pub oidc: Arc<http::oidc::OidcProvider>,
 }
 
 impl Default for StoreInit {
 	fn default() -> Self {
-		Self {
-			ipv6_enabled: true,
-			oidc: Arc::new(http::oidc::OidcProvider::new()),
-		}
+		Self { ipv6_enabled: true }
 	}
 }
 
@@ -371,7 +361,7 @@ pub struct RoutePath<'a> {
 
 impl Store {
 	pub fn from_init(init: StoreInit) -> Self {
-		let StoreInit { ipv6_enabled, oidc } = init;
+		let StoreInit { ipv6_enabled } = init;
 		let (tx, _) = tokio::sync::broadcast::channel(1000);
 		Self {
 			ipv6_enabled,
@@ -379,9 +369,6 @@ impl Store {
 			resources: Default::default(),
 			policies_by_key: Default::default(),
 			policies_by_target: Default::default(),
-			compiled_oauth2: Default::default(),
-			inline_compiled_oauth2: std::sync::RwLock::new(HashMap::new()),
-			oidc,
 			backends: Default::default(),
 			staged_routes: Default::default(),
 			staged_listeners: Default::default(),
@@ -414,10 +401,10 @@ impl Store {
 
 		// Apply inline policies first
 		for rule in inline {
-			self.apply_traffic_policy(&mut pol, &mut authz, rule, None, true);
+			self.apply_traffic_policy(&mut pol, &mut authz, rule);
 		}
 
-		// Apply stored policies (which can use cached filters)
+		// Apply stored policies.
 		let stored_keys = route_rule
 			.iter()
 			.copied()
@@ -434,13 +421,7 @@ impl Store {
 				continue;
 			};
 
-			self.apply_traffic_policy(
-				&mut pol,
-				&mut authz,
-				rule,
-				self.compiled_oauth2.get(key),
-				false,
-			);
+			self.apply_traffic_policy(&mut pol, &mut authz, rule);
 		}
 
 		if !authz.is_empty() {
@@ -455,8 +436,6 @@ impl Store {
 		pol: &mut RoutePolicies,
 		authz: &mut Vec<http::authorization::RuleSet>,
 		rule: &TrafficPolicy,
-		cached_oauth2: Option<&Arc<http::oauth2::OAuth2Filter>>,
-		compile_oauth2_on_miss: bool,
 	) {
 		match rule {
 			TrafficPolicy::LocalRateLimit(p) => {
@@ -490,25 +469,10 @@ impl Store {
 				if pol.oauth2.is_some() {
 					return;
 				}
-				let compiled = if let Some(cached) = cached_oauth2 {
-					Some(cached.clone())
-				} else if compile_oauth2_on_miss {
-					self.inline_oauth2_filter(p)
-				} else {
-					None
-				};
-				if let Some(compiled) = compiled {
-					if pol.jwt.take().is_some() {
-						warn!("oauth2 policy overrides jwt policy for this route");
-					}
-					pol.oauth2 = Some(compiled);
-				} else {
-					warn!("oauth2 policy failed to compile for route; forcing fail-closed direct response");
-					pol.direct_response.get_or_insert(filters::DirectResponse {
-						body: bytes::Bytes::from_static(b"oauth2 policy compilation failed"),
-						status: ::http::StatusCode::INTERNAL_SERVER_ERROR,
-					});
+				if pol.jwt.take().is_some() {
+					warn!("oauth2 policy overrides jwt policy for this route");
 				}
+				pol.oauth2 = Some(Arc::new(p.clone()));
 			},
 			TrafficPolicy::Transformation(p) => {
 				pol.transformation.get_or_insert_with(|| p.clone());
@@ -559,118 +523,6 @@ impl Store {
 		}
 	}
 
-	fn inline_oauth2_cache_key(policy: &agent::OAuth2Policy) -> u64 {
-		// Runtime-only cache key (not persisted). Hash stability across compiler versions is irrelevant.
-		// Collisions are guarded by `matches_policy` (which compares all fields including the secret).
-		// The client_secret is intentionally excluded to avoid exposing secret material to the hash function.
-		let mut hasher = std::collections::hash_map::DefaultHasher::new();
-		use std::hash::{Hash, Hasher};
-		policy.issuer.hash(&mut hasher);
-		match policy.provider_backend.as_ref() {
-			None => 0u8.hash(&mut hasher),
-			Some(agent::SimpleBackendReference::Service { name, port }) => {
-				1u8.hash(&mut hasher);
-				name.namespace.hash(&mut hasher);
-				name.hostname.hash(&mut hasher);
-				port.hash(&mut hasher);
-			},
-			Some(agent::SimpleBackendReference::Backend(name)) => {
-				2u8.hash(&mut hasher);
-				name.hash(&mut hasher);
-			},
-			Some(agent::SimpleBackendReference::InlineBackend(target)) => {
-				3u8.hash(&mut hasher);
-				target.hash(&mut hasher);
-			},
-			Some(agent::SimpleBackendReference::Invalid) => 4u8.hash(&mut hasher),
-		}
-		policy.client_id.hash(&mut hasher);
-		policy.redirect_uri.hash(&mut hasher);
-		policy.auto_detect_redirect_uri.hash(&mut hasher);
-		policy.scopes.hash(&mut hasher);
-		policy.cookie_name.hash(&mut hasher);
-		policy.refreshable_cookie_max_age_seconds.hash(&mut hasher);
-		policy.pass_access_token.hash(&mut hasher);
-		policy.sign_out_path.hash(&mut hasher);
-		policy.post_logout_redirect_uri.hash(&mut hasher);
-		policy.pass_through_matchers.hash(&mut hasher);
-		policy.deny_redirect_matchers.hash(&mut hasher);
-		policy.trusted_proxy_cidrs.hash(&mut hasher);
-		hasher.finish()
-	}
-
-	fn inline_oauth2_filter(
-		&self,
-		policy: &agent::OAuth2Policy,
-	) -> Option<Arc<http::oauth2::OAuth2Filter>> {
-		let key = Self::inline_oauth2_cache_key(policy);
-
-		{
-			let cache = self
-				.inline_compiled_oauth2
-				.read()
-				.unwrap_or_else(|e| e.into_inner());
-			if let Some(filters) = cache.get(&key)
-				&& let Some(filter) = filters.iter().find(|f| f.matches_policy(policy))
-			{
-				return Some(filter.clone());
-			}
-		}
-
-		let compiled = match http::oauth2::OAuth2Filter::new(policy.clone(), self.oidc.clone()) {
-			Ok(filter) => Arc::new(filter),
-			Err(e) => {
-				warn!("failed to create inline oauth2 filter: {e}");
-				return None;
-			},
-		};
-
-		let mut cache = self
-			.inline_compiled_oauth2
-			.write()
-			.unwrap_or_else(|e| e.into_inner());
-		let bucket = cache.entry(key).or_default();
-		if let Some(existing) = bucket.iter().find(|f| f.matches_policy(policy)) {
-			return Some(existing.clone());
-		}
-		bucket.push(compiled.clone());
-		Some(compiled)
-	}
-
-	fn validate_inline_oauth2_policies_for_route(&self, route: &Route) -> anyhow::Result<()> {
-		for policy in &route.inline_policies {
-			let TrafficPolicy::OAuth2(oauth2) = policy else {
-				continue;
-			};
-			self.inline_oauth2_filter(oauth2).ok_or_else(|| {
-				anyhow::anyhow!(
-					"failed to compile inline oauth2 policy for route {}",
-					route.key
-				)
-			})?;
-		}
-		Ok(())
-	}
-
-	fn validate_inline_oauth2_policies_for_binds(&self, binds: &[Bind]) -> anyhow::Result<()> {
-		for bind in binds {
-			for listener in bind.listeners.iter() {
-				for route in listener.routes.iter() {
-					self.validate_inline_oauth2_policies_for_route(route.as_ref())?;
-				}
-			}
-		}
-		Ok(())
-	}
-
-	fn clear_inline_oauth2_cache(&self) {
-		let mut cache = self
-			.inline_compiled_oauth2
-			.write()
-			.unwrap_or_else(|e| e.into_inner());
-		cache.clear();
-	}
-
 	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
@@ -709,16 +561,12 @@ impl Store {
 				TrafficPolicy::ExtProc(p) => {
 					pol.ext_proc.get_or_insert_with(|| p.clone());
 				},
-				TrafficPolicy::OAuth2(_) => {
+				TrafficPolicy::OAuth2(p) => {
 					if pol.oauth2.is_none() {
-						if let Some(cached) = self.compiled_oauth2.get(key) {
-							if pol.jwt.take().is_some() {
-								warn!("oauth2 policy overrides jwt policy for this gateway");
-							}
-							pol.oauth2 = Some(cached.clone());
-						} else {
-							warn!("ignoring oauth2 policy for gateway because it failed to compile");
+						if pol.jwt.take().is_some() {
+							warn!("oauth2 policy overrides jwt policy for this gateway");
 						}
+						pol.oauth2 = Some(Arc::new(p.clone()));
 					}
 				},
 				TrafficPolicy::Transformation(p) => {
@@ -950,7 +798,6 @@ impl Store {
         fields(bind),
     )]
 	pub fn remove_bind(&mut self, bind: BindKey) {
-		self.clear_inline_oauth2_cache();
 		if let Some(old) = self.binds.remove(&bind) {
 			let _ = self.tx.send(Event::Remove(old));
 		}
@@ -962,7 +809,6 @@ impl Store {
         fields(bind),
     )]
 	pub fn remove_policy(&mut self, pol: PolicyKey) {
-		self.compiled_oauth2.remove(&pol);
 		if let Some(old) = self.policies_by_key.remove(&pol)
 			&& let Some(o) = self.policies_by_target.get_mut(&old.target)
 		{
@@ -1049,7 +895,6 @@ impl Store {
     )]
 	pub fn insert_bind(&mut self, mut bind: Bind) {
 		debug!(bind=%bind.key, "insert bind");
-		self.clear_inline_oauth2_cache();
 
 		// Insert any staged listeners
 		for (k, mut v) in self
@@ -1085,36 +930,7 @@ impl Store {
 		self.backends.insert(key, arc);
 	}
 
-	fn compile_oauth2_filter_for_policy(
-		&self,
-		pol: &TargetedPolicy,
-	) -> anyhow::Result<Option<Arc<http::oauth2::OAuth2Filter>>> {
-		let agent::PolicyType::Traffic(tp) = &pol.policy else {
-			return Ok(None);
-		};
-		let TrafficPolicy::OAuth2(p) = &tp.policy else {
-			return Ok(None);
-		};
-		let filter = http::oauth2::OAuth2Filter::new(p.clone(), self.oidc.clone())
-			.map_err(|e| anyhow::anyhow!("failed to compile oauth2 policy {}: {}", pol.key, e))?;
-		Ok(Some(Arc::new(filter)))
-	}
-
 	pub fn insert_policy(&mut self, pol: TargetedPolicy) -> anyhow::Result<()> {
-		let compiled_oauth2 = self.compile_oauth2_filter_for_policy(&pol)?;
-		self.insert_policy_with_compiled_oauth2(pol, compiled_oauth2)
-	}
-
-	fn insert_policy_with_compiled_oauth2(
-		&mut self,
-		pol: TargetedPolicy,
-		compiled_oauth2: Option<Arc<http::oauth2::OAuth2Filter>>,
-	) -> anyhow::Result<()> {
-		self.compiled_oauth2.remove(&pol.key);
-		if let Some(filter) = compiled_oauth2 {
-			self.compiled_oauth2.insert(pol.key.clone(), filter);
-		}
-
 		let pol = Arc::new(pol);
 		if let Some(old) = self.policies_by_key.insert(pol.key.clone(), pol.clone()) {
 			// Remove the old target. We may add it back, though.
@@ -1300,7 +1116,6 @@ impl Store {
 	}
 	fn insert_xds_route(&mut self, raw: XdsRoute) -> anyhow::Result<()> {
 		let (route, listener_name): (Route, ListenerKey) = (&raw).try_into()?;
-		self.validate_inline_oauth2_policies_for_route(&route)?;
 		self.insert_route(route, listener_name);
 		Ok(())
 	}
@@ -1380,15 +1195,6 @@ impl StoreUpdater {
 	) -> anyhow::Result<PreviousState> {
 		let mut s = self.state.write().expect("mutex acquired");
 
-		s.validate_inline_oauth2_policies_for_binds(&binds)?;
-
-		let mut compiled_oauth2 = HashMap::new();
-		for p in &policies {
-			if let Some(filter) = s.compile_oauth2_filter_for_policy(p)? {
-				compiled_oauth2.insert(p.key.clone(), filter);
-			}
-		}
-
 		let mut old_binds = prev.binds;
 		let mut old_pols = prev.policies;
 		let mut old_backends = prev.backends;
@@ -1411,8 +1217,7 @@ impl StoreUpdater {
 		for p in policies {
 			old_pols.remove(&p.key);
 			next_state.policies.insert(p.key.clone());
-			let compiled = compiled_oauth2.remove(&p.key);
-			s.insert_policy_with_compiled_oauth2(p, compiled)?;
+			s.insert_policy(p)?;
 		}
 		for remaining_bind in old_binds {
 			s.remove_bind(remaining_bind);
@@ -1536,22 +1341,43 @@ mod tests {
 
 	fn test_oauth2_policy() -> OAuth2Policy {
 		OAuth2Policy {
-			issuer: "https://issuer.example.com".to_string(),
+			provider_id: "https://issuer.example.com".to_string(),
+			oidc_issuer: Some("https://issuer.example.com".to_string()),
 			provider_backend: None,
 			client_id: "client-id".to_string(),
 			client_secret: SecretString::new("secret".into()),
+			resolved_provider: Some(Box::new(crate::types::agent::ResolvedOAuth2Provider {
+				authorization_endpoint: "https://issuer.example.com/authorize".to_string(),
+				token_endpoint: "https://issuer.example.com/token".to_string(),
+				jwks_inline: Some(
+					serde_json::json!({
+						"keys": [{
+							"kty": "EC",
+							"crv": "P-256",
+							"kid": "test-kid",
+							"alg": "ES256",
+							"x": "WfUSsBlmKtTX8Rfmo9K-6PsKG1Ysw1j3St-ZUZSq4HU",
+							"y": "vO_R0kjX3d1oz-2aUtpoWfBp-wu7YxO_XjGSHv40tgM",
+							"use": "sig",
+						}]
+					})
+					.to_string(),
+				),
+				end_session_endpoint: Some("https://issuer.example.com/logout".to_string()),
+				token_endpoint_auth_methods_supported: vec!["client_secret_post".to_string()],
+			})),
 			redirect_uri: Some("https://example.com/_gateway/callback".to_string()),
-			auto_detect_redirect_uri: None,
+			allow_insecure_redirect_uri: false,
 			scopes: vec!["openid".to_string()],
 			cookie_name: None,
 			refreshable_cookie_max_age_seconds: None,
-			pass_access_token: Some(true),
 			sign_out_path: Some("/logout".to_string()),
 			post_logout_redirect_uri: None,
-			pass_through_matchers: vec![],
-			deny_redirect_matchers: vec![],
-			trusted_proxy_cidrs: vec![],
 		}
+	}
+
+	fn test_oauth2() -> http::oauth2::OAuth2 {
+		http::oauth2::OAuth2::new(test_oauth2_policy()).expect("test oauth2 policy should build")
 	}
 
 	fn test_jwt() -> http::jwt::Jwt {
@@ -1740,146 +1566,34 @@ mod tests {
 
 		let mut authz = Vec::new();
 		let mut pol = RoutePolicies::default();
-		store.apply_traffic_policy(
-			&mut pol,
-			&mut authz,
-			&TrafficPolicy::JwtAuth(test_jwt()),
-			None,
-			true,
-		);
-		store.apply_traffic_policy(
-			&mut pol,
-			&mut authz,
-			&TrafficPolicy::OAuth2(test_oauth2_policy()),
-			None,
-			true,
-		);
+		store.apply_traffic_policy(&mut pol, &mut authz, &TrafficPolicy::JwtAuth(test_jwt()));
+		store.apply_traffic_policy(&mut pol, &mut authz, &TrafficPolicy::OAuth2(test_oauth2()));
 		assert!(pol.oauth2.is_some());
 		assert!(pol.jwt.is_none());
 
 		let mut authz = Vec::new();
 		let mut pol = RoutePolicies::default();
-		store.apply_traffic_policy(
-			&mut pol,
-			&mut authz,
-			&TrafficPolicy::OAuth2(test_oauth2_policy()),
-			None,
-			true,
-		);
-		store.apply_traffic_policy(
-			&mut pol,
-			&mut authz,
-			&TrafficPolicy::JwtAuth(test_jwt()),
-			None,
-			true,
-		);
+		store.apply_traffic_policy(&mut pol, &mut authz, &TrafficPolicy::OAuth2(test_oauth2()));
+		store.apply_traffic_policy(&mut pol, &mut authz, &TrafficPolicy::JwtAuth(test_jwt()));
 		assert!(pol.oauth2.is_some());
 		assert!(pol.jwt.is_none());
 	}
 
 	#[test]
-	fn invalid_inline_oauth2_does_not_override_existing_jwt() {
-		let store = Store::from_init(StoreInit::default());
-		let mut authz = Vec::new();
-		let mut pol = RoutePolicies::default();
-
-		store.apply_traffic_policy(
-			&mut pol,
-			&mut authz,
-			&TrafficPolicy::JwtAuth(test_jwt()),
-			None,
-			true,
-		);
-
-		let mut invalid = test_oauth2_policy();
-		invalid.redirect_uri = None;
-		invalid.auto_detect_redirect_uri = None;
-		store.apply_traffic_policy(
-			&mut pol,
-			&mut authz,
-			&TrafficPolicy::OAuth2(invalid),
-			None,
-			true,
-		);
-
-		assert!(pol.oauth2.is_none());
-		assert!(pol.jwt.is_some());
-		assert!(
-			pol.direct_response.is_some(),
-			"invalid inline oauth2 should force fail-closed direct response"
-		);
-	}
-
-	#[test]
-	fn sync_local_rejects_bind_with_invalid_inline_oauth2_policy() {
-		let updater = StoreUpdater::new(Arc::new(std::sync::RwLock::new(Store::from_init(
-			StoreInit::default(),
-		))));
-
-		let mut invalid = test_oauth2_policy();
-		invalid.redirect_uri = None;
-		invalid.auto_detect_redirect_uri = None;
-
-		let route_name = route("r", "ns", Some("HTTPRoute"));
-		let route = Route {
-			key: strng::new("route-key"),
-			name: route_name,
-			hostnames: vec![],
-			matches: vec![],
-			backends: vec![],
-			inline_policies: vec![TrafficPolicy::OAuth2(invalid)],
-		};
-		let listener = Listener {
-			key: strng::new("listener-key"),
-			name: listener(),
-			hostname: strng::new(""),
-			protocol: crate::types::agent::ListenerProtocol::HTTP,
-			routes: crate::types::agent::RouteSet::from_list(vec![route]),
-			tcp_routes: crate::types::agent::TCPRouteSet::default(),
-		};
-		let bind = Bind {
-			key: strng::new("bind-key"),
-			address: "0.0.0.0:8080".parse().unwrap(),
-			protocol: crate::types::agent::BindProtocol::http,
-			tunnel_protocol: crate::types::agent::TunnelProtocol::Direct,
-			listeners: crate::types::agent::ListenerSet::from_list([listener]),
-		};
-
-		let err = updater
-			.sync_local(vec![bind], vec![], vec![], PreviousState::default())
-			.expect_err("invalid inline oauth2 policy must be rejected");
-		assert!(
-			err
-				.to_string()
-				.contains("failed to compile inline oauth2 policy"),
-			"unexpected error: {err}"
-		);
-	}
-
-	#[test]
-	fn insert_policy_rejects_invalid_oauth2() {
+	fn insert_policy_accepts_oauth2_runtime() {
 		let mut store = Store::from_init(StoreInit::default());
-		let mut invalid = test_oauth2_policy();
-		invalid.redirect_uri = None;
-		invalid.auto_detect_redirect_uri = None;
-		let key: PolicyKey = strng::new("invalid-oauth2");
+		let key: PolicyKey = strng::new("valid-oauth2");
 		let policy = TargetedPolicy {
 			key: key.clone(),
 			name: None,
 			target: PolicyTarget::Route(route("r", "ns", Some("HTTPRoute"))),
-			policy: TrafficPolicy::OAuth2(invalid).into(),
+			policy: TrafficPolicy::OAuth2(test_oauth2()).into(),
 		};
 
-		let err = store
+		store
 			.insert_policy(policy)
-			.expect_err("invalid oauth2 policy must be rejected");
-		assert!(
-			err
-				.to_string()
-				.contains("redirect_uri or auto_detect_redirect_uri=true")
-		);
-		assert!(!store.policies_by_key.contains_key(&key));
-		assert!(!store.compiled_oauth2.contains_key(&key));
+			.expect("oauth2 runtime policy should be inserted");
+		assert!(store.policies_by_key.contains_key(&key));
 	}
 
 	#[test]
@@ -1892,7 +1606,7 @@ mod tests {
 			&mut store,
 			&listener,
 			"listener-oauth2",
-			TrafficPolicy::OAuth2(test_oauth2_policy()),
+			TrafficPolicy::OAuth2(test_oauth2()),
 			true,
 		);
 		insert_gateway_traffic_policy(
@@ -1919,42 +1633,11 @@ mod tests {
 			&mut store,
 			&listener,
 			"gateway-oauth2",
-			TrafficPolicy::OAuth2(test_oauth2_policy()),
+			TrafficPolicy::OAuth2(test_oauth2()),
 			false,
 		);
 		let pol = store.gateway_policies(&listener);
 		assert!(pol.oauth2.is_some());
 		assert!(pol.jwt.is_none());
-	}
-
-	#[test]
-	fn inline_oauth2_cache_distinguishes_different_secrets() {
-		let store = Store::from_init(StoreInit::default());
-		let policy_a = test_oauth2_policy();
-		let mut policy_b = test_oauth2_policy();
-		policy_b.client_secret = SecretString::new("different-secret".into());
-
-		// Cache keys collide because client_secret is excluded from the hash.
-		assert_eq!(
-			Store::inline_oauth2_cache_key(&policy_a),
-			Store::inline_oauth2_cache_key(&policy_b),
-		);
-
-		// First compile populates the cache.
-		let filter_a = store
-			.inline_oauth2_filter(&policy_a)
-			.expect("filter_a should compile");
-
-		// Second compile with different secret must produce a distinct filter.
-		let filter_b = store
-			.inline_oauth2_filter(&policy_b)
-			.expect("filter_b should compile");
-
-		assert!(
-			!Arc::ptr_eq(&filter_a, &filter_b),
-			"filters with different secrets must not be reused"
-		);
-		assert!(filter_a.matches_policy(&policy_a));
-		assert!(!filter_a.matches_policy(&policy_b));
 	}
 }

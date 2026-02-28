@@ -37,9 +37,10 @@ type JwksHttpClient interface {
 }
 
 type JwksSource struct {
-	JwksURL string
-	Ttl     time.Duration
-	Deleted bool
+	JwksURL      string
+	HostOverride string
+	Ttl          time.Duration
+	Deleted      bool
 	// Exclude from JSON dump as this is not safe for marshaling
 	TlsConfig *tls.Config `json:"-"`
 }
@@ -50,6 +51,7 @@ func (js JwksSource) ResourceName() string {
 
 func (js JwksSource) Equals(other JwksSource) bool {
 	return js.JwksURL == other.JwksURL &&
+		js.HostOverride == other.HostOverride &&
 		js.Ttl == other.Ttl && js.Deleted == other.Deleted && reflect.DeepEqual(js.TlsConfig, other.TlsConfig)
 }
 
@@ -142,7 +144,7 @@ func (f *JwksFetcher) maybeFetchJwks(ctx context.Context) {
 
 		logger.Debug("fetching remote jwks", "jwks_uri", fetch.keysetSource.JwksURL)
 
-		jwks, err := f.fetchJwks(ctx, fetch.keysetSource.JwksURL, fetch.keysetSource.TlsConfig)
+		jwks, err := f.fetchJwks(ctx, fetch.keysetSource.JwksURL, fetch.keysetSource.TlsConfig, fetch.keysetSource.HostOverride)
 		if err != nil {
 			multiplier := time.Duration(math.Pow(2, float64(fetch.retryAttempt+1)))
 			next := min(100*time.Millisecond*multiplier, time.Second*15)
@@ -219,21 +221,28 @@ func (f *JwksFetcher) RemoveKeyset(source JwksSource) {
 	}
 }
 
-func (f *JwksFetcher) fetchJwks(ctx context.Context, jwksURL string, tlsConfig *tls.Config) (jose.JSONWebKeySet, error) {
-	if tlsConfig != nil {
+func (f *JwksFetcher) fetchJwks(ctx context.Context, jwksURL string, tlsConfig *tls.Config, hostOverride string) (jose.JSONWebKeySet, error) {
+	if tlsConfig != nil || hostOverride != "" {
 		c := &jwksHttpClientImpl{Client: makeClient(tlsConfig)}
-		return c.FetchJwks(ctx, jwksURL)
+		return c.fetchJwks(ctx, jwksURL, hostOverride)
 	}
 	return f.defaultJwksClient.FetchJwks(ctx, jwksURL)
 }
 
 func (c *jwksHttpClientImpl) FetchJwks(ctx context.Context, jwksURL string) (jose.JSONWebKeySet, error) {
+	return c.fetchJwks(ctx, jwksURL, "")
+}
+
+func (c *jwksHttpClientImpl) fetchJwks(ctx context.Context, jwksURL string, hostOverride string) (jose.JSONWebKeySet, error) {
 	log := log.FromContext(ctx)
 	log.Info("fetching jwks", "url", jwksURL)
 
 	request, err := http.NewRequest(http.MethodGet, jwksURL, nil)
 	if err != nil {
 		return jose.JSONWebKeySet{}, fmt.Errorf("could not build request to get JWKS: %w", err)
+	}
+	if hostOverride != "" {
+		request.Host = hostOverride
 	}
 
 	// TODO (dmitri-d) control the size here maybe?

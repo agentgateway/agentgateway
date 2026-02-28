@@ -725,8 +725,10 @@
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
 |`binds[].listeners[].routes[].policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
-|`binds[].listeners[].routes[].policies.oauth2.issuer`|OIDC issuer URL.|
-|`binds[].listeners[].routes[].policies.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`binds[].listeners[].routes[].policies.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`binds[].listeners[].routes[].policies.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`binds[].listeners[].routes[].policies.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
 |`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.name`||
 |`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
@@ -734,20 +736,18 @@
 |`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.port`||
 |`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`binds[].listeners[].routes[].policies.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
 |`binds[].listeners[].routes[].policies.oauth2.clientId`|OAuth2 client ID.|
 |`binds[].listeners[].routes[].policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
 |`binds[].listeners[].routes[].policies.oauth2.clientSecret.(any)file`||
-|`binds[].listeners[].routes[].policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
-|`binds[].listeners[].routes[].policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`binds[].listeners[].routes[].policies.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`binds[].listeners[].routes[].policies.oauth2.allowInsecureRedirectUri`|Allow non-loopback `http://` redirect URIs for local development only.|
 |`binds[].listeners[].routes[].policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`binds[].listeners[].routes[].policies.oauth2.cookieName`|Session cookie base name.|
 |`binds[].listeners[].routes[].policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
-|`binds[].listeners[].routes[].policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
 |`binds[].listeners[].routes[].policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
 |`binds[].listeners[].routes[].policies.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
-|`binds[].listeners[].routes[].policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
-|`binds[].listeners[].routes[].policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
-|`binds[].listeners[].routes[].policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`binds[].listeners[].routes[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name`||
@@ -1618,8 +1618,10 @@
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
 |`binds[].listeners[].policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
-|`binds[].listeners[].policies.oauth2.issuer`|OIDC issuer URL.|
-|`binds[].listeners[].policies.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`binds[].listeners[].policies.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`binds[].listeners[].policies.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`binds[].listeners[].policies.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`binds[].listeners[].policies.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
 |`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service`||
 |`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.name`||
 |`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
@@ -1627,20 +1629,18 @@
 |`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.port`||
 |`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
 |`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`binds[].listeners[].policies.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
 |`binds[].listeners[].policies.oauth2.clientId`|OAuth2 client ID.|
 |`binds[].listeners[].policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
 |`binds[].listeners[].policies.oauth2.clientSecret.(any)file`||
-|`binds[].listeners[].policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
-|`binds[].listeners[].policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`binds[].listeners[].policies.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`binds[].listeners[].policies.oauth2.allowInsecureRedirectUri`|Allow non-loopback `http://` redirect URIs for local development only.|
 |`binds[].listeners[].policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`binds[].listeners[].policies.oauth2.cookieName`|Session cookie base name.|
 |`binds[].listeners[].policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
-|`binds[].listeners[].policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
 |`binds[].listeners[].policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
 |`binds[].listeners[].policies.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
-|`binds[].listeners[].policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
-|`binds[].listeners[].policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
-|`binds[].listeners[].policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`binds[].listeners[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].policies.extProc.(any)(1)service.name`||
@@ -2371,8 +2371,10 @@
 |`policies[].policy.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
 |`policies[].policy.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
-|`policies[].policy.oauth2.issuer`|OIDC issuer URL.|
-|`policies[].policy.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`policies[].policy.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`policies[].policy.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`policies[].policy.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`policies[].policy.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
 |`policies[].policy.oauth2.providerBackend.(any)(1)service`||
 |`policies[].policy.oauth2.providerBackend.(any)(1)service.name`||
 |`policies[].policy.oauth2.providerBackend.(any)(1)service.name.namespace`||
@@ -2380,20 +2382,18 @@
 |`policies[].policy.oauth2.providerBackend.(any)(1)service.port`||
 |`policies[].policy.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
 |`policies[].policy.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`policies[].policy.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
 |`policies[].policy.oauth2.clientId`|OAuth2 client ID.|
 |`policies[].policy.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
 |`policies[].policy.oauth2.clientSecret.(any)file`||
-|`policies[].policy.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
-|`policies[].policy.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`policies[].policy.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`policies[].policy.oauth2.allowInsecureRedirectUri`|Allow non-loopback `http://` redirect URIs for local development only.|
 |`policies[].policy.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`policies[].policy.oauth2.cookieName`|Session cookie base name.|
 |`policies[].policy.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
-|`policies[].policy.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
 |`policies[].policy.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
 |`policies[].policy.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
-|`policies[].policy.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
-|`policies[].policy.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
-|`policies[].policy.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`policies[].policy.extProc`|Extend agentgateway with an external processor|
 |`policies[].policy.extProc.(any)(1)service`||
 |`policies[].policy.extProc.(any)(1)service.name`||
@@ -3195,8 +3195,10 @@
 |`llm.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`llm.policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
 |`llm.policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
-|`llm.policies.oauth2.issuer`|OIDC issuer URL.|
-|`llm.policies.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`llm.policies.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`llm.policies.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`llm.policies.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`llm.policies.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
 |`llm.policies.oauth2.providerBackend.(any)(1)service`||
 |`llm.policies.oauth2.providerBackend.(any)(1)service.name`||
 |`llm.policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
@@ -3204,20 +3206,18 @@
 |`llm.policies.oauth2.providerBackend.(any)(1)service.port`||
 |`llm.policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
 |`llm.policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`llm.policies.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
 |`llm.policies.oauth2.clientId`|OAuth2 client ID.|
 |`llm.policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
 |`llm.policies.oauth2.clientSecret.(any)file`||
-|`llm.policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
-|`llm.policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`llm.policies.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`llm.policies.oauth2.allowInsecureRedirectUri`|Allow non-loopback `http://` redirect URIs for local development only.|
 |`llm.policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`llm.policies.oauth2.cookieName`|Session cookie base name.|
 |`llm.policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
-|`llm.policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
 |`llm.policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
 |`llm.policies.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
-|`llm.policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
-|`llm.policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
-|`llm.policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`llm.policies.extProc`|Extend agentgateway with an external processor|
 |`llm.policies.extProc.(any)(1)service`||
 |`llm.policies.extProc.(any)(1)service.name`||
@@ -4074,8 +4074,10 @@
 |`mcp.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
 |`mcp.policies.extAuthz.(any)timeout`|Timeout for the authorization request (default: 200ms)|
 |`mcp.policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
-|`mcp.policies.oauth2.issuer`|OIDC issuer URL.|
-|`mcp.policies.oauth2.providerBackend`|Optional provider backend used for OIDC back-channel calls.|
+|`mcp.policies.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`mcp.policies.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`mcp.policies.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`mcp.policies.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
 |`mcp.policies.oauth2.providerBackend.(any)(1)service`||
 |`mcp.policies.oauth2.providerBackend.(any)(1)service.name`||
 |`mcp.policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
@@ -4083,20 +4085,18 @@
 |`mcp.policies.oauth2.providerBackend.(any)(1)service.port`||
 |`mcp.policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
 |`mcp.policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`mcp.policies.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
 |`mcp.policies.oauth2.clientId`|OAuth2 client ID.|
 |`mcp.policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
 |`mcp.policies.oauth2.clientSecret.(any)file`||
-|`mcp.policies.oauth2.redirectUri`|Explicit callback URL (recommended for multi-proxy deployments).|
-|`mcp.policies.oauth2.autoDetectRedirectUri`|Allow callback URL inference from request host/proxy headers when `redirectUri` is unset.<br>Prefer explicit `redirectUri` in production.|
+|`mcp.policies.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`mcp.policies.oauth2.allowInsecureRedirectUri`|Allow non-loopback `http://` redirect URIs for local development only.|
 |`mcp.policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`mcp.policies.oauth2.cookieName`|Session cookie base name.|
 |`mcp.policies.oauth2.refreshableCookieMaxAgeSeconds`|Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).|
-|`mcp.policies.oauth2.passAccessToken`|Forward `Authorization: Bearer <access_token>` upstream after login (default: false).|
 |`mcp.policies.oauth2.signOutPath`|Sign-out path that clears the local OAuth2 session.|
 |`mcp.policies.oauth2.postLogoutRedirectUri`|Optional post-logout redirect URI sent to OIDC end_session_endpoint.|
-|`mcp.policies.oauth2.passThroughMatchers`|Route path prefixes that bypass OAuth2 auth.|
-|`mcp.policies.oauth2.denyRedirectMatchers`|Route path prefixes that return `401` instead of browser redirect for unauthenticated requests.|
-|`mcp.policies.oauth2.trustedProxyCidrs`|Trusted proxy CIDRs allowed to provide `X-Forwarded-*` values for redirect inference.|
 |`mcp.policies.extProc`|Extend agentgateway with an external processor|
 |`mcp.policies.extProc.(any)(1)service`||
 |`mcp.policies.extProc.(any)(1)service.name`||

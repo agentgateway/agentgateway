@@ -25,13 +25,14 @@ spec:
     name: gateway
   traffic:
     oauth2:
-      issuer: http://127.0.0.1:8080
-      providerBackendRef:
+      issuer: https://oauth2-discovery.agentgateway-base.svc.cluster.local:8443/realms/master
+      backendRef:
         kind: Service
         name: oauth2-discovery
-        port: 8080
+        port: 8443
       clientId: agw-client
-      clientSecret: agw-secret
+      clientSecret:
+        inline: agw-secret
       redirectUri: https://oauth2gateway.com/_gateway/callback
       scopes:
       - openid

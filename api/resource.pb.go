@@ -7762,24 +7762,26 @@ func (x *TrafficPolicySpec_ExtProc) GetMetadataContext() map[string]*TrafficPoli
 }
 
 type TrafficPolicySpec_OAuth2 struct {
-	state                          protoimpl.MessageState `protogen:"open.v1"`
-	Issuer                         string                 `protobuf:"bytes,1,opt,name=issuer,proto3" json:"issuer,omitempty"`
-	ProviderBackend                *BackendReference      `protobuf:"bytes,15,opt,name=provider_backend,json=providerBackend,proto3" json:"provider_backend,omitempty"`
-	ClientId                       string                 `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
-	ClientSecret                   string                 `protobuf:"bytes,3,opt,name=client_secret,json=clientSecret,proto3" json:"client_secret,omitempty"`
-	RedirectUri                    *string                `protobuf:"bytes,4,opt,name=redirect_uri,json=redirectUri,proto3,oneof" json:"redirect_uri,omitempty"`
-	AutoDetectRedirectUri          *bool                  `protobuf:"varint,10,opt,name=auto_detect_redirect_uri,json=autoDetectRedirectUri,proto3,oneof" json:"auto_detect_redirect_uri,omitempty"`
-	Scopes                         []string               `protobuf:"bytes,5,rep,name=scopes,proto3" json:"scopes,omitempty"`
-	CookieName                     *string                `protobuf:"bytes,6,opt,name=cookie_name,json=cookieName,proto3,oneof" json:"cookie_name,omitempty"`
-	PassAccessToken                *bool                  `protobuf:"varint,7,opt,name=pass_access_token,json=passAccessToken,proto3,oneof" json:"pass_access_token,omitempty"`
-	SignOutPath                    *string                `protobuf:"bytes,8,opt,name=sign_out_path,json=signOutPath,proto3,oneof" json:"sign_out_path,omitempty"`
-	PassThroughMatchers            []string               `protobuf:"bytes,9,rep,name=pass_through_matchers,json=passThroughMatchers,proto3" json:"pass_through_matchers,omitempty"`
-	DenyRedirectMatchers           []string               `protobuf:"bytes,11,rep,name=deny_redirect_matchers,json=denyRedirectMatchers,proto3" json:"deny_redirect_matchers,omitempty"`
-	TrustedProxyCidrs              []string               `protobuf:"bytes,12,rep,name=trusted_proxy_cidrs,json=trustedProxyCidrs,proto3" json:"trusted_proxy_cidrs,omitempty"`
-	RefreshableCookieMaxAgeSeconds *uint64                `protobuf:"varint,13,opt,name=refreshable_cookie_max_age_seconds,json=refreshableCookieMaxAgeSeconds,proto3,oneof" json:"refreshable_cookie_max_age_seconds,omitempty"`
-	PostLogoutRedirectUri          *string                `protobuf:"bytes,14,opt,name=post_logout_redirect_uri,json=postLogoutRedirectUri,proto3,oneof" json:"post_logout_redirect_uri,omitempty"`
-	unknownFields                  protoimpl.UnknownFields
-	sizeCache                      protoimpl.SizeCache
+	state                             protoimpl.MessageState `protogen:"open.v1"`
+	ProviderId                        string                 `protobuf:"bytes,1,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
+	ProviderBackend                   *BackendReference      `protobuf:"bytes,15,opt,name=provider_backend,json=providerBackend,proto3" json:"provider_backend,omitempty"`
+	OidcIssuer                        string                 `protobuf:"bytes,21,opt,name=oidc_issuer,json=oidcIssuer,proto3" json:"oidc_issuer,omitempty"`
+	ClientId                          string                 `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	ClientSecret                      string                 `protobuf:"bytes,3,opt,name=client_secret,json=clientSecret,proto3" json:"client_secret,omitempty"`
+	RedirectUri                       *string                `protobuf:"bytes,4,opt,name=redirect_uri,json=redirectUri,proto3,oneof" json:"redirect_uri,omitempty"`
+	Scopes                            []string               `protobuf:"bytes,5,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	CookieName                        *string                `protobuf:"bytes,6,opt,name=cookie_name,json=cookieName,proto3,oneof" json:"cookie_name,omitempty"`
+	SignOutPath                       *string                `protobuf:"bytes,8,opt,name=sign_out_path,json=signOutPath,proto3,oneof" json:"sign_out_path,omitempty"`
+	RefreshableCookieMaxAgeSeconds    *uint64                `protobuf:"varint,13,opt,name=refreshable_cookie_max_age_seconds,json=refreshableCookieMaxAgeSeconds,proto3,oneof" json:"refreshable_cookie_max_age_seconds,omitempty"`
+	PostLogoutRedirectUri             *string                `protobuf:"bytes,14,opt,name=post_logout_redirect_uri,json=postLogoutRedirectUri,proto3,oneof" json:"post_logout_redirect_uri,omitempty"`
+	AuthorizationEndpoint             *string                `protobuf:"bytes,16,opt,name=authorization_endpoint,json=authorizationEndpoint,proto3,oneof" json:"authorization_endpoint,omitempty"`
+	TokenEndpoint                     *string                `protobuf:"bytes,17,opt,name=token_endpoint,json=tokenEndpoint,proto3,oneof" json:"token_endpoint,omitempty"`
+	JwksInline                        *string                `protobuf:"bytes,18,opt,name=jwks_inline,json=jwksInline,proto3,oneof" json:"jwks_inline,omitempty"`
+	EndSessionEndpoint                *string                `protobuf:"bytes,19,opt,name=end_session_endpoint,json=endSessionEndpoint,proto3,oneof" json:"end_session_endpoint,omitempty"`
+	TokenEndpointAuthMethodsSupported []string               `protobuf:"bytes,20,rep,name=token_endpoint_auth_methods_supported,json=tokenEndpointAuthMethodsSupported,proto3" json:"token_endpoint_auth_methods_supported,omitempty"`
+	AllowInsecureRedirectUri          bool                   `protobuf:"varint,22,opt,name=allow_insecure_redirect_uri,json=allowInsecureRedirectUri,proto3" json:"allow_insecure_redirect_uri,omitempty"`
+	unknownFields                     protoimpl.UnknownFields
+	sizeCache                         protoimpl.SizeCache
 }
 
 func (x *TrafficPolicySpec_OAuth2) Reset() {
@@ -7812,9 +7814,9 @@ func (*TrafficPolicySpec_OAuth2) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{44, 13}
 }
 
-func (x *TrafficPolicySpec_OAuth2) GetIssuer() string {
+func (x *TrafficPolicySpec_OAuth2) GetProviderId() string {
 	if x != nil {
-		return x.Issuer
+		return x.ProviderId
 	}
 	return ""
 }
@@ -7824,6 +7826,13 @@ func (x *TrafficPolicySpec_OAuth2) GetProviderBackend() *BackendReference {
 		return x.ProviderBackend
 	}
 	return nil
+}
+
+func (x *TrafficPolicySpec_OAuth2) GetOidcIssuer() string {
+	if x != nil {
+		return x.OidcIssuer
+	}
+	return ""
 }
 
 func (x *TrafficPolicySpec_OAuth2) GetClientId() string {
@@ -7847,13 +7856,6 @@ func (x *TrafficPolicySpec_OAuth2) GetRedirectUri() string {
 	return ""
 }
 
-func (x *TrafficPolicySpec_OAuth2) GetAutoDetectRedirectUri() bool {
-	if x != nil && x.AutoDetectRedirectUri != nil {
-		return *x.AutoDetectRedirectUri
-	}
-	return false
-}
-
 func (x *TrafficPolicySpec_OAuth2) GetScopes() []string {
 	if x != nil {
 		return x.Scopes
@@ -7868,39 +7870,11 @@ func (x *TrafficPolicySpec_OAuth2) GetCookieName() string {
 	return ""
 }
 
-func (x *TrafficPolicySpec_OAuth2) GetPassAccessToken() bool {
-	if x != nil && x.PassAccessToken != nil {
-		return *x.PassAccessToken
-	}
-	return false
-}
-
 func (x *TrafficPolicySpec_OAuth2) GetSignOutPath() string {
 	if x != nil && x.SignOutPath != nil {
 		return *x.SignOutPath
 	}
 	return ""
-}
-
-func (x *TrafficPolicySpec_OAuth2) GetPassThroughMatchers() []string {
-	if x != nil {
-		return x.PassThroughMatchers
-	}
-	return nil
-}
-
-func (x *TrafficPolicySpec_OAuth2) GetDenyRedirectMatchers() []string {
-	if x != nil {
-		return x.DenyRedirectMatchers
-	}
-	return nil
-}
-
-func (x *TrafficPolicySpec_OAuth2) GetTrustedProxyCidrs() []string {
-	if x != nil {
-		return x.TrustedProxyCidrs
-	}
-	return nil
 }
 
 func (x *TrafficPolicySpec_OAuth2) GetRefreshableCookieMaxAgeSeconds() uint64 {
@@ -7915,6 +7889,48 @@ func (x *TrafficPolicySpec_OAuth2) GetPostLogoutRedirectUri() string {
 		return *x.PostLogoutRedirectUri
 	}
 	return ""
+}
+
+func (x *TrafficPolicySpec_OAuth2) GetAuthorizationEndpoint() string {
+	if x != nil && x.AuthorizationEndpoint != nil {
+		return *x.AuthorizationEndpoint
+	}
+	return ""
+}
+
+func (x *TrafficPolicySpec_OAuth2) GetTokenEndpoint() string {
+	if x != nil && x.TokenEndpoint != nil {
+		return *x.TokenEndpoint
+	}
+	return ""
+}
+
+func (x *TrafficPolicySpec_OAuth2) GetJwksInline() string {
+	if x != nil && x.JwksInline != nil {
+		return *x.JwksInline
+	}
+	return ""
+}
+
+func (x *TrafficPolicySpec_OAuth2) GetEndSessionEndpoint() string {
+	if x != nil && x.EndSessionEndpoint != nil {
+		return *x.EndSessionEndpoint
+	}
+	return ""
+}
+
+func (x *TrafficPolicySpec_OAuth2) GetTokenEndpointAuthMethodsSupported() []string {
+	if x != nil {
+		return x.TokenEndpointAuthMethodsSupported
+	}
+	return nil
+}
+
+func (x *TrafficPolicySpec_OAuth2) GetAllowInsecureRedirectUri() bool {
+	if x != nil {
+		return x.AllowInsecureRedirectUri
+	}
+	return false
 }
 
 type TrafficPolicySpec_HostRewrite struct {
@@ -10971,7 +10987,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05valueB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xabD\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xc6E\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -11154,32 +11170,38 @@ const file_resource_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2N.agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContextR\x05value:\x028\x01\"-\n" +
 	"\vFailureMode\x12\x0f\n" +
 	"\vFAIL_CLOSED\x10\x00\x12\r\n" +
-	"\tFAIL_OPEN\x10\x01\x1a\x8b\a\n" +
-	"\x06OAuth2\x12\x16\n" +
-	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12V\n" +
-	"\x10provider_backend\x18\x0f \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x0fproviderBackend\x12\x1b\n" +
+	"\tFAIL_OPEN\x10\x01\x1a\xa6\b\n" +
+	"\x06OAuth2\x12\x1f\n" +
+	"\vprovider_id\x18\x01 \x01(\tR\n" +
+	"providerId\x12V\n" +
+	"\x10provider_backend\x18\x0f \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x0fproviderBackend\x12\x1f\n" +
+	"\voidc_issuer\x18\x15 \x01(\tR\n" +
+	"oidcIssuer\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12#\n" +
 	"\rclient_secret\x18\x03 \x01(\tR\fclientSecret\x12&\n" +
-	"\fredirect_uri\x18\x04 \x01(\tH\x00R\vredirectUri\x88\x01\x01\x12<\n" +
-	"\x18auto_detect_redirect_uri\x18\n" +
-	" \x01(\bH\x01R\x15autoDetectRedirectUri\x88\x01\x01\x12\x16\n" +
+	"\fredirect_uri\x18\x04 \x01(\tH\x00R\vredirectUri\x88\x01\x01\x12\x16\n" +
 	"\x06scopes\x18\x05 \x03(\tR\x06scopes\x12$\n" +
-	"\vcookie_name\x18\x06 \x01(\tH\x02R\n" +
-	"cookieName\x88\x01\x01\x12/\n" +
-	"\x11pass_access_token\x18\a \x01(\bH\x03R\x0fpassAccessToken\x88\x01\x01\x12'\n" +
-	"\rsign_out_path\x18\b \x01(\tH\x04R\vsignOutPath\x88\x01\x01\x122\n" +
-	"\x15pass_through_matchers\x18\t \x03(\tR\x13passThroughMatchers\x124\n" +
-	"\x16deny_redirect_matchers\x18\v \x03(\tR\x14denyRedirectMatchers\x12.\n" +
-	"\x13trusted_proxy_cidrs\x18\f \x03(\tR\x11trustedProxyCidrs\x12O\n" +
-	"\"refreshable_cookie_max_age_seconds\x18\r \x01(\x04H\x05R\x1erefreshableCookieMaxAgeSeconds\x88\x01\x01\x12<\n" +
-	"\x18post_logout_redirect_uri\x18\x0e \x01(\tH\x06R\x15postLogoutRedirectUri\x88\x01\x01B\x0f\n" +
-	"\r_redirect_uriB\x1b\n" +
-	"\x19_auto_detect_redirect_uriB\x0e\n" +
-	"\f_cookie_nameB\x14\n" +
-	"\x12_pass_access_tokenB\x10\n" +
+	"\vcookie_name\x18\x06 \x01(\tH\x01R\n" +
+	"cookieName\x88\x01\x01\x12'\n" +
+	"\rsign_out_path\x18\b \x01(\tH\x02R\vsignOutPath\x88\x01\x01\x12O\n" +
+	"\"refreshable_cookie_max_age_seconds\x18\r \x01(\x04H\x03R\x1erefreshableCookieMaxAgeSeconds\x88\x01\x01\x12<\n" +
+	"\x18post_logout_redirect_uri\x18\x0e \x01(\tH\x04R\x15postLogoutRedirectUri\x88\x01\x01\x12:\n" +
+	"\x16authorization_endpoint\x18\x10 \x01(\tH\x05R\x15authorizationEndpoint\x88\x01\x01\x12*\n" +
+	"\x0etoken_endpoint\x18\x11 \x01(\tH\x06R\rtokenEndpoint\x88\x01\x01\x12$\n" +
+	"\vjwks_inline\x18\x12 \x01(\tH\aR\n" +
+	"jwksInline\x88\x01\x01\x125\n" +
+	"\x14end_session_endpoint\x18\x13 \x01(\tH\bR\x12endSessionEndpoint\x88\x01\x01\x12P\n" +
+	"%token_endpoint_auth_methods_supported\x18\x14 \x03(\tR!tokenEndpointAuthMethodsSupported\x12=\n" +
+	"\x1ballow_insecure_redirect_uri\x18\x16 \x01(\bR\x18allowInsecureRedirectUriB\x0f\n" +
+	"\r_redirect_uriB\x0e\n" +
+	"\f_cookie_nameB\x10\n" +
 	"\x0e_sign_out_pathB%\n" +
 	"#_refreshable_cookie_max_age_secondsB\x1b\n" +
-	"\x19_post_logout_redirect_uri\x1a|\n" +
+	"\x19_post_logout_redirect_uriB\x19\n" +
+	"\x17_authorization_endpointB\x11\n" +
+	"\x0f_token_endpointB\x0e\n" +
+	"\f_jwks_inlineB\x17\n" +
+	"\x15_end_session_endpoint\x1a|\n" +
 	"\vHostRewrite\x12Q\n" +
 	"\x04mode\x18\x01 \x01(\x0e2=.agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.ModeR\x04mode\"\x1a\n" +
 	"\x04Mode\x12\b\n" +

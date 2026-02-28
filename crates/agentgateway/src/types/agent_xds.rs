@@ -1611,26 +1611,51 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					SimpleBackendReference::Invalid => None,
 					backend => Some(backend),
 				};
+				let resolved_provider = match (o.authorization_endpoint.clone(), o.token_endpoint.clone()) {
+					(Some(authorization_endpoint), Some(token_endpoint)) => {
+						Some(Box::new(agent::ResolvedOAuth2Provider {
+							authorization_endpoint,
+							token_endpoint,
+							jwks_inline: o.jwks_inline.clone(),
+							end_session_endpoint: o.end_session_endpoint.clone(),
+							token_endpoint_auth_methods_supported: o
+								.token_endpoint_auth_methods_supported
+								.clone(),
+						}))
+					},
+					(None, None) => {
+						if o.jwks_inline.is_some() {
+							return Err(ProtoError::Generic(
+									"oauth2 policy cannot provide jwks_inline without authorization_endpoint and token_endpoint".to_string(),
+								));
+						}
+						None
+					},
+					_ => {
+						return Err(ProtoError::Generic(
+							"oauth2 policy must provide authorization_endpoint and token_endpoint together"
+								.to_string(),
+						));
+					},
+				};
 				let policy = OAuth2Policy {
-					issuer: o.issuer.clone(),
+					provider_id: o.provider_id.clone(),
+					oidc_issuer: (!o.oidc_issuer.is_empty()).then(|| o.oidc_issuer.clone()),
 					provider_backend,
 					client_id: o.client_id.clone(),
 					client_secret: o.client_secret.clone().into(),
+					resolved_provider,
 					redirect_uri: o.redirect_uri.clone(),
-					auto_detect_redirect_uri: o.auto_detect_redirect_uri,
+					allow_insecure_redirect_uri: o.allow_insecure_redirect_uri,
 					scopes: o.scopes.clone(),
 					cookie_name: o.cookie_name.clone(),
 					refreshable_cookie_max_age_seconds: o.refreshable_cookie_max_age_seconds,
-					pass_access_token: o.pass_access_token,
 					sign_out_path: o.sign_out_path.clone(),
 					post_logout_redirect_uri: o.post_logout_redirect_uri.clone(),
-					pass_through_matchers: o.pass_through_matchers.clone(),
-					deny_redirect_matchers: o.deny_redirect_matchers.clone(),
-					trusted_proxy_cidrs: o.trusted_proxy_cidrs.clone(),
 				};
-				crate::http::oauth2::OAuth2Filter::validate_policy(&policy)
+				let oauth2 = crate::http::oauth2::OAuth2::new(policy)
 					.map_err(|e| ProtoError::Generic(format!("invalid oauth2 policy: {e}")))?;
-				TrafficPolicy::OAuth2(policy)
+				TrafficPolicy::OAuth2(oauth2)
 			},
 			Some(tps::Kind::HostRewrite(hr)) => {
 				let mode = tps::host_rewrite::Mode::try_from(hr.mode)?;

@@ -758,21 +758,23 @@ message TrafficPolicySpec {
     map<string, NamespacedMetadataContext> metadata_context = 5;
   }
   message OAuth2 {
-    string issuer = 1;
+    string provider_id = 1;
     BackendReference provider_backend = 15;
+    string oidc_issuer = 21;
     string client_id = 2;
     string client_secret = 3;
     optional string redirect_uri = 4;
-    optional bool auto_detect_redirect_uri = 10;
     repeated string scopes = 5;
     optional string cookie_name = 6;
-    optional bool pass_access_token = 7;
     optional string sign_out_path = 8;
-    repeated string pass_through_matchers = 9;
-    repeated string deny_redirect_matchers = 11;
-    repeated string trusted_proxy_cidrs = 12;
     optional uint64 refreshable_cookie_max_age_seconds = 13;
     optional string post_logout_redirect_uri = 14;
+    optional string authorization_endpoint = 16;
+    optional string token_endpoint = 17;
+    optional string jwks_inline = 18;
+    optional string end_session_endpoint = 19;
+    repeated string token_endpoint_auth_methods_supported = 20;
+    bool allow_insecure_redirect_uri = 22;
   }
 
   enum PolicyPhase {

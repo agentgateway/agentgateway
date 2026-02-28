@@ -53,7 +53,13 @@ type testingSuite struct {
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	return &testingSuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		BaseTestingSuite: base.NewBaseTestingSuite(
+			ctx,
+			testInst,
+			setup,
+			testCases,
+			base.WithMinGwApiVersion(base.GwApiRequireBackendTLSPolicy),
+		),
 	}
 }
 
@@ -109,7 +115,7 @@ func (s *testingSuite) assertBrowserRedirect(hostHeader string) {
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusFound,
 			Headers: map[string]any{
-				"Location": gomega.ContainSubstring("/authorize"),
+				"Location": gomega.ContainSubstring("/protocol/openid-connect/auth"),
 			},
 		},
 		curl.WithHostHeader(hostHeader),
