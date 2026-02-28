@@ -404,6 +404,26 @@
       },
       "additionalProperties": false
     },
+    "RawLoggingLevel": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "LoggingFormat": {
+      "type": "string",
+      "enum": [
+        "text",
+        "json"
+      ]
+    },
     "RawLoggingOtlp": {
       "type": "object",
       "properties": {
@@ -428,8 +448,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": "grpc"
+          ]
         },
         "path": {
           "description": "OTLP path. Default is /v1/logs",
@@ -440,26 +459,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "RawLoggingLevel": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      ]
-    },
-    "LoggingFormat": {
-      "type": "string",
-      "enum": [
-        "text",
-        "json"
-      ]
     },
     "RawMetrics": {
       "type": "object",

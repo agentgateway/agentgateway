@@ -1157,6 +1157,10 @@ fn build_resource(defaults: Option<&trc::GlobalResourceDefaults>) -> Resource {
 
 impl OtelAccessLogger {
 	pub fn new(cfg: &OtlpConfig) -> anyhow::Result<Self> {
+		if cfg.endpoint.is_empty() {
+			return Err(anyhow::anyhow!("OTLP log endpoint is not configured; set logging.otlp.otlpEndpoint or tracing.otlpEndpoint"));
+		}
+
 		let defaults = trc::global_resource_defaults();
 		let resource = build_resource(defaults);
 
