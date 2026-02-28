@@ -2,7 +2,7 @@
 source: crates/agentgateway/src/llm/tests.rs
 description: "vertex-messages: request_anthropic_tools"
 info:
-  model: claude-opus-4-1-20250805
+  model: claude-opus-4-6
   max_tokens: 1024
   tools:
     - name: get_weather

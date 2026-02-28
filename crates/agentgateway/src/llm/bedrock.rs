@@ -26,6 +26,16 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
+	pub fn is_anthropic_model(&self, request_model: Option<&str>) -> bool {
+		let model = self
+			.model
+			.as_deref()
+			.or(request_model)
+			.unwrap_or_default()
+			.to_ascii_lowercase();
+		model.contains("anthropic.claude")
+	}
+
 	pub fn get_path_for_route(
 		&self,
 		route_type: super::RouteType,

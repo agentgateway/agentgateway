@@ -131,6 +131,60 @@ const COUNT_TOKENS_REQUESTS: &[&str] = &[
 	"request_count_tokens_with_system",
 ];
 const EMBEDDINGS_REQUESTS: &[&str] = &["request_embeddings_basic", "request_embeddings_array"];
+const STREAM_FIXTURE_BEDROCK_BASIC: &str = "response_stream-bedrock_basic.bin";
+const STREAM_FIXTURE_ANTHROPIC_BASIC: &str = "response_stream-anthropic_basic.json";
+const STREAM_FIXTURE_ANTHROPIC_THINKING: &str = "response_stream-anthropic_thinking.json";
+const STREAM_FIXTURE_ANTHROPIC_TOOL: &str = "response_stream-anthropic_tool.json";
+
+fn llm_request(
+	input_format: InputFormat,
+	provider: &str,
+	model: &str,
+	streaming: bool,
+) -> LLMRequest {
+	LLMRequest {
+		input_tokens: None,
+		input_format,
+		request_model: strng::new(model),
+		provider: strng::new(provider),
+		streaming,
+		params: LLMRequestParams::default(),
+		prompt: None,
+	}
+}
+
+fn provider_message_adapters() -> Vec<(&'static str, AIProvider)> {
+	vec![
+		(
+			"openai",
+			AIProvider::OpenAI(openai::Provider {
+				model: Some(strng::new("gpt-4.1")),
+			}),
+		),
+		(
+			"gemini",
+			AIProvider::Gemini(gemini::Provider {
+				model: Some(strng::new("gemini-2.5-pro")),
+			}),
+		),
+		(
+			"azure",
+			AIProvider::AzureOpenAI(azureopenai::Provider {
+				model: Some(strng::new("gpt-4.1")),
+				host: strng::new("example.openai.azure.com"),
+				api_version: None,
+			}),
+		),
+		(
+			"vertex",
+			AIProvider::Vertex(vertex::Provider {
+				model: Some(strng::new("gemini-2.5-pro")),
+				region: Some(strng::new("us-central1")),
+				project_id: strng::new("test-project-123"),
+			}),
+		),
+	]
+}
 
 #[tokio::test]
 async fn test_bedrock_embeddings() {
@@ -230,7 +284,7 @@ async fn test_bedrock_completions() {
 	};
 	test_streaming(
 		"bedrock-completions",
-		"response_stream-bedrock_basic.bin",
+		STREAM_FIXTURE_BEDROCK_BASIC,
 		stream_response,
 	)
 	.await;
@@ -266,7 +320,7 @@ async fn test_bedrock_messages() {
 	};
 	test_streaming(
 		"bedrock-messages",
-		"response_stream-bedrock_basic.bin",
+		STREAM_FIXTURE_BEDROCK_BASIC,
 		stream_response,
 	)
 	.await;
@@ -302,7 +356,7 @@ async fn test_bedrock_responses() {
 	};
 	test_streaming(
 		"bedrock-response",
-		"response_stream-bedrock_basic.bin",
+		STREAM_FIXTURE_BEDROCK_BASIC,
 		stream_response,
 	)
 	.await;
@@ -333,7 +387,7 @@ async fn test_vertex_messages() {
 	let stream_response = |body, log| Ok(conversion::messages::passthrough_stream(body, 1024, log));
 	test_streaming(
 		"vertex-messages",
-		"response_stream-anthropic_basic.json",
+		STREAM_FIXTURE_ANTHROPIC_BASIC,
 		stream_response,
 	)
 	.await;
@@ -514,6 +568,271 @@ fn test_messages_output_config_format_maps_to_openai_response_format() {
 	);
 }
 
+#[test]
+fn test_messages_to_completions_stream_sets_include_usage_stream_option() {
+	let req: types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"max_tokens": 64,
+		"stream": true,
+		"messages": [
+			{"role": "user", "content": "hello"}
+		]
+	}))
+	.expect("valid messages request");
+
+	let out = conversion::completions::from_messages::translate(&req)
+		.expect("messages -> completions translation should succeed");
+	let value: Value =
+		serde_json::from_slice(&out).expect("translated completions request should parse");
+
+	assert_eq!(value["stream"], serde_json::json!(true));
+	assert_eq!(
+		value["stream_options"]["include_usage"],
+		serde_json::json!(true)
+	);
+}
+
+#[test]
+fn test_messages_to_completions_non_stream_omits_stream_options() {
+	let req: types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"max_tokens": 64,
+		"stream": false,
+		"messages": [
+			{"role": "user", "content": "hello"}
+		]
+	}))
+	.expect("valid messages request");
+
+	let out = conversion::completions::from_messages::translate(&req)
+		.expect("messages -> completions translation should succeed");
+	let value: Value =
+		serde_json::from_slice(&out).expect("translated completions request should parse");
+
+	assert_eq!(value["stream"], serde_json::json!(false));
+	assert!(
+		value.get("stream_options").is_none(),
+		"non-stream request should not include stream_options: {value}"
+	);
+}
+
+#[test]
+fn test_messages_to_completions_drops_assistant_thinking_blocks_but_keeps_text_and_tool_use() {
+	let req: types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"max_tokens": 64,
+		"messages": [
+			{"role": "user", "content": "hello"},
+			{
+				"role": "assistant",
+				"content": [
+					{"type": "thinking", "thinking": "internal chain of thought", "signature": "sig_123"},
+					{"type": "redacted_thinking", "data": "opaque"},
+					{"type": "text", "text": "final answer"},
+					{"type": "tool_use", "id": "call_1", "name": "lookup", "input": {"q": "x"}}
+				]
+			}
+		]
+	}))
+	.expect("valid messages request");
+
+	let out = conversion::completions::from_messages::translate(&req)
+		.expect("messages -> completions translation should succeed");
+	let value: Value =
+		serde_json::from_slice(&out).expect("translated completions request should parse");
+
+	let msgs = value["messages"]
+		.as_array()
+		.expect("translated messages should be an array");
+	let assistant = msgs
+		.iter()
+		.find(|m| m["role"] == "assistant")
+		.expect("assistant message should be present");
+
+	assert_eq!(assistant["content"], serde_json::json!("final answer"));
+	assert_eq!(
+		assistant["tool_calls"][0]["id"],
+		serde_json::json!("call_1")
+	);
+	assert_eq!(
+		assistant["tool_calls"][0]["function"]["name"],
+		serde_json::json!("lookup")
+	);
+	assert!(
+		!assistant.to_string().contains("redacted_thinking")
+			&& !assistant.to_string().contains("thinking"),
+		"assistant message should not include thinking blocks: {assistant}"
+	);
+}
+
+#[test]
+fn test_messages_to_completions_preserves_parallel_tool_calls_preference() {
+	let req: types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"max_tokens": 64,
+		"messages": [{"role": "user", "content": "hello"}],
+		"tool_choice": {
+			"type": "auto",
+			"disable_parallel_tool_use": true
+		}
+	}))
+	.expect("valid messages request");
+
+	let out = conversion::completions::from_messages::translate(&req)
+		.expect("messages -> completions translation should succeed");
+	let value: serde_json::Value =
+		serde_json::from_slice(&out).expect("translated completions request should parse");
+
+	assert_eq!(value["parallel_tool_calls"], serde_json::json!(false));
+
+	let req: types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"max_tokens": 64,
+		"messages": [{"role": "user", "content": "hello"}],
+		"tool_choice": {
+			"type": "any",
+			"disable_parallel_tool_use": false
+		}
+	}))
+	.expect("valid messages request");
+
+	let out = conversion::completions::from_messages::translate(&req)
+		.expect("messages -> completions translation should succeed");
+	let value: serde_json::Value =
+		serde_json::from_slice(&out).expect("translated completions request should parse");
+
+	assert_eq!(value["parallel_tool_calls"], serde_json::json!(true));
+}
+
+#[test]
+fn test_messages_to_completions_omits_assistant_message_when_only_thinking_blocks() {
+	let req: types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"max_tokens": 64,
+		"messages": [
+			{"role": "user", "content": "hello"},
+			{
+				"role": "assistant",
+				"content": [
+					{"type": "thinking", "thinking": "internal chain of thought", "signature": "sig_123"},
+					{"type": "redacted_thinking", "data": "opaque"}
+				]
+			}
+		]
+	}))
+	.expect("valid messages request");
+
+	let out = conversion::completions::from_messages::translate(&req)
+		.expect("messages -> completions translation should succeed");
+	let value: Value =
+		serde_json::from_slice(&out).expect("translated completions request should parse");
+
+	let msgs = value["messages"]
+		.as_array()
+		.expect("translated messages should be an array");
+	assert_eq!(
+		msgs.len(),
+		1,
+		"assistant-only thinking blocks should be dropped"
+	);
+	assert_eq!(msgs[0]["role"], serde_json::json!("user"));
+	assert_eq!(
+		msgs[0]["content"],
+		serde_json::json!([{"type": "text", "text": "hello"}])
+	);
+}
+
+#[test]
+fn test_completions_to_messages_synthesizes_auto_tool_choice_for_parallel_preference() {
+	let req: types::completions::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"parallel_tool_calls": false,
+		"messages": [{"role": "user", "content": "hello"}],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "get_weather",
+				"description": "Get weather",
+				"parameters": {
+					"type": "object",
+					"properties": {"location": {"type": "string"}},
+					"required": ["location"]
+				}
+			}
+		}]
+	}))
+	.expect("valid completions request");
+
+	let out = conversion::messages::from_completions::translate(&req)
+		.expect("completions -> messages translation should succeed");
+	let value: Value =
+		serde_json::from_slice(&out).expect("translated messages request should parse");
+
+	assert_eq!(
+		value["tool_choice"],
+		serde_json::json!({
+			"type": "auto",
+			"disable_parallel_tool_use": true
+		})
+	);
+}
+
+#[test]
+fn test_completions_to_messages_does_not_synthesize_tool_choice_without_tools() {
+	let req: types::completions::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"parallel_tool_calls": false,
+		"messages": [{"role": "user", "content": "hello"}]
+	}))
+	.expect("valid completions request");
+
+	let out = conversion::messages::from_completions::translate(&req)
+		.expect("completions -> messages translation should succeed");
+	let value: Value =
+		serde_json::from_slice(&out).expect("translated messages request should parse");
+
+	assert!(
+		value.get("tool_choice").is_none(),
+		"tool_choice should be omitted when no tools are present: {value}"
+	);
+}
+
+#[test]
+fn test_completions_to_messages_preserves_explicit_tool_choice_and_parallel_preference() {
+	let req: types::completions::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"parallel_tool_calls": false,
+		"tool_choice": "required",
+		"messages": [{"role": "user", "content": "hello"}],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "get_weather",
+				"description": "Get weather",
+				"parameters": {
+					"type": "object",
+					"properties": {"location": {"type": "string"}},
+					"required": ["location"]
+				}
+			}
+		}]
+	}))
+	.expect("valid completions request");
+
+	let out = conversion::messages::from_completions::translate(&req)
+		.expect("completions -> messages translation should succeed");
+	let value: Value =
+		serde_json::from_slice(&out).expect("translated messages request should parse");
+
+	assert_eq!(
+		value["tool_choice"],
+		serde_json::json!({
+			"type": "any",
+			"disable_parallel_tool_use": true
+		})
+	);
+}
+
 #[tokio::test]
 async fn test_completions_to_messages() {
 	let response = |i| conversion::messages::from_completions::translate_response(&i);
@@ -526,18 +845,14 @@ async fn test_completions_to_messages() {
 			i, 1024, log,
 		))
 	};
+	test_streaming("anthropic", STREAM_FIXTURE_ANTHROPIC_BASIC, stream_response).await;
 	test_streaming(
 		"anthropic",
-		"response_stream-anthropic_basic.json",
+		STREAM_FIXTURE_ANTHROPIC_THINKING,
 		stream_response,
 	)
 	.await;
-	test_streaming(
-		"anthropic",
-		"response_stream-anthropic_thinking.json",
-		stream_response,
-	)
-	.await;
+	test_streaming("anthropic", STREAM_FIXTURE_ANTHROPIC_TOOL, stream_response).await;
 
 	let request = |i| conversion::messages::from_completions::translate(&i);
 	for r in COMPLETION_REQUESTS {
@@ -546,6 +861,372 @@ async fn test_completions_to_messages() {
 	for r in ANTHROPIC_COMPLETION_REQUESTS {
 		test_request("anthropic", r, request);
 	}
+}
+
+#[test]
+fn test_completions_from_messages_rejects_empty_choices() {
+	let response = serde_json::json!({
+		"id": "chatcmpl-empty",
+		"object": "chat.completion",
+		"created": 123,
+		"model": "gpt-4.1",
+		"choices": [],
+		"usage": null,
+		"service_tier": null,
+		"system_fingerprint": null
+	});
+	let bytes = Bytes::from(response.to_string());
+
+	let out = conversion::completions::from_messages::translate_response(&bytes);
+	assert!(matches!(out, Err(AIError::InvalidResponse(_))));
+}
+
+#[test]
+fn test_completions_from_messages_preserves_multiple_assistant_text_blocks() {
+	let req: types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"max_tokens": 32,
+		"messages": [
+			{
+				"role": "assistant",
+				"content": [
+					{"type": "text", "text": "first"},
+					{"type": "text", "text": "second"}
+				]
+			}
+		]
+	}))
+	.expect("valid messages request");
+
+	let out =
+		conversion::completions::from_messages::translate(&req).expect("translation should work");
+	let value: serde_json::Value = serde_json::from_slice(&out).expect("valid translated request");
+	assert_eq!(value["messages"][0]["content"], "first\nsecond");
+}
+
+#[tokio::test]
+async fn test_completions_from_messages_stream_done_without_finish_reason_emits_message_stop() {
+	let input = concat!(
+		"data: {\"id\":\"cmpl-2\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"}}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":null}\n\n",
+		"data: {\"id\":\"cmpl-2\",\"choices\":[],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":1,\"total_tokens\":6}}\n\n",
+		"data: [DONE]\n\n"
+	);
+	let out = conversion::completions::from_messages::translate_stream(
+		Body::from(input.as_bytes().to_vec()),
+		1024 * 1024,
+		AsyncLog::default(),
+	)
+	.collect()
+	.await
+	.expect("stream should be readable")
+	.to_bytes();
+	let out = std::str::from_utf8(&out).expect("stream is utf-8");
+
+	assert!(
+		out.contains("\"type\":\"message_stop\""),
+		"stream missing message_stop:\n{out}"
+	);
+	assert!(
+		out.contains("\"stop_reason\":\"end_turn\""),
+		"stream missing end_turn stop_reason:\n{out}"
+	);
+}
+
+#[tokio::test]
+async fn test_completions_from_messages_stream_interleaved_tool_calls_single_block_start_per_index()
+{
+	let input = concat!(
+		"data: {\"id\":\"cmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_0\",\"type\":\"function\",\"function\":{\"name\":\"foo\",\"arguments\":\"{\\\"a\\\":\"}}]}}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":null}\n\n",
+		"data: {\"id\":\"cmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bar\",\"arguments\":\"{\\\"b\\\":\"}}]}}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":null}\n\n",
+		"data: {\"id\":\"cmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"type\":\"function\",\"function\":{\"arguments\":\"1}\"}}]}}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":null}\n\n",
+		"data: {\"id\":\"cmpl-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}\n\n",
+		"data: [DONE]\n\n"
+	);
+
+	let out = conversion::completions::from_messages::translate_stream(
+		Body::from(input.as_bytes().to_vec()),
+		1024 * 1024,
+		AsyncLog::default(),
+	)
+	.collect()
+	.await
+	.expect("stream should be readable")
+	.to_bytes();
+	let out = std::str::from_utf8(&out).expect("stream is utf-8");
+
+	let idx0 = out
+		.matches("\"type\":\"content_block_start\",\"index\":0")
+		.count();
+	let idx1 = out
+		.matches("\"type\":\"content_block_start\",\"index\":1")
+		.count();
+	assert_eq!(idx0, 1, "tool index 0 block started multiple times:\n{out}");
+	assert_eq!(idx1, 1, "tool index 1 block started multiple times:\n{out}");
+}
+
+#[tokio::test]
+async fn test_completions_from_messages_stream_waits_for_tool_name_before_open() {
+	let input = concat!(
+		"data: {\"id\":\"cmpl-3\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_0\",\"type\":\"function\",\"function\":{\"arguments\":\"{\\\"a\\\":\"}}]}}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":null}\n\n",
+		"data: {\"id\":\"cmpl-3\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"type\":\"function\",\"function\":{\"name\":\"foo\",\"arguments\":\"1}\"}}]}}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":null}\n\n",
+		"data: {\"id\":\"cmpl-3\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}\n\n",
+		"data: [DONE]\n\n"
+	);
+
+	let out = conversion::completions::from_messages::translate_stream(
+		Body::from(input.as_bytes().to_vec()),
+		1024 * 1024,
+		AsyncLog::default(),
+	)
+	.collect()
+	.await
+	.expect("stream should be readable")
+	.to_bytes();
+	let out = std::str::from_utf8(&out).expect("stream is utf-8");
+
+	assert!(
+		!out.contains("\"name\":\"\""),
+		"tool block should not be opened with empty name:\n{out}"
+	);
+	assert!(
+		out.contains("\"name\":\"foo\""),
+		"tool block should include resolved tool name:\n{out}"
+	);
+}
+
+#[tokio::test]
+async fn test_completions_from_messages_stream_text_then_tool_reindexes_tool_calls() {
+	let input = concat!(
+		"event: message_start\n",
+		"data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-3\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\n\n",
+		"event: content_block_start\n",
+		"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"Thinking...\"}}\n\n",
+		"event: content_block_delta\n",
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Thinking...\"}}\n\n",
+		"event: content_block_stop\n",
+		"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+		"event: content_block_start\n",
+		"data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"tool\",\"input\":{}}}\n\n",
+		"event: content_block_delta\n",
+		"data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{}\"}}\n\n",
+		"event: message_delta\n",
+		"data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":10,\"output_tokens\":20}}\n\n",
+		"event: message_stop\n",
+		"data: {\"type\":\"message_stop\"}\n\n",
+		"data: [DONE]\n\n"
+	);
+
+	let out = conversion::messages::from_completions::translate_stream(
+		Body::from(input.as_bytes().to_vec()),
+		1024 * 1024,
+		AmendOnDrop::new(AsyncLog::default(), LLMResponsePolicies::default()),
+	)
+	.collect()
+	.await
+	.expect("stream should be readable")
+	.to_bytes();
+	let out = std::str::from_utf8(&out).expect("stream is utf-8");
+
+	// Check that we have tool_calls with index 0
+	assert!(
+		out.contains(r#""tool_calls":[{"index":0"#),
+		"tool call should be re-indexed to 0:\n{out}"
+	);
+	// Check that we DO NOT have tool_calls with index 1
+	assert!(
+		!out.contains(r#""tool_calls":[{"index":1"#),
+		"tool call should not use raw index 1:\n{out}"
+	);
+}
+
+#[test]
+fn test_process_success_messages_uses_completions_translation_for_provider_adapters() {
+	let test_dir = Path::new("src/llm/tests");
+	let input_path = test_dir.join("response_basic.json");
+	let body = Bytes::from(fs::read(input_path).expect("Failed to read provider response fixture"));
+
+	let expected = conversion::completions::from_messages::translate_response(&body)
+		.expect("expected translation should succeed")
+		.serialize()
+		.expect("expected translation should serialize");
+	let expected: Value =
+		serde_json::from_slice(&expected).expect("expected response should be JSON");
+
+	for (name, provider) in provider_message_adapters() {
+		let req = llm_request(InputFormat::Messages, name, "gpt-4.1", false);
+		let got = provider
+			.process_success(&req, &body)
+			.unwrap_or_else(|e| panic!("{name}: process_success failed: {e}"))
+			.serialize()
+			.unwrap_or_else(|e| panic!("{name}: failed to serialize translated response: {e}"));
+		let got: Value = serde_json::from_slice(&got)
+			.unwrap_or_else(|e| panic!("{name}: invalid translated JSON: {e}"));
+		assert_eq!(got, expected, "{name}: translated response mismatch");
+	}
+}
+
+#[tokio::test]
+async fn test_process_streaming_messages_uses_completions_translation_for_provider_adapters() {
+	let stream = concat!(
+		"data: {\"id\":\"cmpl-routing\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"}}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":null}\n\n",
+		"data: {\"id\":\"cmpl-routing\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"created\":123,\"model\":\"gpt-4.1\",\"service_tier\":null,\"system_fingerprint\":null,\"object\":\"chat.completion.chunk\",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":1,\"total_tokens\":6}}\n\n",
+		"data: [DONE]\n\n"
+	);
+	let stream_bytes = stream.as_bytes().to_vec();
+	let expected = conversion::completions::from_messages::translate_stream(
+		Body::from(stream_bytes.clone()),
+		1024 * 1024,
+		AsyncLog::default(),
+	)
+	.collect()
+	.await
+	.expect("expected translated stream should be readable")
+	.to_bytes();
+
+	for (name, provider) in provider_message_adapters() {
+		let req = llm_request(InputFormat::Messages, name, "gpt-4.1", true);
+		let resp = ::http::Response::builder()
+			.status(::http::StatusCode::OK)
+			.header(::http::header::CONTENT_TYPE, "text/event-stream")
+			.body(Body::from(stream_bytes.clone()))
+			.expect("failed to build provider stream response");
+
+		let out = provider
+			.process_streaming(
+				req,
+				crate::store::LLMResponsePolicies::default(),
+				AsyncLog::default(),
+				false,
+				resp,
+			)
+			.await
+			.unwrap_or_else(|e| panic!("{name}: process_streaming failed: {e}"))
+			.into_body()
+			.collect()
+			.await
+			.unwrap_or_else(|e| panic!("{name}: translated stream read failed: {e}"))
+			.to_bytes();
+
+		assert_eq!(out, expected, "{name}: streaming translation mismatch");
+	}
+}
+
+#[tokio::test]
+async fn test_process_streaming_vertex_anthropic_completions_uses_messages_translation() {
+	let test_dir = Path::new("src/llm/tests");
+	let stream_path = test_dir.join("response_stream-anthropic_basic.json");
+	let stream_bytes = fs::read(stream_path).expect("Failed to read anthropic stream fixture");
+	let expected = conversion::messages::from_completions::translate_stream(
+		Body::from(stream_bytes.clone()),
+		1024 * 1024,
+		AmendOnDrop::new(AsyncLog::default(), LLMResponsePolicies::default()),
+	)
+	.collect()
+	.await
+	.expect("expected translated stream should be readable")
+	.to_bytes();
+
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project-123"),
+	});
+	let req = llm_request(
+		InputFormat::Completions,
+		"vertex",
+		"anthropic/claude-sonnet-4-5-20251001",
+		true,
+	);
+	let resp = ::http::Response::builder()
+		.status(::http::StatusCode::OK)
+		.header(::http::header::CONTENT_TYPE, "text/event-stream")
+		.body(Body::from(stream_bytes))
+		.expect("failed to build provider stream response");
+
+	let got = provider
+		.process_streaming(
+			req,
+			crate::store::LLMResponsePolicies::default(),
+			AsyncLog::default(),
+			false,
+			resp,
+		)
+		.await
+		.expect("vertex anthropic completions streaming should be translated")
+		.into_body()
+		.collect()
+		.await
+		.expect("translated stream should be readable")
+		.to_bytes();
+
+	assert_eq!(
+		got, expected,
+		"vertex anthropic completions streaming translation mismatch"
+	);
+}
+
+#[test]
+fn test_roundtrip_completions_messages_preserves_tool_call_and_tool_result_semantics() {
+	let source: types::completions::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4.1",
+		"messages": [
+			{"role": "system", "content": "system instruction"},
+			{"role": "developer", "content": "developer instruction"},
+			{"role": "user", "content": "please call the tool"},
+			{
+				"role": "assistant",
+				"content": "calling tool",
+				"tool_calls": [
+					{
+						"id": "call_123",
+						"type": "function",
+						"function": {
+							"name": "lookup_weather",
+							"arguments": "{\"city\":\"Paris\"}"
+						}
+					}
+				]
+			},
+			{"role": "tool", "tool_call_id": "call_123", "content": "sunny"}
+		],
+		"max_tokens": 64
+	}))
+	.expect("valid source completion request");
+
+	let messages = conversion::messages::from_completions::translate(&source)
+		.expect("completions -> messages should succeed");
+	let roundtrip = conversion::completions::from_messages::translate(
+		&serde_json::from_slice::<types::messages::Request>(&messages)
+			.expect("translated messages request should deserialize"),
+	)
+	.expect("messages -> completions should succeed");
+	let roundtrip: Value =
+		serde_json::from_slice(&roundtrip).expect("roundtrip completions should deserialize");
+
+	let msgs = roundtrip["messages"]
+		.as_array()
+		.expect("roundtrip messages should be an array");
+	assert!(
+		msgs.iter().any(|m| {
+			m["role"] == "assistant"
+				&& m["tool_calls"].is_array()
+				&& m["tool_calls"][0]["id"] == "call_123"
+				&& m["tool_calls"][0]["function"]["name"] == "lookup_weather"
+		}),
+		"assistant tool call not preserved in roundtrip: {roundtrip}"
+	);
+	assert!(
+		msgs.iter().any(|m| {
+			m["role"] == "tool" && m["tool_call_id"] == "call_123" && m["content"] == "sunny"
+		}),
+		"tool result not preserved in roundtrip: {roundtrip}"
+	);
+	assert!(
+		msgs
+			.iter()
+			.any(|m| m["role"] == "system" && m["content"] == "system instruction\ndeveloper instruction"),
+		"system+developer prompt merge missing in roundtrip: {roundtrip}"
+	);
 }
 
 fn apply_test_prompts<R: RequestType + Serialize>(mut r: R) -> Result<Vec<u8>, AIError> {
@@ -719,5 +1400,49 @@ fn test_get_messages() {
 		"messages_get_messages",
 		&input_raw,
 		&input_path,
+	);
+}
+
+#[test]
+fn test_messages_set_messages_roundtrip_preserves_system_field() {
+	use crate::llm::types::RequestType;
+	use crate::llm::types::SimpleChatCompletionMessage;
+
+	let mut req = types::messages::Request {
+		model: Some("claude-haiku-4-5-20251001".to_string()),
+		system: Some(types::messages::TextBlock::Text(
+			"original system".to_string(),
+		)),
+		messages: vec![types::messages::RequestMessage {
+			role: "user".to_string(),
+			content: Some(types::messages::ContentBlock::Text("hello".to_string())),
+			rest: Default::default(),
+		}],
+		..Default::default()
+	};
+
+	let mut msgs = req.get_messages();
+	msgs[0] = SimpleChatCompletionMessage {
+		role: strng::literal!("system"),
+		content: strng::literal!("masked system"),
+	};
+	req.set_messages(msgs);
+
+	match req.system {
+		Some(types::messages::TextBlock::Array(ref parts)) => {
+			assert_eq!(parts.len(), 1, "expected one system prompt after roundtrip");
+			match &parts[0] {
+				types::messages::TextPart::Text { text, .. } => {
+					assert_eq!(text, "masked system");
+				},
+				other => panic!("unexpected system prompt block: {other:?}"),
+			}
+		},
+		other => panic!("expected system prompts in array form, got: {other:?}"),
+	}
+
+	assert!(
+		req.messages.iter().all(|m| m.role != "system"),
+		"system messages must not be stored inside messages[]"
 	);
 }

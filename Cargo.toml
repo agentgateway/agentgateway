@@ -50,7 +50,7 @@ anyhow = "1.0"
 arc-swap = "1.7.1"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { version = "0.32.2", default-features = false, features = ["chat-completion-types", "embedding-types", "moderation-types", "response-types", "realtime-types"] }
+async-openai = { version = "0.33.0", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = "1.8"

@@ -213,7 +213,7 @@ backends:
                     name: claude-3-haiku
                     provider:
                       anthropic:
-                        model: claude-3-5-haiku-20241022
+                        model: claude-haiku-4-5-20251001
                     hostOverride: ~
                     pathOverride: ~
                     tokenize: false
@@ -244,7 +244,7 @@ backends:
                     name: gemini-0.5-pro
                     provider:
                       vertex:
-                        model: claude-3-5-haiku-20241022
+                        model: claude-haiku-4-5-20251001
                         region: global
                         projectId: my-vertex-project
                     hostOverride: ~

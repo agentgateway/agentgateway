@@ -5,7 +5,7 @@ info:
   id: msg_01BE9GBzjs95TqdG8FeUanUn
   type: message
   role: assistant
-  model: claude-opus-4-1-20250805
+  model: claude-opus-4-6
   content:
     - type: thinking
       thinking: The user is asking me about the current weather in San Francisco
@@ -25,7 +25,7 @@ info:
     service_tier: standard
 ---
 {
-  "model": "claude-opus-4-1-20250805",
+  "model": "claude-opus-4-6",
   "usage": {
     "prompt_tokens": 47,
     "completion_tokens": 251,

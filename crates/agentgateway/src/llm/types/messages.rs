@@ -5,10 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::llm::policy::webhook::{Message, ResponseChoice};
 use crate::llm::types::{RequestType, ResponseType, SimpleChatCompletionMessage};
-use crate::llm::{
-	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion,
-	num_tokens_from_anthropic_messages,
-};
+use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
 
 #[derive(Debug, Deserialize, Clone, Serialize, Default)]
 pub struct Request {
@@ -36,16 +33,6 @@ pub struct RequestMessage {
 	pub content: Option<ContentBlock>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
-}
-
-impl RequestMessage {
-	pub fn message_text(&self) -> Option<&str> {
-		self.content.as_ref().and_then(|c| match c {
-			ContentBlock::Text(t) => Some(t.as_str()),
-			// TODO?
-			ContentBlock::Array(_) => None,
-		})
-	}
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -88,7 +75,12 @@ pub enum TextPart {
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
+	pub id: String,
+	pub r#type: String,
+	pub role: String,
 	pub model: String,
+	pub stop_reason: Option<String>,
+	pub stop_sequence: Option<String>,
 	pub usage: Usage,
 	pub content: Vec<Content>,
 	#[serde(flatten, default)]
@@ -115,6 +107,72 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
+pub fn get_messages_helper(
+	messages: &[RequestMessage],
+	system: &Option<TextBlock>,
+) -> Vec<SimpleChatCompletionMessage> {
+	let mut out = Vec::new();
+	if let Some(system) = system {
+		let content = match system {
+			TextBlock::Text(t) => strng::new(t),
+			TextBlock::Array(parts) => {
+				let text = parts
+					.iter()
+					.filter_map(|part| match part {
+						TextPart::Text { text, .. } => Some(text.as_str()),
+						_ => None,
+					})
+					.fold(String::new(), |mut acc, s| {
+						if !acc.is_empty() {
+							acc.push('\n');
+						}
+						acc.push_str(s);
+						acc
+					});
+				strng::new(&text)
+			},
+		};
+		if !content.is_empty() {
+			out.push(SimpleChatCompletionMessage {
+				role: strng::literal!("system"),
+				content,
+			});
+		}
+	}
+
+	out.extend(messages.iter().map(|m| {
+		let content = m
+			.content
+			.as_ref()
+			.and_then(|c| match c {
+				ContentBlock::Text(t) => Some(strng::new(t)),
+				ContentBlock::Array(parts) if !parts.is_empty() => {
+					let text = parts
+						.iter()
+						.filter_map(|part| match part {
+							ContentPart::Text { text, .. } => Some(text.as_str()),
+							_ => None,
+						})
+						.fold(String::new(), |mut acc, s| {
+							if !acc.is_empty() {
+								acc.push(' ');
+							}
+							acc.push_str(s);
+							acc
+						});
+					Some(strng::new(&text))
+				},
+				_ => None,
+			})
+			.unwrap_or_default();
+		SimpleChatCompletionMessage {
+			role: strng::new(&m.role),
+			content,
+		}
+	}));
+	out
+}
+
 impl RequestType for Request {
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
@@ -131,7 +189,8 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let tokens = num_tokens_from_anthropic_messages(&model, &self.messages)?;
+			let messages = self.get_messages();
+			let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
 			Some(tokens)
 		} else {
 			None
@@ -159,44 +218,28 @@ impl RequestType for Request {
 	}
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
-		self
-			.messages
-			.iter()
-			.map(|m| {
-				let content = m
-					.content
-					.as_ref()
-					.and_then(|c| match c {
-						ContentBlock::Text(t) => Some(strng::new(t)),
-						ContentBlock::Array(parts) if !parts.is_empty() => {
-							let text = parts
-								.iter()
-								.filter_map(|part| match part {
-									ContentPart::Text { text, .. } => Some(text.as_str()),
-									_ => None,
-								})
-								.fold(String::new(), |mut acc, s| {
-									if !acc.is_empty() {
-										acc.push(' ');
-									}
-									acc.push_str(s);
-									acc
-								});
-							Some(strng::new(&text))
-						},
-						_ => None,
-					})
-					.unwrap_or_default();
-				SimpleChatCompletionMessage {
-					role: strng::new(&m.role),
-					content,
-				}
-			})
-			.collect()
+		get_messages_helper(&self.messages, &self.system)
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
-		self.messages = messages.into_iter().map(Into::into).collect();
+		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = messages
+			.into_iter()
+			.partition(|m| m.role.as_str() == "system");
+
+		self.system = if system_prompts.is_empty() {
+			None
+		} else {
+			Some(TextBlock::Array(
+				system_prompts
+					.into_iter()
+					.map(|p| TextPart::Text {
+						text: p.content.to_string(),
+						rest: Default::default(),
+					})
+					.collect(),
+			))
+		};
+		self.messages = message_prompts.into_iter().map(Into::into).collect();
 	}
 
 	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
@@ -895,20 +938,26 @@ pub mod typed {
 
 	/// Tool choice configuration
 	#[derive(Debug, Serialize, Deserialize)]
-	#[serde(tag = "type")]
+	#[serde(tag = "type", rename_all = "snake_case")]
 	pub enum ToolChoice {
 		/// Let model choose whether to use tools
-		#[serde(rename = "auto")]
-		Auto,
+		Auto {
+			#[serde(default, skip_serializing_if = "Option::is_none")]
+			disable_parallel_tool_use: Option<bool>,
+		},
 		/// Model must use one of the provided tools
-		#[serde(rename = "any")]
-		Any,
+		Any {
+			#[serde(default, skip_serializing_if = "Option::is_none")]
+			disable_parallel_tool_use: Option<bool>,
+		},
 		/// Model must use a specific tool
-		#[serde(rename = "tool")]
-		Tool { name: String },
+		Tool {
+			name: String,
+			#[serde(default, skip_serializing_if = "Option::is_none")]
+			disable_parallel_tool_use: Option<bool>,
+		},
 		/// Model must not use any tools
-		#[serde(rename = "none")]
-		None,
+		None {},
 	}
 
 	/// Message metadata
@@ -917,5 +966,73 @@ pub mod typed {
 		/// Custom metadata fields
 		#[serde(flatten)]
 		pub fields: std::collections::HashMap<String, String>,
+	}
+
+	impl super::ResponseType for MessagesResponse {
+		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
+			crate::llm::LLMResponse {
+				input_tokens: Some(self.usage.input_tokens as u64),
+				output_tokens: Some(self.usage.output_tokens as u64),
+				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
+				reasoning_tokens: None,
+				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
+				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
+				provider_model: Some(agent_core::strng::new(&self.model)),
+				count_tokens: None,
+				completion: if include_completion_in_log {
+					Some(
+						self
+							.content
+							.iter()
+							.filter_map(|c| match c {
+								ContentBlock::Text(t) => Some(t.text.clone()),
+								_ => None,
+							})
+							.collect(),
+					)
+				} else {
+					None
+				},
+				first_token: Default::default(),
+			}
+		}
+
+		fn set_webhook_choices(
+			&mut self,
+			choices: Vec<crate::llm::policy::webhook::ResponseChoice>,
+		) -> anyhow::Result<()> {
+			if self.content.len() != choices.len() {
+				anyhow::bail!("webhook response message count mismatch");
+			}
+			for (block, wh) in self.content.iter_mut().zip(choices.into_iter()) {
+				if let ContentBlock::Text(t) = block {
+					t.text = wh.message.content.to_string();
+				}
+			}
+			Ok(())
+		}
+
+		fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice> {
+			self
+				.content
+				.iter()
+				.map(|c| {
+					let content = match c {
+						ContentBlock::Text(t) => t.text.clone(),
+						_ => String::new(),
+					};
+					crate::llm::policy::webhook::ResponseChoice {
+						message: crate::llm::policy::webhook::Message {
+							role: "assistant".into(),
+							content: content.into(),
+						},
+					}
+				})
+				.collect()
+		}
+
+		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
+			serde_json::to_vec(&self)
+		}
 	}
 }

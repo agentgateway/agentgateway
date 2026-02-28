@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 108
 description: "bedrock-completions: request_tool-call"
 info:
   model: gpt-3.5-turbo
@@ -31,10 +32,33 @@ info:
       ]
     },
     {
+      "role": "assistant",
+      "content": [
+        {
+          "toolUse": {
+            "toolUseId": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+            "name": "get_weather",
+            "input": {
+              "format": "celsius",
+              "location": "Columbus, OH"
+            }
+          }
+        }
+      ]
+    },
+    {
       "role": "user",
       "content": [
         {
-          "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+          "toolResult": {
+            "toolUseId": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+            "content": [
+              {
+                "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+              }
+            ],
+            "status": null
+          }
         }
       ]
     }

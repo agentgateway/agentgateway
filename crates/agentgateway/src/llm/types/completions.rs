@@ -35,6 +35,15 @@ pub struct Request {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_completion_tokens: Option<u32>,
 
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub stop: Option<serde_json::Value>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tools: Option<Vec<serde_json::Value>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tool_choice: Option<serde_json::Value>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub user: Option<String>,
+
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -292,6 +301,8 @@ fn convert_message(r: SimpleChatCompletionMessage) -> RequestMessage {
 		role: r.role.to_string(),
 		name: None,
 		content: Some(Content::Text(r.content.to_string())),
+		tool_call_id: None,
+		tool_calls: None,
 		rest: Default::default(),
 	}
 }
@@ -302,6 +313,10 @@ pub struct RequestMessage {
 	pub name: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub content: Option<Content>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tool_call_id: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tool_calls: Option<Vec<serde_json::Value>>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -357,20 +372,26 @@ pub mod typed {
 		ChatCompletionNamedToolChoice as NamedToolChoice,
 		ChatCompletionRequestAssistantMessage as RequestAssistantMessage,
 		ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
+		ChatCompletionRequestAssistantMessageContentPart as RequestAssistantMessageContentPart,
 		ChatCompletionRequestDeveloperMessage as RequestDeveloperMessage,
 		ChatCompletionRequestDeveloperMessageContent as RequestDeveloperMessageContent,
+		ChatCompletionRequestDeveloperMessageContentPart as RequestDeveloperMessageContentPart,
 		ChatCompletionRequestMessage as RequestMessage,
+		ChatCompletionRequestMessageContentPartImage as RequestMessageContentPartImage,
+		ChatCompletionRequestMessageContentPartText as RequestMessageContentPartText,
 		ChatCompletionRequestSystemMessage as RequestSystemMessage,
 		ChatCompletionRequestSystemMessageContent as RequestSystemMessageContent,
+		ChatCompletionRequestSystemMessageContentPart as RequestSystemMessageContentPart,
 		ChatCompletionRequestToolMessage as RequestToolMessage,
 		ChatCompletionRequestToolMessageContent as RequestToolMessageContent,
 		ChatCompletionRequestToolMessageContentPart as RequestToolMessageContentPart,
 		ChatCompletionRequestUserMessage as RequestUserMessage,
 		ChatCompletionRequestUserMessageContent as RequestUserMessageContent,
+		ChatCompletionRequestUserMessageContentPart as RequestUserMessageContentPart,
 		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool as FunctionTool,
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
-		FunctionObject, FunctionType, PredictionContent, ReasoningEffort, ResponseFormat,
+		FunctionObject, FunctionType, ImageUrl, PredictionContent, ReasoningEffort, ResponseFormat,
 		ResponseFormatJsonSchema, ResponseModalities as ChatCompletionModalities, Role, ServiceTier,
 		StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
 	};
@@ -753,7 +774,7 @@ pub mod typed {
 		pub functions: Option<Vec<ChatCompletionFunctions>>,
 
 		/// Agentgateway: vendor specific fields we allow only for internal creation
-		#[serde(flatten, skip_deserializing)]
+		#[serde(flatten, skip_serializing, skip_deserializing)]
 		pub vendor_extensions: RequestVendorExtensions,
 	}
 
@@ -775,7 +796,8 @@ pub mod typed {
 
 	#[derive(Debug, Deserialize, Serialize)]
 	pub struct ChatCompletionError {
-		pub r#type: String,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub r#type: Option<String>,
 		pub message: String,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub param: Option<String>,
@@ -785,9 +807,37 @@ pub mod typed {
 		pub event_id: Option<String>,
 	}
 
+	/// Google's OpenAI-compatible shim (Gemini API and Vertex AI) return errors
+	/// following the standard Google Cloud error model, but consistently wrap
+	/// them in a JSON array when returned from the Vertex AI shim.
+	///
+	/// For the official Google Cloud error model, see:
+	/// https://cloud.google.com/apis/design/errors#http_mapping
+	///
+	/// For the observed non-standard array-wrapping behavior in the OpenAI shim, see:
+	/// https://github.com/openai/openai-node/issues/1734
+	#[derive(Debug, Deserialize, Serialize)]
+	pub struct GoogleErrorResponse {
+		pub error: GoogleError,
+	}
+
+	#[derive(Debug, Deserialize, Serialize)]
+	pub struct GoogleError {
+		/// The numeric error code (e.g. 400).
+		pub code: i32,
+		/// The human-readable error message.
+		pub message: String,
+		/// The programmatic error status (e.g. "INVALID_ARGUMENT", "RESOURCE_EXHAUSTED").
+		#[serde(default)]
+		pub status: Option<String>,
+	}
+
+	#[allow(dead_code)]
 	pub const SYSTEM_ROLE: &str = "system";
+	#[allow(dead_code)]
 	pub const ASSISTANT_ROLE: &str = "assistant";
 
+	#[allow(dead_code)]
 	pub fn message_role(msg: &RequestMessage) -> &'static str {
 		match msg {
 			RequestMessage::Developer(_) => "developer",
@@ -799,6 +849,7 @@ pub mod typed {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub fn message_text(msg: &RequestMessage) -> Option<&str> {
 		// All of these types support Vec<Text>... show we support those?
 		// Right now, we don't support

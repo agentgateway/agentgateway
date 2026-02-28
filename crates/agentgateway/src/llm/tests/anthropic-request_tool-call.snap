@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 108
 description: "anthropic: request_tool-call"
 info:
   model: gpt-3.5-turbo
@@ -31,11 +32,26 @@ info:
       ]
     },
     {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+          "name": "get_weather",
+          "input": {
+            "format": "celsius",
+            "location": "Columbus, OH"
+          }
+        }
+      ]
+    },
+    {
       "role": "user",
       "content": [
         {
-          "type": "text",
-          "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+          "type": "tool_result",
+          "tool_use_id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+          "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
         }
       ]
     }

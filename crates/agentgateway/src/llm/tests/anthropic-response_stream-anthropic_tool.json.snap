@@ -3,10 +3,13 @@ source: crates/agentgateway/src/llm/tests.rs
 description: src/llm/tests/response_stream-anthropic_tool.json
 ---
 event: 
-data: {"id":"","choices":[{"index":0,"delta":{"content":null}}],"created":123,"model":"claude-3-5-sonnet-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+data: {"id":"","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":"","type":"function","function":{"name":"get_weather","arguments":null}}]}}],"created":123,"model":"claude-3-5-sonnet-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
 
 event: 
-data: {"id":"","choices":[],"created":123,"model":"claude-3-5-sonnet-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":12,"completion_tokens":5,"total_tokens":17}}
+data: {"id":"","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":null,"type":null,"function":{"name":null,"arguments":"{\"location\": \"San Francisco\"}"}}]}}],"created":123,"model":"claude-3-5-sonnet-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+event: 
+data: {"id":"","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"created":123,"model":"claude-3-5-sonnet-20241022","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":12,"completion_tokens":5,"total_tokens":17}}
 
 event: 
 data: [DONE]

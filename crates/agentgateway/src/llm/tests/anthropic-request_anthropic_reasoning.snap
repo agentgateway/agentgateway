@@ -17,7 +17,12 @@ info:
   "messages": [
     {
       "role": "user",
-      "content": "Give one concise insight about distributed consensus."
+      "content": [
+        {
+          "type": "text",
+          "text": "Give one concise insight about distributed consensus."
+        }
+      ]
     }
   ],
   "model": "claude-opus-4-6",

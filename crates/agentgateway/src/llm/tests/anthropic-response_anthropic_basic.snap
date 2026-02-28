@@ -5,7 +5,7 @@ info:
   id: msg_012JYtNYb8sv6Hb67TcGT7xW
   type: message
   role: assistant
-  model: claude-3-5-haiku-20241022
+  model: claude-haiku-4-5-20251001
   content:
     - type: text
       text: Hi there! How are you doing today? Is there anything I can help you with?
@@ -19,7 +19,7 @@ info:
     service_tier: standard
 ---
 {
-  "model": "claude-3-5-haiku-20241022",
+  "model": "claude-haiku-4-5-20251001",
   "usage": {
     "prompt_tokens": 15,
     "completion_tokens": 21,
