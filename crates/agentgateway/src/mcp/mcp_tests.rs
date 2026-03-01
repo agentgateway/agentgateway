@@ -1,4 +1,6 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 
 use agent_core::strng;
 use itertools::Itertools;
@@ -11,10 +13,18 @@ use secrecy::SecretString;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::mcp::McpAuthorization;
+use crate::test_helpers::otlp::{
+	any_bool, any_i64, any_string, event_attr, export_requests_spans, span_attr,
+	start_mock_trace_collector,
+};
 use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
-use crate::types::agent::BackendPolicy;
+use crate::types::agent::{
+	Backend, BackendPolicy, BackendWithPolicies, FrontendPolicy, ListenerTarget, PolicyTarget,
+	ResourceName, SimpleBackendReference, Target, TargetedPolicy, TracingConfig, TracingPolicy,
+	TracingProtocol,
+};
 use crate::*;
 
 #[tokio::test]
@@ -515,6 +525,144 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 	);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_tracing_policy_emits_operation_span_lifecycle_end_to_end() {
+	let mock = mock_streamable_http_server(true).await;
+	let (collector_addr, mut collector_rx) = start_mock_trace_collector().await;
+
+	let tracing_config = TracingConfig {
+		provider_backend: SimpleBackendReference::Backend("/otlp-collector".into()),
+		attributes: Default::default(),
+		resources: Default::default(),
+		remove: vec![],
+		random_sampling: Some(Arc::new(cel::Expression::new_strict("true").unwrap())),
+		client_sampling: Some(Arc::new(cel::Expression::new_strict("true").unwrap())),
+		path: "/v1/traces".to_string(),
+		protocol: TracingProtocol::Grpc,
+	};
+	let tracing_policy = TargetedPolicy {
+		key: strng::new("mcp-route-tracing"),
+		name: None,
+		target: PolicyTarget::Gateway(ListenerTarget {
+			gateway_name: "".into(),
+			gateway_namespace: "".into(),
+			listener_name: None,
+		}),
+		policy: FrontendPolicy::Tracing(Arc::new(TracingPolicy {
+			config: tracing_config,
+			fields: Arc::new(crate::telemetry::log::LoggingFields::default()),
+			tracer: once_cell::sync::OnceCell::new(),
+		}))
+		.into(),
+	};
+
+	let otlp_backend = BackendWithPolicies {
+		backend: Backend::Opaque(
+			ResourceName::new("otlp-collector".into(), "".into()),
+			Target::Address(collector_addr),
+		),
+		inline_policies: vec![],
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_raw_backend(otlp_backend)
+		.with_bind(simple_bind(basic_route(mock.addr)))
+		.with_policy(tracing_policy);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = mcp_streamable_client(io).await;
+
+	let _ = client
+		.call_tool(rmcp::model::CallToolRequestParams {
+			meta: None,
+			task: None,
+			name: "echo".into(),
+			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
+		})
+		.await
+		.expect("mcp tools/call should succeed");
+
+	let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+	let mut target_span: Option<opentelemetry_proto::tonic::trace::v1::Span> = None;
+	let mut seen_spans = Vec::new();
+
+	while tokio::time::Instant::now() < deadline {
+		let recv = tokio::time::timeout_at(deadline, collector_rx.recv()).await;
+		let Some(req) = recv.expect("collector timeout waiting for trace export") else {
+			break;
+		};
+
+		for span in export_requests_spans(&req) {
+			seen_spans.push(span.name.clone());
+			let is_tools_call = any_string(span_attr(span, "mcp.method.name")) == Some("tools/call");
+			let has_finalized = span
+				.events
+				.iter()
+				.any(|e| e.name == "gateway.mcp.lifecycle.finalized");
+			if is_tools_call && has_finalized {
+				target_span = Some(span.clone());
+				break;
+			}
+		}
+		if target_span.is_some() {
+			break;
+		}
+	}
+
+	let span = target_span.unwrap_or_else(|| {
+		panic!(
+			"did not capture MCP operation span with lifecycle events; seen spans: {:?}",
+			seen_spans
+		)
+	});
+
+	assert_eq!(
+		any_string(span_attr(&span, "mcp.method.name")),
+		Some("tools/call")
+	);
+	assert_eq!(
+		any_bool(span_attr(&span, "gateway.mcp.lifecycle.fanout")),
+		Some(false)
+	);
+	assert_eq!(
+		any_i64(span_attr(&span, "gateway.mcp.lifecycle.retry.count")),
+		Some(0)
+	);
+
+	let event_names = span.events.iter().map(|e| e.name.as_str()).collect_vec();
+	assert!(
+		event_names.contains(&"gateway.mcp.lifecycle.received"),
+		"missing received event; got {:?}",
+		event_names
+	);
+	assert!(
+		event_names.contains(&"gateway.mcp.lifecycle.fanout"),
+		"missing fanout event; got {:?}",
+		event_names
+	);
+	assert!(
+		event_names.contains(&"gateway.mcp.lifecycle.retry"),
+		"missing retry event; got {:?}",
+		event_names
+	);
+	assert!(
+		event_names.contains(&"gateway.mcp.lifecycle.finalized"),
+		"missing finalized event; got {:?}",
+		event_names
+	);
+
+	let finalized = span
+		.events
+		.iter()
+		.find(|e| e.name == "gateway.mcp.lifecycle.finalized")
+		.expect("finalized lifecycle event must exist");
+	assert_eq!(
+		any_string(event_attr(finalized, "gateway.mcp.lifecycle.result")),
+		Some("ok")
+	);
+}
+
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParams>) {
 	let tools = client.list_tools(None).await.unwrap();
 	let t = tools
@@ -671,7 +819,9 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 	let addr = tcp_listener.local_addr().unwrap();
 	tokio::spawn(async move {
 		let _ = axum::serve(tcp_listener, router)
-			.with_graceful_shutdown(async { rx.await.unwrap() })
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
 			.await;
 		info!("server stopped");
 	});
@@ -699,7 +849,7 @@ async fn mock_sse_server() -> MockServer {
 	tokio::spawn(async move {
 		let _ = axum::serve(tcp_listener, service)
 			.with_graceful_shutdown(async move {
-				rx.await.unwrap();
+				let _ = rx.await;
 				ct.cancel();
 				ct2.cancel();
 				tracing::info!("sse server cancelled");

@@ -86,6 +86,9 @@ impl RequestType for Request {
 				presence_penalty: None,
 				seed: None,
 				max_tokens: None,
+				top_k: None,
+				choice_count: None,
+				stop_sequences: None,
 				encoding_format: self.encoding_format.as_ref().map(|f| match f {
 					typed::EncodingFormat::Base64 => strng::literal!("base64"),
 					typed::EncodingFormat::Float => strng::literal!("float"),

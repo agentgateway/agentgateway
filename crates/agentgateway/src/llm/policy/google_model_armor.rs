@@ -15,6 +15,7 @@ use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::GoogleModelArmor;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
 
 /// User prompt data for sanitization
@@ -229,6 +230,7 @@ pub async fn send_request(
 	claims: Option<Claims>,
 	client: &PolicyClient,
 	model_armor: &GoogleModelArmor,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<SanitizeResponse> {
 	let content = req
 		.get_messages()
@@ -247,6 +249,7 @@ pub async fn send_request(
 		model_armor,
 		"sanitizeUserPrompt",
 		&request_body,
+		span_writer,
 	)
 	.await?;
 
@@ -278,6 +281,7 @@ pub async fn send_response(
 	claims: Option<Claims>,
 	client: &PolicyClient,
 	model_armor: &GoogleModelArmor,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<SanitizeResponse> {
 	let combined_content = content.join("\n");
 
@@ -293,6 +297,7 @@ pub async fn send_response(
 		model_armor,
 		"sanitizeModelResponse",
 		&request_body,
+		span_writer,
 	)
 	.await?;
 
@@ -324,6 +329,7 @@ async fn send_model_armor_request<T: Serialize>(
 	model_armor: &GoogleModelArmor,
 	action: &str,
 	request_body: &T,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<SanitizeResponse> {
 	// Use default location if not specified
 	let location = model_armor
@@ -364,7 +370,7 @@ async fn send_model_armor_request<T: Serialize>(
 	);
 
 	let resp = client
-		.call_with_explicit_policies(req, mock_be, pols)
+		.call_with_explicit_policies_and_span(req, mock_be, pols, span_writer)
 		.await?;
 
 	let resp: SanitizeResponse = json::from_response_body(resp).await?;

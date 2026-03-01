@@ -189,6 +189,12 @@ pub struct LLMRequestParams {
 	pub seed: Option<i64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub top_k: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub choice_count: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub stop_sequences: Option<Vec<Strng>>,
 	// Embeddings
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub encoding_format: Option<Strng>,
@@ -234,6 +240,8 @@ pub struct LLMResponse {
 	pub cached_input_tokens: Option<u64>,
 
 	pub provider_model: Option<Strng>,
+	pub response_id: Option<Strng>,
+	pub finish_reasons: Option<Vec<Strng>>,
 	pub completion: Option<Vec<String>>,
 
 	// Time to get the first token. Only used for streaming.
@@ -635,8 +643,9 @@ impl AIProvider {
 			if original_format.supports_prompt_guard() {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
+				let span_writer = log.as_ref().and_then(|l| l.span_writer());
 				if let Some(dr) = p
-					.apply_prompt_guard(backend_info, &mut req, http_headers, claims)
+					.apply_prompt_guard(backend_info, &mut req, http_headers, claims, span_writer)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
@@ -794,6 +803,7 @@ impl AIProvider {
 				resp.as_mut(),
 				&parts.headers,
 				&rate_limit.prompt_guard,
+				rate_limit.span_writer.clone(),
 			)
 			.await
 			.map_err(|e| {
@@ -1188,6 +1198,31 @@ pub fn get_bpe_from_tokenizer<'a>(tokenizer: Tokenizer) -> &'a CoreBPE {
 		Tokenizer::P50kBase => tiktoken_rs::r50k_base_singleton(),
 		Tokenizer::P50kEdit => tiktoken_rs::r50k_base_singleton(),
 		Tokenizer::Gpt2 => tiktoken_rs::r50k_base_singleton(),
+	}
+}
+
+pub(crate) fn rest_u64(rest: &serde_json::Value, key: &str) -> Option<u64> {
+	rest.get(key).and_then(|v| {
+		v.as_u64().or_else(|| {
+			v.as_i64()
+				.and_then(|n| if n >= 0 { Some(n as u64) } else { None })
+		})
+	})
+}
+
+pub(crate) fn rest_stop_sequences(rest: &serde_json::Value) -> Option<Vec<Strng>> {
+	let value = rest.get("stop_sequences").or_else(|| rest.get("stop"))?;
+	match value {
+		serde_json::Value::String(s) => Some(vec![strng::new(s)]),
+		serde_json::Value::Array(arr) => {
+			let out = arr
+				.iter()
+				.filter_map(serde_json::Value::as_str)
+				.map(strng::new)
+				.collect::<Vec<_>>();
+			if out.is_empty() { None } else { Some(out) }
+		},
+		_ => None,
 	}
 }
 #[derive(thiserror::Error, Debug)]

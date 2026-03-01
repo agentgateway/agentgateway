@@ -17,6 +17,7 @@ use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
 	BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
@@ -165,9 +166,13 @@ impl BackendPolicies {
 		}
 	}
 	/// build the inference routing configuration. This may be a NO-OP config.
-	pub fn build_inference(&self, client: PolicyClient) -> ext_proc::InferencePoolRouter {
+	pub fn build_inference(
+		&self,
+		client: PolicyClient,
+		span_writer: Option<SpanWriter>,
+	) -> ext_proc::InferencePoolRouter {
 		if let Some(inference) = &self.inference_routing {
-			inference.build(client)
+			inference.build(client, span_writer)
 		} else {
 			ext_proc::InferencePoolRouter::default()
 		}
@@ -331,6 +336,7 @@ pub struct LLMResponsePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
 	pub prompt_guard: Vec<ResponseGuard>,
+	pub span_writer: Option<SpanWriter>,
 }
 
 impl Default for Store {

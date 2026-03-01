@@ -49,6 +49,8 @@ impl<IO> Parser<IO> {
 						output_tokens: Some(usage.output_tokens as u64),
 						total_tokens: Some(usage.total_tokens as u64),
 						provider_model: None,
+						response_id: None,
+						finish_reasons: None,
 						completion: None,
 						first_token: None,
 						count_tokens: None,

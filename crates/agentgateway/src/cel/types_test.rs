@@ -51,6 +51,8 @@ fn build_test_request() -> crate::http::Request {
 		request_model: "gpt-4".into(),
 		response_model: Some("gpt-4-turbo".into()),
 		provider: "openai".into(),
+		response_id: Some("resp_1".into()),
+		finish_reasons: Some(vec!["stop".into()]),
 		input_tokens: Some(100),
 		output_tokens: Some(50),
 		total_tokens: Some(150),

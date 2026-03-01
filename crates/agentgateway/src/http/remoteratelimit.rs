@@ -9,6 +9,7 @@ use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest}
 use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
 
@@ -107,6 +108,7 @@ pub struct LLMResponseAmend {
 	base: RemoteRateLimit,
 	client: PolicyClient,
 	request: proto::RateLimitRequest,
+	span_writer: Option<SpanWriter>,
 }
 
 impl LLMResponseAmend {
@@ -123,7 +125,10 @@ impl LLMResponseAmend {
 			.for_each(|d| d.hits_addend = Some(tokens));
 		// Ignore the response
 		tokio::task::spawn(async move {
-			let _ = self.base.check_internal(self.client, self.request).await;
+			let _ = self
+				.base
+				.check_internal(self.client, self.request, self.span_writer)
+				.await;
 		});
 	}
 }
@@ -227,6 +232,7 @@ impl RemoteRateLimit {
 		client: PolicyClient,
 		req: &mut Request,
 		cost: u64,
+		span_writer: Option<SpanWriter>,
 	) -> Result<(PolicyResponse, Option<LLMResponseAmend>), ProxyError> {
 		if !self
 			.descriptors
@@ -244,11 +250,14 @@ impl RemoteRateLimit {
 		let Some(request) = self.build_request(req, RateLimitType::Tokens, Some(cost)) else {
 			return Ok((PolicyResponse::default(), None));
 		};
-		let cr = self.check_internal(client.clone(), request.clone()).await;
+		let cr = self
+			.check_internal(client.clone(), request.clone(), span_writer.clone())
+			.await;
 		let r = LLMResponseAmend {
 			base: self.clone(),
 			client,
 			request,
+			span_writer,
 		};
 
 		match cr {
@@ -267,6 +276,7 @@ impl RemoteRateLimit {
 		&self,
 		client: PolicyClient,
 		req: &mut Request,
+		span_writer: Option<SpanWriter>,
 	) -> Result<PolicyResponse, ProxyError> {
 		// This is on the request path
 		if !self
@@ -285,7 +295,7 @@ impl RemoteRateLimit {
 		let Some(request) = self.build_request(req, RateLimitType::Requests, None) else {
 			return Ok(PolicyResponse::default());
 		};
-		match self.check_internal(client, request).await {
+		match self.check_internal(client, request, span_writer).await {
 			Ok(cr) => Self::apply(req, cr),
 			Err(e) => {
 				if self.failure_mode == FailureMode::FailOpen {
@@ -301,6 +311,7 @@ impl RemoteRateLimit {
 		&self,
 		client: PolicyClient,
 		request: proto::RateLimitRequest,
+		span_writer: Option<SpanWriter>,
 	) -> Result<proto::RateLimitResponse, ProxyError> {
 		trace!("connecting to {:?}", self.target);
 		let descriptor_summaries: Vec<String> = request
@@ -325,6 +336,7 @@ impl RemoteRateLimit {
 			target: self.target.clone(),
 			client,
 			timeout: self.timeout,
+			span_writer,
 		};
 		let mut client = RateLimitServiceClient::new(chan);
 		let resp = client.should_rate_limit(request).await;

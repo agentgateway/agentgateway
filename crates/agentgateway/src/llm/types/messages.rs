@@ -150,6 +150,9 @@ impl RequestType for Request {
 				presence_penalty: None,
 				seed: None,
 				max_tokens: self.max_tokens,
+				top_k: crate::llm::rest_u64(&self.rest, "top_k"),
+				choice_count: crate::llm::rest_u64(&self.rest, "n"),
+				stop_sequences: crate::llm::rest_stop_sequences(&self.rest),
 				encoding_format: None,
 				dimensions: None,
 			},
@@ -305,6 +308,17 @@ impl From<SimpleChatCompletionMessage> for RequestMessage {
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+		let response_id = self
+			.rest
+			.get("id")
+			.and_then(serde_json::Value::as_str)
+			.map(strng::new);
+		let finish_reasons = self
+			.rest
+			.get("stop_reason")
+			.and_then(serde_json::Value::as_str)
+			.map(strng::new)
+			.map(|v| vec![v]);
 		LLMResponse {
 			input_tokens: Some(self.usage.input_tokens),
 			output_tokens: Some(self.usage.output_tokens),
@@ -314,6 +328,8 @@ impl ResponseType for Response {
 			reasoning_tokens: None,
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
 			cached_input_tokens: self.usage.cache_read_input_tokens,
+			response_id,
+			finish_reasons,
 			completion: if include_completion_in_log {
 				Some(
 					self

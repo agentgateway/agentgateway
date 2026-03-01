@@ -4,7 +4,7 @@ use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::RequestLog;
+use crate::telemetry::log::{RequestLog, SpanWriter};
 use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
 use crate::types::local::LocalBackendPolicies;
 use crate::*;
@@ -364,6 +364,7 @@ impl Policy {
 		req: &mut dyn RequestType,
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
 		let client = PolicyClient {
 			inputs: backend_info.inputs.clone(),
@@ -400,7 +401,9 @@ impl Policy {
 					},
 				},
 				RequestGuardKind::Webhook(wh) => {
-					if let Some(res) = Self::apply_webhook(req, http_headers, &client, wh).await? {
+					if let Some(res) =
+						Self::apply_webhook(req, http_headers, &client, wh, span_writer.clone()).await?
+					{
 						Self::record_guardrail_trip(
 							&client,
 							crate::telemetry::metrics::GuardrailPhase::Request,
@@ -410,8 +413,15 @@ impl Policy {
 					}
 				},
 				RequestGuardKind::OpenAIModeration(m) => {
-					if let Some(res) =
-						Self::apply_moderation(req, claims.clone(), &client, &g.rejection, m).await?
+					if let Some(res) = Self::apply_moderation(
+						req,
+						claims.clone(),
+						&client,
+						&g.rejection,
+						m,
+						span_writer.clone(),
+					)
+					.await?
 					{
 						Self::record_guardrail_trip(
 							&client,
@@ -428,9 +438,15 @@ impl Policy {
 					}
 				},
 				RequestGuardKind::BedrockGuardrails(bg) => {
-					if let Some(res) =
-						Self::apply_bedrock_guardrails_request(req, claims.clone(), &client, &g.rejection, bg)
-							.await?
+					if let Some(res) = Self::apply_bedrock_guardrails_request(
+						req,
+						claims.clone(),
+						&client,
+						&g.rejection,
+						bg,
+						span_writer.clone(),
+					)
+					.await?
 					{
 						Self::record_guardrail_trip(
 							&client,
@@ -447,9 +463,15 @@ impl Policy {
 					}
 				},
 				RequestGuardKind::GoogleModelArmor(gma) => {
-					if let Some(res) =
-						Self::apply_google_model_armor_request(req, claims.clone(), &client, &g.rejection, gma)
-							.await?
+					if let Some(res) = Self::apply_google_model_armor_request(
+						req,
+						claims.clone(),
+						&client,
+						&g.rejection,
+						gma,
+						span_writer.clone(),
+					)
+					.await?
 					{
 						Self::record_guardrail_trip(
 							&client,
@@ -476,8 +498,9 @@ impl Policy {
 		client: &PolicyClient,
 		rej: &RequestRejection,
 		moderation: &Moderation,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
-		let resp = moderation::send_request(req, claims, client, moderation).await?;
+		let resp = moderation::send_request(req, claims, client, moderation, span_writer).await?;
 		if resp.results.iter().any(|r| r.flagged) {
 			Ok(Some(rej.as_response()))
 		} else {
@@ -491,8 +514,11 @@ impl Policy {
 		client: &PolicyClient,
 		rej: &RequestRejection,
 		guardrails: &BedrockGuardrails,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
-		let resp = bedrock_guardrails::send_request(req, claims.clone(), client, guardrails).await?;
+		let resp =
+			bedrock_guardrails::send_request(req, claims.clone(), client, guardrails, span_writer)
+				.await?;
 		if resp.is_blocked() {
 			Ok(Some(rej.as_response()))
 		} else {
@@ -506,6 +532,7 @@ impl Policy {
 		client: &PolicyClient,
 		rej: &RequestRejection,
 		guardrails: &BedrockGuardrails,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
 		// Extract text content from response choices
 		let content: Vec<String> = resp
@@ -519,7 +546,7 @@ impl Policy {
 		}
 
 		let guardrail_resp =
-			bedrock_guardrails::send_response(content, claims, client, guardrails).await?;
+			bedrock_guardrails::send_response(content, claims, client, guardrails, span_writer).await?;
 		if guardrail_resp.is_blocked() {
 			Ok(Some(rej.as_response()))
 		} else {
@@ -533,8 +560,11 @@ impl Policy {
 		client: &PolicyClient,
 		rej: &RequestRejection,
 		model_armor: &GoogleModelArmor,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
-		let resp = google_model_armor::send_request(req, claims.clone(), client, model_armor).await?;
+		let resp =
+			google_model_armor::send_request(req, claims.clone(), client, model_armor, span_writer)
+				.await?;
 		if resp.is_blocked() {
 			Ok(Some(rej.as_response()))
 		} else {
@@ -548,6 +578,7 @@ impl Policy {
 		client: &PolicyClient,
 		rej: &RequestRejection,
 		model_armor: &GoogleModelArmor,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
 		// Extract text content from response choices
 		let content: Vec<String> = resp
@@ -561,7 +592,8 @@ impl Policy {
 		}
 
 		let guardrail_resp =
-			google_model_armor::send_response(content, claims.clone(), client, model_armor).await?;
+			google_model_armor::send_response(content, claims.clone(), client, model_armor, span_writer)
+				.await?;
 		if guardrail_resp.is_blocked() {
 			Ok(Some(rej.as_response()))
 		} else {
@@ -626,10 +658,12 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		webhook: &Webhook,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
 		let messsages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = webhook::send_request(client, &webhook.target, &headers, messsages).await?;
+		let whr =
+			webhook::send_request(client, &webhook.target, &headers, messsages, span_writer).await?;
 		match whr.action {
 			RequestAction::Mask(mask) => {
 				debug!(
@@ -684,10 +718,12 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		webhook: &Webhook,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
 		let messsages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = webhook::send_response(client, &webhook.target, &headers, messsages).await?;
+		let whr =
+			webhook::send_response(client, &webhook.target, &headers, messsages, span_writer).await?;
 		match whr.action {
 			ResponseAction::Mask(mask) => {
 				debug!(
@@ -886,6 +922,7 @@ impl Policy {
 		resp: &mut dyn ResponseType,
 		http_headers: &HeaderMap,
 		guards: &Vec<ResponseGuard>,
+		span_writer: Option<SpanWriter>,
 	) -> anyhow::Result<Option<Response>> {
 		for g in guards {
 			match &g.kind {
@@ -914,7 +951,10 @@ impl Policy {
 					},
 				},
 				ResponseGuardKind::Webhook(wh) => {
-					if let Some(res) = Self::apply_webhook_response(resp, http_headers, client, wh).await? {
+					if let Some(res) =
+						Self::apply_webhook_response(resp, http_headers, client, wh, span_writer.clone())
+							.await?
+					{
 						Self::record_guardrail_trip(
 							client,
 							crate::telemetry::metrics::GuardrailPhase::Response,
@@ -924,8 +964,15 @@ impl Policy {
 					}
 				},
 				ResponseGuardKind::BedrockGuardrails(bg) => {
-					if let Some(res) =
-						Self::apply_bedrock_guardrails_response(resp, None, client, &g.rejection, bg).await?
+					if let Some(res) = Self::apply_bedrock_guardrails_response(
+						resp,
+						None,
+						client,
+						&g.rejection,
+						bg,
+						span_writer.clone(),
+					)
+					.await?
 					{
 						Self::record_guardrail_trip(
 							client,
@@ -942,8 +989,15 @@ impl Policy {
 					}
 				},
 				ResponseGuardKind::GoogleModelArmor(gma) => {
-					if let Some(res) =
-						Self::apply_google_model_armor_response(resp, None, client, &g.rejection, gma).await?
+					if let Some(res) = Self::apply_google_model_armor_response(
+						resp,
+						None,
+						client,
+						&g.rejection,
+						gma,
+						span_writer.clone(),
+					)
+					.await?
 					{
 						Self::record_guardrail_trip(
 							client,
