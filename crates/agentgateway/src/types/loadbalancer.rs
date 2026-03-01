@@ -3,8 +3,9 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::RngExt;
 use serde::ser::SerializeSeq;
+use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
@@ -163,7 +164,29 @@ pub enum EndpointEvent<T> {
 
 #[derive(Debug)]
 pub enum EvictionEvent {
-	Evict(EndpointKey, Instant),
+	Evict(EndpointKey, Instant, Option<f64>),
+}
+
+/// Entry for the uneviction heap. Ordered so the earliest `until` is popped first (min-heap via reversed Ord).
+#[derive(Debug)]
+struct UnevictEntry(Instant, EndpointKey, Option<f64>);
+
+impl PartialEq for UnevictEntry {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0 && self.1 == other.1
+	}
+}
+impl Eq for UnevictEntry {}
+impl PartialOrd for UnevictEntry {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+impl Ord for UnevictEntry {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// Reverse so earliest instant is "greater" and gets popped first from BinaryHeap (max-heap).
+		other.0.cmp(&self.0).then_with(|| self.1.cmp(&other.1))
+	}
 }
 
 impl<T: Clone + Sync + Send + 'static> Default for EndpointSet<T> {
@@ -301,9 +324,10 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		buckets: Vec<Atomic<EndpointGroup<T>>>,
 	) {
 		tokio::task::spawn(async move {
-			let mut uneviction_heap: BinaryHeap<(Instant, EndpointKey)> = Default::default();
-			let handle_eviction = |uneviction_heap: &mut BinaryHeap<(Instant, EndpointKey)>| {
-				let (_, key) = uneviction_heap.pop().expect("heap is empty");
+			let mut uneviction_heap: BinaryHeap<UnevictEntry> = Default::default();
+			let handle_eviction = |uneviction_heap: &mut BinaryHeap<UnevictEntry>| {
+				let UnevictEntry(_until, key, health_on_unevict) =
+					uneviction_heap.pop().expect("heap is empty");
 
 				trace!(%key, "unevict");
 				let Some(bucket) = Self::find_bucket_atomic(buckets.as_slice(), &key) else {
@@ -312,30 +336,33 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
 				if let Some(ep) = eps.rejected.swap_remove(&key) {
 					ep.info.evicted_until.store(None);
+					if let Some(h) = health_on_unevict {
+						ep.info.health.set(h);
+					}
 					eps.active.insert(key, ep);
 				}
 				bucket.store(Arc::new(eps));
 			};
-			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<(Instant, EndpointKey)>,
+			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<UnevictEntry>,
 			                         o: Option<EvictionEvent>| {
 				let Some(item) = o else {
 					return;
 				};
 
-				let EvictionEvent::Evict(key, timer) = item;
+				let EvictionEvent::Evict(key, timer, health_on_unevict) = item;
 
 				let Some(bucket) = Self::find_bucket_atomic(buckets.as_slice(), &key) else {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				uneviction_heap.push((timer, key.clone()));
+				uneviction_heap.push(UnevictEntry(timer, key.clone(), health_on_unevict));
 				if let Some(ep) = eps.active.swap_remove(&key) {
 					eps.rejected.insert(key, ep);
 				}
 				bucket.store(Arc::new(eps));
 			};
 			loop {
-				let evict_at = uneviction_heap.peek().map(|x| x.0);
+				let evict_at = uneviction_heap.peek().map(|e| e.0);
 				tokio::select! {
 					true = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
 					item = eviction_events.recv() => {
@@ -360,7 +387,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				let tx = self.tx_eviction.clone();
 				// If we were the one to evict it, trigger the real eviction async
 				tokio::spawn(async move {
-					let _ = tx.send(EvictionEvent::Evict(key, time)).await;
+					let _ = tx.send(EvictionEvent::Evict(key, time, None)).await;
 				});
 			}
 		}
@@ -401,6 +428,10 @@ impl EndpointInfo {
 	pub fn new() -> Self {
 		Self::default()
 	}
+	/// Current health score (0.0–1.0) for threshold-based eviction.
+	pub fn health_score(&self) -> f64 {
+		self.health.load()
+	}
 	// Todo: fine-tune the algorithm here
 	pub fn score(&self) -> f64 {
 		let latency_penalty =
@@ -412,7 +443,7 @@ impl EndpointInfo {
 		key: Strng,
 		tx_sender: mpsc::Sender<EvictionEvent>,
 	) -> ActiveHandle {
-		self.total_requests.fetch_add(1, Ordering::Relaxed);
+		self.total_requests.fetch_add(1, AtomicOrdering::Relaxed);
 		ActiveHandle {
 			info: self.clone(),
 			key,
@@ -430,12 +461,16 @@ impl Ewma {
 		Ewma(atomic_float::AtomicF64::new(f))
 	}
 	pub fn load(&self) -> f64 {
-		self.0.load(Ordering::Relaxed)
+		self.0.load(AtomicOrdering::Relaxed)
+	}
+	/// Set the value directly (e.g. when unevicting to give the endpoint a recovery score).
+	pub fn set(&self, value: f64) {
+		self.0.store(value, AtomicOrdering::Relaxed);
 	}
 	pub fn record(&self, nv: f64) {
 		let _ = self
 			.0
-			.fetch_update(Ordering::SeqCst, Ordering::Relaxed, |old| {
+			.fetch_update(AtomicOrdering::SeqCst, AtomicOrdering::Relaxed, |old| {
 				Some(if old == 0.0 {
 					nv
 				} else {
@@ -467,7 +502,17 @@ pub struct ActiveHandle {
 }
 
 impl ActiveHandle {
-	pub fn finish_request(self, success: bool, latency: Duration, eviction_time: Option<Duration>) {
+	/// Current endpoint health score (0.0–1.0) for eviction threshold checks.
+	pub fn health_score(&self) -> f64 {
+		self.info.health_score()
+	}
+	pub fn finish_request(
+		self,
+		success: bool,
+		latency: Duration,
+		eviction_time: Option<Duration>,
+		health_on_unevict: Option<f64>,
+	) {
 		if success {
 			self.info.request_latency.record(latency.as_secs_f64());
 			self.info.health.record(1.0);
@@ -487,7 +532,9 @@ impl ActiveHandle {
 				let key = self.key.clone();
 				// If we were the one to evict it, trigger the real eviction async
 				tokio::spawn(async move {
-					let _ = tx.send(EvictionEvent::Evict(key, time)).await;
+					let _ = tx
+						.send(EvictionEvent::Evict(key, time, health_on_unevict))
+						.await;
 				});
 			}
 		}
