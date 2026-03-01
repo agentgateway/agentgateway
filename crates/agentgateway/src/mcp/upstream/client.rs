@@ -3,8 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::client::ResolvedDestination;
 use crate::proxy::ProxyError;
-use crate::proxy::httpproxy::PolicyClient;
+use crate::proxy::httpproxy::{PolicyClient, UpstreamSpanMeta};
 use crate::store::BackendPolicies;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::SimpleBackend;
 
 /// HTTP client for MCP upstream backends with optional stateful session affinity.
@@ -43,8 +44,12 @@ impl McpHttpClient {
 
 	pub async fn call(
 		&self,
-		req: http::Request<crate::http::Body>,
+		mut req: http::Request<crate::http::Body>,
 	) -> Result<http::Response<crate::http::Body>, ProxyError> {
+		let span_writer = req.extensions().get::<SpanWriter>().cloned();
+		req.extensions_mut().insert(UpstreamSpanMeta {
+			mcp_target: Some(self.target_name.clone()),
+		});
 		let mut policies = self.base_policies.clone();
 
 		if self.stateful
@@ -62,7 +67,7 @@ impl McpHttpClient {
 
 		let resp = self
 			.client
-			.call_with_default_policies(req, &self.backend, policies)
+			.call_with_default_policies_and_span(req, &self.backend, policies, span_writer)
 			.await?;
 
 		// Capture resolved destination on first request if stateful

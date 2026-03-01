@@ -694,6 +694,14 @@ pub struct LLMContext {
 	#[dynamic(rename = "responseModel")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub response_model: Option<Strng>,
+	/// The provider response id for the generation.
+	#[dynamic(rename = "responseId")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub response_id: Option<Strng>,
+	/// The finish reasons returned by the provider.
+	#[dynamic(rename = "finishReasons")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub finish_reasons: Option<Vec<Strng>>,
 	/// The provider of the LLM.
 	pub provider: Strng,
 	/// The number of tokens in the input/prompt.
@@ -752,6 +760,8 @@ impl From<llm::LLMInfo> for LLMContext {
 			cached_input_tokens: resp.cached_input_tokens,
 			cache_creation_input_tokens: resp.cache_creation_input_tokens,
 			response_model: resp.provider_model.clone(),
+			response_id: resp.response_id.clone(),
+			finish_reasons: resp.finish_reasons.clone(),
 			// Not always set
 			completion: resp.completion.clone(),
 			..LLMContext::from(value.request)
@@ -786,6 +796,8 @@ impl From<llm::LLMRequest> for LLMContext {
 			first_token: None,
 			count_tokens: None,
 			response_model: None,
+			response_id: None,
+			finish_reasons: None,
 			output_tokens: None,
 			total_tokens: None,
 			completion: None,
@@ -1094,6 +1106,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 			request_model: "gpt-4".into(),
 			response_model: Some("gpt-4-turbo".into()),
 			provider: "fake-ai".into(),
+			response_id: Some("resp_123".into()),
+			finish_reasons: Some(vec!["stop".into()]),
 			input_tokens: Some(100),
 			cached_input_tokens: Some(20),
 			cache_creation_input_tokens: Some(10),
@@ -1112,6 +1126,9 @@ pub fn full_example_executor() -> ExecutorSerde {
 				presence_penalty: Some(0.0),
 				seed: Some(42),
 				max_tokens: Some(1024),
+				top_k: Some(40),
+				choice_count: Some(1),
+				stop_sequences: Some(vec!["\n\n".into()]),
 				encoding_format: None,
 				dimensions: None,
 			},

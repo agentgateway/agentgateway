@@ -121,6 +121,10 @@ impl Display for MCPOperation {
 #[derive(Debug, Default, Clone)]
 pub struct MCPInfo {
 	pub method_name: Option<String>,
+	/// JSON-RPC request identifier for MCP request messages.
+	pub jsonrpc_request_id: Option<String>,
+	/// Negotiated MCP protocol version, when known.
+	pub protocol_version: Option<String>,
 	/// Tool name, etc
 	pub resource_name: Option<String>,
 	pub target_name: Option<String>,

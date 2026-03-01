@@ -1,9 +1,14 @@
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
+
 use ::http::{Method, StatusCode, Version};
 use agent_core::strng;
 use assert_matches::assert_matches;
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
+use itertools::Itertools;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -15,14 +20,65 @@ use crate::http::transformation_cel::Transformation;
 use crate::http::{Body, Response, transformation_cel};
 use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
+use crate::test_helpers::otlp::{
+	any_i64, any_string, export_requests_spans, span_attr, start_mock_trace_collector,
+};
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
-	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindProtocol, Listener,
-	ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, ResourceName, Route,
-	RouteBackendReference, RouteMatch, RouteName, RouteSet, Target, TargetedPolicy, TrafficPolicy,
+	A2aPolicy, Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindProtocol,
+	FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget, PathMatch, PolicyTarget,
+	ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, RouteSet,
+	SimpleBackendReference, Target, TargetedPolicy, TracingConfig, TracingPolicy, TracingProtocol,
+	TrafficPolicy,
 };
 use crate::types::backend;
 use crate::*;
+
+fn has_child_span(
+	spans: &[opentelemetry_proto::tonic::trace::v1::Span],
+	parent: &opentelemetry_proto::tonic::trace::v1::Span,
+) -> bool {
+	spans.iter().any(|candidate| {
+		candidate.trace_id == parent.trace_id && candidate.parent_span_id == parent.span_id
+	})
+}
+
+fn test_gateway_tracing_policy() -> TargetedPolicy {
+	TargetedPolicy {
+		key: strng::new("gateway-tracing"),
+		name: None,
+		target: PolicyTarget::Gateway(ListenerTarget {
+			gateway_name: "".into(),
+			gateway_namespace: "".into(),
+			listener_name: None,
+		}),
+		policy: FrontendPolicy::Tracing(Arc::new(TracingPolicy {
+			config: TracingConfig {
+				provider_backend: SimpleBackendReference::Backend("/otlp-collector".into()),
+				attributes: Default::default(),
+				resources: Default::default(),
+				remove: vec![],
+				random_sampling: Some(Arc::new(cel::Expression::new_strict("true").unwrap())),
+				client_sampling: Some(Arc::new(cel::Expression::new_strict("true").unwrap())),
+				path: "/v1/traces".to_string(),
+				protocol: TracingProtocol::Grpc,
+			},
+			fields: Arc::new(crate::telemetry::log::LoggingFields::default()),
+			tracer: once_cell::sync::OnceCell::new(),
+		}))
+		.into(),
+	}
+}
+
+fn test_otlp_backend(addr: SocketAddr) -> BackendWithPolicies {
+	BackendWithPolicies {
+		backend: Backend::Opaque(
+			ResourceName::new("otlp-collector".into(), "".into()),
+			Target::Address(addr),
+		),
+		inline_policies: vec![],
+	}
+}
 
 #[tokio::test]
 async fn basic_handling() {
@@ -574,6 +630,297 @@ async fn llm_log_body() {
 		]
 	});
 	assert_llm(io, include_bytes!("../llm/tests/request_basic.json"), want).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn llm_tracing_policy_emits_typed_otlp_span_end_to_end() {
+	let (collector_addr, mut collector_rx) = start_mock_trace_collector().await;
+	let mock = body_mock(include_bytes!("../llm/tests/response_basic.json")).await;
+	let (_mock, bind, _io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		true,
+		"{}",
+	);
+	let bind = bind
+		.with_raw_backend(test_otlp_backend(collector_addr))
+		.with_policy(test_gateway_tracing_policy());
+	let io = bind.serve_http(BIND_KEY);
+
+	let request_path = format!("/{}", rand::rng().random::<u128>());
+	let res = send_request_body(
+		io.clone(),
+		Method::POST,
+		&format!("http://lo{request_path}"),
+		include_bytes!("../llm/tests/request_basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+	let mut target_span: Option<opentelemetry_proto::tonic::trace::v1::Span> = None;
+	let mut seen_spans = Vec::new();
+	while tokio::time::Instant::now() < deadline {
+		let recv = tokio::time::timeout_at(deadline, collector_rx.recv()).await;
+		let Some(req) = recv.expect("collector timeout waiting for LLM span export") else {
+			break;
+		};
+		for span in export_requests_spans(&req) {
+			seen_spans.push(span.clone());
+			let op = any_string(span_attr(span, "gen_ai.operation.name"));
+			let provider = any_string(span_attr(span, "gen_ai.provider.name"));
+			let is_operation_span = span.name.starts_with("chat ") && !span.parent_span_id.is_empty();
+			if op == Some("chat") && provider == Some("openai") && is_operation_span {
+				target_span = Some(span.clone());
+				break;
+			}
+		}
+		if target_span
+			.as_ref()
+			.is_some_and(|span| has_child_span(&seen_spans, span))
+		{
+			break;
+		}
+	}
+
+	let span = target_span.unwrap_or_else(|| {
+		panic!(
+			"did not capture LLM typed span; seen span names: {:?}",
+			seen_spans.iter().map(|s| s.name.as_str()).collect_vec()
+		)
+	});
+	assert_eq!(
+		any_string(span_attr(&span, "gen_ai.operation.name")),
+		Some("chat")
+	);
+	assert_eq!(
+		any_string(span_attr(&span, "gen_ai.provider.name")),
+		Some("openai")
+	);
+	assert_eq!(any_string(span_attr(&span, "protocol")), Some("llm"));
+	assert_eq!(
+		any_i64(span_attr(&span, "gateway.span_schema_version")),
+		Some(2)
+	);
+	assert_eq!(any_string(span_attr(&span, "a2a.method")), None);
+	assert_eq!(any_string(span_attr(&span, "mcp.method.name")), None);
+	assert!(
+		has_child_span(&seen_spans, &span),
+		"LLM operation span should have downstream child spans"
+	);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a2a_tracing_policy_emits_typed_otlp_span_end_to_end() {
+	let (collector_addr, mut collector_rx) = start_mock_trace_collector().await;
+	let mock = simple_mock().await;
+
+	let bind = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![BackendPolicy::A2a(A2aPolicy {})],
+		})
+		.with_raw_backend(test_otlp_backend(collector_addr))
+		.with_bind(simple_bind(basic_route(*mock.address())))
+		.with_policy(test_gateway_tracing_policy());
+	let io = bind.serve_http(BIND_KEY);
+
+	let request_path = format!("/{}", rand::rng().random::<u128>());
+	let req_body = json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tasks/get",
+		"params": {
+			"id": "task-123"
+		}
+	});
+	let res = RequestBuilder::new(Method::POST, &format!("http://lo{request_path}"))
+		.header("content-type", "application/json")
+		.body(req_body.to_string())
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+	let mut target_span: Option<opentelemetry_proto::tonic::trace::v1::Span> = None;
+	let mut seen_spans = Vec::new();
+	while tokio::time::Instant::now() < deadline {
+		let recv = tokio::time::timeout_at(deadline, collector_rx.recv()).await;
+		let Some(req) = recv.expect("collector timeout waiting for A2A span export") else {
+			break;
+		};
+		for span in export_requests_spans(&req) {
+			seen_spans.push(span.clone());
+			let op = any_string(span_attr(span, "gen_ai.operation.name"));
+			let method = any_string(span_attr(span, "a2a.method"));
+			let is_operation_span =
+				span.name.starts_with("invoke_agent") && !span.parent_span_id.is_empty();
+			if op == Some("invoke_agent") && method == Some("tasks/get") && is_operation_span {
+				target_span = Some(span.clone());
+				break;
+			}
+		}
+		if target_span
+			.as_ref()
+			.is_some_and(|span| has_child_span(&seen_spans, span))
+		{
+			break;
+		}
+	}
+
+	let span = target_span.unwrap_or_else(|| {
+		panic!(
+			"did not capture A2A typed span; seen span names: {:?}",
+			seen_spans.iter().map(|s| s.name.as_str()).collect_vec()
+		)
+	});
+	assert_eq!(
+		any_string(span_attr(&span, "gen_ai.operation.name")),
+		Some("invoke_agent")
+	);
+	assert_eq!(
+		any_string(span_attr(&span, "a2a.method")),
+		Some("tasks/get")
+	);
+	assert_eq!(any_string(span_attr(&span, "protocol")), Some("a2a"));
+	assert_eq!(
+		any_i64(span_attr(&span, "gateway.span_schema_version")),
+		Some(2)
+	);
+	assert_eq!(any_string(span_attr(&span, "mcp.method.name")), None);
+	assert!(
+		has_child_span(&seen_spans, &span),
+		"A2A operation span should have downstream child spans"
+	);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mixed_llm_and_a2a_traces_emit_child_operation_spans() {
+	let (collector_addr, mut collector_rx) = start_mock_trace_collector().await;
+
+	let llm_mock = body_mock(include_bytes!("../llm/tests/response_basic.json")).await;
+	let (_llm_mock, llm_bind, _llm_io) = setup_llm_mock(
+		llm_mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		true,
+		"{}",
+	);
+	let llm_bind = llm_bind
+		.with_raw_backend(test_otlp_backend(collector_addr))
+		.with_policy(test_gateway_tracing_policy());
+	let llm_io = llm_bind.serve_http(BIND_KEY);
+
+	let llm_path = format!("/{}", rand::rng().random::<u128>());
+	let llm_res = send_request_body(
+		llm_io.clone(),
+		Method::POST,
+		&format!("http://lo{llm_path}"),
+		include_bytes!("../llm/tests/request_basic.json"),
+	)
+	.await;
+	assert_eq!(llm_res.status(), StatusCode::OK);
+	let _ = llm_res.into_body().collect().await.unwrap();
+
+	let a2a_mock = simple_mock().await;
+	let a2a_bind = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::format!("{}", a2a_mock.address()), "".into()),
+				Target::Address(*a2a_mock.address()),
+			),
+			inline_policies: vec![BackendPolicy::A2a(A2aPolicy {})],
+		})
+		.with_raw_backend(test_otlp_backend(collector_addr))
+		.with_bind(simple_bind(basic_route(*a2a_mock.address())))
+		.with_policy(test_gateway_tracing_policy());
+	let a2a_io = a2a_bind.serve_http(BIND_KEY);
+
+	let a2a_path = format!("/{}", rand::rng().random::<u128>());
+	let a2a_req_body = json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tasks/get",
+		"params": {
+			"id": "task-123"
+		}
+	});
+	let a2a_res = RequestBuilder::new(Method::POST, &format!("http://lo{a2a_path}"))
+		.header("content-type", "application/json")
+		.body(a2a_req_body.to_string())
+		.send(a2a_io.clone())
+		.await
+		.unwrap();
+	assert_eq!(a2a_res.status(), StatusCode::OK);
+	let _ = a2a_res.into_body().collect().await.unwrap();
+
+	let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+	let mut seen_spans = Vec::new();
+	let mut llm_operation_span: Option<opentelemetry_proto::tonic::trace::v1::Span> = None;
+	let mut a2a_operation_span: Option<opentelemetry_proto::tonic::trace::v1::Span> = None;
+	while tokio::time::Instant::now() < deadline {
+		let recv = tokio::time::timeout_at(deadline, collector_rx.recv()).await;
+		let Some(req) = recv.expect("collector timeout waiting for mixed trace export") else {
+			break;
+		};
+		for span in export_requests_spans(&req) {
+			seen_spans.push(span.clone());
+			let op = any_string(span_attr(span, "gen_ai.operation.name"));
+			let protocol = any_string(span_attr(span, "protocol"));
+			let has_parent = !span.parent_span_id.is_empty();
+			if has_parent
+				&& op == Some("chat")
+				&& protocol == Some("llm")
+				&& span.name.starts_with("chat ")
+			{
+				llm_operation_span = Some(span.clone());
+			}
+			if has_parent
+				&& op == Some("invoke_agent")
+				&& protocol == Some("a2a")
+				&& span.name.starts_with("invoke_agent")
+			{
+				a2a_operation_span = Some(span.clone());
+			}
+		}
+		let llm_child_found = llm_operation_span
+			.as_ref()
+			.is_some_and(|span| has_child_span(&seen_spans, span));
+		let a2a_child_found = a2a_operation_span
+			.as_ref()
+			.is_some_and(|span| has_child_span(&seen_spans, span));
+		if llm_child_found && a2a_child_found {
+			break;
+		}
+	}
+
+	let llm_span = llm_operation_span.unwrap_or_else(|| {
+		panic!(
+			"did not capture mixed-flow LLM operation span; seen names: {:?}",
+			seen_spans.iter().map(|s| s.name.as_str()).collect_vec()
+		)
+	});
+	let a2a_span = a2a_operation_span.unwrap_or_else(|| {
+		panic!(
+			"did not capture mixed-flow A2A operation span; seen names: {:?}",
+			seen_spans.iter().map(|s| s.name.as_str()).collect_vec()
+		)
+	});
+	assert!(
+		has_child_span(&seen_spans, &llm_span),
+		"LLM operation span should have downstream child spans in mixed flow"
+	);
+	assert!(
+		has_child_span(&seen_spans, &a2a_span),
+		"A2A operation span should have downstream child spans in mixed flow"
+	);
 }
 
 #[tokio::test]

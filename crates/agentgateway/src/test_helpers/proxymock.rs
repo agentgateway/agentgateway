@@ -608,7 +608,6 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),
 		stores: stores.clone(),
-		tracer: None,
 		metrics: Arc::new(crate::metrics::Metrics::new(
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),

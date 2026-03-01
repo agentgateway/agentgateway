@@ -1,14 +1,18 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Sub;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 use agent_core::telemetry::ValueBag;
 use http::Version;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
-use opentelemetry::trace::{Span, SpanContext, SpanKind, TraceState, Tracer as _, TracerProvider};
-use opentelemetry::{Key, KeyValue, TraceFlags};
+use opentelemetry::trace::{
+	Span, SpanContext, SpanKind, Status, TraceContextExt, TraceState, Tracer as _, TracerProvider,
+};
+use opentelemetry::{Context, InstrumentationScope, Key, KeyValue, TraceFlags};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::trace::SdkTracerProvider;
@@ -16,6 +20,7 @@ pub use traceparent::TraceParent;
 
 use crate::cel;
 use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
+use crate::telemetry::operation_spans::request_root_span_name;
 use crate::types::agent::{SimpleBackendReference, TracingConfig};
 
 #[derive(Clone, Debug)]
@@ -48,8 +53,92 @@ pub struct Config {
 mod semconv {
 	use opentelemetry::Key;
 
+	pub static GATEWAY_LEGACY_SPAN_NAME: Key = Key::from_static_str("gateway.legacy_span_name");
+	pub static GATEWAY_SPAN_SCHEMA_VERSION: Key = Key::from_static_str("gateway.span_schema_version");
 	pub static PROTOCOL_VERSION: Key = Key::from_static_str("network.protocol.version");
 	pub static URL_SCHEME: Key = Key::from_static_str("url.scheme");
+}
+
+const OTEL_SCHEMA_URL: &str = "https://opentelemetry.io/schemas/1.40.0";
+
+fn append_path(endpoint: &str, path: &str) -> String {
+	let path = path.trim_start_matches('/');
+	format!("{}/{}", endpoint.trim_end_matches('/'), path)
+}
+
+fn normalize_otel_path(path: &str) -> Cow<'_, str> {
+	if path.starts_with('/') {
+		Cow::Borrowed(path)
+	} else {
+		Cow::Owned(format!("/{path}"))
+	}
+}
+
+fn join_base_and_cfg_path(base_path: &str, cfg_path: &str) -> String {
+	let cfg_path = normalize_otel_path(cfg_path);
+	if base_path.is_empty() || base_path == "/" {
+		return cfg_path.into_owned();
+	}
+
+	let base_path = normalize_otel_path(base_path);
+	let base_path = base_path.as_ref().trim_end_matches('/');
+	if base_path.ends_with(cfg_path.as_ref()) {
+		base_path.to_string()
+	} else {
+		append_path(base_path, cfg_path.as_ref())
+	}
+}
+
+fn scheme_for_request(request: &RequestLog) -> Option<&'static str> {
+	if matches!(request.backend_protocol, Some(cel::BackendProtocol::tcp)) {
+		return None;
+	}
+	if request.version.is_some() || request.backend_protocol.is_some() {
+		return Some(if request.tls_info.is_some() {
+			"https"
+		} else {
+			"http"
+		});
+	}
+	None
+}
+
+fn network_protocol_version_for_request(version: Option<Version>) -> Option<&'static str> {
+	match version {
+		Some(Version::HTTP_11) => Some("1.1"),
+		Some(Version::HTTP_2) => Some("2"),
+		_ => None,
+	}
+}
+
+fn legacy_request_span_name(request: &RequestLog) -> Option<String> {
+	let method = request.method.as_ref()?.as_str();
+	let path = request.path_match.as_deref().or(request.path.as_deref())?;
+	Some(format!("{method} {path}"))
+}
+
+fn tracer_scope(name: String) -> InstrumentationScope {
+	InstrumentationScope::builder(name)
+		.with_schema_url(OTEL_SCHEMA_URL)
+		.build()
+}
+
+fn status_for_request(request: &RequestLog) -> Option<Status> {
+	if request.error.is_some() {
+		return Some(Status::error("request_error"));
+	}
+	let status = request.status?;
+	if status.is_server_error() {
+		let description = match status.as_u16() {
+			500 => "http 500",
+			502 => "http 502",
+			503 => "http 503",
+			504 => "http 504",
+			_ => "http error",
+		};
+		return Some(Status::error(description));
+	}
+	None
 }
 
 impl Tracer {
@@ -68,7 +157,8 @@ impl Tracer {
 			.unwrap_or_else(tokio::runtime::Handle::current);
 
 		let defaults = GLOBAL_RESOURCE_DEFAULTS.get();
-		let mut resource_builder = Resource::builder();
+		let mut resource_builder =
+			Resource::builder().with_schema_url(Vec::<KeyValue>::new(), OTEL_SCHEMA_URL);
 		if let Some(d) = defaults {
 			for kv in &d.attrs {
 				resource_builder = resource_builder.with_attribute(kv.clone());
@@ -149,86 +239,22 @@ impl Tracer {
 				backend_ref: config.provider_backend.clone(),
 				runtime: exporter_runtime,
 			};
+			let exporter = opentelemetry_otlp::SpanExporter::builder()
+				.with_http()
+				.with_http_client(http_client)
+				.with_endpoint(endpoint_path)
+				.build()?;
 			opentelemetry_sdk::trace::SdkTracerProvider::builder()
 				.with_resource(resource.clone())
-				.with_batch_exporter(
-					opentelemetry_otlp::SpanExporter::builder()
-						.with_http()
-						.with_http_client(http_client)
-						.with_endpoint(endpoint_path)
-						.build()?,
-				)
+				.with_batch_exporter(exporter)
 				.build()
 		};
-		let tracer = provider.tracer(tracer_name);
+		let tracer = provider.tracer_with_scope(tracer_scope(tracer_name));
 		Ok(Tracer {
 			tracer: Arc::new(tracer),
 			provider,
 			fields,
 		})
-	}
-
-	pub fn new(cfg: &Config) -> anyhow::Result<Option<Tracer>> {
-		let Some(ep) = &cfg.endpoint else {
-			return Ok(None);
-		};
-		// Apply global defaults (gateway-derived if initialized)
-		let defaults = GLOBAL_RESOURCE_DEFAULTS.get();
-		let result = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-			.with_resource({
-				let mut rb = Resource::builder()
-					.with_service_name(
-						defaults
-							.and_then(|d| d.service_name.clone())
-							.unwrap_or_else(|| "agentgateway".to_string()),
-					)
-					.with_attribute(KeyValue::new(
-						"service.version",
-						agent_core::version::BuildInfo::new().version,
-					));
-				if let Some(d) = defaults {
-					for kv in &d.attrs {
-						rb = rb.with_attribute(kv.clone());
-					}
-				}
-				rb.build()
-			})
-			// TODO: this should be integrated with PolicyClient
-			.with_batch_exporter(if cfg.protocol == Protocol::Grpc {
-				// TODO: otel is using an old tonic version that mismatches with the one we have
-				// let metadata = MetadataMap::from_headers(HeaderMap::from_iter(
-				// 	cfg
-				// 		.headers
-				// 		.clone()
-				// 		.into_iter()
-				// 		.map(|(k, v)| Ok((HeaderName::try_from(k)?, HeaderValue::try_from(v)?)))
-				// 		.collect::<Result<_, _>>()?
-				// 		.iter(),
-				// ));
-				opentelemetry_otlp::SpanExporter::builder()
-					.with_tonic()
-					.with_endpoint(ep)
-					// .with_metadata(metadata)
-					.build()?
-			} else {
-				opentelemetry_otlp::SpanExporter::builder()
-					.with_http()
-					// For HTTP, we add the suffix ourselves
-					.with_endpoint(format!(
-						"{}/{}",
-						ep.strip_suffix("/").unwrap_or(ep),
-						cfg.path.clone()
-					))
-					.with_headers(cfg.headers.clone())
-					.build()?
-			})
-			.build();
-		let tracer = result.tracer("agentgateway");
-		Ok(Some(Tracer {
-			tracer: Arc::new(tracer),
-			provider: result,
-			fields: Arc::new(cfg.fields.clone()),
-		}))
 	}
 
 	pub fn shutdown(&self) {
@@ -240,31 +266,64 @@ impl Tracer {
 		request: &RequestLog,
 		cel_exec: &CelLoggingExecutor,
 		attrs: &[(&str, Option<ValueBag<'v>>)],
+		extra_attrs: &[KeyValue],
+		suppressed_keys: &[&str],
 	) {
-		let mut attributes = attrs
-			.iter()
-			.filter(|(k, _)| !self.fields.has(k))
-			.filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
-			.map(|(k, v)| KeyValue::new(Key::new(k.to_string()), to_otel(v)))
-			.collect_vec();
-		let out_span = request.outgoing_span.as_ref().unwrap();
+		let Some(out_span) = request.outgoing_span.as_ref() else {
+			return;
+		};
 		if !out_span.is_sampled() {
 			return;
 		}
+		let mut attributes = attrs
+			.iter()
+			.filter(|(k, _)| !self.fields.has(k))
+			.filter(|(k, _)| !suppressed_keys.contains(k))
+			.filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
+			.map(|(k, v)| KeyValue::new(Key::new(k.to_string()), to_otel(v)))
+			.collect_vec();
+		attributes.extend(extra_attrs.iter().cloned());
 		let end = SystemTime::now();
 		let elapsed = request.tcp_info.start.elapsed();
 
-		// For now we only accept HTTP(?)
-		attributes.push(KeyValue::new(semconv::URL_SCHEME.clone(), "http"));
-		// Otel spec has a special format here
-		match &request.version {
-			Some(Version::HTTP_11) => {
-				attributes.push(KeyValue::new(semconv::PROTOCOL_VERSION.clone(), "1.1"));
-			},
-			Some(Version::HTTP_2) => {
-				attributes.push(KeyValue::new(semconv::PROTOCOL_VERSION.clone(), "2"));
-			},
-			_ => {},
+		let mut has_url_scheme = false;
+		let mut has_protocol_version = false;
+		let mut has_legacy_span_name = false;
+		let mut has_span_schema_version = false;
+		for kv in &attributes {
+			let key = kv.key.as_str();
+			if key == semconv::URL_SCHEME.as_str() {
+				has_url_scheme = true;
+			} else if key == semconv::PROTOCOL_VERSION.as_str() {
+				has_protocol_version = true;
+			} else if key == semconv::GATEWAY_LEGACY_SPAN_NAME.as_str() {
+				has_legacy_span_name = true;
+			} else if key == semconv::GATEWAY_SPAN_SCHEMA_VERSION.as_str() {
+				has_span_schema_version = true;
+			}
+			if has_url_scheme && has_protocol_version && has_legacy_span_name && has_span_schema_version {
+				break;
+			}
+		}
+		if !has_url_scheme && let Some(scheme) = scheme_for_request(request) {
+			attributes.push(KeyValue::new(semconv::URL_SCHEME.clone(), scheme));
+		}
+		if !has_protocol_version
+			&& let Some(version) = network_protocol_version_for_request(request.version)
+		{
+			attributes.push(KeyValue::new(semconv::PROTOCOL_VERSION.clone(), version));
+		}
+		if !has_legacy_span_name && let Some(legacy_name) = legacy_request_span_name(request) {
+			attributes.push(KeyValue::new(
+				semconv::GATEWAY_LEGACY_SPAN_NAME.clone(),
+				legacy_name,
+			));
+		}
+		if !has_span_schema_version {
+			attributes.push(KeyValue::new(
+				semconv::GATEWAY_SPAN_SCHEMA_VERSION.clone(),
+				2_i64,
+			));
 		}
 
 		attributes.reserve(self.fields.add.len());
@@ -283,14 +342,8 @@ impl Tracer {
 			}
 		}
 
-		let span_name = span_name.unwrap_or_else(|| match (&request.method, &request.path_match) {
-			(Some(method), Some(path_match)) => {
-				format!("{method} {path_match}")
-			},
-			_ => "unknown".to_string(),
-		});
-
-		let out_span = request.outgoing_span.as_ref().unwrap();
+		let span_name =
+			span_name.unwrap_or_else(|| request_root_span_name(request.path_match.as_deref()));
 		let mut sb = self
 			.tracer
 			.span_builder(span_name)
@@ -300,22 +353,308 @@ impl Tracer {
 			.with_attributes(attributes)
 			.with_trace_id(out_span.trace_id.into())
 			.with_span_id(out_span.span_id.into());
+		if let Some(status) = status_for_request(request) {
+			sb = sb.with_status(status);
+		}
 
 		if let Some(in_span) = &request.incoming_span {
-			let parent = SpanContext::new(
-				in_span.trace_id.into(),
-				in_span.span_id.into(),
-				TraceFlags::new(in_span.flags),
-				true,
-				TraceState::default(),
-			);
-			sb = sb.with_links(vec![opentelemetry::trace::Link::new(
-				parent.clone(),
-				vec![],
-				0,
-			)]);
+			let parent_ctx = remote_parent_context(in_span);
+			sb.start_with_context(self.tracer.as_ref(), &parent_ctx)
+				.end()
+		} else {
+			sb.start(self.tracer.as_ref()).end()
 		}
-		sb.start(self.tracer.as_ref()).end()
+	}
+}
+
+pub(crate) fn remote_parent_context(parent: &TraceParent) -> Context {
+	let sc = SpanContext::new(
+		parent.trace_id.into(),
+		parent.span_id.into(),
+		TraceFlags::new(parent.flags),
+		true,
+		TraceState::default(),
+	);
+	Context::new().with_remote_span_context(sc)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::collections::HashMap;
+	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+	use std::sync::{Arc, Mutex};
+	use std::time::{Duration, Instant};
+
+	use frozen_collections::FzHashSet;
+	use opentelemetry::trace::TraceContextExt;
+	use opentelemetry_proto::tonic::collector::trace::v1::trace_service_server::{
+		TraceService, TraceServiceServer,
+	};
+	use opentelemetry_proto::tonic::collector::trace::v1::{
+		ExportTraceServiceRequest, ExportTraceServiceResponse,
+	};
+	use opentelemetry_proto::tonic::common::v1::any_value::Value as AnyValue;
+	use prometheus_client::registry::Registry;
+	use tokio::sync::mpsc;
+	use tonic::{Request, Response, Status};
+
+	#[test]
+	fn remote_parent_context_uses_traceparent_values() {
+		let tp = TraceParent {
+			version: 0,
+			trace_id: 0x1234,
+			span_id: 0xabcd,
+			flags: 0x01,
+		};
+		let ctx = remote_parent_context(&tp);
+		let span = ctx.span();
+		let sc = span.span_context();
+		assert_eq!(u128::from_be_bytes(sc.trace_id().to_bytes()), tp.trace_id);
+		assert_eq!(u64::from_be_bytes(sc.span_id().to_bytes()), tp.span_id);
+		assert!(sc.is_remote());
+		assert!(sc.is_sampled());
+	}
+
+	#[test]
+	fn traceparent_try_from_rejects_bad_segment_count_without_panicking() {
+		let malformed = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-";
+		assert!(TraceParent::try_from(malformed).is_err());
+	}
+
+	#[test]
+	fn traceparent_try_from_accepts_valid_header() {
+		let value = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		let parsed = TraceParent::try_from(value).expect("valid traceparent");
+		assert_eq!(parsed.version, 0);
+		assert_eq!(parsed.trace_id, 0x4bf92f3577b34da6a3ce929d0e0e4736);
+		assert_eq!(parsed.span_id, 0x00f067aa0ba902b7);
+		assert_eq!(parsed.flags, 0x01);
+	}
+
+	#[test]
+	fn append_path_trims_boundary_slashes() {
+		let joined = append_path("http://collector:4318/", "/v1/traces");
+		assert_eq!(joined, "http://collector:4318/v1/traces");
+	}
+
+	#[test]
+	fn normalize_otel_path_enforces_leading_slash() {
+		assert_eq!(normalize_otel_path("v1/traces"), "/v1/traces");
+		assert_eq!(normalize_otel_path("/v1/traces"), "/v1/traces");
+	}
+
+	#[test]
+	fn join_base_and_cfg_path_avoids_duplicate_suffix() {
+		let joined = join_base_and_cfg_path("/otlp/v1/traces", "v1/traces");
+		assert_eq!(joined, "/otlp/v1/traces");
+	}
+
+	#[test]
+	fn join_base_and_cfg_path_joins_root_or_base_paths() {
+		assert_eq!(join_base_and_cfg_path("/", "v1/traces"), "/v1/traces");
+		assert_eq!(
+			join_base_and_cfg_path("/collector", "/v1/traces"),
+			"/collector/v1/traces"
+		);
+	}
+
+	#[derive(Debug)]
+	struct MockTraceService {
+		tx: Mutex<mpsc::Sender<ExportTraceServiceRequest>>,
+	}
+
+	#[tonic::async_trait]
+	impl TraceService for MockTraceService {
+		async fn export(
+			&self,
+			request: Request<ExportTraceServiceRequest>,
+		) -> Result<Response<ExportTraceServiceResponse>, Status> {
+			self
+				.tx
+				.lock()
+				.expect("trace export sender mutex poisoned")
+				.try_send(request.into_inner())
+				.map_err(|e| Status::internal(format!("failed to capture export request: {e}")))?;
+			Ok(Response::new(ExportTraceServiceResponse {
+				partial_success: None,
+			}))
+		}
+	}
+
+	async fn start_mock_trace_collector() -> (SocketAddr, mpsc::Receiver<ExportTraceServiceRequest>) {
+		let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0)))
+			.await
+			.expect("bind mock trace collector");
+		let addr = listener.local_addr().expect("mock collector local addr");
+
+		let (tx, rx) = mpsc::channel(4);
+		let service = MockTraceService { tx: Mutex::new(tx) };
+		tokio::spawn(async move {
+			tonic::transport::Server::builder()
+				.add_service(TraceServiceServer::new(service))
+				.serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
+				.await
+				.expect("mock trace collector server failed");
+		});
+
+		(addr, rx)
+	}
+
+	fn make_min_req_log() -> crate::telemetry::log::RequestLog {
+		let log_cfg = crate::telemetry::log::Config {
+			filter: None,
+			fields: crate::telemetry::log::LoggingFields::default(),
+			metric_fields: Arc::new(crate::telemetry::log::MetricFields::default()),
+			excluded_metrics: FzHashSet::default(),
+			level: "info".to_string(),
+			format: crate::LoggingFormat::Text,
+		};
+		let tracing_cfg = Config {
+			endpoint: None,
+			headers: HashMap::new(),
+			protocol: Protocol::Grpc,
+			fields: crate::telemetry::log::LoggingFields::default(),
+			random_sampling: None,
+			client_sampling: None,
+			path: "/v1/traces".to_string(),
+		};
+		let cel = crate::telemetry::log::CelLogging::new(log_cfg, tracing_cfg);
+		let mut prom = Registry::default();
+		let metrics = Arc::new(crate::telemetry::metrics::Metrics::new(
+			&mut prom,
+			FzHashSet::default(),
+		));
+		let start = Instant::now();
+		let tcp_info = crate::transport::stream::TCPConnectionInfo {
+			peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),
+			local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
+			start,
+			raw_peer_addr: None,
+		};
+		crate::telemetry::log::RequestLog::new(cel, metrics, start, tcp_info)
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn otlp_grpc_wire_export_emits_server_span_and_resource_attrs() {
+		let (addr, mut rx) = start_mock_trace_collector().await;
+
+		let exporter = opentelemetry_otlp::SpanExporter::builder()
+			.with_tonic()
+			.with_endpoint(format!("http://{addr}"))
+			.build()
+			.expect("otlp tonic exporter init");
+		let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+			.with_resource(
+				Resource::builder()
+					.with_service_name("agentgateway")
+					.with_schema_url(Vec::<KeyValue>::new(), OTEL_SCHEMA_URL)
+					.with_attribute(KeyValue::new(
+						"service.version",
+						agent_core::version::BuildInfo::new().version,
+					))
+					.build(),
+			)
+			.with_batch_exporter(exporter)
+			.build();
+		let tracer = Tracer {
+			tracer: Arc::new(provider.tracer_with_scope(tracer_scope("agentgateway".to_string()))),
+			provider,
+			fields: Arc::new(crate::telemetry::log::LoggingFields::default()),
+		};
+
+		let mut req_log = make_min_req_log();
+		let outgoing = TraceParent {
+			version: 0,
+			trace_id: 0xabcddcbaabcddcbaabcddcbaabcddcba,
+			span_id: 0x0102030405060708,
+			flags: 0x01,
+		};
+		req_log.method = Some(http::Method::POST);
+		req_log.path = Some("/v1/chat/completions".to_string());
+		req_log.outgoing_span = Some(outgoing.clone());
+		let cel_exec = req_log
+			.cel
+			.build(None, None, None, None, None, None)
+			.expect("cel executor");
+
+		tracer.send(&req_log, &cel_exec, &[], &[], &[]);
+		tracer.shutdown();
+
+		let export_req = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+			.await
+			.expect("collector timeout")
+			.expect("collector channel closed unexpectedly");
+
+		let service_name = export_req
+			.resource_spans
+			.iter()
+			.filter_map(|rs| rs.resource.as_ref())
+			.flat_map(|r| r.attributes.iter())
+			.find_map(|kv| {
+				if kv.key != "service.name" {
+					return None;
+				}
+				match kv.value.as_ref().and_then(|v| v.value.as_ref()) {
+					Some(AnyValue::StringValue(s)) if !s.is_empty() => Some(s.as_str()),
+					_ => None,
+				}
+			});
+		assert!(
+			service_name.is_some(),
+			"exported resource should include non-empty service.name"
+		);
+
+		let spans = export_req
+			.resource_spans
+			.iter()
+			.flat_map(|rs| rs.scope_spans.iter())
+			.flat_map(|ss| ss.spans.iter())
+			.collect_vec();
+		assert_eq!(spans.len(), 1, "expected exactly one exported span");
+
+		let ingress = spans[0];
+		assert_eq!(
+			ingress.kind,
+			opentelemetry_proto::tonic::trace::v1::span::SpanKind::Server as i32,
+			"ingress span must be Server on the wire"
+		);
+		let wire_trace_id = u128::from_be_bytes(
+			ingress
+				.trace_id
+				.as_slice()
+				.try_into()
+				.expect("trace id should be 16 bytes"),
+		);
+		let wire_span_id = u64::from_be_bytes(
+			ingress
+				.span_id
+				.as_slice()
+				.try_into()
+				.expect("span id should be 8 bytes"),
+		);
+		assert_eq!(wire_trace_id, outgoing.trace_id);
+		assert_eq!(wire_span_id, outgoing.span_id);
+		let legacy_span_name = ingress.attributes.iter().find_map(|kv| {
+			if kv.key != "gateway.legacy_span_name" {
+				return None;
+			}
+			match kv.value.as_ref().and_then(|v| v.value.as_ref()) {
+				Some(AnyValue::StringValue(v)) => Some(v.as_str()),
+				_ => None,
+			}
+		});
+		assert_eq!(legacy_span_name, Some("POST /v1/chat/completions"));
+		let span_schema_version = ingress.attributes.iter().find_map(|kv| {
+			if kv.key != "gateway.span_schema_version" {
+				return None;
+			}
+			match kv.value.as_ref().and_then(|v| v.value.as_ref()) {
+				Some(AnyValue::IntValue(v)) => Some(*v),
+				_ => None,
+			}
+		});
+		assert_eq!(span_schema_version, Some(2));
 	}
 }
 
@@ -328,7 +667,7 @@ struct PolicyGrpcSpanExporter {
 		opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient<
 			crate::http::ext_proc::GrpcReferenceChannel,
 		>,
-	is_shutdown: Arc<bool>,
+	is_shutdown: Arc<AtomicBool>,
 	resource: Resource,
 	runtime: tokio::runtime::Handle,
 }
@@ -350,13 +689,14 @@ impl PolicyGrpcSpanExporter {
 			target,
 			client: crate::proxy::httpproxy::PolicyClient { inputs },
 			timeout: None,
+			span_writer: None,
 		};
 		let tonic_client = opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient::new(
 			channel,
 		);
 		Self {
 			tonic_client,
-			is_shutdown: Arc::new(false),
+			is_shutdown: Arc::new(AtomicBool::new(false)),
 			resource: Resource::builder().build(),
 			runtime,
 		}
@@ -375,7 +715,7 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 		let resource = self.resource.clone();
 		let handle = self.runtime.clone();
 		async move {
-			if *is_shutdown {
+			if is_shutdown.load(Ordering::Acquire) {
 				return Err(OTelSdkError::AlreadyShutdown);
 			}
 			// Reuse OTLP transform to convert SDK spans to ResourceSpans
@@ -394,7 +734,7 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 	}
 
 	fn shutdown(&mut self) -> opentelemetry_sdk::error::OTelSdkResult {
-		self.is_shutdown = Arc::new(true);
+		self.is_shutdown.store(true, Ordering::Release);
 		Ok(())
 	}
 
@@ -410,6 +750,8 @@ fn to_otel(v: &ValueBag) -> opentelemetry::Value {
 		opentelemetry::Value::I64(b)
 	} else if let Some(b) = v.to_f64() {
 		opentelemetry::Value::F64(b)
+	} else if let Some(b) = v.to_bool() {
+		opentelemetry::Value::Bool(b)
 	} else {
 		opentelemetry::Value::String(v.to_string().into())
 	}
@@ -473,48 +815,44 @@ fn from_span_data(
 	resource: &opentelemetry_sdk::Resource,
 	spans: Vec<opentelemetry_sdk::trace::SpanData>,
 ) -> Vec<opentelemetry_proto::tonic::trace::v1::ResourceSpans> {
-	let resource: opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema =
-		resource.into();
+	let opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema {
+		attributes,
+		schema_url,
+	} = resource.into();
 	// Group spans by their instrumentation scope
-	let scope_map = spans.iter().fold(
-		HashMap::new(),
-		|mut scope_map: HashMap<
-			&opentelemetry::InstrumentationScope,
-			Vec<&opentelemetry_sdk::trace::SpanData>,
-		>,
-		 span| {
-			let instrumentation = &span.instrumentation_scope;
-			scope_map.entry(instrumentation).or_default().push(span);
-			scope_map
-		},
-	);
+	let mut scope_map: HashMap<
+		opentelemetry::InstrumentationScope,
+		Vec<opentelemetry_sdk::trace::SpanData>,
+	> = HashMap::new();
+	for span in spans {
+		scope_map
+			.entry(span.instrumentation_scope.clone())
+			.or_default()
+			.push(span);
+	}
 
 	// Convert the grouped spans into ScopeSpans
 	let scope_spans = scope_map
 		.into_iter()
 		.map(
 			|(instrumentation, span_records)| opentelemetry_proto::tonic::trace::v1::ScopeSpans {
-				scope: Some((instrumentation, None).into()),
+				scope: Some((&instrumentation, None).into()),
 				schema_url: instrumentation
 					.schema_url()
 					.map(ToOwned::to_owned)
 					.unwrap_or_default(),
-				spans: span_records
-					.into_iter()
-					.map(|span_data| span_data.clone().into())
-					.collect(),
+				spans: span_records.into_iter().map(Into::into).collect(),
 			},
 		)
 		.collect();
-	// We currently do not extract resource attributes; send empty resource payload.
-	// This is sufficient for collector ingestion and can be enhanced later if needed.
+	let resource_schema_url = schema_url.unwrap_or_default();
 	vec![opentelemetry_proto::tonic::trace::v1::ResourceSpans {
 		resource: Some(opentelemetry_proto::tonic::resource::v1::Resource {
-			attributes: resource.attributes.0.clone(),
+			attributes: attributes.0,
 			dropped_attributes_count: 0,
 			entity_refs: vec![],
 		}),
-		schema_url: String::new(),
+		schema_url: resource_schema_url,
 		scope_spans,
 	}]
 }
@@ -558,18 +896,7 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	{
 		// Try to parse as a URI to extract the path component
 		if let Ok(uri) = http::Uri::try_from(ep) {
-			let base_path = uri.path().to_string();
-			let path = if base_path.is_empty() || base_path == "/" {
-				cfg.tracing.path.clone()
-			} else if base_path.ends_with(cfg.tracing.path.as_str()) {
-				base_path
-			} else {
-				format!(
-					"{}/{}",
-					base_path.trim_end_matches('/'),
-					cfg.tracing.path.as_str()
-				)
-			};
+			let path = join_base_and_cfg_path(uri.path(), cfg.tracing.path.as_str());
 			otlp_http_path = Some(path);
 		} else {
 			// Fallback to default if parsing fails
@@ -577,11 +904,16 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 		}
 	}
 
-	let _ = GLOBAL_RESOURCE_DEFAULTS.set(GlobalResourceDefaults {
-		service_name: Some(service_name),
-		attrs,
-		otlp_http_path,
-	});
+	if GLOBAL_RESOURCE_DEFAULTS
+		.set(GlobalResourceDefaults {
+			service_name: Some(service_name),
+			attrs,
+			otlp_http_path,
+		})
+		.is_err()
+	{
+		tracing::warn!("set_resource_defaults_from_config called more than once; ignoring");
+	}
 }
 
 mod traceparent {
@@ -619,8 +951,9 @@ mod traceparent {
 			}
 		}
 		pub fn insert_header(&self, req: &mut Request) {
-			let hv = hyper::header::HeaderValue::from_bytes(format!("{self:?}").as_bytes()).unwrap();
-			req.headers_mut().insert(TRACEPARENT_HEADER, hv);
+			if let Ok(hv) = hyper::header::HeaderValue::from_str(&self.to_string()) {
+				req.headers_mut().insert(TRACEPARENT_HEADER, hv);
+			}
 		}
 		pub fn from_request(req: &Request) -> Option<Self> {
 			req
@@ -648,17 +981,17 @@ mod traceparent {
 
 	impl fmt::Debug for TraceParent {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-			write!(
-				f,
-				"{:02x}-{:032x}-{:016x}-{:02x}",
-				self.version, self.trace_id, self.span_id, self.flags
-			)
+			fmt::Display::fmt(self, f)
 		}
 	}
 
 	impl fmt::Display for TraceParent {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-			write!(f, "{:032x}", self.trace_id,)
+			write!(
+				f,
+				"{:02x}-{:032x}-{:016x}-{:02x}",
+				self.version, self.trace_id, self.span_id, self.flags
+			)
 		}
 	}
 
@@ -670,13 +1003,22 @@ mod traceparent {
 				anyhow::bail!("traceparent malformed length was {}", value.len())
 			}
 
-			let segs: Vec<&str> = value.split('-').collect();
+			let mut segs = value.split('-');
+			let (Some(version), Some(trace_id), Some(span_id), Some(flags), None) = (
+				segs.next(),
+				segs.next(),
+				segs.next(),
+				segs.next(),
+				segs.next(),
+			) else {
+				anyhow::bail!("traceparent malformed segment count");
+			};
 
 			Ok(Self {
-				version: u8::from_str_radix(segs[0], 16)?,
-				trace_id: u128::from_str_radix(segs[1], 16)?,
-				span_id: u64::from_str_radix(segs[2], 16)?,
-				flags: u8::from_str_radix(segs[3], 16)?,
+				version: u8::from_str_radix(version, 16)?,
+				trace_id: u128::from_str_radix(trace_id, 16)?,
+				span_id: u64::from_str_radix(span_id, 16)?,
+				flags: u8::from_str_radix(flags, 16)?,
 			})
 		}
 	}

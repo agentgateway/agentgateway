@@ -6,6 +6,7 @@ use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::Moderation;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
 
 pub async fn send_request(
@@ -13,6 +14,7 @@ pub async fn send_request(
 	claims: Option<Claims>,
 	client: &PolicyClient,
 	moderation: &Moderation,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<async_openai::types::moderations::CreateModerationResponse> {
 	let model = moderation
 		.model
@@ -46,7 +48,7 @@ pub async fn send_request(
 		Target::Hostname(strng::literal!("api.openai.com"), 443),
 	);
 	let resp = client
-		.call_with_explicit_policies(req, mock_be, pols)
+		.call_with_explicit_policies_and_span(req, mock_be, pols, span_writer)
 		.await?;
 	let resp: async_openai::types::moderations::CreateModerationResponse =
 		json::from_response_body(resp).await?;

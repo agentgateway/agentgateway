@@ -26,6 +26,8 @@
 |`llm.streaming`|Whether the LLM response is streamed.|
 |`llm.requestModel`|The model requested for the LLM request. This may differ from the actual model used.|
 |`llm.responseModel`|The model that actually served the LLM response.|
+|`llm.responseId`|The provider response id for the generation.|
+|`llm.finishReasons`|The finish reasons returned by the provider.|
 |`llm.provider`|The provider of the LLM.|
 |`llm.inputTokens`|The number of tokens in the input/prompt.|
 |`llm.cachedInputTokens`|The number of tokens in the input/prompt read from cache (savings)|
@@ -45,6 +47,9 @@
 |`llm.params.presence_penalty`||
 |`llm.params.seed`||
 |`llm.params.max_tokens`||
+|`llm.params.top_k`||
+|`llm.params.choice_count`||
+|`llm.params.stop_sequences`||
 |`llm.params.encoding_format`||
 |`llm.params.dimensions`||
 |`llmRequest`|`llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;<br>policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.|

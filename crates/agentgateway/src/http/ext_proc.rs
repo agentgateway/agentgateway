@@ -27,6 +27,7 @@ use crate::http::filters::BackendRequestTimeout;
 use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
 
@@ -86,11 +87,16 @@ pub struct InferencePoolRouter {
 }
 
 impl InferenceRouting {
-	pub fn build(&self, client: PolicyClient) -> InferencePoolRouter {
+	pub fn build(
+		&self,
+		client: PolicyClient,
+		span_writer: Option<SpanWriter>,
+	) -> InferencePoolRouter {
 		InferencePoolRouter {
 			ext_proc: Some(ExtProcInstance::new(
 				client,
 				self.target.clone(),
+				span_writer,
 				self.failure_mode,
 				None,
 				None,
@@ -159,11 +165,12 @@ pub struct ExtProc {
 }
 
 impl ExtProc {
-	pub fn build(&self, client: PolicyClient) -> ExtProcRequest {
+	pub fn build(&self, client: PolicyClient, span_writer: Option<SpanWriter>) -> ExtProcRequest {
 		ExtProcRequest {
 			ext_proc: Some(ExtProcInstance::new(
 				client,
 				self.target.clone(),
+				span_writer,
 				self.failure_mode,
 				self.metadata_context.clone(),
 				self.request_attributes.clone(),
@@ -243,6 +250,7 @@ impl ExtProcInstance {
 	fn new(
 		client: PolicyClient,
 		target: Arc<SimpleBackendReference>,
+		span_writer: Option<SpanWriter>,
 		failure_mode: FailureMode,
 		metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 		req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
@@ -253,6 +261,7 @@ impl ExtProcInstance {
 			target,
 			client,
 			timeout: None,
+			span_writer,
 		};
 		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
@@ -1099,6 +1108,7 @@ pub struct GrpcReferenceChannel {
 	pub target: Arc<SimpleBackendReference>,
 	pub client: PolicyClient,
 	pub timeout: Option<Duration>,
+	pub span_writer: Option<SpanWriter>,
 }
 
 impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel {
@@ -1116,7 +1126,14 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel
 		};
 		let client = self.client.clone();
 		let target = self.target.clone();
+		let span_writer = self.span_writer.clone();
 		let req = req.map(http::Body::new);
-		Box::pin(async move { Ok(client.call_reference(req, &target).await?) })
+		Box::pin(async move {
+			Ok(
+				client
+					.call_reference_and_span(req, &target, span_writer)
+					.await?,
+			)
+		})
 	}
 }

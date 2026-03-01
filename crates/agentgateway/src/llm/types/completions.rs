@@ -111,6 +111,18 @@ pub struct Usage {
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+		let response_id = self
+			.rest
+			.get("id")
+			.and_then(serde_json::Value::as_str)
+			.map(strng::new);
+		let finish_reasons = self
+			.choices
+			.iter()
+			.filter_map(|c| c.rest.get("finish_reason"))
+			.filter_map(serde_json::Value::as_str)
+			.map(strng::new)
+			.collect_vec();
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens as u64),
@@ -128,6 +140,8 @@ impl ResponseType for Response {
 			}),
 			cache_creation_input_tokens: None,
 			provider_model: Some(strng::new(&self.model)),
+			response_id,
+			finish_reasons: (!finish_reasons.is_empty()).then_some(finish_reasons),
 			completion: if include_completion_in_log {
 				Some(
 					self
@@ -240,6 +254,9 @@ impl super::RequestType for Request {
 					.max_completion_tokens
 					.or(self.max_tokens)
 					.map(Into::into),
+				top_k: llm::rest_u64(&self.rest, "top_k"),
+				choice_count: llm::rest_u64(&self.rest, "n"),
+				stop_sequences: llm::rest_stop_sequences(&self.rest),
 				encoding_format: None,
 				dimensions: None,
 			},

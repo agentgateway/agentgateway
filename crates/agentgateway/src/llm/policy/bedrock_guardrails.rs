@@ -8,6 +8,7 @@ use crate::llm::RequestType;
 use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::BedrockGuardrails;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -73,6 +74,7 @@ pub async fn send_request(
 	claims: Option<Claims>,
 	client: &PolicyClient,
 	guardrails: &BedrockGuardrails,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<ApplyGuardrailResponse> {
 	let content = req
 		.get_messages()
@@ -90,6 +92,7 @@ pub async fn send_request(
 		guardrails,
 		GuardrailSource::Input,
 		content,
+		span_writer,
 	)
 	.await
 }
@@ -100,6 +103,7 @@ pub async fn send_response(
 	claims: Option<Claims>,
 	client: &PolicyClient,
 	guardrails: &BedrockGuardrails,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<ApplyGuardrailResponse> {
 	let content = content
 		.into_iter()
@@ -114,6 +118,7 @@ pub async fn send_response(
 		guardrails,
 		GuardrailSource::Output,
 		content,
+		span_writer,
 	)
 	.await
 }
@@ -124,6 +129,7 @@ async fn send_guardrail_request(
 	guardrails: &BedrockGuardrails,
 	source: GuardrailSource,
 	content: Vec<GuardrailContentBlock>,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<ApplyGuardrailResponse> {
 	let request_body = ApplyGuardrailRequest { source, content };
 	let host = strng::format!("bedrock-runtime.{}.amazonaws.com", guardrails.region);
@@ -168,7 +174,7 @@ async fn send_guardrail_request(
 	);
 
 	let resp = client
-		.call_with_explicit_policies(req, mock_be, pols)
+		.call_with_explicit_policies_and_span(req, mock_be, pols, span_writer)
 		.await?;
 
 	let status = resp.status();

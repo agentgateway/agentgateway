@@ -104,6 +104,18 @@ pub struct MCPCall {
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct MCPServerOperationDurationLabels {
+	pub mcp_method_name: DefaultedUnknown<RichStrng>,
+	pub error_type: DefaultedUnknown<RichStrng>,
+
+	#[prometheus(flatten)]
+	pub route: RouteIdentifier,
+
+	#[prometheus(flatten)]
+	pub custom: CustomField,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct TCPLabels {
 	pub bind: DefaultedUnknown<RichStrng>,
 	pub gateway: DefaultedUnknown<RichStrng>,
@@ -132,6 +144,7 @@ pub struct Metrics {
 	pub response_bytes: Family<HTTPLabels, counter::Counter>,
 
 	pub mcp_requests: Family<MCPCall, counter::Counter>,
+	pub mcp_server_operation_duration: Histogram<MCPServerOperationDurationLabels>,
 
 	pub gen_ai_token_usage: Histogram<GenAILabelsTokenUsage>,
 	pub gen_ai_request_duration: Histogram<GenAILabels>,
@@ -291,6 +304,17 @@ impl Metrics {
 				"mcp_requests",
 				"Total number of MCP tool calls",
 			),
+			mcp_server_operation_duration: {
+				let m = Family::<MCPServerOperationDurationLabels, _>::new_with_constructor(move || {
+					PromHistogram::new(REQUEST_DURATION_BUCKET)
+				});
+				registry.register(
+					"mcp_server_operation_duration",
+					"Duration of inbound MCP operations",
+					m.clone(),
+				);
+				m
+			},
 
 			gen_ai_token_usage,
 			gen_ai_request_duration,

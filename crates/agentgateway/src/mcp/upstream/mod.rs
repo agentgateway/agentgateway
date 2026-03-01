@@ -20,6 +20,7 @@ use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
 
@@ -27,6 +28,7 @@ use crate::*;
 pub struct IncomingRequestContext {
 	headers: http::HeaderMap,
 	claims: Option<Claims>,
+	span_writer: Option<SpanWriter>,
 }
 
 impl IncomingRequestContext {
@@ -35,15 +37,22 @@ impl IncomingRequestContext {
 		Self {
 			headers: http::HeaderMap::new(),
 			claims: None,
+			span_writer: None,
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
 		let claims = parts.extensions.get::<Claims>().cloned();
+		let span_writer = parts.extensions.get::<SpanWriter>().cloned();
 		Self {
 			headers: parts.headers.clone(),
 			claims,
+			span_writer,
 		}
 	}
+	pub fn span_writer(&self) -> Option<SpanWriter> {
+		self.span_writer.clone()
+	}
+
 	pub fn apply(&self, req: &mut http::Request) {
 		for (k, v) in &self.headers {
 			// Remove headers we do not want to propagate to the backend
@@ -56,6 +65,9 @@ impl IncomingRequestContext {
 		}
 		if let Some(claims) = self.claims.as_ref() {
 			req.extensions_mut().insert(claims.clone());
+		}
+		if let Some(span_writer) = self.span_writer.as_ref() {
+			req.extensions_mut().insert(span_writer.clone());
 		}
 	}
 }

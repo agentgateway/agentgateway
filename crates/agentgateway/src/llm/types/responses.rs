@@ -282,6 +282,9 @@ impl RequestType for Request {
 				presence_penalty: None,
 				seed: None,
 				max_tokens: self.max_output_tokens.map(Into::into),
+				top_k: crate::llm::rest_u64(&self.rest, "top_k"),
+				choice_count: crate::llm::rest_u64(&self.rest, "n"),
+				stop_sequences: crate::llm::rest_stop_sequences(&self.rest),
 				encoding_format: None,
 				dimensions: None,
 			},
@@ -391,6 +394,12 @@ impl RequestType for Request {
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+		let finish_reasons = self
+			.rest
+			.get("finish_reason")
+			.and_then(serde_json::Value::as_str)
+			.map(strng::new)
+			.map(|v| vec![v]);
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			output_tokens: self.usage.as_ref().map(|u| u.output_tokens),
@@ -411,6 +420,8 @@ impl ResponseType for Response {
 			}),
 			cache_creation_input_tokens: None,
 			provider_model: Some(strng::new(&self.model)),
+			response_id: Some(strng::new(&self.id)),
+			finish_reasons,
 			completion: if include_completion_in_log {
 				Some(
 					self

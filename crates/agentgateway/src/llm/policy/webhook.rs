@@ -3,6 +3,7 @@ use ::http::{HeaderMap, HeaderValue, header};
 use serde::{Deserialize, Serialize};
 
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::SpanWriter;
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
 
@@ -175,9 +176,10 @@ pub async fn send_request(
 	target: &SimpleBackendReference,
 	http_headers: &HeaderMap,
 	messages: Vec<Message>,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<GuardrailsPromptResponse> {
 	let whr = build_request_for_request(http_headers, messages)?;
-	let res = Box::pin(client.call_reference(whr, target)).await?;
+	let res = Box::pin(client.call_reference_and_span(whr, target, span_writer)).await?;
 	let parsed = json::from_response_body(res).await?;
 	Ok(parsed)
 }
@@ -187,9 +189,12 @@ pub async fn send_response(
 	target: &SimpleBackendReference,
 	http_headers: &HeaderMap,
 	choices: Vec<ResponseChoice>,
+	span_writer: Option<SpanWriter>,
 ) -> anyhow::Result<GuardrailsResponseResponse> {
 	let whr = build_request_for_response(http_headers, choices)?;
-	let res = client.call_reference(whr, target).await?;
+	let res = client
+		.call_reference_and_span(whr, target, span_writer)
+		.await?;
 	let parsed = json::from_response_body(res).await?;
 	Ok(parsed)
 }
