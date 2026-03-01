@@ -674,7 +674,16 @@ impl Drop for DropOnLog {
 				.status
 				.unwrap_or(crate::http::StatusCode::INTERNAL_SERVER_ERROR);
 			let health = !status.is_server_error() && !status.is_client_error();
-			rh.finish_request(health, duration, log.retry_after);
+			// Evict the provider on upstream failure (5xx or no response) so the next request can try the next failover group.
+			// Use retry_after from response headers when present, otherwise a short default for server errors.
+			let eviction = log.retry_after.or_else(|| {
+				if !health && log.status.map_or(true, |s| s.is_server_error()) {
+					Some(std::time::Duration::from_secs(30))
+				} else {
+					None
+				}
+			});
+			rh.finish_request(health, duration, eviction);
 		}
 
 		let llm_response = log.llm_response.take().map(Into::into);
