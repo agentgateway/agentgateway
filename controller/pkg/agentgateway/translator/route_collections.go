@@ -535,10 +535,14 @@ type RouteContextInputs struct {
 	Grants         ReferenceGrants
 	RouteParents   RouteParents
 	Services       krt.Collection[*corev1.Service]
+	Secrets        krt.Collection[*corev1.Secret]
+	SecretsByNS    krt.Index[string, *corev1.Secret]
+	ConfigMaps     krt.Collection[*corev1.ConfigMap]
 	InferencePools krt.Collection[*inf.InferencePool]
 	Namespaces     krt.Collection[*corev1.Namespace]
 	ServiceEntries krt.Collection[*networkingclient.ServiceEntry]
 	Backends       krt.Collection[*agentgateway.AgentgatewayBackend]
+	Policies       krt.Collection[*agentgateway.AgentgatewayPolicy]
 	ControllerName string
 }
 

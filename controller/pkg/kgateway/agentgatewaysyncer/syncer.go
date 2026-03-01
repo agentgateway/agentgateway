@@ -323,10 +323,14 @@ func (s *Syncer) buildAgwResources(
 		RouteParents:   routeParents,
 		ControllerName: s.controllerName,
 		Services:       s.agwCollections.Services,
+		Secrets:        s.agwCollections.Secrets,
+		SecretsByNS:    s.agwCollections.SecretsByNamespace,
+		ConfigMaps:     s.agwCollections.ConfigMaps,
 		Namespaces:     s.agwCollections.Namespaces,
 		ServiceEntries: s.agwCollections.ServiceEntries,
 		InferencePools: s.agwCollections.InferencePools,
 		Backends:       s.agwCollections.Backends,
+		Policies:       s.agwCollections.AgentgatewayPolicies,
 	}
 
 	agwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)

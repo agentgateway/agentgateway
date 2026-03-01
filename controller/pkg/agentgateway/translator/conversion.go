@@ -33,6 +33,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	v1alpha2 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
@@ -412,13 +413,14 @@ func BuildAgwTrafficPolicyFilters(
 			}
 			policies = append(policies, h)
 		case gwv1.HTTPRouteFilterExtensionRef:
-			err := createAgwExtensionRefFilter(filter.ExtensionRef)
+			extPolicies, err := createAgwExtensionRefFilter(ctx, ns, filter.ExtensionRef)
 			if err != nil {
 				if policyError == nil {
 					policyError = err
 				}
 				continue
 			}
+			policies = append(policies, extPolicies...)
 		default:
 			return nil, &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionAccepted,
@@ -1626,21 +1628,66 @@ func toRouteKind(g schema.GroupVersionKind) gwv1.RouteGroupKind {
 
 // createAgwExtensionRefFilter creates Agw filter from Gateway API ExtensionRef filter
 func createAgwExtensionRefFilter(
+	ctx RouteContext,
+	ns string,
 	extensionRef *gwv1.LocalObjectReference,
-) *reporter.RouteCondition {
+) ([]*api.TrafficPolicySpec, *reporter.RouteCondition) {
 	if extensionRef == nil {
-		return nil
+		return nil, nil
 	}
 
-	// TODO: support other types of extension refs (TrafficPolicySpec, etc.) https://github.com/kgateway-dev/kgateway/issues/12037
-
-	// Unsupported ExtensionRef
-	return &reporter.RouteCondition{
-		Type:    gwv1.RouteConditionAccepted,
-		Status:  metav1.ConditionFalse,
-		Reason:  gwv1.RouteReasonIncompatibleFilters,
-		Message: fmt.Sprintf("unsupported ExtensionRef: %s/%s", extensionRef.Group, extensionRef.Kind),
+	if string(extensionRef.Group) != wellknown.AgentgatewayPolicyGVK.Group || string(extensionRef.Kind) != wellknown.AgentgatewayPolicyGVK.Kind {
+		return nil, &reporter.RouteCondition{
+			Type:    gwv1.RouteConditionAccepted,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.RouteReasonIncompatibleFilters,
+			Message: fmt.Sprintf("unsupported ExtensionRef: %s/%s", extensionRef.Group, extensionRef.Kind),
+		}
 	}
+
+	key := ns + "/" + string(extensionRef.Name)
+	policy := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Policies, krt.FilterKey(key)))
+	if policy == nil {
+		return nil, &reporter.RouteCondition{
+			Type:    gwv1.RouteConditionAccepted,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.RouteReasonIncompatibleFilters,
+			Message: fmt.Sprintf("extensionRef %s not found", key),
+		}
+	}
+	if policy.Spec.Traffic == nil {
+		return nil, &reporter.RouteCondition{
+			Type:    gwv1.RouteConditionAccepted,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.RouteReasonIncompatibleFilters,
+			Message: fmt.Sprintf("extensionRef %s does not define spec.traffic", key),
+		}
+	}
+
+	inlinePolicies, err := plugins.TranslateInlineTrafficPolicy(
+		plugins.PolicyCtx{
+			Krt: ctx.Krt,
+			Collections: &plugins.AgwCollections{
+				Services:           ctx.Services,
+				Secrets:            ctx.Secrets,
+				SecretsByNamespace: ctx.SecretsByNS,
+				ConfigMaps:         ctx.ConfigMaps,
+				InferencePools:     ctx.InferencePools,
+				Backends:           ctx.Backends,
+			},
+		},
+		policy.Namespace,
+		policy.Spec.Traffic,
+	)
+	if err != nil {
+		return inlinePolicies, &reporter.RouteCondition{
+			Type:    gwv1.RouteConditionAccepted,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.RouteReasonIncompatibleFilters,
+			Message: fmt.Sprintf("failed to translate extensionRef %s: %v", key, err),
+		}
+	}
+	return inlinePolicies, nil
 }
 
 func routeGroupKindEqual(rgk1, rgk2 gwv1.RouteGroupKind) bool {
