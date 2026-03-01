@@ -13,7 +13,7 @@ use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::transformation_cel::LocalTransformationConfig;
-use crate::http::{filters, retry, timeout};
+use crate::http::{eviction, filters, retry, timeout};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
@@ -904,6 +904,9 @@ struct FilterOrPolicy {
 	/// Retry matching requests.
 	#[serde(default)]
 	retry: Option<retry::Policy>,
+	/// Evict backends (e.g. AI providers) on unhealthy responses; duration and CEL configurable.
+	#[serde(default)]
+	eviction: Option<eviction::LocalPolicy>,
 }
 
 #[apply(schema_de!)]
@@ -1314,6 +1317,7 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 		ext_proc,
 		timeout,
 		retry,
+		eviction,
 	} = pol;
 	if let Some(p) = request_header_modifier {
 		route_policies.push(TrafficPolicy::RequestHeaderModifier(p));
@@ -1401,6 +1405,11 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 	}
 	if let Some(p) = retry {
 		route_policies.push(TrafficPolicy::Retry(p));
+	}
+	if let Some(p) = eviction {
+		route_policies.push(TrafficPolicy::Eviction(p.try_into().map_err(
+			|e: crate::cel::Error| anyhow::anyhow!("eviction.unhealthy_expression: {}", e),
+		)?));
 	}
 	Ok(resolved)
 }

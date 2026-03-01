@@ -23,7 +23,8 @@ use serde_json::Value;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::RuleSet;
 use crate::http::{
-	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
+	HeaderOrPseudo, HeaderValue, eviction, ext_authz, ext_proc, filters, remoteratelimit, retry,
+	timeout,
 };
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
@@ -1876,6 +1877,7 @@ pub enum FrontendPolicy {
 pub enum TrafficPolicy {
 	Timeout(timeout::Policy),
 	Retry(retry::Policy),
+	Eviction(eviction::Policy),
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	Authorization(Authorization),

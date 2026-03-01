@@ -616,6 +616,8 @@ impl HTTPProxy {
 			.route_policies(&route_path, &selected_route.inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
+		log.eviction_policy = route_policies.eviction.clone();
+		log.retry_backoff = route_policies.retry.as_ref().and_then(|r| r.backoff);
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		let maybe_ext_proc = route_policies

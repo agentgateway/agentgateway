@@ -1,3 +1,4 @@
+pub mod eviction;
 pub mod filters;
 pub mod timeout;
 

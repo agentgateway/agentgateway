@@ -24,6 +24,7 @@ use tracing::{Level, trace};
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::Request;
+use crate::http::eviction;
 use crate::llm::InputFormat;
 use crate::mcp::{MCPOperation, ResourceId, ResourceType};
 use crate::proxy::ProxyResponseReason;
@@ -410,6 +411,61 @@ impl DropOnLog {
 		}
 	}
 
+	/// Computes (health, eviction_duration, health_on_unevict) for finish_request.
+	/// When eviction_policy is set, uses CEL for unhealthy and policy for duration/threshold/health_on_unevict.
+	/// When not set, keeps backward compatibility: 5xx => unhealthy, eviction = retry_after or 30s.
+	fn eviction_decision(
+		log: &RequestLog,
+		_duration: Duration,
+		current_health: f64,
+	) -> (bool, Option<Duration>, Option<f64>) {
+		const DEFAULT_EVICTION_SECS: u64 = 30;
+		let unhealthy = if let Some(pol) = &log.eviction_policy {
+			if let Some(expr) = &pol.unhealthy_expression {
+				let end_time_str = agent_core::telemetry::render_current_time();
+				match log.cel.build(
+					log.request_snapshot.as_ref(),
+					log.response_snapshot.as_ref(),
+					None,
+					None,
+					Some(&end_time_str),
+					log.source_context.as_ref(),
+				) {
+					Ok(cel_exec) => cel_exec.executor.eval_bool(expr.as_ref()),
+					Err(_) => log.status.is_none_or(|s| s.is_server_error()),
+				}
+			} else {
+				log.status.is_none_or(|s| s.is_server_error())
+			}
+		} else {
+			log.status.is_none_or(|s| s.is_server_error())
+		};
+		let health = !unhealthy;
+		let eviction_duration = if unhealthy {
+			let duration = log
+				.eviction_policy
+				.as_ref()
+				.and_then(|p| p.eviction_duration)
+				.or(log.retry_after)
+				.or(log.retry_backoff)
+				.or(Some(Duration::from_secs(DEFAULT_EVICTION_SECS)));
+			// Apply health threshold: only evict when current health is below threshold
+			let below_threshold = log
+				.eviction_policy
+				.as_ref()
+				.and_then(|p| p.health_threshold)
+				.is_none_or(|t| current_health < t);
+			if below_threshold { duration } else { None }
+		} else {
+			None
+		};
+		let health_on_unevict = log
+			.eviction_policy
+			.as_ref()
+			.and_then(|p| p.health_on_unevict);
+		(health, eviction_duration, health_on_unevict)
+	}
+
 	fn add_llm_metrics(
 		log: &RequestLog,
 		route_identifier: &RouteIdentifier,
@@ -510,6 +566,8 @@ impl RequestLog {
 			status: None,
 			reason: None,
 			retry_after: None,
+			eviction_policy: None,
+			retry_backoff: None,
 			jwt_sub: None,
 			retry_attempt: None,
 			error: None,
@@ -559,6 +617,11 @@ pub struct RequestLog {
 	pub status: Option<crate::http::StatusCode>,
 	pub reason: Option<ProxyResponseReason>,
 	pub retry_after: Option<Duration>,
+
+	/// Eviction policy for backend (e.g. AI provider) failover. Set from route policies when request_handle is used.
+	pub eviction_policy: Option<eviction::Policy>,
+	/// Retry backoff from route policy; used as fallback eviction duration when eviction_policy has no explicit duration.
+	pub retry_backoff: Option<Duration>,
 
 	pub jwt_sub: Option<String>,
 
@@ -651,6 +714,17 @@ impl Drop for DropOnLog {
 
 		let enable_custom_metrics = !log.cel.metric_fields.add.is_empty();
 
+		// Always run request_handle/finish_request first so LLM provider eviction (failover) runs
+		// even when logging/tracing/metrics are disabled.
+		let end_time = Instant::now();
+		let duration = end_time - log.start;
+		if let Some(rh) = log.request_handle.take() {
+			let current_health = rh.health_score();
+			let (health, eviction_duration, health_on_unevict) =
+				Self::eviction_decision(&log, duration, current_health);
+			rh.finish_request(health, duration, eviction_duration, health_on_unevict);
+		}
+
 		let enable_trace = log.tracer.is_some();
 		// We will later check it also matches a filter, but filter is slower
 		let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
@@ -660,30 +734,6 @@ impl Drop for DropOnLog {
 				log.metrics.requests.get_or_create(&http_labels).inc();
 			}
 			return;
-		}
-
-		let end_time = Instant::now();
-		// TODO!
-		// log
-		// 	.cel
-		// 	.cel_context
-		// 	.with_request_completion(agent_core::telemetry::render_current_time());
-		let duration = end_time - log.start;
-		if let Some(rh) = log.request_handle.take() {
-			let status = log
-				.status
-				.unwrap_or(crate::http::StatusCode::INTERNAL_SERVER_ERROR);
-			let health = !status.is_server_error() && !status.is_client_error();
-			// Evict the provider on upstream failure (5xx or no response) so the next request can try the next failover group.
-			// Use retry_after from response headers when present, otherwise a short default for server errors.
-			let eviction = log.retry_after.or_else(|| {
-				if !health && log.status.map_or(true, |s| s.is_server_error()) {
-					Some(std::time::Duration::from_secs(30))
-				} else {
-					None
-				}
-			});
-			rh.finish_request(health, duration, eviction);
 		}
 
 		let llm_response = log.llm_response.take().map(Into::into);
