@@ -9,9 +9,9 @@ use crate::http::localratelimit::RateLimitType;
 fn make_rate_limit(descriptor_entries: Vec<DescriptorEntry>) -> RemoteRateLimit {
 	RemoteRateLimit {
 		domain: "test-domain".to_string(),
+		policies: Default::default(),
 		target: Arc::new(SimpleBackendReference::Invalid),
 		descriptors: Arc::new(DescriptorSet(descriptor_entries)),
-		timeout: None,
 		failure_mode: FailureMode::default(),
 	}
 }

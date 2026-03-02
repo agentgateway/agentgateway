@@ -1061,7 +1061,10 @@ pub struct Moderation {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(feature = "schema", schemars(with = "crate::types::local::SimpleLocalBackendPolicies"))]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "crate::types::local::SimpleLocalBackendPolicies")
+	)]
 	pub policies: Vec<BackendPolicy>,
 }
 
@@ -1076,7 +1079,10 @@ pub struct BedrockGuardrails {
 	pub region: Strng,
 	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(feature = "schema", schemars(with = "crate::types::local::SimpleLocalBackendPolicies"))]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "crate::types::local::SimpleLocalBackendPolicies")
+	)]
 	pub policies: Vec<BackendPolicy>,
 }
 
@@ -1092,7 +1098,10 @@ pub struct GoogleModelArmor {
 	pub location: Option<Strng>,
 	/// Backend policies for GCP authentication (optional, defaults to implicit GCP auth)
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(feature = "schema", schemars(with = "crate::types::local::SimpleLocalBackendPolicies"))]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "crate::types::local::SimpleLocalBackendPolicies")
+	)]
 	pub policies: Vec<BackendPolicy>,
 }
 

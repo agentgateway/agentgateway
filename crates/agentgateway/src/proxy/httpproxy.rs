@@ -1908,7 +1908,9 @@ impl PolicyClient {
 		req: Request,
 		backend_ref: &SimpleBackendReference,
 	) -> Result<Response, ProxyError> {
-		self.call_reference_with_policies(req, backend_ref, Vec::new()).await
+		self
+			.call_reference_with_policies(req, backend_ref, Vec::new())
+			.await
 	}
 	pub async fn call_reference_with_policies(
 		&self,
