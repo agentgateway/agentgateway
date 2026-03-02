@@ -233,6 +233,19 @@ pub struct RawLogging {
 	fields: Option<RawLoggingFields>,
 	level: Option<RawLoggingLevel>,
 	format: Option<LoggingFormat>,
+	#[serde(default)]
+	otlp: Option<RawLoggingOtlp>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct RawLoggingOtlp {
+	otlp_endpoint: Option<String>,
+	#[serde(default)]
+	headers: HashMap<String, String>,
+	otlp_protocol: Option<Protocol>,
+	/// OTLP path. Default is /v1/logs
+	path: Option<String>,
 }
 
 #[apply(schema_de!)]

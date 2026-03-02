@@ -499,6 +499,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 		excluded_metrics: FzHashSet::default(),
 		level: "info".to_string(),
 		format: crate::LoggingFormat::Text,
+		otlp: None,
 	};
 	let tracing_cfg = trc::Config {
 		endpoint: None,

@@ -8,8 +8,8 @@ use prometheus_client::registry::Registry;
 use tokio::task::JoinSet;
 
 use crate::control::caclient;
-use crate::telemetry::trc;
 use crate::telemetry::trc::Tracer;
+use crate::telemetry::{log, trc};
 use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
 
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
@@ -24,6 +24,22 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	})?;
 	// Initialize OpenTelemetry resource defaults from gateway + proxy metadata
 	trc::set_resource_defaults_from_config(config.as_ref());
+
+	if let Some(otlp_cfg) = &config.logging.otlp {
+		match log::OtelAccessLogger::new(otlp_cfg) {
+			Ok(logger) => {
+				agent_core::telemetry::set_otel_log_sink(Box::new(logger));
+				info!(
+					"OTLP log export enabled, endpoint={}, protocol={:?}",
+					otlp_cfg.endpoint, otlp_cfg.protocol
+				);
+			},
+			Err(e) => {
+				warn!("failed to initialize OTLP log exporter: {e}");
+			},
+		}
+	}
+
 	let shutdown = signal::Shutdown::new();
 	// Setup a drain channel. drain_tx is used to trigger a drain, which will complete
 	// once all drain_rx handlers are dropped.
@@ -178,6 +194,8 @@ impl Bound {
 		if let Some(tracer) = self.tracer {
 			tracer.shutdown()
 		}
+
+		agent_core::telemetry::shutdown_otel_log_sink();
 
 		// Start a drain; this will attempt to end all connections
 		// or itself be interrupted by a stronger TERM signal, whichever comes first.

@@ -403,7 +403,7 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 	}
 }
 
-fn to_otel(v: &ValueBag) -> opentelemetry::Value {
+pub(crate) fn to_otel(v: &ValueBag) -> opentelemetry::Value {
 	if let Some(b) = v.to_str() {
 		opentelemetry::Value::String(b.to_string().into())
 	} else if let Some(b) = v.to_i64() {
@@ -458,14 +458,17 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 }
 
 #[derive(Clone, Debug)]
-struct GlobalResourceDefaults {
-	service_name: Option<String>,
-	attrs: Vec<KeyValue>,
-	// If set, the OTLP/HTTP path (e.g., "/v1/traces") derived from cfg.tracing.endpoint or per-policy TracingConfig.path
+pub(crate) struct GlobalResourceDefaults {
+	pub(crate) service_name: Option<String>,
+	pub(crate) attrs: Vec<KeyValue>,
 	otlp_http_path: Option<String>,
 }
 
 static GLOBAL_RESOURCE_DEFAULTS: OnceCell<GlobalResourceDefaults> = OnceCell::new();
+
+pub(crate) fn global_resource_defaults() -> Option<&'static GlobalResourceDefaults> {
+	GLOBAL_RESOURCE_DEFAULTS.get()
+}
 
 /// Build a tonic ResourceSpans payload from SDK SpanData.
 /// Unblock exports for our custom exporter until https://github.com/open-telemetry/opentelemetry-rust/issues/3147 is addressed.
