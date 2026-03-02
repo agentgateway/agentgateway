@@ -8,8 +8,8 @@ use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::filters::HeaderModifier;
-use crate::http::transformation_cel::LocalTransformationConfig;
-use crate::http::{HeaderName, HeaderOrPseudo, filters, retry, timeout};
+use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
+use crate::http::{HeaderName, HeaderOrPseudo, filters, retry, timeout, transformation_cel};
 use crate::llm::policy::PromptGuard;
 use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider};
 use crate::llm::{anthropic, openai};
@@ -187,15 +187,27 @@ fn merge_deprecated_frontend_policies(
 			client_sampling,
 			path,
 		} = tracing;
-		if !headers.is_empty() {
-			anyhow::bail!(
-				"Deprecated config.tracing cannot automatically be translated to the replacement API (frontendPolicies.tracing)"
-			);
-		}
+
+		let policies = if !headers.is_empty() {
+			let backend_xfm = transformation_cel::LocalTransformationConfig {
+				request: Some(transformation_cel::LocalTransform {
+					set: headers
+						.into_iter()
+						.map(|(k, v)| (strng::new(k), strng::new(v)))
+						.collect(),
+					..Default::default()
+				}),
+				response: None,
+			};
+			let backend_xfm = Transformation::try_from_local_config(backend_xfm, true)?;
+			vec![BackendPolicy::Transformation(backend_xfm)]
+		} else {
+			Vec::new()
+		};
 		if let Some(ep) = endpoint {
 			frontend_policies.tracing = Some(TracingConfig {
 				provider_backend: SimpleBackendReference::InlineBackend(Target::try_from(ep.as_str())?),
-				policies: Vec::new(),
+				policies,
 				attributes: Arc::unwrap_or_clone(fields.add),
 				resources: Default::default(), // Not supported in the old config
 				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
