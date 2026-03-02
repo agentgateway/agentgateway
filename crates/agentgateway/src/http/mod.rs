@@ -725,8 +725,7 @@ fn merge_ratelimit_value(
 		|| *name == X_RATELIMIT_RESET_REQUESTS_DAY
 		|| *name == X_RATELIMIT_RESET_TOKENS_MINUTE
 		|| *name == RATELIMIT_RESET
-		|| *name == RETRY_AFTER
-		|| *name == RETRY_AFTER_MS;
+		|| *name == RETRY_AFTER;
 
 	if !keep_min && !keep_max {
 		return None;
@@ -911,16 +910,6 @@ mod merge_header_tests {
 		src.insert("x-ratelimit-reset", hv("1500"));
 		merge_in_headers(Some(src), &mut dest);
 		assert_eq!(dest.get("x-ratelimit-reset").unwrap(), "3000");
-	}
-
-	#[test]
-	fn retry_after_ms_keeps_higher() {
-		let mut dest = HeaderMap::new();
-		dest.insert("retry-after-ms", hv("500"));
-		let mut src = HeaderMap::new();
-		src.insert("retry-after-ms", hv("1200"));
-		merge_in_headers(Some(src), &mut dest);
-		assert_eq!(dest.get("retry-after-ms").unwrap(), "1200");
 	}
 
 	#[test]

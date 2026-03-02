@@ -47,12 +47,10 @@ fn process_rate_limit_headers(h: &HeaderMap, now: SystemTime) -> Option<std::tim
 		return Some(std::time::Duration::from_millis(ms));
 	}
 
-	// ratelimit-reset / x-ratelimit-reset: commonly used.
+	// x-ratelimit-reset: commonly used.
 	// Typically this is a unix epoch timestamp OR number of seconds. Rarely it is number of milliseconds.
-	// Known to be used by: GitHub (x- prefix), Envoy ratelimit server (IETF prefix).
-	if let Some(retry_after) = get_header_as::<u64>(h, &x_headers::X_RATELIMIT_RESET)
-		.or_else(|| get_header_as::<u64>(h, &x_headers::RATELIMIT_RESET))
-	{
+	// Known to be used by: GitHub.
+	if let Some(retry_after) = get_header_as::<u64>(h, &x_headers::X_RATELIMIT_RESET) {
 		const DAY: Duration = Duration::from_secs(60 * 60 * 24);
 		if retry_after < 30 * DAY.as_secs() {
 			// If the time is less than 30 days, its probably absolute seconds
