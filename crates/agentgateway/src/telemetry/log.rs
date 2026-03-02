@@ -84,7 +84,7 @@ impl<T: Debug> Debug for AsyncLog<T> {
 	}
 }
 
-#[derive(serde::Serialize, Debug, Clone)]
+#[derive(serde::Serialize, Debug, Default, Clone)]
 pub struct MetricsConfig {
 	pub metric_fields: Arc<MetricFields>,
 	pub excluded_metrics: FzHashSet<String>,

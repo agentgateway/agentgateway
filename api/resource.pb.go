@@ -6607,7 +6607,7 @@ type FrontendPolicySpec_Tracing struct {
 	// request already has a trace. This should evaluate to a float between 0.0-1.0,
 	// or a boolean (true/false). If unspecified, client sampling is 100% enabled.
 	ClientSampling *string `protobuf:"bytes,5,opt,name=client_sampling,json=clientSampling,proto3,oneof" json:"client_sampling,omitempty"`
-	// OTLP path. Default is /v1/traces
+	// OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
 	Path *string `protobuf:"bytes,6,opt,name=path,proto3,oneof" json:"path,omitempty"`
 	// protocol specifies the OTLP protocol variant to use. Default is HTTP
 	Protocol      FrontendPolicySpec_Tracing_Protocol `protobuf:"varint,7,opt,name=protocol,proto3,enum=agentgateway.dev.resource.FrontendPolicySpec_Tracing_Protocol" json:"protocol,omitempty"`

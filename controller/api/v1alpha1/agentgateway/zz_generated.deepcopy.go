@@ -2487,6 +2487,11 @@ func (in *Timeouts) DeepCopy() *Timeouts {
 func (in *Tracing) DeepCopyInto(out *Tracing) {
 	*out = *in
 	in.BackendRef.DeepCopyInto(&out.BackendRef)
+	if in.Path != nil {
+		in, out := &in.Path, &out.Path
+		*out = new(LongString)
+		**out = **in
+	}
 	if in.Attributes != nil {
 		in, out := &in.Attributes, &out.Attributes
 		*out = new(LogTracingAttributes)

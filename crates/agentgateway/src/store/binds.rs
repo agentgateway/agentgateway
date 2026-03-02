@@ -674,7 +674,7 @@ impl Store {
 		self
 			.policies_by_key
 			.iter()
-			.filter_map(|(k, v)| v.policy.as_frontend())
+			.filter_map(|(_, v)| v.policy.as_frontend())
 			.filter_map(|v| match v {
 				FrontendPolicy::Tracing(t) => Some(t.clone()),
 				_ => None,

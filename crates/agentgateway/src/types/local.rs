@@ -108,15 +108,6 @@ fn migrate_deprecated_frontend_policies(
 	Ok(cfg)
 }
 
-#[derive(Debug, Clone, Default, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DeprecatedLocalFrontendPolicies {
-	#[serde(default)]
-	logging: Option<frontend::LoggingPolicy>,
-	#[serde(default)]
-	tracing: Option<TracingConfig>,
-}
-
 fn merge_deprecated_frontend_policies(
 	deprecated: &crate::Config,
 	frontend_policies: &mut LocalFrontendPolicies,
@@ -131,12 +122,12 @@ fn merge_deprecated_frontend_policies(
 			);
 		}
 		frontend_policies.access_log = Some(frontend::LoggingPolicy {
-			filter: log.filter,
-			add: log.fields.add,
-			remove: log.fields.remove,
+			filter: log.filter.clone(),
+			add: log.fields.add.clone(),
+			remove: log.fields.remove.clone(),
 		});
 	}
-	if let Some(tracing) = deprecated.tracing {
+	if let Some(tracing) = deprecated.tracing.clone() {
 		if frontend_policies.tracing.is_some() {
 			anyhow::bail!("cannot use deprecated config.tracing together with frontendPolicies.tracing");
 		}
@@ -156,10 +147,10 @@ fn merge_deprecated_frontend_policies(
 		}
 		if let Some(ep) = endpoint {
 			frontend_policies.tracing = Some(TracingConfig {
-				provider_backend: SimpleBackendReference::InlineBackend(Target::try_from(ep)?),
+				provider_backend: SimpleBackendReference::InlineBackend(Target::try_from(ep.as_str())?),
 				attributes: Arc::unwrap_or_clone(fields.add),
 				resources: Default::default(), // Not supported in the old config
-				remove: fields.remove.into_iter().collect(),
+				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
 				random_sampling,
 				client_sampling,
 				path,

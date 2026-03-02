@@ -3450,6 +3450,13 @@ spec:
                         maxLength: 16384
                         minLength: 1
                         type: string
+                      path:
+                        description: |-
+                          path specifies the OTLP path to use. This is only applicable when protocol is HTTP.
+                          If unset, this defaults to /v1/traces.
+                        maxLength: 1024
+                        minLength: 1
+                        type: string
                       protocol:
                         default: HTTP
                         description: protocol specifies the OTLP protocol variant
@@ -3489,6 +3496,12 @@ spec:
                     required:
                     - backendRef
                     type: object
+                    x-kubernetes-validations:
+                    - message: path is only valid with protocol HTTP
+                      rule: '!has(self.path) || !has(self.protocol) || self.protocol
+                        == ''HTTP'''
+                    - message: path must start with /
+                      rule: '!has(self.path) || self.path.startsWith(''/'')'
                 type: object
                 x-kubernetes-validations:
                 - message: at least one of the fields in [accessLog http tcp tls tracing]

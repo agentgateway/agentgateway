@@ -132,20 +132,7 @@ impl Tracer {
 				.with_batch_exporter(exporter)
 				.build()
 		} else {
-			// /v1/traces
-			// Use HTTP exporter via PolicyClient by default.
-			// Resolve the OTLP/HTTP path from global defaults; if not set, use the per-policy path (default "/v1/traces").
-			let endpoint_path = GLOBAL_RESOURCE_DEFAULTS
-				.get()
-				.and_then(|d| d.otlp_http_path.clone())
-				.unwrap_or_else(|| {
-					let p = config.path.clone();
-					if p.starts_with('/') {
-						p
-					} else {
-						format!("/{}", p)
-					}
-				});
+			let path = config.path.clone();
 			let http_client = PolicyOtelHttpClient {
 				policy_client,
 				backend_ref: config.provider_backend.clone(),
@@ -157,7 +144,7 @@ impl Tracer {
 					opentelemetry_otlp::SpanExporter::builder()
 						.with_http()
 						.with_http_client(http_client)
-						.with_endpoint(endpoint_path)
+						.with_endpoint(path)
 						.build()?,
 				)
 				.build()
@@ -550,7 +537,6 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	let service_name = cfg.xds.gateway.to_string();
 	let service_namespace = cfg.xds.namespace.to_string();
 	attrs.push(KeyValue::new("service.namespace", service_namespace));
-
 
 	let _ = GLOBAL_RESOURCE_DEFAULTS.set(GlobalResourceDefaults {
 		service_name: Some(service_name),

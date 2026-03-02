@@ -3,13 +3,12 @@ use std::sync::mpsc;
 use std::thread;
 
 use agent_core::prelude::*;
-use agent_core::{drain, metrics, readiness, signal, trcng};
+use agent_core::{drain, metrics, readiness, signal};
 use prometheus_client::registry::Registry;
 use tokio::task::JoinSet;
 
 use crate::control::caclient;
 use crate::telemetry::trc;
-use crate::telemetry::trc::Tracer;
 use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
 
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
