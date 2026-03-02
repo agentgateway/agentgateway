@@ -260,8 +260,8 @@ impl McpRemoteRateLimit {
 		);
 		let chan = GrpcReferenceChannel {
 			target: rl.target.clone(),
+			policies: rl.policies.clone(),
 			client,
-			timeout: rl.timeout,
 		};
 		let mut client = RateLimitServiceClient::new(chan);
 		let resp = client.should_rate_limit(request).await;
