@@ -536,8 +536,16 @@ mod azure {
 
 	use crate::client;
 	use crate::http::auth::{AzureAuth, AzureAuthCredentialSource, AzureUserAssignedIdentity};
+	use tokio::sync::OnceCell;
 
 	const SCOPES: &[&str] = &["https://cognitiveservices.azure.com/.default"];
+
+	/// Cached credential for `AzureAuth::Implicit`.
+	static IMPLICIT_CRED: OnceCell<Arc<dyn TokenCredential>> = OnceCell::const_new();
+	/// Cached credential for `AzureAuth::DeveloperImplicit`.
+	static DEV_IMPLICIT_CRED: OnceCell<Arc<dyn TokenCredential>> = OnceCell::const_new();
+	/// Cached credential for `AzureAuth::ExplicitConfig`.
+	static EXPLICIT_CRED: OnceCell<Arc<dyn TokenCredential>> = OnceCell::const_new();
 
 	/// A credential chain that mirrors the Azure Go SDK's DefaultAzureCredential.
 	///
@@ -883,7 +891,14 @@ mod azure {
 		client: &client::Client,
 		auth: &AzureAuth,
 	) -> anyhow::Result<http::HeaderValue> {
-		let cred = token_credential_from_auth(client, auth).await?;
+		let cell = match auth {
+			AzureAuth::Implicit {} => &IMPLICIT_CRED,
+			AzureAuth::DeveloperImplicit {} => &DEV_IMPLICIT_CRED,
+			AzureAuth::ExplicitConfig { .. } => &EXPLICIT_CRED,
+		};
+		let cred = cell
+			.get_or_try_init(|| token_credential_from_auth(client, auth))
+			.await?;
 		let token = cred.get_token(SCOPES, None).await?;
 		let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
 		hv.set_sensitive(true);
