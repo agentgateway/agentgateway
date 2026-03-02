@@ -30,6 +30,7 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
+use crate::telemetry::trc;
 
 const DELIMITER: &str = "_";
 
@@ -449,6 +450,7 @@ pub fn setup_request_log(
 
 	let cel = CelExecWrapper::new(snap);
 
+	let tracer = http.extensions.get::<Option<std::sync::Arc<trc::Tracer>>>().cloned().unwrap_or_default();
 	let tracer = trcng::get_tracer();
 	let _span = trcng::start_span(span_name.to_string(), &Identity::new(claims))
 		.with_kind(SpanKind::Server)

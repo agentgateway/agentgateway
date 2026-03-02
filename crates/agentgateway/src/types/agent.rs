@@ -1674,8 +1674,8 @@ where
 #[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 pub enum TracingProtocol {
 	#[default]
-	Http,
 	Grpc,
+	Http,
 }
 
 /// TracingPolicy holds both the configuration and the compiled OpenTelemetry tracer

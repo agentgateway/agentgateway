@@ -1375,7 +1375,7 @@ type Tracing struct {
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 	// protocol specifies the OTLP protocol variant to use.
-	// +kubebuilder:default=HTTP
+	// +kubebuilder:default=GRPC
 	// +kubebuilder:validation:Enum=HTTP;GRPC
 	// +optional
 	Protocol TracingProtocol `json:"protocol,omitempty"`
