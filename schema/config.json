@@ -20,7 +20,7 @@
       "description": "policies defines additional policies that can be attached to various other configurations.\nThis is an advanced feature; users should typically use the inline `policies` field under route/gateway.",
       "type": "array",
       "items": {
-        "$ref": "#/$defs/LocalPolicy2"
+        "$ref": "#/$defs/LocalPolicy"
       }
     },
     "workloads": {
@@ -2158,7 +2158,7 @@
           "description": "Evict this backend (outlier detection) on unhealthy responses; duration and CEL configurable.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalPolicy"
+              "$ref": "#/$defs/LocalEvictionPolicy"
             },
             {
               "type": "null"
@@ -2652,7 +2652,7 @@
         "nanos"
       ]
     },
-    "LocalPolicy": {
+    "LocalEvictionPolicy": {
       "description": "Local/config eviction policy with CEL as string; converted to Policy by compiling the expression.",
       "type": "object",
       "properties": {
@@ -4154,7 +4154,7 @@
           "description": "Evict this backend (outlier detection) on unhealthy responses; duration and CEL configurable.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalPolicy"
+              "$ref": "#/$defs/LocalEvictionPolicy"
             },
             {
               "type": "null"
@@ -4546,7 +4546,7 @@
           "description": "Evict this backend (outlier detection) on unhealthy responses; duration and CEL configurable.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalPolicy"
+              "$ref": "#/$defs/LocalEvictionPolicy"
             },
             {
               "type": "null"
@@ -5228,7 +5228,7 @@
         "http"
       ]
     },
-    "LocalPolicy2": {
+    "LocalPolicy": {
       "type": "object",
       "properties": {
         "name": {

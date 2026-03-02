@@ -43,7 +43,7 @@ pub struct Policy {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct LocalPolicy {
+pub struct LocalEvictionPolicy {
 	/// CEL expression; `true` means unhealthy (evict). E.g. `response.status >= 500`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub unhealthy_expression: Option<String>,
@@ -60,9 +60,9 @@ pub struct LocalPolicy {
 	pub health_on_unevict: Option<f64>,
 }
 
-impl TryFrom<LocalPolicy> for Policy {
+impl TryFrom<LocalEvictionPolicy> for Policy {
 	type Error = crate::cel::Error;
-	fn try_from(local: LocalPolicy) -> Result<Self, Self::Error> {
+	fn try_from(local: LocalEvictionPolicy) -> Result<Self, Self::Error> {
 		let unhealthy_expression = match local.unhealthy_expression {
 			Some(s) if !s.trim().is_empty() => Some(Arc::new(Expression::new_strict(&s)?)),
 			_ => None,
