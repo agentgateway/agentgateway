@@ -16,7 +16,7 @@ pub use traceparent::TraceParent;
 
 use crate::cel;
 use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
-use crate::types::agent::{SimpleBackendReference, TracingConfig};
+use crate::types::agent::{BackendPolicy, SimpleBackendReference, TracingConfig};
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
@@ -124,6 +124,7 @@ impl Tracer {
 			let exporter = PolicyGrpcSpanExporter::new(
 				policy_client.inputs.clone(),
 				Arc::new(config.provider_backend.clone()),
+				config.policies.clone(),
 				exporter_runtime.clone(),
 			);
 			opentelemetry_sdk::trace::SdkTracerProvider::builder()
@@ -343,13 +344,14 @@ impl PolicyGrpcSpanExporter {
 	fn new(
 		inputs: Arc<crate::ProxyInputs>,
 		target: Arc<SimpleBackendReference>,
+		policies: Vec<BackendPolicy>,
 		runtime: tokio::runtime::Handle,
 	) -> Self {
 		use crate::http::ext_proc::GrpcReferenceChannel;
 		let channel = GrpcReferenceChannel {
 			target,
+			policies,
 			client: crate::proxy::httpproxy::PolicyClient { inputs },
-			timeout: None,
 		};
 		let tonic_client = opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient::new(
 			channel,

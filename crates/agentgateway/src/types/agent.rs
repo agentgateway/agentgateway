@@ -1615,6 +1615,11 @@ pub struct TargetedPolicy {
 pub struct TracingConfig {
 	#[serde(flatten)]
 	pub provider_backend: SimpleBackendReference,
+	/// Policies to connect to the backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(feature = "schema", schemars(with = "crate::types::local::SimpleLocalBackendPolicies"))]
+	pub policies: Vec<BackendPolicy>,
 	/// Span attributes to add, keyed by attribute name.
 	#[serde(default)]
 	pub attributes: OrderedStringMap<Arc<cel::Expression>>,
