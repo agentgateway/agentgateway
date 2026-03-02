@@ -85,12 +85,20 @@ impl<T: Debug> Debug for AsyncLog<T> {
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
-pub struct Config {
-	pub filter: Option<Arc<cel::Expression>>,
-	pub fields: LoggingFields,
+pub struct MetricsConfig {
 	pub metric_fields: Arc<MetricFields>,
 	pub excluded_metrics: FzHashSet<String>,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct Config {
+	/// Deprecated: use frontendPolicies.accessLog
+	pub filter: Option<Arc<cel::Expression>>,
+	/// Deprecated: use frontendPolicies.accessLog
+	pub fields: LoggingFields,
+	/// Level sets the level for logs
 	pub level: String,
+	/// Format sets the logging format (text or json)
 	pub format: crate::LoggingFormat,
 }
 
@@ -195,10 +203,34 @@ impl LoggingFields {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TraceSampler {
 	pub random_sampling: Option<Arc<cel::Expression>>,
 	pub client_sampling: Option<Arc<cel::Expression>>,
+}
+
+impl TraceSampler {
+	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> bool {
+		let TraceSampler {
+			random_sampling,
+			client_sampling,
+		} = &self;
+		let expr = if tp.is_some() {
+			let Some(cs) = client_sampling else {
+				// If client_sampling is not set, default to include it
+				return true;
+			};
+			cs
+		} else {
+			let Some(rs) = random_sampling else {
+				// If random_sampling is not set, default to NOT include it
+				return false;
+			};
+			rs
+		};
+		let exec = cel::Executor::new_request(req);
+		exec.eval_rng(expr.as_ref())
+	}
 }
 
 #[derive(Debug)]
@@ -207,7 +239,6 @@ pub struct CelLogging {
 	pub filter: Option<Arc<cel::Expression>>,
 	pub fields: LoggingFields,
 	pub metric_fields: Arc<MetricFields>,
-	pub tracing_sampler: TraceSampler,
 }
 
 pub struct CelLoggingExecutor<'a> {
@@ -326,7 +357,7 @@ impl<'a> CelLoggingExecutor<'a> {
 }
 
 impl CelLogging {
-	pub fn new(cfg: Config, tracing_config: trc::Config) -> Self {
+	pub fn new(cfg: Config, metrics: MetricsConfig) -> Self {
 		let mut cel_context = cel::ContextBuilder::new();
 		if let Some(f) = &cfg.filter {
 			cel_context.register_expression(f.as_ref());
@@ -334,7 +365,7 @@ impl CelLogging {
 		for v in cfg.fields.add.values_unordered() {
 			cel_context.register_expression(v.as_ref());
 		}
-		for v in cfg.metric_fields.add.values_unordered() {
+		for v in metrics.metric_fields.add.values_unordered() {
 			cel_context.register_expression(v.as_ref());
 		}
 
@@ -342,11 +373,7 @@ impl CelLogging {
 			cel_context,
 			filter: cfg.filter,
 			fields: cfg.fields,
-			metric_fields: cfg.metric_fields,
-			tracing_sampler: TraceSampler {
-				random_sampling: tracing_config.random_sampling,
-				client_sampling: tracing_config.client_sampling,
-			},
+			metric_fields: metrics.metric_fields,
 		}
 	}
 
@@ -374,7 +401,6 @@ impl CelLogging {
 			filter,
 			fields,
 			metric_fields,
-			tracing_sampler: _,
 		} = self;
 		let executor = if req.is_none() && source_context.is_some() {
 			// TCP case: use new_tcp_logger
@@ -585,30 +611,6 @@ pub struct RequestLog {
 	pub source_context: Option<cel::SourceContext>,
 
 	pub response_bytes: u64,
-}
-
-impl RequestLog {
-	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> bool {
-		let TraceSampler {
-			random_sampling,
-			client_sampling,
-		} = &self.cel.tracing_sampler;
-		let expr = if tp.is_some() {
-			let Some(cs) = client_sampling else {
-				// If client_sampling is not set, default to include it
-				return true;
-			};
-			cs
-		} else {
-			let Some(rs) = random_sampling else {
-				// If random_sampling is not set, default to NOT include it
-				return false;
-			};
-			rs
-		};
-		let exec = cel::Executor::new_request(req);
-		exec.eval_rng(expr.as_ref())
-	}
 }
 
 impl Drop for DropOnLog {

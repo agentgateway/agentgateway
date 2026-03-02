@@ -35,7 +35,7 @@ pub enum Protocol {
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
-pub struct Config {
+pub struct DeprecatedConfig {
 	pub endpoint: Option<String>,
 	pub headers: HashMap<String, String>,
 	pub protocol: Protocol,
@@ -132,6 +132,7 @@ impl Tracer {
 				.with_batch_exporter(exporter)
 				.build()
 		} else {
+			// /v1/traces
 			// Use HTTP exporter via PolicyClient by default.
 			// Resolve the OTLP/HTTP path from global defaults; if not set, use the per-policy path (default "/v1/traces").
 			let endpoint_path = GLOBAL_RESOURCE_DEFAULTS
@@ -169,7 +170,7 @@ impl Tracer {
 		})
 	}
 
-	pub fn new(cfg: &Config) -> anyhow::Result<Option<Tracer>> {
+	pub fn new(cfg: &DeprecatedConfig) -> anyhow::Result<Option<Tracer>> {
 		let Some(ep) = &cfg.endpoint else {
 			return Ok(None);
 		};
@@ -463,8 +464,6 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 struct GlobalResourceDefaults {
 	service_name: Option<String>,
 	attrs: Vec<KeyValue>,
-	// If set, the OTLP/HTTP path (e.g., "/v1/traces") derived from cfg.tracing.endpoint or per-policy TracingConfig.path
-	otlp_http_path: Option<String>,
 }
 
 static GLOBAL_RESOURCE_DEFAULTS: OnceCell<GlobalResourceDefaults> = OnceCell::new();
@@ -552,37 +551,10 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	let service_namespace = cfg.xds.namespace.to_string();
 	attrs.push(KeyValue::new("service.namespace", service_namespace));
 
-	// Derive OTLP/HTTP path from cfg.tracing.endpoint if provided and protocol is HTTP.
-	// We only need the path component; the actual authority is resolved via backend policies.
-	let mut otlp_http_path: Option<String> = None;
-	if let Some(ep) = cfg.tracing.endpoint.as_deref()
-		&& cfg.tracing.protocol == Protocol::Http
-	{
-		// Try to parse as a URI to extract the path component
-		if let Ok(uri) = http::Uri::try_from(ep) {
-			let base_path = uri.path().to_string();
-			let path = if base_path.is_empty() || base_path == "/" {
-				cfg.tracing.path.clone()
-			} else if base_path.ends_with(cfg.tracing.path.as_str()) {
-				base_path
-			} else {
-				format!(
-					"{}/{}",
-					base_path.trim_end_matches('/'),
-					cfg.tracing.path.as_str()
-				)
-			};
-			otlp_http_path = Some(path);
-		} else {
-			// Fallback to default if parsing fails
-			otlp_http_path = Some("/v1/traces".to_string());
-		}
-	}
 
 	let _ = GLOBAL_RESOURCE_DEFAULTS.set(GlobalResourceDefaults {
 		service_name: Some(service_name),
 		attrs,
-		otlp_http_path,
 	});
 }
 

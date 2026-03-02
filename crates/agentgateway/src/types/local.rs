@@ -58,6 +58,121 @@ impl NormalizedLocalConfig {
 	}
 }
 
+pub fn migrate_deprecated_local_config(s: &str) -> anyhow::Result<String> {
+	let cfg: serde_json::Value = serdes::yamlviajson::from_str(s)?;
+	let cfg = migrate_deprecated_frontend_policies(cfg)?;
+	serdes::yamlviajson::to_string(&cfg)
+}
+
+fn migrate_deprecated_frontend_policies(
+	mut cfg: serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+	let Some(root) = cfg.as_object_mut() else {
+		return Ok(cfg);
+	};
+
+	let Some(config) = root
+		.get_mut("config")
+		.and_then(serde_json::Value::as_object_mut)
+	else {
+		return Ok(cfg);
+	};
+
+	let deprecated_logging = config.remove("logging");
+	let deprecated_tracing = config.remove("tracing");
+	if deprecated_logging.is_none() && deprecated_tracing.is_none() {
+		return Ok(cfg);
+	}
+
+	let frontend_policies = root
+		.entry("frontendPolicies")
+		.or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+	let Some(frontend_policies) = frontend_policies.as_object_mut() else {
+		anyhow::bail!("frontendPolicies must be an object");
+	};
+
+	if let Some(logging) = deprecated_logging {
+		if frontend_policies.contains_key("logging") || frontend_policies.contains_key("accessLog") {
+			anyhow::bail!(
+				"cannot use deprecated config.logging together with frontendPolicies.logging/accessLog"
+			);
+		}
+		frontend_policies.insert("logging".to_string(), logging);
+	}
+	if let Some(tracing) = deprecated_tracing {
+		if frontend_policies.contains_key("tracing") {
+			anyhow::bail!("cannot use deprecated config.tracing together with frontendPolicies.tracing");
+		}
+		frontend_policies.insert("tracing".to_string(), tracing);
+	}
+	Ok(cfg)
+}
+
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeprecatedLocalFrontendPolicies {
+	#[serde(default)]
+	logging: Option<frontend::LoggingPolicy>,
+	#[serde(default)]
+	tracing: Option<TracingConfig>,
+}
+
+fn merge_deprecated_frontend_policies(
+	deprecated: &crate::Config,
+	frontend_policies: &mut LocalFrontendPolicies,
+) -> anyhow::Result<()> {
+	let log = &deprecated.logging;
+	let has_deprecated_log =
+		!log.fields.add.is_empty() || !log.fields.remove.is_empty() || log.filter.is_some();
+	if has_deprecated_log {
+		if frontend_policies.access_log.is_some() {
+			anyhow::bail!(
+				"cannot use deprecated config.logging together with frontendPolicies.accessLog"
+			);
+		}
+		frontend_policies.access_log = Some(frontend::LoggingPolicy {
+			filter: log.filter,
+			add: log.fields.add,
+			remove: log.fields.remove,
+		});
+	}
+	if let Some(tracing) = deprecated.tracing {
+		if frontend_policies.tracing.is_some() {
+			anyhow::bail!("cannot use deprecated config.tracing together with frontendPolicies.tracing");
+		}
+		let trc::DeprecatedConfig {
+			endpoint,
+			headers,
+			protocol,
+			fields,
+			random_sampling,
+			client_sampling,
+			path,
+		} = tracing;
+		if headers.is_empty() {
+			anyhow::bail!(
+				"Deprecated config.tracing cannot automatically be translated to the replacement API (frontendPolicies.tracing)"
+			);
+		}
+		if let Some(ep) = endpoint {
+			frontend_policies.tracing = Some(TracingConfig {
+				provider_backend: SimpleBackendReference::InlineBackend(Target::try_from(ep)?),
+				attributes: Arc::unwrap_or_clone(fields.add),
+				resources: Default::default(), // Not supported in the old config
+				remove: fields.remove.into_iter().collect(),
+				random_sampling,
+				client_sampling,
+				path,
+				protocol: match protocol {
+					Protocol::Grpc => crate::types::agent::TracingProtocol::Grpc,
+					Protocol::Http => crate::types::agent::TracingProtocol::Http,
+				},
+			});
+		}
+	}
+	Ok(())
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
 	pub binds: Vec<Bind>,
@@ -939,7 +1054,7 @@ struct LocalFrontendPolicies {
 	#[serde(default)]
 	pub tcp: Option<frontend::TCP>,
 	/// Settings for request access logs.
-	#[serde(default)]
+	#[serde(default, alias = "logging")]
 	pub access_log: Option<frontend::LoggingPolicy>,
 	#[serde(default)]
 	pub tracing: Option<TracingConfig>,
@@ -1057,7 +1172,7 @@ async fn convert(
 ) -> anyhow::Result<NormalizedLocalConfig> {
 	let LocalConfig {
 		config: _,
-		frontend_policies,
+		mut frontend_policies,
 		binds,
 		policies,
 		workloads,
@@ -1066,6 +1181,7 @@ async fn convert(
 		llm,
 		mcp,
 	} = i;
+	merge_deprecated_frontend_policies(config, &mut frontend_policies)?;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 	let mut all_binds = vec![];

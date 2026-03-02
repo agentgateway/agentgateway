@@ -16,12 +16,13 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
 	// TODO consolidate this
-	trcng::init_tracer(trcng::Config {
-		tracer: trcng::Tracer::Otlp {
-			endpoint: config.tracing.endpoint.clone(),
-		},
-		tags: Default::default(),
-	})?;
+	// howardjohn: do not merge
+	// trcng::init_tracer(trcng::Config {
+	// 	tracer: trcng::Tracer::Otlp {
+	// 		endpoint: config.tracing.endpoint.clone(),
+	// 	},
+	// 	tags: Default::default(),
+	// })?;
 	// Initialize OpenTelemetry resource defaults from gateway + proxy metadata
 	trc::set_resource_defaults_from_config(config.as_ref());
 	let shutdown = signal::Shutdown::new();
@@ -72,10 +73,9 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		.map(|ca| agent_hbone::pool::WorkloadHBONEPool::new(config.hbone.clone(), ca));
 	// Build metrics and then the upstream client with metrics wired in
 	let sub_registry = metrics::sub_registry(&mut registry);
-	let tracer = trc::Tracer::new(&config.tracing)?.map(Arc::new);
 	let metrics_handle = Arc::new(crate::metrics::Metrics::new(
 		sub_registry,
-		config.logging.excluded_metrics.clone(),
+		config.metrics.excluded_metrics.clone(),
 	));
 	let client = client::Client::new(
 		&config.dns,
@@ -116,7 +116,6 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let pi = ProxyInputs {
 		cfg: config.clone(),
 		stores: stores.clone(),
-		tracer: tracer.clone(),
 		metrics: metrics_handle.clone(),
 		upstream: client.clone(),
 		ca,
@@ -154,7 +153,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	Ok(Bound {
 		drain_tx,
 		shutdown,
-		tracer,
+		stores,
 		ready,
 	})
 }
@@ -162,8 +161,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 pub struct Bound {
 	pub shutdown: signal::Shutdown,
 	drain_tx: drain::DrainTrigger,
-	tracer: Option<Arc<Tracer>>,
 	ready: readiness::Ready,
+	stores: crate::store::Stores,
 }
 
 impl Bound {
@@ -175,8 +174,14 @@ impl Bound {
 		// Wait for a signal to shutdown from explicit admin shutdown or signal
 		self.shutdown.wait().await;
 
-		if let Some(tracer) = self.tracer {
-			tracer.shutdown()
+		let sdp = {
+			let b = self.stores.binds.read();
+			b.all_shutdown_policies()
+		};
+		for p in sdp {
+			if let Some(t) = p.tracer.get() {
+				t.shutdown()
+			}
 		}
 
 		// Start a drain; this will attempt to end all connections

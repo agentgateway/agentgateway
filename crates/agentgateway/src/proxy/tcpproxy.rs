@@ -43,7 +43,7 @@ impl TCPProxy {
 		let mut log: DropOnLog = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
-				self.inputs.cfg.tracing.clone(),
+				self.inputs.cfg.metrics.clone(),
 			),
 			self.inputs.metrics.clone(),
 			start,

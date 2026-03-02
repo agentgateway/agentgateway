@@ -20,7 +20,7 @@ use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
 	BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
-	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TrafficPolicy,
+	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TracingPolicy, TrafficPolicy,
 };
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -669,6 +669,18 @@ impl Store {
 		pol
 	}
 
+	// All policies that need to be shutdown
+	pub fn all_shutdown_policies(&self) -> Vec<Arc<TracingPolicy>> {
+		self
+			.policies_by_key
+			.iter()
+			.filter_map(|(k, v)| v.policy.as_frontend())
+			.filter_map(|v| match v {
+				FrontendPolicy::Tracing(t) => Some(t.clone()),
+				_ => None,
+			})
+			.collect_vec()
+	}
 	pub fn frontend_policies(&self, gateway: PolicyTargetRef) -> FrontendPolices {
 		let gw_rules = self.policies_by_target.get(&gateway);
 		let rules = gw_rules

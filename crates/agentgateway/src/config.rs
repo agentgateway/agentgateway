@@ -264,48 +264,77 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				None => Duration::from_secs(5),
 			},
 		},
-		tracing: trc::Config {
-			endpoint: otlp,
-			headers: otlp_headers,
-			protocol: otlp_protocol,
+		tracing: raw
+			.tracing
+			.clone()
+			.map(|t| {
+				Ok(trc::DeprecatedConfig {
+					endpoint: otlp,
+					headers: otlp_headers,
+					protocol: otlp_protocol,
 
-			fields: raw
-				.tracing
+					fields: t
+						.fields
+						.clone()
+						.map(|fields| {
+							Ok::<_, anyhow::Error>(LoggingFields {
+								remove: Arc::new(fields.remove.into_iter().collect()),
+								add: Arc::new(
+									fields
+										.add
+										.iter()
+										.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+										.collect::<Result<_, _>>()?,
+								),
+							})
+						})
+						.transpose()?
+						.unwrap_or_default(),
+					random_sampling: t
+						.random_sampling
+						.as_ref()
+						.map(|c| c.0.as_str())
+						.map(cel::Expression::new_strict)
+						.transpose()?
+						.map(Arc::new),
+					client_sampling: t
+						.client_sampling
+						.as_ref()
+						.map(|c| c.0.as_str())
+						.map(cel::Expression::new_strict)
+						.transpose()?
+						.map(Arc::new),
+					path: t.path.clone().unwrap_or_else(|| "/v1/traces".to_string()),
+				})
+			})
+			.transpose()?,
+		metrics: telemetry::log::MetricsConfig {
+			excluded_metrics: raw
+				.metrics
 				.as_ref()
-				.and_then(|f| f.fields.clone())
-				.map(|fields| {
-					Ok::<_, anyhow::Error>(LoggingFields {
-						remove: Arc::new(fields.remove.into_iter().collect()),
-						add: Arc::new(
-							fields
+				.map(|f| {
+					f.remove
+						.clone()
+						.into_iter()
+						.collect::<frozen_collections::FzHashSet<String>>()
+				})
+				.unwrap_or_default(),
+			metric_fields: Arc::new(
+				raw
+					.metrics
+					.and_then(|f| f.fields)
+					.map(|fields| {
+						Ok::<_, anyhow::Error>(MetricFields {
+							add: fields
 								.add
 								.iter()
 								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
-						),
+						})
 					})
-				})
-				.transpose()?
-				.unwrap_or_default(),
-			random_sampling: raw
-				.tracing
-				.as_ref()
-				.and_then(|t| t.random_sampling.as_ref().map(|c| c.0.as_str()))
-				.map(cel::Expression::new_strict)
-				.transpose()?
-				.map(Arc::new),
-			client_sampling: raw
-				.tracing
-				.as_ref()
-				.and_then(|t| t.client_sampling.as_ref().map(|c| c.0.as_str()))
-				.map(cel::Expression::new_strict)
-				.transpose()?
-				.map(Arc::new),
-			path: raw
-				.tracing
-				.as_ref()
-				.and_then(|t| t.path.clone())
-				.unwrap_or_else(|| "/v1/traces".to_string()),
+					.transpose()?
+					.unwrap_or_default(),
+			),
 		},
 		logging: telemetry::log::Config {
 			filter: raw
@@ -342,32 +371,6 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				})
 				.transpose()?
 				.unwrap_or_default(),
-			excluded_metrics: raw
-				.metrics
-				.as_ref()
-				.map(|f| {
-					f.remove
-						.clone()
-						.into_iter()
-						.collect::<frozen_collections::FzHashSet<String>>()
-				})
-				.unwrap_or_default(),
-			metric_fields: Arc::new(
-				raw
-					.metrics
-					.and_then(|f| f.fields)
-					.map(|fields| {
-						Ok::<_, anyhow::Error>(MetricFields {
-							add: fields
-								.add
-								.iter()
-								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-								.collect::<Result<_, _>>()?,
-						})
-					})
-					.transpose()?
-					.unwrap_or_default(),
-			),
 		},
 		dns: client::Config {
 			// TODO: read from file
@@ -408,11 +411,9 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			frame_size: parse("HTTP2_FRAME_SIZE")?
 				.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
 				.unwrap_or(1024u32 * 1024),
-
 			pool_max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
 				.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
 				.unwrap_or(100u16),
-
 			pool_unused_release_timeout: parse_duration("POOL_UNUSED_RELEASE_TIMEOUT")?
 				.or(
 					raw

@@ -492,7 +492,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	use crate::telemetry::{log, trc};
 	use crate::transport::stream::TCPConnectionInfo;
 
-	let log_cfg = log::Config {
+	let log_cfg = log::DeprecatedLogging {
 		filter: None,
 		fields: LoggingFields::default(),
 		metric_fields: Arc::new(MetricFields::default()),
@@ -500,7 +500,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 		level: "info".to_string(),
 		format: crate::LoggingFormat::Text,
 	};
-	let tracing_cfg = trc::Config {
+	let tracing_cfg = trc::DeprecatedConfig {
 		endpoint: None,
 		headers: HashMap::new(),
 		protocol: trc::Protocol::Grpc,

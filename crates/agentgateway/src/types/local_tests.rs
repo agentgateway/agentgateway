@@ -102,3 +102,61 @@ fn test_llm_model_name_header_match_invalid_patterns() {
 	assert!(super::llm_model_name_header_match("*gpt*").is_err());
 	assert!(super::llm_model_name_header_match("g*pt").is_err());
 }
+
+#[test]
+fn test_migrate_deprecated_local_config_moves_fields() {
+	let input = r#"
+config:
+  logging:
+    remove:
+      - foo
+  tracing:
+    host: otlp.default.svc.cluster.local:4317
+"#;
+	let out = super::migrate_deprecated_local_config(input).unwrap();
+	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let cfg = v.get("config").unwrap();
+	assert!(cfg.get("logging").is_none());
+	assert!(cfg.get("tracing").is_none());
+	let frontend = v.get("frontendPolicies").unwrap();
+	assert!(frontend.get("logging").is_some());
+	assert!(frontend.get("tracing").is_some());
+}
+
+#[tokio::test]
+async fn test_runtime_migration_rejects_conflicting_logging_fields() {
+	let input = r#"
+config:
+  logging: {}
+frontendPolicies:
+  logging: {}
+"#;
+	let client = client::Client::new(
+		&client::Config {
+			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+		},
+		None,
+		BackendConfig::default(),
+		None,
+	);
+	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	let res = NormalizedLocalConfig::from(
+		&config,
+		client,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+		},
+		input,
+	)
+	.await;
+	assert!(res.is_err());
+	assert!(
+		res
+			.unwrap_err()
+			.to_string()
+			.contains("deprecated config.logging")
+	);
+}
