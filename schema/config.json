@@ -1184,6 +1184,17 @@
           ],
           "default": null
         },
+        "oauth2": {
+          "description": "Authenticate incoming requests using OAuth2/OIDC.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOAuth2Policy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "extProc": {
           "description": "Extend agentgateway with an external processor",
           "anyOf": [
@@ -3029,6 +3040,10 @@
               "$ref": "#/$defs/Mode",
               "default": "optional"
             },
+            "forward": {
+              "type": "boolean",
+              "default": false
+            },
             "providers": {
               "type": "array",
               "items": {
@@ -3047,6 +3062,10 @@
             "mode": {
               "$ref": "#/$defs/Mode",
               "default": "optional"
+            },
+            "forward": {
+              "type": "boolean",
+              "default": false
             },
             "issuer": {
               "type": "string"
@@ -3076,6 +3095,46 @@
           "required": [
             "issuer",
             "jwks"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "$ref": "#/$defs/Mode",
+              "default": "optional"
+            },
+            "forward": {
+              "type": "boolean",
+              "default": false
+            },
+            "issuer": {
+              "type": "string"
+            },
+            "audiences": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "providerBackend": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SimpleLocalBackend"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "issuer"
           ]
         }
       ]
@@ -3476,6 +3535,127 @@
         }
       },
       "additionalProperties": false
+    },
+    "LocalOAuth2Policy": {
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "description": "OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "authorizationEndpoint": {
+          "description": "Explicit authorization endpoint for non-discovery OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpoint": {
+          "description": "Explicit token endpoint for non-discovery OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "providerBackend": {
+          "description": "Optional provider backend used for provider back-channel calls.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackend"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endSessionEndpoint": {
+          "description": "Optional end-session endpoint for explicit OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpointAuthMethodsSupported": {
+          "description": "Optional token endpoint auth methods supported by explicit OAuth2 providers.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "clientId": {
+          "description": "OAuth2 client ID.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth2 client secret value or file reference.",
+          "$ref": "#/$defs/FileOrInline"
+        },
+        "redirectUri": {
+          "description": "Explicit callback URL configured with the upstream provider.",
+          "type": "string"
+        },
+        "allowInsecureRedirectUri": {
+          "description": "Allow non-loopback `http://` redirect URIs for local development only.",
+          "type": "boolean",
+          "default": false
+        },
+        "scopes": {
+          "description": "OAuth scopes requested during browser login flow.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "cookieName": {
+          "description": "Session cookie base name.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "refreshableCookieMaxAgeSeconds": {
+          "description": "Max age in seconds for refreshable OAuth2 sessions (default: 604800 / 7 days, max: 2592000 / 30 days).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0,
+          "default": null
+        },
+        "signOutPath": {
+          "description": "Sign-out path that clears the local OAuth2 session.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "postLogoutRedirectUri": {
+          "description": "Optional post-logout redirect URI sent to OIDC end_session_endpoint.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "clientSecret",
+        "redirectUri"
+      ]
     },
     "ExtProc": {
       "type": "object",
@@ -4481,6 +4661,17 @@
           ],
           "default": null
         },
+        "oauth2": {
+          "description": "Authenticate incoming requests using OAuth2/OIDC.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOAuth2Policy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "extProc": {
           "description": "Extend agentgateway with an external processor",
           "anyOf": [
@@ -5353,6 +5544,17 @@
             }
           ],
           "default": null
+        },
+        "oauth2": {
+          "description": "Authenticate incoming requests using OAuth2/OIDC.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOAuth2Policy"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "extProc": {
           "description": "Extend agentgateway with an external processor",

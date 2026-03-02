@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-discovery-ca
+  namespace: agentgateway-base
+binaryData:
+  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUQ4ekNDQXR1Z0F3SUJBZ0lVWWd5akVsbmNHc0M0MHJFa3Btd2drNXNCemxjd0RRWUpLb1pJaHZjTkFRRUwKQlFBd1B6RTlNRHNHQTFVRUF3dzBiMkYxZEdneUxXUnBjMk52ZG1WeWVTNWhaMlZ1ZEdkaGRHVjNZWGt0WW1GegpaUzV6ZG1NdVkyeDFjM1JsY2k1c2IyTmhiREFlRncweU5qQXlNamd4TkRJM016VmFGdzB6TmpBeU1qWXhOREkzCk16VmFNRDh4UFRBN0JnTlZCQU1NTkc5aGRYUm9NaTFrYVhOamIzWmxjbmt1WVdkbGJuUm5ZWFJsZDJGNUxXSmgKYzJVdWMzWmpMbU5zZFhOMFpYSXViRzlqWVd3d2dnRWlNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0SUJEd0F3Z2dFSwpBb0lCQVFDcnZka3J4RkdPdFNyQW5WSVp3a2RGb1dQSmJNb2RvdzJabGQwM3kzOVhjNTJpeHVtNi9QbVg5K3JQClFKVm1FVHlOZWFWWkduQWlvQXhvclFSYWMrN1BWSVY1VFRYUm44OTFMZFJ1c2dCSVp1UHlLdG9tTHU5NjhNMzgKNE9kY3p5RWZHWC9Ick1wRmlTa0Zad28yaWZ0c3ZNOGdrZFlWNldlUXJOTnVhMVI5bEtGTzZsWVQzMG93M3NyZgo2R0Y0MU02aXkzdlMzbTR1MUxaSkpTNHZLa0Y4WUtFbHpQVkdxTEQvSXU4M01TaVNqd2NPbVNZK3ZLSHc4bmJTClFZRU9CVGs1YXZNQ1U0eEpwenJDcElSNG55K0oyd2w5TVliRWltdGxpWG5jbkxIMS9FS0F3TGtmZGk0WjllNkUKRmdNdCtqN3hSbGxLbUhwV3A1c2dBbU9tTEI3WEFnTUJBQUdqZ2VZd2dlTXdnWjhHQTFVZEVRU0JsekNCbElJMApiMkYxZEdneUxXUnBjMk52ZG1WeWVTNWhaMlZ1ZEdkaGRHVjNZWGt0WW1GelpTNXpkbU11WTJ4MWMzUmxjaTVzCmIyTmhiSUltYjJGMWRHZ3lMV1JwYzJOdmRtVnllUzVoWjJWdWRHZGhkR1YzWVhrdFltRnpaUzV6ZG1PQ0ltOWgKZFhSb01pMWthWE5qYjNabGNua3VZV2RsYm5SbllYUmxkMkY1TFdKaGMyV0NFRzloZFhSb01pMWthWE5qYjNabApjbmt3Q3dZRFZSMFBCQVFEQWdXZ01CTUdBMVVkSlFRTU1Bb0dDQ3NHQVFVRkJ3TUJNQjBHQTFVZERnUVdCQlJPCndhZ1kzQnVHQ2RSSkRhaDRnVnZKRUdBWFNqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFpMWhlQlZ0WCtCRDIKd2tzMXJKcVpVSHF4MU9jSWJUOHMrek9DVFZZMTBJMjlycUd4bHdwWkx6ODc2YW1yMHR1T2Ftc2xSOHd4RFprKwpKWWhsaEg4bXpmL09KWk9YSG1kdngyRENNTHYrenM2V1dIYjFCaDF2T2FIdHlOUUVhTEZ6cUtkeUNyV2hVTXFBCnQvRnZxUWlrU3J1WlN5akNoQ2xjUGpHVy9GR0lYdmhjU0c1YmhMeW9TemxQaVhueEl0S3RHaE13MEpDRis5YlcKbEZ2QnBmcW5MYUVIcW1pWjVMenYzeVY2STVFWXMvOHZOdEszbGhQcFFtRmE3cWVhY0gxejA2dzBpR21lc3NYagpPTkRIeFZvbEtxZU1QS0t0c3BTQUxaQnRRSEZETCtGaFJjQXkwcWR4V0FvVnV3YUZnbjFCR3BDMXlNRFh5TElICnN3VFdDVkZoUkE9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oauth2-discovery-tls
+  namespace: agentgateway-base
+type: kubernetes.io/tls
+# Example cert and key generated using:
+# openssl req -x509 -out oauth2-discovery.crt -keyout oauth2-discovery.key -newkey rsa:2048 -days 3650 -nodes -sha256 -subj '/CN=oauth2-discovery.agentgateway-base.svc.cluster.local' -extensions EXT -config <( printf "[dn]\nCN=oauth2-discovery.agentgateway-base.svc.cluster.local\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:oauth2-discovery.agentgateway-base.svc.cluster.local,DNS:oauth2-discovery.agentgateway-base.svc,DNS:oauth2-discovery.agentgateway-base,DNS:oauth2-discovery\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUQ4ekNDQXR1Z0F3SUJBZ0lVWWd5akVsbmNHc0M0MHJFa3Btd2drNXNCemxjd0RRWUpLb1pJaHZjTkFRRUwKQlFBd1B6RTlNRHNHQTFVRUF3dzBiMkYxZEdneUxXUnBjMk52ZG1WeWVTNWhaMlZ1ZEdkaGRHVjNZWGt0WW1GegpaUzV6ZG1NdVkyeDFjM1JsY2k1c2IyTmhiREFlRncweU5qQXlNamd4TkRJM016VmFGdzB6TmpBeU1qWXhOREkzCk16VmFNRDh4UFRBN0JnTlZCQU1NTkc5aGRYUm9NaTFrYVhOamIzWmxjbmt1WVdkbGJuUm5ZWFJsZDJGNUxXSmgKYzJVdWMzWmpMbU5zZFhOMFpYSXViRzlqWVd3d2dnRWlNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0SUJEd0F3Z2dFSwpBb0lCQVFDcnZka3J4RkdPdFNyQW5WSVp3a2RGb1dQSmJNb2RvdzJabGQwM3kzOVhjNTJpeHVtNi9QbVg5K3JQClFKVm1FVHlOZWFWWkduQWlvQXhvclFSYWMrN1BWSVY1VFRYUm44OTFMZFJ1c2dCSVp1UHlLdG9tTHU5NjhNMzgKNE9kY3p5RWZHWC9Ick1wRmlTa0Zad28yaWZ0c3ZNOGdrZFlWNldlUXJOTnVhMVI5bEtGTzZsWVQzMG93M3NyZgo2R0Y0MU02aXkzdlMzbTR1MUxaSkpTNHZLa0Y4WUtFbHpQVkdxTEQvSXU4M01TaVNqd2NPbVNZK3ZLSHc4bmJTClFZRU9CVGs1YXZNQ1U0eEpwenJDcElSNG55K0oyd2w5TVliRWltdGxpWG5jbkxIMS9FS0F3TGtmZGk0WjllNkUKRmdNdCtqN3hSbGxLbUhwV3A1c2dBbU9tTEI3WEFnTUJBQUdqZ2VZd2dlTXdnWjhHQTFVZEVRU0JsekNCbElJMApiMkYxZEdneUxXUnBjMk52ZG1WeWVTNWhaMlZ1ZEdkaGRHVjNZWGt0WW1GelpTNXpkbU11WTJ4MWMzUmxjaTVzCmIyTmhiSUltYjJGMWRHZ3lMV1JwYzJOdmRtVnllUzVoWjJWdWRHZGhkR1YzWVhrdFltRnpaUzV6ZG1PQ0ltOWgKZFhSb01pMWthWE5qYjNabGNua3VZV2RsYm5SbllYUmxkMkY1TFdKaGMyV0NFRzloZFhSb01pMWthWE5qYjNabApjbmt3Q3dZRFZSMFBCQVFEQWdXZ01CTUdBMVVkSlFRTU1Bb0dDQ3NHQVFVRkJ3TUJNQjBHQTFVZERnUVdCQlJPCndhZ1kzQnVHQ2RSSkRhaDRnVnZKRUdBWFNqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFpMWhlQlZ0WCtCRDIKd2tzMXJKcVpVSHF4MU9jSWJUOHMrek9DVFZZMTBJMjlycUd4bHdwWkx6ODc2YW1yMHR1T2Ftc2xSOHd4RFprKwpKWWhsaEg4bXpmL09KWk9YSG1kdngyRENNTHYrenM2V1dIYjFCaDF2T2FIdHlOUUVhTEZ6cUtkeUNyV2hVTXFBCnQvRnZxUWlrU3J1WlN5akNoQ2xjUGpHVy9GR0lYdmhjU0c1YmhMeW9TemxQaVhueEl0S3RHaE13MEpDRis5YlcKbEZ2QnBmcW5MYUVIcW1pWjVMenYzeVY2STVFWXMvOHZOdEszbGhQcFFtRmE3cWVhY0gxejA2dzBpR21lc3NYagpPTkRIeFZvbEtxZU1QS0t0c3BTQUxaQnRRSEZETCtGaFJjQXkwcWR4V0FvVnV3YUZnbjFCR3BDMXlNRFh5TElICnN3VFdDVkZoUkE9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2QUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktZd2dnU2lBZ0VBQW9JQkFRQ3J2ZGtyeEZHT3RTckEKblZJWndrZEZvV1BKYk1vZG93MlpsZDAzeTM5WGM1Mml4dW02L1BtWDkrclBRSlZtRVR5TmVhVlpHbkFpb0F4bwpyUVJhYys3UFZJVjVUVFhSbjg5MUxkUnVzZ0JJWnVQeUt0b21MdTk2OE0zODRPZGN6eUVmR1gvSHJNcEZpU2tGClp3bzJpZnRzdk04Z2tkWVY2V2VRck5OdWExUjlsS0ZPNmxZVDMwb3czc3JmNkdGNDFNNml5M3ZTM200dTFMWkoKSlM0dktrRjhZS0VselBWR3FMRC9JdTgzTVNpU2p3Y09tU1krdktIdzhuYlNRWUVPQlRrNWF2TUNVNHhKcHpyQwpwSVI0bnkrSjJ3bDlNWWJFaW10bGlYbmNuTEgxL0VLQXdMa2ZkaTRaOWU2RUZnTXQrajd4UmxsS21IcFdwNXNnCkFtT21MQjdYQWdNQkFBRUNnZ0VBQkVWK2gwWWt1U1hzWUVvSlpyYWNTekVPYUU0YVlNNVRZa1NGOGdOUHNYOGcKcHBISDhteWtVSkZMOThlbGI1cHlKUnFuY0NYbU1CWkcrTHVFNWpNSDk0UWtwYld6NXZqUWtodUhzeEVlVEs2eQpjSzE4SzRMelZkMXpZaHk5NUdNS2NkbVNnZ2JjS1FxV1NKb2RlT25KcFJTMUdoeEdkTmtQU0Z2a0RsVUJEdlorCjVRc1UwcHl5b1hKSHlxMEpqbW1ENWxISWsreGo5dUF4QkFBK3RmU2RxeWxoNFVZblUyTFgydE9xcEdNMlNXaFEKV0NuTGZ4Z2I0dVRNeTVsWmF6cm1mRW1paGdzQk5MZnF3NnBGZjRHSkp5eHFVbmZHWE1scGVNRFA2djEvVHBzbAp1Rzk0Mk54WGFkNDN2emtGbkZqcTc5anRuYWNGVlczLzRweHBpd2dDOFFLQmdRRHJCSWhPb2IrcHU2R3JwZkdtCjNEb2ozVG5UN3RIa3J3dVhUbnQ3enJqcXVVM0pNOXlob1NPOFY0dUNQVkpsOFQxaDlOd011dnlNZEN3WFJENm8Ka3BScnNnKzBCQVFEb2tzMXNUeWxjeWJrSnhIZi82YVU2dG5vTWVBWEdSUGNkakR5c0psNjUyQllzbzYyRDlGRQpoS1FIYkVobDkvbHQ4eXc2WEhaSWpyQ1VWUUtCZ1FDN0V4cHUxaFlDSDZoYWNXNWVXWWZGZjBJTGdvWE5KZXp5CldHSklMUWpNbHA1MWhvSDYwMXBiRzBKaW1oYmhVTS8wejBYS2lJWWlOVjB4OGpDTHY0MXVleFpVRnVLbnkwNUgKdVpzejNicklTbHBjUE5JZURUMHhnZFNnckxJLzkyWWQ3MkNHR1Iya3J4UUtycEtEWk1jWVRXcG5JMmVjTGpBWgpYV29vWHl0eWV3S0JnRU5wN211WHpERzA1OEFqL3JoZGJiUUI3bWVUbHRPaFBwTHRhVkJ2VU8zTHI3dHFTL3gxCkM1b29CcFdhWDN0c2dxNEpuZUZzOWFxWVhGbGtNeEVKMHRjOW9YR0N3V0FGZXN0eEJyTnkzNUlNZnYwaENUaW8KVVU5Z2x5WXBCR0IxNnI2QzE5UEFjUXVnVkgxMjloRlFkdmpHSDlKWUdrMW10cVliQmJiMGIwUnRBb0dBVzMzNApTNFRBdHNFczRTN2d2NXdoM3VGaU42YmFNWDcrNTNkNmVib3N0NEppZFRBWG1jaU1SRXFNcVJTYlpBN1Y1ZkVKClBRaVFNV0xQOVlGeFpLZUdVQ1k2d1YxLzlIaG1ESVlsOWJQWGllVnpVL0ViQWorUFVnc2hKb1BQbWFFeGZDcDYKbHBycCtJVDMxRkdVcmxZM1dSZGpscFdtTXFnVU5oT051N2p2MHNrQ2dZQVY5L3E4dll3WFM0Y0NYM3dRak5pcAoycmh0RG01dzhGNVJBTGRWVW9WTzlGemhyZWwwb0VJVU5KR2FKb0ZLQVZqd3lCekpUK2xYa1ZuTjUvbkUzaGEvClVQMjZnOW1KdTVFQ3pxQmpiT0RhT293M1lUcDNJNjlTMS8yUng2UndxMHFwaEhURVkrNFFpbEdoZk12cVJCNjUKcDlGd0hNeFJ2SkttNVQ2c05ObERSQT09Ci0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-discovery
+  namespace: agentgateway-base
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-discovery
+      app.kubernetes.io/version: v1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oauth2-discovery
+        app.kubernetes.io/version: v1
+    spec:
+      containers:
+      - image: quay.io/keycloak/keycloak:26.3
+        imagePullPolicy: IfNotPresent
+        name: oauth2-discovery
+        args:
+        - start-dev
+        - --hostname-strict=false
+        - --http-enabled=false
+        - --https-port=8443
+        - --https-certificate-file=/etc/x509/https/tls.crt
+        - --https-certificate-key-file=/etc/x509/https/tls.key
+        env:
+        - name: KEYCLOAK_ADMIN
+          value: admin
+        - name: KEYCLOAK_ADMIN_PASSWORD
+          value: admin
+        ports:
+        - containerPort: 8443
+        startupProbe:
+          tcpSocket:
+            port: 8443
+          periodSeconds: 2
+          failureThreshold: 60
+        readinessProbe:
+          tcpSocket:
+            port: 8443
+          periodSeconds: 2
+          failureThreshold: 15
+        volumeMounts:
+        - name: proxy-tls
+          mountPath: /etc/x509/https
+          readOnly: true
+      volumes:
+      - name: proxy-tls
+        secret:
+          secretName: oauth2-discovery-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-discovery
+  namespace: agentgateway-base
+spec:
+  ports:
+  - name: https
+    port: 8443
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/name: oauth2-discovery
+    app.kubernetes.io/version: v1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: oauth2-discovery-tls
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: oauth2-discovery
+  validation:
+    hostname: oauth2-discovery.agentgateway-base.svc.cluster.local
+    caCertificateRefs:
+    - group: ""
+      kind: ConfigMap
+      name: oauth2-discovery-ca

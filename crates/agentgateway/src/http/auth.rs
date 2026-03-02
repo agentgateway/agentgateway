@@ -145,6 +145,9 @@ pub struct BackendInfo {
 	pub inputs: Arc<ProxyInputs>,
 }
 
+#[derive(Clone)]
+pub struct PassthroughBearerToken(pub SecretString);
+
 pub async fn apply_backend_auth(
 	backend_info: &BackendInfo,
 	auth: &BackendAuth,
@@ -152,10 +155,16 @@ pub async fn apply_backend_auth(
 ) -> Result<(), ProxyError> {
 	match auth {
 		BackendAuth::Passthrough {} => {
-			// They should have a JWT policy defined. That will strip the token. Here we add it back
-			if let Some(claim) = req.extensions().get::<Claims>()
-				&& let Ok(mut token) =
-					http::HeaderValue::from_str(&format!("Bearer {}", claim.jwt.expose_secret()))
+			if let Some(token_value) = req
+				.extensions()
+				.get::<PassthroughBearerToken>()
+				.map(|token| token.0.expose_secret())
+				.or_else(|| {
+					req
+						.extensions()
+						.get::<Claims>()
+						.map(|claim| claim.jwt.expose_secret())
+				}) && let Ok(mut token) = http::HeaderValue::from_str(&format!("Bearer {token_value}"))
 			{
 				token.set_sensitive(true);
 				req.headers_mut().insert(http::header::AUTHORIZATION, token);

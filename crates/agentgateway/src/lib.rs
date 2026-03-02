@@ -478,6 +478,7 @@ pub struct ProxyInputs {
 	stores: Stores,
 
 	upstream: client::Client,
+	oidc: Arc<http::oidc::OidcProvider>,
 
 	metrics: Arc<metrics::Metrics>,
 	tracer: Option<std::sync::Arc<trc::Tracer>>,

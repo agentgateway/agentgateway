@@ -57,6 +57,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let xds_metrics = agent_xds::Metrics::new(sub_registry);
 	agent_core::metrics::TokioCollector::register(sub_registry, &data_plane_handle);
 
+	let oidc = Arc::new(crate::http::oidc::OidcProvider::new());
+
 	// TODO: use for XDS
 	let control_client = client::Client::new(&config.dns, None, config.backend.clone(), None);
 	let ca = if let Some(cfg) = &config.ca {
@@ -85,9 +87,14 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	);
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
-	let state_mgr =
-		state_manager::StateManager::new(config.clone(), control_client.clone(), xds_metrics, xds_tx)
-			.await?;
+	let state_mgr = state_manager::StateManager::new(
+		config.clone(),
+		control_client.clone(),
+		xds_metrics,
+		xds_tx,
+		oidc.clone(),
+	)
+	.await?;
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
 		// When we get the initial XDS state, unblock readiness
@@ -119,6 +126,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		tracer: tracer.clone(),
 		metrics: metrics_handle.clone(),
 		upstream: client.clone(),
+		oidc: oidc.clone(),
 		ca,
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),

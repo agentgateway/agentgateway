@@ -45,6 +45,42 @@ async fn test_backend_auth_passthrough_happy_path() {
 }
 
 #[tokio::test]
+async fn test_backend_auth_passthrough_prefers_explicit_bearer_token_extension() {
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req
+		.extensions_mut()
+		.insert(PassthroughBearerToken(SecretString::new(
+			"oauth2-access-token".into(),
+		)));
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::new("id-token.jwt".into()),
+	});
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+	apply_backend_auth(&backend_info, &BackendAuth::Passthrough {}, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let auth = req
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.expect("authorization header must be set");
+	assert_eq!(auth.to_str().unwrap(), "Bearer oauth2-access-token");
+}
+
+#[tokio::test]
 async fn test_backend_auth_key() {
 	// Test Key authentication
 	let mut req = crate::http::Request::new(crate::http::Body::empty());

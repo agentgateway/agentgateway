@@ -636,11 +636,18 @@ message TrafficPolicySpec {
     // List of audiences - the 'aud' claim must be in this list
     repeated string audiences = 2;
 
-    // JWKS configuration - where to get the keys for validation
-    oneof jwks_source {
-      // Inline JWKS as a JSON string
-      string inline = 3;
+    message OIDC {
+      // Optional backend used for OIDC provider back-channel calls.
+      BackendReference provider_backend = 1;
     }
+
+    // JWKS configuration - where to get the keys for validation
+	    oneof jwks_source {
+	      // Inline JWKS as a JSON string
+	      string inline = 3;
+	      // OIDC discovery-backed JWKS resolution
+	      OIDC oidc = 5;
+	    }
 
     // JWT validation options controlling which claims must be present.
     JWTValidationOptions jwt_validation_options = 4;
@@ -660,6 +667,9 @@ message TrafficPolicySpec {
     // How the JWT validation should behave
     Mode mode = 1;
     repeated JWTProvider providers = 2;
+    // When true, preserve Authorization after successful verification.
+    // When false (default), remove Authorization after verification.
+    optional bool forward = 3;
   }
 
   // Basic authentication configuration using htpasswd file
@@ -747,6 +757,26 @@ message TrafficPolicySpec {
     }
     map<string, NamespacedMetadataContext> metadata_context = 5;
   }
+  message OAuth2 {
+    string provider_id = 1;
+    BackendReference provider_backend = 15;
+    string oidc_issuer = 21;
+    string client_id = 2;
+    string client_secret = 3;
+    optional string redirect_uri = 4;
+    repeated string scopes = 5;
+    optional string cookie_name = 6;
+    optional string sign_out_path = 8;
+    optional uint64 refreshable_cookie_max_age_seconds = 13;
+    optional string post_logout_redirect_uri = 14;
+    optional string authorization_endpoint = 16;
+    optional string token_endpoint = 17;
+    optional string jwks_inline = 18;
+    optional string end_session_endpoint = 19;
+    repeated string token_endpoint_auth_methods_supported = 20;
+    bool allow_insecure_redirect_uri = 22;
+  }
+
   enum PolicyPhase {
     ROUTE = 0;
     GATEWAY = 1;
@@ -782,6 +812,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
+    OAuth2 oauth2 = 22;
   }
 }
 

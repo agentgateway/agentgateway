@@ -19,6 +19,12 @@ binds:
           jwks:
             # Relative to the folder the binary runs from, not the config file
             file: ./manifests/jwt/pub-key
+          # Dynamic OIDC discovery alternative (no static jwks value):
+          # issuer: "https://issuer.example.com"
+          # audiences: ["test.agentgateway.dev"]
+          # Optional for private IdP/back-channel routing:
+          # providerBackend:
+          #   host: "idp.internal.example.com:443"
         mcpAuthorization:
           rules:
           # Allow anyone to call 'echo'

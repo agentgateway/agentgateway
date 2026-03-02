@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +57,7 @@ const (
 	jwtPolicySuffix             = ":jwt"
 	basicAuthPolicySuffix       = ":basicauth"
 	apiKeyPolicySuffix          = ":apikeyauth" //nolint:gosec
+	oauth2PolicySuffix          = ":oauth2"
 	directResponseSuffix        = ":direct-response"
 )
 
@@ -112,8 +114,17 @@ type PolicyCtx struct {
 
 type ResolvedTarget struct {
 	AgentgatewayTarget *api.PolicyTarget
+	TargetGroupKind    schema.GroupKind
+	TargetName         gwv1.ObjectName
+	TargetSectionName  *gwv1.SectionName
 	AncestorRefs       []gwv1.ParentReference
 	AttachmentError    string
+}
+
+type policyAttachmentTarget struct {
+	GroupKind   schema.GroupKind
+	Name        gwv1.ObjectName
+	SectionName *gwv1.SectionName
 }
 
 // TranslateAgentgatewayPolicy generates policies for a single traffic policy
@@ -127,45 +138,19 @@ func TranslateAgentgatewayPolicy(
 	pctx := PolicyCtx{Krt: ctx, Collections: agw}
 
 	var policyTargets []ResolvedTarget
-	// TODO: add selectors
-	for _, target := range policy.Spec.TargetRefs {
-		var policyTarget *api.PolicyTarget
-
-		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
-		switch gk {
-		case wellknown.GatewayGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.GatewayTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-		case wellknown.HTTPRouteGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.RouteTarget(policy.Namespace, string(target.Name), wellknown.HTTPRouteGVK.Kind, target.SectionName),
-			}
-		case wellknown.GRPCRouteGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.RouteTarget(policy.Namespace, string(target.Name), wellknown.GRPCRouteGVK.Kind, target.SectionName),
-			}
-		case wellknown.AgentgatewayBackendGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.BackendTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-		case wellknown.ServiceGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.ServiceTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-			// TODO: add support for inferencepool https://github.com/kgateway-dev/kgateway/issues/13295
-			// TODO: add support for XListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
-
-		default:
-			// TODO(npolshak): support attaching policies to k8s services, serviceentries, and other backends
-			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
+	for _, target := range collectPolicyAttachmentTargets(ctx, policy, agw) {
+		policyTarget := toPolicyTarget(policy.Namespace, target)
+		if policyTarget == nil {
+			logger.Warn("unsupported target kind", "kind", target.GroupKind.Kind, "policy", policy.Name)
 			continue
 		}
-
-		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, agw)
+		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, target.GroupKind, target.Name, agw)
 
 		policyTargets = append(policyTargets, ResolvedTarget{
 			AgentgatewayTarget: policyTarget,
+			TargetGroupKind:    target.GroupKind,
+			TargetName:         target.Name,
+			TargetSectionName:  target.SectionName,
 			AncestorRefs:       ancestorRefs,
 			AttachmentError:    attachmentErr,
 		})
@@ -173,8 +158,16 @@ func TranslateAgentgatewayPolicy(
 
 	var ancestors []gwv1.PolicyAncestorStatus
 	for _, policyTarget := range policyTargets {
-		translatedPolicies, err := translatePolicyToAgw(pctx, policy, policyTarget.AgentgatewayTarget)
-		agwPolicies = append(agwPolicies, translatedPolicies...)
+		var (
+			translatedPolicies []AgwPolicy
+			err                error
+		)
+		if conflictErr := validateCrossPhaseAuthConflicts(ctx, policy, policyTarget, agw); conflictErr != nil {
+			err = conflictErr
+		} else {
+			translatedPolicies, err = translatePolicyToAgw(pctx, policy, policyTarget.AgentgatewayTarget)
+			agwPolicies = append(agwPolicies, translatedPolicies...)
+		}
 		var conds []metav1.Condition
 		if err != nil {
 			// If we produced some policies alongside errors, treat as partial validity
@@ -298,6 +291,436 @@ func TranslateAgentgatewayPolicy(
 	})
 
 	return &status, agwPolicies
+}
+
+func toPolicyTarget(policyNamespace string, target policyAttachmentTarget) *api.PolicyTarget {
+	switch target.GroupKind {
+	case wellknown.GatewayGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.GatewayTarget(policyNamespace, string(target.Name), target.SectionName),
+		}
+	case wellknown.HTTPRouteGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.RouteTarget(policyNamespace, string(target.Name), wellknown.HTTPRouteGVK.Kind, target.SectionName),
+		}
+	case wellknown.GRPCRouteGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.RouteTarget(policyNamespace, string(target.Name), wellknown.GRPCRouteGVK.Kind, target.SectionName),
+		}
+	case wellknown.AgentgatewayBackendGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.BackendTarget(policyNamespace, string(target.Name), target.SectionName),
+		}
+	case wellknown.ServiceGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.ServiceTarget(policyNamespace, string(target.Name), target.SectionName),
+		}
+	default:
+		return nil
+	}
+}
+
+func collectPolicyAttachmentTargets(
+	ctx krt.HandlerContext,
+	policy *agentgateway.AgentgatewayPolicy,
+	agw *AgwCollections,
+) []policyAttachmentTarget {
+	seen := map[string]policyAttachmentTarget{}
+	add := func(groupKind schema.GroupKind, name gwv1.ObjectName, sectionName *gwv1.SectionName) {
+		var section string
+		if sectionName != nil {
+			section = string(*sectionName)
+		}
+		key := groupKind.String() + "/" + string(name) + "/" + section
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = policyAttachmentTarget{
+			GroupKind:   groupKind,
+			Name:        name,
+			SectionName: cloneSectionName(sectionName),
+		}
+	}
+
+	for _, target := range policy.Spec.TargetRefs {
+		add(
+			schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)},
+			target.Name,
+			target.SectionName,
+		)
+	}
+	for _, selector := range policy.Spec.TargetSelectors {
+		groupKind := schema.GroupKind{Group: string(selector.Group), Kind: string(selector.Kind)}
+		switch groupKind {
+		case wellknown.GatewayGVK.GroupKind():
+			for _, gateway := range krt.Fetch(ctx, agw.Gateways, krt.FilterLabel(selector.MatchLabels)) {
+				if gateway.Namespace != policy.Namespace {
+					continue
+				}
+				add(groupKind, gwv1.ObjectName(gateway.Name), selector.SectionName)
+			}
+		case wellknown.HTTPRouteGVK.GroupKind():
+			for _, route := range krt.Fetch(ctx, agw.HTTPRoutes, krt.FilterLabel(selector.MatchLabels)) {
+				if route.Namespace != policy.Namespace {
+					continue
+				}
+				add(groupKind, gwv1.ObjectName(route.Name), selector.SectionName)
+			}
+		case wellknown.GRPCRouteGVK.GroupKind():
+			for _, route := range krt.Fetch(ctx, agw.GRPCRoutes, krt.FilterLabel(selector.MatchLabels)) {
+				if route.Namespace != policy.Namespace {
+					continue
+				}
+				add(groupKind, gwv1.ObjectName(route.Name), selector.SectionName)
+			}
+		case wellknown.AgentgatewayBackendGVK.GroupKind():
+			for _, backend := range krt.Fetch(ctx, agw.Backends, krt.FilterLabel(selector.MatchLabels)) {
+				if backend.Namespace != policy.Namespace {
+					continue
+				}
+				add(groupKind, gwv1.ObjectName(backend.Name), selector.SectionName)
+			}
+		case wellknown.ServiceGVK.GroupKind():
+			for _, svc := range krt.Fetch(ctx, agw.Services, krt.FilterLabel(selector.MatchLabels)) {
+				if svc.Namespace != policy.Namespace {
+					continue
+				}
+				add(groupKind, gwv1.ObjectName(svc.Name), selector.SectionName)
+			}
+		default:
+			// TODO(npolshak): support attaching policies to other backends
+			logger.Warn("unsupported target selector kind", "kind", selector.Kind, "policy", policy.Name)
+		}
+	}
+
+	targets := make([]policyAttachmentTarget, 0, len(seen))
+	for _, target := range seen {
+		targets = append(targets, target)
+	}
+	sort.SliceStable(targets, func(i, j int) bool {
+		left := targets[i]
+		right := targets[j]
+		if left.GroupKind.String() != right.GroupKind.String() {
+			return left.GroupKind.String() < right.GroupKind.String()
+		}
+		if left.Name != right.Name {
+			return left.Name < right.Name
+		}
+		leftSection := ""
+		if left.SectionName != nil {
+			leftSection = string(*left.SectionName)
+		}
+		rightSection := ""
+		if right.SectionName != nil {
+			rightSection = string(*right.SectionName)
+		}
+		return leftSection < rightSection
+	})
+	return targets
+}
+
+func cloneSectionName(sectionName *gwv1.SectionName) *gwv1.SectionName {
+	if sectionName == nil {
+		return nil
+	}
+	copied := *sectionName
+	return &copied
+}
+
+type authPolicyConflict struct {
+	Gateway types.NamespacedName
+	Policy  types.NamespacedName
+}
+
+type routeGatewayParent struct {
+	Gateway  types.NamespacedName
+	Listener *gwv1.SectionName
+}
+
+func validateCrossPhaseAuthConflicts(
+	ctx krt.HandlerContext,
+	policy *agentgateway.AgentgatewayPolicy,
+	target ResolvedTarget,
+	agw *AgwCollections,
+) error {
+	if policy.Spec.Traffic == nil || target.AttachmentError != "" {
+		return nil
+	}
+
+	hasJWT := policy.Spec.Traffic.JWTAuthentication != nil
+	hasOAuth2 := policy.Spec.Traffic.OAuth2 != nil
+	if !hasJWT && !hasOAuth2 {
+		return nil
+	}
+
+	switch target.TargetGroupKind {
+	case wellknown.GatewayGVK.GroupKind():
+		if !hasOAuth2 {
+			return nil
+		}
+		gw := types.NamespacedName{Namespace: policy.Namespace, Name: string(target.TargetName)}
+		conflicts := findRouteJWTConflictsForGateway(
+			ctx,
+			agw,
+			gw,
+			target.TargetSectionName,
+			types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
+			policy.UID,
+		)
+		if len(conflicts) == 0 {
+			return nil
+		}
+		sortAuthPolicyConflicts(conflicts)
+		conflict := conflicts[0]
+		return fmt.Errorf(
+			"invalid auth mode combination: gateway-target oauth2 on %s/%s conflicts with route-target jwtAuthentication policy %s/%s",
+			conflict.Gateway.Namespace,
+			conflict.Gateway.Name,
+			conflict.Policy.Namespace,
+			conflict.Policy.Name,
+		)
+	case wellknown.HTTPRouteGVK.GroupKind(), wellknown.GRPCRouteGVK.GroupKind():
+		if !hasJWT {
+			return nil
+		}
+		routeParents := routeGatewayParentsForRouteTarget(ctx, agw, policy.Namespace, target.TargetGroupKind, target.TargetName)
+		if len(routeParents) == 0 {
+			return nil
+		}
+		conflicts := findGatewayOAuth2ConflictsForRouteParents(
+			ctx,
+			agw,
+			routeParents,
+			types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
+			policy.UID,
+		)
+		if len(conflicts) == 0 {
+			return nil
+		}
+		sortAuthPolicyConflicts(conflicts)
+		conflict := conflicts[0]
+		return fmt.Errorf(
+			"invalid auth mode combination: route-target jwtAuthentication conflicts with gateway-target oauth2 policy %s/%s on %s/%s",
+			conflict.Policy.Namespace,
+			conflict.Policy.Name,
+			conflict.Gateway.Namespace,
+			conflict.Gateway.Name,
+		)
+	default:
+		return nil
+	}
+}
+
+func sortAuthPolicyConflicts(conflicts []authPolicyConflict) {
+	sort.SliceStable(conflicts, func(i, j int) bool {
+		left := conflicts[i]
+		right := conflicts[j]
+		if left.Gateway.Namespace != right.Gateway.Namespace {
+			return left.Gateway.Namespace < right.Gateway.Namespace
+		}
+		if left.Gateway.Name != right.Gateway.Name {
+			return left.Gateway.Name < right.Gateway.Name
+		}
+		if left.Policy.Namespace != right.Policy.Namespace {
+			return left.Policy.Namespace < right.Policy.Namespace
+		}
+		return left.Policy.Name < right.Policy.Name
+	})
+}
+
+func findRouteJWTConflictsForGateway(
+	ctx krt.HandlerContext,
+	agw *AgwCollections,
+	gateway types.NamespacedName,
+	gatewaySection *gwv1.SectionName,
+	currentPolicy types.NamespacedName,
+	excludeUID types.UID,
+) []authPolicyConflict {
+	conflictKeys := map[string]authPolicyConflict{}
+	for _, candidate := range krt.Fetch(ctx, agw.AgentgatewayPolicies) {
+		if candidate.Namespace == currentPolicy.Namespace && candidate.Name == currentPolicy.Name {
+			continue
+		}
+		if excludeUID != "" && candidate.UID == excludeUID {
+			continue
+		}
+		if candidate.Spec.Traffic == nil || candidate.Spec.Traffic.JWTAuthentication == nil {
+			continue
+		}
+		for _, targetRef := range collectPolicyAttachmentTargets(ctx, candidate, agw) {
+			targetGK := targetRef.GroupKind
+			if targetGK != wellknown.HTTPRouteGVK.GroupKind() && targetGK != wellknown.GRPCRouteGVK.GroupKind() {
+				continue
+			}
+			for _, parent := range routeGatewayParentsForRouteTarget(ctx, agw, candidate.Namespace, targetGK, targetRef.Name) {
+				if parent.Gateway != gateway || !listenerMayOverlap(gatewaySection, parent.Listener) {
+					continue
+				}
+				conflict := authPolicyConflict{
+					Gateway: gateway,
+					Policy: types.NamespacedName{
+						Namespace: candidate.Namespace,
+						Name:      candidate.Name,
+					},
+				}
+				conflictKeys[conflict.Gateway.String()+"/"+conflict.Policy.String()] = conflict
+			}
+		}
+	}
+
+	conflicts := make([]authPolicyConflict, 0, len(conflictKeys))
+	for _, conflict := range conflictKeys {
+		conflicts = append(conflicts, conflict)
+	}
+	return conflicts
+}
+
+func findGatewayOAuth2ConflictsForRouteParents(
+	ctx krt.HandlerContext,
+	agw *AgwCollections,
+	routeParents []routeGatewayParent,
+	currentPolicy types.NamespacedName,
+	excludeUID types.UID,
+) []authPolicyConflict {
+	conflictKeys := map[string]authPolicyConflict{}
+	for _, candidate := range krt.Fetch(ctx, agw.AgentgatewayPolicies) {
+		if candidate.Namespace == currentPolicy.Namespace && candidate.Name == currentPolicy.Name {
+			continue
+		}
+		if excludeUID != "" && candidate.UID == excludeUID {
+			continue
+		}
+		if candidate.Spec.Traffic == nil || candidate.Spec.Traffic.OAuth2 == nil {
+			continue
+		}
+		for _, routeParent := range routeParents {
+			sections := gatewayPolicySectionsForGateway(ctx, agw, candidate, routeParent.Gateway)
+			if slices.FindFunc(sections, func(section *gwv1.SectionName) bool {
+				return listenerMayOverlap(section, routeParent.Listener)
+			}) == nil {
+				continue
+			}
+			conflict := authPolicyConflict{
+				Gateway: routeParent.Gateway,
+				Policy: types.NamespacedName{
+					Namespace: candidate.Namespace,
+					Name:      candidate.Name,
+				},
+			}
+			conflictKeys[conflict.Gateway.String()+"/"+conflict.Policy.String()] = conflict
+		}
+	}
+
+	conflicts := make([]authPolicyConflict, 0, len(conflictKeys))
+	for _, conflict := range conflictKeys {
+		conflicts = append(conflicts, conflict)
+	}
+	return conflicts
+}
+
+func routeGatewayParentsForRouteTarget(
+	ctx krt.HandlerContext,
+	agw *AgwCollections,
+	namespace string,
+	targetGK schema.GroupKind,
+	targetName gwv1.ObjectName,
+) []routeGatewayParent {
+	var parentRefs []gwv1.ParentReference
+	switch targetGK {
+	case wellknown.HTTPRouteGVK.GroupKind():
+		route := ptr.Flatten(krt.FetchOne(ctx, agw.HTTPRoutes, krt.FilterKey(namespace+"/"+string(targetName))))
+		if route == nil {
+			return nil
+		}
+		parentRefs = route.Spec.ParentRefs
+	case wellknown.GRPCRouteGVK.GroupKind():
+		route := ptr.Flatten(krt.FetchOne(ctx, agw.GRPCRoutes, krt.FilterKey(namespace+"/"+string(targetName))))
+		if route == nil {
+			return nil
+		}
+		parentRefs = route.Spec.ParentRefs
+	default:
+		return nil
+	}
+
+	seen := map[string]routeGatewayParent{}
+	parents := make([]routeGatewayParent, 0, len(parentRefs))
+	for _, parentRef := range parentRefs {
+		kind := ptr.OrDefault(parentRef.Kind, gwv1.Kind(wellknown.GatewayKind))
+		group := ptr.OrDefault(parentRef.Group, gwv1.Group(wellknown.GatewayGVK.Group))
+		if string(kind) != wellknown.GatewayKind || string(group) != wellknown.GatewayGVK.Group {
+			continue
+		}
+		gatewayNamespace := string(ptr.OrDefault(parentRef.Namespace, gwv1.Namespace(namespace)))
+		gateway := types.NamespacedName{
+			Namespace: gatewayNamespace,
+			Name:      string(parentRef.Name),
+		}
+		var listener *gwv1.SectionName
+		if parentRef.SectionName != nil {
+			copied := *parentRef.SectionName
+			listener = &copied
+		}
+		listenerKey := ""
+		if listener != nil {
+			listenerKey = string(*listener)
+		}
+		key := gateway.String() + "/" + listenerKey
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		parent := routeGatewayParent{
+			Gateway:  gateway,
+			Listener: listener,
+		}
+		seen[key] = parent
+		parents = append(parents, parent)
+	}
+
+	sort.SliceStable(parents, func(i, j int) bool {
+		left := parents[i]
+		right := parents[j]
+		if left.Gateway.Namespace != right.Gateway.Namespace {
+			return left.Gateway.Namespace < right.Gateway.Namespace
+		}
+		if left.Gateway.Name != right.Gateway.Name {
+			return left.Gateway.Name < right.Gateway.Name
+		}
+		leftListener := ""
+		if left.Listener != nil {
+			leftListener = string(*left.Listener)
+		}
+		rightListener := ""
+		if right.Listener != nil {
+			rightListener = string(*right.Listener)
+		}
+		return leftListener < rightListener
+	})
+	return parents
+}
+
+func gatewayPolicySectionsForGateway(
+	ctx krt.HandlerContext,
+	agw *AgwCollections,
+	policy *agentgateway.AgentgatewayPolicy,
+	gateway types.NamespacedName,
+) []*gwv1.SectionName {
+	sections := make([]*gwv1.SectionName, 0, 1)
+	for _, targetRef := range collectPolicyAttachmentTargets(ctx, policy, agw) {
+		targetGK := targetRef.GroupKind
+		if targetGK != wellknown.GatewayGVK.GroupKind() || policy.Namespace != gateway.Namespace || string(targetRef.Name) != gateway.Name {
+			continue
+		}
+		sections = append(sections, cloneSectionName(targetRef.SectionName))
+	}
+	return sections
+}
+
+func listenerMayOverlap(gatewaySection, routeListener *gwv1.SectionName) bool {
+	if gatewaySection == nil || routeListener == nil {
+		return true
+	}
+	return *gatewaySection == *routeListener
 }
 
 func resolvePolicyAncestorRefs(
@@ -545,6 +968,15 @@ func translateTrafficPolicyToAgw(
 		}
 		agwPolicies = append(agwPolicies, basicAuthenticationPolicies...)
 	}
+
+	if traffic.OAuth2 != nil {
+		oauth2Policies, err := processOAuth2Policy(ctx, traffic.OAuth2, traffic.Phase, basePolicyName, policyName, policyTarget)
+		if err != nil {
+			logger.Error("error processing oauth2 policy", "error", err)
+			errs = append(errs, err)
+		}
+		agwPolicies = append(agwPolicies, oauth2Policies...)
+	}
 	return agwPolicies, errors.Join(errs...)
 }
 
@@ -659,7 +1091,33 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			}
 			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: inline}
 			p.Providers = append(p.Providers, jp)
+			continue
 		}
+		if o := pp.JWKS.OIDC; o != nil {
+			if o.BackendRef != nil {
+				kind := ptr.OrDefault(o.BackendRef.Kind, wellknown.ServiceKind)
+				group := ptr.OrDefault(o.BackendRef.Group, "")
+				gk := schema.GroupKind{
+					Group: string(group),
+					Kind:  string(kind),
+				}
+				if gk != wellknown.ServiceGVK.GroupKind() && gk != wellknown.AgentgatewayBackendGVK.GroupKind() {
+					errs = append(errs, errors.New(
+						"jwt oidc provider backend ref only supports Service and AgentgatewayBackend kinds",
+					))
+					continue
+				}
+			}
+			resolved, err := oidcResolverFactory().Resolve(ctx, policy.Name, policy.Namespace, pp.Issuer, o.BackendRef)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed resolving jwt oidc provider %q: %v", pp.Issuer, err))
+				continue
+			}
+			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: resolved.JwksInline}
+			p.Providers = append(p.Providers, jp)
+			continue
+		}
+		errs = append(errs, fmt.Errorf("jwt provider %q missing jwks source", pp.Issuer))
 	}
 
 	jwtPolicy := &api.Policy{
@@ -808,6 +1266,152 @@ func processAPIKeyAuthenticationPolicy(
 		"target", target)
 
 	return []AgwPolicy{{Policy: apiKeyPolicy}}, errors.Join(errs...)
+}
+
+func processOAuth2Policy(
+	ctx PolicyCtx,
+	oauth2 *agentgateway.OAuth2,
+	policyPhase *agentgateway.PolicyPhase,
+	basePolicyName string,
+	policy types.NamespacedName,
+	target *api.PolicyTarget,
+) ([]AgwPolicy, error) {
+	spec := &api.TrafficPolicySpec_OAuth2{
+		ProviderId: fmt.Sprintf("%s/%s", policy.Namespace, policy.Name),
+		ClientId:   string(oauth2.ClientID),
+		Scopes:     cast(oauth2.Scopes),
+	}
+	if oauth2.Issuer != nil &&
+		(oauth2.AuthorizationEndpoint != nil ||
+			oauth2.TokenEndpoint != nil ||
+			oauth2.EndSessionEndpoint != nil ||
+			len(oauth2.TokenEndpointAuthMethodsSupported) > 0) {
+		return nil, fmt.Errorf("oauth2 issuer may not be combined with explicit oauth2 endpoint fields")
+	}
+	switch {
+	case oauth2.Issuer != nil:
+		issuer := string(*oauth2.Issuer)
+		spec.OidcIssuer = issuer
+		spec.ProviderId = issuer
+		if oauth2.BackendRef != nil {
+			be, err := buildOAuth2ProviderBackendRef(ctx, *oauth2.BackendRef, policy.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			spec.ProviderBackend = be
+		}
+		resolvedProvider, err := oidcResolverFactory().Resolve(
+			ctx,
+			policy.Name,
+			policy.Namespace,
+			issuer,
+			oauth2.BackendRef,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed resolving oauth2 provider metadata: %v", err)
+		}
+		spec.AuthorizationEndpoint = ptr.Of(resolvedProvider.AuthorizationEndpoint)
+		spec.TokenEndpoint = ptr.Of(resolvedProvider.TokenEndpoint)
+		spec.JwksInline = ptr.Of(resolvedProvider.JwksInline)
+		if resolvedProvider.EndSessionEndpoint != "" {
+			spec.EndSessionEndpoint = ptr.Of(resolvedProvider.EndSessionEndpoint)
+		}
+		spec.TokenEndpointAuthMethodsSupported = resolvedProvider.TokenEndpointAuthMethodsSupported
+	case oauth2.AuthorizationEndpoint != nil && oauth2.TokenEndpoint != nil:
+		spec.ProviderId = string(*oauth2.AuthorizationEndpoint)
+		spec.AuthorizationEndpoint = castPtr(oauth2.AuthorizationEndpoint)
+		spec.TokenEndpoint = castPtr(oauth2.TokenEndpoint)
+		if oauth2.BackendRef != nil {
+			be, err := buildOAuth2ProviderBackendRef(ctx, *oauth2.BackendRef, policy.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			spec.ProviderBackend = be
+		}
+		if oauth2.EndSessionEndpoint != nil {
+			spec.EndSessionEndpoint = castPtr(oauth2.EndSessionEndpoint)
+		}
+		spec.TokenEndpointAuthMethodsSupported = cast(oauth2.TokenEndpointAuthMethodsSupported)
+	default:
+		return nil, fmt.Errorf("oauth2 must configure issuer or both authorizationEndpoint and tokenEndpoint")
+	}
+
+	switch {
+	case oauth2.ClientSecret.SecretRef != nil:
+		ref := oauth2.ClientSecret.SecretRef
+		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+ref.Name)))
+		if scrt == nil {
+			return nil, fmt.Errorf("oauth2 client secret %v not found", ref.Name)
+		}
+		d, ok := scrt.Data[ref.Key]
+		if !ok {
+			return nil, fmt.Errorf("oauth2 client secret %v found, but doesn't contain %q key", ref.Name, ref.Key)
+		}
+		spec.ClientSecret = string(d)
+	case oauth2.ClientSecret.Inline != nil:
+		spec.ClientSecret = *oauth2.ClientSecret.Inline
+	default:
+		return nil, fmt.Errorf("oauth2 requires clientSecret.inline or clientSecret.secretRef")
+	}
+
+	spec.RedirectUri = ptr.Of(string(oauth2.RedirectURI))
+	spec.AllowInsecureRedirectUri = oauth2.AllowInsecureRedirectURI
+	if oauth2.CookieName != nil {
+		spec.CookieName = castPtr(oauth2.CookieName)
+	}
+	if oauth2.SignOutPath != nil {
+		spec.SignOutPath = castPtr(oauth2.SignOutPath)
+	}
+	if oauth2.PostLogoutRedirectURI != nil {
+		spec.PostLogoutRedirectUri = castPtr(oauth2.PostLogoutRedirectURI)
+	}
+	if oauth2.RefreshableCookieMaxAgeSeconds != nil {
+		spec.RefreshableCookieMaxAgeSeconds = oauth2.RefreshableCookieMaxAgeSeconds
+	}
+
+	oauth2Policy := &api.Policy{
+		Key:    basePolicyName + oauth2PolicySuffix + attachmentName(target),
+		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Target: target,
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Phase: phase(policyPhase),
+				Kind: &api.TrafficPolicySpec_Oauth2{
+					Oauth2: spec,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated oauth2 policy",
+		"policy", basePolicyName,
+		"agentgateway_policy", oauth2Policy.Name,
+		"target", target)
+
+	return []AgwPolicy{{Policy: oauth2Policy}}, nil
+}
+
+func buildOAuth2ProviderBackendRef(
+	ctx PolicyCtx,
+	ref gwv1.BackendObjectReference,
+	namespace string,
+) (*api.BackendReference, error) {
+	kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
+	group := ptr.OrDefault(ref.Group, "")
+	gk := schema.GroupKind{
+		Group: string(group),
+		Kind:  string(kind),
+	}
+	if gk != wellknown.ServiceGVK.GroupKind() && gk != wellknown.AgentgatewayBackendGVK.GroupKind() {
+		return nil, errors.New(
+			"oauth2 provider backend ref only supports Service and AgentgatewayBackend kinds",
+		)
+	}
+	be, err := buildBackendRef(ctx, ref, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build oauth2 provider backend ref: %v", err)
+	}
+	return be, nil
 }
 
 func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) []AgwPolicy {

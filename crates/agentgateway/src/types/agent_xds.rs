@@ -1307,42 +1307,59 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					tps::jwt::Mode::Strict => http::jwt::Mode::Strict,
 					tps::jwt::Mode::Permissive => http::jwt::Mode::Permissive,
 				};
-				let providers = jwt
-					.providers
-					.iter()
-					.map(|p| {
-						let jwks_json = match &p.jwks_source {
-							Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline.clone(),
-							None => {
-								return Err(ProtoError::Generic(
-									"JWT policy missing JWKS source".to_string(),
-								));
-							},
-						};
-						let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
-							.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
-						let audiences = if p.audiences.is_empty() {
-							None
-						} else {
-							Some(p.audiences.clone())
-						};
-						let jwt_validation_options = p
-							.jwt_validation_options
-							.as_ref()
-							.map(|vo| http::jwt::JWTValidationOptions {
-								required_claims: vo.required_claims.iter().cloned().collect(),
-							})
-							.unwrap_or_default();
-						http::jwt::Provider::from_jwks(
-							jwk_set,
-							p.issuer.clone(),
-							audiences,
-							jwt_validation_options,
-						)
-						.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
-					})
-					.collect::<Result<Vec<_>, _>>()?;
-				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
+				let mut providers = Vec::with_capacity(jwt.providers.len());
+				let mut oidc_infos = Vec::new();
+				for p in &jwt.providers {
+					let audiences = if p.audiences.is_empty() {
+						None
+					} else {
+						Some(p.audiences.clone())
+					};
+					match &p.jwks_source {
+						Some(tps::jwt_provider::JwksSource::Inline(inline)) => {
+							let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(inline)
+								.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
+							let jwt_validation_options = p
+								.jwt_validation_options
+								.as_ref()
+								.map(|vo| http::jwt::JWTValidationOptions {
+									required_claims: vo.required_claims.iter().cloned().collect(),
+								})
+								.unwrap_or_default();
+							let provider = http::jwt::Provider::from_jwks(
+								jwk_set,
+								p.issuer.clone(),
+								audiences,
+								jwt_validation_options,
+							)
+							.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))?;
+							providers.push(provider);
+						},
+						Some(tps::jwt_provider::JwksSource::Oidc(oidc)) => {
+							let provider_backend = match resolve_simple_reference(oidc.provider_backend.as_ref())?
+							{
+								SimpleBackendReference::Invalid => None,
+								backend => Some(backend),
+							};
+							oidc_infos.push(http::jwt::OidcInfo {
+								issuer: p.issuer.clone(),
+								audiences,
+								provider_backend,
+							});
+						},
+						None => {
+							return Err(ProtoError::Generic(
+								"JWT policy missing JWKS source".to_string(),
+							));
+						},
+					}
+				}
+				let jwt_auth = http::jwt::Jwt::from_providers_with_oidc_infos(
+					providers,
+					mode,
+					jwt.forward.unwrap_or(false),
+					oidc_infos,
+				);
 				TrafficPolicy::JwtAuth(jwt_auth)
 			},
 			Some(tps::Kind::Transformation(tp)) => {
@@ -1588,6 +1605,57 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					})
 					.collect::<Result<Vec<_>, _>>()?;
 				TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(keys, mode))
+			},
+			Some(tps::Kind::Oauth2(o)) => {
+				let provider_backend = match resolve_simple_reference(o.provider_backend.as_ref())? {
+					SimpleBackendReference::Invalid => None,
+					backend => Some(backend),
+				};
+				let resolved_provider = match (o.authorization_endpoint.clone(), o.token_endpoint.clone()) {
+					(Some(authorization_endpoint), Some(token_endpoint)) => {
+						Some(Box::new(agent::ResolvedOAuth2Provider {
+							authorization_endpoint,
+							token_endpoint,
+							jwks_inline: o.jwks_inline.clone(),
+							end_session_endpoint: o.end_session_endpoint.clone(),
+							token_endpoint_auth_methods_supported: o
+								.token_endpoint_auth_methods_supported
+								.clone(),
+						}))
+					},
+					(None, None) => {
+						if o.jwks_inline.is_some() {
+							return Err(ProtoError::Generic(
+									"oauth2 policy cannot provide jwks_inline without authorization_endpoint and token_endpoint".to_string(),
+								));
+						}
+						None
+					},
+					_ => {
+						return Err(ProtoError::Generic(
+							"oauth2 policy must provide authorization_endpoint and token_endpoint together"
+								.to_string(),
+						));
+					},
+				};
+				let policy = OAuth2Policy {
+					provider_id: o.provider_id.clone(),
+					oidc_issuer: (!o.oidc_issuer.is_empty()).then(|| o.oidc_issuer.clone()),
+					provider_backend,
+					client_id: o.client_id.clone(),
+					client_secret: o.client_secret.clone().into(),
+					resolved_provider,
+					redirect_uri: o.redirect_uri.clone(),
+					allow_insecure_redirect_uri: o.allow_insecure_redirect_uri,
+					scopes: o.scopes.clone(),
+					cookie_name: o.cookie_name.clone(),
+					refreshable_cookie_max_age_seconds: o.refreshable_cookie_max_age_seconds,
+					sign_out_path: o.sign_out_path.clone(),
+					post_logout_redirect_uri: o.post_logout_redirect_uri.clone(),
+				};
+				let oauth2 = crate::http::oauth2::OAuth2::new(policy)
+					.map_err(|e| ProtoError::Generic(format!("invalid oauth2 policy: {e}")))?;
+				TrafficPolicy::OAuth2(oauth2)
 			},
 			Some(tps::Kind::HostRewrite(hr)) => {
 				let mode = tps::host_rewrite::Mode::try_from(hr.mode)?;
@@ -1858,7 +1926,9 @@ impl TryFrom<&proto::agent::Policy> for TargetedPolicy {
 			.and_then(PolicyTarget::try_from)?;
 
 		let policy = match &p.kind {
-			Some(pol::Kind::Traffic(spec)) => PolicyType::Traffic(PhasedTrafficPolicy::try_from(spec)?),
+			Some(pol::Kind::Traffic(spec)) => {
+				PolicyType::Traffic(Box::new(PhasedTrafficPolicy::try_from(spec)?))
+			},
 			Some(pol::Kind::Backend(spec)) => PolicyType::Backend(BackendPolicy::try_from(spec)?),
 			Some(pol::Kind::Frontend(spec)) => PolicyType::Frontend(FrontendPolicy::try_from(spec)?),
 			None => return Err(ProtoError::MissingRequiredField),

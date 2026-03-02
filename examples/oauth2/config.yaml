@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: oauth2
+      policies:
+        oauth2:
+          # Replace with your OIDC issuer (for example: https://accounts.google.com)
+          issuer: "https://issuer.example.com"
+          # Optional: route provider back-channel calls through a specific backend.
+          # Useful for private IdP connectivity and custom trust paths.
+          # providerBackend:
+          #   host: "idp.internal.example.com:443"
+          # Replace with your OAuth2 client ID.
+          clientId: "replace-with-client-id"
+
+          # Local/dev option: load secret from file (or set inline).
+          clientSecret:
+            file: ./examples/oauth2/client-secret.example.txt
+
+          # Alternative local inline secret:
+          # clientSecret: "replace-with-client-secret"
+
+          # Must exactly match the redirect URI configured in your IdP app.
+          redirectUri: "http://localhost:3000/oauth2/callback"
+          scopes:
+          - openid
+          - profile
+          - email
+          # Local sign-out endpoint.
+          # - Always clears the gateway session cookie.
+          # - If the IdP exposes end_session_endpoint, gateway redirects there with id_token_hint.
+          signOutPath: "/logout"
+          # Optional IdP post-logout return URL.
+          # Must be pre-registered in your IdP and use https (or http on loopback).
+          # postLogoutRedirectUri: "http://localhost:3000/signed-out"
+        # Optional: forward the OAuth2 access token upstream.
+        # backendAuth:
+        #   passthrough: {}
+      backends:
+      - host: localhost:8080

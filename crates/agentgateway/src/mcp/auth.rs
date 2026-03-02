@@ -14,14 +14,33 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{McpAuthentication, McpIDP};
 
+const OAUTH_PROTECTED_RESOURCE_PREFIX: &str = "/.well-known/oauth-protected-resource";
+const OAUTH_AUTHORIZATION_SERVER_PREFIX: &str = "/.well-known/oauth-authorization-server";
+const CLIENT_REGISTRATION_SEGMENT: &str = "client-registration";
+
 pub(super) fn is_well_known_endpoint(path: &str) -> bool {
-	path.starts_with("/.well-known/oauth-protected-resource")
-		|| path.starts_with("/.well-known/oauth-authorization-server")
+	path.starts_with(OAUTH_PROTECTED_RESOURCE_PREFIX)
+		|| path.starts_with(OAUTH_AUTHORIZATION_SERVER_PREFIX)
+}
+
+fn has_authorization_server_prefix(path: &str) -> bool {
+	path
+		.strip_prefix(OAUTH_AUTHORIZATION_SERVER_PREFIX)
+		.is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+}
+
+fn is_client_registration_endpoint(path: &str) -> bool {
+	has_authorization_server_prefix(path)
+		&& path
+			.rsplit('/')
+			.next()
+			.is_some_and(|segment| segment == CLIENT_REGISTRATION_SEGMENT)
 }
 
 pub(super) async fn apply_token_validation(
 	req: &mut Request,
 	auth: &McpAuthentication,
+	client: &PolicyClient,
 ) -> Result<(), ProxyError> {
 	// skip well-known OAuth endpoints for authn
 	if is_well_known_endpoint(req.uri().path()) {
@@ -42,9 +61,19 @@ pub(super) async fn apply_token_validation(
 		"MCP auth configured; validating Authorization header (mode={:?})",
 		auth.mode
 	);
-	auth.jwt_validator.apply(None, req).await.map_err(|e| {
-		create_auth_required_response(ProxyError::JwtAuthenticationFailure(e), req, auth)
-	})?;
+	auth
+		.jwt_validator
+		.apply(
+			&client.inputs.upstream,
+			client.inputs.oidc.as_ref(),
+			None,
+			None,
+			req,
+		)
+		.await
+		.map_err(|e| {
+			create_auth_required_response(ProxyError::JwtAuthenticationFailure(e), req, auth)
+		})?;
 	Ok(())
 }
 
@@ -55,12 +84,12 @@ pub(super) async fn enforce_authentication(
 ) -> Result<Option<Response>, ProxyError> {
 	// skip well-known OAuth endpoints for authn
 	if !is_well_known_endpoint(req.uri().path()) {
-		apply_token_validation(req, auth).await?;
+		apply_token_validation(req, auth, client).await?;
 	}
 
 	match req.uri().path() {
 		// TODO: indicate this is a DirectResponse
-		path if path.ends_with("client-registration") => Ok(Some(
+		path if is_client_registration_endpoint(path) => Ok(Some(
 			client_registration(req, auth, client.clone())
 				.await
 				.map_err(|e| {
@@ -69,10 +98,10 @@ pub(super) async fn enforce_authentication(
 				})
 				.into_response(),
 		)),
-		path if path.starts_with("/.well-known/oauth-protected-resource") => Ok(Some(
+		path if path.starts_with(OAUTH_PROTECTED_RESOURCE_PREFIX) => Ok(Some(
 			protected_resource_metadata(req, auth).await.into_response(),
 		)),
-		path if path.starts_with("/.well-known/oauth-authorization-server") => Ok(Some(
+		path if path.starts_with(OAUTH_AUTHORIZATION_SERVER_PREFIX) => Ok(Some(
 			authorization_server_metadata(req, auth, client.clone())
 				.await
 				.map_err(|e| {
@@ -282,4 +311,30 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::is_client_registration_endpoint;
+
+	#[test]
+	fn client_registration_endpoint_requires_expected_prefix_and_segment_suffix() {
+		assert!(is_client_registration_endpoint(
+			"/.well-known/oauth-authorization-server/mcp/client-registration"
+		));
+		assert!(is_client_registration_endpoint(
+			"/.well-known/oauth-authorization-server/client-registration"
+		));
+
+		assert!(!is_client_registration_endpoint(
+			"/.well-known/oauth-authorization-server/mcp/client-registration-extra"
+		));
+		assert!(!is_client_registration_endpoint(
+			"/.well-known/oauth-authorization-serverevil/mcp/client-registration"
+		));
+		assert!(!is_client_registration_endpoint("/mcp/client-registration"));
+		assert!(!is_client_registration_endpoint(
+			"/.well-known/oauth-authorization-server/mcp/client-registration/"
+		));
+	}
 }

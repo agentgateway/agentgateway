@@ -210,11 +210,13 @@ func GetTLSConfig(
 }
 
 func AppendPoolWithCertsFromConfigMap(pool *x509.CertPool, cm *corev1.ConfigMap) bool {
-	caCrts, ok := cm.Data["ca.crt"]
-	if !ok {
-		return false
+	if caCrts, ok := cm.Data["ca.crt"]; ok {
+		return pool.AppendCertsFromPEM([]byte(caCrts))
 	}
-	return pool.AppendCertsFromPEM([]byte(caCrts))
+	if caCrts, ok := cm.BinaryData["ca.crt"]; ok {
+		return pool.AppendCertsFromPEM(caCrts)
+	}
+	return false
 }
 
 func insecureSkipVerify(mode *agentgateway.InsecureTLSMode) bool {

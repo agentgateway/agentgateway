@@ -81,6 +81,19 @@ fn test_snapshot_matches_ref() {
 }
 
 #[test]
+fn test_new_request_exposes_jwt_claims() {
+	let req = build_test_request();
+	let executor = Executor::new_request(&req);
+	let expr = Expression::new_strict(r#"jwt.sub == "user123""#).expect("failed to compile");
+	let value = executor
+		.eval(&expr)
+		.expect("failed to evaluate")
+		.json()
+		.expect("failed to convert to json");
+	assert_eq!(value, json!(true));
+}
+
+#[test]
 fn test_executor_snapshot_round_trip() {
 	let mut req = build_test_request();
 	let req_snapshot = snapshot_request(&mut req);

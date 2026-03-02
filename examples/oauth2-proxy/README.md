@@ -4,6 +4,10 @@ This example shows how to integrate with [OAuth2 Proxy](https://oauth2-proxy.git
 In this example, we will setup GitHub Oauth authentication. However, the same concepts can be used with other providers,
 or with other authentication sources.
 
+> Note:
+> Agentgateway now includes a built-in OAuth2/OIDC traffic policy, so a separate `oauth2-proxy` deployment is no longer required for standard browser login flows.
+> Prefer `examples/oauth2` unless you explicitly need external `oauth2-proxy` behavior.
+
 ### Running the example
 
 First, create a [GitHub OAuth App](https://github.com/settings/applications/new).

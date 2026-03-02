@@ -5,6 +5,8 @@ mod buflist;
 pub mod cors;
 pub mod jwt;
 pub mod localratelimit;
+pub mod oauth2;
+pub mod oidc;
 pub mod retry;
 pub mod route;
 
@@ -67,6 +69,13 @@ pub fn version_str(v: &http::Version) -> &'static str {
 		http::Version::HTTP_3 => "HTTP/3",
 		_ => "unknown",
 	}
+}
+
+pub(crate) fn is_loopback_host(host: &str) -> bool {
+	host.eq_ignore_ascii_case("localhost")
+		|| host
+			.parse::<std::net::IpAddr>()
+			.is_ok_and(|ip| ip.is_loopback())
 }
 
 /// A mutable handle that can represent either a request or a response
@@ -685,10 +694,74 @@ impl PolicyResponse {
 
 pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut HeaderMap) {
 	if let Some(rh) = additional_headers {
+		let mut current_key: Option<http::header::HeaderName> = None;
 		for (k, v) in rh.into_iter() {
-			let Some(k) = k else { continue };
-			dest.insert(k, v);
+			if let Some(k) = k {
+				current_key = Some(k);
+			}
+			let Some(key) = current_key.as_ref().cloned() else {
+				continue;
+			};
+			if key == http::header::SET_COOKIE {
+				dest.append(key, v);
+			} else {
+				dest.insert(key, v);
+			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use http::{HeaderName, HeaderValue};
+
+	#[test]
+	fn merge_in_headers_preserves_multiple_set_cookie_values() {
+		let mut additional = HeaderMap::new();
+		additional.append(
+			http::header::SET_COOKIE,
+			HeaderValue::from_static("ag-session=abc; Path=/; HttpOnly"),
+		);
+		additional.append(
+			http::header::SET_COOKIE,
+			HeaderValue::from_static("ag-nonce=; Max-Age=0; Path=/; HttpOnly"),
+		);
+
+		let mut dest = HeaderMap::new();
+		dest.append(
+			http::header::SET_COOKIE,
+			HeaderValue::from_static("existing=1; Path=/; HttpOnly"),
+		);
+
+		merge_in_headers(Some(additional), &mut dest);
+
+		let values: Vec<_> = dest.get_all(http::header::SET_COOKIE).iter().collect();
+		assert_eq!(values.len(), 3);
+	}
+
+	#[test]
+	fn merge_in_headers_overwrites_non_set_cookie_values() {
+		let mut additional = HeaderMap::new();
+		additional.insert(
+			HeaderName::from_static("x-test"),
+			HeaderValue::from_static("new"),
+		);
+
+		let mut dest = HeaderMap::new();
+		dest.insert(
+			HeaderName::from_static("x-test"),
+			HeaderValue::from_static("old"),
+		);
+
+		merge_in_headers(Some(additional), &mut dest);
+
+		assert_eq!(
+			dest
+				.get(HeaderName::from_static("x-test"))
+				.and_then(|v| v.to_str().ok()),
+			Some("new")
+		);
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/test/util/file"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
@@ -186,4 +187,19 @@ func caFromConfigMap(t *testing.T, ctx plugins.PolicyCtx) *x509.CertPool {
 
 	assert.True(t, jwks_url.AppendPoolWithCertsFromConfigMap(certPool, cfgmap))
 	return certPool
+}
+
+func TestAppendPoolWithCertsFromConfigMapBinaryData(t *testing.T) {
+	ctx := setup(t, []string{getTestFile("svc-with-all-configurable-fields.yaml")})
+	source := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: "default", Name: "ca"})))
+	assert.NotNil(t, source)
+
+	certPool := x509.NewCertPool()
+	cfgmap := &corev1.ConfigMap{
+		BinaryData: map[string][]byte{
+			"ca.crt": []byte(source.Data["ca.crt"]),
+		},
+	}
+
+	assert.True(t, jwks_url.AppendPoolWithCertsFromConfigMap(certPool, cfgmap))
 }

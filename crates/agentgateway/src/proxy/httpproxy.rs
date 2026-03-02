@@ -1,5 +1,5 @@
 use rand::RngExt;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,6 +12,7 @@ use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
 use rand::seq::IndexedRandom;
+use rustls_pki_types::ServerName;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -80,10 +81,31 @@ async fn apply_request_policies(
 			.apply(response_policies.headers())?;
 	}
 
-	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
+	if let Some(oauth) = &policies.oauth2 {
+		let resp = oauth
+			.apply(&client.inputs.upstream, Some(&client), req)
 			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+			.map_err(ProxyResponse::from)?;
+		if let Some(dr) = resp.direct_response {
+			let mut dr = dr;
+			crate::http::merge_in_headers(resp.response_headers, dr.headers_mut());
+			return Err(ProxyResponse::DirectResponse(Box::new(dr)));
+		}
+		crate::http::merge_in_headers(resp.response_headers, response_policies.headers());
+	}
+
+	if policies.oauth2.is_none()
+		&& let Some(j) = &policies.jwt
+	{
+		j.apply(
+			&client.inputs.upstream,
+			client.inputs.oidc.as_ref(),
+			Some(&client),
+			Some(log),
+			req,
+		)
+		.await
+		.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;
@@ -246,10 +268,31 @@ async fn apply_gateway_policies(
 	ext_proc: Option<&mut ExtProcRequest>,
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
-	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
+	if let Some(oauth) = &policies.oauth2 {
+		let resp = oauth
+			.apply(&client.inputs.upstream, Some(&client), req)
 			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+			.map_err(ProxyResponse::from)?;
+		if let Some(dr) = resp.direct_response {
+			let mut dr = dr;
+			crate::http::merge_in_headers(resp.response_headers, dr.headers_mut());
+			return Err(ProxyResponse::DirectResponse(Box::new(dr)));
+		}
+		crate::http::merge_in_headers(resp.response_headers, response_headers);
+	}
+
+	if policies.oauth2.is_none()
+		&& let Some(j) = &policies.jwt
+	{
+		j.apply(
+			&client.inputs.upstream,
+			client.inputs.oidc.as_ref(),
+			Some(&client),
+			Some(log),
+			req,
+		)
+		.await
+		.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;
@@ -1903,6 +1946,15 @@ pub struct PolicyClient {
 }
 
 impl PolicyClient {
+	fn server_name_from_host(host: &str) -> Result<ServerName<'static>, ProxyError> {
+		if let Ok(ip) = host.parse::<IpAddr>() {
+			return Ok(ServerName::IpAddress(ip.into()));
+		}
+		ServerName::try_from(host.to_owned()).map_err(|e| {
+			ProxyError::ProcessingString(format!("invalid OIDC endpoint host `{host}` for SNI: {e}"))
+		})
+	}
+
 	pub async fn call_reference(
 		&self,
 		mut req: Request,
@@ -1928,6 +1980,46 @@ impl PolicyClient {
 		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
 		self
 			.internal_call_with_policies(req, backend.backend, pols)
+			.await
+	}
+
+	pub async fn call_oidc_provider(
+		&self,
+		req: Request,
+		backend_ref: &SimpleBackendReference,
+	) -> Result<Response, ProxyError> {
+		let endpoint_host = req
+			.uri()
+			.host()
+			.ok_or_else(|| ProxyError::ProcessingString("OIDC endpoint URI missing host".to_string()))?;
+		let endpoint_scheme = req.uri().scheme().cloned().ok_or_else(|| {
+			ProxyError::ProcessingString("OIDC endpoint URI missing scheme".to_string())
+		})?;
+		let endpoint_server_name = Self::server_name_from_host(endpoint_host)?;
+
+		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
+		trace!("resolved OIDC provider {:?} to {:?}", backend_ref, &backend);
+
+		let backend = BackendWithPolicies::from(backend);
+		let resolved = get_backend_policies(&self.inputs, &backend, &[], None);
+
+		// Provider calls intentionally use transport settings only (TLS + HTTP version behavior).
+		let mut provider_policies = BackendPolicies {
+			http: resolved.http.clone(),
+			..Default::default()
+		};
+
+		if let Some(mut tls) = resolved.backend_tls.clone() {
+			tls.hostname_override = Some(endpoint_server_name);
+			provider_policies.backend_tls = Some(tls);
+		} else if endpoint_scheme == Scheme::HTTPS {
+			let mut tls = crate::http::backendtls::SYSTEM_TRUST.clone();
+			tls.hostname_override = Some(endpoint_server_name);
+			provider_policies.backend_tls = Some(tls);
+		}
+
+		self
+			.internal_call_with_policies(req, backend.backend, provider_policies)
 			.await
 	}
 

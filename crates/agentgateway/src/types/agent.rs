@@ -1727,7 +1727,7 @@ impl From<TrafficPolicy> for PolicyType {
 }
 impl From<(TrafficPolicy, PolicyPhase)> for PolicyType {
 	fn from((p, phase): (TrafficPolicy, PolicyPhase)) -> Self {
-		Self::Traffic(PhasedTrafficPolicy { phase, policy: p })
+		Self::Traffic(Box::new(PhasedTrafficPolicy { phase, policy: p }))
 	}
 }
 
@@ -1751,7 +1751,7 @@ pub struct PhasedTrafficPolicy {
 #[serde(rename_all = "camelCase")]
 pub enum PolicyType {
 	Frontend(FrontendPolicy),
-	Traffic(PhasedTrafficPolicy),
+	Traffic(Box<PhasedTrafficPolicy>),
 	Backend(BackendPolicy),
 }
 
@@ -1870,6 +1870,8 @@ pub enum TrafficPolicy {
 	DirectResponse(filters::DirectResponse),
 	#[serde(rename = "cors")]
 	CORS(http::cors::Cors),
+	#[serde(rename = "oauth2")]
+	OAuth2(crate::http::oauth2::OAuth2),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1898,6 +1900,48 @@ pub enum BackendPolicy {
 
 #[apply(schema!)]
 pub struct A2aPolicy {}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedOAuth2Provider {
+	pub authorization_endpoint: String,
+	pub token_endpoint: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub jwks_inline: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub end_session_endpoint: Option<String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub token_endpoint_auth_methods_supported: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuth2Policy {
+	pub provider_id: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub oidc_issuer: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub provider_backend: Option<SimpleBackendReference>,
+	pub client_id: String,
+	#[serde(skip_serializing)]
+	pub client_secret: secrecy::SecretString,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub resolved_provider: Option<Box<ResolvedOAuth2Provider>>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub redirect_uri: Option<String>,
+	#[serde(default)]
+	pub allow_insecure_redirect_uri: bool,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub scopes: Vec<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub cookie_name: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub refreshable_cookie_max_age_seconds: Option<u64>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub sign_out_path: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub post_logout_redirect_uri: Option<String>,
+}
 
 #[apply(schema!)]
 pub struct Authorization(pub RuleSet);
@@ -2017,6 +2061,7 @@ impl LocalMcpAuthentication {
 
 		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: self.mode.into(),
+			forward: false,
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,
@@ -2028,9 +2073,10 @@ impl LocalMcpAuthentication {
 	pub async fn translate(
 		&self,
 		client: crate::client::Client,
+		oidc_provider: Arc<crate::http::oidc::OidcProvider>,
 	) -> anyhow::Result<McpAuthentication> {
 		let jwt_cfg = self.as_jwt()?;
-		let jwt = jwt_cfg.try_into(client).await?;
+		let jwt = jwt_cfg.try_into(client, oidc_provider).await?;
 		Ok(McpAuthentication {
 			issuer: self.issuer.clone(),
 			audiences: self.audiences.clone(),
