@@ -233,18 +233,8 @@ pub struct RawLogging {
 	fields: Option<RawLoggingFields>,
 	level: Option<RawLoggingLevel>,
 	format: Option<LoggingFormat>,
-	#[serde(default, deserialize_with = "deserialize_null_as_default_option")]
+	#[serde(default)]
 	otlp: Option<RawLoggingOtlp>,
-}
-
-fn deserialize_null_as_default_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-	D: serde::Deserializer<'de>,
-	T: serde::Deserialize<'de> + Default,
-{
-	Ok(Some(
-		Option::<T>::deserialize(deserializer)?.unwrap_or_default(),
-	))
 }
 
 #[apply(schema_de!)]
