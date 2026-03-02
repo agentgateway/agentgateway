@@ -25,7 +25,7 @@ fn make_rate_limit_with_failure_mode(
 		domain: "test-domain".to_string(),
 		target: Arc::new(SimpleBackendReference::Invalid),
 		descriptors: Arc::new(DescriptorSet(descriptor_entries)),
-		timeout: None,
+		policies: vec![],
 		failure_mode,
 	})
 }
