@@ -1923,6 +1923,7 @@ impl PolicyClient {
 			.call_reference_with_policies(req, backend_ref, Vec::new())
 			.await
 	}
+
 	pub async fn call_reference_with_policies(
 		&self,
 		mut req: Request,
