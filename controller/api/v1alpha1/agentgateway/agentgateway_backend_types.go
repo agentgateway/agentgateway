@@ -126,7 +126,7 @@ type AIBackend struct {
 	//            name: azure-secret
 	// ```
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=32
+	// +kubebuilder:validation:MaxItems=8
 	// +optional
 	// TODO: enable this rule when we don't need to support older k8s versions where this rule breaks // +kubebuilder:validation:XValidation:message="provider names must be unique across groups",rule="self.map(pg, pg.providers.map(pp, pp.name)).map(p, self.map(pg, pg.providers.map(pp, pp.name)).filter(cp, cp != p).exists(cp, p.exists(pn, pn in cp))).exists(p, !p)"
 	PriorityGroups []PriorityGroup `json:"groups,omitempty"`
@@ -137,7 +137,7 @@ type PriorityGroup struct {
 	// with automatic weighting based on health.
 	//
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=32
+	// +kubebuilder:validation:MaxItems=16
 	// +kubebuilder:validation:XValidation:message="provider names must be unique within a group",rule="self.all(p1, self.exists_one(p2, p1.name == p2.name))"
 	// +required
 	Providers []NamedLLMProvider `json:"providers"`
