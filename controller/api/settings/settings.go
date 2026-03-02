@@ -127,6 +127,10 @@ type Settings struct {
 	// Defaults to "istio-system".
 	IstioNamespace string `split_words:"true" default:"istio-system"`
 
+	// IstioRevision is the Istio revision of the Istio control plane.
+	// Defaults to "default".
+	IstioRevision string `split_words:"true" default:"default"`
+
 	// XdsServiceHost is the host that serves xDS config.
 	// It overrides xdsServiceName if set.
 	XdsServiceHost string `split_words:"true"`
