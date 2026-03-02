@@ -7,15 +7,15 @@ use crate::http::jwt::Claims;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
 use crate::mcp::mergestream::MergeFn;
-use crate::mcp::rbac::{CelExecWrapper, Identity, McpAuthorizationSet};
+use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::ServerSseMessage;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::AsyncLog;
+use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
+use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
-use agent_core::trcng;
 use futures_core::Stream;
 use http::StatusCode;
 use http::request::Parts;
@@ -30,7 +30,6 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
-use crate::telemetry::trc;
 
 const DELIMITER: &str = "_";
 
@@ -422,20 +421,7 @@ impl Relay {
 pub fn setup_request_log(
 	http: Parts,
 	span_name: &str,
-) -> (BoxedSpan, AsyncLog<MCPInfo>, CelExecWrapper) {
-	let traceparent = http.extensions.get::<TraceParent>();
-	let mut ctx = Context::new();
-	if let Some(tp) = traceparent {
-		ctx = ctx.with_remote_span_context(SpanContext::new(
-			tp.trace_id.into(),
-			tp.span_id.into(),
-			TraceFlags::new(tp.flags),
-			true,
-			TraceState::default(),
-		));
-	}
-	let claims = http.extensions.get::<Claims>().cloned();
-
+) -> (SpanWriteOnDrop, AsyncLog<MCPInfo>, CelExecWrapper) {
 	let log = http
 		.extensions
 		.get::<AsyncLog<MCPInfo>>()
@@ -450,11 +436,12 @@ pub fn setup_request_log(
 
 	let cel = CelExecWrapper::new(snap);
 
-	let tracer = http.extensions.get::<Option<std::sync::Arc<trc::Tracer>>>().cloned().unwrap_or_default();
-	let tracer = trcng::get_tracer();
-	let _span = trcng::start_span(span_name.to_string(), &Identity::new(claims))
-		.with_kind(SpanKind::Server)
-		.start_with_context(tracer, &ctx);
+	let tracer = http
+		.extensions
+		.get::<SpanWriter>()
+		.cloned()
+		.unwrap_or_default();
+	let _span = tracer.start(span_name.to_string());
 	(_span, log, cel)
 }
 
