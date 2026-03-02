@@ -1020,10 +1020,24 @@ async fn handle_upgrade(
 			},
 		};
 		let mut server = TokioIo::new(response_upgraded);
+		tracing::error!("howardjohn: in upgrade...");
 		if let Some(log) = log.as_ref()
 			&& let Some(llm_req) = log.llm_request.as_ref()
 			&& llm_req.input_format == InputFormat::Realtime
 		{
+			let llm = log.llm_response.clone();
+			let mut server = parse::websocket::parser(server, llm).await;
+			let _ = agent_core::copy::copy_bidirectional(
+				&mut TokioIo::new(req),
+				&mut server,
+				&agent_core::copy::ConnectionResult {},
+			)
+			.await;
+		} else if let Some(log) = log.as_ref()
+			&& let Some(llm_req) = dbg!(&log.llm_request).as_ref()
+			&& llm_req.input_format == InputFormat::ResponsesWebsocket
+		{
+			tracing::error!("howardjohn: PARSE");
 			let llm = log.llm_response.clone();
 			let mut server = parse::websocket::parser(server, llm).await;
 			let _ = agent_core::copy::copy_bidirectional(
@@ -1361,16 +1375,18 @@ async fn make_backend_call(
 	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
 			let mut req = req.take_and_snapshot(log.as_mut())?;
-			let route_type = llm_request_policies
-				.llm
-				.as_ref()
-				.map(|policy| policy.resolve_route(req.uri().path()))
-				.unwrap_or(llm::RouteType::Completions);
+			let route_type = dbg!(
+				llm_request_policies
+					.llm
+					.as_ref()
+					.map(|policy| policy.resolve_route(req.uri().path()))
+					.unwrap_or(llm::RouteType::Completions)
+			);
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
 			// First, we process the incoming request. This entails translating to the relevant provider,
 			// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like
 			// prompt enrichment, prompt guard, etc.
-			match route_type {
+			match dbg!(route_type) {
 				RouteType::Completions
 				| RouteType::Messages
 				| RouteType::Responses
@@ -1467,7 +1483,8 @@ async fn make_backend_call(
 							.expect("Failed to build response"),
 					);
 				},
-				RouteType::Passthrough | RouteType::Realtime => {
+				RouteType::Passthrough | RouteType::Realtime | RouteType::ResponsesWebsocket => {
+					tracing::error!("howardjohn: in pass mode...");
 					// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
 					// We do not need LLM policies nor token-based rate limits, etc.
 					// For realtime we do the same and handle everything in the Websocket handler
@@ -1485,6 +1502,21 @@ async fn make_backend_call(
 						log.add(|l| {
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
+								request_model,
+								streaming: true,
+								provider: llm.provider.provider(),
+								input_tokens: None,
+								params: Default::default(),
+								prompt: Default::default(),
+							})
+						});
+					}
+					if route_type == RouteType::ResponsesWebsocket {
+						tracing::error!("howardjohn: RESP WEBS");
+						let request_model = "unknown".into();
+						log.add(|l| {
+							l.llm_request = Some(LLMRequest {
+								input_format: InputFormat::ResponsesWebsocket,
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),
