@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/retry"
 	"k8s.io/apimachinery/pkg/types"
@@ -20,9 +19,6 @@ import (
 )
 
 func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, manifests ...string) {
-	for _, s := range log.Scopes() {
-		s.SetOutputLevel(log.DebugLevel)
-	}
 	err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifests...)
 	assert.NoError(t, err)
 }

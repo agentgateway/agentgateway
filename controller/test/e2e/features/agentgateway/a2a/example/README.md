@@ -1,39 +1,12 @@
-# A2A Test Server 
+# A2A Test Server
 
-This is a simple example of a server that can be used to test A2A gateways. 
+This folder keeps the Rust `http_server_only.rs` example used as the original
+behavior reference.
 
-## Setup
+Current e2e runs A2A through the shared `testbox` image, not a standalone
+`test-a2a-server` Docker build.
 
-### 1. Change the directory of this README.md and clone the repository.
-
-```bash
-cd $(git rev-parse --show-toplevel)/test/e2e/features/agentgateway/a2a/example
-git clone https://github.com/EmilLindfors/a2a-rs.git
-```
-
-### 2. Copy the Dockerfile:
-
-```bash
-cp Dockerfile http_server_only.rs a2a-rs/
-cd a2a-rs
-```
-
-### 3. Build the Docker image
-
-```bash
-export REPO="ghcr.io/agentgateway"
-export IMAGE="test-a2a-server"
-export IMAGE_VERSION="0.0.<version>"
-docker build -t $REPO/$IMAGE:$IMAGE_VERSION .
-```
-
-### 4. Start the container
-
-```shell
-docker run -d --name test-local -p 9999:9999 $REPO/$IMAGE:$IMAGE_VERSION
-```
-
-## Test:
+## Test
 
 1. Simple card test:
 
@@ -59,10 +32,4 @@ curl -X POST -H "Content-Type: application/json" -H "Authorization: Bearer secre
 {"id":"2","jsonrpc":"2.0","result":{"contextId":"default","history":[{"kind":"message","messageId":"test-456","parts":[{"kind":"text","text":"Hello task"}],"role":"user"},{"contextId":"","kind":"message","messageId":"4f3226f5-d644-402a-b01d-d94793346ce1","parts":[{"kind":"text","text":"Echo: Hello task"}],"role":"agent","taskId":"task-123"},{"kind":"message","messageId":"test-456","parts":[{"kind":"text","text":"Hello task"}],"role":"user"},{"contextId":"","kind":"message","messageId":"f1110c19-a516-48e1-a75c-7a5a50b1e09d","parts":[{"kind":"text","text":"Echo: Hello task"}],"role":"agent","taskId":"task-123"},{"kind":"message","messageId":"test-456","parts":[{"kind":"text","text":"Hello task"}],"role":"user"},{"contextId":"","kind":"message","messageId":"a16e4347-c374-4326-8fd2-91c1ba249bdf","parts":[{"kind":"text","text":"Echo: Hello task"}],"role":"agent","taskId":"task-123"}],"id":"task-123","kind":"task","status":{"message":{"contextId":"","kind":"message","messageId":"a16e4347-c374-4326-8fd2-91c1ba249bdf","parts":[{"kind":"text","text":"Echo: Hello task"}],"role":"agent","taskId":"task-123"},"state":"working","timestamp":"2025-10-15T03:20:22.839844199Z"}}}
   ```
 
-When you need to update the `kgateway-repo` push the container.
-
-```bash
-docker push $REPO/$IMAGE:$IMAGE_VERSION
-```
-
-3. Search locally in this repo and update the version reference to the container in the test yamls.
+No standalone A2A image publish/update is required for current e2e.

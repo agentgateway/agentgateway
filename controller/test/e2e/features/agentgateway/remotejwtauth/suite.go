@@ -40,7 +40,6 @@ var (
 	setup = base.TestCase{
 		Manifests: []string{
 			getTestFile("common.yaml"),
-			getTestFile("service.yaml"),
 		},
 	}
 

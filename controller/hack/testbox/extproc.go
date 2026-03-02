@@ -5,15 +5,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"io"
 	"log/slog"
 	"net"
-	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
-	"time"
 
 	core_v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	service_ext_proc_v3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -23,9 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var (
-	grpcport = flag.String("grpcport", ":18080", "grpcport")
-)
+const extProcPort = ":18080"
 
 type Instructions struct {
 	// Header key/value pairs to add to the request or response.
@@ -177,14 +170,10 @@ func (s *server) Process(srv service_ext_proc_v3.ExternalProcessor_ProcessServer
 	}
 }
 
-func main() {
-
-	flag.Parse()
-
-	lis, err := net.Listen("tcp", *grpcport)
+func startExtProcServer() (shutdownFunc, error) {
+	lis, err := net.Listen("tcp", extProcPort)
 	if err != nil {
-		slog.Error("failed to listen", "error", err)
-		os.Exit(1)
+		return nil, err
 	}
 
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(1000)}
@@ -194,22 +183,8 @@ func main() {
 
 	grpc_health_v1.RegisterHealthServer(s, &healthServer{})
 
-	slog.Info("starting gRPC server", "port", *grpcport)
-
-	var gracefulStop = make(chan os.Signal, 1)
-	signal.Notify(gracefulStop, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		sig := <-gracefulStop
-		slog.Info("caught sig", "sig", sig)
-		time.Sleep(time.Second)
-		slog.Info("graceful stop completed")
-		os.Exit(0)
-	}()
-	err = s.Serve(lis)
-	if err != nil {
-		slog.Error("killing server", "error", err)
-		os.Exit(1)
-	}
+	slog.Info("starting gRPC server", "port", extProcPort)
+	return serveGRPC("extproc", lis, s), nil
 }
 
 func getInstructionsFromHeaders(in *service_ext_proc_v3.HttpHeaders) string {

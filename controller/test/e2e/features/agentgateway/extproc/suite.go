@@ -150,8 +150,7 @@ func (s *testingSuite) TestExtProcWithHTTPRouteTargetRef() {
 	}
 }
 
-// The instructions format that the example extproc service understands.
-// See test/e2e/defaults/extproc/README.md for more details.
+// The instructions format that the extproc service in testbox understands.
 type instructions struct {
 	// Header key/value pairs to add to the request or response.
 	AddHeaders map[string]string `json:"addHeaders"`

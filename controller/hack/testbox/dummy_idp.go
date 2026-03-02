@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -20,15 +19,15 @@ var cert []byte
 //go:embed dummy-idp.key
 var key []byte
 
-func main() {
+func startDummyIDP() (shutdownFunc, error) {
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(cert) {
-		log.Fatal("failed to append Cert from PEM")
+		return nil, fmt.Errorf("failed to append Cert from PEM")
 	}
 
 	cert, err := tls.X509KeyPair(cert, key)
 	if err != nil {
-		log.Panic(err)
+		return nil, err
 	}
 
 	mux := http.NewServeMux()
@@ -95,7 +94,9 @@ func main() {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
 	}
 
-	log.Fatal(srv.ListenAndServeTLS("", ""))
+	return serveHTTP("dummy-idp", srv, func() error {
+		return srv.ListenAndServeTLS("", "")
+	}), nil
 }
 
 // OAuth2/OIDC constants

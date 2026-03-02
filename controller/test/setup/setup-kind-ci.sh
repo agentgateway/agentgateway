@@ -227,14 +227,8 @@ function step_setup_gateway_api() {
 }
 function step_preload_images() {(
   if [[ "${TEST_MODE}" == "e2e" ]]; then
-    make --no-print-directory -C controller dummy-idp-docker kind-load-dummy-idp &
-    make --no-print-directory -C controller extproc-server-docker kind-load-extproc-server &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/istio-testing/app:latest &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/istio-testing/ext-authz:1.25-dev &
+    make --no-print-directory -C controller testbox-docker kind-load-testbox &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/solo-public/docs/ai-guardrail-webhook@sha256:01f81b20ae016d123f018841c62daff7f6f44d0dec9189ecf591b3e99753c6b1 &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/mcp-admin-server:0.0.1 &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/mcp-website-fetcher:0.0.1 &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/test-a2a-server:0.0.11 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/otel/opentelemetry-collector-contrib:0.143.0 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/library/redis:7.4.3 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/envoyproxy/ratelimit:3e085e5b &
