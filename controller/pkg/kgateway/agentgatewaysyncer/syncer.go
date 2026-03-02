@@ -468,8 +468,8 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 	meshConfigMapName := GetMeshConfigMapName(cols.IstioRevision)
 	meshConfig := krt.NewSingleton(func(ctx krt.HandlerContext) *ambient.MeshConfig {
 		cm := krt.FetchOne(ctx, cols.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: cols.IstioNamespace, Name: meshConfigMapName}))
-		if cm != nil {
-			if mc := ParseMeshConfigFromConfigMap(*cm); mc != nil {
+		if flattened := ptr.Flatten(cm); flattened != nil {
+			if mc := ParseMeshConfigFromConfigMap(flattened); mc != nil {
 				return &ambient.MeshConfig{MeshConfig: mc}
 			}
 		}
