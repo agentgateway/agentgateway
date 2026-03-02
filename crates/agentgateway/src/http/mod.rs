@@ -453,6 +453,7 @@ pub fn apply_header_or_pseudo(
 pub mod x_headers {
 	use http::HeaderName;
 
+	// De facto standard (x- prefix), used by OpenAI, GitHub, etc.
 	pub const X_RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
 	pub const X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 	pub const X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
@@ -468,6 +469,12 @@ pub mod x_headers {
 		HeaderName::from_static("x-ratelimit-reset-requests-day");
 	pub const X_RATELIMIT_RESET_TOKENS_MINUTE: HeaderName =
 		HeaderName::from_static("x-ratelimit-reset-tokens-minute");
+
+	// IETF standard (draft-ietf-httpapi-ratelimit-headers), used by Envoy ratelimit server.
+	pub const RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("ratelimit-limit");
+	pub const RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("ratelimit-remaining");
+	pub const RATELIMIT_RESET: HeaderName = HeaderName::from_static("ratelimit-reset");
+	pub const RETRY_AFTER: HeaderName = HeaderName::from_static("retry-after");
 }
 
 pub fn modify_req(
@@ -708,12 +715,17 @@ fn merge_ratelimit_value(
 	incoming: &HeaderValue,
 ) -> Option<HeaderValue> {
 	use x_headers::*;
-	let keep_min = *name == X_RATELIMIT_REMAINING || *name == X_RATELIMIT_LIMIT;
+	let keep_min = *name == X_RATELIMIT_REMAINING
+		|| *name == X_RATELIMIT_LIMIT
+		|| *name == RATELIMIT_REMAINING
+		|| *name == RATELIMIT_LIMIT;
 	let keep_max = *name == X_RATELIMIT_RESET
 		|| *name == X_RATELIMIT_RESET_REQUESTS
 		|| *name == X_RATELIMIT_RESET_TOKENS
 		|| *name == X_RATELIMIT_RESET_REQUESTS_DAY
 		|| *name == X_RATELIMIT_RESET_TOKENS_MINUTE
+		|| *name == RATELIMIT_RESET
+		|| *name == RETRY_AFTER
 		|| *name == RETRY_AFTER_MS;
 
 	if !keep_min && !keep_max {
@@ -946,5 +958,57 @@ mod merge_header_tests {
 		dest.insert("x-ratelimit-remaining", hv("42"));
 		merge_in_headers(None, &mut dest);
 		assert_eq!(dest.get("x-ratelimit-remaining").unwrap(), "42");
+	}
+
+	// IETF-standard header tests (without x- prefix)
+
+	#[test]
+	fn ietf_remaining_keeps_lower() {
+		let mut dest = HeaderMap::new();
+		dest.insert("ratelimit-remaining", hv("95"));
+		let mut src = HeaderMap::new();
+		src.insert("ratelimit-remaining", hv("42"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("ratelimit-remaining").unwrap(), "42");
+	}
+
+	#[test]
+	fn ietf_remaining_keeps_existing_when_lower() {
+		let mut dest = HeaderMap::new();
+		dest.insert("ratelimit-remaining", hv("10"));
+		let mut src = HeaderMap::new();
+		src.insert("ratelimit-remaining", hv("50"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("ratelimit-remaining").unwrap(), "10");
+	}
+
+	#[test]
+	fn ietf_limit_keeps_lower() {
+		let mut dest = HeaderMap::new();
+		dest.insert("ratelimit-limit", hv("100"));
+		let mut src = HeaderMap::new();
+		src.insert("ratelimit-limit", hv("50"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("ratelimit-limit").unwrap(), "50");
+	}
+
+	#[test]
+	fn ietf_reset_keeps_higher() {
+		let mut dest = HeaderMap::new();
+		dest.insert("ratelimit-reset", hv("1000"));
+		let mut src = HeaderMap::new();
+		src.insert("ratelimit-reset", hv("2000"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("ratelimit-reset").unwrap(), "2000");
+	}
+
+	#[test]
+	fn retry_after_keeps_higher() {
+		let mut dest = HeaderMap::new();
+		dest.insert("retry-after", hv("30"));
+		let mut src = HeaderMap::new();
+		src.insert("retry-after", hv("60"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("retry-after").unwrap(), "60");
 	}
 }
