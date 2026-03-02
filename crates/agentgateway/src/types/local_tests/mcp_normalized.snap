@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 48
 description: "Config normalization test for mcp: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -27,6 +28,17 @@ binds:
                           - "jwt.sub == \"test-user\" && mcp.tool.name == \"add\""
                           - "mcp.tool.name == \"printEnv\" && jwt.nested.key == \"value\""
                         deny: []
+                  - mcpRemoteRateLimit:
+                      descriptors:
+                        - entries:
+                            - - user
+                              - jwt.sub
+                            - - tool
+                              - mcp.tool.name
+                          type: requests
+                      domain: mcp-ratelimit
+                      failureMode: failClosed
+                      inlineBackend: "127.0.0.1:8081"
                 weight: 1
             inlinePolicies:
               - cors:

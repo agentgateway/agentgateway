@@ -117,6 +117,7 @@ pub struct BackendPolicies {
 
 	pub mcp_authorization: Option<McpAuthorizationSet>,
 	pub mcp_authentication: Option<McpAuthentication>,
+	pub mcp_remote_rate_limit: Option<mcp::remoteratelimit::McpRemoteRateLimit>,
 
 	pub http: Option<types::backend::HTTP>,
 	pub tcp: Option<types::backend::TCP>,
@@ -145,6 +146,7 @@ impl BackendPolicies {
 			llm: other.llm.or(self.llm),
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
+			mcp_remote_rate_limit: other.mcp_remote_rate_limit.or(self.mcp_remote_rate_limit),
 			inference_routing: other.inference_routing.or(self.inference_routing),
 			http: other.http.or(self.http),
 			tcp: other.tcp.or(self.tcp),
@@ -660,6 +662,9 @@ impl Store {
 				},
 				BackendPolicy::McpAuthentication(p) => {
 					pol.mcp_authentication.get_or_insert_with(|| p.clone());
+				},
+				BackendPolicy::McpRemoteRateLimit(p) => {
+					pol.mcp_remote_rate_limit.get_or_insert_with(|| p.clone());
 				},
 			}
 		}

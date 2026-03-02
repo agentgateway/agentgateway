@@ -53,6 +53,7 @@ impl ProxyResponse {
 			ProxyError::BasicAuthenticationFailure(_) => ProxyResponseReason::BasicAuth,
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
+			ProxyError::MCP(mcp::Error::RateLimited(_, _)) => ProxyResponseReason::RateLimit,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
 			ProxyError::AuthorizationFailed | ProxyError::CsrfValidationFailed => {
 				ProxyResponseReason::Authorization
@@ -271,6 +272,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::MCP(mcp::Error::RateLimited(_, _)) => StatusCode::TOO_MANY_REQUESTS,
 		};
 		let msg = self.to_string();
 		let mut rb = ::http::Response::builder().status(code);
@@ -345,6 +347,25 @@ impl ProxyError {
 				error: ErrorData {
 					code: ErrorCode::INVALID_PARAMS,
 					message: e.to_string().into(),
+					data: None,
+				},
+			})
+			.unwrap_or_default();
+			return rb
+				.header("content-type", "application/json")
+				.body(http::Body::from(msg))
+				.unwrap();
+		}
+		if let ProxyError::MCP(mcp::Error::RateLimited(ref req_id, ref response_headers)) = self {
+			for (name, value) in response_headers {
+				rb = rb.header(name, value);
+			}
+			let msg = serde_json::to_string(&JsonRpcError {
+				jsonrpc: Default::default(),
+				id: req_id.clone(),
+				error: ErrorData {
+					code: ErrorCode::INTERNAL_ERROR,
+					message: "rate limited".into(),
 					data: None,
 				},
 			})
@@ -433,4 +454,81 @@ pub fn resolve_simple_backend_with_policies(
 		backend,
 		inline_policies,
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use ::http::HeaderMap;
+	use futures_util::{FutureExt, StreamExt};
+	use rmcp::model::RequestId;
+
+	use super::*;
+
+	#[test]
+	fn mcp_rate_limited_maps_to_rate_limit_reason() {
+		let req_id = RequestId::Number(1);
+		let err = ProxyError::MCP(mcp::Error::RateLimited(req_id, HeaderMap::new()));
+		let response = ProxyResponse::Error(err);
+		assert_eq!(response.as_reason(), ProxyResponseReason::RateLimit);
+	}
+
+	#[test]
+	fn generic_mcp_error_maps_to_mcp_reason() {
+		let err = ProxyError::MCP(mcp::Error::MethodNotAllowed);
+		let response = ProxyResponse::Error(err);
+		assert_eq!(response.as_reason(), ProxyResponseReason::MCP);
+	}
+
+	#[test]
+	fn rate_limit_exceeded_maps_to_rate_limit_reason() {
+		let err = ProxyError::RateLimitExceeded {
+			limit: 10,
+			remaining: 0,
+			reset_seconds: 60,
+		};
+		let response = ProxyResponse::Error(err);
+		assert_eq!(response.as_reason(), ProxyResponseReason::RateLimit);
+	}
+
+	#[test]
+	fn mcp_rate_limited_into_response_returns_429_with_headers() {
+		let req_id = RequestId::Number(42);
+		let mut headers = HeaderMap::new();
+		headers.insert("x-ratelimit-limit", "100".parse().unwrap());
+		headers.insert("x-ratelimit-remaining", "0".parse().unwrap());
+
+		let err = ProxyError::MCP(mcp::Error::RateLimited(req_id, headers));
+		let resp = err.into_response();
+
+		assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+		assert_eq!(resp.headers().get("x-ratelimit-limit").unwrap(), "100");
+		assert_eq!(resp.headers().get("x-ratelimit-remaining").unwrap(), "0");
+		assert_eq!(
+			resp.headers().get("content-type").unwrap(),
+			"application/json"
+		);
+	}
+
+	#[test]
+	fn mcp_rate_limited_into_response_contains_jsonrpc_error() {
+		let req_id = RequestId::Number(7);
+		let err = ProxyError::MCP(mcp::Error::RateLimited(req_id, HeaderMap::new()));
+		let resp = err.into_response();
+
+		let body_bytes = resp
+			.into_body()
+			.into_data_stream()
+			.next()
+			.now_or_never()
+			.expect("body should be immediately available");
+		let body_str = match body_bytes {
+			Some(Ok(bytes)) => String::from_utf8(bytes.to_vec()).unwrap(),
+			_ => panic!("expected body data"),
+		};
+
+		let parsed: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+		assert_eq!(parsed["jsonrpc"], "2.0");
+		assert_eq!(parsed["id"], 7);
+		assert_eq!(parsed["error"]["message"], "rate limited");
+	}
 }

@@ -107,14 +107,21 @@ impl App {
 			.mcp_authorization
 			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));
 		let authn = backend_policies.mcp_authentication;
+		let remote_rate_limit = backend_policies.mcp_remote_rate_limit;
 
 		// Store an empty value, we will populate each field async
 		let logy = log.mcp_status.clone();
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
 
-		authorization_policies.register(log.cel.ctx());
-		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
+		let ctx = log.cel.ctx();
+		authorization_policies.register(ctx);
+		if let Some(rrl) = &remote_rate_limit {
+			for expr in rrl.expressions() {
+				ctx.register_expression(expr);
+			}
+		}
+		ctx.maybe_buffer_request_body(&mut req).await;
 
 		// `response` is not valid here, since we run authz first
 		// MCP context is added later. The context is inserted after
@@ -141,6 +148,7 @@ impl App {
 				RelayInputs {
 					backend: backends.clone(),
 					policies: authorization_policies.clone(),
+					remote_rate_limit: remote_rate_limit.clone(),
 					client: client.clone(),
 				},
 			))
@@ -157,6 +165,7 @@ impl App {
 				RelayInputs {
 					backend: backends.clone(),
 					policies: authorization_policies.clone(),
+					remote_rate_limit: remote_rate_limit.clone(),
 					client: client.clone(),
 				},
 			))

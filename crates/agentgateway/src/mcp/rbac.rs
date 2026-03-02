@@ -27,6 +27,10 @@ impl CelExecWrapper {
 	pub fn new(snap: Arc<Option<RequestSnapshot>>) -> CelExecWrapper {
 		CelExecWrapper(snap)
 	}
+
+	pub fn snapshot(&self) -> Option<&RequestSnapshot> {
+		self.0.as_ref().as_ref()
+	}
 }
 #[derive(Clone, Debug)]
 pub struct McpAuthorizationSet(RuleSets);

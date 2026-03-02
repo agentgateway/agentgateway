@@ -26,6 +26,11 @@ use crate::mcp::{ClientError, MCPOperation, rbac};
 use crate::proxy::ProxyError;
 use crate::{mcp, *};
 
+fn apply_rate_limit_headers(mut resp: Response, rl_headers: ::http::HeaderMap) -> Response {
+	resp.headers_mut().extend(rl_headers);
+	resp
+}
+
 #[derive(Debug, Clone)]
 pub struct Session {
 	encoder: http::sessionpersistence::Encoder,
@@ -171,6 +176,10 @@ impl Session {
 					.map_err(ProxyError::Body)?;
 				Err(mcp::Error::UpstreamError(Box::new(resp)).into())
 			},
+			Err(UpstreamError::RateLimited { response_headers }) if req_id.is_some() => {
+				Err(mcp::Error::RateLimited(req_id.unwrap(), response_headers).into())
+			},
+			Err(UpstreamError::RateLimited { .. }) => Err(ProxyError::RateLimitFailed),
 			Err(UpstreamError::Proxy(p)) => Err(p),
 			Err(UpstreamError::Authorization {
 				resource_type,
@@ -239,10 +248,12 @@ impl Session {
 						log.non_atomic_mutate(|l| {
 							l.resource = Some(MCPOperation::Tool);
 						});
-						self
+						let rl_headers = self.relay.check_rate_limit(&cel, None).await?;
+						let resp = self
 							.relay
 							.send_fanout(r, ctx, self.relay.merge_tools(cel))
-							.await
+							.await?;
+						Ok(apply_rate_limit_headers(resp, rl_headers))
 					},
 					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
 						self
@@ -254,20 +265,24 @@ impl Session {
 						log.non_atomic_mutate(|l| {
 							l.resource = Some(MCPOperation::Prompt);
 						});
-						self
+						let rl_headers = self.relay.check_rate_limit(&cel, None).await?;
+						let resp = self
 							.relay
 							.send_fanout(r, ctx, self.relay.merge_prompts(cel))
-							.await
+							.await?;
+						Ok(apply_rate_limit_headers(resp, rl_headers))
 					},
 					ClientRequest::ListResourcesRequest(_) => {
 						if !self.relay.is_multiplexing() {
 							log.non_atomic_mutate(|l| {
 								l.resource = Some(MCPOperation::Resource);
 							});
-							self
+							let rl_headers = self.relay.check_rate_limit(&cel, None).await?;
+							let resp = self
 								.relay
 								.send_fanout(r, ctx, self.relay.merge_resources(cel))
-								.await
+								.await?;
+							Ok(apply_rate_limit_headers(resp, rl_headers))
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 							// Find a mapping of URL
@@ -281,10 +296,12 @@ impl Session {
 							log.non_atomic_mutate(|l| {
 								l.resource = Some(MCPOperation::ResourceTemplates);
 							});
-							self
+							let rl_headers = self.relay.check_rate_limit(&cel, None).await?;
+							let resp = self
 								.relay
 								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel))
-								.await
+								.await?;
+							Ok(apply_rate_limit_headers(resp, rl_headers))
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 							// Find a mapping of URL
@@ -301,22 +318,22 @@ impl Session {
 							l.target_name = Some(service_name.to_string());
 							l.resource = Some(MCPOperation::Tool);
 						});
-						if !self.relay.policies.validate(
-							&rbac::ResourceType::Tool(rbac::ResourceId::new(
-								service_name.to_string(),
-								tool.to_string(),
-							)),
-							&cel,
-						) {
+						let resource = rbac::ResourceType::Tool(rbac::ResourceId::new(
+							service_name.to_string(),
+							tool.to_string(),
+						));
+						if !self.relay.policies.validate(&resource, &cel) {
 							return Err(UpstreamError::Authorization {
 								resource_type: "tool".to_string(),
 								resource_name: name.to_string(),
 							});
 						}
+						let rl_headers = self.relay.check_rate_limit(&cel, Some(&resource)).await?;
 
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
-						self.relay.send_single(r, ctx, service_name).await
+						let resp = self.relay.send_single(r, ctx, service_name).await?;
+						Ok(apply_rate_limit_headers(resp, rl_headers))
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
@@ -326,20 +343,20 @@ impl Session {
 							l.resource_name = Some(prompt.to_string());
 							l.resource = Some(MCPOperation::Prompt);
 						});
-						if !self.relay.policies.validate(
-							&rbac::ResourceType::Prompt(rbac::ResourceId::new(
-								service_name.to_string(),
-								prompt.to_string(),
-							)),
-							&cel,
-						) {
+						let resource = rbac::ResourceType::Prompt(rbac::ResourceId::new(
+							service_name.to_string(),
+							prompt.to_string(),
+						));
+						if !self.relay.policies.validate(&resource, &cel) {
 							return Err(UpstreamError::Authorization {
 								resource_type: "prompt".to_string(),
 								resource_name: name.to_string(),
 							});
 						}
+						let rl_headers = self.relay.check_rate_limit(&cel, Some(&resource)).await?;
 						gpr.params.name = prompt.to_string();
-						self.relay.send_single(r, ctx, service_name).await
+						let resp = self.relay.send_single(r, ctx, service_name).await?;
+						Ok(apply_rate_limit_headers(resp, rl_headers))
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						if let Some(service_name) = self.relay.default_target_name() {
@@ -349,19 +366,19 @@ impl Session {
 								l.resource_name = Some(uri.to_string());
 								l.resource = Some(MCPOperation::Resource);
 							});
-							if !self.relay.policies.validate(
-								&rbac::ResourceType::Resource(rbac::ResourceId::new(
-									service_name.to_string(),
-									uri.to_string(),
-								)),
-								&cel,
-							) {
+							let resource = rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								uri.to_string(),
+							));
+							if !self.relay.policies.validate(&resource, &cel) {
 								return Err(UpstreamError::Authorization {
 									resource_type: "resource".to_string(),
 									resource_name: uri.to_string(),
 								});
 							}
-							self.relay.send_single_without_multiplexing(r, ctx).await
+							let rl_headers = self.relay.check_rate_limit(&cel, Some(&resource)).await?;
+							let resp = self.relay.send_single_without_multiplexing(r, ctx).await?;
+							Ok(apply_rate_limit_headers(resp, rl_headers))
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 							// Find a mapping of URL
@@ -637,5 +654,40 @@ fn get_client_info() -> ClientInfo {
 			version: BuildInfo::new().version.to_string(),
 			..Default::default()
 		},
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn apply_rate_limit_headers_adds_headers() {
+		let resp = ::http::Response::builder()
+			.status(200)
+			.body(crate::http::Body::empty())
+			.unwrap();
+
+		let mut rl_headers = ::http::HeaderMap::new();
+		rl_headers.insert("x-ratelimit-limit", "100".parse().unwrap());
+		rl_headers.insert("x-ratelimit-remaining", "42".parse().unwrap());
+
+		let resp = apply_rate_limit_headers(resp, rl_headers);
+		assert_eq!(resp.status(), 200);
+		assert_eq!(resp.headers().get("x-ratelimit-limit").unwrap(), "100");
+		assert_eq!(resp.headers().get("x-ratelimit-remaining").unwrap(), "42");
+	}
+
+	#[test]
+	fn apply_rate_limit_headers_empty_headers_is_noop() {
+		let resp = ::http::Response::builder()
+			.status(200)
+			.header("existing", "value")
+			.body(crate::http::Body::empty())
+			.unwrap();
+
+		let resp = apply_rate_limit_headers(resp, ::http::HeaderMap::new());
+		assert_eq!(resp.headers().get("existing").unwrap(), "value");
+		assert_eq!(resp.headers().len(), 1);
 	}
 }

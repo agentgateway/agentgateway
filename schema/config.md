@@ -158,6 +158,87 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit`|Rate limit MCP requests. State is managed by a remote server, applied at the backend level.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service.name`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service.port`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)domain`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies`|Policies to connect to the backend|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.add`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.set`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.remove`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.add`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.set`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.remove`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.scheme`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.authority`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)full`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)host`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)port`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.path`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.path.(any)(1)full`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.path.(any)(1)prefix`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS`|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS.cert`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS.key`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS.root`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS.hostname`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS.insecure`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS.insecureHost`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS.alpn`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendTLS.subjectAltNames`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth`|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)passthrough`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)key`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)key.(any)file`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)region`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.http`|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.http.version`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.http.requestTimeout`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp`|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives.enabled`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives.time`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives.interval`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives.retries`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout.secs`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout.nanos`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors[].entries`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors[].entries[].key`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors[].entries[].value`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors[].type`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`binds[].listeners[].routes[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`||
@@ -2979,6 +3060,87 @@
 |`policies[].policy.mcpAuthentication.mode`||
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.mcpRemoteRateLimit`|Rate limit MCP requests. State is managed by a remote server, applied at the backend level.|
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service.name`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service.name.namespace`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service.name.hostname`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service.port`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.mcpRemoteRateLimit.(any)domain`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies`|Policies to connect to the backend|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.add`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.set`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.remove`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.add`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.set`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.remove`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.scheme`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.authority`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)full`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)host`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)port`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.path`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.path.(any)(1)full`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.path.(any)(1)prefix`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.requestRedirect.status`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS`|Send TLS to the backend.|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS.cert`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS.key`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS.root`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS.hostname`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS.insecure`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS.insecureHost`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS.alpn`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendTLS.subjectAltNames`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth`|Authenticate to the backend.|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)passthrough`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)key`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)key.(any)file`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)region`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.http`|Specify HTTP settings for the backend|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.http.version`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.http.requestTimeout`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp`|Specify TCP settings for the backend|
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp.keepalives`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp.keepalives.enabled`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp.keepalives.time`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp.keepalives.interval`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp.keepalives.retries`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout.secs`||
+|`policies[].policy.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout.nanos`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors[].entries`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors[].entries[].key`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors[].entries[].value`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors[].type`||
+|`policies[].policy.mcpRemoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`policies[].policy.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`||
@@ -5031,6 +5193,87 @@
 |`mcp.policies.mcpAuthentication.mode`||
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.mcpRemoteRateLimit`|Rate limit MCP requests. State is managed by a remote server, applied at the backend level.|
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service.name`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service.name.namespace`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service.name.hostname`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service.port`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.mcpRemoteRateLimit.(any)domain`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies`|Policies to connect to the backend|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.add`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.set`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestHeaderModifier.remove`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.add`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.set`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.responseHeaderModifier.remove`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.scheme`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.authority`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)full`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)host`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.authority.(any)(1)port`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.path`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.path.(any)(1)full`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.path.(any)(1)prefix`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.requestRedirect.status`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS`|Send TLS to the backend.|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS.cert`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS.key`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS.root`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS.hostname`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS.insecure`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS.insecureHost`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS.alpn`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendTLS.subjectAltNames`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth`|Authenticate to the backend.|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)passthrough`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)key`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)key.(any)file`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)region`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.http`|Specify HTTP settings for the backend|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.http.version`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.http.requestTimeout`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp`|Specify TCP settings for the backend|
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives.enabled`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives.time`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives.interval`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp.keepalives.retries`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout.secs`||
+|`mcp.policies.mcpRemoteRateLimit.(any)policies.tcp.connectTimeout.nanos`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors[].entries`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors[].entries[].key`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors[].entries[].value`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors[].type`||
+|`mcp.policies.mcpRemoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`mcp.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`||

@@ -1072,6 +1072,18 @@
             }
           ]
         },
+        "mcpRemoteRateLimit": {
+          "description": "Rate limit MCP requests. State is managed by a remote server, applied at the backend level.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemoteRateLimit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "a2a": {
           "description": "Mark this traffic as A2A to enable A2A processing and telemetry.",
           "anyOf": [
@@ -1760,290 +1772,14 @@
       },
       "additionalProperties": false
     },
-    "A2aPolicy": {
-      "type": "object",
-      "additionalProperties": false
-    },
-    "Policy": {
+    "RemoteRateLimit": {
       "type": "object",
       "properties": {
-        "promptGuard": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptGuard"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "defaults": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
-        "overrides": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
-        "transformations": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/Expression"
-          }
-        },
-        "prompts": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptEnrichment"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "modelAliases": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "promptCaching": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptCachingConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "routes": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/RouteType"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "PromptGuard": {
-      "type": "object",
-      "properties": {
-        "request": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/RequestGuard"
-          }
-        },
-        "response": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ResponseGuard"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "RequestGuard": {
-      "type": "object",
-      "properties": {
-        "rejection": {
-          "$ref": "#/$defs/RequestRejection",
-          "default": {
-            "body": "The request was rejected due to inappropriate content",
-            "status": 403
-          }
-        }
-      },
-      "unevaluatedProperties": false,
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "regex": {
-              "$ref": "#/$defs/RegexRules"
-            }
-          },
-          "required": [
-            "regex"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "webhook": {
-              "$ref": "#/$defs/Webhook"
-            }
-          },
-          "required": [
-            "webhook"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "openAIModeration": {
-              "$ref": "#/$defs/Moderation"
-            }
-          },
-          "required": [
-            "openAIModeration"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "bedrockGuardrails": {
-              "$ref": "#/$defs/BedrockGuardrails"
-            }
-          },
-          "required": [
-            "bedrockGuardrails"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "googleModelArmor": {
-              "$ref": "#/$defs/GoogleModelArmor"
-            }
-          },
-          "required": [
-            "googleModelArmor"
-          ]
-        }
-      ]
-    },
-    "RequestRejection": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "$ref": "#/$defs/Bytes",
-          "default": "The request was rejected due to inappropriate content"
-        },
-        "status": {
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 1,
-          "maximum": 65535,
-          "default": 403
-        },
-        "headers": {
-          "description": "Optional headers to add, set, or remove from the rejection response",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "RegexRules": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "$ref": "#/$defs/Action",
-          "default": "mask"
-        },
-        "rules": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/RegexRule"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "rules"
-      ]
-    },
-    "Action": {
-      "type": "string",
-      "enum": [
-        "mask",
-        "reject"
-      ]
-    },
-    "RegexRule": {
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "builtin": {
-              "$ref": "#/$defs/Builtin"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "builtin"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "pattern": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "pattern"
-          ]
-        }
-      ]
-    },
-    "Builtin": {
-      "type": "string",
-      "enum": [
-        "ssn",
-        "creditCard",
-        "phoneNumber",
-        "email",
-        "caSin"
-      ]
-    },
-    "Webhook": {
-      "type": "object",
-      "properties": {
-        "target": {
-          "$ref": "#/$defs/SimpleLocalBackend"
-        },
-        "forwardHeaderMatches": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/HeaderMatch"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "target"
-      ]
-    },
-    "Moderation": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "description": "Model to use. Defaults to `omni-moderation-latest`",
-          "type": [
-            "string",
-            "null"
-          ]
+        "domain": {
+          "type": "string"
         },
         "policies": {
+          "description": "Policies to connect to the backend",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -2052,9 +1788,82 @@
               "type": "null"
             }
           ]
+        },
+        "descriptors": {
+          "$ref": "#/$defs/DescriptorSet"
+        },
+        "failureMode": {
+          "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
+          "$ref": "#/$defs/FailureMode",
+          "default": "failClosed"
         }
       },
-      "additionalProperties": false
+      "required": [
+        "domain",
+        "descriptors"
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
     },
     "SimpleLocalBackendPolicies": {
       "type": "object",
@@ -2568,6 +2377,364 @@
         "nanos"
       ]
     },
+    "DescriptorSet": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DescriptorEntry"
+      }
+    },
+    "DescriptorEntry": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KV"
+          }
+        },
+        "type": {
+          "$ref": "#/$defs/RateLimitType",
+          "default": "requests"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entries"
+      ]
+    },
+    "KV": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ]
+    },
+    "RateLimitType": {
+      "type": "string",
+      "enum": [
+        "requests",
+        "tokens"
+      ]
+    },
+    "FailureMode": {
+      "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailClosed`. When failing closed, a 500 Internal Server Error\nis returned when the service is unavailable. When failing open, requests are\nallowed through despite the service failure.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files",
+      "oneOf": [
+        {
+          "description": "Deny the request with a 500 status when the rate limit service is unavailable (default).",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Allow the request through when the rate limit service is unavailable.",
+          "type": "string",
+          "const": "failOpen"
+        }
+      ]
+    },
+    "A2aPolicy": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "Policy": {
+      "type": "object",
+      "properties": {
+        "promptGuard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptGuard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defaults": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "transformations": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "prompts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptEnrichment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modelAliases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "promptCaching": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "routes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/RouteType"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "PromptGuard": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RequestGuard"
+          }
+        },
+        "response": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResponseGuard"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RequestGuard": {
+      "type": "object",
+      "properties": {
+        "rejection": {
+          "$ref": "#/$defs/RequestRejection",
+          "default": {
+            "body": "The request was rejected due to inappropriate content",
+            "status": 403
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "regex": {
+              "$ref": "#/$defs/RegexRules"
+            }
+          },
+          "required": [
+            "regex"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "webhook": {
+              "$ref": "#/$defs/Webhook"
+            }
+          },
+          "required": [
+            "webhook"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "openAIModeration": {
+              "$ref": "#/$defs/Moderation"
+            }
+          },
+          "required": [
+            "openAIModeration"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bedrockGuardrails": {
+              "$ref": "#/$defs/BedrockGuardrails"
+            }
+          },
+          "required": [
+            "bedrockGuardrails"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "googleModelArmor": {
+              "$ref": "#/$defs/GoogleModelArmor"
+            }
+          },
+          "required": [
+            "googleModelArmor"
+          ]
+        }
+      ]
+    },
+    "RequestRejection": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/Bytes",
+          "default": "The request was rejected due to inappropriate content"
+        },
+        "status": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 403
+        },
+        "headers": {
+          "description": "Optional headers to add, set, or remove from the rejection response",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RegexRules": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/Action",
+          "default": "mask"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RegexRule"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "rules"
+      ]
+    },
+    "Action": {
+      "type": "string",
+      "enum": [
+        "mask",
+        "reject"
+      ]
+    },
+    "RegexRule": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "builtin": {
+              "$ref": "#/$defs/Builtin"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "builtin"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pattern"
+          ]
+        }
+      ]
+    },
+    "Builtin": {
+      "type": "string",
+      "enum": [
+        "ssn",
+        "creditCard",
+        "phoneNumber",
+        "email",
+        "caSin"
+      ]
+    },
+    "Webhook": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/SimpleLocalBackend"
+        },
+        "forwardHeaderMatches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderMatch"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target"
+      ]
+    },
+    "Moderation": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "Model to use. Defaults to `omni-moderation-latest`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "BedrockGuardrails": {
       "description": "Configuration for AWS Bedrock Guardrails integration.",
       "type": "object",
@@ -2835,161 +3002,6 @@
       "additionalProperties": false,
       "required": [
         "fillInterval"
-      ]
-    },
-    "RateLimitType": {
-      "type": "string",
-      "enum": [
-        "requests",
-        "tokens"
-      ]
-    },
-    "RemoteRateLimit": {
-      "type": "object",
-      "properties": {
-        "domain": {
-          "type": "string"
-        },
-        "policies": {
-          "description": "Policies to connect to the backend",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "descriptors": {
-          "$ref": "#/$defs/DescriptorSet"
-        },
-        "failureMode": {
-          "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode",
-          "default": "failClosed"
-        }
-      },
-      "required": [
-        "domain",
-        "descriptors"
-      ],
-      "unevaluatedProperties": false,
-      "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
-        {
-          "description": "Service reference. Service must be defined in the top level services list.",
-          "type": "object",
-          "properties": {
-            "service": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "$ref": "#/$defs/NamespacedHostname"
-                },
-                "port": {
-                  "type": "integer",
-                  "format": "uint16",
-                  "minimum": 0,
-                  "maximum": 65535
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name",
-                "port"
-              ]
-            }
-          },
-          "required": [
-            "service"
-          ]
-        },
-        {
-          "description": "Hostname or IP address",
-          "type": "object",
-          "properties": {
-            "host": {
-              "description": "Hostname or IP address",
-              "type": "string"
-            }
-          },
-          "required": [
-            "host"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "backend": {
-              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
-              "type": "string"
-            }
-          },
-          "required": [
-            "backend"
-          ]
-        }
-      ]
-    },
-    "DescriptorSet": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/DescriptorEntry"
-      }
-    },
-    "DescriptorEntry": {
-      "type": "object",
-      "properties": {
-        "entries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/KV"
-          }
-        },
-        "type": {
-          "$ref": "#/$defs/RateLimitType",
-          "default": "requests"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "entries"
-      ]
-    },
-    "KV": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "key",
-        "value"
-      ]
-    },
-    "FailureMode": {
-      "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailClosed`. When failing closed, a 500 Internal Server Error\nis returned when the service is unavailable. When failing open, requests are\nallowed through despite the service failure.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files",
-      "oneOf": [
-        {
-          "description": "Deny the request with a 500 status when the rate limit service is unavailable (default).",
-          "type": "string",
-          "const": "failClosed"
-        },
-        {
-          "description": "Allow the request through when the rate limit service is unavailable.",
-          "type": "string",
-          "const": "failOpen"
-        }
       ]
     },
     "LocalJwtConfig": {

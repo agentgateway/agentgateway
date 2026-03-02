@@ -67,6 +67,8 @@ pub enum UpstreamError {
 		resource_type: String,
 		resource_name: String,
 	},
+	#[error("rate limited")]
+	RateLimited { response_headers: ::http::HeaderMap },
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]
