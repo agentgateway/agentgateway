@@ -1469,7 +1469,8 @@ json(request.body).model
 	// Create routes and backends for each model
 	for (idx, model_config) in llm_config.models.iter().enumerate() {
 		let model_name = strng::new(&model_config.name);
-		let backend_key = strng::format!("llm:{}", model_config.name);
+		// Index is needed because the same name can be used with different match criteria
+		let backend_key = strng::format!("llm:model:{}:{idx}", model_config.name);
 		let p = model_config.params.clone();
 		let model = p.model;
 
