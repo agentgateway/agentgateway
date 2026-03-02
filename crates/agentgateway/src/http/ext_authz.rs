@@ -123,7 +123,7 @@ pub struct ExtAuthz {
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "crate::types::local::SimpleLocalBackendPolicies")
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendPolicy>,
 	/// The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.

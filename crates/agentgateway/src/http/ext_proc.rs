@@ -146,7 +146,7 @@ pub struct ExtProc {
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "crate::types::local::SimpleLocalBackendPolicies")
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendPolicy>,
 	/// Behavior when the ext_proc service is unavailable or returns an error

@@ -2044,13 +2044,17 @@
           ]
         },
         "policies": {
-          "$ref": "#/$defs/SimpleLocalBackendPolicies"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "policies"
-      ]
+      "additionalProperties": false
     },
     "SimpleLocalBackendPolicies": {
       "type": "object",
@@ -2582,15 +2586,21 @@
         },
         "policies": {
           "description": "Backend policies for AWS authentication (optional, defaults to implicit AWS auth)",
-          "$ref": "#/$defs/SimpleLocalBackendPolicies"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
         "guardrailIdentifier",
         "guardrailVersion",
-        "region",
-        "policies"
+        "region"
       ]
     },
     "GoogleModelArmor": {
@@ -2614,14 +2624,20 @@
         },
         "policies": {
           "description": "Backend policies for GCP authentication (optional, defaults to implicit GCP auth)",
-          "$ref": "#/$defs/SimpleLocalBackendPolicies"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
         "templateId",
-        "projectId",
-        "policies"
+        "projectId"
       ]
     },
     "ResponseGuard": {
@@ -2836,7 +2852,14 @@
         },
         "policies": {
           "description": "Policies to connect to the backend",
-          "$ref": "#/$defs/SimpleLocalBackendPolicies"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "descriptors": {
           "$ref": "#/$defs/DescriptorSet"
@@ -3179,7 +3202,14 @@
       "properties": {
         "policies": {
           "description": "Policies to connect to the backend",
-          "$ref": "#/$defs/SimpleLocalBackendPolicies"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "protocol": {
           "description": "The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.",
@@ -3428,7 +3458,14 @@
       "properties": {
         "policies": {
           "description": "Policies to connect to the backend",
-          "$ref": "#/$defs/SimpleLocalBackendPolicies"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "failureMode": {
           "description": "Behavior when the ext_proc service is unavailable or returns an error",
@@ -4949,7 +4986,14 @@
       "properties": {
         "policies": {
           "description": "Policies to connect to the backend",
-          "$ref": "#/$defs/SimpleLocalBackendPolicies"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "attributes": {
           "description": "Span attributes to add, keyed by attribute name.",
