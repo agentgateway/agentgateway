@@ -190,6 +190,7 @@ async fn apply_backend_policies(
 		request_header_modifier,
 		response_header_modifier,
 		request_redirect,
+		transformation,
 		// TODO: implement session persistence
 		session_persistence: _,
 		// Applied elsewhere
@@ -198,6 +199,7 @@ async fn apply_backend_policies(
 		override_dest: _,
 	} = &backend_call.backend_policies;
 	response_policies.backend_response_header = response_header_modifier.clone();
+	response_policies.backend_transformation = transformation.clone();
 
 	let dh = backend::HTTP::default();
 	http
@@ -207,6 +209,9 @@ async fn apply_backend_policies(
 
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
+	}
+	if let Some(j) = transformation {
+		j.apply_request(req);
 	}
 	if let Some(rhm) = request_header_modifier {
 		rhm.apply(req.headers_mut()).map_err(ProxyError::from)?;
@@ -651,6 +656,8 @@ impl HTTPProxy {
 			&selected_backend.inline_policies,
 			Some(route_path.clone()),
 		);
+		backend_policies.register_cel_expressions(log.cel.ctx());
+		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 		log.backend_info = Some(selected_backend.backend.backend.backend_info());
 		if let Some(bp) = selected_backend.backend.backend.backend_protocol() {
 			log.backend_protocol = Some(bp)
@@ -1843,6 +1850,7 @@ struct ResponsePolicies {
 	route_response_header: Option<filters::HeaderModifier>,
 	backend_response_header: Option<filters::HeaderModifier>,
 	transformation: Option<Transformation>,
+	backend_transformation: Option<Transformation>,
 	gateway_transformation: Option<Transformation>,
 	response_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
@@ -1868,6 +1876,9 @@ impl ResponsePolicies {
 			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
 		}
 		if let Some(j) = &self.transformation {
+			j.apply_response(resp, log.request_snapshot.as_ref());
+		}
+		if let Some(j) = &self.backend_transformation {
 			j.apply_response(resp, log.request_snapshot.as_ref());
 		}
 		if let Some(j) = &self.gateway_transformation {

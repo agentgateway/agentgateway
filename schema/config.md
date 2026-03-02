@@ -202,6 +202,17 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
@@ -272,6 +283,17 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -342,6 +364,17 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -439,6 +472,17 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -509,6 +553,17 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -648,6 +703,17 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.request`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.request.add`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.request.set`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.request.body`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.response`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.response.add`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.response.set`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTLS.key`||
@@ -756,6 +822,17 @@
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.request`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.request.add`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.request.set`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.request.body`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.response`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.response.add`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.response.set`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTLS.key`||
@@ -847,6 +924,17 @@
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.request`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.request.add`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.request.set`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.request.body`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.response`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.response.add`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.response.set`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.transformations.response.body`||
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTLS.key`||
@@ -967,6 +1055,17 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTLS.key`||
@@ -1062,6 +1161,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTLS.key`||
@@ -1155,6 +1265,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
@@ -1225,6 +1346,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -1295,6 +1427,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -1392,6 +1535,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -1462,6 +1616,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -1578,6 +1743,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTLS.key`||
@@ -1671,6 +1847,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
@@ -1741,6 +1928,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -1811,6 +2009,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -1908,6 +2117,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -1978,6 +2198,17 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -2069,6 +2300,17 @@
 |`binds[].listeners[].routes[].backends[].policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.key`||
@@ -2162,6 +2404,17 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
@@ -2232,6 +2485,17 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -2302,6 +2566,17 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -2399,6 +2674,17 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -2469,6 +2755,17 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.body`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.add`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.set`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.body`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -2620,6 +2917,17 @@
 |`binds[].listeners[].policies.extAuthz.(any)policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].policies.extAuthz.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].policies.extAuthz.(any)policies.requestRedirect.status`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.request`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.request.add`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.request.set`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.request.remove`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.request.body`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.response`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.response.add`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.response.set`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.response.remove`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.transformations.response.body`||
 |`binds[].listeners[].policies.extAuthz.(any)policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].policies.extAuthz.(any)policies.backendTLS.cert`||
 |`binds[].listeners[].policies.extAuthz.(any)policies.backendTLS.key`||
@@ -2711,6 +3019,17 @@
 |`binds[].listeners[].policies.extProc.(any)policies.requestRedirect.path.(any)(1)full`||
 |`binds[].listeners[].policies.extProc.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`binds[].listeners[].policies.extProc.(any)policies.requestRedirect.status`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.request`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.request.add`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.request.set`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.request.remove`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.request.body`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.response`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.response.add`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.response.set`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.response.remove`||
+|`binds[].listeners[].policies.extProc.(any)policies.transformations.response.body`||
 |`binds[].listeners[].policies.extProc.(any)policies.backendTLS`|Send TLS to the backend.|
 |`binds[].listeners[].policies.extProc.(any)policies.backendTLS.cert`||
 |`binds[].listeners[].policies.extProc.(any)policies.backendTLS.key`||
@@ -2837,6 +3156,17 @@
 |`frontendPolicies.tracing.(any)policies.requestRedirect.path.(any)(1)full`||
 |`frontendPolicies.tracing.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`frontendPolicies.tracing.(any)policies.requestRedirect.status`||
+|`frontendPolicies.tracing.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`frontendPolicies.tracing.(any)policies.transformations.request`||
+|`frontendPolicies.tracing.(any)policies.transformations.request.add`||
+|`frontendPolicies.tracing.(any)policies.transformations.request.set`||
+|`frontendPolicies.tracing.(any)policies.transformations.request.remove`||
+|`frontendPolicies.tracing.(any)policies.transformations.request.body`||
+|`frontendPolicies.tracing.(any)policies.transformations.response`||
+|`frontendPolicies.tracing.(any)policies.transformations.response.add`||
+|`frontendPolicies.tracing.(any)policies.transformations.response.set`||
+|`frontendPolicies.tracing.(any)policies.transformations.response.remove`||
+|`frontendPolicies.tracing.(any)policies.transformations.response.body`||
 |`frontendPolicies.tracing.(any)policies.backendTLS`|Send TLS to the backend.|
 |`frontendPolicies.tracing.(any)policies.backendTLS.cert`||
 |`frontendPolicies.tracing.(any)policies.backendTLS.key`||
@@ -3023,6 +3353,17 @@
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.add`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.set`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.remove`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.body`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.add`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.set`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.remove`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.body`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
@@ -3093,6 +3434,17 @@
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -3163,6 +3515,17 @@
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.add`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.set`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.body`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.add`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.set`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.body`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -3260,6 +3623,17 @@
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -3330,6 +3704,17 @@
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.add`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.set`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.body`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.add`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.set`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.body`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -3469,6 +3854,17 @@
 |`policies[].policy.remoteRateLimit.(any)policies.requestRedirect.path.(any)(1)full`||
 |`policies[].policy.remoteRateLimit.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`policies[].policy.remoteRateLimit.(any)policies.requestRedirect.status`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.request`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.request.add`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.request.set`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.request.remove`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.request.body`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.response`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.response.add`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.response.set`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.response.remove`||
+|`policies[].policy.remoteRateLimit.(any)policies.transformations.response.body`||
 |`policies[].policy.remoteRateLimit.(any)policies.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.remoteRateLimit.(any)policies.backendTLS.cert`||
 |`policies[].policy.remoteRateLimit.(any)policies.backendTLS.key`||
@@ -3577,6 +3973,17 @@
 |`policies[].policy.extAuthz.(any)policies.requestRedirect.path.(any)(1)full`||
 |`policies[].policy.extAuthz.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`policies[].policy.extAuthz.(any)policies.requestRedirect.status`||
+|`policies[].policy.extAuthz.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.extAuthz.(any)policies.transformations.request`||
+|`policies[].policy.extAuthz.(any)policies.transformations.request.add`||
+|`policies[].policy.extAuthz.(any)policies.transformations.request.set`||
+|`policies[].policy.extAuthz.(any)policies.transformations.request.remove`||
+|`policies[].policy.extAuthz.(any)policies.transformations.request.body`||
+|`policies[].policy.extAuthz.(any)policies.transformations.response`||
+|`policies[].policy.extAuthz.(any)policies.transformations.response.add`||
+|`policies[].policy.extAuthz.(any)policies.transformations.response.set`||
+|`policies[].policy.extAuthz.(any)policies.transformations.response.remove`||
+|`policies[].policy.extAuthz.(any)policies.transformations.response.body`||
 |`policies[].policy.extAuthz.(any)policies.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.extAuthz.(any)policies.backendTLS.cert`||
 |`policies[].policy.extAuthz.(any)policies.backendTLS.key`||
@@ -3668,6 +4075,17 @@
 |`policies[].policy.extProc.(any)policies.requestRedirect.path.(any)(1)full`||
 |`policies[].policy.extProc.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`policies[].policy.extProc.(any)policies.requestRedirect.status`||
+|`policies[].policy.extProc.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.extProc.(any)policies.transformations.request`||
+|`policies[].policy.extProc.(any)policies.transformations.request.add`||
+|`policies[].policy.extProc.(any)policies.transformations.request.set`||
+|`policies[].policy.extProc.(any)policies.transformations.request.remove`||
+|`policies[].policy.extProc.(any)policies.transformations.request.body`||
+|`policies[].policy.extProc.(any)policies.transformations.response`||
+|`policies[].policy.extProc.(any)policies.transformations.response.add`||
+|`policies[].policy.extProc.(any)policies.transformations.response.set`||
+|`policies[].policy.extProc.(any)policies.transformations.response.remove`||
+|`policies[].policy.extProc.(any)policies.transformations.response.body`||
 |`policies[].policy.extProc.(any)policies.backendTLS`|Send TLS to the backend.|
 |`policies[].policy.extProc.(any)policies.backendTLS.cert`||
 |`policies[].policy.extProc.(any)policies.backendTLS.key`||
@@ -3763,6 +4181,17 @@
 |`backends[].policies.requestRedirect.path.(any)(1)full`||
 |`backends[].policies.requestRedirect.path.(any)(1)prefix`||
 |`backends[].policies.requestRedirect.status`||
+|`backends[].policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.transformations.request`||
+|`backends[].policies.transformations.request.add`||
+|`backends[].policies.transformations.request.set`||
+|`backends[].policies.transformations.request.remove`||
+|`backends[].policies.transformations.request.body`||
+|`backends[].policies.transformations.response`||
+|`backends[].policies.transformations.response.add`||
+|`backends[].policies.transformations.response.set`||
+|`backends[].policies.transformations.response.remove`||
+|`backends[].policies.transformations.response.body`||
 |`backends[].policies.backendTLS`|Send TLS to the backend.|
 |`backends[].policies.backendTLS.cert`||
 |`backends[].policies.backendTLS.key`||
@@ -3856,6 +4285,17 @@
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.add`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.set`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.remove`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.body`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.add`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.set`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.remove`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.body`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
@@ -3926,6 +4366,17 @@
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -3996,6 +4447,17 @@
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.add`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.set`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.body`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.add`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.set`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.body`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -4093,6 +4555,17 @@
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -4163,6 +4636,17 @@
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.add`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.set`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.body`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.add`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.set`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.body`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -4296,6 +4780,17 @@
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.request`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.request.add`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.request.set`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.request.remove`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.request.body`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.response`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.response.add`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.response.set`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.response.remove`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.transformations.response.body`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.cert`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTLS.key`||
@@ -4366,6 +4861,17 @@
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.request`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.response`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -4436,6 +4942,17 @@
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.request`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.request.add`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.request.set`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.request.body`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.response`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.response.add`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.response.set`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.transformations.response.body`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -4533,6 +5050,17 @@
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.request`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.response`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -4603,6 +5131,17 @@
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.request`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.request.add`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.request.set`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.request.body`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.response`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.response.add`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.response.set`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.transformations.response.body`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -4709,6 +5248,17 @@
 |`llm.policies.extAuthz.(any)policies.requestRedirect.path.(any)(1)full`||
 |`llm.policies.extAuthz.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`llm.policies.extAuthz.(any)policies.requestRedirect.status`||
+|`llm.policies.extAuthz.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`llm.policies.extAuthz.(any)policies.transformations.request`||
+|`llm.policies.extAuthz.(any)policies.transformations.request.add`||
+|`llm.policies.extAuthz.(any)policies.transformations.request.set`||
+|`llm.policies.extAuthz.(any)policies.transformations.request.remove`||
+|`llm.policies.extAuthz.(any)policies.transformations.request.body`||
+|`llm.policies.extAuthz.(any)policies.transformations.response`||
+|`llm.policies.extAuthz.(any)policies.transformations.response.add`||
+|`llm.policies.extAuthz.(any)policies.transformations.response.set`||
+|`llm.policies.extAuthz.(any)policies.transformations.response.remove`||
+|`llm.policies.extAuthz.(any)policies.transformations.response.body`||
 |`llm.policies.extAuthz.(any)policies.backendTLS`|Send TLS to the backend.|
 |`llm.policies.extAuthz.(any)policies.backendTLS.cert`||
 |`llm.policies.extAuthz.(any)policies.backendTLS.key`||
@@ -4800,6 +5350,17 @@
 |`llm.policies.extProc.(any)policies.requestRedirect.path.(any)(1)full`||
 |`llm.policies.extProc.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`llm.policies.extProc.(any)policies.requestRedirect.status`||
+|`llm.policies.extProc.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`llm.policies.extProc.(any)policies.transformations.request`||
+|`llm.policies.extProc.(any)policies.transformations.request.add`||
+|`llm.policies.extProc.(any)policies.transformations.request.set`||
+|`llm.policies.extProc.(any)policies.transformations.request.remove`||
+|`llm.policies.extProc.(any)policies.transformations.request.body`||
+|`llm.policies.extProc.(any)policies.transformations.response`||
+|`llm.policies.extProc.(any)policies.transformations.response.add`||
+|`llm.policies.extProc.(any)policies.transformations.response.set`||
+|`llm.policies.extProc.(any)policies.transformations.response.remove`||
+|`llm.policies.extProc.(any)policies.transformations.response.body`||
 |`llm.policies.extProc.(any)policies.backendTLS`|Send TLS to the backend.|
 |`llm.policies.extProc.(any)policies.backendTLS.cert`||
 |`llm.policies.extProc.(any)policies.backendTLS.key`||
@@ -4916,6 +5477,17 @@
 |`mcp.targets[].policies.requestRedirect.path.(any)(1)full`||
 |`mcp.targets[].policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.targets[].policies.requestRedirect.status`||
+|`mcp.targets[].policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.targets[].policies.transformations.request`||
+|`mcp.targets[].policies.transformations.request.add`||
+|`mcp.targets[].policies.transformations.request.set`||
+|`mcp.targets[].policies.transformations.request.remove`||
+|`mcp.targets[].policies.transformations.request.body`||
+|`mcp.targets[].policies.transformations.response`||
+|`mcp.targets[].policies.transformations.response.add`||
+|`mcp.targets[].policies.transformations.response.set`||
+|`mcp.targets[].policies.transformations.response.remove`||
+|`mcp.targets[].policies.transformations.response.body`||
 |`mcp.targets[].policies.backendTLS`|Send TLS to the backend.|
 |`mcp.targets[].policies.backendTLS.cert`||
 |`mcp.targets[].policies.backendTLS.key`||
@@ -5075,6 +5647,17 @@
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)full`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.request.body`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.transformations.response.body`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS`|Send TLS to the backend.|
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.cert`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTLS.key`||
@@ -5145,6 +5728,17 @@
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -5215,6 +5809,17 @@
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.request.body`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.add`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.set`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.transformations.response.body`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -5312,6 +5917,17 @@
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)full`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.add`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.set`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.remove`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.request.body`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.add`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.set`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.remove`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.transformations.response.body`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS`|Send TLS to the backend.|
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.cert`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTLS.key`||
@@ -5382,6 +5998,17 @@
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)full`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.requestRedirect.status`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.add`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.set`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.remove`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.request.body`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.add`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.set`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.remove`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.transformations.response.body`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS`|Send TLS to the backend.|
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.cert`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTLS.key`||
@@ -5521,6 +6148,17 @@
 |`mcp.policies.remoteRateLimit.(any)policies.requestRedirect.path.(any)(1)full`||
 |`mcp.policies.remoteRateLimit.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.policies.remoteRateLimit.(any)policies.requestRedirect.status`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.request`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.request.add`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.request.set`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.request.remove`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.request.body`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.response`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.response.add`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.response.set`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.response.remove`||
+|`mcp.policies.remoteRateLimit.(any)policies.transformations.response.body`||
 |`mcp.policies.remoteRateLimit.(any)policies.backendTLS`|Send TLS to the backend.|
 |`mcp.policies.remoteRateLimit.(any)policies.backendTLS.cert`||
 |`mcp.policies.remoteRateLimit.(any)policies.backendTLS.key`||
@@ -5629,6 +6267,17 @@
 |`mcp.policies.extAuthz.(any)policies.requestRedirect.path.(any)(1)full`||
 |`mcp.policies.extAuthz.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.policies.extAuthz.(any)policies.requestRedirect.status`||
+|`mcp.policies.extAuthz.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.extAuthz.(any)policies.transformations.request`||
+|`mcp.policies.extAuthz.(any)policies.transformations.request.add`||
+|`mcp.policies.extAuthz.(any)policies.transformations.request.set`||
+|`mcp.policies.extAuthz.(any)policies.transformations.request.remove`||
+|`mcp.policies.extAuthz.(any)policies.transformations.request.body`||
+|`mcp.policies.extAuthz.(any)policies.transformations.response`||
+|`mcp.policies.extAuthz.(any)policies.transformations.response.add`||
+|`mcp.policies.extAuthz.(any)policies.transformations.response.set`||
+|`mcp.policies.extAuthz.(any)policies.transformations.response.remove`||
+|`mcp.policies.extAuthz.(any)policies.transformations.response.body`||
 |`mcp.policies.extAuthz.(any)policies.backendTLS`|Send TLS to the backend.|
 |`mcp.policies.extAuthz.(any)policies.backendTLS.cert`||
 |`mcp.policies.extAuthz.(any)policies.backendTLS.key`||
@@ -5720,6 +6369,17 @@
 |`mcp.policies.extProc.(any)policies.requestRedirect.path.(any)(1)full`||
 |`mcp.policies.extProc.(any)policies.requestRedirect.path.(any)(1)prefix`||
 |`mcp.policies.extProc.(any)policies.requestRedirect.status`||
+|`mcp.policies.extProc.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.extProc.(any)policies.transformations.request`||
+|`mcp.policies.extProc.(any)policies.transformations.request.add`||
+|`mcp.policies.extProc.(any)policies.transformations.request.set`||
+|`mcp.policies.extProc.(any)policies.transformations.request.remove`||
+|`mcp.policies.extProc.(any)policies.transformations.request.body`||
+|`mcp.policies.extProc.(any)policies.transformations.response`||
+|`mcp.policies.extProc.(any)policies.transformations.response.add`||
+|`mcp.policies.extProc.(any)policies.transformations.response.set`||
+|`mcp.policies.extProc.(any)policies.transformations.response.remove`||
+|`mcp.policies.extProc.(any)policies.transformations.response.body`||
 |`mcp.policies.extProc.(any)policies.backendTLS`|Send TLS to the backend.|
 |`mcp.policies.extProc.(any)policies.backendTLS.cert`||
 |`mcp.policies.extProc.(any)policies.backendTLS.key`||

@@ -125,6 +125,7 @@ pub struct BackendPolicies {
 	pub response_header_modifier: Option<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub request_mirror: Vec<filters::RequestMirror>,
+	pub transformation: Option<http::transformation_cel::Transformation>,
 
 	pub session_persistence: Option<http::sessionpersistence::Policy>,
 
@@ -160,6 +161,7 @@ impl BackendPolicies {
 			} else {
 				other.request_mirror
 			},
+			transformation: other.transformation.or(self.transformation),
 			session_persistence: other.session_persistence.or(self.session_persistence),
 			override_dest: other.override_dest.or(self.override_dest),
 		}
@@ -170,6 +172,14 @@ impl BackendPolicies {
 			inference.build(client)
 		} else {
 			ext_proc::InferencePoolRouter::default()
+		}
+	}
+
+	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		if let Some(xfm) = &self.transformation {
+			for expr in xfm.expressions() {
+				ctx.register_expression(expr)
+			}
 		}
 	}
 }
@@ -645,6 +655,9 @@ impl Store {
 				},
 				BackendPolicy::RequestRedirect(p) => {
 					pol.request_redirect.get_or_insert_with(|| p.clone());
+				},
+				BackendPolicy::Transformation(p) => {
+					pol.transformation.get_or_insert_with(|| p.clone());
 				},
 				BackendPolicy::SessionPersistence(p) => {
 					pol.session_persistence.get_or_insert_with(|| p.clone());

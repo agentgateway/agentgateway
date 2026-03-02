@@ -990,6 +990,11 @@ func (in *BackendSimple) DeepCopyInto(out *BackendSimple) {
 		*out = new(BackendHTTP)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Transformation != nil {
+		in, out := &in.Transformation, &out.Transformation
+		*out = new(Transformation)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Auth != nil {
 		in, out := &in.Auth, &out.Auth
 		*out = new(BackendAuth)

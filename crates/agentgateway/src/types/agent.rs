@@ -1897,6 +1897,7 @@ pub enum BackendPolicy {
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	SessionPersistence(http::sessionpersistence::Policy),
+	Transformation(crate::http::transformation_cel::Transformation),
 
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(filters::HeaderModifier),

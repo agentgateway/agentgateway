@@ -2095,6 +2095,18 @@
           ],
           "default": null
         },
+        "transformations": {
+          "description": "Modify requests and responses sent to and from the backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "backendTLS": {
           "description": "Send TLS to the backend.",
           "anyOf": [
@@ -2139,6 +2151,66 @@
             {
               "type": "null"
             }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalTransformationConfig": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalTransform": {
+      "type": "object",
+      "properties": {
+        "add": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "set": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
           ],
           "default": null
         }
@@ -3576,66 +3648,6 @@
         "failOpen"
       ]
     },
-    "LocalTransformationConfig": {
-      "type": "object",
-      "properties": {
-        "request": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalTransform"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "response": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalTransform"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "LocalTransform": {
-      "type": "object",
-      "properties": {
-        "add": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "default": {}
-        },
-        "set": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "default": {}
-        },
-        "remove": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": []
-        },
-        "body": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false
-    },
     "Csrf": {
       "type": "object",
       "properties": {
@@ -4033,6 +4045,18 @@
           ],
           "default": null
         },
+        "transformations": {
+          "description": "Modify requests and responses sent to and from the backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "backendTLS": {
           "description": "Send TLS to the backend.",
           "anyOf": [
@@ -4394,6 +4418,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/RequestRedirect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transformations": {
+          "description": "Modify requests and responses sent to and from the backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransformationConfig"
             },
             {
               "type": "null"
@@ -5043,7 +5079,7 @@
         },
         "protocol": {
           "$ref": "#/$defs/TracingProtocol",
-          "default": "http"
+          "default": "grpc"
         }
       },
       "unevaluatedProperties": false,
@@ -5118,8 +5154,8 @@
     "TracingProtocol": {
       "type": "string",
       "enum": [
-        "http",
-        "grpc"
+        "grpc",
+        "http"
       ]
     },
     "LocalPolicy": {

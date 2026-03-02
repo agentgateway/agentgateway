@@ -129,6 +129,10 @@ type BackendSimple struct {
 	// +optional
 	HTTP *BackendHTTP `json:"http,omitempty"`
 
+	// transformation is used to mutate and transform requests and responses sent to and from the backend.
+	// +optional
+	Transformation *Transformation `json:"transformation,omitempty"`
+
 	// auth defines settings for managing authentication to the backend
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`

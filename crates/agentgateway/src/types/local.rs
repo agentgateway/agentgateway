@@ -148,6 +148,7 @@ fn merge_deprecated_frontend_policies(
 		if let Some(ep) = endpoint {
 			frontend_policies.tracing = Some(TracingConfig {
 				provider_backend: SimpleBackendReference::InlineBackend(Target::try_from(ep.as_str())?),
+				policies: Vec::new(),
 				attributes: Arc::unwrap_or_clone(fields.add),
 				resources: Default::default(), // Not supported in the old config
 				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
@@ -918,6 +919,15 @@ pub struct SimpleLocalBackendPolicies {
 	#[serde(default)]
 	pub request_redirect: Option<filters::RequestRedirect>,
 
+	/// Modify requests and responses sent to and from the backend.
+	#[serde(default)]
+	#[serde(deserialize_with = "de_transform")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<http::transformation_cel::LocalTransformationConfig>")
+	)]
+	pub transformations: Option<crate::http::transformation_cel::Transformation>,
+
 	/// Send TLS to the backend.
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<http::backendtls::LocalBackendTLS>,
@@ -968,6 +978,7 @@ impl LocalBackendPolicies {
 					request_header_modifier,
 					response_header_modifier,
 					request_redirect,
+					transformations,
 					backend_tls,
 					backend_auth,
 					http,
@@ -992,6 +1003,9 @@ impl LocalBackendPolicies {
 		}
 		if let Some(p) = request_redirect {
 			pols.push(BackendPolicy::RequestRedirect(p));
+		}
+		if let Some(p) = transformations {
+			pols.push(BackendPolicy::Transformation(p));
 		}
 		if let Some(p) = mcp_authorization {
 			pols.push(BackendPolicy::McpAuthorization(p))

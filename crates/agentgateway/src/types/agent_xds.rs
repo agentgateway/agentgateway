@@ -1057,6 +1057,9 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 				BackendPolicy::McpAuthentication(McpAuthentication::try_from(ma)?)
 			},
 			Some(bps::Kind::Ai(ai)) => BackendPolicy::AI(Arc::new(convert_backend_ai_policy(ai)?)),
+			Some(bps::Kind::Transformation(tp)) => {
+				BackendPolicy::Transformation(Transformation::try_from(tp)?)
+			},
 			Some(bps::Kind::RequestHeaderModifier(rhm)) => {
 				BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
 					add: rhm
@@ -2228,6 +2231,41 @@ mod tests {
 			panic!("Expected AI policy variant");
 		}
 
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_policy_spec_to_transformation_policy() -> Result<(), ProtoError> {
+		let spec = proto::agent::BackendPolicySpec {
+			kind: Some(proto::agent::backend_policy_spec::Kind::Transformation(
+				proto::agent::traffic_policy_spec::TransformationPolicy {
+					request: Some(
+						proto::agent::traffic_policy_spec::transformation_policy::Transform {
+							set: vec![proto::agent::traffic_policy_spec::HeaderTransformation {
+								name: "x-backend-req".to_string(),
+								expression: "\"backend-req\"".to_string(),
+							}],
+							..Default::default()
+						},
+					),
+					response: Some(
+						proto::agent::traffic_policy_spec::transformation_policy::Transform {
+							add: vec![proto::agent::traffic_policy_spec::HeaderTransformation {
+								name: "x-backend-resp".to_string(),
+								expression: "\"backend-resp\"".to_string(),
+							}],
+							..Default::default()
+						},
+					),
+				},
+			)),
+		};
+
+		let policy = BackendPolicy::try_from(&spec)?;
+		let BackendPolicy::Transformation(transformation) = policy else {
+			panic!("Expected Transformation policy variant");
+		};
+		assert_eq!(transformation.expressions().count(), 2);
 		Ok(())
 	}
 }
