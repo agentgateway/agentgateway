@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::cel::RequestSnapshot;
 use crate::http::Response;
-use crate::http::jwt::Claims;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
 use crate::mcp::mergestream::MergeFn;
@@ -14,15 +13,10 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
-use crate::telemetry::trc;
-use crate::telemetry::trc::TraceParent;
 use futures_core::Stream;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
-use opentelemetry::global::BoxedSpan;
-use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
-use opentelemetry::{Context, TraceFlags};
 use rmcp::ErrorData;
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,

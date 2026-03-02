@@ -5,7 +5,6 @@ use vector_map::VecMap;
 
 use crate::cel::{ContextBuilder, RequestSnapshot};
 use crate::http::authorization::{RuleSet, RuleSets};
-use crate::http::jwt::Claims;
 use crate::*;
 
 #[apply(schema!)]

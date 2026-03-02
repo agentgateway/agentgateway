@@ -14,14 +14,6 @@ use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
-	// TODO consolidate this
-	// howardjohn: do not merge
-	// trcng::init_tracer(trcng::Config {
-	// 	tracer: trcng::Tracer::Otlp {
-	// 		endpoint: config.tracing.endpoint.clone(),
-	// 	},
-	// 	tags: Default::default(),
-	// })?;
 	// Initialize OpenTelemetry resource defaults from gateway + proxy metadata
 	trc::set_resource_defaults_from_config(config.as_ref());
 	let shutdown = signal::Shutdown::new();

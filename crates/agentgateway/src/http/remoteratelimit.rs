@@ -323,7 +323,7 @@ impl RemoteRateLimit {
 		);
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
-			policies: self.policies.clone(),
+			policies: Arc::new(self.policies.clone()),
 			client,
 		};
 		let mut client = RateLimitServiceClient::new(chan);

@@ -1096,10 +1096,12 @@ pub struct SpanWriterInner {
 }
 
 impl SpanWriterInner {
+	#[allow(unused)]
 	pub fn traceparent(&self) -> &trc::TraceParent {
 		&self.current
 	}
 
+	#[allow(unused)]
 	pub fn write(
 		&self,
 		name: impl Into<Cow<'static, str>>,
@@ -1137,7 +1139,7 @@ impl SpanWriterInner {
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
 		// Create a unique child span ID for this recorded span.
 		let child = self.parent.new_span();
-		let mut sb = self
+		let sb = self
 			.tracer
 			.tracer
 			.span_builder(name)

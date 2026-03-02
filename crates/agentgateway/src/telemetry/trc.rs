@@ -136,6 +136,7 @@ impl Tracer {
 			let http_client = PolicyOtelHttpClient {
 				policy_client,
 				backend_ref: config.provider_backend.clone(),
+				policies: config.policies.clone(),
 				runtime: exporter_runtime,
 			};
 			opentelemetry_sdk::trace::SdkTracerProvider::builder()
@@ -338,7 +339,7 @@ impl PolicyGrpcSpanExporter {
 		use crate::http::ext_proc::GrpcReferenceChannel;
 		let channel = GrpcReferenceChannel {
 			target,
-			policies,
+			policies: Arc::new(policies),
 			client: crate::proxy::httpproxy::PolicyClient { inputs },
 		};
 		let tonic_client = opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient::new(
@@ -410,6 +411,7 @@ struct PolicyOtelHttpClient {
 	policy_client: crate::proxy::httpproxy::PolicyClient,
 	backend_ref: SimpleBackendReference,
 	runtime: tokio::runtime::Handle,
+	policies: Vec<BackendPolicy>,
 }
 
 #[async_trait::async_trait]
@@ -420,6 +422,7 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 	) -> Result<http::Response<bytes::Bytes>, Box<dyn std::error::Error + Send + Sync + 'static>> {
 		let client = self.policy_client.clone();
 		let backend_ref = self.backend_ref.clone();
+		let policies = self.policies.clone();
 		let handle = self.runtime.clone();
 
 		let (mut head, body_bytes) = request.into_parts();
@@ -432,7 +435,7 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 		let resp = handle
 			.spawn(async move {
 				client
-					.call_reference(req, &backend_ref)
+					.call_reference_with_policies(req, &backend_ref, &policies)
 					.await
 					.map_err(Box::new)
 			})

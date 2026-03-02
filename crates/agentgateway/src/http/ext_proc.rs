@@ -262,7 +262,7 @@ impl ExtProcInstance {
 		let chan = GrpcReferenceChannel {
 			target,
 			client,
-			policies,
+			policies: Arc::new(policies),
 		};
 		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
@@ -1108,7 +1108,7 @@ fn eval_to_struct(
 pub struct GrpcReferenceChannel {
 	pub target: Arc<SimpleBackendReference>,
 	pub client: PolicyClient,
-	pub policies: Vec<BackendPolicy>,
+	pub policies: Arc<Vec<BackendPolicy>>,
 }
 
 impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel {
@@ -1123,7 +1123,14 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel
 	fn call(&mut self, req: ::http::Request<tonic::body::Body>) -> Self::Future {
 		let client = self.client.clone();
 		let target = self.target.clone();
+		let policies = self.policies.clone();
 		let req = req.map(http::Body::new);
-		Box::pin(async move { Ok(client.call_reference(req, &target).await?) })
+		Box::pin(async move {
+			Ok(
+				client
+					.call_reference_with_policies(req, &target, policies.as_slice())
+					.await?,
+			)
+		})
 	}
 }
