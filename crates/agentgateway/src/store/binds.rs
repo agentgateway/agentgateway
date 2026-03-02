@@ -887,8 +887,10 @@ impl Store {
 			let mut bind = Arc::unwrap_or_clone(b.clone());
 			// If this is a listener update, copy things over
 			if let Some(old) = bind.listeners.remove(&lis.key) {
-				debug!("listener update, copy old routes over");
-				lis.routes = Arc::unwrap_or_clone(old).routes;
+				debug!("listener update, copy old routes and tcp routes over");
+				let old = Arc::unwrap_or_clone(old);
+				lis.routes = old.routes;
+				lis.tcp_routes = old.tcp_routes;
 			}
 			// Insert any staged routes
 			for (k, v) in self.staged_routes.remove(&lis.key).into_iter().flatten() {
