@@ -158,6 +158,22 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit`|Rate limit MCP requests. State is managed by a remote server, applied at the backend level.|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service.name`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)service.port`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)domain`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors[].entries`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors[].entries[].key`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors[].entries[].value`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)descriptors[].type`||
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)timeout`|Timeout for the request|
+|`binds[].listeners[].routes[].policies.mcpRemoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`binds[].listeners[].routes[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`||
@@ -1728,6 +1744,22 @@
 |`policies[].policy.mcpAuthentication.mode`||
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.mcpRemoteRateLimit`|Rate limit MCP requests. State is managed by a remote server, applied at the backend level.|
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service.name`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service.name.namespace`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service.name.hostname`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)service.port`||
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`policies[].policy.mcpRemoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.mcpRemoteRateLimit.(any)domain`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors[].entries`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors[].entries[].key`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors[].entries[].value`||
+|`policies[].policy.mcpRemoteRateLimit.(any)descriptors[].type`||
+|`policies[].policy.mcpRemoteRateLimit.(any)timeout`|Timeout for the request|
+|`policies[].policy.mcpRemoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`policies[].policy.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`||
@@ -3355,6 +3387,22 @@
 |`mcp.policies.mcpAuthentication.mode`||
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.mcpRemoteRateLimit`|Rate limit MCP requests. State is managed by a remote server, applied at the backend level.|
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service.name`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service.name.namespace`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service.name.hostname`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)service.port`||
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)host`|Hostname or IP address|
+|`mcp.policies.mcpRemoteRateLimit.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.mcpRemoteRateLimit.(any)domain`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors[].entries`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors[].entries[].key`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors[].entries[].value`||
+|`mcp.policies.mcpRemoteRateLimit.(any)descriptors[].type`||
+|`mcp.policies.mcpRemoteRateLimit.(any)timeout`|Timeout for the request|
+|`mcp.policies.mcpRemoteRateLimit.(any)failureMode`|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`mcp.policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`||

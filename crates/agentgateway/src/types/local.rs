@@ -960,6 +960,9 @@ struct FilterOrPolicy {
 	/// Authentication for MCP clients.
 	#[serde(default)]
 	mcp_authentication: Option<LocalMcpAuthentication>,
+	/// Rate limit MCP requests. State is managed by a remote server, applied at the backend level.
+	#[serde(default)]
+	mcp_remote_rate_limit: Option<crate::mcp::remoteratelimit::McpRemoteRateLimit>,
 	/// Mark this traffic as A2A to enable A2A processing and telemetry.
 	#[serde(default)]
 	a2a: Option<A2aPolicy>,
@@ -1873,6 +1876,7 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 		cors,
 		mcp_authorization,
 		mcp_authentication,
+		mcp_remote_rate_limit,
 		a2a,
 		ai,
 		backend_tls,
@@ -1923,6 +1927,9 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 		let authn: McpAuthentication = p.translate(client.clone()).await?;
 		backend_policies.push(BackendPolicy::McpAuthentication(authn));
 		// Do NOT inject a separate route-level JwtAuth; MCP router handles validation using jwt_validator.
+	}
+	if let Some(p) = mcp_remote_rate_limit {
+		backend_policies.push(BackendPolicy::McpRemoteRateLimit(p))
 	}
 	if let Some(p) = a2a {
 		backend_policies.push(BackendPolicy::A2a(p))

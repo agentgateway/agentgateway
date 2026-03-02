@@ -45,17 +45,25 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 pub struct Relay {
 	upstreams: Arc<upstream::UpstreamGroup>,
 	pub policies: McpAuthorizationSet,
+	remote_rate_limit: Option<crate::mcp::remoteratelimit::McpRemoteRateLimit>,
+	client: PolicyClient,
 }
 
 pub struct RelayInputs {
 	pub backend: McpBackendGroup,
 	pub policies: McpAuthorizationSet,
+	pub remote_rate_limit: Option<crate::mcp::remoteratelimit::McpRemoteRateLimit>,
 	pub client: PolicyClient,
 }
 
 impl RelayInputs {
 	pub fn build_new_connections(self) -> Result<Relay, mcp::Error> {
-		Relay::new(self.backend, self.policies, self.client)
+		Relay::new(
+			self.backend,
+			self.policies,
+			self.remote_rate_limit,
+			self.client,
+		)
 	}
 }
 
@@ -63,17 +71,22 @@ impl Relay {
 	pub fn new(
 		backend: McpBackendGroup,
 		policies: McpAuthorizationSet,
+		remote_rate_limit: Option<crate::mcp::remoteratelimit::McpRemoteRateLimit>,
 		client: PolicyClient,
 	) -> Result<Self, mcp::Error> {
 		Ok(Self {
-			upstreams: Arc::new(upstream::UpstreamGroup::new(client, backend)?),
+			upstreams: Arc::new(upstream::UpstreamGroup::new(client.clone(), backend)?),
 			policies,
+			remote_rate_limit,
+			client,
 		})
 	}
 	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
 		Self {
 			upstreams: self.upstreams.clone(),
 			policies,
+			remote_rate_limit: self.remote_rate_limit.clone(),
+			client: self.client.clone(),
 		}
 	}
 
@@ -114,6 +127,40 @@ impl Relay {
 	}
 	pub fn default_target_name(&self) -> Option<String> {
 		self.upstreams.default_target_name.clone()
+	}
+
+	/// Checks remote rate limiting using the request snapshot from the CEL context.
+	/// Returns Ok with response headers to apply on success, or Err if rate limited.
+	///
+	/// When the rate limit service is unreachable:
+	/// - `FailOpen`: the request is allowed (returns Ok).
+	/// - `FailClosed`: returns `ProxyError::RateLimitFailed` (500), not a rate limit (429).
+	pub async fn check_rate_limit(
+		&self,
+		cel: &CelExecWrapper,
+		mcp: Option<&rbac::ResourceType>,
+	) -> Result<::http::HeaderMap, UpstreamError> {
+		let Some(rl) = &self.remote_rate_limit else {
+			return Ok(::http::HeaderMap::new());
+		};
+		let Some(snapshot) = cel.snapshot() else {
+			tracing::trace!(
+				"ratelimit: no request snapshot available for domain={}, skipping",
+				rl.domain()
+			);
+			return Ok(::http::HeaderMap::new());
+		};
+		rl.check(self.client.clone(), snapshot, mcp)
+			.await
+			.map_err(|e| {
+				if e.service_error {
+					UpstreamError::Proxy(crate::proxy::ProxyError::RateLimitFailed)
+				} else {
+					UpstreamError::RateLimited {
+						response_headers: e.response_headers,
+					}
+				}
+			})
 	}
 
 	pub fn merge_tools(&self, cel: CelExecWrapper) -> Box<MergeFn> {

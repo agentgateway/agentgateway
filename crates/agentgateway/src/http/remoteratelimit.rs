@@ -6,7 +6,7 @@ use crate::http::localratelimit::RateLimitType;
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
 use crate::http::remoteratelimit::proto::rate_limit_service_client::RateLimitServiceClient;
 use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest};
-use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
+use crate::http::{PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::SimpleBackendReference;
@@ -354,7 +354,7 @@ impl RemoteRateLimit {
 		if cr.overall_code != (proto::rate_limit_response::Code::Ok as i32) {
 			let mut rb = ::http::response::Builder::new().status(StatusCode::TOO_MANY_REQUESTS);
 			if let Some(hm) = rb.headers_mut() {
-				process_headers(hm, cr.response_headers_to_add)
+				crate::http::proto_header::process_proto_headers(hm, cr.response_headers_to_add)
 			}
 			let resp = rb
 				.body(http::Body::from(cr.raw_body))
@@ -363,10 +363,10 @@ impl RemoteRateLimit {
 			return Ok(res);
 		}
 
-		process_headers(req.headers_mut(), cr.request_headers_to_add);
+		crate::http::proto_header::process_proto_headers(req.headers_mut(), cr.request_headers_to_add);
 		if !cr.response_headers_to_add.is_empty() {
 			let mut hm = HeaderMap::new();
-			process_headers(&mut hm, cr.response_headers_to_add);
+			crate::http::proto_header::process_proto_headers(&mut hm, cr.response_headers_to_add);
 			res.response_headers = Some(hm);
 		}
 		Ok(res)
@@ -410,24 +410,5 @@ impl RemoteRateLimit {
 			.0
 			.iter()
 			.flat_map(|v| v.entries.iter().map(|v| &v.1))
-	}
-}
-
-fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
-	for h in headers {
-		let Ok(hn) = HeaderName::from_bytes(h.key.as_bytes()) else {
-			continue;
-		};
-		let hv = if !h.value.is_empty() {
-			HeaderValue::from_bytes(h.value.as_bytes())
-		} else if !h.raw_value.is_empty() {
-			HeaderValue::from_bytes(&h.raw_value)
-		} else {
-			continue;
-		};
-		let Ok(hv) = hv else {
-			continue;
-		};
-		hm.insert(hn, hv);
 	}
 }

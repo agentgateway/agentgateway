@@ -186,6 +186,8 @@ async fn apply_backend_policies(
 		// Applied elsewhere
 		mcp_authentication: _,
 		// Applied elsewhere
+		mcp_remote_rate_limit: _,
+		// Applied elsewhere
 		inference_routing: _,
 		request_header_modifier,
 		response_header_modifier,

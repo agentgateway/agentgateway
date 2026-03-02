@@ -19,6 +19,7 @@ pub mod ext_authz;
 pub mod ext_proc;
 pub mod outlierdetection;
 mod peekbody;
+pub(crate) mod proto_header;
 pub mod remoteratelimit;
 pub mod sessionpersistence;
 #[cfg(any(test, feature = "internal_benches"))]
@@ -687,9 +688,46 @@ pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut Header
 	if let Some(rh) = additional_headers {
 		for (k, v) in rh.into_iter() {
 			let Some(k) = k else { continue };
+			if let Some(existing) = dest.get(&k)
+				&& let Some(merged) = merge_ratelimit_value(&k, existing, &v)
+			{
+				dest.insert(k, merged);
+				continue;
+			}
 			dest.insert(k, v);
 		}
 	}
+}
+
+/// For well-known rate limit headers, merge two values by keeping the most
+/// restrictive one. Returns `None` for non-rate-limit headers so the caller
+/// can fall back to plain overwrite.
+fn merge_ratelimit_value(
+	name: &HeaderName,
+	existing: &HeaderValue,
+	incoming: &HeaderValue,
+) -> Option<HeaderValue> {
+	use x_headers::*;
+	let keep_min = *name == X_RATELIMIT_REMAINING || *name == X_RATELIMIT_LIMIT;
+	let keep_max = *name == X_RATELIMIT_RESET
+		|| *name == X_RATELIMIT_RESET_REQUESTS
+		|| *name == X_RATELIMIT_RESET_TOKENS
+		|| *name == X_RATELIMIT_RESET_REQUESTS_DAY
+		|| *name == X_RATELIMIT_RESET_TOKENS_MINUTE
+		|| *name == RETRY_AFTER_MS;
+
+	if !keep_min && !keep_max {
+		return None;
+	}
+
+	let parse = |v: &HeaderValue| -> Option<u64> { v.to_str().ok()?.trim().parse().ok() };
+
+	let (Some(old), Some(new)) = (parse(existing), parse(incoming)) else {
+		return Some(incoming.clone());
+	};
+
+	let winner = if keep_min { old.min(new) } else { old.max(new) };
+	HeaderValue::from_str(&winner.to_string()).ok()
 }
 
 pin_project_lite::pin_project! {
@@ -802,5 +840,111 @@ impl Debug for DebugExtensions<'_> {
 			d.field("RequestStartTime", e);
 		}
 		d.finish()
+	}
+}
+
+#[cfg(test)]
+mod merge_header_tests {
+	use super::*;
+
+	fn hv(s: &str) -> HeaderValue {
+		HeaderValue::from_str(s).unwrap()
+	}
+
+	#[test]
+	fn remaining_keeps_lower() {
+		let mut dest = HeaderMap::new();
+		dest.insert("x-ratelimit-remaining", hv("95"));
+		let mut src = HeaderMap::new();
+		src.insert("x-ratelimit-remaining", hv("42"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("x-ratelimit-remaining").unwrap(), "42");
+	}
+
+	#[test]
+	fn remaining_keeps_existing_when_lower() {
+		let mut dest = HeaderMap::new();
+		dest.insert("x-ratelimit-remaining", hv("10"));
+		let mut src = HeaderMap::new();
+		src.insert("x-ratelimit-remaining", hv("50"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("x-ratelimit-remaining").unwrap(), "10");
+	}
+
+	#[test]
+	fn limit_keeps_lower() {
+		let mut dest = HeaderMap::new();
+		dest.insert("x-ratelimit-limit", hv("100"));
+		let mut src = HeaderMap::new();
+		src.insert("x-ratelimit-limit", hv("50"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("x-ratelimit-limit").unwrap(), "50");
+	}
+
+	#[test]
+	fn reset_keeps_higher() {
+		let mut dest = HeaderMap::new();
+		dest.insert("x-ratelimit-reset", hv("1000"));
+		let mut src = HeaderMap::new();
+		src.insert("x-ratelimit-reset", hv("2000"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("x-ratelimit-reset").unwrap(), "2000");
+	}
+
+	#[test]
+	fn reset_keeps_existing_when_higher() {
+		let mut dest = HeaderMap::new();
+		dest.insert("x-ratelimit-reset", hv("3000"));
+		let mut src = HeaderMap::new();
+		src.insert("x-ratelimit-reset", hv("1500"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("x-ratelimit-reset").unwrap(), "3000");
+	}
+
+	#[test]
+	fn retry_after_ms_keeps_higher() {
+		let mut dest = HeaderMap::new();
+		dest.insert("retry-after-ms", hv("500"));
+		let mut src = HeaderMap::new();
+		src.insert("retry-after-ms", hv("1200"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("retry-after-ms").unwrap(), "1200");
+	}
+
+	#[test]
+	fn non_ratelimit_header_overwrites() {
+		let mut dest = HeaderMap::new();
+		dest.insert("x-custom", hv("old"));
+		let mut src = HeaderMap::new();
+		src.insert("x-custom", hv("new"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("x-custom").unwrap(), "new");
+	}
+
+	#[test]
+	fn unparseable_value_falls_back_to_overwrite() {
+		let mut dest = HeaderMap::new();
+		dest.insert("x-ratelimit-remaining", hv("not-a-number"));
+		let mut src = HeaderMap::new();
+		src.insert("x-ratelimit-remaining", hv("42"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("x-ratelimit-remaining").unwrap(), "42");
+	}
+
+	#[test]
+	fn no_existing_header_inserts_normally() {
+		let mut dest = HeaderMap::new();
+		let mut src = HeaderMap::new();
+		src.insert("x-ratelimit-remaining", hv("42"));
+		merge_in_headers(Some(src), &mut dest);
+		assert_eq!(dest.get("x-ratelimit-remaining").unwrap(), "42");
+	}
+
+	#[test]
+	fn none_headers_is_noop() {
+		let mut dest = HeaderMap::new();
+		dest.insert("x-ratelimit-remaining", hv("42"));
+		merge_in_headers(None, &mut dest);
+		assert_eq!(dest.get("x-ratelimit-remaining").unwrap(), "42");
 	}
 }

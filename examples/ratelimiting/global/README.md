@@ -90,7 +90,7 @@ Now that we have the gateway running, we can use the [mcpinspector](https://gith
 npx @modelcontextprotocol/inspector
 ```
 
-![Global Route Limiting Enforcment](./img/global-route-limits-429.png)
+![Global Route Limiting Enforcement](./img/global-route-limits-429.png)
 
 The system will return `OVER_LIMIT` responses when thresholds are exceeded.
 

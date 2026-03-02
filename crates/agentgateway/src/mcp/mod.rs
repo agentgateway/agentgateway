@@ -2,6 +2,7 @@ mod auth;
 mod handler;
 mod mergestream;
 mod rbac;
+pub(crate) mod remoteratelimit;
 mod router;
 mod session;
 mod sse;
@@ -54,6 +55,8 @@ pub enum Error {
 	// Intentionally do NOT say its not authorized; we hide the existence of the tool
 	#[error("Unknown {1}: {2}")]
 	Authorization(RequestId, String, String),
+	#[error("rate limited")]
+	RateLimited(RequestId, ::http::HeaderMap),
 	#[error("failed to process session_id query parameter")]
 	InvalidSessionIdQuery,
 	#[error("failed to establish get stream: {0}")]

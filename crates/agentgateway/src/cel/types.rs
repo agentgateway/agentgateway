@@ -243,6 +243,11 @@ impl<'a> Executor<'a> {
 	pub fn new_empty() -> Self {
 		Default::default()
 	}
+	pub fn new_snapshot(req: &'a RequestSnapshot) -> Self {
+		let mut this = Self::new_empty();
+		this.set_request_snapshot(req);
+		this
+	}
 	pub fn new_mcp(req: Option<&'a RequestSnapshot>, mcp: &'a ResourceType) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
