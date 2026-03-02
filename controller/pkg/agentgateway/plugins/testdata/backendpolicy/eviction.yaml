@@ -1,0 +1,57 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: AgentgatewayBackend
+      name: be
+      group: agentgateway.dev
+  backend:
+    eviction:
+      condition: "response.code >= 500"
+      duration: 60s
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook
+  namespace: default
+spec:
+  ports:
+    - port: 80
+---
+# Output
+output:
+- Policy:
+    backend:
+      eviction:
+        condition: response.code >= 500
+        duration: 60s
+    key: default/agw:eviction:default/be
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      backend:
+        name: be
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: agentgateway.dev
+      name: StatusSummary
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: 'Policy is not attached: AgentgatewayBackend default/be not found'
+      reason: Pending
+      status: "False"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

@@ -197,6 +197,8 @@ async fn apply_backend_policies(
 		request_mirror: _,
 		// Applied elsewhere
 		override_dest: _,
+		// Applied elsewhere
+		eviction: _,
 	} = &backend_call.backend_policies;
 	response_policies.backend_response_header = response_header_modifier.clone();
 	response_policies.backend_transformation = transformation.clone();
@@ -640,7 +642,6 @@ impl HTTPProxy {
 			.route_policies(&route_path, &selected_route.inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-		log.eviction_policy = route_policies.eviction.clone();
 		log.retry_backoff = route_policies.retry.as_ref().and_then(|r| r.backoff);
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
@@ -679,6 +680,12 @@ impl HTTPProxy {
 		);
 		backend_policies.register_cel_expressions(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
+		log.eviction_policy = backend_policies.eviction.clone();
+		if let Some(ev) = &backend_policies.eviction
+			&& let Some(expr) = &ev.unhealthy_expression
+		{
+			log.cel.ctx().register_expression(expr.as_ref());
+		}
 		log.backend_info = Some(selected_backend.backend.backend.backend_info());
 		if let Some(bp) = selected_backend.backend.backend.backend_protocol() {
 			log.backend_protocol = Some(bp)

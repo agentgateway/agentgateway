@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -33,6 +34,7 @@ const (
 	backendHttpPolicySuffix       = ":backend-http"
 	mcpAuthorizationPolicySuffix  = ":mcp-authorization"
 	mcpAuthenticationPolicySuffix = ":mcp-authentication"
+	evictionPolicySuffix          = ":eviction"
 )
 
 func TranslateInlineBackendPolicy(
@@ -90,6 +92,15 @@ func translateBackendPolicyToAgw(
 		agwPolicies = append(agwPolicies, pol...)
 	}
 
+	if s := backend.Eviction; s != nil {
+		pol, err := translateBackendEviction(policy, policyTarget)
+		if err != nil {
+			logger.Error("error processing backend eviction", "err", err)
+			errs = append(errs, err)
+		}
+		agwPolicies = append(agwPolicies, pol...)
+	}
+
 	if s := backend.Transformation; s != nil {
 		pol, err := translateBackendTransformation(policy, policyTarget)
 		if err != nil {
@@ -134,6 +145,35 @@ func translateBackendPolicyToAgw(
 	}
 
 	return agwPolicies, errors.Join(errs...)
+}
+
+func translateBackendEviction(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {
+	var errs []error
+
+	eviction := policy.Spec.Backend.Eviction
+
+	evictionDur := 30 * time.Second // default
+	if eviction.Duration != nil {
+		evictionDur = eviction.Duration.Duration
+	}
+	p := &api.BackendPolicySpec_Eviction{
+		Condition: string(eviction.Condition),
+		Duration:  durationpb.New(evictionDur),
+	}
+	evictPolicy := &api.Policy{
+		Key:    policy.Namespace + "/" + policy.Name + evictionPolicySuffix + attachmentName(target),
+		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Target: target,
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_Eviction_{
+					Eviction: p,
+				},
+			},
+		},
+	}
+
+	return []AgwPolicy{{Policy: evictPolicy}}, errors.Join(errs...)
 }
 
 func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) ([]AgwPolicy, error) {

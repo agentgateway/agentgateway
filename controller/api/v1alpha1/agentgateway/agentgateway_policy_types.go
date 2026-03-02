@@ -136,6 +136,28 @@ type BackendSimple struct {
 	// auth defines settings for managing authentication to the backend
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
+
+	// eviction defines settings for evicting unhealthy backends.
+	// +optional
+	Eviction *BackendEviction `json:"eviction,omitempty"`
+}
+
+// BackendEviction defines settings for evicting unhealthy backends based on response characteristics.
+type BackendEviction struct {
+	// condition is a CEL expression that determines whether a response indicates an unhealthy backend.
+	// When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
+	//
+	// For example, to evict on 5xx responses: `response.code >= 500`.
+	//
+	// +required
+	Condition shared.CELExpression `json:"condition"`
+
+	// duration specifies how long a backend should be evicted after being marked unhealthy. If unset, defaults to 30s.
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="evictionDuration must be at least 1 second"
+	// +kubebuilder:default="30s"
+	// +optional
+	Duration *metav1.Duration `json:"duration,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet

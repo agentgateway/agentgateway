@@ -442,6 +442,35 @@ spec:
                                               gcp] must be set
                                             rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
+                                        eviction:
+                                          description: eviction defines settings for
+                                            evicting unhealthy backends.
+                                          properties:
+                                            condition:
+                                              description: |-
+                                                condition is a CEL expression that determines whether a response indicates an unhealthy backend.
+                                                When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
+
+                                                For example, to evict on 5xx responses: `response.code >= 500`.
+                                              maxLength: 16384
+                                              minLength: 1
+                                              type: string
+                                            duration:
+                                              default: 30s
+                                              description: duration specifies how
+                                                long a backend should be evicted after
+                                                being marked unhealthy. If unset,
+                                                defaults to 30s.
+                                              type: string
+                                              x-kubernetes-validations:
+                                              - message: invalid duration value
+                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                              - message: evictionDuration must be
+                                                  at least 1 second
+                                                rule: duration(self) >= duration('1s')
+                                          required:
+                                          - condition
+                                          type: object
                                         http:
                                           description: http defines settings for managing
                                             HTTP requests to the backend.
@@ -1050,6 +1079,35 @@ spec:
                                               gcp] must be set
                                             rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
+                                        eviction:
+                                          description: eviction defines settings for
+                                            evicting unhealthy backends.
+                                          properties:
+                                            condition:
+                                              description: |-
+                                                condition is a CEL expression that determines whether a response indicates an unhealthy backend.
+                                                When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
+
+                                                For example, to evict on 5xx responses: `response.code >= 500`.
+                                              maxLength: 16384
+                                              minLength: 1
+                                              type: string
+                                            duration:
+                                              default: 30s
+                                              description: duration specifies how
+                                                long a backend should be evicted after
+                                                being marked unhealthy. If unset,
+                                                defaults to 30s.
+                                              type: string
+                                              x-kubernetes-validations:
+                                              - message: invalid duration value
+                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                              - message: evictionDuration must be
+                                                  at least 1 second
+                                                rule: duration(self) >= duration('1s')
+                                          required:
+                                          - condition
+                                          type: object
                                         http:
                                           description: http defines settings for managing
                                             HTTP requests to the backend.
@@ -1654,6 +1712,35 @@ spec:
                                               gcp] must be set
                                             rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
+                                        eviction:
+                                          description: eviction defines settings for
+                                            evicting unhealthy backends.
+                                          properties:
+                                            condition:
+                                              description: |-
+                                                condition is a CEL expression that determines whether a response indicates an unhealthy backend.
+                                                When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
+
+                                                For example, to evict on 5xx responses: `response.code >= 500`.
+                                              maxLength: 16384
+                                              minLength: 1
+                                              type: string
+                                            duration:
+                                              default: 30s
+                                              description: duration specifies how
+                                                long a backend should be evicted after
+                                                being marked unhealthy. If unset,
+                                                defaults to 30s.
+                                              type: string
+                                              x-kubernetes-validations:
+                                              - message: invalid duration value
+                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                              - message: evictionDuration must be
+                                                  at least 1 second
+                                                rule: duration(self) >= duration('1s')
+                                          required:
+                                          - condition
+                                          type: object
                                         http:
                                           description: http defines settings for managing
                                             HTTP requests to the backend.
@@ -2298,14 +2385,8 @@ spec:
                                             - RegularExpression
                                             type: string
                                           value:
-                                            description: |-
-                                              Value is the value of HTTP Header to be matched.
-                                              <gateway:experimental:description>
-                                              Must consist of printable US-ASCII characters, optionally separated
-                                              by single tabs or spaces. See: https://tools.ietf.org/html/rfc7230#section-3.2
-                                              </gateway:experimental:description>
-
-                                              <gateway:experimental:validation:Pattern=`^[!-~]+([\t ]?[!-~]+)*$`>
+                                            description: Value is the value of HTTP
+                                              Header to be matched.
                                             maxLength: 4096
                                             minLength: 1
                                             type: string
@@ -2475,6 +2556,35 @@ spec:
                                               gcp] must be set
                                             rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
+                                        eviction:
+                                          description: eviction defines settings for
+                                            evicting unhealthy backends.
+                                          properties:
+                                            condition:
+                                              description: |-
+                                                condition is a CEL expression that determines whether a response indicates an unhealthy backend.
+                                                When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
+
+                                                For example, to evict on 5xx responses: `response.code >= 500`.
+                                              maxLength: 16384
+                                              minLength: 1
+                                              type: string
+                                            duration:
+                                              default: 30s
+                                              description: duration specifies how
+                                                long a backend should be evicted after
+                                                being marked unhealthy. If unset,
+                                                defaults to 30s.
+                                              type: string
+                                              x-kubernetes-validations:
+                                              - message: invalid duration value
+                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                              - message: evictionDuration must be
+                                                  at least 1 second
+                                                rule: duration(self) >= duration('1s')
+                                          required:
+                                          - condition
+                                          type: object
                                         http:
                                           description: http defines settings for managing
                                             HTTP requests to the backend.
@@ -3083,6 +3193,35 @@ spec:
                                               gcp] must be set
                                             rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                                               == 1'
+                                        eviction:
+                                          description: eviction defines settings for
+                                            evicting unhealthy backends.
+                                          properties:
+                                            condition:
+                                              description: |-
+                                                condition is a CEL expression that determines whether a response indicates an unhealthy backend.
+                                                When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
+
+                                                For example, to evict on 5xx responses: `response.code >= 500`.
+                                              maxLength: 16384
+                                              minLength: 1
+                                              type: string
+                                            duration:
+                                              default: 30s
+                                              description: duration specifies how
+                                                long a backend should be evicted after
+                                                being marked unhealthy. If unset,
+                                                defaults to 30s.
+                                              type: string
+                                              x-kubernetes-validations:
+                                              - message: invalid duration value
+                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                              - message: evictionDuration must be
+                                                  at least 1 second
+                                                rule: duration(self) >= duration('1s')
+                                          required:
+                                          - condition
+                                          type: object
                                         http:
                                           description: http defines settings for managing
                                             HTTP requests to the backend.
@@ -3742,14 +3881,8 @@ spec:
                                             - RegularExpression
                                             type: string
                                           value:
-                                            description: |-
-                                              Value is the value of HTTP Header to be matched.
-                                              <gateway:experimental:description>
-                                              Must consist of printable US-ASCII characters, optionally separated
-                                              by single tabs or spaces. See: https://tools.ietf.org/html/rfc7230#section-3.2
-                                              </gateway:experimental:description>
-
-                                              <gateway:experimental:validation:Pattern=`^[!-~]+([\t ]?[!-~]+)*$`>
+                                            description: Value is the value of HTTP
+                                              Header to be matched.
                                             maxLength: 4096
                                             minLength: 1
                                             type: string
@@ -3956,6 +4089,33 @@ spec:
                         aws azure gcp] must be set
                       rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                         == 1'
+                  eviction:
+                    description: eviction defines settings for evicting unhealthy
+                      backends.
+                    properties:
+                      condition:
+                        description: |-
+                          condition is a CEL expression that determines whether a response indicates an unhealthy backend.
+                          When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
+
+                          For example, to evict on 5xx responses: `response.code >= 500`.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
+                      duration:
+                        default: 30s
+                        description: duration specifies how long a backend should
+                          be evicted after being marked unhealthy. If unset, defaults
+                          to 30s.
+                        type: string
+                        x-kubernetes-validations:
+                        - message: invalid duration value
+                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                        - message: evictionDuration must be at least 1 second
+                          rule: duration(self) >= duration('1s')
+                    required:
+                    - condition
+                    type: object
                   http:
                     description: http defines settings for managing HTTP requests
                       to the backend.
@@ -4542,9 +4702,9 @@ spec:
                         >= 1'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [ai auth http mcp tcp tls
-                    transformation] must be set
-                  rule: '[has(self.ai),has(self.auth),has(self.http),has(self.mcp),has(self.tcp),has(self.tls),has(self.transformation)].filter(x,x==true).size()
+                - message: at least one of the fields in [ai auth eviction http mcp
+                    tcp tls transformation] must be set
+                  rule: '[has(self.ai),has(self.auth),has(self.eviction),has(self.http),has(self.mcp),has(self.tcp),has(self.tls),has(self.transformation)].filter(x,x==true).size()
                     >= 1'
               frontend:
                 description: |-
@@ -5314,7 +5474,7 @@ spec:
                           AllowHeaders indicates which HTTP request headers are supported for
                           accessing the requested resource.
 
-                          Header names are not case-sensitive.
+                          Header names are not case sensitive.
 
                           Multiple header names in the value of the `Access-Control-Allow-Headers`
                           response header are separated by a comma (",").
@@ -5333,21 +5493,18 @@ spec:
                           client side.
 
                           A wildcard indicates that the requests with all HTTP headers are allowed.
-                          If config contains the wildcard "*" in allowHeaders and the request is
-                          not credentialed, the `Access-Control-Allow-Headers` response header
-                          can either use the `*` wildcard or the value of
-                          Access-Control-Request-Headers from the request.
+                          The `Access-Control-Allow-Headers` response header can only use `*`
+                          wildcard as value when the `AllowCredentials` field is false or omitted.
 
-                          When the request is credentialed, the gateway must not specify the `*`
-                          wildcard in the `Access-Control-Allow-Headers` response header. When
-                          also the `AllowCredentials` field is true and `AllowHeaders` field
-                          is specified with the `*` wildcard, the gateway must specify one or more
+                          When the `AllowCredentials` field is true and `AllowHeaders` field
+                          specified with the `*` wildcard, the gateway must specify one or more
                           HTTP headers in the value of the `Access-Control-Allow-Headers` response
                           header. The value of the header `Access-Control-Allow-Headers` is same as
                           the `Access-Control-Request-Headers` header provided by the client. If
                           the header `Access-Control-Request-Headers` is not included in the
                           request, the gateway will omit the `Access-Control-Allow-Headers`
-                          response header, instead of specifying the `*` wildcard.
+                          response header, instead of specifying the `*` wildcard. A Gateway
+                          implementation may choose to add implementation-specific default headers.
 
                           Support: Extended
                         items:
@@ -5371,10 +5528,6 @@ spec:
                         maxItems: 64
                         type: array
                         x-kubernetes-list-type: set
-                        x-kubernetes-validations:
-                        - message: AllowHeaders cannot contain '*' alongside other
-                            methods
-                          rule: '!(''*'' in self && self.size() > 1)'
                       allowMethods:
                         description: |-
                           AllowMethods indicates which HTTP methods are supported for accessing the
@@ -5383,7 +5536,7 @@ spec:
                           Valid values are any method defined by RFC9110, along with the special
                           value `*`, which represents all HTTP methods are allowed.
 
-                          Method names are case-sensitive, so these values are also case-sensitive.
+                          Method names are case sensitive, so these values are also case-sensitive.
                           (See https://www.rfc-editor.org/rfc/rfc2616#section-5.1.1)
 
                           Multiple method names in the value of the `Access-Control-Allow-Methods`
@@ -5403,21 +5556,18 @@ spec:
                           `Access-Control-Allow-Methods`, it will present an error on the client
                           side.
 
-                          If config contains the wildcard "*" in allowMethods and the request is
-                          not credentialed, the `Access-Control-Allow-Methods` response header
-                          can either use the `*` wildcard or the value of
-                          Access-Control-Request-Method from the request.
+                          The `Access-Control-Allow-Methods` response header can only use `*`
+                          wildcard as value when the `AllowCredentials` field is false or omitted.
 
-                          When the request is credentialed, the gateway must not specify the `*`
-                          wildcard in the `Access-Control-Allow-Methods` response header. When
-                          also the `AllowCredentials` field is true and `AllowMethods` field
+                          When the `AllowCredentials` field is true and `AllowMethods` field
                           specified with the `*` wildcard, the gateway must specify one HTTP method
                           in the value of the Access-Control-Allow-Methods response header. The
                           value of the header `Access-Control-Allow-Methods` is same as the
                           `Access-Control-Request-Method` header provided by the client. If the
                           header `Access-Control-Request-Method` is not included in the request,
                           the gateway will omit the `Access-Control-Allow-Methods` response header,
-                          instead of specifying the `*` wildcard.
+                          instead of specifying the `*` wildcard. A Gateway implementation may
+                          choose to add implementation-specific default methods.
 
                           Support: Extended
                         items:
@@ -5484,19 +5634,10 @@ spec:
                           the CORS headers. The cross-origin request fails on the client side.
                           Therefore, the client doesn't attempt the actual cross-origin request.
 
-                          Conversely, if the request `Origin` matches one of the configured
-                          allowed origins, the gateway sets the response header
-                          `Access-Control-Allow-Origin` to the same value as the `Origin`
-                          header provided by the client.
+                          The `Access-Control-Allow-Origin` response header can only use `*`
+                          wildcard as value when the `AllowCredentials` field is false or omitted.
 
-                          When config has the wildcard ("*") in allowOrigins, and the request
-                          is not credentialed (e.g., it is a preflight request), the
-                          `Access-Control-Allow-Origin` response header either contains the
-                          wildcard as well or the Origin from the request.
-
-                          When the request is credentialed, the gateway must not specify the `*`
-                          wildcard in the `Access-Control-Allow-Origin` response header. When
-                          also the `AllowCredentials` field is true and `AllowOrigins` field
+                          When the `AllowCredentials` field is true and `AllowOrigins` field
                           specified with the `*` wildcard, the gateway must return a single origin
                           in the value of the `Access-Control-Allow-Origin` response header,
                           instead of specifying the `*` wildcard. The value of the header
@@ -5508,12 +5649,13 @@ spec:
                           description: |-
                             The CORSOrigin MUST NOT be a relative URI, and it MUST follow the URI syntax and
                             encoding rules specified in RFC3986.  The CORSOrigin MUST include both a
-                            scheme ("http" or "https") and a scheme-specific-part, or it should be a single '*' character.
+                            scheme (e.g., "http" or "spiffe") and a scheme-specific-part, or it should be a single '*' character.
                             URIs that include an authority MUST include a fully qualified domain name or
                             IP address as the host.
+                            <gateway:util:excludeFromCRD> The below regex was generated to simplify the assertion of scheme://host:<port> being port optional </gateway:util:excludeFromCRD>
                           maxLength: 253
                           minLength: 1
-                          pattern: (^\*$)|(^(http(s)?):\/\/(((\*\.)?([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9-]+|\*)(:([0-9]{1,5}))?)$)
+                          pattern: (^\*$)|(^([a-zA-Z][a-zA-Z0-9+\-.]+):\/\/([^:/?#]+)(:([0-9]{1,5}))?$)
                           type: string
                         maxItems: 64
                         type: array
@@ -5544,18 +5686,14 @@ spec:
                           this additional header will be exposed as part of the response to the
                           client.
 
-                          Header names are not case-sensitive.
+                          Header names are not case sensitive.
 
                           Multiple header names in the value of the `Access-Control-Expose-Headers`
                           response header are separated by a comma (",").
 
                           A wildcard indicates that the responses with all HTTP headers are exposed
                           to clients. The `Access-Control-Expose-Headers` response header can only
-                          use `*` wildcard as value when the request is not credentialed.
-
-                          When the `exposeHeaders` config field contains the "*" wildcard and
-                          the request is credentialed, the gateway cannot use the `*` wildcard in
-                          the `Access-Control-Expose-Headers` response header.
+                          use `*` wildcard as value when the `AllowCredentials` field is false or omitted.
 
                           Support: Extended
                         items:
@@ -5591,9 +5729,6 @@ spec:
 
                           The default value of `Access-Control-Max-Age` response header is 5
                           (seconds).
-
-                          When the `MaxAge` field is unspecified, the gateway sets the response
-                          header "Access-Control-Max-Age: 5" by default.
                         format: int32
                         minimum: 1
                         type: integer
@@ -5961,14 +6096,8 @@ spec:
                                   pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
                                   type: string
                                 value:
-                                  description: |-
-                                    Value is the value of HTTP Header to be matched.
-                                    <gateway:experimental:description>
-                                    Must consist of printable US-ASCII characters, optionally separated
-                                    by single tabs or spaces. See: https://tools.ietf.org/html/rfc7230#section-3.2
-                                    </gateway:experimental:description>
-
-                                    <gateway:experimental:validation:Pattern=`^[!-~]+([\t ]?[!-~]+)*$`>
+                                  description: Value is the value of HTTP Header to
+                                    be matched.
                                   maxLength: 4096
                                   minLength: 1
                                   type: string
@@ -6041,14 +6170,8 @@ spec:
                                   pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
                                   type: string
                                 value:
-                                  description: |-
-                                    Value is the value of HTTP Header to be matched.
-                                    <gateway:experimental:description>
-                                    Must consist of printable US-ASCII characters, optionally separated
-                                    by single tabs or spaces. See: https://tools.ietf.org/html/rfc7230#section-3.2
-                                    </gateway:experimental:description>
-
-                                    <gateway:experimental:validation:Pattern=`^[!-~]+([\t ]?[!-~]+)*$`>
+                                  description: Value is the value of HTTP Header to
+                                    be matched.
                                   maxLength: 4096
                                   minLength: 1
                                   type: string
@@ -6102,14 +6225,8 @@ spec:
                                   pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
                                   type: string
                                 value:
-                                  description: |-
-                                    Value is the value of HTTP Header to be matched.
-                                    <gateway:experimental:description>
-                                    Must consist of printable US-ASCII characters, optionally separated
-                                    by single tabs or spaces. See: https://tools.ietf.org/html/rfc7230#section-3.2
-                                    </gateway:experimental:description>
-
-                                    <gateway:experimental:validation:Pattern=`^[!-~]+([\t ]?[!-~]+)*$`>
+                                  description: Value is the value of HTTP Header to
+                                    be matched.
                                   maxLength: 4096
                                   minLength: 1
                                   type: string
@@ -6182,14 +6299,8 @@ spec:
                                   pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
                                   type: string
                                 value:
-                                  description: |-
-                                    Value is the value of HTTP Header to be matched.
-                                    <gateway:experimental:description>
-                                    Must consist of printable US-ASCII characters, optionally separated
-                                    by single tabs or spaces. See: https://tools.ietf.org/html/rfc7230#section-3.2
-                                    </gateway:experimental:description>
-
-                                    <gateway:experimental:validation:Pattern=`^[!-~]+([\t ]?[!-~]+)*$`>
+                                  description: Value is the value of HTTP Header to
+                                    be matched.
                                   maxLength: 4096
                                   minLength: 1
                                   type: string
@@ -6620,7 +6731,7 @@ spec:
                           For example, setting the `rules[].retry.backoff` field to the value
                           `100ms` will cause a backend request to first be retried approximately
                           100 milliseconds after timing out or receiving a response code configured
-                          to be retriable.
+                          to be retryable.
 
                           An implementation MAY use an exponential or alternative backoff strategy
                           for subsequent retry attempts, MAY cap the maximum backoff duration to
@@ -6663,7 +6774,7 @@ spec:
                             HTTPRouteRetryStatusCode defines an HTTP response status code for
                             which a backend request should be retried.
 
-                            Implementations MUST support the following status codes as retriable:
+                            Implementations MUST support the following status codes as retryable:
 
                             * 500
                             * 502

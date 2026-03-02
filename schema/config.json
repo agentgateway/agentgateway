@@ -20,7 +20,7 @@
       "description": "policies defines additional policies that can be attached to various other configurations.\nThis is an advanced feature; users should typically use the inline `policies` field under route/gateway.",
       "type": "array",
       "items": {
-        "$ref": "#/$defs/LocalPolicy"
+        "$ref": "#/$defs/LocalPolicy2"
       }
     },
     "workloads": {
@@ -2153,6 +2153,18 @@
             }
           ],
           "default": null
+        },
+        "eviction": {
+          "description": "Evict this backend (outlier detection) on unhealthy responses; duration and CEL configurable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -2639,6 +2651,40 @@
         "secs",
         "nanos"
       ]
+    },
+    "LocalPolicy": {
+      "description": "Local/config eviction policy with CEL as string; converted to Policy by compiling the expression.",
+      "type": "object",
+      "properties": {
+        "unhealthyExpression": {
+          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.status >= 500`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evictionDuration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "healthThreshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "healthOnUnevict": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "additionalProperties": false
     },
     "BedrockGuardrails": {
       "description": "Configuration for AWS Bedrock Guardrails integration.",
@@ -4104,6 +4150,18 @@
           ],
           "default": null
         },
+        "eviction": {
+          "description": "Evict this backend (outlier detection) on unhealthy responses; duration and CEL configurable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
           "anyOf": [
@@ -4477,6 +4535,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "eviction": {
+          "description": "Evict this backend (outlier detection) on unhealthy responses; duration and CEL configurable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalPolicy"
             },
             {
               "type": "null"
@@ -5158,7 +5228,7 @@
         "http"
       ]
     },
-    "LocalPolicy": {
+    "LocalPolicy2": {
       "type": "object",
       "properties": {
         "name": {

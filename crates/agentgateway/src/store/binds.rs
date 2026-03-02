@@ -129,6 +129,8 @@ pub struct BackendPolicies {
 
 	pub session_persistence: Option<http::sessionpersistence::Policy>,
 
+	pub eviction: Option<eviction::Policy>,
+
 	/// Internal-only override for destination endpoint selection.
 	/// Used for stateful MCP routing (session affinity).
 	/// Not exposed through config - set programmatically only.
@@ -163,6 +165,7 @@ impl BackendPolicies {
 			},
 			transformation: other.transformation.or(self.transformation),
 			session_persistence: other.session_persistence.or(self.session_persistence),
+			eviction: other.eviction.or(self.eviction),
 			override_dest: other.override_dest.or(self.override_dest),
 		}
 	}
@@ -200,7 +203,6 @@ pub struct RoutePolicies {
 
 	pub timeout: Option<timeout::Policy>,
 	pub retry: Option<retry::Policy>,
-	pub eviction: Option<eviction::Policy>,
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: Option<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
@@ -267,11 +269,6 @@ impl RoutePolicies {
 			for expr in extproc.expressions() {
 				ctx.register_expression(expr);
 			}
-		}
-		if let Some(ev) = &self.eviction
-			&& let Some(expr) = &ev.unhealthy_expression
-		{
-			ctx.register_expression(expr.as_ref());
 		}
 	}
 }
@@ -454,9 +451,6 @@ impl Store {
 				},
 				TrafficPolicy::Retry(p) => {
 					pol.retry.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Eviction(p) => {
-					pol.eviction.get_or_insert_with(|| p.clone());
 				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
 					pol.request_header_modifier.get_or_insert_with(|| p.clone());
@@ -670,6 +664,9 @@ impl Store {
 				},
 				BackendPolicy::SessionPersistence(p) => {
 					pol.session_persistence.get_or_insert_with(|| p.clone());
+				},
+				BackendPolicy::Eviction(p) => {
+					pol.eviction.get_or_insert_with(|| p.clone());
 				},
 				BackendPolicy::RequestMirror(p) => {
 					if pol.request_mirror.is_empty() {

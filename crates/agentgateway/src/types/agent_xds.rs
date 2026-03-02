@@ -11,7 +11,7 @@ use llm::{AIBackend, AIProvider, NamedAIProvider};
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
-use crate::http::{HeaderOrPseudo, Scheme, auth, authorization};
+use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, eviction};
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
@@ -124,6 +124,12 @@ impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 	}
 }
 
+fn expand_backend_policy_spec(
+	spec: &proto::agent::BackendPolicySpec,
+) -> Result<Vec<BackendPolicy>, ProtoError> {
+	BackendPolicy::try_from(spec).map(|p| vec![p])
+}
+
 impl TryFrom<&proto::agent::RouteBackend> for RouteBackendReference {
 	type Error = ProtoError;
 
@@ -132,8 +138,11 @@ impl TryFrom<&proto::agent::RouteBackend> for RouteBackendReference {
 		let inline_policies = s
 			.backend_policies
 			.iter()
-			.map(BackendPolicy::try_from)
-			.collect::<Result<Vec<_>, _>>()?;
+			.map(expand_backend_policy_spec)
+			.collect::<Result<Vec<_>, _>>()?
+			.into_iter()
+			.flatten()
+			.collect();
 		Ok(Self {
 			weight: s.weight as usize,
 			backend,
@@ -690,8 +699,11 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 		let pols = s
 			.inline_policies
 			.iter()
-			.map(BackendPolicy::try_from)
-			.collect::<Result<Vec<_>, _>>()?;
+			.map(expand_backend_policy_spec)
+			.collect::<Result<Vec<_>, _>>()?
+			.into_iter()
+			.flatten()
+			.collect::<Vec<_>>();
 		let name = s.name.as_ref().ok_or(ProtoError::MissingRequiredField)?;
 		let backend = match &s.kind {
 			Some(proto::agent::backend::Kind::Static(s)) => Backend::Opaque(
@@ -1133,9 +1145,27 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 					.collect::<Result<Vec<_>, _>>()?;
 				BackendPolicy::RequestMirror(mirrors)
 			},
+			Some(bps::Kind::Eviction(ev)) => BackendPolicy::Eviction(convert_eviction(ev)?),
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}
+}
+
+fn convert_eviction(
+	ev: &proto::agent::backend_policy_spec::Eviction,
+) -> Result<eviction::Policy, ProtoError> {
+	let unhealthy_expression = if ev.condition.is_empty() {
+		None
+	} else {
+		Some(Arc::new(cel::Expression::new_permissive(&ev.condition)))
+	};
+	let eviction_duration = ev.duration.map(convert_duration);
+	Ok(eviction::Policy {
+		unhealthy_expression,
+		eviction_duration,
+		health_threshold: None,
+		health_on_unevict: None,
+	})
 }
 
 impl TryFrom<&proto::agent::TrafficPolicySpec> for PhasedTrafficPolicy {

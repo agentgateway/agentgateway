@@ -1937,7 +1937,6 @@ pub enum FrontendPolicy {
 pub enum TrafficPolicy {
 	Timeout(timeout::Policy),
 	Retry(retry::Policy),
-	Eviction(eviction::Policy),
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	Authorization(Authorization),
@@ -1980,6 +1979,7 @@ pub enum BackendPolicy {
 	AI(Arc<llm::Policy>),
 	SessionPersistence(http::sessionpersistence::Policy),
 	Transformation(crate::http::transformation_cel::Transformation),
+	Eviction(eviction::Policy),
 
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(filters::HeaderModifier),
