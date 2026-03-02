@@ -623,7 +623,8 @@ message TrafficPolicySpec {
     optional uint32 status_on_error = 5;
     repeated string include_request_headers = 6;
     BodyOptions include_request_body = 7;
-    google.protobuf.Duration timeout = 8;
+    reserved 8;
+    reserved "timeout";
   }
   message RBAC {
     repeated string allow = 1;

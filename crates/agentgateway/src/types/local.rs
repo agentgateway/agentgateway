@@ -416,12 +416,18 @@ impl LocalAIBackend {
 }
 
 impl LocalBackend {
-	fn make_backend(
+	fn make_mcp_backend(
 		b: Backend,
-		policies: Option<LocalBackendPolicies>,
+		policies: Option<MCPLocalBackendPolicies>,
 		tls: bool,
 	) -> Result<BackendWithPolicies, anyhow::Error> {
 		let mut inline_policies = policies
+			.map(|p| LocalBackendPolicies {
+				simple: p.simple,
+				mcp_authorization: p.mcp_authorization,
+				a2a: None,
+				ai: None,
+			})
 			.map(LocalBackendPolicies::translate)
 			.transpose()?
 			.unwrap_or_default();
@@ -455,7 +461,7 @@ impl LocalBackend {
 							let (backend, path, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								backends.push(Self::make_backend(b, t.policies.clone(), tls)?);
+								backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
 							}
 							McpTargetSpec::Sse(SseTargetSpec {
 								backend: bref,
@@ -466,7 +472,7 @@ impl LocalBackend {
 							let (backend, path, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								backends.push(Self::make_backend(b, t.policies.clone(), tls)?);
+								backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
 							}
 							McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 								backend: bref,
@@ -478,7 +484,7 @@ impl LocalBackend {
 							let (backend, _, tls) = backend.process()?;
 							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
 							if let Some(b) = be {
-								backends.push(Self::make_backend(b, t.policies.clone(), tls)?);
+								backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
 							}
 							let openapi_schema = schema.load_openapi_schema(client.clone()).await?;
 							McpTargetSpec::OpenAPI(OpenAPITarget {
@@ -566,7 +572,7 @@ pub struct LocalMcpTarget {
 	#[serde(flatten)]
 	pub spec: LocalMcpTargetSpec,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub policies: Option<LocalBackendPolicies>,
+	pub policies: Option<MCPLocalBackendPolicies>,
 }
 
 #[apply(schema_de!)]
@@ -792,7 +798,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 
 #[apply(schema_de!)]
 #[derive(Default)]
-pub struct LocalBackendPolicies {
+pub struct SimpleLocalBackendPolicies {
 	// Filters. Keep in sync with RouteFilter
 	/// Headers to be modified in the request.
 	#[serde(default)]
@@ -806,15 +812,6 @@ pub struct LocalBackendPolicies {
 	#[serde(default)]
 	pub request_redirect: Option<filters::RequestRedirect>,
 
-	/// Authorization policies for MCP access.
-	#[serde(default)]
-	pub mcp_authorization: Option<McpAuthorization>,
-	/// Mark this traffic as A2A to enable A2A processing and telemetry.
-	#[serde(default)]
-	pub a2a: Option<A2aPolicy>,
-	/// Mark this as LLM traffic to enable LLM processing.
-	#[serde(default)]
-	pub ai: Option<llm::Policy>,
 	/// Send TLS to the backend.
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<http::backendtls::LocalBackendTLS>,
@@ -830,19 +827,49 @@ pub struct LocalBackendPolicies {
 	pub tcp: Option<backend::TCP>,
 }
 
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct MCPLocalBackendPolicies {
+	#[serde(flatten)]
+	simple: SimpleLocalBackendPolicies,
+	/// Authorization policies for MCP access.
+	#[serde(default)]
+	pub mcp_authorization: Option<McpAuthorization>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct LocalBackendPolicies {
+	#[serde(flatten)]
+	simple: SimpleLocalBackendPolicies,
+
+	/// Authorization policies for MCP access.
+	#[serde(default)]
+	pub mcp_authorization: Option<McpAuthorization>,
+	/// Mark this traffic as A2A to enable A2A processing and telemetry.
+	#[serde(default)]
+	pub a2a: Option<A2aPolicy>,
+	/// Mark this as LLM traffic to enable LLM processing.
+	#[serde(default)]
+	pub ai: Option<llm::Policy>,
+}
+
 impl LocalBackendPolicies {
 	pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
 		let LocalBackendPolicies {
-			request_header_modifier,
-			response_header_modifier,
-			request_redirect,
+			simple:
+				SimpleLocalBackendPolicies {
+					request_header_modifier,
+					response_header_modifier,
+					request_redirect,
+					backend_tls,
+					backend_auth,
+					http,
+					tcp,
+				},
 			mcp_authorization,
 			a2a,
 			ai,
-			backend_tls,
-			backend_auth,
-			http,
-			tcp,
 		} = self;
 		let mut pols = vec![];
 		if let Some(p) = tcp {
@@ -2093,4 +2120,19 @@ impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 
 fn local_name(name: Strng) -> ResourceName {
 	ResourceName::new(name, "".into())
+}
+
+pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(
+	deserializer: D,
+) -> Result<Vec<BackendPolicy>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let s = SimpleLocalBackendPolicies::deserialize(deserializer)?;
+	LocalBackendPolicies {
+		simple: s,
+		..Default::default()
+	}
+	.translate()
+	.map_err(serde::de::Error::custom)
 }

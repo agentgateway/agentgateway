@@ -6,7 +6,6 @@ use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
-use crate::types::local::LocalBackendPolicies;
 use crate::*;
 use ::http::HeaderMap;
 use bytes::Bytes;
@@ -1061,8 +1060,11 @@ pub struct Moderation {
 	/// Model to use. Defaults to `omni-moderation-latest`
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
-	#[serde(deserialize_with = "de_from_local_backend_policy")]
-	#[cfg_attr(feature = "schema", schemars(with = "LocalBackendPolicies"))]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
 	pub policies: Vec<BackendPolicy>,
 }
 
@@ -1076,12 +1078,11 @@ pub struct BedrockGuardrails {
 	/// AWS region where the guardrail is deployed
 	pub region: Strng,
 	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
-	#[serde(
-		default,
-		deserialize_with = "de_from_local_backend_policy_opt",
-		skip_serializing_if = "Vec::is_empty"
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<LocalBackendPolicies>"))]
 	pub policies: Vec<BackendPolicy>,
 }
 
@@ -1096,36 +1097,12 @@ pub struct GoogleModelArmor {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub location: Option<Strng>,
 	/// Backend policies for GCP authentication (optional, defaults to implicit GCP auth)
-	#[serde(
-		default,
-		deserialize_with = "de_from_local_backend_policy_opt",
-		skip_serializing_if = "Vec::is_empty"
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<LocalBackendPolicies>"))]
 	pub policies: Vec<BackendPolicy>,
-}
-
-pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(
-	deserializer: D,
-) -> Result<Vec<BackendPolicy>, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let s = LocalBackendPolicies::deserialize(deserializer)?;
-	s.translate().map_err(serde::de::Error::custom)
-}
-
-pub fn de_from_local_backend_policy_opt<'de: 'a, 'a, D>(
-	deserializer: D,
-) -> Result<Vec<BackendPolicy>, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let s = Option::<LocalBackendPolicies>::deserialize(deserializer)?;
-	match s {
-		Some(policies) => policies.translate().map_err(serde::de::Error::custom),
-		None => Ok(Vec::new()),
-	}
 }
 
 #[apply(schema!)]

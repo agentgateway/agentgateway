@@ -464,8 +464,17 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 			return ""
 		},
 	}
-	// Dummy empty mesh config
-	meshConfig := krt.NewStatic[ambient.MeshConfig](&ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}, true, krtopts.ToOptions("MeshConfig")...)
+
+	meshConfigMapName := GetMeshConfigMapName(cols.IstioRevision)
+	meshConfig := krt.NewSingleton(func(ctx krt.HandlerContext) *ambient.MeshConfig {
+		cm := krt.FetchOne(ctx, cols.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: cols.IstioNamespace, Name: meshConfigMapName}))
+		if flattened := ptr.Flatten(cm); flattened != nil {
+			if mc := ParseMeshConfigFromConfigMap(flattened); mc != nil {
+				return &ambient.MeshConfig{MeshConfig: mc}
+			}
+		}
+		return &ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
+	}, krtopts.ToOptions("IstioMeshConfig")...)
 
 	waypoints := builder.WaypointsCollection(clusterId, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
 	services := builder.ServicesCollection(

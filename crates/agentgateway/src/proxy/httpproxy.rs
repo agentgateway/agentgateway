@@ -1907,8 +1907,18 @@ pub struct PolicyClient {
 impl PolicyClient {
 	pub async fn call_reference(
 		&self,
+		req: Request,
+		backend_ref: &SimpleBackendReference,
+	) -> Result<Response, ProxyError> {
+		self
+			.call_reference_with_policies(req, backend_ref, Vec::new())
+			.await
+	}
+	pub async fn call_reference_with_policies(
+		&self,
 		mut req: Request,
 		backend_ref: &SimpleBackendReference,
+		policies: Vec<BackendPolicy>,
 	) -> Result<Response, ProxyError> {
 		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
 		trace!("resolved {:?} to {:?}", backend_ref, &backend);
@@ -1927,7 +1937,7 @@ impl PolicyClient {
 		.map_err(ProxyError::Processing)?;
 
 		let backend = BackendWithPolicies::from(backend);
-		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
+		let pols = get_backend_policies(&self.inputs, &backend, policies.as_ref(), None);
 		self
 			.internal_call_with_policies(req, backend.backend, pols)
 			.await

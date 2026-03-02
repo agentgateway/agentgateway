@@ -1215,7 +1215,6 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 							allow_partial_message: body_opts.allow_partial_message,
 							pack_as_bytes: body_opts.pack_as_bytes,
 						});
-				let timeout = ea.timeout.map(convert_duration);
 				let protocol = match ea
 					.protocol
 					.as_ref()
@@ -1278,6 +1277,8 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
 					protocol,
 					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
 					failure_mode,
 					include_request_headers: ea
 						.include_request_headers
@@ -1293,7 +1294,6 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						)
 						.collect(),
 					include_request_body,
-					timeout,
 				})
 			},
 			Some(tps::Kind::Authorization(rbac)) => {
@@ -1396,9 +1396,9 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),
 					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
-					// Not supported over XDS; use a timeout on the backend itself
-					timeout: None,
 					failure_mode,
 				})
 			},
@@ -1429,6 +1429,8 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				}
 				TrafficPolicy::ExtProc(http::ext_proc::ExtProc {
 					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
 					failure_mode,
 					request_attributes: to_cel_attrs(&ep.request_attributes),
 					response_attributes: to_cel_attrs(&ep.response_attributes),
@@ -1781,6 +1783,8 @@ impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::Tra
 
 		Ok(types::agent::TracingConfig {
 			provider_backend,
+			// Not supported inline from xDS
+			policies: Vec::new(),
 			attributes,
 			resources,
 			remove: t.remove.clone(),
