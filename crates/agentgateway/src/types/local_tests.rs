@@ -108,17 +108,43 @@ fn test_migrate_deprecated_local_config_moves_fields() {
 	let input = r#"
 config:
   logging:
-    remove:
-      - foo
+    level: info
+    filter: request.path == "/foo"
+    fields:
+      remove:
+        - foo
+      add:
+        region: request.host
   tracing:
-    host: otlp.default.svc.cluster.local:4317
+    otlpEndpoint: otlp.default.svc.cluster.local:4317
+    headers:
+      authorization: token
+    otlpProtocol: http
 "#;
 	let out = super::migrate_deprecated_local_config(input).unwrap();
 	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
 	let cfg = v.get("config").unwrap();
-	assert!(cfg.get("logging").is_none());
+	let logging = cfg.get("logging").unwrap();
+	assert_eq!(logging.get("level").unwrap(), "info");
+	assert!(logging.get("filter").is_none());
+	assert!(logging.get("fields").is_none());
 	assert!(cfg.get("tracing").is_none());
 	let frontend = v.get("frontendPolicies").unwrap();
-	assert!(frontend.get("logging").is_some());
-	assert!(frontend.get("tracing").is_some());
+	assert!(frontend.get("logging").is_none());
+	let access_log = frontend.get("accessLog").unwrap();
+	assert_eq!(
+		access_log.get("filter").unwrap(),
+		"request.path == \"/foo\""
+	);
+	assert_eq!(
+		access_log.get("add").unwrap().get("region").unwrap(),
+		"request.host"
+	);
+	assert_eq!(access_log.get("remove").unwrap()[0], "foo");
+	let tracing = frontend.get("tracing").unwrap();
+	assert_eq!(
+		tracing.get("inlineBackend").unwrap(),
+		"otlp.default.svc.cluster.local:4317"
+	);
+	assert_eq!(tracing.get("protocol").unwrap(), "http");
 }

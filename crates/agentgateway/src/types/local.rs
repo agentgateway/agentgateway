@@ -71,41 +71,91 @@ fn migrate_deprecated_frontend_policies(
 		return Ok(cfg);
 	};
 
+	let Some(config) = root.get("config").and_then(serde_json::Value::as_object) else {
+		return Ok(cfg);
+	};
+
+	let deprecated_logging = config.get("logging").cloned();
+	let deprecated_tracing = config.get("tracing").cloned();
+	if deprecated_logging.is_none() && deprecated_tracing.is_none() {
+		return Ok(cfg);
+	}
+
+	let mut deprecated_config = serde_json::Map::new();
+	if let Some(logging) = deprecated_logging {
+		deprecated_config.insert("logging".to_string(), logging);
+	}
+	if let Some(tracing) = deprecated_tracing {
+		deprecated_config.insert("tracing".to_string(), tracing);
+	}
+	let mut deprecated_root = serde_json::Map::new();
+	deprecated_root.insert(
+		"config".to_string(),
+		serde_json::Value::Object(deprecated_config),
+	);
+	let deprecated_cfg_yaml =
+		serdes::yamlviajson::to_string(&serde_json::Value::Object(deprecated_root))?;
+	let deprecated_cfg = crate::config::parse_config(deprecated_cfg_yaml, None)?;
+
+	let mut frontend_policies: LocalFrontendPolicies = serde_json::from_value(
+		root
+			.get("frontendPolicies")
+			.cloned()
+			.unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new())),
+	)?;
+	merge_deprecated_frontend_policies(&deprecated_cfg, &mut frontend_policies)?;
+
+	let has_deprecated_log = has_deprecated_frontend_log_fields(&deprecated_cfg.logging);
+	let has_deprecated_tracing = deprecated_cfg.tracing.is_some();
+
+	let frontend_policies_map = root
+		.entry("frontendPolicies")
+		.or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+	let Some(frontend_policies_map) = frontend_policies_map.as_object_mut() else {
+		anyhow::bail!("frontendPolicies must be an object");
+	};
+	if has_deprecated_log {
+		let Some(access_log) = frontend_policies.access_log else {
+			anyhow::bail!("internal error: migrated accessLog was not generated");
+		};
+		frontend_policies_map.insert("accessLog".to_string(), serde_json::to_value(access_log)?);
+		frontend_policies_map.remove("logging");
+	}
+	if has_deprecated_tracing {
+		if let Some(tracing) = frontend_policies.tracing {
+			frontend_policies_map.insert("tracing".to_string(), serde_json::to_value(tracing)?);
+		}
+	}
+
 	let Some(config) = root
 		.get_mut("config")
 		.and_then(serde_json::Value::as_object_mut)
 	else {
 		return Ok(cfg);
 	};
-
-	let deprecated_logging = config.remove("logging");
-	let deprecated_tracing = config.remove("tracing");
-	if deprecated_logging.is_none() && deprecated_tracing.is_none() {
-		return Ok(cfg);
-	}
-
-	let frontend_policies = root
-		.entry("frontendPolicies")
-		.or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
-	let Some(frontend_policies) = frontend_policies.as_object_mut() else {
-		anyhow::bail!("frontendPolicies must be an object");
-	};
-
-	if let Some(logging) = deprecated_logging {
-		if frontend_policies.contains_key("logging") || frontend_policies.contains_key("accessLog") {
-			anyhow::bail!(
-				"cannot use deprecated config.logging together with frontendPolicies.logging/accessLog"
-			);
+	if has_deprecated_log {
+		match config.get_mut("logging") {
+			Some(serde_json::Value::Object(logging)) => {
+				logging.remove("filter");
+				logging.remove("fields");
+				if logging.is_empty() {
+					config.remove("logging");
+				}
+			},
+			Some(_) => {
+				config.remove("logging");
+			},
+			None => {},
 		}
-		frontend_policies.insert("logging".to_string(), logging);
 	}
-	if let Some(tracing) = deprecated_tracing {
-		if frontend_policies.contains_key("tracing") {
-			anyhow::bail!("cannot use deprecated config.tracing together with frontendPolicies.tracing");
-		}
-		frontend_policies.insert("tracing".to_string(), tracing);
+	if has_deprecated_tracing {
+		config.remove("tracing");
 	}
 	Ok(cfg)
+}
+
+fn has_deprecated_frontend_log_fields(log: &crate::telemetry::log::Config) -> bool {
+	!log.fields.add.is_empty() || !log.fields.remove.is_empty() || log.filter.is_some()
 }
 
 fn merge_deprecated_frontend_policies(
@@ -113,8 +163,7 @@ fn merge_deprecated_frontend_policies(
 	frontend_policies: &mut LocalFrontendPolicies,
 ) -> anyhow::Result<()> {
 	let log = &deprecated.logging;
-	let has_deprecated_log =
-		!log.fields.add.is_empty() || !log.fields.remove.is_empty() || log.filter.is_some();
+	let has_deprecated_log = has_deprecated_frontend_log_fields(log);
 	if has_deprecated_log {
 		if frontend_policies.access_log.is_some() {
 			anyhow::bail!(
@@ -140,7 +189,7 @@ fn merge_deprecated_frontend_policies(
 			client_sampling,
 			path,
 		} = tracing;
-		if headers.is_empty() {
+		if !headers.is_empty() {
 			anyhow::bail!(
 				"Deprecated config.tracing cannot automatically be translated to the replacement API (frontendPolicies.tracing)"
 			);

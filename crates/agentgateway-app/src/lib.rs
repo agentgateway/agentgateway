@@ -73,7 +73,7 @@ pub(crate) struct MigrateArgs {
 #[derive(Subcommand, Debug)]
 enum Commands {
 	/// Run agentgateway as a subprocess and exec a command when ready.
-	#[cfg(unix)]
+	#[cfg(target_os = "linux")]
 	Oneshot(OneshotArgs),
 	/// Migrate deprecated local config fields to frontendPolicies.
 	Migrate(MigrateArgs),
