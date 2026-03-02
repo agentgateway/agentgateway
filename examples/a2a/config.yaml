@@ -1,10 +1,10 @@
-# yaml-language-server: $schema=https://agentgateway.dev/schema/config
-frontendPolicies:
+config:
   logging:
     format: json
-    fields:
-      add:
-        backend: backend
+frontendPolicies:
+  accessLog:
+    add:
+      backend: backend
 binds:
 - port: 3000
   listeners:

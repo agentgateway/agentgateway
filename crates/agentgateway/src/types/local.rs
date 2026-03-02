@@ -121,10 +121,8 @@ fn migrate_deprecated_frontend_policies(
 		frontend_policies_map.insert("accessLog".to_string(), serde_json::to_value(access_log)?);
 		frontend_policies_map.remove("logging");
 	}
-	if has_deprecated_tracing {
-		if let Some(tracing) = frontend_policies.tracing {
-			frontend_policies_map.insert("tracing".to_string(), serde_json::to_value(tracing)?);
-		}
+	if has_deprecated_tracing && let Some(tracing) = frontend_policies.tracing {
+		frontend_policies_map.insert("tracing".to_string(), serde_json::to_value(tracing)?);
 	}
 
 	let Some(config) = root
