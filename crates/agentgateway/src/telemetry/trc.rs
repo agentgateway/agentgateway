@@ -53,7 +53,7 @@ mod semconv {
 }
 
 impl Tracer {
-	pub fn create_tracer_from_config_with_client(
+	pub fn new(
 		config: &TracingConfig,
 		fields: Arc<LoggingFields>,
 		policy_client: crate::proxy::httpproxy::PolicyClient,
@@ -156,69 +156,6 @@ impl Tracer {
 			provider,
 			fields,
 		})
-	}
-
-	pub fn new(cfg: &DeprecatedConfig) -> anyhow::Result<Option<Tracer>> {
-		let Some(ep) = &cfg.endpoint else {
-			return Ok(None);
-		};
-		// Apply global defaults (gateway-derived if initialized)
-		let defaults = GLOBAL_RESOURCE_DEFAULTS.get();
-		let result = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-			.with_resource({
-				let mut rb = Resource::builder()
-					.with_service_name(
-						defaults
-							.and_then(|d| d.service_name.clone())
-							.unwrap_or_else(|| "agentgateway".to_string()),
-					)
-					.with_attribute(KeyValue::new(
-						"service.version",
-						agent_core::version::BuildInfo::new().version,
-					));
-				if let Some(d) = defaults {
-					for kv in &d.attrs {
-						rb = rb.with_attribute(kv.clone());
-					}
-				}
-				rb.build()
-			})
-			// TODO: this should be integrated with PolicyClient
-			.with_batch_exporter(if cfg.protocol == Protocol::Grpc {
-				// TODO: otel is using an old tonic version that mismatches with the one we have
-				// let metadata = MetadataMap::from_headers(HeaderMap::from_iter(
-				// 	cfg
-				// 		.headers
-				// 		.clone()
-				// 		.into_iter()
-				// 		.map(|(k, v)| Ok((HeaderName::try_from(k)?, HeaderValue::try_from(v)?)))
-				// 		.collect::<Result<_, _>>()?
-				// 		.iter(),
-				// ));
-				opentelemetry_otlp::SpanExporter::builder()
-					.with_tonic()
-					.with_endpoint(ep)
-					// .with_metadata(metadata)
-					.build()?
-			} else {
-				opentelemetry_otlp::SpanExporter::builder()
-					.with_http()
-					// For HTTP, we add the suffix ourselves
-					.with_endpoint(format!(
-						"{}/{}",
-						ep.strip_suffix("/").unwrap_or(ep),
-						cfg.path.clone()
-					))
-					.with_headers(cfg.headers.clone())
-					.build()?
-			})
-			.build();
-		let tracer = result.tracer("agentgateway");
-		Ok(Some(Tracer {
-			tracer: Arc::new(tracer),
-			provider: result,
-			fields: Arc::new(cfg.fields.clone()),
-		}))
 	}
 
 	pub fn shutdown(&self) {

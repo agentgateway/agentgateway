@@ -1785,11 +1785,8 @@ impl TracingPolicy {
 		policy_client: crate::proxy::httpproxy::PolicyClient,
 	) -> anyhow::Result<&Arc<crate::telemetry::trc::Tracer>> {
 		self.tracer.get_or_try_init(|| {
-			let tracer = crate::telemetry::trc::Tracer::create_tracer_from_config_with_client(
-				&self.config,
-				self.fields.clone(),
-				policy_client,
-			)?;
+			let tracer =
+				crate::telemetry::trc::Tracer::new(&self.config, self.fields.clone(), policy_client)?;
 			Ok(Arc::new(tracer))
 		})
 	}
