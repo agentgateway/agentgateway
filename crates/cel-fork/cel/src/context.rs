@@ -170,7 +170,7 @@ impl<'a, 'rf> VariableResolver<'a> for SingleVarResolver<'a, 'rf> {
 
 pub struct MapResolver<'k, 'a, 'rf> {
 	base: Option<&'rf dyn VariableResolver<'a>>,
-	variables: HashMap<&'k str, Value<'a>>,
+	variables: vector_map::VecMap<&'k str, Value<'a>>,
 }
 
 impl<'k, 'a, 'rf> Default for MapResolver<'k, 'a, 'rf> {
@@ -186,7 +186,7 @@ impl<'k, 'a, 'rf> MapResolver<'k, 'a, 'rf> {
 			variables: Default::default(),
 		}
 	}
-	pub fn with_base(base: &'rf dyn VariableResolver<'a>,) -> Self {
+	pub fn with_base(base: &'rf dyn VariableResolver<'a>) -> Self {
 		MapResolver {
 			base: Some(base),
 			variables: Default::default(),
@@ -216,11 +216,9 @@ impl<'k, 'a, 'rf> MapResolver<'k, 'a, 'rf> {
 
 impl<'k, 'a, 'rf> VariableResolver<'a> for MapResolver<'k, 'a, 'rf> {
 	fn resolve(&self, expr: &str) -> Option<Value<'a>> {
-		match self.variables.get(expr).cloned() {
+		match self.variables.get(&expr).cloned() {
 			Some(val) => Some(val),
-			None => {
-				self.base.and_then(|base| base.resolve(expr))
-			}
+			None => self.base.and_then(|base| base.resolve(expr)),
 		}
 	}
 }

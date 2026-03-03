@@ -1,8 +1,8 @@
 use cel::Context;
 
 mod cidr;
-mod format;
 mod flatten;
+mod format;
 mod general;
 mod optimize;
 mod strings;

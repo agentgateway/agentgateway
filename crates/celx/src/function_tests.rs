@@ -428,6 +428,13 @@ mod format {
 		let expr = r#""x}".format()"#;
 		assert_fails(expr);
 	}
+
+	#[test]
+	fn invalid_dynamic() {
+		let expr = r#"
+'a/{}'.with(fmt, fmt.format("b"))"#;
+		assert_fails(expr);
+	}
 }
 
 mod parse {
@@ -507,4 +514,11 @@ mod parse {
 		assert_fails(expr);
 	}
 
+	#[test]
+	fn invalid_dynamic() {
+		// Only simple vars are allowed
+		let expr = r#"
+'a/{v}'.with(pattern, "a/b".parse(pattern, v))"#;
+		assert_fails(expr);
+	}
 }
