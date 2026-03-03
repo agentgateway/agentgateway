@@ -23,7 +23,13 @@ fn snapshot_path_and_name(relative_path: &str, provider: &str) -> (String, Strin
 		.file_stem()
 		.unwrap_or_else(|| panic!("{relative_path}: missing filename"))
 		.to_string_lossy();
-	eprintln!("{} {} -> {} {}", relative_path, provider, format!("tests/{}", parent.display()), format!("{stem}.{provider}"),);
+	eprintln!(
+		"{} {} -> {} {}",
+		relative_path,
+		provider,
+		format!("tests/{}", parent.display()),
+		format!("{stem}.{provider}"),
+	);
 	(
 		format!("tests/{}", parent.display()),
 		format!("{stem}.{provider}"),
@@ -223,7 +229,7 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, test, bedrock_request),
-					COMPLETIONS => test_request(ANTHROPIC, test, completions_request),
+					COMPLETIONS => test_request(COMPLETIONS, test, completions_request),
 					VERTEX => test_request(VERTEX, test, vertex_request),
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
 				}
