@@ -574,9 +574,7 @@ jobs:
           * `cr.agentgateway.dev/controller:v${{ env.VERSION }}`
 
           **Helm charts** are available:
-          * `cr.agentgateway.dev/charts/agentgateway:${{ env.VERSION }}`
           * `cr.agentgateway.dev/charts/agentgateway:v${{ env.VERSION }}`
-          * `cr.agentgateway.dev/charts/agentgateway-crds:${{ env.VERSION }}`
           * `cr.agentgateway.dev/charts/agentgateway-crds:v${{ env.VERSION }}`
 
           **Binaries** are available below.
