@@ -23,6 +23,7 @@ fn snapshot_path_and_name(relative_path: &str, provider: &str) -> (String, Strin
 		.file_stem()
 		.unwrap_or_else(|| panic!("{relative_path}: missing filename"))
 		.to_string_lossy();
+	eprintln!("{} {} -> {} {}", relative_path, provider, format!("tests/{}", parent.display()), format!("{stem}.{provider}"),);
 	(
 		format!("tests/{}", parent.display()),
 		format!("{stem}.{provider}"),
@@ -77,6 +78,7 @@ async fn test_streaming(
 	let resp_bytes = resp.collect().await.unwrap().to_bytes();
 	let resp_str = std::str::from_utf8(&resp_bytes).unwrap();
 	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
+	let snapshot_name = snapshot_name + "-streaming";
 
 	insta::with_settings!({
 			description => input_path.to_string_lossy().to_string(),
@@ -132,34 +134,36 @@ const BEDROCK: &str = "bedrock";
 const VERTEX: &str = "vertex";
 const OPENAI: &str = "openai";
 const COMPLETIONS: &str = "completions";
+const MESSAGES: &str = "messages";
+const RESPONSES: &str = "responses";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 
-const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
-	("basic", &[ANTHROPIC, BEDROCK]),
-	("full", &[ANTHROPIC, BEDROCK]),
-	("tool-call", &[ANTHROPIC, BEDROCK]),
-	("reasoning", &[ANTHROPIC, BEDROCK]),
-	("reasoning_max", &[ANTHROPIC]),
-];
-const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
-	("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
-	("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
-	("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
-];
-const RESPONSES_REQUESTS: &[(&str, &[&str])] =
-	&[("basic", &[BEDROCK]), ("instructions", &[BEDROCK])];
-const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
-	("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
-	("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
-];
-const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
-	("basic", &[BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
-	("array", &[BEDROCK_COHERE, VERTEX]),
-];
-
 mod requests {
 	use super::*;
+
+	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
+		("basic", &[ANTHROPIC, BEDROCK]),
+		("full", &[ANTHROPIC, BEDROCK]),
+		("tool-call", &[ANTHROPIC, BEDROCK]),
+		("reasoning", &[ANTHROPIC, BEDROCK]),
+		("reasoning_max", &[ANTHROPIC]),
+	];
+	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
+		("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
+		("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
+		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
+	];
+	const RESPONSES_REQUESTS: &[(&str, &[&str])] =
+		&[("basic", &[BEDROCK]), ("instructions", &[BEDROCK])];
+	pub const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
+		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
+		("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
+	];
+	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
+		("basic", &[BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
+		("array", &[BEDROCK_COHERE, VERTEX]),
+	];
 
 	#[test]
 	fn from_completions() {
@@ -220,7 +224,7 @@ mod requests {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, test, bedrock_request),
 					COMPLETIONS => test_request(ANTHROPIC, test, completions_request),
-					VERTEX => test_request(ANTHROPIC, test, vertex_request),
+					VERTEX => test_request(VERTEX, test, vertex_request),
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
 				}
 			}
@@ -302,84 +306,261 @@ mod requests {
 			}
 		}
 	}
-}
 
-#[tokio::test]
-async fn test_bedrock_completions() {
-	let response =
-		|i| conversion::bedrock::from_completions::translate_response(&i, &strng::new("fake-model"));
-	test_response("completions", "response/bedrock/basic.json", response);
-	test_response("completions", "response/bedrock/tool.json", response);
+	#[tokio::test]
+	async fn from_count_tokens() {
+		let mut headers = http::HeaderMap::new();
+		headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
+		let vertex_provider = vertex::Provider {
+			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
+			region: Some(strng::new("us-central1")),
+			project_id: strng::new("test-project-123"),
+		};
 
-	let stream_response = |i, log| {
-		Ok(conversion::bedrock::from_completions::translate_stream(
-			i,
-			0,
-			log,
-			"model",
-			"request-id",
-		))
-	};
-	test_streaming("completions", "response/bedrock/basic.bin", stream_response).await;
-}
-
-#[tokio::test]
-async fn test_bedrock_responses() {
-	let provider = bedrock::Provider {
-		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-		region: strng::new("us-west-2"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	let response =
-		|i| conversion::bedrock::from_responses::translate_response(&i, &strng::new("fake-model"));
-	test_response("responses", "response/bedrock/basic.json", response);
-	test_response("responses", "response/bedrock/tool.json", response);
-
-	let stream_response = |i, log| {
-		Ok(conversion::bedrock::from_responses::translate_stream(
-			i,
-			0,
-			log,
-			"model",
-			"request-id",
-		))
-	};
-	test_streaming("responses", "response/bedrock/basic.bin", stream_response).await;
-
-	let request = |i| conversion::bedrock::from_responses::translate(&i, &provider, None, None);
-	for (name, providers) in RESPONSES_REQUESTS {
-		if providers.contains(&BEDROCK) {
-			test_request(BEDROCK, &format!("requests/responses/{name}.json"), request);
+		let bedrock_request =
+			|input: types::count_tokens::Request| input.to_bedrock_token_count(&headers);
+		let anthropic_request = |i: types::count_tokens::Request| i.to_anthropic();
+		let vertex_request = |input: types::count_tokens::Request| -> Result<Vec<u8>, AIError> {
+			let anthropic_body = input.to_anthropic()?;
+			vertex_provider.prepare_anthropic_count_tokens_body(anthropic_body)
+		};
+		for (name, providers) in COUNT_TOKENS_REQUESTS {
+			let test = &format!("requests/count-tokens/{name}.json");
+			for provider in *providers {
+				match *provider {
+					ANTHROPIC => test_request(*provider, test, anthropic_request),
+					BEDROCK => test_request(*provider, test, bedrock_request),
+					VERTEX => test_request(*provider, test, vertex_request),
+					other => panic!("unsupported provider in COUNT_TOKENS_REQUESTS: {other}"),
+				}
+			}
 		}
 	}
 }
 
-#[tokio::test]
-async fn test_vertex_messages() {
-	let provider = vertex::Provider {
-		model: Some(strng::new("anthropic/claude-sonnet-4-5")),
-		region: Some(strng::new("us-central1")),
-		project_id: strng::new("test-project-123"),
-	};
+mod response {
+	use super::*;
 
-	let response = |bytes: Bytes| -> Result<Box<dyn ResponseType>, AIError> {
-		Ok(Box::new(
-			serde_json::from_slice::<types::messages::Response>(&bytes)
-				.map_err(AIError::ResponseParsing)?,
-		))
-	};
-	test_response(VERTEX, "response/anthropic/basic.json", response);
-	test_response(VERTEX, "response/anthropic/tool.json", response);
+	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[
+		("basic", &[COMPLETIONS, MESSAGES, RESPONSES]),
+		("tool", &[COMPLETIONS, MESSAGES, RESPONSES]),
+	];
+	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] =
+		&[("basic", &[COMPLETIONS, MESSAGES, RESPONSES])];
+	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
+		("basic", &[ANTHROPIC]),
+		("tool", &[ANTHROPIC]),
+		("thinking", &[ANTHROPIC]),
+	];
+	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
+		("stream_basic", &[ANTHROPIC]),
+		("stream_thinking", &[ANTHROPIC]),
+	];
+	const VERTEX_RESPONSES: &[(&str, &[&str])] = &[("basic", &[VERTEX]), ("tool", &[VERTEX])];
+	const VERTEX_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream_basic", &[VERTEX])];
+	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
+		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
+		("response/bedrock-cohere/embeddings.json", &[BEDROCK_COHERE]),
+		("response/vertex/embeddings.json", &[VERTEX]),
+	];
+	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
 
-	let stream_response = |body, log| Ok(conversion::messages::passthrough_stream(body, 1024, log));
-	test_streaming(
-		VERTEX,
-		"response/anthropic/stream_basic.json",
-		stream_response,
-	)
-	.await;
+	#[tokio::test]
+	async fn from_bedrock() {
+		let to_completions =
+			|i| conversion::bedrock::from_completions::translate_response(&i, &strng::new("fake-model"));
+		let to_messages =
+			|i| conversion::bedrock::from_messages::translate_response(&i, &strng::new("fake-model"));
+		let to_responses =
+			|i| conversion::bedrock::from_responses::translate_response(&i, &strng::new("fake-model"));
+
+		for (name, providers) in BEDROCK_RESPONSES {
+			let test = &format!("response/bedrock/{name}.json");
+			for provider in *providers {
+				match *provider {
+					COMPLETIONS => test_response(COMPLETIONS, test, to_completions),
+					MESSAGES => test_response(MESSAGES, test, to_messages),
+					RESPONSES => test_response(RESPONSES, test, to_responses),
+					other => panic!("unsupported provider in BEDROCK_RESPONSES: {other}"),
+				}
+			}
+		}
+
+		let stream_to_completions = |i, log| {
+			Ok(conversion::bedrock::from_completions::translate_stream(
+				i,
+				0,
+				log,
+				"model",
+				"request-id",
+			))
+		};
+		let stream_to_messages = |i, log| {
+			Ok(conversion::bedrock::from_messages::translate_stream(
+				i,
+				0,
+				log,
+				"model",
+				"request-id",
+			))
+		};
+		let stream_to_responses = |i, log| {
+			Ok(conversion::bedrock::from_responses::translate_stream(
+				i,
+				0,
+				log,
+				"model",
+				"request-id",
+			))
+		};
+		for (name, providers) in BEDROCK_STREAM_RESPONSES {
+			let test = &format!("response/bedrock/{name}.bin");
+			for provider in *providers {
+				match *provider {
+					COMPLETIONS => test_streaming(COMPLETIONS, test, stream_to_completions).await,
+					MESSAGES => test_streaming(MESSAGES, test, stream_to_messages).await,
+					RESPONSES => test_streaming(RESPONSES, test, stream_to_responses).await,
+					other => panic!("unsupported provider in BEDROCK_STREAM_RESPONSES: {other}"),
+				}
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn from_anthropic() {
+		let to_completions = |i| conversion::messages::from_completions::translate_response(&i);
+		for (name, providers) in ANTHROPIC_RESPONSES {
+			let test = &format!("response/anthropic/{name}.json");
+			for provider in *providers {
+				match *provider {
+					ANTHROPIC => test_response(ANTHROPIC, test, to_completions),
+					other => panic!("unsupported provider in ANTHROPIC_RESPONSES: {other}"),
+				}
+			}
+		}
+
+		let stream_to_completions = |i, log| {
+			Ok(conversion::messages::from_completions::translate_stream(
+				i, 1024, log,
+			))
+		};
+		for (name, providers) in ANTHROPIC_STREAM_RESPONSES {
+			let test = &format!("response/anthropic/{name}.json");
+			for provider in *providers {
+				match *provider {
+					ANTHROPIC => test_streaming(ANTHROPIC, test, stream_to_completions).await,
+					other => panic!("unsupported provider in ANTHROPIC_STREAM_RESPONSES: {other}"),
+				}
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn from_vertex() {
+		let to_messages = |bytes: Bytes| -> Result<Box<dyn ResponseType>, AIError> {
+			Ok(Box::new(
+				serde_json::from_slice::<types::messages::Response>(&bytes)
+					.map_err(AIError::ResponseParsing)?,
+			))
+		};
+		for (name, providers) in VERTEX_RESPONSES {
+			let test = &format!("response/anthropic/{name}.json");
+			for provider in *providers {
+				match *provider {
+					VERTEX => test_response(VERTEX, test, to_messages),
+					other => panic!("unsupported provider in VERTEX_RESPONSES: {other}"),
+				}
+			}
+		}
+
+		let stream_to_messages =
+			|body, log| Ok(conversion::messages::passthrough_stream(body, 1024, log));
+		for (name, providers) in VERTEX_STREAM_RESPONSES {
+			let test = &format!("response/anthropic/{name}.json");
+			for provider in *providers {
+				match *provider {
+					VERTEX => test_streaming(VERTEX, test, stream_to_messages).await,
+					other => panic!("unsupported provider in VERTEX_STREAM_RESPONSES: {other}"),
+				}
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn from_embeddings() {
+		let titan = |i: Bytes| {
+			conversion::bedrock::from_embeddings::translate_response(
+				&i,
+				&http::HeaderMap::new(),
+				"amazon.titan-embed-text-v2:0",
+			)
+		};
+		let cohere = |i: Bytes| {
+			conversion::bedrock::from_embeddings::translate_response(
+				&i,
+				&http::HeaderMap::new(),
+				"cohere.embed-english-v3",
+			)
+		};
+		let vertex =
+			|i: Bytes| conversion::vertex::from_embeddings::translate_response(&i, "text-embedding-004");
+
+		for (test, providers) in EMBEDDING_RESPONSES {
+			for provider in *providers {
+				match *provider {
+					BEDROCK_TITAN => test_response(BEDROCK_TITAN, test, titan),
+					BEDROCK_COHERE => test_response(BEDROCK_COHERE, test, cohere),
+					VERTEX => test_response(VERTEX, test, vertex),
+					other => panic!("unsupported provider in EMBEDDING_RESPONSES: {other}"),
+				}
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn from_count_tokens() {
+		for (name, providers) in COUNT_TOKEN_RESPONSES {
+			let test = &format!("response/anthropic/{name}.json");
+			for provider in *providers {
+				match *provider {
+					ANTHROPIC => {
+						let input_path = fixture_path(test);
+						let response_str =
+							&fs::read_to_string(&input_path).expect("Failed to read response file");
+						let bytes = Bytes::copy_from_slice(response_str.as_bytes());
+						let provider_value = serde_json::from_str::<Value>(response_str).unwrap();
+
+						let (returned_bytes, count) =
+							types::count_tokens::Response::translate_response(bytes.clone())
+								.expect("Failed to translate count_tokens response");
+
+						assert_eq!(
+							returned_bytes, bytes,
+							"Response bytes should be returned unchanged"
+						);
+
+						let resp: types::count_tokens::Response =
+							serde_json::from_slice(&returned_bytes).expect("Failed to deserialize response");
+						let (snapshot_path, snapshot_name) = snapshot_path_and_name(test, ANTHROPIC);
+
+						insta::with_settings!({
+								info => &provider_value,
+								description => input_path.to_string_lossy().to_string(),
+								omit_expression => true,
+								prepend_module_to_snapshot => false,
+								snapshot_path => snapshot_path,
+						}, {
+								 insta::assert_json_snapshot!(snapshot_name, serde_json::json!({
+									"input_tokens": resp.input_tokens,
+									"token_count": count,
+								}));
+						});
+					},
+					other => panic!("unsupported provider in COUNT_TOKEN_RESPONSES: {other}"),
+				}
+			}
+		}
+	}
 }
 
 #[tokio::test]
@@ -536,32 +717,6 @@ fn test_messages_output_config_format_maps_to_openai_response_format() {
 	);
 }
 
-#[tokio::test]
-async fn test_completions_to_messages() {
-	let response = |i| conversion::messages::from_completions::translate_response(&i);
-	test_response(ANTHROPIC, "response/anthropic/basic.json", response);
-	test_response(ANTHROPIC, "response/anthropic/tool.json", response);
-	test_response(ANTHROPIC, "response/anthropic/thinking.json", response);
-
-	let stream_response = |i, log| {
-		Ok(conversion::messages::from_completions::translate_stream(
-			i, 1024, log,
-		))
-	};
-	test_streaming(
-		ANTHROPIC,
-		"response/anthropic/stream_basic.json",
-		stream_response,
-	)
-	.await;
-	test_streaming(
-		ANTHROPIC,
-		"response/anthropic/stream_thinking.json",
-		stream_response,
-	)
-	.await;
-}
-
 fn apply_test_prompts<R: RequestType + Serialize>(mut r: R) -> Result<Vec<u8>, AIError> {
 	r.prepend_prompts(vec![
 		SimpleChatCompletionMessage {
@@ -611,93 +766,6 @@ fn test_prompt_enrichment() {
 		"requests/policies/openai_with_messages.json",
 		apply_test_prompts,
 	);
-}
-
-#[tokio::test]
-async fn test_anthropic_count_tokens() {
-	let request = |i: types::count_tokens::Request| i.to_anthropic();
-	for (name, providers) in COUNT_TOKENS_REQUESTS {
-		if providers.contains(&ANTHROPIC) {
-			test_request(
-				ANTHROPIC,
-				&format!("requests/count-tokens/{name}.json"),
-				request,
-			);
-		}
-	}
-
-	let input_path = fixture_path("response/anthropic/count_tokens.json");
-	let response_str = &fs::read_to_string(&input_path).expect("Failed to read response file");
-	let bytes = Bytes::copy_from_slice(response_str.as_bytes());
-	let provider_value = serde_json::from_str::<Value>(response_str).unwrap();
-
-	let (returned_bytes, count) = types::count_tokens::Response::translate_response(bytes.clone())
-		.expect("Failed to translate count_tokens response");
-
-	assert_eq!(
-		returned_bytes, bytes,
-		"Response bytes should be returned unchanged"
-	);
-
-	let resp: types::count_tokens::Response =
-		serde_json::from_slice(&returned_bytes).expect("Failed to deserialize response");
-	let (snapshot_path, snapshot_name) =
-		snapshot_path_and_name("response/anthropic/count_tokens.json", ANTHROPIC);
-
-	insta::with_settings!({
-			info => &provider_value,
-			description => input_path.to_string_lossy().to_string(),
-			omit_expression => true,
-			prepend_module_to_snapshot => false,
-			snapshot_path => snapshot_path,
-	}, {
-			 insta::assert_json_snapshot!(snapshot_name, serde_json::json!({
-				"input_tokens": resp.input_tokens,
-				"token_count": count,
-			}));
-	});
-}
-
-#[tokio::test]
-async fn test_bedrock_count_tokens() {
-	let mut headers = http::HeaderMap::new();
-	headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
-
-	let request = |input: types::count_tokens::Request| input.to_bedrock_token_count(&headers);
-
-	for (name, providers) in COUNT_TOKENS_REQUESTS {
-		if providers.contains(&BEDROCK) {
-			test_request(
-				BEDROCK,
-				&format!("requests/count-tokens/{name}.json"),
-				request,
-			);
-		}
-	}
-}
-
-#[tokio::test]
-async fn test_vertex_count_tokens() {
-	let provider = vertex::Provider {
-		model: Some(strng::new("anthropic/claude-sonnet-4-5")),
-		region: Some(strng::new("us-central1")),
-		project_id: strng::new("test-project-123"),
-	};
-
-	let request = |input: types::count_tokens::Request| -> Result<Vec<u8>, AIError> {
-		let anthropic_body = input.to_anthropic()?;
-		provider.prepare_anthropic_count_tokens_body(anthropic_body)
-	};
-
-	for (name, providers) in COUNT_TOKENS_REQUESTS {
-		if providers.contains(&VERTEX) {
-			test_request(
-				VERTEX,
-				&format!("requests/count-tokens/{name}.json"),
-				request,
-			);
-		}
-	}
 }
 
 #[test]
