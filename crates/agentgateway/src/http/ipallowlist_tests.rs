@@ -1081,3 +1081,237 @@ fn xds_roundtrip_functional_apply() {
 		"192.168.1.1 not in allow list"
 	);
 }
+
+#[test]
+fn xds_roundtrip_invalid_deny_cidr_rejected() {
+	let proto = make_proto_ip_access_control(vec![], vec!["bad-deny"], None, false, false, None);
+	let result = TrafficPolicy::try_from(&proto);
+	assert!(result.is_err(), "invalid deny CIDR should cause conversion error");
+	let err_msg = format!("{:?}", result.unwrap_err());
+	assert!(err_msg.contains("deny"), "error should mention deny: {err_msg}");
+}
+
+#[test]
+fn xds_roundtrip_deny_only_functional() {
+	let proto = make_proto_ip_access_control(
+		vec![],
+		vec!["203.0.113.0/24"],
+		None,
+		false,
+		false,
+		None,
+	);
+	let tp = TrafficPolicy::try_from(&proto).expect("conversion should succeed");
+	let iac = match tp {
+		TrafficPolicy::IpAccessControl(iac) => iac,
+		other => panic!("expected IpAccessControl, got {other:?}"),
+	};
+
+	let denied = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 50)));
+	assert!(iac.apply(&denied).is_err(), "203.0.113.50 should be denied");
+
+	let allowed = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)));
+	assert!(iac.apply(&allowed).is_ok(), "8.8.8.8 should be allowed (no allow list)");
+}
+
+#[test]
+fn xds_roundtrip_single_host_cidrs() {
+	let proto = make_proto_ip_access_control(
+		vec!["10.0.0.1/32", "::1/128"],
+		vec![],
+		None,
+		false,
+		false,
+		None,
+	);
+	let tp = TrafficPolicy::try_from(&proto).expect("conversion should succeed");
+	let iac = match tp {
+		TrafficPolicy::IpAccessControl(iac) => iac,
+		other => panic!("expected IpAccessControl, got {other:?}"),
+	};
+
+	assert_eq!(iac.allow.len(), 2);
+	let ok = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)));
+	assert!(iac.apply(&ok).is_ok());
+
+	let not_ok = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2)));
+	assert!(iac.apply(&not_ok).is_err(), "10.0.0.2 is not 10.0.0.1/32");
+}
+
+#[test]
+fn xds_roundtrip_mixed_ipv4_ipv6() {
+	let proto = make_proto_ip_access_control(
+		vec!["10.0.0.0/8", "fd00::/8"],
+		vec!["10.0.1.0/24", "fd00:dead::/32"],
+		None,
+		false,
+		false,
+		None,
+	);
+	let tp = TrafficPolicy::try_from(&proto).expect("conversion should succeed");
+	let iac = match tp {
+		TrafficPolicy::IpAccessControl(iac) => iac,
+		other => panic!("expected IpAccessControl, got {other:?}"),
+	};
+
+	assert_eq!(iac.allow.len(), 2);
+	assert_eq!(iac.deny.len(), 2);
+
+	let v4_ok = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)));
+	assert!(iac.apply(&v4_ok).is_ok());
+
+	let v4_deny = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(10, 0, 1, 1)));
+	assert!(iac.apply(&v4_deny).is_err());
+
+	let v6_ok = make_request_with_ip(IpAddr::V6("fd00::1".parse().unwrap()));
+	assert!(iac.apply(&v6_ok).is_ok());
+
+	let v6_deny = make_request_with_ip(IpAddr::V6("fd00:dead::1".parse().unwrap()));
+	assert!(iac.apply(&v6_deny).is_err());
+}
+
+#[test]
+fn xds_roundtrip_xff_trusted_hops_functional() {
+	let proto = make_proto_ip_access_control(
+		vec!["10.0.0.0/8"],
+		vec![],
+		Some(1),
+		false,
+		false,
+		None,
+	);
+	let tp = TrafficPolicy::try_from(&proto).expect("conversion should succeed");
+	let iac = match tp {
+		TrafficPolicy::IpAccessControl(iac) => iac,
+		other => panic!("expected IpAccessControl, got {other:?}"),
+	};
+
+	assert_eq!(iac.xff_num_trusted_hops, Some(1));
+
+	// xff="10.0.0.5, 172.16.0.1", hops=1 -> idx = len(2) - 1 = 1 -> client = 172.16.0.1
+	// 172.16.0.1 is NOT in 10.0.0.0/8 -> denied
+	let denied = make_request_with_ip_and_xff(
+		IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
+		"10.0.0.5, 172.16.0.1",
+	);
+	assert!(iac.apply(&denied).is_err(), "client IP 172.16.0.1 not in 10.0.0.0/8");
+
+	// xff="172.16.0.1, 10.0.0.5", hops=1 -> idx = 2 - 1 = 1 -> client = 10.0.0.5
+	// 10.0.0.5 is in 10.0.0.0/8 -> allowed
+	let allowed = make_request_with_ip_and_xff(
+		IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
+		"172.16.0.1, 10.0.0.5",
+	);
+	assert!(iac.apply(&allowed).is_ok(), "client IP 10.0.0.5 is in 10.0.0.0/8");
+}
+
+#[test]
+fn xds_roundtrip_skip_private_ips_functional() {
+	let proto = make_proto_ip_access_control(
+		vec!["203.0.113.0/24"],
+		vec![],
+		None,
+		true,
+		false,
+		None,
+	);
+	let tp = TrafficPolicy::try_from(&proto).expect("conversion should succeed");
+	let iac = match tp {
+		TrafficPolicy::IpAccessControl(iac) => iac,
+		other => panic!("expected IpAccessControl, got {other:?}"),
+	};
+
+	assert!(iac.skip_private_ips);
+
+	let private = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)));
+	assert!(iac.apply(&private).is_ok(), "private IP should bypass allow check");
+
+	let public_ok = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 1)));
+	assert!(iac.apply(&public_ok).is_ok(), "203.0.113.1 is in allow list");
+
+	let public_no = make_request_with_ip(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)));
+	assert!(iac.apply(&public_no).is_err(), "8.8.8.8 not in allow list, not private");
+}
+
+#[test]
+fn xds_roundtrip_enforce_full_chain_functional() {
+	let proto = make_proto_ip_access_control(
+		vec!["10.0.0.0/8"],
+		vec!["10.0.1.0/24"],
+		Some(1),
+		false,
+		true,
+		None,
+	);
+	let tp = TrafficPolicy::try_from(&proto).expect("conversion should succeed");
+	let iac = match tp {
+		TrafficPolicy::IpAccessControl(iac) => iac,
+		other => panic!("expected IpAccessControl, got {other:?}"),
+	};
+
+	assert!(iac.enforce_full_chain);
+
+	let req = make_request_with_ip_and_xff(
+		IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+		"10.0.0.5, 10.0.1.50",
+	);
+	assert!(iac.apply(&req).is_err(), "10.0.1.50 in XFF chain hits deny list");
+
+	let ok_req = make_request_with_ip_and_xff(
+		IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+		"10.0.0.5, 10.0.2.1",
+	);
+	assert!(iac.apply(&ok_req).is_ok(), "all IPs in 10.0.0.0/8 and none in deny");
+}
+
+#[test]
+fn xds_roundtrip_max_xff_length_functional() {
+	let proto = make_proto_ip_access_control(
+		vec![],
+		vec![],
+		Some(1),
+		false,
+		false,
+		Some(2),
+	);
+	let tp = TrafficPolicy::try_from(&proto).expect("conversion should succeed");
+	let iac = match tp {
+		TrafficPolicy::IpAccessControl(iac) => iac,
+		other => panic!("expected IpAccessControl, got {other:?}"),
+	};
+
+	assert_eq!(iac.max_xff_length, Some(2));
+
+	let ok = make_request_with_ip_and_xff(
+		IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+		"1.1.1.1, 2.2.2.2",
+	);
+	assert!(iac.apply(&ok).is_ok(), "2 entries within limit of 2");
+
+	let too_long = make_request_with_ip_and_xff(
+		IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+		"1.1.1.1, 2.2.2.2, 3.3.3.3",
+	);
+	assert!(iac.apply(&too_long).is_err(), "3 entries exceeds limit of 2");
+}
+
+#[test]
+fn xds_roundtrip_phased_traffic_policy() {
+	use crate::types::agent::{PhasedTrafficPolicy, PolicyPhase};
+	let proto = make_proto_ip_access_control(
+		vec!["10.0.0.0/8"],
+		vec![],
+		None,
+		false,
+		false,
+		None,
+	);
+	let phased = PhasedTrafficPolicy::try_from(&proto).expect("conversion should succeed");
+	assert_eq!(phased.phase, PolicyPhase::Gateway, "IP access control should be gateway phase");
+	match phased.policy {
+		TrafficPolicy::IpAccessControl(iac) => {
+			assert_eq!(iac.allow.len(), 1);
+		},
+		other => panic!("expected IpAccessControl, got {other:?}"),
+	}
+}
