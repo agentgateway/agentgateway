@@ -65,11 +65,7 @@ impl Session {
 		let is_init = matches!(&message, ClientJsonRpcMessage::Request(r) if matches!(&r.request, &ClientRequest::InitializeRequest(_)));
 		if !is_init {
 			// first, send the initialize
-			let init_request = rmcp::model::InitializeRequest {
-				method: Default::default(),
-				params: get_client_info(),
-				extensions: Default::default(),
-			};
+			let init_request = rmcp::model::InitializeRequest::new(get_client_info());
 			let _ = self
 				.send(
 					parts.clone(),
@@ -645,21 +641,9 @@ impl sse_stream::Timer for TokioSseTimer {
 }
 
 fn get_client_info() -> ClientInfo {
-	ClientInfo {
-		meta: None,
-		protocol_version: ProtocolVersion::V_2025_06_18,
-		capabilities: rmcp::model::ClientCapabilities {
-			experimental: None,
-			roots: None,
-			sampling: None,
-			elicitation: None,
-			tasks: None,
-			extensions: None,
-		},
-		client_info: Implementation {
-			name: "agentgateway".to_string(),
-			version: BuildInfo::new().version.to_string(),
-			..Default::default()
-		},
-	}
+	let mut client_info = ClientInfo::default();
+	client_info.protocol_version = ProtocolVersion::V_2025_06_18;
+	client_info.capabilities = rmcp::model::ClientCapabilities::default();
+	client_info.client_info = Implementation::new("agentgateway", BuildInfo::new().version.to_string());
+	client_info
 }

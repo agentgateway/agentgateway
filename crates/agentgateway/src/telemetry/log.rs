@@ -12,7 +12,8 @@ use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{OptionExt, ValueBag, debug, display};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
-use frozen_collections::{FzHashSet, FzStringMap};
+use frozen_collections::traits::{Len, MapIteration, MapQuery, SetQuery};
+use frozen_collections::FzHashSet;
 use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -117,7 +118,7 @@ pub struct MetricFields {
 
 #[derive(Clone, Debug)]
 pub struct OrderedStringMap<V> {
-	map: FzStringMap<Box<str>, V>,
+	map: std::collections::HashMap<Box<str>, V>,
 	order: Box<[Box<str>]>,
 }
 
@@ -194,7 +195,8 @@ where
 	fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
 		let items = iter.into_iter().collect_vec();
 		let order: Box<[Box<str>]> = items.iter().map(|(k, _)| k.as_ref().into()).collect();
-		let map: FzStringMap<Box<str>, V> = items.into_iter().collect();
+		let map: std::collections::HashMap<Box<str>, V> =
+			items.into_iter().map(|(k, v)| (k.as_ref().into(), v)).collect();
 		Self { map, order }
 	}
 }
