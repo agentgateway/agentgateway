@@ -9,7 +9,7 @@ use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest}
 use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::SimpleBackendReference;
+use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
 
 #[cfg(test)]
@@ -50,15 +50,15 @@ pub struct RemoteRateLimit {
 	pub domain: String,
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
-	pub descriptors: Arc<DescriptorSet>,
-	/// Timeout for the request
-	#[serde(
-		default,
-		skip_serializing_if = "Option::is_none",
-		with = "serde_dur_option"
+	/// Policies to connect to the backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	pub timeout: Option<Duration>,
+	pub policies: Vec<BackendPolicy>,
+	pub descriptors: Arc<DescriptorSet>,
 	/// Behavior when the remote rate limit service is unavailable or returns an error.
 	/// Defaults to failClosed, denying requests with a 500 status on service failure.
 	#[serde(default)]
@@ -323,8 +323,8 @@ impl RemoteRateLimit {
 		);
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
+			policies: Arc::new(self.policies.clone()),
 			client,
-			timeout: self.timeout,
 		};
 		let mut client = RateLimitServiceClient::new(chan);
 		let resp = client.should_rate_limit(request).await;

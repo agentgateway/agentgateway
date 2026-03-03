@@ -1,0 +1,625 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gateway-with-listenerset-hostname-conflict
+  namespace: gateway-conformance-infra
+spec:
+  gatewayClassName: "agentgateway"
+  allowedListeners:
+    namespaces:
+      from: Same
+  listeners:
+    - name: gateway-listener
+      port: 80
+      protocol: HTTP
+      hostname: "gateway-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+    # The following listener should be accepted based on listener precedence
+    - name: hostname-conflict-with-gateway-listener
+      port: 80
+      protocol: HTTP
+      hostname: "hostname-conflict-with-gateway-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+# The listener `hostname-conflict-with-gateway-listener` should be rejected but the listenerSet should be accepted since it has other valid listeners
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: listenerset-with-hostname-conflict-with-gateway-1
+  namespace: gateway-conformance-infra
+spec:
+  parentRef:
+    kind: Gateway
+    group: gateway.networking.k8s.io
+    name: gateway-with-listenerset-hostname-conflict
+    namespace: gateway-conformance-infra
+  listeners:
+    - name: listener-set-1-listener
+      port: 80
+      protocol: HTTP
+      hostname: "listener-set-1-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+    # The following listener should be rejected since it conflicts with the gateway listener
+    - name: hostname-conflict-with-gateway-listener
+      port: 80
+      protocol: HTTP
+      hostname: "hostname-conflict-with-gateway-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+    # The following listener should be accepted based on listener precedence
+    - name: hostname-conflict-with-listener-set-listener
+      port: 80
+      protocol: HTTP
+      hostname: "hostname-conflict-with-listener-set-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+# This listenerSet should not be accepted since its only listener `hostname-conflict-with-gateway-listener` is rejected
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: listenerset-with-hostname-conflict-with-gateway-2
+  namespace: gateway-conformance-infra
+spec:
+  parentRef:
+    kind: Gateway
+    group: gateway.networking.k8s.io
+    name: gateway-with-listenerset-hostname-conflict
+    namespace: gateway-conformance-infra
+  listeners:
+    # The following listener should be rejected since it conflicts with the gateway listener
+    - name: hostname-conflict-with-gateway-listener
+      port: 80
+      protocol: HTTP
+      hostname: "hostname-conflict-with-gateway-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+# The listener `hostname-conflict-with-listener-set-listener` should be rejected but the listenerSet should be accepted since it has other valid listeners
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: listenerset-with-hostname-conflict-with-listener-set-1
+  namespace: gateway-conformance-infra
+spec:
+  parentRef:
+    kind: Gateway
+    group: gateway.networking.k8s.io
+    name: gateway-with-listenerset-hostname-conflict
+    namespace: gateway-conformance-infra
+  listeners:
+    - name: listener-set-2-listener
+      port: 80
+      protocol: HTTP
+      hostname: "listener-set-2-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+    # The following listener should be rejected since it conflicts with another listenerSet's listener
+    - name: hostname-conflict-with-listener-set-listener
+      port: 80
+      protocol: HTTP
+      hostname: "hostname-conflict-with-listener-set-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+# This listenerSet should not be accepted since its only listener `hostname-conflict-with-listener-set-listener` is rejected
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: listenerset-with-hostname-conflict-with-listener-set-2
+  namespace: gateway-conformance-infra
+spec:
+  parentRef:
+    kind: Gateway
+    group: gateway.networking.k8s.io
+    name: gateway-with-listenerset-hostname-conflict
+    namespace: gateway-conformance-infra
+  listeners:
+    # The following listener should be rejected since it conflicts with another listenerSet's listener
+    - name: hostname-conflict-with-listener-set-listener
+      port: 80
+      protocol: HTTP
+      hostname: "hostname-conflict-with-listener-set-listener.com"
+      allowedRoutes:
+        namespaces:
+          from: All
+
+---
+# Output
+output:
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    bind:
+      key: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      port: 80
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: gateway-listener.com
+      key: gateway-conformance-infra/gateway-with-listenerset-hostname-conflict.gateway-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: gateway-listener
+      protocol: HTTP
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: hostname-conflict-with-gateway-listener.com
+      key: gateway-conformance-infra/gateway-with-listenerset-hostname-conflict.hostname-conflict-with-gateway-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: hostname-conflict-with-gateway-listener
+      protocol: HTTP
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: hostname-conflict-with-gateway-listener.com
+      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-gateway-1.hostname-conflict-with-gateway-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: hostname-conflict-with-gateway-listener
+      protocol: HTTP
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: hostname-conflict-with-listener-set-listener.com
+      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-gateway-1.hostname-conflict-with-listener-set-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: hostname-conflict-with-listener-set-listener
+      protocol: HTTP
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: listener-set-1-listener.com
+      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-gateway-1.listener-set-1-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: listener-set-1-listener
+      protocol: HTTP
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: hostname-conflict-with-gateway-listener.com
+      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-gateway-2.hostname-conflict-with-gateway-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: hostname-conflict-with-gateway-listener
+      protocol: HTTP
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: hostname-conflict-with-listener-set-listener.com
+      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-listener-set-1.hostname-conflict-with-listener-set-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: hostname-conflict-with-listener-set-listener
+      protocol: HTTP
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: listener-set-2-listener.com
+      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-listener-set-1.listener-set-2-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: listener-set-2-listener
+      protocol: HTTP
+- gateway:
+    Name: gateway-with-listenerset-hostname-conflict
+    Namespace: gateway-conformance-infra
+  resource:
+    listener:
+      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
+      hostname: hostname-conflict-with-listener-set-listener.com
+      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-listener-set-2.hostname-conflict-with-listener-set-listener
+      name:
+        gatewayName: gateway-with-listenerset-hostname-conflict
+        gatewayNamespace: gateway-conformance-infra
+        listenerName: hostname-conflict-with-listener-set-listener
+      protocol: HTTP
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: listenerset-with-hostname-conflict-with-gateway-1
+    namespace: gateway-conformance-infra
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: ""
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: listener-set-1-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: hostname-conflict-with-gateway-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: hostname-conflict-with-listener-set-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: listenerset-with-hostname-conflict-with-gateway-2
+    namespace: gateway-conformance-infra
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: hostname-conflict-with-gateway-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: listenerset-with-hostname-conflict-with-listener-set-1
+    namespace: gateway-conformance-infra
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: ""
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: listener-set-2-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: hostname-conflict-with-listener-set-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: listenerset-with-hostname-conflict-with-listener-set-2
+    namespace: gateway-conformance-infra
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: hostname-conflict-with-listener-set-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: gateway-with-listenerset-hostname-conflict
+    namespace: gateway-conformance-infra
+  spec: null
+  status:
+    attachedListenerSets: 2
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: gateway-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: hostname-conflict-with-gateway-listener
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

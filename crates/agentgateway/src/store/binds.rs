@@ -20,7 +20,7 @@ use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
 	BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
-	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TrafficPolicy,
+	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TracingPolicy, TrafficPolicy,
 };
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -125,6 +125,7 @@ pub struct BackendPolicies {
 	pub response_header_modifier: Option<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub request_mirror: Vec<filters::RequestMirror>,
+	pub transformation: Option<http::transformation_cel::Transformation>,
 
 	pub session_persistence: Option<http::sessionpersistence::Policy>,
 
@@ -160,6 +161,7 @@ impl BackendPolicies {
 			} else {
 				other.request_mirror
 			},
+			transformation: other.transformation.or(self.transformation),
 			session_persistence: other.session_persistence.or(self.session_persistence),
 			override_dest: other.override_dest.or(self.override_dest),
 		}
@@ -170,6 +172,14 @@ impl BackendPolicies {
 			inference.build(client)
 		} else {
 			ext_proc::InferencePoolRouter::default()
+		}
+	}
+
+	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		if let Some(xfm) = &self.transformation {
+			for expr in xfm.expressions() {
+				ctx.register_expression(expr)
+			}
 		}
 	}
 }
@@ -646,6 +656,9 @@ impl Store {
 				BackendPolicy::RequestRedirect(p) => {
 					pol.request_redirect.get_or_insert_with(|| p.clone());
 				},
+				BackendPolicy::Transformation(p) => {
+					pol.transformation.get_or_insert_with(|| p.clone());
+				},
 				BackendPolicy::SessionPersistence(p) => {
 					pol.session_persistence.get_or_insert_with(|| p.clone());
 				},
@@ -669,6 +682,18 @@ impl Store {
 		pol
 	}
 
+	// All policies that need to be shutdown
+	pub fn all_shutdown_policies(&self) -> Vec<Arc<TracingPolicy>> {
+		self
+			.policies_by_key
+			.iter()
+			.filter_map(|(_, v)| v.policy.as_frontend())
+			.filter_map(|v| match v {
+				FrontendPolicy::Tracing(t) => Some(t.clone()),
+				_ => None,
+			})
+			.collect_vec()
+	}
 	pub fn frontend_policies(&self, gateway: PolicyTargetRef) -> FrontendPolices {
 		let gw_rules = self.policies_by_target.get(&gateway);
 		let rules = gw_rules
@@ -887,8 +912,10 @@ impl Store {
 			let mut bind = Arc::unwrap_or_clone(b.clone());
 			// If this is a listener update, copy things over
 			if let Some(old) = bind.listeners.remove(&lis.key) {
-				debug!("listener update, copy old routes over");
-				lis.routes = Arc::unwrap_or_clone(old).routes;
+				debug!("listener update, copy old routes and tcp routes over");
+				let old = Arc::unwrap_or_clone(old);
+				lis.routes = old.routes;
+				lis.tcp_routes = old.tcp_routes;
 			}
 			// Insert any staged routes
 			for (k, v) in self.staged_routes.remove(&lis.key).into_iter().flatten() {

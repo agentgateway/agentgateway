@@ -102,6 +102,9 @@ impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 			}
 		};
 
+		let mtls_mode =
+			proto::agent::tls_config::MtlsMode::try_from(value.mtls_mode).unwrap_or_default();
+
 		match ServerTLSConfig::from_pem_with_profile(
 			value.cert.clone(),
 			value.private_key.clone(),
@@ -110,6 +113,7 @@ impl From<&proto::agent::TlsConfig> for ServerTLSConfig {
 			min_version,
 			max_version,
 			cipher_suites,
+			mtls_mode == proto::agent::tls_config::MtlsMode::AllowInsecureFallback,
 		) {
 			Ok(sc) => sc,
 			Err(e) => {
@@ -1057,6 +1061,9 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 				BackendPolicy::McpAuthentication(McpAuthentication::try_from(ma)?)
 			},
 			Some(bps::Kind::Ai(ai)) => BackendPolicy::AI(Arc::new(convert_backend_ai_policy(ai)?)),
+			Some(bps::Kind::Transformation(tp)) => {
+				BackendPolicy::Transformation(Transformation::try_from(tp)?)
+			},
 			Some(bps::Kind::RequestHeaderModifier(rhm)) => {
 				BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
 					add: rhm
@@ -1215,7 +1222,6 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 							allow_partial_message: body_opts.allow_partial_message,
 							pack_as_bytes: body_opts.pack_as_bytes,
 						});
-				let timeout = ea.timeout.map(convert_duration);
 				let protocol = match ea
 					.protocol
 					.as_ref()
@@ -1278,6 +1284,8 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
 					protocol,
 					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
 					failure_mode,
 					include_request_headers: ea
 						.include_request_headers
@@ -1293,7 +1301,6 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						)
 						.collect(),
 					include_request_body,
-					timeout,
 				})
 			},
 			Some(tps::Kind::Authorization(rbac)) => {
@@ -1396,9 +1403,9 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),
 					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
-					// Not supported over XDS; use a timeout on the backend itself
-					timeout: None,
 					failure_mode,
 				})
 			},
@@ -1429,6 +1436,8 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				}
 				TrafficPolicy::ExtProc(http::ext_proc::ExtProc {
 					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
 					failure_mode,
 					request_attributes: to_cel_attrs(&ep.request_attributes),
 					response_attributes: to_cel_attrs(&ep.response_attributes),
@@ -1781,6 +1790,8 @@ impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::Tra
 
 		Ok(types::agent::TracingConfig {
 			provider_backend,
+			// Not supported inline from xDS
+			policies: Vec::new(),
 			attributes,
 			resources,
 			remove: t.remove.clone(),
@@ -2224,6 +2235,41 @@ mod tests {
 			panic!("Expected AI policy variant");
 		}
 
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_policy_spec_to_transformation_policy() -> Result<(), ProtoError> {
+		let spec = proto::agent::BackendPolicySpec {
+			kind: Some(proto::agent::backend_policy_spec::Kind::Transformation(
+				proto::agent::traffic_policy_spec::TransformationPolicy {
+					request: Some(
+						proto::agent::traffic_policy_spec::transformation_policy::Transform {
+							set: vec![proto::agent::traffic_policy_spec::HeaderTransformation {
+								name: "x-backend-req".to_string(),
+								expression: "\"backend-req\"".to_string(),
+							}],
+							..Default::default()
+						},
+					),
+					response: Some(
+						proto::agent::traffic_policy_spec::transformation_policy::Transform {
+							add: vec![proto::agent::traffic_policy_spec::HeaderTransformation {
+								name: "x-backend-resp".to_string(),
+								expression: "\"backend-resp\"".to_string(),
+							}],
+							..Default::default()
+						},
+					),
+				},
+			)),
+		};
+
+		let policy = BackendPolicy::try_from(&spec)?;
+		let BackendPolicy::Transformation(transformation) = policy else {
+			panic!("Expected Transformation policy variant");
+		};
+		assert_eq!(transformation.expressions().count(), 2);
 		Ok(())
 	}
 }

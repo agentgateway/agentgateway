@@ -117,7 +117,7 @@ fn test_metadata_from_header() {
 		output_config: None,
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, Some(&headers));
+	let out = super::from_messages::translate_internal(req, &provider, Some(&headers)).unwrap();
 	let metadata = out.request_metadata.unwrap();
 
 	assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
@@ -162,7 +162,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 		}),
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None);
+	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -225,7 +225,7 @@ fn test_output_config_format_maps_to_converse_output_config() {
 		}),
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None);
+	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -289,7 +289,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 		}),
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None);
+	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -346,7 +346,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		}),
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None);
+	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -404,12 +404,13 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		}]),
 		tool_choice: Some(messages::typed::ToolChoice::Tool {
 			name: "lookup".to_string(),
+			disable_parallel_tool_use: None,
 		}),
 		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
 		output_config: None,
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None);
+	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, Some(0.7));
 	assert_eq!(inference.top_p, Some(0.8));
@@ -475,14 +476,16 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 			}),
 			cache_control: None,
 		}]),
-		tool_choice: Some(messages::typed::ToolChoice::Auto),
+		tool_choice: Some(messages::typed::ToolChoice::Auto {
+			disable_parallel_tool_use: None,
+		}),
 		thinking: Some(messages::typed::ThinkingInput::Enabled {
 			budget_tokens: 1024,
 		}),
 		output_config: None,
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None);
+	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, None);
 	assert_eq!(inference.top_p, None);
@@ -493,6 +496,52 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		.as_ref()
 		.and_then(|cfg| cfg.tool_choice.as_ref());
 	assert!(matches!(tool_choice, Some(types::bedrock::ToolChoice::Any)));
+}
+
+#[test]
+fn test_messages_image_url_to_bedrock_returns_error() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Image(
+				messages::typed::ContentImageBlock {
+					source: json!({
+						"type": "url",
+						"url": "https://example.com/sample.jpg"
+					}),
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_k: None,
+		top_p: None,
+		tools: None,
+		tool_choice: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let err = super::from_messages::translate_internal(req, &provider, None).unwrap_err();
+	assert!(matches!(err, crate::llm::AIError::UnsupportedConversion(_)));
+	assert!(
+		err
+			.to_string()
+			.contains("URL image sources are unsupported")
+	);
 }
 
 #[test]

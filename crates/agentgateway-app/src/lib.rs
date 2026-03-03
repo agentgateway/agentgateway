@@ -63,11 +63,20 @@ pub(crate) struct OneshotArgs {
 	pub(crate) command: Vec<std::ffi::OsString>,
 }
 
+#[derive(ClapArgs, Debug)]
+pub(crate) struct MigrateArgs {
+	/// Use config from file
+	#[arg(short, long, value_name = "file")]
+	pub(crate) file: PathBuf,
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
 	/// Run agentgateway as a subprocess and exec a command when ready.
-	#[cfg(unix)]
+	#[cfg(target_os = "linux")]
 	Oneshot(OneshotArgs),
+	/// Migrate deprecated local config fields to frontendPolicies.
+	Migrate(MigrateArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -77,20 +86,18 @@ struct Cli {
 	#[command(flatten)]
 	run: RunArgs,
 
-	#[cfg(target_os = "linux")]
 	#[command(subcommand)]
 	command: Option<Commands>,
 }
 
 pub fn run() -> anyhow::Result<()> {
 	let args = Cli::parse();
-	#[cfg(target_os = "linux")]
 	match args.command {
+		#[cfg(target_os = "linux")]
 		Some(Commands::Oneshot(oneshot)) => commands::oneshot::execute(oneshot),
+		Some(Commands::Migrate(migrate)) => commands::migrate::execute(migrate),
 		None => commands::run::execute(args.run),
 	}
-	#[cfg(not(target_os = "linux"))]
-	commands::run::execute(args.run)
 }
 
 pub(crate) fn read_config_contents(

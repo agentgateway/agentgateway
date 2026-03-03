@@ -2,7 +2,7 @@
 source: crates/agentgateway/src/llm/tests.rs
 description: "anthropic: request_anthropic_tools"
 info:
-  model: claude-opus-4-1-20250805
+  model: claude-opus-4-6
   max_tokens: 1024
   tools:
     - name: get_weather
@@ -23,10 +23,15 @@ info:
   "messages": [
     {
       "role": "user",
-      "content": "What is the weather like in San Francisco?"
+      "content": [
+        {
+          "type": "text",
+          "text": "What is the weather like in San Francisco?"
+        }
+      ]
     }
   ],
-  "model": "claude-opus-4-1-20250805",
+  "model": "claude-opus-4-6",
   "max_completion_tokens": 1024,
   "stream": false,
   "tools": [

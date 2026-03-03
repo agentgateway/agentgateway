@@ -78,7 +78,7 @@ func TestConformance(t *testing.T) {
 	}
 	options.Debug = true
 
-	t.Logf("Running conformance tests with\nprofiles: %+v\n", profiles)
+	t.Logf("Running conformance tests with\nprofiles: %+v %v\n", profiles, options.RunTest)
 	conformance.RunConformanceWithOptions(t, options)
 }
 

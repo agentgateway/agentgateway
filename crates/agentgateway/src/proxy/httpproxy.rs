@@ -33,7 +33,7 @@ use crate::store::{
 	RoutePath,
 };
 use crate::telemetry::log;
-use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog};
+use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog, TraceSampler};
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::{backend, frontend};
@@ -190,6 +190,7 @@ async fn apply_backend_policies(
 		request_header_modifier,
 		response_header_modifier,
 		request_redirect,
+		transformation,
 		// TODO: implement session persistence
 		session_persistence: _,
 		// Applied elsewhere
@@ -198,6 +199,7 @@ async fn apply_backend_policies(
 		override_dest: _,
 	} = &backend_call.backend_policies;
 	response_policies.backend_response_header = response_header_modifier.clone();
+	response_policies.backend_transformation = transformation.clone();
 
 	let dh = backend::HTTP::default();
 	http
@@ -207,6 +209,9 @@ async fn apply_backend_policies(
 
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
+	}
+	if let Some(j) = transformation {
+		j.apply_request(req);
 	}
 	if let Some(rhm) = request_header_modifier {
 		rhm.apply(req.headers_mut()).map_err(ProxyError::from)?;
@@ -401,7 +406,7 @@ impl HTTPProxy {
 		let log = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
-				self.inputs.cfg.tracing.clone(),
+				self.inputs.cfg.metrics.clone(),
 			),
 			self.inputs.metrics.clone(),
 			start,
@@ -578,16 +583,35 @@ impl HTTPProxy {
 
 		Self::detect_misdirected(log, bind, &req, &selected_listener).snapshot_on_err(log, &mut req)?;
 
-		let (selected_route, path_match) = http::route::select_best_route(
+		let mut selected_route = http::route::select_best_route(
 			inputs.stores.clone(),
 			inputs.cfg.network.clone(),
 			inputs.cfg.self_addr.clone(),
 			self.target_address,
 			&selected_listener,
 			&req,
-		)
-		.ok_or(ProxyError::RouteNotFound)
-		.snapshot_on_err(log, &mut req)?;
+		);
+		if selected_route.is_none()
+			&& let Some(rewritten_uri) = crate::mcp::pre_route_rewrite_uri(&req)
+		{
+			let original_uri = req.uri().clone();
+			*req.uri_mut() = rewritten_uri;
+			let rewritten_selected = http::route::select_best_route(
+				inputs.stores.clone(),
+				inputs.cfg.network.clone(),
+				inputs.cfg.self_addr.clone(),
+				self.target_address,
+				&selected_listener,
+				&req,
+			);
+			*req.uri_mut() = original_uri;
+			selected_route = rewritten_selected.and_then(|(route, path_match)| {
+				route_has_mcp_backend(inputs.as_ref(), &route).then_some((route, path_match))
+			});
+		}
+		let (selected_route, path_match) = selected_route
+			.ok_or(ProxyError::RouteNotFound)
+			.snapshot_on_err(log, &mut req)?;
 		log.route_name = Some(selected_route.name.clone());
 		// Record the matched path for tracing/logging span names
 		log.path_match = Some(match &path_match {
@@ -651,6 +675,8 @@ impl HTTPProxy {
 			&selected_backend.inline_policies,
 			Some(route_path.clone()),
 		);
+		backend_policies.register_cel_expressions(log.cel.ctx());
+		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 		log.backend_info = Some(selected_backend.backend.backend.backend_info());
 		if let Some(bp) = selected_backend.backend.backend.backend_protocol() {
 			log.backend_protocol = Some(bp)
@@ -795,14 +821,15 @@ impl HTTPProxy {
 		if let Some(lp) = &frontend_policies.access_log {
 			apply_logging_policy_to_log(log, lp);
 		}
+		let mut sampler = TraceSampler::default();
 		if let Some(tp) = frontend_policies.tracing.as_deref() {
 			// Apply sampling overrides if present
 			if let Some(rs) = &tp.config.random_sampling {
-				log.cel.tracing_sampler.random_sampling = Some(rs.clone());
+				sampler.random_sampling = Some(rs.clone());
 				log.cel.cel_context.register_expression(rs.as_ref());
 			}
 			if let Some(cs) = &tp.config.client_sampling {
-				log.cel.tracing_sampler.client_sampling = Some(cs.clone());
+				sampler.client_sampling = Some(cs.clone());
 				log.cel.cel_context.register_expression(cs.as_ref());
 			}
 			// Re-apply request so any newly required attributes are captured before sampling
@@ -810,7 +837,7 @@ impl HTTPProxy {
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
 		let trace_parent = trc::TraceParent::from_request(req);
-		let trace_sampled = log.trace_sampled(req, trace_parent.as_ref());
+		let trace_sampled = sampler.trace_sampled(req, trace_parent.as_ref());
 
 		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
 		if trace_sampled {
@@ -824,12 +851,11 @@ impl HTTPProxy {
 				tp.get_or_init(self.policy_client())
 					.map(|t| Some(t.clone()))
 					.unwrap_or_else(|e| {
-						debug!("failed to initialize dynamic tracer, falling back to static tracer: {e:?}");
-						self.inputs.tracer.clone()
+						warn!("ignoring invalid tracing policy: {e}");
+						None
 					})
 			} else {
-				debug!("No frontend tracing policy found, using static tracer");
-				self.inputs.tracer.clone()
+				None
 			};
 			// Register CEL expressions from the tracer
 			if let Some(tracer) = &log.tracer {
@@ -986,6 +1012,15 @@ fn resolve_backend(b: RouteBackendReference, pi: &ProxyInputs) -> Result<RouteBa
 		weight: b.weight,
 		backend,
 		inline_policies: b.inline_policies,
+	})
+}
+
+fn route_has_mcp_backend(inputs: &ProxyInputs, route: &Route) -> bool {
+	route.backends.iter().any(|backend_ref| {
+		let Ok(backend) = resolve_backend(backend_ref.clone(), inputs) else {
+			return false;
+		};
+		matches!(backend.backend.backend, Backend::MCP(_, _))
 	})
 }
 
@@ -1193,6 +1228,7 @@ async fn make_backend_call(
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
 	};
+	let mut mcp_passthrough_rewrite: Option<crate::mcp::PassthroughProtectedResource> = None;
 
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
@@ -1204,6 +1240,20 @@ async fn make_backend_call(
 					.mcp_state
 					.should_passthrough(&base_policies, mcp_backend, &req)
 			{
+				if req.uri().path().contains("/.well-known/") {
+					req.headers_mut().remove(header::ACCEPT_ENCODING);
+				}
+				match crate::mcp::passthrough_well_known(&req) {
+					Some(crate::mcp::PassthroughWellKnown::UnsupportedAuthorizationServer) => {
+						return Err(ProxyResponse::from(ProxyError::RouteNotFound));
+					},
+					Some(crate::mcp::PassthroughWellKnown::ProtectedResource(rewrite)) => {
+						*req.uri_mut() = rewrite.upstream_uri.clone();
+						mcp_passthrough_rewrite = Some(rewrite);
+					},
+					None => {},
+				}
+
 				let target = super::resolve_simple_backend_with_policies(&be, inputs.as_ref())?;
 				let tgt = target.backend.target();
 				let policies = inputs
@@ -1563,6 +1613,13 @@ async fn make_backend_call(
 	};
 	// TODO: we currently do not support ImmediateResponse from inference router
 	let _ = maybe_inference.mutate_response(&mut resp).await?;
+	if let Some(rewrite) = &mcp_passthrough_rewrite {
+		crate::mcp::rewrite_passthrough_www_authenticate(&mut resp, rewrite)
+			.map_err(ProxyResponse::from)?;
+		crate::mcp::rewrite_passthrough_protected_resource_metadata(&mut resp, rewrite)
+			.await
+			.map_err(ProxyResponse::from)?;
+	}
 	Ok(resp)
 }
 
@@ -1843,6 +1900,7 @@ struct ResponsePolicies {
 	route_response_header: Option<filters::HeaderModifier>,
 	backend_response_header: Option<filters::HeaderModifier>,
 	transformation: Option<Transformation>,
+	backend_transformation: Option<Transformation>,
 	gateway_transformation: Option<Transformation>,
 	response_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
@@ -1870,6 +1928,9 @@ impl ResponsePolicies {
 		if let Some(j) = &self.transformation {
 			j.apply_response(resp, log.request_snapshot.as_ref());
 		}
+		if let Some(j) = &self.backend_transformation {
+			j.apply_response(resp, log.request_snapshot.as_ref());
+		}
 		if let Some(j) = &self.gateway_transformation {
 			j.apply_response(resp, log.request_snapshot.as_ref());
 		}
@@ -1893,6 +1954,7 @@ impl ResponsePolicies {
 		}
 
 		merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
+
 		Ok(())
 	}
 }
@@ -1905,8 +1967,19 @@ pub struct PolicyClient {
 impl PolicyClient {
 	pub async fn call_reference(
 		&self,
+		req: Request,
+		backend_ref: &SimpleBackendReference,
+	) -> Result<Response, ProxyError> {
+		self
+			.call_reference_with_policies(req, backend_ref, &[])
+			.await
+	}
+
+	pub async fn call_reference_with_policies(
+		&self,
 		mut req: Request,
 		backend_ref: &SimpleBackendReference,
+		policies: &[BackendPolicy],
 	) -> Result<Response, ProxyError> {
 		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
 		trace!("resolved {:?} to {:?}", backend_ref, &backend);
@@ -1925,7 +1998,7 @@ impl PolicyClient {
 		.map_err(ProxyError::Processing)?;
 
 		let backend = BackendWithPolicies::from(backend);
-		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
+		let pols = get_backend_policies(&self.inputs, &backend, policies, None);
 		self
 			.internal_call_with_policies(req, backend.backend, pols)
 			.await

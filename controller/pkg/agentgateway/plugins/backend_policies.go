@@ -28,6 +28,7 @@ const (
 	aiPolicySuffix                = ":ai"
 	backendTlsPolicySuffix        = ":backend-tls"
 	backendauthPolicySuffix       = ":backend-auth"
+	backendTransformationSuffix   = ":backend-transformation"
 	tlsPolicySuffix               = ":tls"
 	backendHttpPolicySuffix       = ":backend-http"
 	mcpAuthorizationPolicySuffix  = ":mcp-authorization"
@@ -89,6 +90,15 @@ func translateBackendPolicyToAgw(
 		agwPolicies = append(agwPolicies, pol...)
 	}
 
+	if s := backend.Transformation; s != nil {
+		pol, err := translateBackendTransformation(policy, policyTarget)
+		if err != nil {
+			logger.Error("error processing backend transformation", "err", err)
+			errs = append(errs, err)
+		}
+		agwPolicies = append(agwPolicies, pol...)
+	}
+
 	if s := backend.MCP; s != nil {
 		if backend.MCP.Authorization != nil {
 			pol := translateBackendMCPAuthorization(policy, policyTarget)
@@ -129,6 +139,43 @@ func translateBackendPolicyToAgw(
 func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) ([]AgwPolicy, error) {
 	// TODO
 	return nil, nil
+}
+
+func translateBackendTransformation(
+	policy *agentgateway.AgentgatewayPolicy,
+	target *api.PolicyTarget,
+) ([]AgwPolicy, error) {
+	var errs []error
+	transformation := policy.Spec.Backend.Transformation
+
+	convertedReq, err := convertTransformSpec(transformation.Request)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	convertedResp, err := convertTransformSpec(transformation.Response)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tp := &api.Policy{
+		Key:    policy.Namespace + "/" + policy.Name + backendTransformationSuffix + attachmentName(target),
+		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Target: target,
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_Transformation{
+					Transformation: &api.TrafficPolicySpec_TransformationPolicy{
+						Request:  convertedReq,
+						Response: convertedResp,
+					},
+				},
+			},
+		},
+	}
+	logger.Debug("generated backend transformation policy",
+		"policy", policy.Name,
+		"agentgateway_policy", tp.Name)
+	return []AgwPolicy{{Policy: tp}}, errors.Join(errs...)
 }
 
 func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {

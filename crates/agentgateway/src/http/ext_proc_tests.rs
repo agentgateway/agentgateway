@@ -216,6 +216,7 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 				kind: None,
 			}),
 			policy: TrafficPolicy::ExtProc(ext_proc::ExtProc {
+				policies: Default::default(),
 				target: Arc::new(SimpleBackendReference::Backend(strng::format!(
 					"/{}",
 					ext_proc.address

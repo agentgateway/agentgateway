@@ -247,12 +247,12 @@ impl ExtendedServerName {
 pub mod insecure {
 	use std::sync::Arc;
 
+	use crate::transport::tls::provider;
 	use rustls::client::WebPkiServerVerifier;
 	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 	use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-	use rustls::{DigitallySignedStruct, SignatureScheme};
-
-	use crate::transport::tls::provider;
+	use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
+	use rustls::{DigitallySignedStruct, DistinguishedName, SignatureScheme};
 
 	#[derive(Debug)]
 	pub struct NoServerNameVerification {
@@ -464,6 +464,70 @@ pub mod insecure {
 			provider()
 				.signature_verification_algorithms
 				.supported_schemes()
+		}
+	}
+
+	#[derive(Debug)]
+	pub struct AllowInsecureMtlsVerifier {
+		base: Arc<dyn ClientCertVerifier>,
+	}
+
+	impl AllowInsecureMtlsVerifier {
+		pub fn new(base: Arc<dyn ClientCertVerifier>) -> Arc<Self> {
+			Arc::new(Self { base })
+		}
+	}
+
+	impl ClientCertVerifier for AllowInsecureMtlsVerifier {
+		fn offer_client_auth(&self) -> bool {
+			true
+		}
+
+		fn client_auth_mandatory(&self) -> bool {
+			false
+		}
+
+		fn root_hint_subjects(&self) -> &[DistinguishedName] {
+			self.base.root_hint_subjects()
+		}
+
+		fn verify_client_cert(
+			&self,
+			end_entity: &CertificateDer<'_>,
+			intermediates: &[CertificateDer<'_>],
+			now: UnixTime,
+		) -> Result<ClientCertVerified, rustls::Error> {
+			match self.base.verify_client_cert(end_entity, intermediates, now) {
+				Ok(verified) => Ok(verified),
+				Err(err) => {
+					tracing::debug!(
+						"allow_insecure_mtls: accepting client cert despite verification error: {err}"
+					);
+					Ok(ClientCertVerified::assertion())
+				},
+			}
+		}
+
+		fn verify_tls12_signature(
+			&self,
+			message: &[u8],
+			cert: &CertificateDer<'_>,
+			dss: &DigitallySignedStruct,
+		) -> Result<HandshakeSignatureValid, rustls::Error> {
+			self.base.verify_tls12_signature(message, cert, dss)
+		}
+
+		fn verify_tls13_signature(
+			&self,
+			message: &[u8],
+			cert: &CertificateDer<'_>,
+			dss: &DigitallySignedStruct,
+		) -> Result<HandshakeSignatureValid, rustls::Error> {
+			self.base.verify_tls13_signature(message, cert, dss)
+		}
+
+		fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+			self.base.supported_verify_schemes()
 		}
 	}
 }

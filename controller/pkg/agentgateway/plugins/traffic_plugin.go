@@ -154,7 +154,7 @@ func TranslateAgentgatewayPolicy(
 				Kind: utils.ServiceTarget(policy.Namespace, string(target.Name), target.SectionName),
 			}
 			// TODO: add support for inferencepool https://github.com/kgateway-dev/kgateway/issues/13295
-			// TODO: add support for XListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
+			// TODO: add support for ListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
 
 		default:
 			// TODO(npolshak): support attaching policies to k8s services, serviceentries, and other backends

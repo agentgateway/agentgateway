@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 108
 description: "bedrock-completions: request_full"
 info:
   model: gpt-4-turbo-preview
@@ -19,7 +20,7 @@ info:
           text: "What's in this image?"
         - type: image_url
           image_url:
-            url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+            url: "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png"
   max_tokens: 1000
   temperature: 0.7
   top_p: 0.9
@@ -89,6 +90,14 @@ info:
       "content": [
         {
           "text": "This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "What's in this image?"
         }
       ]
     }

@@ -112,7 +112,7 @@ impl Provider {
 		}
 	}
 
-	pub fn get_host(&self) -> Strng {
+	pub fn get_host(&self, _request_model: Option<&str>) -> Strng {
 		match &self.region {
 			None => {
 				strng::literal!("aiplatform.googleapis.com")

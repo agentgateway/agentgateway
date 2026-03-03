@@ -287,6 +287,21 @@ spec:
         kind: Service
       protocol: TCP
 ---
+_err: 'path is only valid with protocol HTTP'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-tracing-path-with-grpc
+spec:
+  frontend:
+    tracing:
+      backendRef:
+        name: otel-collector
+        kind: Service
+        port: 4317
+      protocol: GRPC
+      path: /v1/traces
+---
 _err: 'hostRewrite: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -381,7 +396,7 @@ spec:
       kind: Backend
       name: dummy
 ---
-_err: "the 'traffic.phase=PreRouting' field can only target a Gateway or XListenerSet"
+_err: "the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:

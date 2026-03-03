@@ -12,7 +12,12 @@ info:
   "messages": [
     {
       "role": "user",
-      "content": "Hello, world"
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello, world"
+        }
+      ]
     }
   ],
   "model": "claude-sonnet-4-20250514",

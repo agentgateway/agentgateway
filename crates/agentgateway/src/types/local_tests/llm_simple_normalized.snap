@@ -31,7 +31,7 @@ binds:
             namespace: internal
           "llm:model:claude-3-haiku:0":
             backends:
-              - backend: "/llm:claude-3-haiku"
+              - backend: "/llm:model:claude-3-haiku:0"
                 weight: 1
             inlinePolicies:
               - ai:
@@ -58,7 +58,7 @@ binds:
             namespace: internal
           "llm:model:gemini-0.5-pro:1":
             backends:
-              - backend: "/llm:gemini-0.5-pro"
+              - backend: "/llm:model:gemini-0.5-pro:1"
                 weight: 1
             inlinePolicies:
               - ai:
@@ -82,7 +82,7 @@ binds:
             namespace: internal
           "llm:model:gpt-3.5-turbo:3":
             backends:
-              - backend: "/llm:gpt-3.5-turbo"
+              - backend: "/llm:model:gpt-3.5-turbo:3"
                 weight: 1
             inlinePolicies:
               - ai:
@@ -106,7 +106,7 @@ binds:
             namespace: internal
           "llm:model:gpt-7-max:2":
             backends:
-              - backend: "/llm:gpt-7-max"
+              - backend: "/llm:model:gpt-7-max:2"
                 weight: 1
             inlinePolicies:
               - ai:
@@ -203,7 +203,7 @@ policies:
 backends:
   - backend:
       ai:
-        name: "llm:claude-3-haiku"
+        name: "llm:model:claude-3-haiku:0"
         namespace: ""
         target:
           providers:
@@ -213,7 +213,7 @@ backends:
                     name: claude-3-haiku
                     provider:
                       anthropic:
-                        model: claude-3-5-haiku-20241022
+                        model: claude-haiku-4-5-20251001
                     hostOverride: ~
                     pathOverride: ~
                     tokenize: false
@@ -234,7 +234,7 @@ backends:
       - ai: {}
   - backend:
       ai:
-        name: "llm:gemini-0.5-pro"
+        name: "llm:model:gemini-0.5-pro:1"
         namespace: ""
         target:
           providers:
@@ -244,7 +244,7 @@ backends:
                     name: gemini-0.5-pro
                     provider:
                       vertex:
-                        model: claude-3-5-haiku-20241022
+                        model: claude-haiku-4-5-20251001
                         region: global
                         projectId: my-vertex-project
                     hostOverride: ~
@@ -267,7 +267,7 @@ backends:
       - ai: {}
   - backend:
       ai:
-        name: "llm:gpt-7-max"
+        name: "llm:model:gpt-7-max:2"
         namespace: ""
         target:
           providers:
@@ -297,7 +297,7 @@ backends:
       - ai: {}
   - backend:
       ai:
-        name: "llm:gpt-3.5-turbo"
+        name: "llm:model:gpt-3.5-turbo:3"
         namespace: ""
         target:
           providers:

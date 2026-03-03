@@ -1,0 +1,63 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    transformation:
+      request:
+        set:
+          - name: x-backend-req
+            value: request.headers['x-request-id']
+      response:
+        add:
+          - name: x-backend-resp
+            value: string(response.code)
+---
+# Output
+output:
+- Policy:
+    backend:
+      transformation:
+        request:
+          set:
+          - expression: request.headers['x-request-id']
+            name: x-backend-req
+        response:
+          add:
+          - expression: string(response.code)
+            name: x-backend-resp
+    key: default/agw:backend-transformation:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      route:
+        kind: HTTPRoute
+        name: test
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

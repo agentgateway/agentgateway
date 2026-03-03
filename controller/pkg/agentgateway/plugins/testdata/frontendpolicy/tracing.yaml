@@ -1,0 +1,67 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tracing-path-http
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  frontend:
+    tracing:
+      backendRef:
+        name: otel-collector
+        port: 4318
+      protocol: HTTP
+      path: /custom/v1/traces
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: default
+spec:
+  ports:
+    - port: 4318
+
+---
+# Output
+output:
+- Policy:
+    frontend:
+      tracing:
+        path: /custom/v1/traces
+        providerBackend:
+          port: 4318
+          service:
+            hostname: otel-collector.default.svc.cluster.local
+            namespace: default
+    key: frontend/default/tracing-path-http:frontend-tracing:default/test
+    name:
+      kind: AgentgatewayPolicy
+      name: tracing-path-http
+      namespace: default
+    target:
+      gateway:
+        name: test
+        namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

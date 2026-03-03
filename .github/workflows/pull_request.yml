@@ -193,6 +193,12 @@ jobs:
     - name: Conformance
       run: |
         make -C controller all-conformance
+    - name: Debug Info
+      if: ${{ failure() }}
+      run: |
+        kubectl describe deployment -n agentgateway-system
+        kubectl get pods -n agentgateway-system
+        kubectl logs -n agentgateway-system -l app.kubernetes.io/name=agentgateway
     - name: Upload cargo timings
       uses: actions/upload-artifact@v6
       with:

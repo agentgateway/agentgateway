@@ -8,7 +8,6 @@ import (
 	"istio.io/istio/pkg/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -105,7 +104,7 @@ func GetStatus[I, IS any](spec I) IS {
 		return any(t.Status).(IS)
 	case *gwv1a2.TLSRoute:
 		return any(t.Status).(IS)
-	case *gwxv1a1.XListenerSet:
+	case *gwv1.ListenerSet:
 		return any(t.Status).(IS)
 	case *agentgateway.AgentgatewayPolicy:
 		return any(t.Status).(IS)

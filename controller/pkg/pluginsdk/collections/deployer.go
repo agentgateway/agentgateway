@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -31,8 +30,8 @@ func (k TargetRefIndexKey) String() string {
 
 func GatewaysForDeployerTransformationFunc(
 	gatewayClasses krt.Collection[*gwv1.GatewayClass],
-	listenerSets krt.Collection[*gwxv1a1.XListenerSet],
-	byParentRefIndex krt.Index[TargetRefIndexKey, *gwxv1a1.XListenerSet],
+	listenerSets krt.Collection[*gwv1.ListenerSet],
+	byParentRefIndex krt.Index[TargetRefIndexKey, *gwv1.ListenerSet],
 	controllerName string,
 ) func(kctx krt.HandlerContext, gw *gwv1.Gateway) *GatewayForDeployer {
 	return func(kctx krt.HandlerContext, gw *gwv1.Gateway) *GatewayForDeployer {

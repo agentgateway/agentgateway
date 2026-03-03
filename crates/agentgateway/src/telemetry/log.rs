@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll, ready};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use agent_core::metrics::CustomField;
 use agent_core::strng;
@@ -18,6 +18,8 @@ use frozen_collections::{FzHashSet, FzStringMap};
 use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
+use opentelemetry::TraceFlags;
+use opentelemetry::trace::{Span, SpanBuilder, SpanContext, SpanKind, TraceState, Tracer};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -92,13 +94,21 @@ impl<T: Debug> Debug for AsyncLog<T> {
 	}
 }
 
-#[derive(serde::Serialize, Debug, Clone)]
-pub struct Config {
-	pub filter: Option<Arc<cel::Expression>>,
-	pub fields: LoggingFields,
+#[derive(serde::Serialize, Debug, Default, Clone)]
+pub struct MetricsConfig {
 	pub metric_fields: Arc<MetricFields>,
 	pub excluded_metrics: FzHashSet<String>,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct Config {
+	/// Deprecated: use frontendPolicies.accessLog
+	pub filter: Option<Arc<cel::Expression>>,
+	/// Deprecated: use frontendPolicies.accessLog
+	pub fields: LoggingFields,
+	/// Level sets the level for logs
 	pub level: String,
+	/// Format sets the logging format (text or json)
 	pub format: crate::LoggingFormat,
 	pub otlp: Option<OtlpConfig>,
 }
@@ -204,10 +214,34 @@ impl LoggingFields {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TraceSampler {
 	pub random_sampling: Option<Arc<cel::Expression>>,
 	pub client_sampling: Option<Arc<cel::Expression>>,
+}
+
+impl TraceSampler {
+	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> bool {
+		let TraceSampler {
+			random_sampling,
+			client_sampling,
+		} = &self;
+		let expr = if tp.is_some() {
+			let Some(cs) = client_sampling else {
+				// If client_sampling is not set, default to include it
+				return true;
+			};
+			cs
+		} else {
+			let Some(rs) = random_sampling else {
+				// If random_sampling is not set, default to NOT include it
+				return false;
+			};
+			rs
+		};
+		let exec = cel::Executor::new_request(req);
+		exec.eval_rng(expr.as_ref())
+	}
 }
 
 #[derive(Debug)]
@@ -216,7 +250,6 @@ pub struct CelLogging {
 	pub filter: Option<Arc<cel::Expression>>,
 	pub fields: LoggingFields,
 	pub metric_fields: Arc<MetricFields>,
-	pub tracing_sampler: TraceSampler,
 }
 
 pub struct CelLoggingExecutor<'a> {
@@ -335,7 +368,7 @@ impl<'a> CelLoggingExecutor<'a> {
 }
 
 impl CelLogging {
-	pub fn new(cfg: Config, tracing_config: trc::Config) -> Self {
+	pub fn new(cfg: Config, metrics: MetricsConfig) -> Self {
 		let mut cel_context = cel::ContextBuilder::new();
 		if let Some(f) = &cfg.filter {
 			cel_context.register_expression(f.as_ref());
@@ -343,7 +376,7 @@ impl CelLogging {
 		for v in cfg.fields.add.values_unordered() {
 			cel_context.register_expression(v.as_ref());
 		}
-		for v in cfg.metric_fields.add.values_unordered() {
+		for v in metrics.metric_fields.add.values_unordered() {
 			cel_context.register_expression(v.as_ref());
 		}
 
@@ -351,11 +384,7 @@ impl CelLogging {
 			cel_context,
 			filter: cfg.filter,
 			fields: cfg.fields,
-			metric_fields: cfg.metric_fields,
-			tracing_sampler: TraceSampler {
-				random_sampling: tracing_config.random_sampling,
-				client_sampling: tracing_config.client_sampling,
-			},
+			metric_fields: metrics.metric_fields,
 		}
 	}
 
@@ -383,7 +412,6 @@ impl CelLogging {
 			filter,
 			fields,
 			metric_fields,
-			tracing_sampler: _,
 		} = self;
 		let executor = if req.is_none() && source_context.is_some() {
 			// TCP case: use new_tcp_logger
@@ -505,6 +533,7 @@ impl RequestLog {
 			tcp_info,
 			tls_info: None,
 			tracer: None,
+			trace_spans: Arc::new(Mutex::new(Default::default())),
 			endpoint: None,
 			bind_name: None,
 			listener_name: None,
@@ -537,6 +566,23 @@ impl RequestLog {
 			response_bytes: 0,
 		}
 	}
+
+	pub fn span_writer(&self) -> SpanWriter {
+		let inner = self.span_writer_inner();
+		SpanWriter { inner }
+	}
+	fn span_writer_inner(&self) -> Option<SpanWriterInner> {
+		let tp = self.outgoing_span.clone()?;
+		let tc = self.tracer.clone()?;
+		let current = tp.new_span();
+
+		Some(SpanWriterInner {
+			tracer: tc,
+			parent: tp,
+			current,
+			inner: self.trace_spans.clone(),
+		})
+	}
 }
 
 #[derive(Debug)]
@@ -551,6 +597,9 @@ pub struct RequestLog {
 
 	// Set only if the trace is sampled
 	pub tracer: Option<std::sync::Arc<trc::Tracer>>,
+	/// Additional spans created during the request (e.g. upstream call spans).
+	/// These are flushed on drop when tracing is enabled.
+	pub trace_spans: Arc<Mutex<Vec<SpanBuilder>>>,
 
 	pub endpoint: Option<Target>,
 
@@ -594,30 +643,6 @@ pub struct RequestLog {
 	pub source_context: Option<cel::SourceContext>,
 
 	pub response_bytes: u64,
-}
-
-impl RequestLog {
-	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> bool {
-		let TraceSampler {
-			random_sampling,
-			client_sampling,
-		} = &self.cel.tracing_sampler;
-		let expr = if tp.is_some() {
-			let Some(cs) = client_sampling else {
-				// If client_sampling is not set, default to include it
-				return true;
-			};
-			cs
-		} else {
-			let Some(rs) = random_sampling else {
-				// If random_sampling is not set, default to NOT include it
-				return false;
-			};
-			rs
-		};
-		let exec = cel::Executor::new_request(req);
-		exec.eval_rng(expr.as_ref())
-	}
 }
 
 impl Drop for DropOnLog {
@@ -967,7 +992,14 @@ impl Drop for DropOnLog {
 			("duration", Some(dur.as_str().into())),
 		];
 		if enable_trace && let Some(t) = &log.tracer {
-			t.send(&log, &cel_exec, kv.as_slice())
+			t.send(&log, &cel_exec, kv.as_slice());
+			// Flush any buffered spans created during request processing.
+			// Does best effort, if the lock is poisoned, skip flushing.
+			if let Ok(mut spans) = log.trace_spans.lock() {
+				for sb in spans.drain(..) {
+					sb.start(t.tracer.as_ref()).end();
+				}
+			}
 		};
 		if enable_logs {
 			kv.reserve(fields.add.len());
@@ -1271,5 +1303,116 @@ impl OtelLogSink for OtelAccessLogger {
 
 	fn shutdown(&self) {
 		let _ = self.provider.shutdown();
+	}
+}
+
+// SpanWriter is a construct that can start otel spans
+#[derive(Debug, Default, Clone)]
+pub struct SpanWriter {
+	inner: Option<SpanWriterInner>,
+}
+
+impl SpanWriter {
+	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
+		match self.inner.clone() {
+			Some(i) => i.start(name),
+			None => SpanWriteOnDrop::default(),
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct SpanWriterInner {
+	parent: trc::TraceParent,
+	current: trc::TraceParent,
+	tracer: Arc<trc::Tracer>,
+	inner: Arc<Mutex<Vec<SpanBuilder>>>,
+}
+
+impl SpanWriterInner {
+	#[allow(unused)]
+	pub fn traceparent(&self) -> &trc::TraceParent {
+		&self.current
+	}
+
+	#[allow(unused)]
+	pub fn write(
+		&self,
+		name: impl Into<Cow<'static, str>>,
+		f: impl FnOnce(SpanBuilder) -> SpanBuilder,
+	) {
+		// Create a unique child span ID for this recorded span.
+		let child = self.parent.new_span();
+		let mut sb = self
+			.tracer
+			.tracer
+			.span_builder(name)
+			.with_kind(SpanKind::Server)
+			.with_trace_id(child.trace_id.into())
+			.with_span_id(child.span_id.into());
+
+		sb = f(sb);
+		// Capture end time at write time so it measures the intended operation duration.
+		sb = sb.with_end_time(SystemTime::now());
+
+		let parent = SpanContext::new(
+			self.parent.trace_id.into(),
+			self.parent.span_id.into(),
+			TraceFlags::new(self.parent.flags),
+			true,
+			TraceState::default(),
+		);
+		sb = sb.with_links(vec![opentelemetry::trace::Link::new(parent, vec![], 0)]);
+
+		// Store for later flush when the request log is finalized.
+		if let Ok(mut spans) = self.inner.lock() {
+			spans.push(sb);
+		}
+	}
+
+	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
+		// Create a unique child span ID for this recorded span.
+		let child = self.parent.new_span();
+		let sb = self
+			.tracer
+			.tracer
+			.span_builder(name)
+			.with_kind(SpanKind::Server)
+			.with_trace_id(child.trace_id.into())
+			.with_span_id(child.span_id.into())
+			.with_start_time(SystemTime::now());
+
+		SpanWriteOnDrop {
+			sb: Some(sb),
+			parent: self.parent.clone(),
+			inner: self.inner.clone(),
+		}
+	}
+}
+
+#[derive(Default)]
+pub struct SpanWriteOnDrop {
+	sb: Option<SpanBuilder>,
+	parent: trc::TraceParent,
+	inner: Arc<Mutex<Vec<SpanBuilder>>>,
+}
+impl Drop for SpanWriteOnDrop {
+	fn drop(&mut self) {
+		let Some(mut sb) = self.sb.take() else { return };
+		sb = sb.with_end_time(SystemTime::now());
+
+		let parent = SpanContext::new(
+			self.parent.trace_id.into(),
+			self.parent.span_id.into(),
+			TraceFlags::new(self.parent.flags),
+			true,
+			TraceState::default(),
+		);
+		sb = sb.with_links(vec![opentelemetry::trace::Link::new(parent, vec![], 0)]);
+
+		// Store for later flush when the request log is finalized.
+		if let Ok(mut spans) = self.inner.lock() {
+			spans.push(sb);
+		}
 	}
 }

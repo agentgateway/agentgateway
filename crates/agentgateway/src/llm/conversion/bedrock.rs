@@ -155,7 +155,7 @@ pub mod from_embeddings {
 		let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
 			event_id: None,
 			error: crate::llm::types::completions::typed::ChatCompletionError {
-				r#type: "invalid_request_error".to_string(),
+				r#type: Some("invalid_request_error".to_string()),
 				message: res.message,
 				param: None,
 				code: None,
@@ -180,11 +180,143 @@ pub mod from_completions {
 	use super::helpers;
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
+	use crate::llm::conversion::completions::{extract_system_text, parse_data_url};
 	use crate::llm::types::ResponseType;
 	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::{AIError, AmendOnDrop, types};
 
 	use crate::{json, parse};
+
+	fn text_blocks_from_user_content(
+		content: &completions::RequestUserMessageContent,
+	) -> Vec<bedrock::ContentBlock> {
+		let mut out = Vec::new();
+		match content {
+			completions::RequestUserMessageContent::Text(text) => {
+				if !text.trim().is_empty() {
+					out.push(bedrock::ContentBlock::Text(text.clone()));
+				}
+			},
+			completions::RequestUserMessageContent::Array(parts) => {
+				for part in parts {
+					match part {
+						completions::RequestUserMessageContentPart::Text(text) => {
+							if !text.text.trim().is_empty() {
+								out.push(bedrock::ContentBlock::Text(text.text.clone()));
+							}
+						},
+						completions::RequestUserMessageContentPart::ImageUrl(image) => {
+							if let Some((media_type, data)) = parse_data_url(&image.image_url.url) {
+								let format = media_type
+									.strip_prefix("image/")
+									.unwrap_or(media_type)
+									.to_string();
+								out.push(bedrock::ContentBlock::Image(bedrock::ImageBlock {
+									format,
+									source: bedrock::ImageSource {
+										bytes: data.to_string(),
+									},
+								}));
+							}
+						},
+						completions::RequestUserMessageContentPart::InputAudio(_)
+						| completions::RequestUserMessageContentPart::File(_) => {},
+					}
+				}
+			},
+		}
+		out
+	}
+
+	fn assistant_content_to_bedrock(
+		msg: &completions::RequestAssistantMessage,
+	) -> Vec<bedrock::ContentBlock> {
+		let mut content = Vec::new();
+		if let Some(content_field) = &msg.content {
+			match content_field {
+				completions::RequestAssistantMessageContent::Text(text) => {
+					if !text.trim().is_empty() {
+						content.push(bedrock::ContentBlock::Text(text.to_string()));
+					}
+				},
+				completions::RequestAssistantMessageContent::Array(parts) => {
+					for part in parts {
+						match part {
+							completions::RequestAssistantMessageContentPart::Text(text) => {
+								if !text.text.trim().is_empty() {
+									content.push(bedrock::ContentBlock::Text(text.text.clone()));
+								}
+							},
+							completions::RequestAssistantMessageContentPart::Refusal(refusal) => {
+								if !refusal.refusal.trim().is_empty() {
+									content.push(bedrock::ContentBlock::Text(refusal.refusal.clone()));
+								}
+							},
+						}
+					}
+				},
+			}
+		}
+		if let Some(refusal) = &msg.refusal
+			&& !refusal.trim().is_empty()
+		{
+			content.push(bedrock::ContentBlock::Text(refusal.clone()));
+		}
+
+		if let Some(tool_calls) = &msg.tool_calls {
+			for call in tool_calls {
+				match call {
+					completions::MessageToolCalls::Function(call) => {
+						let input = serde_json::from_str::<serde_json::Value>(&call.function.arguments)
+							.unwrap_or_else(|_| serde_json::Value::String(call.function.arguments.clone()));
+						content.push(bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+							tool_use_id: call.id.clone(),
+							name: call.function.name.clone(),
+							input,
+						}));
+					},
+					completions::MessageToolCalls::Custom(call) => {
+						let input = serde_json::from_str::<serde_json::Value>(&call.custom_tool.input)
+							.unwrap_or_else(|_| serde_json::Value::String(call.custom_tool.input.clone()));
+						content.push(bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+							tool_use_id: call.id.clone(),
+							name: call.custom_tool.name.clone(),
+							input,
+						}));
+					},
+				}
+			}
+		}
+		content
+	}
+
+	fn tool_content_to_bedrock(msg: &completions::RequestToolMessage) -> Vec<bedrock::ContentBlock> {
+		let content = match &msg.content {
+			completions::RequestToolMessageContent::Text(text) => {
+				vec![bedrock::ToolResultContentBlock::Text(text.to_string())]
+			},
+			completions::RequestToolMessageContent::Array(parts) => parts
+				.iter()
+				.map(|part| match part {
+					completions::RequestToolMessageContentPart::Text(text) => {
+						bedrock::ToolResultContentBlock::Text(text.text.clone())
+					},
+				})
+				.collect(),
+		};
+		if content.is_empty() {
+			return Vec::new();
+		}
+		vec![bedrock::ContentBlock::ToolResult(
+			bedrock::ToolResultBlock {
+				tool_use_id: msg.tool_call_id.clone(),
+				content,
+				// OpenAI tool messages do not carry explicit success/error status.
+				// Keep this unset rather than asserting success.
+				status: None,
+			},
+		)]
+	}
 
 	/// translate an OpenAI completions request to a Bedrock converse  request
 	pub fn translate(
@@ -210,31 +342,56 @@ pub mod from_completions {
 		let system_text = req
 			.messages
 			.iter()
-			.filter_map(|msg| {
-				if completions::message_role(msg) == completions::SYSTEM_ROLE {
-					completions::message_text(msg).map(|s| s.to_string())
-				} else {
-					None
-				}
-			})
+			.filter_map(extract_system_text)
 			.collect::<Vec<String>>()
 			.join("\n");
 
 		let messages = req
 			.messages
 			.iter()
-			.filter(|msg| completions::message_role(msg) != completions::SYSTEM_ROLE)
-			.filter_map(|msg| {
-				let role = match completions::message_role(msg) {
-					completions::ASSISTANT_ROLE => bedrock::Role::Assistant,
-					// Default to user for other roles
-					_ => bedrock::Role::User,
-				};
-
-				completions::message_text(msg)
+			.filter_map(|msg| match msg {
+				completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_) => None,
+				completions::RequestMessage::User(user) => {
+					let content = text_blocks_from_user_content(&user.content);
+					if content.is_empty() {
+						None
+					} else {
+						Some(bedrock::Message {
+							role: bedrock::Role::User,
+							content,
+						})
+					}
+				},
+				completions::RequestMessage::Assistant(assistant) => {
+					let content = assistant_content_to_bedrock(assistant);
+					if content.is_empty() {
+						None
+					} else {
+						Some(bedrock::Message {
+							role: bedrock::Role::Assistant,
+							content,
+						})
+					}
+				},
+				completions::RequestMessage::Tool(tool_result) => {
+					let content = tool_content_to_bedrock(tool_result);
+					if content.is_empty() {
+						None
+					} else {
+						Some(bedrock::Message {
+							role: bedrock::Role::User,
+							content,
+						})
+					}
+				},
+				completions::RequestMessage::Function(function) => function
+					.content
+					.as_ref()
 					.filter(|s| !s.trim().is_empty())
-					.map(|s| vec![bedrock::ContentBlock::Text(s.to_string())])
-					.map(|content| bedrock::Message { role, content })
+					.map(|s| bedrock::Message {
+						role: bedrock::Role::User,
+						content: vec![bedrock::ContentBlock::Text(s.clone())],
+					}),
 			})
 			.collect();
 
@@ -492,7 +649,7 @@ pub mod from_completions {
 		let m = completions::ChatCompletionErrorResponse {
 			event_id: None,
 			error: completions::ChatCompletionError {
-				r#type: "invalid_request_error".to_string(),
+				r#type: Some("invalid_request_error".to_string()),
 				message: res.message,
 				param: None,
 				code: None,
@@ -708,6 +865,7 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
+	use agent_core::strng;
 	use std::collections::HashSet;
 	use std::time::Instant;
 
@@ -730,7 +888,7 @@ pub mod from_messages {
 		headers: Option<&http::HeaderMap>,
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed, provider, headers);
+		let xlated = translate_internal(typed, provider, headers)?;
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
@@ -738,7 +896,7 @@ pub mod from_messages {
 		req: messages::Request,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
-	) -> bedrock::ConverseRequest {
+	) -> Result<bedrock::ConverseRequest, AIError> {
 		let mut cache_points_used = 0;
 		// Converse placement note (AWS docs):
 		// - Anthropic-specific params are sent via additionalModelRequestFields for Converse:
@@ -810,7 +968,7 @@ pub mod from_messages {
 		let messages: Vec<bedrock::Message> = req
 			.messages
 			.into_iter()
-			.map(|msg| {
+			.map(|msg| -> Result<bedrock::Message, AIError> {
 				let role = match msg.role {
 					messages::Role::Assistant => bedrock::Role::Assistant,
 					messages::Role::User => bedrock::Role::User,
@@ -844,11 +1002,13 @@ pub mod from_messages {
 										},
 									}),
 									cache_control.is_some(),
-								)
-							} else {
-								continue;
-							}
-						},
+									)
+								} else {
+									return Err(AIError::UnsupportedConversion(strng::literal!(
+										"bedrock image source must be base64 (media_type + data); URL image sources are unsupported"
+									)));
+								}
+							},
 						messages::ContentBlock::ToolUse {
 							id,
 							name,
@@ -947,9 +1107,9 @@ pub mod from_messages {
 					}
 				}
 
-				bedrock::Message { role, content }
-			})
-			.collect();
+					Ok(bedrock::Message { role, content })
+				})
+				.collect::<Result<Vec<_>, AIError>>()?;
 
 		// Build inference config from typed fields
 		let inference_config = bedrock::InferenceConfiguration {
@@ -991,22 +1151,22 @@ pub mod from_messages {
 				None
 			} else {
 				let tool_choice = match req.tool_choice {
-					Some(messages::ToolChoice::Auto) => {
+					Some(messages::ToolChoice::Auto { .. }) => {
 						if thinking_enabled {
 							Some(bedrock::ToolChoice::Any)
 						} else {
 							Some(bedrock::ToolChoice::Auto)
 						}
 					},
-					Some(messages::ToolChoice::Any) => Some(bedrock::ToolChoice::Any),
-					Some(messages::ToolChoice::Tool { name }) => {
+					Some(messages::ToolChoice::Any { .. }) => Some(bedrock::ToolChoice::Any),
+					Some(messages::ToolChoice::Tool { name, .. }) => {
 						if thinking_enabled {
 							Some(bedrock::ToolChoice::Any)
 						} else {
 							Some(bedrock::ToolChoice::Tool { name })
 						}
 					},
-					Some(messages::ToolChoice::None) | None => {
+					Some(messages::ToolChoice::None {}) | None => {
 						if thinking_enabled {
 							Some(bedrock::ToolChoice::Any)
 						} else {
@@ -1089,7 +1249,7 @@ pub mod from_messages {
 			Some(metadata)
 		};
 
-		bedrock::ConverseRequest {
+		Ok(bedrock::ConverseRequest {
 			model_id: req.model,
 			messages,
 			system: system_content,
@@ -1102,7 +1262,7 @@ pub mod from_messages {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
-		}
+		})
 	}
 
 	fn messages_output_format_to_bedrock_output_config(
@@ -1625,7 +1785,9 @@ pub mod from_responses {
 							bedrock::ToolResultBlock {
 								tool_use_id: output.call_id,
 								content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
-								status: Some(bedrock::ToolResultStatus::Success),
+								// Responses tool outputs do not carry explicit success/error metadata.
+								// Leave Bedrock status unset instead of assuming success.
+								status: None,
 							},
 						)],
 					});
@@ -1663,7 +1825,9 @@ pub mod from_responses {
 							bedrock::ToolResultBlock {
 								tool_use_id: call_id,
 								content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
-								status: Some(bedrock::ToolResultStatus::Success),
+								// Responses tool outputs do not carry explicit success/error metadata.
+								// Leave Bedrock status unset instead of assuming success.
+								status: None,
 							},
 						)],
 					});
@@ -1807,7 +1971,7 @@ pub mod from_responses {
 		};
 
 		// Extract metadata from request body and merge with headers (consistent with Messages/Completions)
-		let mut metadata = req.metadata.clone().unwrap_or_default();
+		let mut metadata = req.metadata.unwrap_or_default();
 
 		if let Some(header_metadata) = extract_metadata_from_headers(headers) {
 			metadata.extend(header_metadata);
@@ -1959,7 +2123,7 @@ pub mod from_responses {
 		let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
 			event_id: None,
 			error: crate::llm::types::completions::typed::ChatCompletionError {
-				r#type: "invalid_request_error".to_string(),
+				r#type: Some("invalid_request_error".to_string()),
 				message: res.message,
 				param: None,
 				code: None,
@@ -1994,8 +2158,7 @@ pub mod from_responses {
 		let message_item_id = format!("msg_{:016x}", rand::rng().random::<u64>());
 		let model = model.to_string();
 
-		let response_builder =
-			crate::llm::types::responses::ResponseBuilder::new(response_id.clone(), model.clone());
+		let response_builder = crate::llm::types::responses::ResponseBuilder::new(response_id, model);
 
 		let make_output_part = |text: String| {
 			OutputContent::OutputText(OutputTextContent {

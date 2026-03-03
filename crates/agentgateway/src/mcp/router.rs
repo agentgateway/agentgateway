@@ -112,6 +112,8 @@ impl App {
 		let logy = log.mcp_status.clone();
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
+		let tracer = log.span_writer();
+		req.extensions_mut().insert(tracer);
 
 		authorization_policies.register(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;

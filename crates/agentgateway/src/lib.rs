@@ -400,8 +400,11 @@ pub struct Config {
 	/// XDS address to use. If unset, XDS will not be used.
 	pub xds: XDSConfig,
 	pub ca: Option<caclient::Config>,
-	pub tracing: trc::Config,
+
+	pub tracing: Option<trc::DeprecatedConfig>,
+	pub metrics: crate::telemetry::log::MetricsConfig,
 	pub logging: crate::telemetry::log::Config,
+
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
@@ -493,7 +496,6 @@ pub struct ProxyInputs {
 	upstream: client::Client,
 
 	metrics: Arc<metrics::Metrics>,
-	tracer: Option<std::sync::Arc<trc::Tracer>>,
 
 	mcp_state: mcp::App,
 	ca: Option<Arc<CaClient>>,

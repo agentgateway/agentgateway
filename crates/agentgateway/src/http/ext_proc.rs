@@ -23,11 +23,10 @@ use crate::http::ext_proc::proto::{
 	HttpHeaders, HttpTrailers, ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse,
 	processing_response,
 };
-use crate::http::filters::BackendRequestTimeout;
 use crate::http::{HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::SimpleBackendReference;
+use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
 
 /// The namespace key used for ext_proc attributes in ProcessingRequest.attributes
@@ -90,6 +89,7 @@ impl InferenceRouting {
 		InferencePoolRouter {
 			ext_proc: Some(ExtProcInstance::new(
 				client,
+				Vec::new(),
 				self.target.clone(),
 				self.failure_mode,
 				None,
@@ -141,6 +141,14 @@ pub struct ExtProc {
 	/// Reference to the external processing service backend
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
+	/// Policies to connect to the backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<BackendPolicy>,
 	/// Behavior when the ext_proc service is unavailable or returns an error
 	#[serde(default)]
 	pub failure_mode: FailureMode,
@@ -163,6 +171,7 @@ impl ExtProc {
 		ExtProcRequest {
 			ext_proc: Some(ExtProcInstance::new(
 				client,
+				self.policies.clone(),
 				self.target.clone(),
 				self.failure_mode,
 				self.metadata_context.clone(),
@@ -242,6 +251,7 @@ struct ExtProcInstance {
 impl ExtProcInstance {
 	fn new(
 		client: PolicyClient,
+		policies: Vec<BackendPolicy>,
 		target: Arc<SimpleBackendReference>,
 		failure_mode: FailureMode,
 		metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
@@ -252,7 +262,7 @@ impl ExtProcInstance {
 		let chan = GrpcReferenceChannel {
 			target,
 			client,
-			timeout: None,
+			policies: Arc::new(policies),
 		};
 		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
@@ -1098,7 +1108,7 @@ fn eval_to_struct(
 pub struct GrpcReferenceChannel {
 	pub target: Arc<SimpleBackendReference>,
 	pub client: PolicyClient,
-	pub timeout: Option<Duration>,
+	pub policies: Arc<Vec<BackendPolicy>>,
 }
 
 impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel {
@@ -1110,13 +1120,17 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel
 		Ok(()).into()
 	}
 
-	fn call(&mut self, mut req: ::http::Request<tonic::body::Body>) -> Self::Future {
-		if let Some(timeout) = self.timeout {
-			req.extensions_mut().insert(BackendRequestTimeout(timeout));
-		};
+	fn call(&mut self, req: ::http::Request<tonic::body::Body>) -> Self::Future {
 		let client = self.client.clone();
 		let target = self.target.clone();
+		let policies = self.policies.clone();
 		let req = req.map(http::Body::new);
-		Box::pin(async move { Ok(client.call_reference(req, &target).await?) })
+		Box::pin(async move {
+			Ok(
+				client
+					.call_reference_with_policies(req, &target, policies.as_slice())
+					.await?,
+			)
+		})
 	}
 }

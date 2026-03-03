@@ -4,7 +4,7 @@ description: src/llm/tests/response_anthropic_tool.json
 info:
   id: msg_01Aq9w938a90dw8q
   type: message
-  model: claude-opus-4-1-20250805
+  model: claude-opus-4-6
   stop_reason: tool_use
   role: assistant
   content:
@@ -24,7 +24,7 @@ info:
     service_tier: standard
 ---
 {
-  "model": "claude-opus-4-1-20250805",
+  "model": "claude-opus-4-6",
   "usage": {
     "prompt_tokens": 558,
     "completion_tokens": 48,

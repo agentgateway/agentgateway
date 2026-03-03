@@ -990,6 +990,11 @@ func (in *BackendSimple) DeepCopyInto(out *BackendSimple) {
 		*out = new(BackendHTTP)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Transformation != nil {
+		in, out := &in.Transformation, &out.Transformation
+		*out = new(Transformation)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Auth != nil {
 		in, out := &in.Auth, &out.Auth
 		*out = new(BackendAuth)
@@ -2487,6 +2492,11 @@ func (in *Timeouts) DeepCopy() *Timeouts {
 func (in *Tracing) DeepCopyInto(out *Tracing) {
 	*out = *in
 	in.BackendRef.DeepCopyInto(&out.BackendRef)
+	if in.Path != nil {
+		in, out := &in.Path, &out.Path
+		*out = new(LongString)
+		**out = **in
+	}
 	if in.Attributes != nil {
 		in, out := &in.Attributes, &out.Attributes
 		*out = new(LogTracingAttributes)

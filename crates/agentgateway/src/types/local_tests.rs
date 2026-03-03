@@ -102,3 +102,49 @@ fn test_llm_model_name_header_match_invalid_patterns() {
 	assert!(super::llm_model_name_header_match("*gpt*").is_err());
 	assert!(super::llm_model_name_header_match("g*pt").is_err());
 }
+
+#[test]
+fn test_migrate_deprecated_local_config_moves_fields() {
+	let input = r#"
+config:
+  logging:
+    level: info
+    filter: request.path == "/foo"
+    fields:
+      remove:
+        - foo
+      add:
+        region: request.host
+  tracing:
+    otlpEndpoint: otlp.default.svc.cluster.local:4317
+    headers:
+      authorization: token
+    otlpProtocol: http
+"#;
+	let out = super::migrate_deprecated_local_config(input).unwrap();
+	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let cfg = v.get("config").unwrap();
+	let logging = cfg.get("logging").unwrap();
+	assert_eq!(logging.get("level").unwrap(), "info");
+	assert!(logging.get("filter").is_none());
+	assert!(logging.get("fields").is_none());
+	assert!(cfg.get("tracing").is_none());
+	let frontend = v.get("frontendPolicies").unwrap();
+	assert!(frontend.get("logging").is_none());
+	let access_log = frontend.get("accessLog").unwrap();
+	assert_eq!(
+		access_log.get("filter").unwrap(),
+		"request.path == \"/foo\""
+	);
+	assert_eq!(
+		access_log.get("add").unwrap().get("region").unwrap(),
+		"request.host"
+	);
+	assert_eq!(access_log.get("remove").unwrap()[0], "foo");
+	let tracing = frontend.get("tracing").unwrap();
+	assert_eq!(
+		tracing.get("inlineBackend").unwrap(),
+		"otlp.default.svc.cluster.local:4317"
+	);
+	assert_eq!(tracing.get("protocol").unwrap(), "http");
+}

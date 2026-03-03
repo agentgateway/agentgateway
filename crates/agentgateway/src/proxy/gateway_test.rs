@@ -899,6 +899,17 @@ async fn send_http_version(t: &TestBind, v: Version) -> Response {
 #[tokio::test]
 async fn header_manipulation() {
 	let mock = simple_mock().await;
+	let backend_xfm = transformation_cel::LocalTransformationConfig {
+		request: Some(transformation_cel::LocalTransform {
+			set: vec![("x-backend-xfm-req".into(), "\"backend-xfm-req\"".into())],
+			..Default::default()
+		}),
+		response: Some(transformation_cel::LocalTransform {
+			add: vec![("x-backend-xfm-resp".into(), "\"backend-xfm-resp\"".into())],
+			..Default::default()
+		}),
+	};
+	let backend_xfm = Transformation::try_from_local_config(backend_xfm, true).unwrap();
 	let bind = base_gateway(&mock).with_route(Route {
 		key: "route2".into(),
 		name: RouteName {
@@ -940,6 +951,7 @@ async fn header_manipulation() {
 					set: vec![],
 					remove: vec![],
 				}),
+				BackendPolicy::Transformation(backend_xfm),
 			],
 		}],
 	});
@@ -949,6 +961,7 @@ async fn header_manipulation() {
 	assert_eq!(res.status(), 200);
 	assert_eq!(res.hdr("x-route-resp"), "route-resp");
 	assert_eq!(res.hdr("x-backend-resp"), "backend-resp");
+	assert_eq!(res.hdr("x-backend-xfm-resp"), "backend-xfm-resp");
 	let body = read_body(res.into_body()).await;
 	assert_eq!(
 		body.headers.get("x-route-req").unwrap().as_bytes(),
@@ -957,6 +970,10 @@ async fn header_manipulation() {
 	assert_eq!(
 		body.headers.get("x-backend-req").unwrap().as_bytes(),
 		b"backend-req"
+	);
+	assert_eq!(
+		body.headers.get("x-backend-xfm-req").unwrap().as_bytes(),
+		b"backend-xfm-req"
 	);
 }
 

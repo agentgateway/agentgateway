@@ -30,7 +30,7 @@ func TestBuildGatewayStatus(t *testing.T) {
 		// Initialize GatewayReporter to mimic translation loop.
 		r.Gateway(gw)
 
-		status := rm.BuildGWStatus(context.Background(), *gw, nil)
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
 
 		assert.Equal(t, true, status != nil)
 		assert.Equal(t, 2, len(status.Conditions))
@@ -50,7 +50,7 @@ func TestBuildGatewayStatus(t *testing.T) {
 		// Initialize GatewayReporter to mimic translation loop.
 		r.Gateway(gw)
 
-		status := rm.BuildGWStatus(context.Background(), *gw, nil)
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
 
 		assert.Equal(t, true, status != nil)
 		assert.Equal(t, 3, len(status.Conditions)) // 2 from report, 1 from original status.
@@ -67,7 +67,7 @@ func TestBuildGatewayStatus(t *testing.T) {
 			Status: metav1.ConditionFalse,
 			Reason: gwv1.GatewayReasonAddressNotUsable,
 		})
-		status := rm.BuildGWStatus(context.Background(), *gw, nil)
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
 
 		assert.Equal(t, true, status != nil)
 		assert.Equal(t, 2, len(status.Conditions))
@@ -88,7 +88,7 @@ func TestBuildGatewayStatus(t *testing.T) {
 			Status: metav1.ConditionFalse,
 			Reason: gwv1.ListenerReasonInvalidRouteKinds,
 		})
-		status := rm.BuildGWStatus(context.Background(), *gw, nil)
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
 
 		assert.Equal(t, true, status != nil)
 		assert.Equal(t, 2, len(status.Conditions))
@@ -108,7 +108,7 @@ func TestBuildGatewayStatus(t *testing.T) {
 		// Initialize GatewayReporter to mimic translation loop.
 		r.Gateway(gw)
 
-		status := rm.BuildGWStatus(context.Background(), *gw, nil)
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
 
 		assert.Equal(t, true, status != nil)
 		assert.Equal(t, 2, len(status.Conditions))
@@ -120,7 +120,7 @@ func TestBuildGatewayStatus(t *testing.T) {
 		oldTransitionTime := acceptedCond.LastTransitionTime
 
 		gw.Status = *status
-		status = rm.BuildGWStatus(context.Background(), *gw, nil)
+		status = rm.BuildGWStatus(context.Background(), *gw, 0)
 
 		assert.Equal(t, true, status != nil)
 		assert.Equal(t, 2, len(status.Conditions))

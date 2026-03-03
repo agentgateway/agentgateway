@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
+use super::{JWTValidationOptions, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
+use crate::telemetry::log::MetricsConfig;
 use itertools::Itertools;
 use serde_json::json;
-
-use super::{JWTValidationOptions, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
 
@@ -479,7 +479,6 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 }
 
 fn make_min_req_log() -> crate::telemetry::log::RequestLog {
-	use std::collections::HashMap;
 	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 	use std::sync::Arc;
 	use std::time::Instant;
@@ -487,30 +486,19 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	use frozen_collections::FzHashSet;
 	use prometheus_client::registry::Registry;
 
-	use crate::telemetry::log::{LoggingFields, MetricFields, RequestLog};
+	use crate::telemetry::log;
+	use crate::telemetry::log::{LoggingFields, RequestLog};
 	use crate::telemetry::metrics::Metrics;
-	use crate::telemetry::{log, trc};
 	use crate::transport::stream::TCPConnectionInfo;
 
 	let log_cfg = log::Config {
 		filter: None,
 		fields: LoggingFields::default(),
-		metric_fields: Arc::new(MetricFields::default()),
-		excluded_metrics: FzHashSet::default(),
 		level: "info".to_string(),
 		format: crate::LoggingFormat::Text,
 		otlp: None,
 	};
-	let tracing_cfg = trc::Config {
-		endpoint: None,
-		headers: HashMap::new(),
-		protocol: trc::Protocol::Grpc,
-		fields: LoggingFields::default(),
-		random_sampling: None,
-		client_sampling: None,
-		path: "/v1/traces".to_string(),
-	};
-	let cel = log::CelLogging::new(log_cfg, tracing_cfg);
+	let cel = log::CelLogging::new(log_cfg, MetricsConfig::default());
 	let mut prom = Registry::default();
 	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
 	let start = Instant::now();
