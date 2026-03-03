@@ -644,8 +644,14 @@ pub mod from_completions {
 							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_creation_input_tokens.map(|i| i as u64);
-							r.response.output_tokens = Some(usage.output_tokens as u64);
-							r.response.total_tokens = Some((usage.input_tokens + usage.output_tokens) as u64);
+							if let Some(o) = usage.output_tokens {
+								r.response.output_tokens = Some(o as u64);
+							}
+							if let Some(inp) = r.response.input_tokens
+								&& let Some(o) = r.response.output_tokens
+							{
+								r.response.total_tokens = Some(inp + o)
+							}
 						});
 						let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
 							vec![completions::ChatChoiceStream {
@@ -658,10 +664,11 @@ pub mod from_completions {
 						mk(
 							choices,
 							Some(completions::Usage {
-								prompt_tokens: usage.input_tokens as u32,
-								completion_tokens: usage.output_tokens as u32,
+								prompt_tokens: usage.input_tokens.unwrap_or_default() as u32,
+								completion_tokens: usage.output_tokens.unwrap_or_default() as u32,
 
-								total_tokens: (usage.input_tokens + usage.output_tokens) as u32,
+								total_tokens: (usage.input_tokens.unwrap_or_default()
+									+ usage.output_tokens.unwrap_or_default()) as u32,
 
 								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
 								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
@@ -726,12 +733,16 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 			},
 			messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
 				log.non_atomic_mutate(|r| {
-					r.response.output_tokens = Some(usage.output_tokens as u64);
+					if let Some(o) = usage.output_tokens {
+						r.response.output_tokens = Some(o as u64);
+					}
 					r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 					r.response.cache_creation_input_tokens =
 						usage.cache_creation_input_tokens.map(|i| i as u64);
-					if let Some(inp) = r.response.input_tokens {
-						r.response.total_tokens = Some(inp + usage.output_tokens as u64)
+					if let Some(inp) = r.response.input_tokens
+						&& let Some(o) = r.response.output_tokens
+					{
+						r.response.total_tokens = Some(inp + o)
 					}
 				});
 			},

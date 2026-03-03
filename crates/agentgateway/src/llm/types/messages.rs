@@ -840,9 +840,9 @@ pub mod typed {
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 	pub struct MessageDeltaUsage {
 		/// Cumulative input tokens
-		pub input_tokens: usize,
+		pub input_tokens: Option<usize>,
 		/// Cumulative output tokens
-		pub output_tokens: usize,
+		pub output_tokens: Option<usize>,
 		/// Cumulative cache creation tokens
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_creation_input_tokens: Option<usize>,

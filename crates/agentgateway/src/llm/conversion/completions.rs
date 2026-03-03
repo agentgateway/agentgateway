@@ -406,8 +406,8 @@ pub mod from_messages {
 						stop_sequence: None,
 					},
 					usage: messages::MessageDeltaUsage {
-						input_tokens,
-						output_tokens,
+						input_tokens: Some(input_tokens),
+						output_tokens: Some(output_tokens),
 						cache_creation_input_tokens: None,
 						cache_read_input_tokens: None,
 					},
