@@ -635,20 +635,16 @@ impl AIProvider {
 			return Err(AIError::RequestTooLarge);
 		};
 
-		let mut req = if is_json {
+		let req = if is_json {
 			if let Some(p) = policies {
-				p.unmarshal_request(&bytes)
+				p.unmarshal_request(&bytes, log)
 			} else {
 				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)
-			}.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
+			}
+			.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
 		} else {
 			types::detect::Request::new_raw(bytes)
 		};
-
-		if let Some(provider_model) = &self.override_model() {
-			*req.model() = Some(provider_model.to_string());
-		}
-		// do not reject missing model
 
 		self
 			.process_request(
@@ -725,7 +721,8 @@ impl AIProvider {
 		}
 		if let Some(p) = policies {
 			// Apply model alias resolution
-			if let Some(model) = req.model()
+			if req.supports_model()
+				&& let Some(model) = req.model()
 				&& let Some(aliased) = p.resolve_model_alias(model.as_str())
 			{
 				*model = aliased.to_string();
@@ -804,7 +801,6 @@ impl AIProvider {
 		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
-		tracing::error!("howardjohn: process success... {req:?}");
 		if req.streaming {
 			return self
 				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
@@ -887,9 +883,7 @@ impl AIProvider {
 			let body = self.process_error(&req, parts.status, &bytes)?;
 			(LLMResponse::default(), body)
 		} else {
-			tracing::error!("howardjohn: process success...");
 			let mut resp = self.process_success(&req, &bytes)?;
-			tracing::error!("howardjohn: process success!");
 
 			// Apply response prompt guard
 			if let Some(dr) = Policy::apply_response_prompt_guard(
@@ -936,16 +930,10 @@ impl AIProvider {
 		req: &LLMRequest,
 		bytes: &Bytes,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		match (self, dbg!(req.input_format)) {
+		match (self, req.input_format) {
 			(_, InputFormat::Detect) => Ok(Box::new(
-				serde_json::from_slice::<types::detect::Response>(bytes).map_err(|e| {
-					warn!(
-						error = %e,
-						body = %String::from_utf8_lossy(bytes),
-						"failed to parse completions response"
-					);
-					AIError::ResponseParsing(e)
-				})?,
+				serde_json::from_slice::<types::detect::Response>(bytes)
+					.unwrap_or_else(|_| types::detect::Response::new_raw(bytes.clone())),
 			)),
 			// Completions with OpenAI: just passthrough
 			(
@@ -1265,6 +1253,10 @@ impl AIProvider {
 				}
 			},
 			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+				// Passthrough; nothing needed
+				Ok(bytes.clone())
+			},
+			(_, InputFormat::Detect) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},

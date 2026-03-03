@@ -32,58 +32,42 @@ fn lookup<'a, T, const C: usize>(
 	None
 }
 
-#[derive(Clone, Serialize, Debug)]
-pub struct Request {
-	#[serde(skip)]
-	// This is a hack to make it so we can return an owned mutatable copy of this
-	model: Option<String>,
-	#[serde(flatten)]
-	body: RawOrParse,
+#[derive(Clone, Debug)]
+pub enum Request {
+	Raw(Bytes),
+	Json(serde_json::Value),
 }
 
 impl<'de> Deserialize<'de> for Request {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		let v = Value::deserialize(deserializer)?;
-		let model = v
-			.get("model")
-			.and_then(|v| v.as_str())
-			.map(ToString::to_string);
-		Ok(Request {
-			model,
-			body: RawOrParse::Json(v),
-		})
+		Ok(Request::Json(v))
 	}
-}
-
-#[derive(Clone, Serialize, Debug)]
-#[serde(untagged)]
-enum RawOrParse {
-	Raw(Bytes),
-	Json(serde_json::Value),
 }
 
 impl Request {
 	pub fn new_raw(body: Bytes) -> Self {
-		Self {
-			model: None,
-			body: RawOrParse::Raw(body),
-		}
+		Self::Raw(body)
 	}
 	pub fn lookup<'a, T, const C: usize>(
 		&'a self,
 		path: [&[&str]; C],
 		f: impl Fn(&'a Value) -> Option<T>,
 	) -> Option<T> {
-		match &self.body {
-			RawOrParse::Raw(_) => None,
-			RawOrParse::Json(b) => lookup(b, path, f),
+		match &self {
+			Self::Raw(_) => None,
+			Self::Json(b) => lookup(b, path, f),
 		}
 	}
 }
 
 impl RequestType for Request {
+	fn supports_model(&self) -> bool {
+		false
+	}
 	fn model(&mut self) -> &mut Option<String> {
-		&mut self.model
+		unimplemented!("model is not available");
+		todo!()
 	}
 
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
@@ -133,7 +117,10 @@ impl RequestType for Request {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disable for detect.")
 	}
 	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
-		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
+		match self {
+			Self::Raw(bytes) => Ok(bytes.to_vec()),
+			Self::Json(v) => serde_json::to_vec(v).map_err(AIError::RequestMarshal),
+		}
 	}
 	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
 		self.to_openai()
@@ -155,20 +142,34 @@ impl RequestType for Request {
 	}
 }
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
-pub struct Response {
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
+#[derive(Debug, Clone)]
+pub enum Response {
+	Raw(Bytes),
+	Json(serde_json::Value),
 }
 impl Response {
+	pub fn new_raw(body: Bytes) -> Self {
+		Self::Raw(body)
+	}
 	pub fn lookup<'a, T, const C: usize>(
 		&'a self,
 		path: [&[&str]; C],
 		f: impl Fn(&'a Value) -> Option<T>,
 	) -> Option<T> {
-		lookup(&self.rest, path, f)
+		match &self {
+			Self::Raw(_) => None,
+			Self::Json(b) => lookup(b, path, f),
+		}
 	}
 }
+
+impl<'de> Deserialize<'de> for Response {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let v = Value::deserialize(deserializer)?;
+		Ok(Response::Json(v))
+	}
+}
+
 impl ResponseType for Response {
 	fn to_llm_response(&self, _include_completion_in_log: bool) -> LLMResponse {
 		let input_tokens = self.lookup(
@@ -227,7 +228,10 @@ impl ResponseType for Response {
 	}
 
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
-		serde_json::to_vec(&self)
+		match self {
+			Self::Raw(bytes) => Ok(bytes.to_vec()),
+			Self::Json(v) => Ok(serde_json::to_vec(v)?),
+		}
 	}
 }
 
