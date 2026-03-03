@@ -407,11 +407,11 @@ pub(crate) fn to_otel(v: &ValueBag) -> opentelemetry::Value {
 }
 
 #[derive(Clone, Debug)]
-struct PolicyOtelHttpClient {
-	policy_client: crate::proxy::httpproxy::PolicyClient,
-	backend_ref: SimpleBackendReference,
-	runtime: tokio::runtime::Handle,
-	policies: Vec<BackendPolicy>,
+pub(crate) struct PolicyOtelHttpClient {
+	pub(crate) policy_client: crate::proxy::httpproxy::PolicyClient,
+	pub(crate) backend_ref: SimpleBackendReference,
+	pub(crate) runtime: tokio::runtime::Handle,
+	pub(crate) policies: Vec<BackendPolicy>,
 }
 
 #[async_trait::async_trait]

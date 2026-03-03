@@ -531,6 +531,7 @@ impl RequestLog {
 			tls_info: None,
 			tracer: None,
 			trace_spans: Arc::new(Mutex::new(Default::default())),
+			otel_logger: None,
 			endpoint: None,
 			bind_name: None,
 			listener_name: None,
@@ -597,6 +598,9 @@ pub struct RequestLog {
 	/// Additional spans created during the request (e.g. upstream call spans).
 	/// These are flushed on drop when tracing is enabled.
 	pub trace_spans: Arc<Mutex<Vec<SpanBuilder>>>,
+
+	// Set only if OTLP logging is configured
+	pub otel_logger: Option<std::sync::Arc<OtelAccessLogger>>,
 
 	pub endpoint: Option<Target>,
 
@@ -1016,6 +1020,10 @@ impl Drop for DropOnLog {
 			}
 
 			agent_core::telemetry::log("info", "request", &kv);
+
+			if let Some(otel) = &log.otel_logger {
+				otel.emit("info", "request", &kv);
+			}
 		}
 	}
 }
@@ -1100,50 +1108,6 @@ fn to_any_value(v: &ValueBag) -> AnyValue {
 		AnyValue::Boolean(b)
 	} else {
 		AnyValue::String(v.to_string().into())
-	}
-}
-
-#[derive(Clone, Debug)]
-struct PolicyOtelHttpClient {
-	policy_client: crate::proxy::httpproxy::PolicyClient,
-	backend_ref: crate::types::agent::SimpleBackendReference,
-	runtime: tokio::runtime::Handle,
-	policies: Vec<crate::types::agent::BackendPolicy>,
-}
-
-#[async_trait::async_trait]
-impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
-	async fn send_bytes(
-		&self,
-		request: http::Request<bytes::Bytes>,
-	) -> Result<http::Response<bytes::Bytes>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-		let client = self.policy_client.clone();
-		let backend_ref = self.backend_ref.clone();
-		let policies = self.policies.clone();
-		let handle = self.runtime.clone();
-
-		let (mut head, body_bytes) = request.into_parts();
-		let mut uri_parts = head.uri.into_parts();
-		uri_parts.scheme = None;
-		uri_parts.authority = None;
-		head.uri = http::Uri::from_parts(uri_parts).map_err(Box::new)?;
-		let req = crate::http::Request::from_parts(head, crate::http::Body::from(body_bytes));
-
-		let resp = handle
-			.spawn(async move {
-				client
-					.call_reference_with_policies(req, &backend_ref, &policies)
-					.await
-					.map_err(Box::new)
-			})
-			.await
-			.map_err(Box::new)??;
-
-		use http_body_util::BodyExt as _;
-		let (parts, body) = resp.into_parts();
-		let collected = body.collect().await.map_err(Box::new)?;
-		let bytes = collected.to_bytes();
-		Ok(http::Response::from_parts(parts, bytes))
 	}
 }
 
@@ -1280,7 +1244,7 @@ impl OtelAccessLogger {
 				.with_batch_exporter(exporter)
 				.build()
 		} else {
-			let http_client = PolicyOtelHttpClient {
+			let http_client = trc::PolicyOtelHttpClient {
 				policy_client,
 				backend_ref,
 				policies,
@@ -1300,6 +1264,10 @@ impl OtelAccessLogger {
 		let logger = provider.logger("agentgateway.access");
 
 		Ok(Self { provider, logger })
+	}
+
+	pub fn shutdown(&self) {
+		let _ = self.provider.shutdown();
 	}
 }
 

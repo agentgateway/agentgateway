@@ -821,6 +821,17 @@ impl HTTPProxy {
 		if let Some(lp) = &frontend_policies.access_log {
 			apply_logging_policy_to_log(log, lp);
 		}
+
+		if let Some(alp) = frontend_policies.access_log_otlp.as_deref() {
+			log.otel_logger = alp
+				.get_or_init(self.policy_client())
+				.map(|l| Some(l.clone()))
+				.unwrap_or_else(|e| {
+					warn!("failed to initialize OTLP access logger: {e}");
+					None
+				});
+		}
+
 		let mut sampler = TraceSampler::default();
 		if let Some(tp) = frontend_policies.tracing.as_deref() {
 			// Apply sampling overrides if present

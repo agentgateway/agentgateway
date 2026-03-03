@@ -8,8 +8,8 @@ use prometheus_client::registry::Registry;
 use tokio::task::JoinSet;
 
 use crate::control::caclient;
-use crate::telemetry::{log, trc};
-use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager, types};
+use crate::telemetry::trc;
+use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
 
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
@@ -116,37 +116,6 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
 	};
 
-	{
-		let binds_store = stores.binds.read();
-		for policy in binds_store.all_policies() {
-			if let types::agent::PolicyType::Frontend(types::agent::FrontendPolicy::AccessLog(access_log)) =
-				&policy.policy
-				&& let Some(otlp_cfg) = &access_log.otlp
-			{
-				let policy_client = proxy::httpproxy::PolicyClient {
-					inputs: Arc::new(pi.clone()),
-				};
-
-				match log::OtelAccessLogger::new(
-					policy_client,
-					otlp_cfg.provider_backend.clone(),
-					otlp_cfg.policies.clone(),
-					otlp_cfg.protocol,
-					otlp_cfg.path.clone(),
-				) {
-					Ok(logger) => {
-						agent_core::telemetry::set_otel_log_sink(Box::new(logger));
-						info!("OTLP log export enabled, protocol={:?}", otlp_cfg.protocol);
-					},
-					Err(e) => {
-						warn!("failed to initialize OTLP log exporter: {e}");
-					},
-				}
-				break;
-			}
-		}
-	}
-
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());
 
 	// Run the agentgateway in the data plane worker pool.
@@ -208,7 +177,15 @@ impl Bound {
 			}
 		}
 
-		agent_core::telemetry::shutdown_otel_log_sink();
+		let access_log_policies = {
+			let b = self.stores.binds.read();
+			b.all_access_log_policies()
+		};
+		for p in access_log_policies {
+			if let Some(logger) = p.logger.get() {
+				logger.shutdown()
+			}
+		}
 
 		// Start a drain; this will attempt to end all connections
 		// or itself be interrupted by a stronger TERM signal, whichever comes first.

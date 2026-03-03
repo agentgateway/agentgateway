@@ -1795,6 +1795,39 @@ impl TracingPolicy {
 	}
 }
 
+#[derive(Clone, Debug)]
+pub struct AccessLogPolicy {
+	pub config: crate::types::frontend::OtlpLoggingConfig,
+	pub logger: once_cell::sync::OnceCell<Arc<crate::telemetry::log::OtelAccessLogger>>,
+}
+
+impl AccessLogPolicy {
+	pub fn get_or_init(
+		&self,
+		policy_client: crate::proxy::httpproxy::PolicyClient,
+	) -> anyhow::Result<&Arc<crate::telemetry::log::OtelAccessLogger>> {
+		self.logger.get_or_try_init(|| {
+			let logger = crate::telemetry::log::OtelAccessLogger::new(
+				policy_client,
+				self.config.provider_backend.clone(),
+				self.config.policies.clone(),
+				self.config.protocol,
+				self.config.path.clone(),
+			)?;
+			Ok(Arc::new(logger))
+		})
+	}
+}
+
+impl serde::Serialize for AccessLogPolicy {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.config.serialize(serializer)
+	}
+}
+
 impl From<BackendPolicy> for PolicyType {
 	fn from(value: BackendPolicy) -> Self {
 		Self::Backend(value)
