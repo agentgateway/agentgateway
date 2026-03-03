@@ -28,9 +28,7 @@ type testingSuite struct {
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	// Define the setup TestCase for common resources only
 	setupTestCase := base.TestCase{
-		Manifests: []string{
-			extProcManifest,
-		},
+		Manifests: []string{},
 	}
 
 	// Test-specific manifests are applied per test
