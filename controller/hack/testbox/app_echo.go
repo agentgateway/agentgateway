@@ -24,7 +24,6 @@ func startEchoAppServer() (shutdownFunc, error) {
 	}
 
 	if fileExists("/tls/tls.crt") && fileExists("/tls/tls.key") {
-
 		cfg.TLSCert = "/tls/tls.crt"
 		cfg.TLSKey = "/tls/tls.key"
 		cfg.Ports = append(cfg.Ports, &common.Port{Name: "https", Protocol: protocol.HTTP, Port: 443, TLS: true})

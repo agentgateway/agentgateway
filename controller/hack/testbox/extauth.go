@@ -6,7 +6,7 @@ import (
 	"net"
 	"strings"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoycorev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	authv3 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"google.golang.org/genproto/googleapis/rpc/status"
@@ -31,6 +31,7 @@ var extAuthzDenyBody = "denied by ext_authz for not found header `x-ext-authz: a
 type extAuthzServerV3 struct{}
 
 func startExtAuthzServer() (shutdownFunc, error) {
+	// nolint: gosec // Test code only
 	listener, err := net.Listen("tcp", ":9000")
 	if err != nil {
 		return nil, err
@@ -65,15 +66,15 @@ func (s *extAuthzServerV3) allow(request *authv3.CheckRequest) *authv3.CheckResp
 	return &authv3.CheckResponse{
 		HttpResponse: &authv3.CheckResponse_OkResponse{
 			OkResponse: &authv3.OkHttpResponse{
-				Headers: []*corev3.HeaderValueOption{
+				Headers: []*envoycorev3.HeaderValueOption{
 					{
-						Header: &corev3.HeaderValue{Key: extAuthzResultHeader, Value: extAuthzResultAllowed},
+						Header: &envoycorev3.HeaderValue{Key: extAuthzResultHeader, Value: extAuthzResultAllowed},
 					},
 					{
-						Header: &corev3.HeaderValue{Key: extAuthzReceivedHeader, Value: returnIfNotTooLong(request.GetAttributes().String())},
+						Header: &envoycorev3.HeaderValue{Key: extAuthzReceivedHeader, Value: returnIfNotTooLong(request.GetAttributes().String())},
 					},
 					{
-						Header: &corev3.HeaderValue{Key: extAuthzOverrideHeader, Value: extAuthzOverrideGRPCValue},
+						Header: &envoycorev3.HeaderValue{Key: extAuthzOverrideHeader, Value: extAuthzOverrideGRPCValue},
 					},
 				},
 			},
@@ -89,15 +90,15 @@ func (s *extAuthzServerV3) deny(request *authv3.CheckRequest) *authv3.CheckRespo
 			DeniedResponse: &authv3.DeniedHttpResponse{
 				Status: &typev3.HttpStatus{Code: typev3.StatusCode_Forbidden},
 				Body:   extAuthzDenyBody,
-				Headers: []*corev3.HeaderValueOption{
+				Headers: []*envoycorev3.HeaderValueOption{
 					{
-						Header: &corev3.HeaderValue{Key: extAuthzResultHeader, Value: extAuthzResultDenied},
+						Header: &envoycorev3.HeaderValue{Key: extAuthzResultHeader, Value: extAuthzResultDenied},
 					},
 					{
-						Header: &corev3.HeaderValue{Key: extAuthzReceivedHeader, Value: returnIfNotTooLong(request.GetAttributes().String())},
+						Header: &envoycorev3.HeaderValue{Key: extAuthzReceivedHeader, Value: returnIfNotTooLong(request.GetAttributes().String())},
 					},
 					{
-						Header: &corev3.HeaderValue{Key: extAuthzOverrideHeader, Value: extAuthzOverrideGRPCValue},
+						Header: &envoycorev3.HeaderValue{Key: extAuthzOverrideHeader, Value: extAuthzOverrideGRPCValue},
 					},
 				},
 			},

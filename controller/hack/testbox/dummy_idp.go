@@ -81,12 +81,14 @@ func startDummyIDP() (shutdownFunc, error) {
 		mux.ServeHTTP(w, r)
 	})
 
+	// nolint: gosec // Test code only
 	cfg := &tls.Config{
 		RootCAs:      roots,
 		Certificates: []tls.Certificate{cert},
 		NextProtos:   []string{"http/1.1"},
 	}
 
+	// nolint: gosec // Test code only
 	srv := &http.Server{
 		Addr:         "0.0.0.0:8443",
 		Handler:      muxWithCORS,
@@ -101,15 +103,16 @@ func startDummyIDP() (shutdownFunc, error) {
 
 // OAuth2/OIDC constants
 const (
-	hardcodedClientID     = "mcp_gi3APARn2_uHv2oxfJJqq2yZBDV4OyNo"
-	hardcodedCode         = "fixed_auth_code_123"
+	hardcodedClientID = "mcp_gi3APARn2_uHv2oxfJJqq2yZBDV4OyNo"
+	hardcodedCode     = "fixed_auth_code_123"
+	// nolint: gosec // Test code only
 	hardcodedClientSecret = "secret_2nGx_bjvo9z72Aw3-hKTWMusEo2-yTfH"
 	hardcodedRefreshToken = "fixed_refresh_token_123"
 	redirectURI           = "http://localhost:8081/callback"
 )
 
 // sendJSONResponse sends a JSON response with CORS headers
-func sendJSONResponse(w http.ResponseWriter, r *http.Request, data interface{}, statusCode int) {
+func sendJSONResponse(w http.ResponseWriter, r *http.Request, data any, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -134,7 +137,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	registration := map[string]interface{}{
+	registration := map[string]any{
 		"client_id":                  hardcodedClientID,
 		"client_secret":              hardcodedClientSecret,
 		"client_name":                "Test Client",
@@ -203,7 +206,7 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 		// Be lenient for generic MCP inspectors/SPAs using PKCE:
 		// - Do not require client_secret (public client)
 		// - Accept any code/redirect_uri/code_verifier
-		response := map[string]interface{}{
+		response := map[string]any{
 			"access_token":  string(orgOneJwt),
 			"refresh_token": hardcodedRefreshToken,
 			"token_type":    "bearer",
@@ -218,7 +221,7 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Accept any refresh_token for testing purposes
-		response := map[string]interface{}{
+		response := map[string]any{
 			"access_token":  string(orgOneJwt),
 			"refresh_token": hardcodedRefreshToken,
 			"token_type":    "bearer",
@@ -268,7 +271,7 @@ func handleDiscovery(w http.ResponseWriter, r *http.Request) {
 	}
 	baseURL := fmt.Sprintf("%s://%s", scheme, host)
 
-	discovery := map[string]interface{}{
+	discovery := map[string]any{
 		"issuer":                                "https://kgateway.dev",
 		"authorization_endpoint":                fmt.Sprintf("%s/authorize", baseURL),
 		"token_endpoint":                        fmt.Sprintf("%s/token", baseURL),

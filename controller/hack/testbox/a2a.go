@@ -27,6 +27,7 @@ func startA2AServer() (shutdownFunc, error) {
 	mux.HandleFunc("/agent-card", handleAgentCard)
 	mux.HandleFunc("/", handleA2ARequest)
 
+	// nolint: gosec // Test code only
 	httpServer := &http.Server{
 		Addr:    ":9999",
 		Handler: mux,

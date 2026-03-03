@@ -25,6 +25,7 @@ func startMCPServer(addr, name string, server *mcp.Server) (shutdownFunc, error)
 		return server
 	}, nil))
 
+	// nolint: gosec // Test code only
 	httpServer := &http.Server{
 		Addr:    addr,
 		Handler: mux,
