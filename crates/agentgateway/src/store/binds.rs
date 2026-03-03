@@ -1300,6 +1300,7 @@ mod tests {
 			filter: None,
 			add: Arc::new(OrderedStringMap::default()),
 			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),
+			otlp: None,
 		})
 	}
 

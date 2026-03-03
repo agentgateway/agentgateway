@@ -40,11 +40,6 @@
 |`config.logging.fields.add`||
 |`config.logging.level`||
 |`config.logging.format`||
-|`config.logging.otlp`||
-|`config.logging.otlp.otlpEndpoint`||
-|`config.logging.otlp.headers`||
-|`config.logging.otlp.otlpProtocol`||
-|`config.logging.otlp.path`|OTLP path. Default is /v1/logs|
 |`config.metrics`||
 |`config.metrics.remove`||
 |`config.metrics.fields`||
@@ -3134,6 +3129,93 @@
 |`frontendPolicies.accessLog.filter`||
 |`frontendPolicies.accessLog.add`||
 |`frontendPolicies.accessLog.remove`||
+|`frontendPolicies.accessLog.otlp`||
+|`frontendPolicies.accessLog.otlp.(any)(1)service`||
+|`frontendPolicies.accessLog.otlp.(any)(1)service.name`||
+|`frontendPolicies.accessLog.otlp.(any)(1)service.name.namespace`||
+|`frontendPolicies.accessLog.otlp.(any)(1)service.name.hostname`||
+|`frontendPolicies.accessLog.otlp.(any)(1)service.port`||
+|`frontendPolicies.accessLog.otlp.(any)(1)host`|Hostname or IP address|
+|`frontendPolicies.accessLog.otlp.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.accessLog.otlp.(any)policies`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestHeaderModifier`|Headers to be modified in the request.|
+|`frontendPolicies.accessLog.otlp.(any)policies.requestHeaderModifier.add`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestHeaderModifier.set`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestHeaderModifier.remove`||
+|`frontendPolicies.accessLog.otlp.(any)policies.responseHeaderModifier`|Headers to be modified in the response.|
+|`frontendPolicies.accessLog.otlp.(any)policies.responseHeaderModifier.add`||
+|`frontendPolicies.accessLog.otlp.(any)policies.responseHeaderModifier.set`||
+|`frontendPolicies.accessLog.otlp.(any)policies.responseHeaderModifier.remove`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect`|Directly respond to the request with a redirect.|
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.scheme`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.authority`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.authority.(any)(1)full`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.authority.(any)(1)host`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.authority.(any)(1)port`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.path`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.path.(any)(1)full`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.path.(any)(1)prefix`||
+|`frontendPolicies.accessLog.otlp.(any)policies.requestRedirect.status`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations`|Modify requests and responses sent to and from the backend.|
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.request`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.request.add`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.request.set`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.request.remove`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.request.body`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.response`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.response.add`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.response.set`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.response.remove`||
+|`frontendPolicies.accessLog.otlp.(any)policies.transformations.response.body`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS`|Send TLS to the backend.|
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS.cert`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS.key`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS.root`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS.hostname`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS.insecure`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS.insecureHost`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS.alpn`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTLS.subjectAltNames`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth`|Authenticate to the backend.|
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)passthrough`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)key`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)key.(any)file`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)gcp`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)gcp.(any)audience`|Audience for the token. If not set, the destination host will be used.|
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)gcp.(any)type`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)aws`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)aws.(any)accessKeyId`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)aws.(any)secretAccessKey`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)aws.(any)region`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)aws.(any)sessionToken`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.tenant_id`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_id`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)clientSecret.client_secret`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)clientId`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)objectId`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`frontendPolicies.accessLog.otlp.(any)policies.http`|Specify HTTP settings for the backend|
+|`frontendPolicies.accessLog.otlp.(any)policies.http.version`||
+|`frontendPolicies.accessLog.otlp.(any)policies.http.requestTimeout`||
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp`|Specify TCP settings for the backend|
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp.keepalives`||
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp.keepalives.enabled`||
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp.keepalives.time`||
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp.keepalives.interval`||
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp.keepalives.retries`||
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp.connectTimeout`||
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp.connectTimeout.secs`||
+|`frontendPolicies.accessLog.otlp.(any)policies.tcp.connectTimeout.nanos`||
+|`frontendPolicies.accessLog.otlp.(any)protocol`||
+|`frontendPolicies.accessLog.otlp.(any)path`||
 |`frontendPolicies.tracing`||
 |`frontendPolicies.tracing.(any)(1)service`||
 |`frontendPolicies.tracing.(any)(1)service.name`||

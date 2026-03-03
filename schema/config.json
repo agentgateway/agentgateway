@@ -390,16 +390,6 @@
               "type": "null"
             }
           ]
-        },
-        "otlp": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RawLoggingOtlp"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "additionalProperties": false
@@ -423,42 +413,6 @@
         "text",
         "json"
       ]
-    },
-    "RawLoggingOtlp": {
-      "type": "object",
-      "properties": {
-        "otlpEndpoint": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "headers": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "default": {}
-        },
-        "otlpProtocol": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Protocol"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "path": {
-          "description": "OTLP path. Default is /v1/logs",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
     },
     "RawMetrics": {
       "type": "object",
@@ -5058,9 +5012,110 @@
           "items": {
             "type": "string"
           }
+        },
+        "otlp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OtlpLoggingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
+    },
+    "OtlpLoggingConfig": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protocol": {
+          "$ref": "#/$defs/TracingProtocol",
+          "default": "grpc"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
+    "TracingProtocol": {
+      "type": "string",
+      "enum": [
+        "grpc",
+        "http"
+      ]
     },
     "TracingConfig": {
       "description": "Configuration for dynamic tracing policy",
@@ -5196,13 +5251,6 @@
       "additionalProperties": {
         "$ref": "#/$defs/Expression"
       }
-    },
-    "TracingProtocol": {
-      "type": "string",
-      "enum": [
-        "grpc",
-        "http"
-      ]
     },
     "LocalPolicy": {
       "type": "object",

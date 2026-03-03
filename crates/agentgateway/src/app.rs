@@ -119,35 +119,30 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	{
 		let binds_store = stores.binds.read();
 		for policy in binds_store.all_policies() {
-			if let types::agent::PolicyType::Frontend(types::agent::FrontendPolicy::AccessLog(
-				access_log,
-			)) = &policy.policy
+			if let types::agent::PolicyType::Frontend(types::agent::FrontendPolicy::AccessLog(access_log)) =
+				&policy.policy
+				&& let Some(otlp_cfg) = &access_log.otlp
 			{
-				if let Some(otlp_cfg) = &access_log.otlp {
-					let policy_client = proxy::httpproxy::PolicyClient {
-						inputs: Arc::new(pi.clone()),
-					};
+				let policy_client = proxy::httpproxy::PolicyClient {
+					inputs: Arc::new(pi.clone()),
+				};
 
-					match log::OtelAccessLogger::new(
-						policy_client,
-						otlp_cfg.provider_backend.clone(),
-						otlp_cfg.policies.clone(),
-						otlp_cfg.protocol,
-						otlp_cfg.path.clone(),
-					) {
-						Ok(logger) => {
-							agent_core::telemetry::set_otel_log_sink(Box::new(logger));
-							info!(
-								"OTLP log export enabled, protocol={:?}",
-								otlp_cfg.protocol
-							);
-						},
-						Err(e) => {
-							warn!("failed to initialize OTLP log exporter: {e}");
-						},
-					}
-					break;
+				match log::OtelAccessLogger::new(
+					policy_client,
+					otlp_cfg.provider_backend.clone(),
+					otlp_cfg.policies.clone(),
+					otlp_cfg.protocol,
+					otlp_cfg.path.clone(),
+				) {
+					Ok(logger) => {
+						agent_core::telemetry::set_otel_log_sink(Box::new(logger));
+						info!("OTLP log export enabled, protocol={:?}", otlp_cfg.protocol);
+					},
+					Err(e) => {
+						warn!("failed to initialize OTLP log exporter: {e}");
+					},
 				}
+				break;
 			}
 		}
 	}

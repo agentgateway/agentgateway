@@ -142,7 +142,10 @@ pub struct OtlpLoggingConfig {
 	pub policies: Vec<super::agent::BackendPolicy>,
 	#[serde(default)]
 	pub protocol: super::agent::TracingProtocol,
-	#[serde(default = "default_logs_path", skip_serializing_if = "is_default_logs_path")]
+	#[serde(
+		default = "default_logs_path",
+		skip_serializing_if = "is_default_logs_path"
+	)]
 	pub path: String,
 }
 

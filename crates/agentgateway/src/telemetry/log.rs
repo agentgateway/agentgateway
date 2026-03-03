@@ -1078,7 +1078,6 @@ where
 	}
 }
 
-
 pub struct OtelAccessLogger {
 	provider: SdkLoggerProvider,
 	logger: opentelemetry_sdk::logs::SdkLogger,
@@ -1180,9 +1179,10 @@ impl PolicyGrpcLogExporter {
 			policies: Arc::new(policies),
 			client: crate::proxy::httpproxy::PolicyClient { inputs },
 		};
-		let tonic_client = opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient::new(
-			channel,
-		);
+		let tonic_client =
+			opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient::new(
+				channel,
+			);
 		Self {
 			tonic_client,
 			is_shutdown: Arc::new(false),
@@ -1202,7 +1202,8 @@ impl opentelemetry_sdk::logs::LogExporter for PolicyGrpcLogExporter {
 
 		let is_shutdown = self.is_shutdown.clone();
 		let mut client = self.tonic_client.clone();
-		let resource: opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema = (&self.resource).into();
+		let resource: opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema =
+			(&self.resource).into();
 		let resource_logs = group_logs_by_resource_and_scope(batch, &resource);
 		let handle = self.runtime.clone();
 
