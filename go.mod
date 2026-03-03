@@ -52,6 +52,8 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
+require github.com/modelcontextprotocol/go-sdk v1.4.0
+
 require (
 	github.com/cbeuw/connutil v0.0.0-20200411215123-966bfaa51ee3 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -81,7 +83,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 // indirect
 	github.com/hashicorp/golang-lru/arc/v2 v2.0.6 // indirect
 	github.com/mattn/go-sqlite3 v1.14.28 // indirect
-	github.com/modelcontextprotocol/go-sdk v1.4.0 // indirect
 	github.com/nxadm/tail v1.4.11 // indirect
 	github.com/pires/go-proxyproto v0.8.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
