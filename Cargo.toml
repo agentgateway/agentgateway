@@ -248,8 +248,8 @@ incremental = true
 
 # For CI, optimize all dependencies since they are cached. Leave workspace packages, which are uncached,
 [profile.ci]
-inherits = "quick-release"
-opt-level = 1
+inherits = "dev"
+debug = "line-tables-only"
 [profile.ci.package."*"]
 opt-level = 3
 
