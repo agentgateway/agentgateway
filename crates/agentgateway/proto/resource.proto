@@ -1038,6 +1038,7 @@ message BackendPolicySpec {
     RequestMirrors request_mirror = 11;
     BackendHTTP backend_http = 12;
     BackendTCP backend_tcp = 13;
+    TrafficPolicySpec.RemoteRateLimit mcp_remote_rate_limit = 14;
   }
 }
 

@@ -986,6 +986,58 @@ impl TryFrom<&proto::agent::traffic_policy_spec::TransformationPolicy> for Trans
 	}
 }
 
+fn convert_remote_rate_limit(
+	rrl: &proto::agent::traffic_policy_spec::RemoteRateLimit,
+) -> Result<http::remoteratelimit::RemoteRateLimit, ProtoError> {
+	use crate::types::proto::agent::traffic_policy_spec as tps;
+	let descriptors = rrl
+		.descriptors
+		.iter()
+		.map(
+			|d| -> Result<http::remoteratelimit::DescriptorEntry, ProtoError> {
+				let entries: Vec<_> = d
+					.entries
+					.iter()
+					.map(|e| {
+						http::remoteratelimit::Descriptor(
+							e.key.clone(),
+							cel::Expression::new_permissive(e.value.clone()),
+						)
+					})
+					.collect();
+				Ok(http::remoteratelimit::DescriptorEntry {
+					entries: Arc::new(entries),
+					limit_type: match tps::remote_rate_limit::Type::try_from(d.r#type)
+						.unwrap_or(tps::remote_rate_limit::Type::Requests)
+					{
+						tps::remote_rate_limit::Type::Requests => http::localratelimit::RateLimitType::Requests,
+						tps::remote_rate_limit::Type::Tokens => http::localratelimit::RateLimitType::Tokens,
+					},
+				})
+			},
+		)
+		.collect::<Result<Vec<_>, _>>()?;
+	let target = resolve_simple_reference(rrl.target.as_ref())?;
+	if matches!(target, SimpleBackendReference::Invalid) {
+		return Err(ProtoError::Generic(
+			"remote_rate_limit: target must be set".into(),
+		));
+	}
+	let failure_mode = match tps::remote_rate_limit::FailureMode::try_from(rrl.failure_mode) {
+		Ok(tps::remote_rate_limit::FailureMode::FailOpen) => {
+			http::remoteratelimit::FailureMode::FailOpen
+		},
+		_ => http::remoteratelimit::FailureMode::FailClosed,
+	};
+	Ok(http::remoteratelimit::RemoteRateLimit {
+		domain: rrl.domain.clone(),
+		target: Arc::new(target),
+		policies: Vec::new(),
+		descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
+		failure_mode,
+	})
+}
+
 impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 	type Error = ProtoError;
 
@@ -1126,6 +1178,9 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 					.collect::<Result<Vec<_>, _>>()?;
 				BackendPolicy::RequestMirror(mirrors)
 			},
+			Some(bps::Kind::McpRemoteRateLimit(rrl)) => BackendPolicy::McpRemoteRateLimit(
+				mcp::remoteratelimit::McpRemoteRateLimit(convert_remote_rate_limit(rrl)?),
+			),
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}
@@ -1349,58 +1404,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::Transformation(Transformation::try_from(tp)?)
 			},
 			Some(tps::Kind::RemoteRateLimit(rrl)) => {
-				let descriptors = rrl
-					.descriptors
-					.iter()
-					.map(
-						|d| -> Result<http::remoteratelimit::DescriptorEntry, ProtoError> {
-							let entries: Vec<_> = d
-								.entries
-								.iter()
-								.map(|e| {
-									http::remoteratelimit::Descriptor(
-										e.key.clone(),
-										cel::Expression::new_permissive(e.value.clone()),
-									)
-								})
-								.collect();
-							Ok(http::remoteratelimit::DescriptorEntry {
-								entries: Arc::new(entries),
-								limit_type: match tps::remote_rate_limit::Type::try_from(d.r#type)
-									.unwrap_or(tps::remote_rate_limit::Type::Requests)
-								{
-									tps::remote_rate_limit::Type::Requests => {
-										http::localratelimit::RateLimitType::Requests
-									},
-									tps::remote_rate_limit::Type::Tokens => {
-										http::localratelimit::RateLimitType::Tokens
-									},
-								},
-							})
-						},
-					)
-					.collect::<Result<Vec<_>, _>>()?;
-				let target = resolve_simple_reference(rrl.target.as_ref())?;
-				if matches!(target, SimpleBackendReference::Invalid) {
-					return Err(ProtoError::Generic(
-						"remote_rate_limit: target must be set".into(),
-					));
-				}
-				let failure_mode = match tps::remote_rate_limit::FailureMode::try_from(rrl.failure_mode) {
-					Ok(tps::remote_rate_limit::FailureMode::FailOpen) => {
-						http::remoteratelimit::FailureMode::FailOpen
-					},
-					// Default to FailClosed (proto default is FAIL_CLOSED = 0)
-					_ => http::remoteratelimit::FailureMode::FailClosed,
-				};
-				TrafficPolicy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
-					domain: rrl.domain.clone(),
-					target: Arc::new(target),
-					// Not supported inline from xDS
-					policies: Vec::new(),
-					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
-					failure_mode,
-				})
+				TrafficPolicy::RemoteRateLimit(convert_remote_rate_limit(rrl)?)
 			},
 			Some(tps::Kind::Csrf(csrf_spec)) => {
 				let additional_origins: std::collections::HashSet<String> =
