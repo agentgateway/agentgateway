@@ -336,65 +336,41 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 					.unwrap_or_default(),
 			),
 		},
-		logging: {
-			let log_otlp = raw
+		logging: telemetry::log::Config {
+			filter: raw
 				.logging
 				.as_ref()
-				.and_then(|l| l.otlp.as_ref())
-				.map(|otlp_cfg| crate::telemetry::log::OtlpConfig {
-					endpoint: otlp_cfg
-						.otlp_endpoint
-						.clone()
-						.or_else(|| otlp.clone())
-						.unwrap_or_default(),
-					headers: if otlp_cfg.headers.is_empty() {
-						otlp_headers.clone()
-					} else {
-						otlp_cfg.headers.clone()
-					},
-					protocol: otlp_cfg.otlp_protocol.unwrap_or(otlp_protocol),
-					path: otlp_cfg
-						.path
-						.clone()
-						.unwrap_or_else(|| "/v1/logs".to_string()),
-				});
-			telemetry::log::Config {
-				filter: raw
-					.logging
-					.as_ref()
-					.and_then(|l| l.filter.as_ref())
-					.map(cel::Expression::new_strict)
-					.transpose()?
-					.map(Arc::new),
-				level: match raw.logging.as_ref().and_then(|l| l.level.as_ref()) {
-					None => "".to_string(),
-					Some(RawLoggingLevel::Single(level)) => level.to_string(),
-					Some(RawLoggingLevel::List(levels)) => levels.join(","),
-				},
-				format: raw
-					.logging
-					.as_ref()
-					.and_then(|l| l.format.clone())
-					.unwrap_or_default(),
-				fields: raw
-					.logging
-					.and_then(|f| f.fields)
-					.map(|fields| {
-						Ok::<_, anyhow::Error>(LoggingFields {
-							remove: Arc::new(fields.remove.into_iter().collect()),
-							add: Arc::new(
-								fields
-									.add
-									.iter()
-									.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-									.collect::<Result<_, _>>()?,
-							),
-						})
+				.and_then(|l| l.filter.as_ref())
+				.map(cel::Expression::new_strict)
+				.transpose()?
+				.map(Arc::new),
+			level: match raw.logging.as_ref().and_then(|l| l.level.as_ref()) {
+				None => "".to_string(),
+				Some(RawLoggingLevel::Single(level)) => level.to_string(),
+				Some(RawLoggingLevel::List(levels)) => levels.join(","),
+			},
+			format: raw
+				.logging
+				.as_ref()
+				.and_then(|l| l.format.clone())
+				.unwrap_or_default(),
+			fields: raw
+				.logging
+				.and_then(|f| f.fields)
+				.map(|fields| {
+					Ok::<_, anyhow::Error>(LoggingFields {
+						remove: Arc::new(fields.remove.into_iter().collect()),
+						add: Arc::new(
+							fields
+								.add
+								.iter()
+								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+								.collect::<Result<_, _>>()?,
+						),
 					})
-					.transpose()?
-					.unwrap_or_default(),
-				otlp: log_otlp,
-			}
+				})
+				.transpose()?
+				.unwrap_or_default(),
 		},
 		dns: client::Config {
 			// TODO: read from file

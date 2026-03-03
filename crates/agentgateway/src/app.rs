@@ -9,28 +9,13 @@ use tokio::task::JoinSet;
 
 use crate::control::caclient;
 use crate::telemetry::{log, trc};
-use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
+use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager, types};
 
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
 	// Initialize OpenTelemetry resource defaults from gateway + proxy metadata
 	trc::set_resource_defaults_from_config(config.as_ref());
-
-	if let Some(otlp_cfg) = &config.logging.otlp {
-		match log::OtelAccessLogger::new(otlp_cfg) {
-			Ok(logger) => {
-				agent_core::telemetry::set_otel_log_sink(Box::new(logger));
-				info!(
-					"OTLP log export enabled, endpoint={}, protocol={:?}",
-					otlp_cfg.endpoint, otlp_cfg.protocol
-				);
-			},
-			Err(e) => {
-				warn!("failed to initialize OTLP log exporter: {e}");
-			},
-		}
-	}
 
 	let shutdown = signal::Shutdown::new();
 	// Setup a drain channel. drain_tx is used to trigger a drain, which will complete
@@ -95,13 +80,14 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let state_mgr =
 		state_manager::StateManager::new(config.clone(), control_client.clone(), xds_metrics, xds_tx)
 			.await?;
+	let stores = state_mgr.stores();
+
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
 		// When we get the initial XDS state, unblock readiness
 		let _ = xds_rx_for_task.changed().await;
 		std::mem::drop(state_mgr_task);
 	});
-	let stores = state_mgr.stores();
 	// Run the XDS state manager in the current tokio worker pool.
 	tokio::spawn(state_mgr.run());
 
@@ -129,6 +115,42 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
 	};
+
+	{
+		let binds_store = stores.binds.read();
+		for policy in binds_store.all_policies() {
+			if let types::agent::PolicyType::Frontend(types::agent::FrontendPolicy::AccessLog(
+				access_log,
+			)) = &policy.policy
+			{
+				if let Some(otlp_cfg) = &access_log.otlp {
+					let policy_client = proxy::httpproxy::PolicyClient {
+						inputs: Arc::new(pi.clone()),
+					};
+
+					match log::OtelAccessLogger::new(
+						policy_client,
+						otlp_cfg.provider_backend.clone(),
+						otlp_cfg.policies.clone(),
+						otlp_cfg.protocol,
+						otlp_cfg.path.clone(),
+					) {
+						Ok(logger) => {
+							agent_core::telemetry::set_otel_log_sink(Box::new(logger));
+							info!(
+								"OTLP log export enabled, protocol={:?}",
+								otlp_cfg.protocol
+							);
+						},
+						Err(e) => {
+							warn!("failed to initialize OTLP log exporter: {e}");
+						},
+					}
+					break;
+				}
+			}
+		}
+	}
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());
 

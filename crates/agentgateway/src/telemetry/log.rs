@@ -1,9 +1,7 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, ready};
 use std::time::{Duration, Instant, SystemTime};
@@ -110,7 +108,6 @@ pub struct Config {
 	pub level: String,
 	/// Format sets the logging format (text or json)
 	pub format: crate::LoggingFormat,
-	pub otlp: Option<OtlpConfig>,
 }
 
 #[derive(serde::Serialize, Default, Clone, Debug)]
@@ -1081,13 +1078,6 @@ where
 	}
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
-pub struct OtlpConfig {
-	pub endpoint: String,
-	pub headers: HashMap<String, String>,
-	pub protocol: trc::Protocol,
-	pub path: String,
-}
 
 pub struct OtelAccessLogger {
 	provider: SdkLoggerProvider,
@@ -1114,22 +1104,95 @@ fn to_any_value(v: &ValueBag) -> AnyValue {
 	}
 }
 
-struct TokioGrpcLogExporter {
-	client: opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient<
-		tonic::transport::Channel,
-	>,
-	is_shutdown: AtomicBool,
-	resource: opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema,
+#[derive(Clone, Debug)]
+struct PolicyOtelHttpClient {
+	policy_client: crate::proxy::httpproxy::PolicyClient,
+	backend_ref: crate::types::agent::SimpleBackendReference,
 	runtime: tokio::runtime::Handle,
+	policies: Vec<crate::types::agent::BackendPolicy>,
 }
 
-impl std::fmt::Debug for TokioGrpcLogExporter {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("TokioGrpcLogExporter").finish()
+#[async_trait::async_trait]
+impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
+	async fn send_bytes(
+		&self,
+		request: http::Request<bytes::Bytes>,
+	) -> Result<http::Response<bytes::Bytes>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+		let client = self.policy_client.clone();
+		let backend_ref = self.backend_ref.clone();
+		let policies = self.policies.clone();
+		let handle = self.runtime.clone();
+
+		let (mut head, body_bytes) = request.into_parts();
+		let mut uri_parts = head.uri.into_parts();
+		uri_parts.scheme = None;
+		uri_parts.authority = None;
+		head.uri = http::Uri::from_parts(uri_parts).map_err(Box::new)?;
+		let req = crate::http::Request::from_parts(head, crate::http::Body::from(body_bytes));
+
+		let resp = handle
+			.spawn(async move {
+				client
+					.call_reference_with_policies(req, &backend_ref, &policies)
+					.await
+					.map_err(Box::new)
+			})
+			.await
+			.map_err(Box::new)??;
+
+		use http_body_util::BodyExt as _;
+		let (parts, body) = resp.into_parts();
+		let collected = body.collect().await.map_err(Box::new)?;
+		let bytes = collected.to_bytes();
+		Ok(http::Response::from_parts(parts, bytes))
 	}
 }
 
-impl opentelemetry_sdk::logs::LogExporter for TokioGrpcLogExporter {
+/// Policy-aware OTLP gRPC log exporter that routes via `GrpcReferenceChannel`, ensuring
+/// backend policies are looked up and applied by `PolicyClient::call_reference`.
+#[derive(Clone)]
+struct PolicyGrpcLogExporter {
+	tonic_client:
+		opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient<
+			crate::http::ext_proc::GrpcReferenceChannel,
+		>,
+	is_shutdown: Arc<bool>,
+	resource: Resource,
+	runtime: tokio::runtime::Handle,
+}
+
+impl std::fmt::Debug for PolicyGrpcLogExporter {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("PolicyGrpcLogExporter").finish()
+	}
+}
+
+impl PolicyGrpcLogExporter {
+	fn new(
+		inputs: Arc<crate::ProxyInputs>,
+		target: Arc<crate::types::agent::SimpleBackendReference>,
+		policies: Vec<crate::types::agent::BackendPolicy>,
+		runtime: tokio::runtime::Handle,
+	) -> Self {
+		use crate::http::ext_proc::GrpcReferenceChannel;
+		let channel = GrpcReferenceChannel {
+			target,
+			policies: Arc::new(policies),
+			client: crate::proxy::httpproxy::PolicyClient { inputs },
+		};
+		let tonic_client = opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient::new(
+			channel,
+		);
+		Self {
+			tonic_client,
+			is_shutdown: Arc::new(false),
+			resource: Resource::builder().build(),
+			runtime,
+		}
+	}
+}
+
+impl opentelemetry_sdk::logs::LogExporter for PolicyGrpcLogExporter {
 	fn export(
 		&self,
 		batch: opentelemetry_sdk::logs::LogBatch<'_>,
@@ -1137,13 +1200,14 @@ impl opentelemetry_sdk::logs::LogExporter for TokioGrpcLogExporter {
 		use opentelemetry_proto::transform::logs::tonic::group_logs_by_resource_and_scope;
 		use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
 
-		let is_shutdown = self.is_shutdown.load(Ordering::Relaxed);
-		let mut client = self.client.clone();
-		let resource_logs = group_logs_by_resource_and_scope(batch, &self.resource);
+		let is_shutdown = self.is_shutdown.clone();
+		let mut client = self.tonic_client.clone();
+		let resource: opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema = (&self.resource).into();
+		let resource_logs = group_logs_by_resource_and_scope(batch, &resource);
 		let handle = self.runtime.clone();
 
 		async move {
-			if is_shutdown {
+			if *is_shutdown {
 				return Err(OTelSdkError::AlreadyShutdown);
 			}
 			let req =
@@ -1158,12 +1222,11 @@ impl opentelemetry_sdk::logs::LogExporter for TokioGrpcLogExporter {
 	}
 
 	fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
-		self.is_shutdown.store(true, Ordering::Relaxed);
 		Ok(())
 	}
 
 	fn set_resource(&mut self, resource: &opentelemetry_sdk::Resource) {
-		self.resource = resource.into();
+		self.resource = resource.clone();
 	}
 }
 
@@ -1187,41 +1250,45 @@ fn build_resource(defaults: Option<&trc::GlobalResourceDefaults>) -> Resource {
 }
 
 impl OtelAccessLogger {
-	pub fn new(cfg: &OtlpConfig) -> anyhow::Result<Self> {
-		if cfg.endpoint.is_empty() {
-			return Err(anyhow::anyhow!(
-				"OTLP log endpoint is not configured; set logging.otlp.otlpEndpoint or tracing.otlpEndpoint"
-			));
-		}
-
+	pub fn new(
+		policy_client: crate::proxy::httpproxy::PolicyClient,
+		backend_ref: crate::types::agent::SimpleBackendReference,
+		policies: Vec<crate::types::agent::BackendPolicy>,
+		protocol: crate::types::agent::TracingProtocol,
+		path: String,
+	) -> anyhow::Result<Self> {
 		let defaults = trc::global_resource_defaults();
 		let resource = build_resource(defaults);
 
-		let provider = if cfg.protocol == trc::Protocol::Grpc {
-			let channel = tonic::transport::Channel::from_shared(cfg.endpoint.clone())
-				.map_err(|e| anyhow::anyhow!("invalid OTLP log endpoint: {e}"))?
-				.connect_lazy();
-			let client =
-				opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient::new(channel);
-			let exporter = TokioGrpcLogExporter {
-				client,
-				is_shutdown: AtomicBool::new(false),
-				resource: Default::default(),
-				runtime: tokio::runtime::Handle::current(),
-			};
+		let exporter_runtime = policy_client
+			.inputs
+			.cfg
+			.admin_runtime_handle
+			.clone()
+			.unwrap_or_else(tokio::runtime::Handle::current);
+
+		let provider = if protocol == crate::types::agent::TracingProtocol::Grpc {
+			let exporter = PolicyGrpcLogExporter::new(
+				policy_client.inputs.clone(),
+				Arc::new(backend_ref),
+				policies,
+				exporter_runtime,
+			);
 			SdkLoggerProvider::builder()
 				.with_resource(resource)
 				.with_batch_exporter(exporter)
 				.build()
 		} else {
+			let http_client = PolicyOtelHttpClient {
+				policy_client,
+				backend_ref,
+				policies,
+				runtime: exporter_runtime,
+			};
 			let exporter = opentelemetry_otlp::LogExporter::builder()
 				.with_http()
-				.with_endpoint(format!(
-					"{}/{}",
-					cfg.endpoint.strip_suffix("/").unwrap_or(&cfg.endpoint),
-					cfg.path.strip_prefix("/").unwrap_or(&cfg.path),
-				))
-				.with_headers(cfg.headers.clone())
+				.with_http_client(http_client)
+				.with_endpoint(path)
 				.build()?;
 			SdkLoggerProvider::builder()
 				.with_resource(resource)

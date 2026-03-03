@@ -93,6 +93,7 @@ impl FrontendPolices {
 			filter,
 			add: fields_add,
 			remove: _,
+			otlp: _,
 		}) = &self.access_log
 		else {
 			return;
@@ -746,6 +747,10 @@ impl Store {
 
 	pub fn all(&self) -> Vec<Arc<Bind>> {
 		self.binds.values().cloned().collect()
+	}
+
+	pub fn all_policies(&self) -> Vec<Arc<TargetedPolicy>> {
+		self.policies_by_key.values().cloned().collect()
 	}
 
 	pub fn backend(&self, r: &BackendKey) -> Option<Arc<BackendWithPolicies>> {

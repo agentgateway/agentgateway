@@ -172,6 +172,7 @@ fn merge_deprecated_frontend_policies(
 			filter: log.filter.clone(),
 			add: log.fields.add.clone(),
 			remove: log.fields.remove.clone(),
+			otlp: None,
 		});
 	}
 	if let Some(tracing) = deprecated.tracing.clone() {
