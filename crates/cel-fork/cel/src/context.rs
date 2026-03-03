@@ -168,26 +168,34 @@ impl<'a, 'rf> VariableResolver<'a> for SingleVarResolver<'a, 'rf> {
 	}
 }
 
-pub struct MapResolver<'a> {
-	variables: HashMap<&'a str, Value<'a>>,
+pub struct MapResolver<'k, 'a, 'rf> {
+	base: Option<&'rf dyn VariableResolver<'a>>,
+	variables: vector_map::VecMap<&'k str, Value<'a>>,
 }
 
-impl<'a> Default for MapResolver<'a> {
+impl<'k, 'a, 'rf> Default for MapResolver<'k, 'a, 'rf> {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
-impl<'a> MapResolver<'a> {
+impl<'k, 'a, 'rf> MapResolver<'k, 'a, 'rf> {
 	pub fn new() -> Self {
+		MapResolver::<'k, 'a, 'rf> {
+			base: None,
+			variables: Default::default(),
+		}
+	}
+	pub fn with_base(base: &'rf dyn VariableResolver<'a>) -> Self {
 		MapResolver {
+			base: Some(base),
 			variables: Default::default(),
 		}
 	}
 
 	pub fn add_variable<V>(
 		&mut self,
-		name: &'a str,
+		name: &'k str,
 		value: V,
 	) -> Result<(), <V as TryIntoValue<'a>>::Error>
 	where
@@ -198,7 +206,7 @@ impl<'a> MapResolver<'a> {
 		Ok(())
 	}
 
-	pub fn add_variable_from_value<V>(&mut self, name: &'a str, value: V)
+	pub fn add_variable_from_value<V>(&mut self, name: &'k str, value: V)
 	where
 		V: Into<Value<'a>>,
 	{
@@ -206,8 +214,11 @@ impl<'a> MapResolver<'a> {
 	}
 }
 
-impl<'a> VariableResolver<'a> for MapResolver<'a> {
+impl<'k, 'a, 'rf> VariableResolver<'a> for MapResolver<'k, 'a, 'rf> {
 	fn resolve(&self, expr: &str) -> Option<Value<'a>> {
-		self.variables.get(expr).cloned()
+		match self.variables.get(&expr).cloned() {
+			Some(val) => Some(val),
+			None => self.base.and_then(|base| base.resolve(expr)),
+		}
 	}
 }

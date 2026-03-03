@@ -17,7 +17,15 @@ struct TestCase {
 }
 
 // keep in sync with test_cases
-const TEST_CASE_NAMES: &[&str] = &["simple_access", "header", "bbr", "jwt", "cidr", "regex"];
+const TEST_CASE_NAMES: &[&str] = &[
+	"simple_access",
+	"header",
+	"bbr",
+	"jwt",
+	"cidr",
+	"regex",
+	"format_parse",
+];
 
 // Comprehensive test cases to be used across multiple tests
 fn test_cases() -> Vec<TestCase> {
@@ -126,6 +134,21 @@ fn test_cases() -> Vec<TestCase> {
 					.unwrap()
 			},
 			expected: json!(true),
+		},
+		TestCase {
+			name: "format_parse",
+			expression: r#"
+request.path.parse("/user/{id}/view",
+	"/some/new/path/{}/blah".format(id)
+)"#,
+			request_builder: || {
+				::http::Request::builder()
+					.method(Method::POST)
+					.uri("http://example.com/user/1234/view")
+					.body(Body::empty())
+					.unwrap()
+			},
+			expected: json!("/some/new/path/1234/blah"),
 		},
 	]
 }

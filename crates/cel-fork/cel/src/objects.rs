@@ -190,6 +190,7 @@ impl Value<'_> {
 			},
 			Value::Int(v) => Ok(Cow::Owned(v.to_string())),
 			Value::UInt(v) => Ok(Cow::Owned(v.to_string())),
+			Value::Float(v) => Ok(Cow::Owned(v.to_string())),
 			Value::Bytes(v) => {
 				use base64::Engine;
 				Ok(Cow::Owned(
