@@ -127,127 +127,160 @@ fn test_request<I>(
 	});
 }
 
-const COMPLETION_REQUESTS: &[&str] = &[
-	"basic",
-	"full",
-	"tool-call",
-	"reasoning",
+const ANTHROPIC: &str = "anthropic";
+const BEDROCK: &str = "bedrock";
+const VERTEX: &str = "vertex";
+const OPENAI: &str = "openai";
+const BEDROCK_TITAN: &str = "bedrock-titan";
+const BEDROCK_COHERE: &str = "bedrock-cohere";
+
+const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
+	("basic", &[ANTHROPIC, BEDROCK]),
+	("full", &[ANTHROPIC, BEDROCK]),
+	("tool-call", &[ANTHROPIC, BEDROCK]),
+	("reasoning", &[ANTHROPIC, BEDROCK]),
+    ("reasoning_max", &[ANTHROPIC]),
 ];
-const ANTHROPIC_COMPLETION_REQUESTS: &[&str] = &["reasoning_max"];
-const MESSAGES_REQUESTS: &[&str] = &[
-	"basic",
-	"tools",
-	"reasoning",
+const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
+	("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
+	("tools", &[ANTHROPIC, BEDROCK, VERTEX]),
+	("reasoning", &[ANTHROPIC, BEDROCK, VERTEX]),
 ];
-const RESPONSES_REQUESTS: &[&str] = &["basic", "instructions"];
-const COUNT_TOKENS_REQUESTS: &[&str] = &[
-	"basic",
-	"with_system",
+const RESPONSES_REQUESTS: &[(&str, &[&str])] =
+	&[("basic", &[BEDROCK]), ("instructions", &[BEDROCK])];
+const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
+	("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
+	("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
 ];
-const EMBEDDINGS_REQUESTS: &[&str] = &["basic", "array"];
+const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
+	("basic", &[BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
+	("array", &[BEDROCK_COHERE, VERTEX]),
+];
 
-#[tokio::test]
-async fn test_bedrock_embeddings() {
-	let titan_provider = bedrock::Provider {
-		model: Some(strng::new("amazon.titan-embed-text-v2:0")),
-		region: strng::new("us-west-2"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
+mod requests {
+	use super::*;
 
-	let cohere_provider = bedrock::Provider {
-		model: Some(strng::new("cohere.embed-english-v3")),
-		region: strng::new("us-west-2"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
+	#[test]
+	fn from_completions() {
+		let bedrock_provider = bedrock::Provider {
+			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
 
-	let titan_request = |i| conversion::bedrock::from_embeddings::translate(&i, &titan_provider);
-	let cohere_request = |i| conversion::bedrock::from_embeddings::translate(&i, &cohere_provider);
+		let bedrock =
+			|i| conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None);
+		let anthropic = |i| conversion::messages::from_completions::translate(&i);
 
-	test_request(
-		"bedrock-titan",
-		"requests/embeddings/basic.json",
-		titan_request,
-	);
-	for r in EMBEDDINGS_REQUESTS {
-		test_request(
-			"bedrock-cohere",
-			&format!("requests/embeddings/{r}.json"),
-			cohere_request,
-		);
+		for (name, providers) in COMPLETION_REQUESTS {
+			for provider in *providers {
+				match *provider {
+					BEDROCK => test_request(
+						BEDROCK,
+						&format!("requests/completions/{name}.json"),
+						bedrock,
+					),
+					ANTHROPIC => test_request(
+						ANTHROPIC,
+						&format!("requests/completions/{name}.json"),
+						anthropic,
+					),
+					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
+				}
+			}
+		}
 	}
 
-	let titan_response = |i: Bytes| {
-		conversion::bedrock::from_embeddings::translate_response(
-			&i,
-			&http::HeaderMap::new(),
-			"amazon.titan-embed-text-v2:0",
-		)
-	};
-	let cohere_response = |i: Bytes| {
-		conversion::bedrock::from_embeddings::translate_response(
-			&i,
-			&http::HeaderMap::new(),
-			"cohere.embed-english-v3",
-		)
-	};
+	#[test]
+	fn from_messages() {
+		let bedrock_provider = bedrock::Provider {
+			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
 
-	test_response(
-		"bedrock-titan",
-		"response/bedrock-titan/embeddings.json",
-		titan_response,
-	);
-	test_response(
-		"bedrock-cohere",
-		"response/bedrock-cohere/embeddings.json",
-		cohere_response,
-	);
-}
-
-#[tokio::test]
-async fn test_vertex_embeddings() {
-	let provider = vertex::Provider {
-		model: Some(strng::new("text-embedding-004")),
-		region: Some(strng::new("us-central1")),
-		project_id: strng::new("test-project-123"),
-	};
-
-	let request = |i: types::embeddings::Request| i.to_vertex(&provider);
-	for r in EMBEDDINGS_REQUESTS {
-		test_request("vertex", &format!("requests/embeddings/{r}.json"), request);
+      let bedrock_request= |i| conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None);
+		for (name, providers) in MESSAGES_REQUESTS {
+			for provider in *providers {
+				match *provider {
+					BEDROCK => test_request(
+						BEDROCK,
+						&format!("requests/completions/{name}.json"),
+						bedrock,
+					),
+					ANTHROPIC => test_request(
+						ANTHROPIC,
+						&format!("requests/completions/{name}.json"),
+						anthropic,
+					),
+					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
+				}
+			}
+		}
 	}
 
-	let response =
-		|i: Bytes| conversion::vertex::from_embeddings::translate_response(&i, "text-embedding-004");
-	test_response(
-		"vertex",
-		"response/vertex/embeddings.json",
-		response,
-	);
+	#[tokio::test]
+	async fn from_embeddings() {
+		let titan_provider = bedrock::Provider {
+			model: Some(strng::new("amazon.titan-embed-text-v2:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
+
+		let cohere_provider = bedrock::Provider {
+			model: Some(strng::new("cohere.embed-english-v3")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
+
+		let vertex_provider = vertex::Provider {
+			model: Some(strng::new("text-embedding-004")),
+			region: Some(strng::new("us-central1")),
+			project_id: strng::new("test-project-123"),
+		};
+
+		let titan_request = |i| conversion::bedrock::from_embeddings::translate(&i, &titan_provider);
+		let cohere_request = |i| conversion::bedrock::from_embeddings::translate(&i, &cohere_provider);
+		let vertex_request = |i: types::embeddings::Request| i.to_vertex(&vertex_provider);
+		for (name, providers) in EMBEDDINGS_REQUESTS {
+			for provider in *providers {
+				match *provider {
+					BEDROCK_TITAN => {
+						test_request(
+							BEDROCK_TITAN,
+							&format!("requests/embeddings/{name}.json"),
+							titan_request,
+						);
+					},
+					BEDROCK_COHERE => test_request(
+						BEDROCK_COHERE,
+						&format!("requests/embeddings/{name}.json"),
+						cohere_request,
+					),
+					VERTEX => {
+						test_request(
+							VERTEX,
+							&format!("requests/embeddings/{name}.json"),
+							vertex_request,
+						);
+					},
+					other => panic!("unsupported provider in EMBEDDINGS_REQUESTS: {other}"),
+				}
+			}
+		}
+	}
 }
 
 #[tokio::test]
 async fn test_bedrock_completions() {
-	let provider = bedrock::Provider {
-		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-		region: strng::new("us-west-2"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
 	let response =
 		|i| conversion::bedrock::from_completions::translate_response(&i, &strng::new("fake-model"));
-	test_response(
-		"completions",
-		"response/bedrock/basic.json",
-		response,
-	);
-	test_response(
-		"completions",
-		"response/bedrock/tool.json",
-		response,
-	);
+	test_response("completions", "response/bedrock/basic.json", response);
+	test_response("completions", "response/bedrock/tool.json", response);
 
 	let stream_response = |i, log| {
 		Ok(conversion::bedrock::from_completions::translate_stream(
@@ -258,17 +291,7 @@ async fn test_bedrock_completions() {
 			"request-id",
 		))
 	};
-	test_streaming(
-		"completions",
-		"response/bedrock/basic.bin",
-		stream_response,
-	)
-	.await;
-
-	let request = |i| conversion::bedrock::from_completions::translate(&i, &provider, None, None);
-	for r in COMPLETION_REQUESTS {
-		test_request("bedrock", &format!("requests/completions/{r}.json"), request);
-	}
+	test_streaming("completions", "response/bedrock/basic.bin", stream_response).await;
 }
 
 #[tokio::test]
@@ -294,16 +317,13 @@ async fn test_bedrock_messages() {
 			"request-id",
 		))
 	};
-	test_streaming(
-		"messages",
-		"response/bedrock/basic.bin",
-		stream_response,
-	)
-	.await;
+	test_streaming("messages", "response/bedrock/basic.bin", stream_response).await;
 
 	let request = |i| conversion::bedrock::from_messages::translate(&i, &provider, None);
-	for r in MESSAGES_REQUESTS {
-		test_request("bedrock", &format!("requests/messages/{r}.json"), request);
+	for (name, providers) in MESSAGES_REQUESTS {
+		if providers.contains(&BEDROCK) {
+			test_request(BEDROCK, &format!("requests/messages/{name}.json"), request);
+		}
 	}
 }
 
@@ -330,16 +350,13 @@ async fn test_bedrock_responses() {
 			"request-id",
 		))
 	};
-	test_streaming(
-		"responses",
-		"response/bedrock/basic.bin",
-		stream_response,
-	)
-	.await;
+	test_streaming("responses", "response/bedrock/basic.bin", stream_response).await;
 
 	let request = |i| conversion::bedrock::from_responses::translate(&i, &provider, None, None);
-	for r in RESPONSES_REQUESTS {
-		test_request("bedrock", &format!("requests/responses/{r}.json"), request);
+	for (name, providers) in RESPONSES_REQUESTS {
+		if providers.contains(&BEDROCK) {
+			test_request(BEDROCK, &format!("requests/responses/{name}.json"), request);
+		}
 	}
 }
 
@@ -357,20 +374,12 @@ async fn test_vertex_messages() {
 				.map_err(AIError::ResponseParsing)?,
 		))
 	};
-	test_response(
-		"vertex",
-		"response/anthropic/basic.json",
-		response,
-	);
-	test_response(
-		"vertex",
-		"response/anthropic/tool.json",
-		response,
-	);
+	test_response(VERTEX, "response/anthropic/basic.json", response);
+	test_response(VERTEX, "response/anthropic/tool.json", response);
 
 	let stream_response = |body, log| Ok(conversion::messages::passthrough_stream(body, 1024, log));
 	test_streaming(
-		"vertex",
+		VERTEX,
 		"response/anthropic/stream_basic.json",
 		stream_response,
 	)
@@ -381,8 +390,10 @@ async fn test_vertex_messages() {
 		provider.prepare_anthropic_message_body(anthropic_body)
 	};
 
-	for r in MESSAGES_REQUESTS {
-		test_request("vertex", &format!("requests/messages/{r}.json"), request);
+	for (name, providers) in MESSAGES_REQUESTS {
+		if providers.contains(&VERTEX) {
+			test_request(VERTEX, &format!("requests/messages/{name}.json"), request);
+		}
 	}
 }
 
@@ -405,8 +416,14 @@ async fn test_passthrough() {
 #[tokio::test]
 async fn test_messages_to_completions() {
 	let request = |i| conversion::completions::from_messages::translate(&i);
-	for r in MESSAGES_REQUESTS {
-		test_request("anthropic", &format!("requests/messages/{r}.json"), request);
+	for (name, providers) in MESSAGES_REQUESTS {
+		if providers.contains(&ANTHROPIC) {
+			test_request(
+				ANTHROPIC,
+				&format!("requests/messages/{name}.json"),
+				request,
+			);
+		}
 	}
 }
 
@@ -551,21 +568,9 @@ fn test_messages_output_config_format_maps_to_openai_response_format() {
 #[tokio::test]
 async fn test_completions_to_messages() {
 	let response = |i| conversion::messages::from_completions::translate_response(&i);
-	test_response(
-		"anthropic",
-		"response/anthropic/basic.json",
-		response,
-	);
-	test_response(
-		"anthropic",
-		"response/anthropic/tool.json",
-		response,
-	);
-	test_response(
-		"anthropic",
-		"response/anthropic/thinking.json",
-		response,
-	);
+	test_response(ANTHROPIC, "response/anthropic/basic.json", response);
+	test_response(ANTHROPIC, "response/anthropic/tool.json", response);
+	test_response(ANTHROPIC, "response/anthropic/thinking.json", response);
 
 	let stream_response = |i, log| {
 		Ok(conversion::messages::from_completions::translate_stream(
@@ -573,25 +578,17 @@ async fn test_completions_to_messages() {
 		))
 	};
 	test_streaming(
-		"anthropic",
+		ANTHROPIC,
 		"response/anthropic/stream_basic.json",
 		stream_response,
 	)
 	.await;
 	test_streaming(
-		"anthropic",
+		ANTHROPIC,
 		"response/anthropic/stream_thinking.json",
 		stream_response,
 	)
 	.await;
-
-	let request = |i| conversion::messages::from_completions::translate(&i);
-	for r in COMPLETION_REQUESTS {
-		test_request("anthropic", &format!("requests/completions/{r}.json"), request);
-	}
-	for r in ANTHROPIC_COMPLETION_REQUESTS {
-		test_request("anthropic", &format!("requests/completions/{r}.json"), request);
-	}
 }
 
 fn apply_test_prompts<R: RequestType + Serialize>(mut r: R) -> Result<Vec<u8>, AIError> {
@@ -629,17 +626,17 @@ fn apply_test_prompts<R: RequestType + Serialize>(mut r: R) -> Result<Vec<u8>, A
 #[test]
 fn test_prompt_enrichment() {
 	test_request::<types::messages::Request>(
-		"anthropic",
+		ANTHROPIC,
 		"requests/policies/anthropic_with_system.json",
 		apply_test_prompts,
 	);
 	test_request::<types::responses::Request>(
-		"openai",
+		OPENAI,
 		"requests/policies/openai_with_inputs.json",
 		apply_test_prompts,
 	);
 	test_request::<types::completions::Request>(
-		"openai",
+		OPENAI,
 		"requests/policies/openai_with_messages.json",
 		apply_test_prompts,
 	);
@@ -648,8 +645,14 @@ fn test_prompt_enrichment() {
 #[tokio::test]
 async fn test_anthropic_count_tokens() {
 	let request = |i: types::count_tokens::Request| i.to_anthropic();
-	for r in COUNT_TOKENS_REQUESTS {
-		test_request("anthropic", &format!("requests/count-tokens/{r}.json"), request);
+	for (name, providers) in COUNT_TOKENS_REQUESTS {
+		if providers.contains(&ANTHROPIC) {
+			test_request(
+				ANTHROPIC,
+				&format!("requests/count-tokens/{name}.json"),
+				request,
+			);
+		}
 	}
 
 	let input_path = fixture_path("response/anthropic/count_tokens.json");
@@ -668,7 +671,7 @@ async fn test_anthropic_count_tokens() {
 	let resp: types::count_tokens::Response =
 		serde_json::from_slice(&returned_bytes).expect("Failed to deserialize response");
 	let (snapshot_path, snapshot_name) =
-		snapshot_path_and_name("response/anthropic/count_tokens.json", "anthropic");
+		snapshot_path_and_name("response/anthropic/count_tokens.json", ANTHROPIC);
 
 	insta::with_settings!({
 			info => &provider_value,
@@ -691,8 +694,14 @@ async fn test_bedrock_count_tokens() {
 
 	let request = |input: types::count_tokens::Request| input.to_bedrock_token_count(&headers);
 
-	for r in COUNT_TOKENS_REQUESTS {
-		test_request("bedrock", &format!("requests/count-tokens/{r}.json"), request);
+	for (name, providers) in COUNT_TOKENS_REQUESTS {
+		if providers.contains(&BEDROCK) {
+			test_request(
+				BEDROCK,
+				&format!("requests/count-tokens/{name}.json"),
+				request,
+			);
+		}
 	}
 }
 
@@ -709,8 +718,14 @@ async fn test_vertex_count_tokens() {
 		provider.prepare_anthropic_count_tokens_body(anthropic_body)
 	};
 
-	for r in COUNT_TOKENS_REQUESTS {
-		test_request("vertex", &format!("requests/count-tokens/{r}.json"), request);
+	for (name, providers) in COUNT_TOKENS_REQUESTS {
+		if providers.contains(&VERTEX) {
+			test_request(
+				VERTEX,
+				&format!("requests/count-tokens/{name}.json"),
+				request,
+			);
+		}
 	}
 }
 
@@ -741,10 +756,8 @@ fn test_get_messages() {
 			})
 			.collect();
 
-		let (snapshot_path, snapshot_name) = snapshot_path_and_name(
-			"requests/completions/full.json",
-			provider,
-		);
+		let (snapshot_path, snapshot_name) =
+			snapshot_path_and_name("requests/completions/full.json", provider);
 		insta::with_settings!({
 			info => raw,
 			description => path.to_string_lossy().to_string(),
@@ -756,6 +769,16 @@ fn test_get_messages() {
 		});
 	}
 
-	extract_messages::<types::completions::Request>(input_str, &input_path, &input_raw, "get-messages-completions");
-	extract_messages::<types::messages::Request>(input_str, &input_path, &input_raw, "get-messages-messages");
+	extract_messages::<types::completions::Request>(
+		input_str,
+		&input_path,
+		&input_raw,
+		"get-messages-completions",
+	);
+	extract_messages::<types::messages::Request>(
+		input_str,
+		&input_path,
+		&input_raw,
+		"get-messages-messages",
+	);
 }
