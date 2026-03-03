@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use agentgateway::http::{Body, Response};
 use agentgateway::proxy::request_builder::RequestBuilder;
@@ -49,6 +49,7 @@ impl AgentGateway {
 		let mut js: Value =
 			yamlviajson::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
 		let config = js.pointer_mut("/config").unwrap();
+		let readiness_port = crate::common::compare::find_free_port().await?;
 		config.as_object_mut().unwrap().insert(
 			"adminAddr".to_string(),
 			Value::String("127.0.0.1:0".to_string()),
@@ -59,7 +60,7 @@ impl AgentGateway {
 		);
 		config.as_object_mut().unwrap().insert(
 			"readinessAddr".to_string(),
-			Value::String("127.0.0.1:0".to_string()),
+			Value::String(format!("127.0.0.1:{readiness_port}")),
 		);
 
 		let js = serde_json::to_string(&js).unwrap();
@@ -88,6 +89,7 @@ impl AgentGateway {
 		info!("waiting for agent...");
 		let port = *port.lock().unwrap();
 		crate::common::compare::wait_for_port(port).await?;
+		wait_for_readiness(readiness_port).await?;
 		info!("agent ready!...");
 		let client = ::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
@@ -140,6 +142,27 @@ impl AgentGateway {
 	pub fn port(&self) -> u16 {
 		self.port
 	}
+}
+
+async fn wait_for_readiness(readiness_port: u16) -> anyhow::Result<()> {
+	let timeout_duration = Duration::from_secs(10);
+	let start = std::time::Instant::now();
+	let client = reqwest::Client::new();
+	let url = format!("http://127.0.0.1:{readiness_port}/healthz/ready");
+
+	while start.elapsed() < timeout_duration {
+		if let Ok(resp) = client.get(&url).send().await
+			&& resp.status().is_success()
+		{
+			return Ok(());
+		}
+		tokio::time::sleep(Duration::from_millis(100)).await;
+	}
+
+	Err(anyhow::anyhow!(
+		"Timeout waiting for readiness endpoint {}",
+		url
+	))
 }
 
 impl Drop for AgentGateway {
