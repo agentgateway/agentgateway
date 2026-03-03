@@ -131,6 +131,7 @@ const ANTHROPIC: &str = "anthropic";
 const BEDROCK: &str = "bedrock";
 const VERTEX: &str = "vertex";
 const OPENAI: &str = "openai";
+const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 
@@ -139,12 +140,12 @@ const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
 	("full", &[ANTHROPIC, BEDROCK]),
 	("tool-call", &[ANTHROPIC, BEDROCK]),
 	("reasoning", &[ANTHROPIC, BEDROCK]),
-    ("reasoning_max", &[ANTHROPIC]),
+	("reasoning_max", &[ANTHROPIC]),
 ];
 const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
-	("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
-	("tools", &[ANTHROPIC, BEDROCK, VERTEX]),
-	("reasoning", &[ANTHROPIC, BEDROCK, VERTEX]),
+	("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
+	("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
+	("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
 ];
 const RESPONSES_REQUESTS: &[(&str, &[&str])] =
 	&[("basic", &[BEDROCK]), ("instructions", &[BEDROCK])];
@@ -200,22 +201,50 @@ mod requests {
 			guardrail_identifier: None,
 			guardrail_version: None,
 		};
+		let vertex_provider = vertex::Provider {
+			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
+			region: Some(strng::new("us-central1")),
+			project_id: strng::new("test-project-123"),
+		};
 
-      let bedrock_request= |i| conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None);
+		let bedrock_request =
+			|i| conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None);
+		let vertex_request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
+			let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
+			vertex_provider.prepare_anthropic_message_body(anthropic_body)
+		};
+		let completions_request = |i| conversion::completions::from_messages::translate(&i);
 		for (name, providers) in MESSAGES_REQUESTS {
+			let test = &format!("requests/messages/{name}.json");
 			for provider in *providers {
 				match *provider {
-					BEDROCK => test_request(
-						BEDROCK,
-						&format!("requests/completions/{name}.json"),
-						bedrock,
-					),
-					ANTHROPIC => test_request(
-						ANTHROPIC,
-						&format!("requests/completions/{name}.json"),
-						anthropic,
-					),
-					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
+					BEDROCK => test_request(BEDROCK, test, bedrock_request),
+					COMPLETIONS => test_request(ANTHROPIC, test, completions_request),
+					VERTEX => test_request(ANTHROPIC, test, vertex_request),
+					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn from_responses() {
+		let bedrock_provider = bedrock::Provider {
+			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
+
+		let bed_request =
+			|i| conversion::bedrock::from_responses::translate(&i, &bedrock_provider, None, None);
+
+		for (name, providers) in RESPONSES_REQUESTS {
+			let test = &format!("requests/responses/{name}.json");
+			for provider in *providers {
+				match *provider {
+					BEDROCK => test_request(BEDROCK, test, bed_request),
+					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
 				}
 			}
 		}
@@ -295,39 +324,6 @@ async fn test_bedrock_completions() {
 }
 
 #[tokio::test]
-async fn test_bedrock_messages() {
-	let provider = bedrock::Provider {
-		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-		region: strng::new("us-west-2"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	let response =
-		|i| conversion::bedrock::from_messages::translate_response(&i, &strng::new("fake-model"));
-	test_response("messages", "response/bedrock/basic.json", response);
-	test_response("messages", "response/bedrock/tool.json", response);
-
-	let stream_response = |i, log| {
-		Ok(conversion::bedrock::from_messages::translate_stream(
-			i,
-			0,
-			log,
-			"model",
-			"request-id",
-		))
-	};
-	test_streaming("messages", "response/bedrock/basic.bin", stream_response).await;
-
-	let request = |i| conversion::bedrock::from_messages::translate(&i, &provider, None);
-	for (name, providers) in MESSAGES_REQUESTS {
-		if providers.contains(&BEDROCK) {
-			test_request(BEDROCK, &format!("requests/messages/{name}.json"), request);
-		}
-	}
-}
-
-#[tokio::test]
 async fn test_bedrock_responses() {
 	let provider = bedrock::Provider {
 		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
@@ -384,17 +380,6 @@ async fn test_vertex_messages() {
 		stream_response,
 	)
 	.await;
-
-	let request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
-		let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
-		provider.prepare_anthropic_message_body(anthropic_body)
-	};
-
-	for (name, providers) in MESSAGES_REQUESTS {
-		if providers.contains(&VERTEX) {
-			test_request(VERTEX, &format!("requests/messages/{name}.json"), request);
-		}
-	}
 }
 
 #[tokio::test]
@@ -411,20 +396,6 @@ async fn test_passthrough() {
 		serde_json::from_str::<Value>(&t2).unwrap(),
 		"{t}\n{t2}"
 	);
-}
-
-#[tokio::test]
-async fn test_messages_to_completions() {
-	let request = |i| conversion::completions::from_messages::translate(&i);
-	for (name, providers) in MESSAGES_REQUESTS {
-		if providers.contains(&ANTHROPIC) {
-			test_request(
-				ANTHROPIC,
-				&format!("requests/messages/{name}.json"),
-				request,
-			);
-		}
-	}
 }
 
 #[test]
