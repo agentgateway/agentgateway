@@ -23,13 +23,6 @@ fn snapshot_path_and_name(relative_path: &str, provider: &str) -> (String, Strin
 		.file_stem()
 		.unwrap_or_else(|| panic!("{relative_path}: missing filename"))
 		.to_string_lossy();
-	eprintln!(
-		"{} {} -> {} {}",
-		relative_path,
-		provider,
-		format!("tests/{}", parent.display()),
-		format!("{stem}.{provider}"),
-	);
 	(
 		format!("tests/{}", parent.display()),
 		format!("{stem}.{provider}"),
@@ -334,9 +327,9 @@ mod requests {
 			let test = &format!("requests/count-tokens/{name}.json");
 			for provider in *providers {
 				match *provider {
-					ANTHROPIC => test_request(*provider, test, anthropic_request),
-					BEDROCK => test_request(*provider, test, bedrock_request),
-					VERTEX => test_request(*provider, test, vertex_request),
+					ANTHROPIC => test_request(provider, test, anthropic_request),
+					BEDROCK => test_request(provider, test, bedrock_request),
+					VERTEX => test_request(provider, test, vertex_request),
 					other => panic!("unsupported provider in COUNT_TOKENS_REQUESTS: {other}"),
 				}
 			}
@@ -359,8 +352,8 @@ mod response {
 		("thinking", &[ANTHROPIC]),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("stream_basic", &[ANTHROPIC]),
-		("stream_thinking", &[ANTHROPIC]),
+		("stream_basic", &[ANTHROPIC, COMPLETIONS]),
+		("stream_thinking", &[ANTHROPIC, COMPLETIONS]),
 	];
 	const VERTEX_RESPONSES: &[(&str, &[&str])] = &[("basic", &[VERTEX]), ("tool", &[VERTEX])];
 	const VERTEX_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream_basic", &[VERTEX])];
@@ -454,6 +447,7 @@ mod response {
 			let test = &format!("response/anthropic/{name}.json");
 			for provider in *providers {
 				match *provider {
+					COMPLETIONS => test_streaming(COMPLETIONS, test, stream_to_completions).await,
 					ANTHROPIC => test_streaming(ANTHROPIC, test, stream_to_completions).await,
 					other => panic!("unsupported provider in ANTHROPIC_STREAM_RESPONSES: {other}"),
 				}
