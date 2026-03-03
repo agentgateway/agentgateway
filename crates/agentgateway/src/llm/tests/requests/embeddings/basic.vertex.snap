@@ -1,0 +1,19 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/embeddings/basic.json
+info:
+  model: text-embedding-3-small
+  input: hello world
+  dimensions: 1024
+---
+{
+  "instances": [
+    {
+      "content": "hello world",
+      "task_type": "RETRIEVAL_QUERY"
+    }
+  ],
+  "parameters": {
+    "outputDimensionality": 1024
+  }
+}

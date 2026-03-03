@@ -1,0 +1,24 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/basic.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input: "Hello, world"
+---
+{
+  "modelId": "gpt-4o",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "Hello, world"
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 1024
+  }
+}

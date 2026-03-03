@@ -1,0 +1,16 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/count-tokens/basic.json
+info:
+  model: claude-3-5-sonnet-20241022
+  messages:
+    - role: user
+      content: "Hello, how are you?"
+---
+{
+  "input": {
+    "invokeModel": {
+      "body": "eyJtZXNzYWdlcyI6W3sicm9sZSI6InVzZXIiLCJjb250ZW50IjoiSGVsbG8sIGhvdyBhcmUgeW91PyJ9XSwibWF4X3Rva2VucyI6MSwiYW50aHJvcGljX3ZlcnNpb24iOiIyMDIzLTA2LTAxIn0="
+    }
+  }
+}

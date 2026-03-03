@@ -1,0 +1,17 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/count-tokens/with_system.json
+info:
+  model: claude-3-5-sonnet-20241022
+  system: You are a helpful assistant.
+  messages:
+    - role: user
+      content: What is the weather today?
+---
+{
+  "input": {
+    "invokeModel": {
+      "body": "eyJtZXNzYWdlcyI6W3sicm9sZSI6InVzZXIiLCJjb250ZW50IjoiV2hhdCBpcyB0aGUgd2VhdGhlciB0b2RheT8ifV0sInN5c3RlbSI6IllvdSBhcmUgYSBoZWxwZnVsIGFzc2lzdGFudC4iLCJtYXhfdG9rZW5zIjoxLCJhbnRocm9waWNfdmVyc2lvbiI6IjIwMjMtMDYtMDEifQ=="
+    }
+  }
+}

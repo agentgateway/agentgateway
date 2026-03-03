@@ -1,0 +1,27 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/basic.json
+info:
+  model: replaceme
+  messages:
+    - role: system
+      content: You are a helpful assistant.
+    - role: user
+      content: What is the name of the LLM provider?
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "What is the name of the LLM provider?"
+        }
+      ]
+    }
+  ],
+  "system": "You are a helpful assistant.",
+  "model": "replaceme",
+  "max_tokens": 4096
+}
