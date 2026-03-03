@@ -749,6 +749,9 @@ struct LocalLLMPolicy {
 #[apply(schema_de!)]
 #[derive(Default)]
 struct LocalGatewayPolicy {
+	/// Control access based on client IP address using allow/deny CIDR lists.
+	#[serde(default)]
+	ip_access_control: Option<crate::http::ipallowlist::IpAccessControl>,
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
@@ -777,6 +780,7 @@ struct LocalGatewayPolicy {
 impl From<LocalGatewayPolicy> for FilterOrPolicy {
 	fn from(val: LocalGatewayPolicy) -> Self {
 		let LocalGatewayPolicy {
+			ip_access_control,
 			jwt_auth,
 			ext_authz,
 			ext_proc,
@@ -785,6 +789,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			api_key,
 		} = val;
 		FilterOrPolicy {
+			ip_access_control,
 			jwt_auth,
 			ext_authz,
 			ext_proc,
@@ -978,6 +983,9 @@ struct FilterOrPolicy {
 	cors: Option<http::cors::Cors>,
 
 	// Policy
+	/// Control access based on client IP address using allow/deny CIDR lists.
+	#[serde(default)]
+	ip_access_control: Option<crate::http::ipallowlist::IpAccessControl>,
 	/// Authorization policies for MCP access.
 	#[serde(default)]
 	mcp_authorization: Option<McpAuthorization>,
@@ -1898,6 +1906,7 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 		request_mirror,
 		direct_response,
 		cors,
+		ip_access_control,
 		mcp_authorization,
 		mcp_authentication,
 		a2a,
@@ -1962,6 +1971,9 @@ async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedP
 	}
 
 	// Route policies
+	if let Some(p) = ip_access_control {
+		route_policies.push(TrafficPolicy::IpAccessControl(p));
+	}
 	if let Some(mut p) = ai {
 		p.compile_model_alias_patterns();
 		route_policies.push(TrafficPolicy::AI(Arc::new(p)))

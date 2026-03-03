@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Scenario: Paranoid mode - check every IP in the X-Forwarded-For
+# chain, not just the resolved client IP. If any hop in the chain
+# matches a deny rule (or fails the allowlist), the request is
+# rejected.
+#
+# Combined with skipPrivateIps to avoid rejecting internal proxy
+# hops and maxXffLength to guard against header abuse.
+#
+binds:
+- port: 3000
+  listeners:
+  - policies:
+      ipAccessControl:
+        allow:
+        - "203.0.113.0/24"
+        - "198.51.100.0/24"
+        deny:
+        - "203.0.113.128/25"
+        enforceFullChain: true
+        skipPrivateIps: true
+        maxXffLength: 10
+    routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

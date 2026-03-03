@@ -54,9 +54,9 @@ impl ProxyResponse {
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
-			ProxyError::AuthorizationFailed | ProxyError::CsrfValidationFailed => {
-				ProxyResponseReason::Authorization
-			},
+			ProxyError::AuthorizationFailed
+			| ProxyError::CsrfValidationFailed
+			| ProxyError::IpAccessDenied(_) => ProxyResponseReason::Authorization,
 			ProxyError::UpstreamCallFailed(_)
 			| ProxyError::UpstreamTCPCallFailed(_)
 			| ProxyError::BackendAuthenticationFailed(_)
@@ -148,6 +148,8 @@ pub enum ProxyError {
 	APIKeyAuthenticationFailure(http::apikey::Error),
 	#[error("CSRF validation failed")]
 	CsrfValidationFailed,
+	#[error("ip access denied: {0}")]
+	IpAccessDenied(http::ipallowlist::Error),
 	#[error("service not found")]
 	ServiceNotFound,
 	#[error("invalid backend type")]
@@ -232,6 +234,7 @@ impl ProxyError {
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
+			ProxyError::IpAccessDenied(_) => StatusCode::FORBIDDEN,
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,

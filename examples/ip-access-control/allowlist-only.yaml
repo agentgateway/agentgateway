@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Scenario: Only allow requests from specific CIDR ranges.
+# All other IPs are rejected with 403.
+#
+binds:
+- port: 3000
+  listeners:
+  - policies:
+      ipAccessControl:
+        allow:
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+    routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

@@ -1866,6 +1866,7 @@ pub enum TrafficPolicy {
 	JwtAuth(crate::http::jwt::Jwt),
 	BasicAuth(crate::http::basicauth::BasicAuthentication),
 	APIKey(crate::http::apikey::APIKeyAuthentication),
+	IpAccessControl(crate::http::ipallowlist::IpAccessControl),
 	Transformation(crate::http::transformation_cel::Transformation),
 	Csrf(crate::http::csrf::Csrf),
 

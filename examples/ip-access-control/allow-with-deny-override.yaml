@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Scenario: Allow a broad corporate range but explicitly deny a
+# specific subnet within it. Deny rules always take precedence.
+#
+# Given IP 10.0.1.5:
+#   - Matches allow 10.0.0.0/8? Yes
+#   - Matches deny 10.0.1.0/24? Yes -> DENIED (deny wins)
+#
+# Given IP 10.0.2.5:
+#   - Matches deny 10.0.1.0/24? No
+#   - Matches allow 10.0.0.0/8? Yes -> ALLOWED
+#
+binds:
+- port: 3000
+  listeners:
+  - policies:
+      ipAccessControl:
+        allow:
+        - "10.0.0.0/8"
+        deny:
+        - "10.0.1.0/24"
+    routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

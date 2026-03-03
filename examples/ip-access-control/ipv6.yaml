@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Scenario: IPv6 access control. Both IPv4 and IPv6 CIDR ranges
+# can be mixed freely in allow and deny lists.
+#
+binds:
+- port: 3000
+  listeners:
+  - policies:
+      ipAccessControl:
+        allow:
+        - "10.0.0.0/8"
+        - "2001:db8::/32"
+        - "fd00::/8"
+        deny:
+        - "2001:db8:bad::/48"
+    routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

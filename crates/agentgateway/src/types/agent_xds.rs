@@ -1598,6 +1598,32 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					Mode::Auto => agent::HostRedirectOverride::Auto,
 				})
 			},
+			Some(tps::Kind::IpAccessControl(iac)) => {
+				let allow = iac
+					.allow
+					.iter()
+					.map(|s| {
+						s.parse::<ipnet::IpNet>()
+							.map_err(|e| ProtoError::Generic(format!("invalid allow CIDR '{s}': {e}")))
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				let deny = iac
+					.deny
+					.iter()
+					.map(|s| {
+						s.parse::<ipnet::IpNet>()
+							.map_err(|e| ProtoError::Generic(format!("invalid deny CIDR '{s}': {e}")))
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				TrafficPolicy::IpAccessControl(http::ipallowlist::IpAccessControl {
+					allow,
+					deny,
+					xff_num_trusted_hops: iac.xff_num_trusted_hops.map(|v| v as usize),
+					skip_private_ips: iac.skip_private_ips,
+					enforce_full_chain: iac.enforce_full_chain,
+					max_xff_length: iac.max_xff_length.map(|v| v as usize),
+				})
+			},
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}

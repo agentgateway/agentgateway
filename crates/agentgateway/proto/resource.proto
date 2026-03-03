@@ -761,6 +761,23 @@ message TrafficPolicySpec {
     Mode mode = 1;
   }
 
+  // IP-based access control supporting CIDR allow and deny lists.
+  message IpAccessControl {
+    // CIDR ranges that are allowed. When non-empty, only IPs matching at least
+    // one entry are permitted (after deny check).
+    repeated string allow = 1;
+    // CIDR ranges that are denied. Deny rules are evaluated before allow rules.
+    repeated string deny = 2;
+    // Number of trusted proxy hops for X-Forwarded-For client IP resolution.
+    optional uint32 xff_num_trusted_hops = 3;
+    // When true, private/loopback IPs bypass allow and deny checks.
+    bool skip_private_ips = 4;
+    // When true, every IP in the XFF chain plus the connection IP is checked.
+    bool enforce_full_chain = 5;
+    // Maximum number of IPs allowed in the X-Forwarded-For chain.
+    optional uint32 max_xff_length = 6;
+  }
+
   PolicyPhase phase = 1;
   oneof kind {
     Timeout timeout = 2;
@@ -783,6 +800,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
+    IpAccessControl ip_access_control = 22;
   }
 }
 

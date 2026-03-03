@@ -17,6 +17,7 @@ pub mod compression;
 pub mod csrf;
 pub mod ext_authz;
 pub mod ext_proc;
+pub mod ipallowlist;
 pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;

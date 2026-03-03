@@ -34,3 +34,7 @@ The `http` example shows how to use agentgateway to serve generic HTTP traffic.
 ### [Prompt Enrichment](prompt-enrichment/README.md)
 
 The `prompt-enrichment` example shows how to append or preprend prompts to agentgateway AI requests.
+
+### [IP Access Control](ip-access-control/README.md)
+
+The `ip-access-control` examples show how to control access based on client IP addresses using allow/deny CIDR lists, X-Forwarded-For support, private IP bypass, full chain enforcement, and multi-source policy merge.

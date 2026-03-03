@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Scenario: Allow only specific public IP ranges but let internal
+# (RFC 1918, loopback, link-local) traffic through unconditionally.
+# Useful in environments where pod-to-pod or health-check traffic
+# should never be blocked.
+#
+# Private ranges bypassed automatically:
+#   IPv4: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8
+#   IPv6: ::1/128, fc00::/7, fe80::/10
+#
+binds:
+- port: 3000
+  listeners:
+  - policies:
+      ipAccessControl:
+        allow:
+        - "203.0.113.0/24"
+        - "198.51.100.0/24"
+        skipPrivateIps: true
+    routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

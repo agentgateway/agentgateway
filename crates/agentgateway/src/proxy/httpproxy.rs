@@ -246,6 +246,9 @@ async fn apply_gateway_policies(
 	ext_proc: Option<&mut ExtProcRequest>,
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
+	if let Some(ip) = &policies.ip_access_control {
+		ip.apply(req).map_err(ProxyResponse::from)?;
+	}
 	if let Some(j) = &policies.jwt {
 		j.apply(Some(log), req)
 			.await

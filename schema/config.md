@@ -141,6 +141,13 @@
 |`binds[].listeners[].routes[].policies.cors.allowOrigins`||
 |`binds[].listeners[].routes[].policies.cors.exposeHeaders`||
 |`binds[].listeners[].routes[].policies.cors.maxAge`||
+|`binds[].listeners[].routes[].policies.ipAccessControl`|Control access based on client IP address using allow/deny CIDR lists.|
+|`binds[].listeners[].routes[].policies.ipAccessControl.allow`|CIDR ranges that are allowed. When non-empty, only IPs matching at least<br>one entry are permitted (after deny check).|
+|`binds[].listeners[].routes[].policies.ipAccessControl.deny`|CIDR ranges that are denied. Deny rules are evaluated before allow rules.|
+|`binds[].listeners[].routes[].policies.ipAccessControl.xffNumTrustedHops`|Number of trusted proxy hops. When set, the client IP is taken from the<br>X-Forwarded-For header, counting backwards from the rightmost entry.<br>For example, 1 means the last entry is the client IP (one trusted proxy).|
+|`binds[].listeners[].routes[].policies.ipAccessControl.skipPrivateIps`|When true, private/loopback IPs (RFC 1918, RFC 4193, link-local) bypass<br>both allow and deny checks. Defaults to false.|
+|`binds[].listeners[].routes[].policies.ipAccessControl.enforceFullChain`|When true, every IP in the X-Forwarded-For chain (plus the connection IP)<br>is checked against allow/deny rules. A deny match on any hop rejects the<br>request, and every non-private hop must satisfy the allow list.<br>When false, only the resolved client IP is checked.|
+|`binds[].listeners[].routes[].policies.ipAccessControl.maxXffLength`|Maximum number of IPs allowed in the X-Forwarded-For chain. Requests<br>exceeding this limit are rejected with 403. Guards against forwarding<br>loops and header abuse. Defaults to 30 when unset.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization`|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules`||
 |`binds[].listeners[].routes[].policies.authorization`|Authorization policies for HTTP access.|
@@ -2575,6 +2582,13 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.alpn`||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.subjectAltNames`||
 |`binds[].listeners[].policies`||
+|`binds[].listeners[].policies.ipAccessControl`|Control access based on client IP address using allow/deny CIDR lists.|
+|`binds[].listeners[].policies.ipAccessControl.allow`|CIDR ranges that are allowed. When non-empty, only IPs matching at least<br>one entry are permitted (after deny check).|
+|`binds[].listeners[].policies.ipAccessControl.deny`|CIDR ranges that are denied. Deny rules are evaluated before allow rules.|
+|`binds[].listeners[].policies.ipAccessControl.xffNumTrustedHops`|Number of trusted proxy hops. When set, the client IP is taken from the<br>X-Forwarded-For header, counting backwards from the rightmost entry.<br>For example, 1 means the last entry is the client IP (one trusted proxy).|
+|`binds[].listeners[].policies.ipAccessControl.skipPrivateIps`|When true, private/loopback IPs (RFC 1918, RFC 4193, link-local) bypass<br>both allow and deny checks. Defaults to false.|
+|`binds[].listeners[].policies.ipAccessControl.enforceFullChain`|When true, every IP in the X-Forwarded-For chain (plus the connection IP)<br>is checked against allow/deny rules. A deny match on any hop rejects the<br>request, and every non-private hop must satisfy the allow list.<br>When false, only the resolved client IP is checked.|
+|`binds[].listeners[].policies.ipAccessControl.maxXffLength`|Maximum number of IPs allowed in the X-Forwarded-For chain. Requests<br>exceeding this limit are rejected with 403. Guards against forwarding<br>loops and header abuse. Defaults to 30 when unset.|
 |`binds[].listeners[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)providers`||
@@ -2962,6 +2976,13 @@
 |`policies[].policy.cors.allowOrigins`||
 |`policies[].policy.cors.exposeHeaders`||
 |`policies[].policy.cors.maxAge`||
+|`policies[].policy.ipAccessControl`|Control access based on client IP address using allow/deny CIDR lists.|
+|`policies[].policy.ipAccessControl.allow`|CIDR ranges that are allowed. When non-empty, only IPs matching at least<br>one entry are permitted (after deny check).|
+|`policies[].policy.ipAccessControl.deny`|CIDR ranges that are denied. Deny rules are evaluated before allow rules.|
+|`policies[].policy.ipAccessControl.xffNumTrustedHops`|Number of trusted proxy hops. When set, the client IP is taken from the<br>X-Forwarded-For header, counting backwards from the rightmost entry.<br>For example, 1 means the last entry is the client IP (one trusted proxy).|
+|`policies[].policy.ipAccessControl.skipPrivateIps`|When true, private/loopback IPs (RFC 1918, RFC 4193, link-local) bypass<br>both allow and deny checks. Defaults to false.|
+|`policies[].policy.ipAccessControl.enforceFullChain`|When true, every IP in the X-Forwarded-For chain (plus the connection IP)<br>is checked against allow/deny rules. A deny match on any hop rejects the<br>request, and every non-private hop must satisfy the allow list.<br>When false, only the resolved client IP is checked.|
+|`policies[].policy.ipAccessControl.maxXffLength`|Maximum number of IPs allowed in the X-Forwarded-For chain. Requests<br>exceeding this limit are rejected with 403. Guards against forwarding<br>loops and header abuse. Defaults to 30 when unset.|
 |`policies[].policy.mcpAuthorization`|Authorization policies for MCP access.|
 |`policies[].policy.mcpAuthorization.rules`||
 |`policies[].policy.authorization`|Authorization policies for HTTP access.|
@@ -4664,6 +4685,13 @@
 |`llm.models[].matches[].headers[].value.(1)exact`||
 |`llm.models[].matches[].headers[].value.(1)regex`||
 |`llm.policies`|policies defines policies for handling incoming requests, before a model is selected|
+|`llm.policies.ipAccessControl`|Control access based on client IP address using allow/deny CIDR lists.|
+|`llm.policies.ipAccessControl.allow`|CIDR ranges that are allowed. When non-empty, only IPs matching at least<br>one entry are permitted (after deny check).|
+|`llm.policies.ipAccessControl.deny`|CIDR ranges that are denied. Deny rules are evaluated before allow rules.|
+|`llm.policies.ipAccessControl.xffNumTrustedHops`|Number of trusted proxy hops. When set, the client IP is taken from the<br>X-Forwarded-For header, counting backwards from the rightmost entry.<br>For example, 1 means the last entry is the client IP (one trusted proxy).|
+|`llm.policies.ipAccessControl.skipPrivateIps`|When true, private/loopback IPs (RFC 1918, RFC 4193, link-local) bypass<br>both allow and deny checks. Defaults to false.|
+|`llm.policies.ipAccessControl.enforceFullChain`|When true, every IP in the X-Forwarded-For chain (plus the connection IP)<br>is checked against allow/deny rules. A deny match on any hop rejects the<br>request, and every non-private hop must satisfy the allow list.<br>When false, only the resolved client IP is checked.|
+|`llm.policies.ipAccessControl.maxXffLength`|Maximum number of IPs allowed in the X-Forwarded-For chain. Requests<br>exceeding this limit are rejected with 403. Guards against forwarding<br>loops and header abuse. Defaults to 30 when unset.|
 |`llm.policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`llm.policies.jwtAuth.(any)(any)mode`||
 |`llm.policies.jwtAuth.(any)(any)providers`||
@@ -5014,6 +5042,13 @@
 |`mcp.policies.cors.allowOrigins`||
 |`mcp.policies.cors.exposeHeaders`||
 |`mcp.policies.cors.maxAge`||
+|`mcp.policies.ipAccessControl`|Control access based on client IP address using allow/deny CIDR lists.|
+|`mcp.policies.ipAccessControl.allow`|CIDR ranges that are allowed. When non-empty, only IPs matching at least<br>one entry are permitted (after deny check).|
+|`mcp.policies.ipAccessControl.deny`|CIDR ranges that are denied. Deny rules are evaluated before allow rules.|
+|`mcp.policies.ipAccessControl.xffNumTrustedHops`|Number of trusted proxy hops. When set, the client IP is taken from the<br>X-Forwarded-For header, counting backwards from the rightmost entry.<br>For example, 1 means the last entry is the client IP (one trusted proxy).|
+|`mcp.policies.ipAccessControl.skipPrivateIps`|When true, private/loopback IPs (RFC 1918, RFC 4193, link-local) bypass<br>both allow and deny checks. Defaults to false.|
+|`mcp.policies.ipAccessControl.enforceFullChain`|When true, every IP in the X-Forwarded-For chain (plus the connection IP)<br>is checked against allow/deny rules. A deny match on any hop rejects the<br>request, and every non-private hop must satisfy the allow list.<br>When false, only the resolved client IP is checked.|
+|`mcp.policies.ipAccessControl.maxXffLength`|Maximum number of IPs allowed in the X-Forwarded-For chain. Requests<br>exceeding this limit are rejected with 403. Guards against forwarding<br>loops and header abuse. Defaults to 30 when unset.|
 |`mcp.policies.mcpAuthorization`|Authorization policies for MCP access.|
 |`mcp.policies.mcpAuthorization.rules`||
 |`mcp.policies.authorization`|Authorization policies for HTTP access.|

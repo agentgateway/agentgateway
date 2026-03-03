@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Scenario: Running behind a load balancer. The real client IP is
+# in the X-Forwarded-For header. Set xffNumTrustedHops to the number
+# of trusted proxies between the client and agentgateway.
+#
+# Example: client -> CDN -> LB -> agentgateway
+# X-Forwarded-For: <client>, <CDN>, <LB>
+#
+# With xffNumTrustedHops: 2, agentgateway picks the IP at
+# position len(XFF) - 2, which is the client IP.
+#
+# If the XFF header is missing or unparseable, agentgateway falls
+# back to the direct TCP connection IP.
+#
+binds:
+- port: 3000
+  listeners:
+  - policies:
+      ipAccessControl:
+        allow:
+        - "203.0.113.0/24"
+        xffNumTrustedHops: 2
+    routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

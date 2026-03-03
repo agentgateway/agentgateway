@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Scenario: Multi-source policy merge. An operator defines
+# infrastructure-wide deny rules and private IP bypass at the
+# listener level, while each route adds its own allowlist.
+#
+# Because ipAccessControl policies merge across attachment levels:
+#   - Allow lists are unioned (IP in *any* allow list passes)
+#   - Deny lists are unioned (IP in *any* deny list is blocked)
+#   - Behavioral flags use the most-specific (listener) value
+#
+# In this example:
+#   Listener-level: deny embargoed ranges, skip private IPs
+#   Route "internal": allow corporate 10.0.0.0/8
+#   Route "partners": allow partner range 203.0.113.0/24
+#
+binds:
+- port: 3000
+  listeners:
+  - policies:
+      ipAccessControl:
+        deny:
+        - "198.51.100.0/24"
+        skipPrivateIps: true
+        maxXffLength: 20
+    routes:
+    - name: internal-tools
+      matches:
+      - path:
+          pathPrefix: /internal
+      policies:
+        ipAccessControl:
+          allow:
+          - "10.0.0.0/8"
+      backends:
+      - mcp:
+          targets:
+          - name: internal
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]
+    - name: partner-api
+      matches:
+      - path:
+          pathPrefix: /partners
+      policies:
+        ipAccessControl:
+          allow:
+          - "203.0.113.0/24"
+      backends:
+      - mcp:
+          targets:
+          - name: partners
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

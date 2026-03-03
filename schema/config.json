@@ -1037,6 +1037,18 @@
           ],
           "default": null
         },
+        "ipAccessControl": {
+          "description": "Control access based on client IP address using allow/deny CIDR lists.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IpAccessControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
           "anyOf": [
@@ -1586,6 +1598,53 @@
             "null"
           ],
           "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "IpAccessControl": {
+      "description": "IP access control policy supporting allow and deny lists with CIDR ranges.\n\nEvaluation order:\n1. If the IP matches any deny entry, reject (403).\n2. If an allow list is configured and the IP does not match, reject (403).\n3. Otherwise, allow.\n\nWhen `xff_num_trusted_hops` is set, the client IP is extracted from the\nX-Forwarded-For header (counting from the right) instead of the direct\nconnection IP.",
+      "type": "object",
+      "properties": {
+        "allow": {
+          "description": "CIDR ranges that are allowed. When non-empty, only IPs matching at least\none entry are permitted (after deny check).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "description": "CIDR ranges that are denied. Deny rules are evaluated before allow rules.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "xffNumTrustedHops": {
+          "description": "Number of trusted proxy hops. When set, the client IP is taken from the\nX-Forwarded-For header, counting backwards from the rightmost entry.\nFor example, 1 means the last entry is the client IP (one trusted proxy).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "skipPrivateIps": {
+          "description": "When true, private/loopback IPs (RFC 1918, RFC 4193, link-local) bypass\nboth allow and deny checks. Defaults to false.",
+          "type": "boolean"
+        },
+        "enforceFullChain": {
+          "description": "When true, every IP in the X-Forwarded-For chain (plus the connection IP)\nis checked against allow/deny rules. A deny match on any hop rejects the\nrequest, and every non-private hop must satisfy the allow list.\nWhen false, only the resolved client IP is checked.",
+          "type": "boolean"
+        },
+        "maxXffLength": {
+          "description": "Maximum number of IPs allowed in the X-Forwarded-For chain. Requests\nexceeding this limit are rejected with 403. Guards against forwarding\nloops and header abuse. Defaults to 30 when unset.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
         }
       },
       "additionalProperties": false
@@ -4671,6 +4730,18 @@
     "LocalGatewayPolicy": {
       "type": "object",
       "properties": {
+        "ipAccessControl": {
+          "description": "Control access based on client IP address using allow/deny CIDR lists.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IpAccessControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "jwtAuth": {
           "description": "Authenticate incoming JWT requests.",
           "anyOf": [
@@ -5555,6 +5626,18 @@
     "LocalLLMPolicy": {
       "type": "object",
       "properties": {
+        "ipAccessControl": {
+          "description": "Control access based on client IP address using allow/deny CIDR lists.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IpAccessControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "jwtAuth": {
           "description": "Authenticate incoming JWT requests.",
           "anyOf": [

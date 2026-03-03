@@ -202,6 +202,7 @@ pub struct RoutePolicies {
 
 #[derive(Debug, Default)]
 pub struct GatewayPolicies {
+	pub ip_access_control: Option<http::ipallowlist::IpAccessControl>,
 	pub ext_proc: Option<ext_proc::ExtProc>,
 	pub jwt: Option<http::jwt::Jwt>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
@@ -467,6 +468,9 @@ impl Store {
 				TrafficPolicy::CORS(p) => {
 					pol.cors.get_or_insert_with(|| p.clone());
 				},
+				TrafficPolicy::IpAccessControl(_) => {
+					// IP access control is handled at the gateway phase
+				},
 			}
 		}
 		if !authz.is_empty() {
@@ -487,9 +491,13 @@ impl Store {
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
 
+		let mut ip_access_controls = Vec::new();
 		let mut pol = GatewayPolicies::default();
 		for rule in rules {
 			match &rule {
+				TrafficPolicy::IpAccessControl(p) => {
+					ip_access_controls.push(p.clone());
+				},
 				TrafficPolicy::JwtAuth(p) => {
 					pol.jwt.get_or_insert_with(|| p.clone());
 				},
@@ -513,6 +521,7 @@ impl Store {
 				},
 			}
 		}
+		pol.ip_access_control = http::ipallowlist::IpAccessControl::merge(ip_access_controls);
 
 		pol
 	}
