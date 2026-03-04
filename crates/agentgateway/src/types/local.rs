@@ -33,6 +33,7 @@ use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Error, anyhow, bail};
 use bytes::Bytes;
+use frozen_collections::Len;
 use itertools::Itertools;
 use macro_rules_attribute::apply;
 use secrecy::SecretString;

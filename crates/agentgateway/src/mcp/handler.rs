@@ -134,13 +134,13 @@ impl Relay {
 							)
 						})
 						// Rename to handle multiplexing
-						.map(|t| Tool {
-							name: Cow::Owned(resource_name(
+						.map(|mut t| {
+							t.name = Cow::Owned(resource_name(
 								default_target_name.as_ref(),
 								server_name.as_str(),
 								&t.name,
-							)),
-							..t
+							));
+							t
 						})
 						.collect_vec()
 				})
@@ -202,9 +202,10 @@ impl Relay {
 								&cel,
 							)
 						})
-						.map(|p| Prompt {
-							name: resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name),
-							..p
+						.map(|mut p| {
+							p.name =
+								resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name);
+							p
 						})
 						.collect_vec()
 				})
@@ -377,38 +378,22 @@ impl Relay {
 	}
 	fn get_info(pv: ProtocolVersion, multiplexing: bool) -> ServerInfo {
 		let capabilities = if multiplexing {
-			ServerCapabilities {
-				completions: None,
-				experimental: None,
-				logging: None,
-				tasks: None,
-				extensions: None,
-				tools: Some(ToolsCapability::default()),
-				// These are not supported when multiplexing.
-				prompts: None,
-				resources: None,
-			}
+			// These are not supported when multiplexing.
+			ServerCapabilities::builder().enable_tools().build()
 		} else {
-			ServerCapabilities {
-				completions: None,
-				experimental: None,
-				logging: None,
-				tasks: None,
-				extensions: None,
-				tools: Some(ToolsCapability::default()),
-				prompts: Some(PromptsCapability::default()),
-				resources: Some(ResourcesCapability::default()),
-			}
+			ServerCapabilities::builder()
+				.enable_tools()
+				.enable_prompts()
+				.enable_resources()
+				.build()
 		};
 		let instructions = Some(
             "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
         );
-		ServerInfo {
-			protocol_version: pv,
-			capabilities,
-			server_info: Implementation::from_build_env(),
-			instructions,
-		}
+		ServerInfo::new(capabilities)
+			.with_protocol_version(pv)
+			.with_server_info(Implementation::from_build_env())
+			.with_instructions(instructions.unwrap_or_default())
 	}
 }
 
