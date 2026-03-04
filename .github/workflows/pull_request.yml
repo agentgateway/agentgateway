@@ -21,6 +21,8 @@ env:
 jobs:
   #### Proxy jobs ####
   proxy-test:
+    permissions:
+      contents: read
     strategy:
       matrix:
         include:
@@ -52,6 +54,8 @@ jobs:
       run: make validate
 
   proxy-lint:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
@@ -72,6 +76,8 @@ jobs:
 
   #### UI jobs ####
   ui-lint:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -88,6 +94,8 @@ jobs:
 
   #### Controller jobs ####
   controller-test:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
@@ -101,6 +109,8 @@ jobs:
       run: go test -race ./...
 
   controller-lint:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
@@ -121,6 +131,8 @@ jobs:
       run: make generate-apis check-clean-repo
 
   controller-e2e:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
@@ -167,6 +179,8 @@ jobs:
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
 
   controller-conformance:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
