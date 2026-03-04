@@ -355,7 +355,9 @@ mod response {
 	const COMPLETIONS_TO_COMPLETIONS: &str = "completions-completions";
 	const MESSAGES_TO_MESSAGES: &str = "messages-messages";
 	const MESSAGES_TO_COMPLETIONS: &str = "messages-completions";
+	const MESSAGES_TO_DETECT: &str = "messages-detect";
 	const COMPLETIONS_TO_MESSAGES: &str = "completions-messages";
+	const COMPLETIONS_TO_DETECT: &str = "completions-detect";
 	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
@@ -369,7 +371,7 @@ mod response {
 	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
 	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK)];
 
-	const ALL_ANTHROPIC: &[&str] = &[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS];
+	const ALL_ANTHROPIC: &[&str] = &[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS, MESSAGES_TO_DETECT];
 	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_ANTHROPIC),
 		("tool", ALL_ANTHROPIC),
@@ -380,15 +382,14 @@ mod response {
 		("stream_thinking", ALL_ANTHROPIC),
 	];
 
+	const ALL_COMPLETIONS: &[&str] = &[
+		COMPLETIONS_TO_COMPLETIONS,
+		COMPLETIONS_TO_MESSAGES,
+		COMPLETIONS_TO_DETECT,
+	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
-		(
-			"basic",
-			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
-		),
-		(
-			"openrouter_reasoning",
-			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
-		),
+		("basic", ALL_COMPLETIONS),
+		("openrouter_reasoning", ALL_COMPLETIONS),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[(
 		"stream",
@@ -518,6 +519,14 @@ mod response {
 			BEDROCK_TO_MESSAGES => (bedrock_provider, dummy_llm_req(InputFormat::Messages)),
 			BEDROCK_TO_COMPLETIONS => (bedrock_provider, dummy_llm_req(InputFormat::Completions)),
 			BEDROCK_TO_RESPONSES => (bedrock_provider, dummy_llm_req(InputFormat::Responses)),
+			COMPLETIONS_TO_DETECT => (
+				AIProvider::OpenAI(openai::Provider { model: None }),
+				dummy_llm_req(InputFormat::Detect),
+			),
+			MESSAGES_TO_DETECT => (
+				AIProvider::Anthropic(anthropic::Provider { model: None }),
+				dummy_llm_req(InputFormat::Detect),
+			),
 			// No other ones are supported.
 			// We do not have Responses<-->Completions
 			other => panic!("unsupported provider for responses: {other}"),
