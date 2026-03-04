@@ -127,48 +127,47 @@ func TranslateAgentgatewayPolicy(
 	pctx := PolicyCtx{Krt: ctx, Collections: agw}
 
 	var policyTargets []ResolvedTarget
-	// TODO: add selectors
-	for _, target := range policy.Spec.TargetRefs {
-		var policyTarget *api.PolicyTarget
-
-		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
-		switch gk {
-		case wellknown.GatewayGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.GatewayTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-		case wellknown.HTTPRouteGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.RouteTarget(policy.Namespace, string(target.Name), wellknown.HTTPRouteGVK.Kind, target.SectionName),
-			}
-		case wellknown.GRPCRouteGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.RouteTarget(policy.Namespace, string(target.Name), wellknown.GRPCRouteGVK.Kind, target.SectionName),
-			}
-		case wellknown.AgentgatewayBackendGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.BackendTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-		case wellknown.ServiceGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.ServiceTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-			// TODO: add support for inferencepool https://github.com/kgateway-dev/kgateway/issues/13295
-			// TODO: add support for ListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
-
-		default:
+	seenTargets := map[string]struct{}{}
+	appendPolicyTarget := func(targetGK schema.GroupKind, targetName gwv1.ObjectName, sectionName *gwv1.SectionName) {
+		policyTarget := buildPolicyTarget(policy.Namespace, targetGK, targetName, sectionName)
+		if policyTarget == nil {
 			// TODO(npolshak): support attaching policies to k8s services, serviceentries, and other backends
-			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
-			continue
+			logger.Warn("unsupported target kind", "kind", targetGK.Kind, "policy", policy.Name)
+			return
 		}
 
-		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, agw)
+		targetKey := targetGK.String() + "/" + string(targetName)
+		if sectionName != nil {
+			targetKey += "/" + string(*sectionName)
+		}
+		if _, found := seenTargets[targetKey]; found {
+			return
+		}
+		seenTargets[targetKey] = struct{}{}
 
+		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, targetGK, targetName, agw)
 		policyTargets = append(policyTargets, ResolvedTarget{
 			AgentgatewayTarget: policyTarget,
 			AncestorRefs:       ancestorRefs,
 			AttachmentError:    attachmentErr,
 		})
+	}
+
+	for _, target := range policy.Spec.TargetRefs {
+		targetGK := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
+		appendPolicyTarget(targetGK, target.Name, target.SectionName)
+	}
+	for _, selector := range policy.Spec.TargetSelectors {
+		targetGK := schema.GroupKind{Group: string(selector.Group), Kind: string(selector.Kind)}
+		targetNames, ok := resolveSelectorTargetNames(ctx, policy.Namespace, selector, agw)
+		if !ok {
+			// TODO(npolshak): support attaching policies to k8s services, serviceentries, and other backends
+			logger.Warn("unsupported target kind", "kind", selector.Kind, "policy", policy.Name)
+			continue
+		}
+		for _, targetName := range targetNames {
+			appendPolicyTarget(targetGK, targetName, selector.SectionName)
+		}
 	}
 
 	var ancestors []gwv1.PolicyAncestorStatus
@@ -298,6 +297,103 @@ func TranslateAgentgatewayPolicy(
 	})
 
 	return &status, agwPolicies
+}
+
+func buildPolicyTarget(
+	policyNamespace string,
+	targetGK schema.GroupKind,
+	targetName gwv1.ObjectName,
+	sectionName *gwv1.SectionName,
+) *api.PolicyTarget {
+	switch targetGK {
+	case wellknown.GatewayGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.GatewayTarget(policyNamespace, string(targetName), sectionName),
+		}
+	case wellknown.HTTPRouteGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.RouteTarget(policyNamespace, string(targetName), wellknown.HTTPRouteGVK.Kind, sectionName),
+		}
+	case wellknown.GRPCRouteGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.RouteTarget(policyNamespace, string(targetName), wellknown.GRPCRouteGVK.Kind, sectionName),
+		}
+	case wellknown.AgentgatewayBackendGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.BackendTarget(policyNamespace, string(targetName), sectionName),
+		}
+	case wellknown.ServiceGVK.GroupKind():
+		return &api.PolicyTarget{
+			Kind: utils.ServiceTarget(policyNamespace, string(targetName), sectionName),
+		}
+		// TODO: add support for inferencepool https://github.com/kgateway-dev/kgateway/issues/13295
+		// TODO: add support for ListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
+	default:
+		return nil
+	}
+}
+
+func resolveSelectorTargetNames(
+	ctx krt.HandlerContext,
+	policyNamespace string,
+	selector shared.LocalPolicyTargetSelectorWithSectionName,
+	agw *AgwCollections,
+) ([]gwv1.ObjectName, bool) {
+	targetGK := schema.GroupKind{Group: string(selector.Group), Kind: string(selector.Kind)}
+
+	names := make([]gwv1.ObjectName, 0)
+	seen := make(map[gwv1.ObjectName]struct{})
+	addName := func(name string) {
+		tn := gwv1.ObjectName(name)
+		if _, found := seen[tn]; found {
+			return
+		}
+		seen[tn] = struct{}{}
+		names = append(names, tn)
+	}
+
+	switch targetGK {
+	case wellknown.GatewayGVK.GroupKind():
+		for _, gw := range krt.Fetch(ctx, agw.Gateways, krt.FilterLabel(selector.MatchLabels)) {
+			if gw.Namespace == policyNamespace {
+				addName(string(gw.Name))
+			}
+		}
+	case wellknown.HTTPRouteGVK.GroupKind():
+		for _, route := range krt.Fetch(ctx, agw.HTTPRoutes, krt.FilterLabel(selector.MatchLabels)) {
+			if route.Namespace == policyNamespace {
+				addName(string(route.Name))
+			}
+		}
+	case wellknown.GRPCRouteGVK.GroupKind():
+		for _, route := range krt.Fetch(ctx, agw.GRPCRoutes, krt.FilterLabel(selector.MatchLabels)) {
+			if route.Namespace == policyNamespace {
+				addName(string(route.Name))
+			}
+		}
+	case wellknown.AgentgatewayBackendGVK.GroupKind():
+		for _, backend := range krt.Fetch(ctx, agw.Backends, krt.FilterLabel(selector.MatchLabels)) {
+			if backend.Namespace == policyNamespace {
+				addName(string(backend.Name))
+			}
+		}
+	case wellknown.ServiceGVK.GroupKind():
+		for _, svc := range krt.Fetch(
+			ctx,
+			agw.Services,
+			krt.FilterLabel(selector.MatchLabels),
+			krt.FilterIndex(agw.ServicesByNamespace, policyNamespace),
+		) {
+			addName(svc.Name)
+		}
+	default:
+		return nil, false
+	}
+
+	slices.SortStableFunc(names, func(a, b gwv1.ObjectName) int {
+		return strings.Compare(string(a), string(b))
+	})
+	return names, true
 }
 
 func resolvePolicyAncestorRefs(
