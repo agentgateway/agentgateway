@@ -27,6 +27,26 @@ pub fn json_passthrough<F: DeserializeOwned>(
 	})
 }
 
+pub fn permissive_json_passthrough<F: DeserializeOwned>(
+	b: http::Body,
+	buffer_limit: usize,
+	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
+) -> http::Body {
+	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
+
+	crate::parse::passthrough::full_passthrough_parser(b, decoder, move |o| {
+		let Some(data) = unwrap_sse_data(o) else {
+			return;
+		};
+		if data.as_ref() == b"[DONE]" {
+			f(None);
+			return;
+		}
+		let obj = serde_json::from_slice::<F>(&data);
+		f(Some(obj.map_err(anyhow::Error::from)))
+	})
+}
+
 pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	b: http::Body,
 	buffer_limit: usize,

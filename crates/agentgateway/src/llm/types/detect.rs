@@ -246,7 +246,7 @@ pub fn passthrough_stream(
 ) -> crate::http::Response {
 	let buffer_limit = crate::http::response_buffer_limit(&resp);
 	resp.map(|b| {
-		parse::sse::json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
+		parse::sse::permissive_json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
 			Some(Ok(f)) => {
 				tracing::error!("howardjohn: parsed {f:?}");
 			},

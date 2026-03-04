@@ -1,0 +1,9 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/detect/non-json
+info: "{\n  this isn't json!\n}"
+---
+{
+  "response": "{\n  this isn't json!\n}",
+  "parsed": {}
+}
