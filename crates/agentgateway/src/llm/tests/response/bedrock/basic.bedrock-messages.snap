@@ -20,7 +20,7 @@ info:
     "id": "[id]",
     "type": "message",
     "role": "assistant",
-    "model": "",
+    "model": "input-model",
     "stop_reason": "end_turn",
     "stop_sequence": null,
     "usage": {
@@ -38,6 +38,6 @@ info:
     "input_tokens": 18,
     "output_tokens": 46,
     "total_tokens": 64,
-    "provider_model": ""
+    "provider_model": "input-model"
   }
 }

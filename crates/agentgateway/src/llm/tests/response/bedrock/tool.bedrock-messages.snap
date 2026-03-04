@@ -23,7 +23,7 @@ info:
     "id": "[id]",
     "type": "message",
     "role": "assistant",
-    "model": "",
+    "model": "input-model",
     "stop_reason": "tool_use",
     "stop_sequence": null,
     "usage": {
@@ -53,6 +53,6 @@ info:
     "input_tokens": 0,
     "output_tokens": 0,
     "total_tokens": 0,
-    "provider_model": ""
+    "provider_model": "input-model"
   }
 }

@@ -140,8 +140,6 @@ const BEDROCK: &str = "bedrock";
 const VERTEX: &str = "vertex";
 const OPENAI: &str = "openai";
 const COMPLETIONS: &str = "completions";
-const MESSAGES: &str = "messages";
-const RESPONSES: &str = "responses";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 
@@ -488,7 +486,7 @@ mod response {
 		LLMRequest {
 			input_tokens: None,
 			input_format,
-			request_model: Default::default(),
+			request_model: "input-model".into(),
 			provider: Default::default(),
 			streaming: false,
 			params: Default::default(),

@@ -40,9 +40,9 @@ info:
         "status": "completed"
       }
     ],
-    "model": ""
+    "model": "input-model"
   },
   "parsed": {
-    "provider_model": ""
+    "provider_model": "input-model"
   }
 }

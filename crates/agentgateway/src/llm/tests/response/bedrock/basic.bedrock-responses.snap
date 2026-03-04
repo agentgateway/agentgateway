@@ -35,7 +35,7 @@ info:
         "status": "completed"
       }
     ],
-    "model": "",
+    "model": "input-model",
     "usage": {
       "input_tokens": 18,
       "output_tokens": 46,
@@ -53,6 +53,6 @@ info:
     "total_tokens": 64,
     "reasoning_tokens": 0,
     "cached_input_tokens": 0,
-    "provider_model": ""
+    "provider_model": "input-model"
   }
 }

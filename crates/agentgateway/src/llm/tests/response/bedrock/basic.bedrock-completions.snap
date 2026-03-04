@@ -17,7 +17,7 @@ info:
 ---
 {
   "response": {
-    "model": "",
+    "model": "input-model",
     "usage": {
       "prompt_tokens": 18,
       "completion_tokens": 46,
@@ -41,6 +41,6 @@ info:
     "input_tokens": 18,
     "output_tokens": 46,
     "total_tokens": 64,
-    "provider_model": ""
+    "provider_model": "input-model"
   }
 }

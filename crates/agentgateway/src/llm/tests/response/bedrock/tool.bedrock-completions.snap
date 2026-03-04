@@ -20,7 +20,7 @@ info:
 ---
 {
   "response": {
-    "model": "",
+    "model": "input-model",
     "usage": {
       "prompt_tokens": 0,
       "completion_tokens": 0,
@@ -61,6 +61,6 @@ info:
     "input_tokens": 0,
     "output_tokens": 0,
     "total_tokens": 0,
-    "provider_model": ""
+    "provider_model": "input-model"
   }
 }
