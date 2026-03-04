@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use frozen_collections::traits::Len;
+use frozen_collections::Len;
 use frozen_collections::FzHashSet;
 use serde::{Deserialize, Serialize};
 

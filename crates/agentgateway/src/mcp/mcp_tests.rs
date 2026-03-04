@@ -87,12 +87,14 @@ async fn stream_to_multiplex() {
 	);
 
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "mcp_echo".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("mcp_echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.unwrap();
 	assert_eq!(
@@ -101,12 +103,14 @@ async fn stream_to_multiplex() {
 	);
 
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "sse_echo".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("sse_echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.unwrap();
 	assert_eq!(
@@ -117,12 +121,14 @@ async fn stream_to_multiplex() {
 	// No target set...
 	assert!(
 		client
-			.call_tool(rmcp::model::CallToolRequestParams {
-				meta: None,
-				task: None,
-				name: "echo".into(),
-				arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-			})
+			.call_tool(
+				rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+					serde_json::json!({"hi": "world"})
+						.as_object()
+						.cloned()
+						.unwrap(),
+				),
+			)
 			.await
 			.is_err()
 	);
@@ -158,12 +164,14 @@ async fn stream_to_stream_single_tls() {
 	.await;
 	let client = mcp_streamable_client(io).await;
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "echo_http".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo_http").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.unwrap();
 	assert_eq!(
@@ -197,12 +205,14 @@ async fn authorization_denied_returns_unknown_tool_error() {
 
 	// Attempt to call a tool - should fail with "Unknown tool" error
 	let result = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "echo".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await;
 
 	// The call should fail
@@ -214,22 +224,23 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	let err = result.unwrap_err();
 
 	// Verify error code is INVALID_PARAMS (-32602) and message format
-	match &err {
-		rmcp::ServiceError::McpError(mcp_error) => {
-			assert_eq!(
-				mcp_error.code.0, -32602,
-				"Expected INVALID_PARAMS error code (-32602), got: {}",
-				mcp_error.code.0
-			);
-			assert_eq!(
-				mcp_error.message.as_ref(),
-				"Unknown tool: echo",
-				"Expected error message 'Unknown tool: echo', got: {}",
-				mcp_error.message
-			);
-		},
+	let mcp_error = match &err {
+		rmcp::ServiceError::McpError(mcp_error) => mcp_error,
+		// rmcp::ServiceError::TransportSend(d) => d.downcast::(),
 		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
-	}
+	};
+
+	assert_eq!(
+		mcp_error.code.0, -32602,
+		"Expected INVALID_PARAMS error code (-32602), got: {}",
+		mcp_error.code.0
+	);
+	assert_eq!(
+		mcp_error.message.as_ref(),
+		"Unknown tool: echo",
+		"Expected error message 'Unknown tool: echo', got: {}",
+		mcp_error.message
+	);
 }
 
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
@@ -256,11 +267,7 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 
 	// Attempt to get a prompt - should fail with "Unknown prompt" error
 	let result = client
-		.get_prompt(rmcp::model::GetPromptRequestParams {
-			meta: None,
-			name: "example_prompt".into(),
-			arguments: None,
-		})
+		.get_prompt(rmcp::model::GetPromptRequestParams::new("example_prompt"))
 		.await;
 
 	// The call should fail
@@ -314,10 +321,9 @@ async fn authorization_denied_returns_unknown_resource_error() {
 
 	// Attempt to read a resource - should fail with "Unknown resource" error
 	let result = client
-		.read_resource(rmcp::model::ReadResourceRequestParams {
-			meta: None,
-			uri: "memo://insights".into(),
-		})
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"memo://insights",
+		))
 		.await;
 
 	// The call should fail
@@ -449,19 +455,10 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{addr}/mcp"))
 			.custom_headers(headers);
 		let transport = StreamableHttpClientTransport::from_config(config);
-		let client_info = ClientInfo {
-			meta: None,
-			protocol_version: Default::default(),
-			capabilities: ClientCapabilities::default(),
-			client_info: Implementation {
-				name: format!("test-{agent_name}"),
-				version: "0.0.1".to_string(),
-				title: None,
-				website_url: None,
-				icons: None,
-				description: None,
-			},
-		};
+		let client_info = ClientInfo::new(
+			ClientCapabilities::default(),
+			Implementation::new(format!("test-{agent_name}"), "0.0.1"),
+		);
 		client_info
 			.serve(transport)
 			.await
@@ -526,12 +523,14 @@ async fn standard_assertions(client: RunningService<RoleClient, InitializeReques
 		.collect_vec();
 	assert_eq!(t, vec!["decrement".to_string(), "echo".to_string()]);
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "echo".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.unwrap();
 	assert_eq!(
@@ -593,19 +592,10 @@ pub async fn mcp_streamable_client(
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
-	let client_info = ClientInfo {
-		meta: None,
-		protocol_version: Default::default(),
-		capabilities: ClientCapabilities::default(),
-		client_info: Implementation {
-			name: "test client".to_string(),
-			version: "0.0.1".to_string(),
-			title: None,
-			website_url: None,
-			icons: None,
-			description: None,
-		},
-	};
+	let client_info = ClientInfo::new(
+		ClientCapabilities::default(),
+		Implementation::new("test client".to_string(), "0.0.1".to_string()),
+	);
 
 	client_info
 		.serve(transport)
@@ -661,6 +651,7 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 			sse_retry: None,
 			sse_keep_alive: None,
 			stateful_mode: stateful,
+			json_response: false,
 			cancellation_token: Default::default(),
 		},
 	);
@@ -842,10 +833,10 @@ mod mockserver {
 				"This is an example prompt with your message here: '{}'",
 				args.message
 			);
-			Ok(vec![PromptMessage {
-				role: PromptMessageRole::User,
-				content: PromptMessageContent::text(prompt),
-			}])
+			Ok(vec![PromptMessage::new(
+				PromptMessageRole::User,
+				PromptMessageContent::text(prompt),
+			)])
 		}
 
 		/// Analyze the current counter value and suggest next steps
@@ -873,13 +864,10 @@ mod mockserver {
 				),
 			];
 
-			Ok(GetPromptResult {
-				description: Some(format!(
-					"Counter analysis for reaching {} from {}",
-					args.goal, current_value
-				)),
-				messages,
-			})
+			Ok(GetPromptResult::new(messages).with_description(format!(
+				"Counter analysis for reaching {} from {}",
+				args.goal, current_value
+			)))
 		}
 	}
 
@@ -887,16 +875,15 @@ mod mockserver {
 	#[prompt_handler]
 	impl ServerHandler for Counter {
 		fn get_info(&self) -> ServerInfo {
-			ServerInfo {
-				protocol_version: ProtocolVersion::V_2025_06_18,
-				capabilities: ServerCapabilities::builder()
+			ServerInfo::new(
+				ServerCapabilities::builder()
 					.enable_prompts()
 					.enable_resources()
 					.enable_tools()
 					.build(),
-				server_info: Implementation::from_build_env(),
-				instructions: Some("This server provides counter tools and prompts.".to_string()),
-			}
+			)
+			.with_protocol_version(ProtocolVersion::V_2025_06_18)
+			.with_instructions("This server provides counter tools and prompts.")
 		}
 
 		async fn list_resources(
@@ -922,15 +909,15 @@ mod mockserver {
 			match uri.as_str() {
 				"str:////Users/to/some/path/" => {
 					let cwd = "/Users/to/some/path/";
-					Ok(ReadResourceResult {
-						contents: vec![ResourceContents::text(cwd, uri)],
-					})
+					Ok(ReadResourceResult::new(vec![ResourceContents::text(
+						cwd, uri,
+					)]))
 				},
 				"memo://insights" => {
 					let memo = "Business Intelligence Memo\n\nAnalysis has revealed 5 key insights ...";
-					Ok(ReadResourceResult {
-						contents: vec![ResourceContents::text(memo, uri)],
-					})
+					Ok(ReadResourceResult::new(vec![ResourceContents::text(
+						memo, uri,
+					)]))
 				},
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",

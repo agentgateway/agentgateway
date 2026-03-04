@@ -8,7 +8,7 @@ use futures_util::TryStreamExt;
 use http_body_util::BodyExt;
 use tracing::{debug, error, warn};
 use azure_core::http::{AsyncRawResponse, Sanitizer};
-
+use typespec_client_core::http::DEFAULT_ALLOWED_QUERY_PARAMETERS;
 use crate::client::{ApplicationTransport, Call, Client};
 use crate::types::agent::Target;
 
@@ -47,7 +47,7 @@ impl azure_core::http::HttpClient for Client {
 
 		debug!(
 			"performing request {method} '{}' with `agentgateway::client::Client`",
-			url.sanitize(&azure_core::http::DEFAULT_ALLOWED_QUERY_PARAMETERS)
+			url.sanitize(&DEFAULT_ALLOWED_QUERY_PARAMETERS)
 		);
 		let rsp = self
 			.call(Call {

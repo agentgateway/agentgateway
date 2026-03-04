@@ -12,7 +12,7 @@ use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{OptionExt, ValueBag, debug, display};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
-use frozen_collections::traits::{Len, MapIteration, MapQuery, SetQuery};
+use frozen_collections::{Len, MapIteration, MapQuery, SetQuery};
 use frozen_collections::FzHashSet;
 use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
