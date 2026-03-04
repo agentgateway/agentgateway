@@ -25,3 +25,11 @@ data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":
 
 event: message_stop
 data: {"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 142,
+  "total_tokens": 157
+}

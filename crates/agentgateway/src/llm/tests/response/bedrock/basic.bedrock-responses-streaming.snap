@@ -22,3 +22,11 @@ data: {"type":"response.output_item.done","sequence_number":6,"output_index":0,"
 
 event: event
 data: {"type":"response.completed","sequence_number":7,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[],"status":"completed","usage":{"input_tokens":15,"input_tokens_details":{"cached_tokens":0},"output_tokens":142,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":157}}}
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 142,
+  "total_tokens": 157
+}

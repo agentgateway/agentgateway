@@ -52,3 +52,14 @@ data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":
 
 event: message_stop
 data: {"type":"message_stop"          }
+
+
+
+{
+  "input_tokens": 47,
+  "output_tokens": 264,
+  "total_tokens": 311,
+  "cache_creation_input_tokens": 0,
+  "cached_input_tokens": 0,
+  "provider_model": "claude-opus-4-6"
+}

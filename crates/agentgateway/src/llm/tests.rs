@@ -75,6 +75,7 @@ async fn test_streaming(
 		&fs::read(&input_path).unwrap_or_else(|_| panic!("{relative_path}: Failed to read input file"));
 	let body = Body::from(input_bytes.clone());
 	let log = AsyncLog::default();
+	let log2 = log.clone();
 	let mut resp = Response::new(body);
 	resp.headers_mut().insert(
 		crate::http::x_headers::X_AMZN_REQUESTID,
@@ -82,7 +83,9 @@ async fn test_streaming(
 	);
 	let resp = xlate(resp, log).await.expect("failed to translate stream");
 	let resp_bytes = resp.collect().await.unwrap().to_bytes();
-	let resp_str = std::str::from_utf8(&resp_bytes).unwrap();
+	let llm_response = log2.take().unwrap().response;
+	let llm_resp_str = serde_json::to_string_pretty(&llm_response).unwrap();
+	let resp_str = String::from_utf8(resp_bytes.to_vec()).unwrap() + "\n\n" + llm_resp_str.as_str();
 	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 	let snapshot_name = snapshot_name + "-streaming";
 
@@ -353,6 +356,7 @@ mod response {
 	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
+	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 
 	const ALL_BEDROCK: &[&str] = &[
 		BEDROCK_TO_MESSAGES,
@@ -383,12 +387,33 @@ mod response {
 			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
 		),
 	];
+	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
+		(
+			"stream",
+			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
+		),
+	];
+
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
 		("response/bedrock-cohere/embeddings.json", &[BEDROCK_COHERE]),
 		("response/vertex/embeddings.json", &[VERTEX]),
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
+
+
+	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
+		(
+			"basic",
+			&[RESPONSES_TO_RESPONSES],
+		),
+	];
+	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
+		(
+			"stream",
+			&[RESPONSES_TO_RESPONSES],
+		),
+	];
 
 	#[tokio::test]
 	async fn from_bedrock() {
@@ -431,6 +456,30 @@ mod response {
 				test_response_for_provider(provider, test)
 			}
 		}
+
+		for (name, providers) in COMPLETIONS_STREAM_RESPONSES {
+			let test = &format!("response/completions/{name}.json");
+			for provider in *providers {
+				test_streaming_response_for_provider(provider, test).await
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn from_responses() {
+		for (name, providers) in RESPONSES_RESPONSES {
+			let test = &format!("response/responses/{name}.json");
+			for provider in *providers {
+				test_response_for_provider(provider, test)
+			}
+		}
+
+		for (name, providers) in RESPONSES_STREAM_RESPONSES {
+			let test = &format!("response/responses/{name}.json");
+			for provider in *providers {
+				test_streaming_response_for_provider(provider, test).await
+			}
+		}
 	}
 
 	fn test_response_for_provider(provider: &str, test: &str) {
@@ -456,6 +505,10 @@ mod response {
 			guardrail_version: None,
 		});
 		let (p, r) = match provider {
+			RESPONSES_TO_RESPONSES => (
+				AIProvider::OpenAI(openai::Provider { model: None }),
+				dummy_llm_req(InputFormat::Responses),
+			),
 			COMPLETIONS_TO_COMPLETIONS => (
 				AIProvider::OpenAI(openai::Provider { model: None }),
 				dummy_llm_req(InputFormat::Completions),
@@ -482,7 +535,7 @@ mod response {
 		(p, r)
 	}
 
-	fn dummy_llm_req(input_format: InputFormat) -> LLMRequest {
+	pub fn dummy_llm_req(input_format: InputFormat) -> LLMRequest {
 		LLMRequest {
 			input_tokens: None,
 			input_format,

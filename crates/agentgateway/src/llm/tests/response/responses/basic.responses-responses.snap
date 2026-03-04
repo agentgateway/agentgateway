@@ -1,0 +1,142 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/responses/basic.json
+info:
+  id: resp_0fd43e1b46691ead0069a89a2144808199a06ce29faf5798da
+  object: response
+  created_at: 1772657185
+  status: completed
+  background: false
+  billing:
+    payer: developer
+  completed_at: 1772657185
+  error: ~
+  frequency_penalty: 0
+  incomplete_details: ~
+  instructions: ~
+  max_output_tokens: 1024
+  max_tool_calls: ~
+  model: gpt-4o-2024-08-06
+  output:
+    - id: msg_0fd43e1b46691ead0069a89a21ea1c8199ae1962065e1d3995
+      type: message
+      status: completed
+      content:
+        - type: output_text
+          annotations: []
+          logprobs: []
+          text: Hello! How can I assist you today?
+      role: assistant
+  parallel_tool_calls: true
+  presence_penalty: 0
+  previous_response_id: ~
+  prompt_cache_key: ~
+  prompt_cache_retention: ~
+  reasoning:
+    effort: ~
+    summary: ~
+  safety_identifier: ~
+  service_tier: default
+  store: true
+  temperature: 1
+  text:
+    format:
+      type: text
+    verbosity: medium
+  tool_choice: auto
+  tools: []
+  top_logprobs: 0
+  top_p: 1
+  truncation: disabled
+  usage:
+    input_tokens: 10
+    input_tokens_details:
+      cached_tokens: 0
+    output_tokens: 10
+    output_tokens_details:
+      reasoning_tokens: 0
+    total_tokens: 20
+  user: ~
+  metadata: {}
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": [],
+            "text": "Hello! How can I assist you today?"
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "completed"
+      }
+    ],
+    "model": "gpt-4o-2024-08-06",
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 10,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 20
+    },
+    "object": "response",
+    "created_at": 1772657185,
+    "background": false,
+    "billing": {
+      "payer": "developer"
+    },
+    "completed_at": 1772657185,
+    "error": null,
+    "frequency_penalty": 0.0,
+    "incomplete_details": null,
+    "instructions": null,
+    "max_output_tokens": 1024,
+    "max_tool_calls": null,
+    "parallel_tool_calls": true,
+    "presence_penalty": 0.0,
+    "previous_response_id": null,
+    "prompt_cache_key": null,
+    "prompt_cache_retention": null,
+    "reasoning": {
+      "effort": null,
+      "summary": null
+    },
+    "safety_identifier": null,
+    "service_tier": "default",
+    "store": true,
+    "temperature": 1.0,
+    "text": {
+      "format": {
+        "type": "text"
+      },
+      "verbosity": "medium"
+    },
+    "tool_choice": "auto",
+    "tools": [],
+    "top_logprobs": 0,
+    "top_p": 1.0,
+    "truncation": "disabled",
+    "user": null,
+    "metadata": {}
+  },
+  "parsed": {
+    "input_tokens": 10,
+    "output_tokens": 10,
+    "total_tokens": 20,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "gpt-4o-2024-08-06"
+  }
+}

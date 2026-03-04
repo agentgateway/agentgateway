@@ -19,3 +19,11 @@ data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null},"finish_
 
 event: 
 data: {"id":"request_id","choices":[],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":15,"completion_tokens":142,"total_tokens":157}}
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 142,
+  "total_tokens": 157
+}
