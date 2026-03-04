@@ -55,4 +55,10 @@ data: {"type":"message_stop"          }
 
 
 
-{}
+{
+  "input_tokens": 47,
+  "output_tokens": 264,
+  "total_tokens": 311,
+  "cache_creation_input_tokens": 0,
+  "cached_input_tokens": 0
+}

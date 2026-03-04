@@ -182,4 +182,11 @@ data: [DONE]
 
 
 
-{}
+{
+  "input_tokens": 18,
+  "output_tokens": 286,
+  "total_tokens": 304,
+  "reasoning_tokens": 192,
+  "cached_input_tokens": 0,
+  "provider_model": "gpt-5-nano-2025-08-07"
+}
