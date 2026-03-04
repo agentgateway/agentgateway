@@ -2324,6 +2324,10 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.cacheTools`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptCaching.minTokens`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.routes`||
+|`binds[].listeners[].routes[].backends[].(1)aws`||
+|`binds[].listeners[].routes[].backends[].(1)aws.(1)agentCore`||
+|`binds[].listeners[].routes[].backends[].(1)aws.(1)agentCore.agentRuntimeArn`||
+|`binds[].listeners[].routes[].backends[].(1)aws.(1)agentCore.qualifier`||
 |`binds[].listeners[].routes[].backends[].weight`||
 |`binds[].listeners[].routes[].backends[].policies`||
 |`binds[].listeners[].routes[].backends[].policies.requestHeaderModifier`|Headers to be modified in the request.|

@@ -914,6 +914,8 @@ pub enum Backend {
 	MCP(ResourceName, McpBackend),
 	#[serde(rename = "ai", serialize_with = "serialize_backend_tuple")]
 	AI(ResourceName, crate::llm::AIBackend),
+	#[serde(rename = "aws", serialize_with = "serialize_backend_tuple")]
+	Aws(ResourceName, crate::aws::AwsBackendConfig),
 	#[serde(serialize_with = "serialize_backend_tuple")]
 	Dynamic(ResourceName, ()),
 	Invalid,
@@ -1092,6 +1094,7 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
+			| Backend::Aws(name, _)
 			| Backend::Dynamic(name, _) => BackendTarget::Backend {
 				name: name.name.clone(),
 				namespace: name.namespace.clone(),
@@ -1111,6 +1114,7 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
+			| Backend::Aws(name, _)
 			| Backend::Dynamic(name, _) => BackendTargetRef::Backend {
 				name: name.name.as_ref(),
 				namespace: name.namespace.as_ref(),
@@ -1126,6 +1130,7 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
+			| Backend::Aws(name, _)
 			| Backend::Dynamic(name, _) => strng::format!("{}", name),
 			Backend::Invalid => strng::literal!("invalid"),
 		}
@@ -1137,7 +1142,8 @@ impl Backend {
 			Backend::Opaque(_, _) => cel::BackendType::Static,
 			Backend::MCP(_, _) => cel::BackendType::MCP,
 			Backend::AI(_, _) => cel::BackendType::AI,
-			Backend::Dynamic { .. } => cel::BackendType::Dynamic,
+			Backend::Aws(_, _) => cel::BackendType::Unknown,
+			Backend::Dynamic(_, _) => cel::BackendType::Dynamic,
 			Backend::Invalid => cel::BackendType::Unknown,
 		}
 	}

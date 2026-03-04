@@ -8,6 +8,15 @@ pub struct AwsRegion {
 	pub region: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct AwsServiceName {
+	pub name: &'static str,
+}
+
+pub const SERVICE_BEDROCK_AGENTCORE: AwsServiceName = AwsServiceName {
+	name: "bedrock-agentcore",
+};
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

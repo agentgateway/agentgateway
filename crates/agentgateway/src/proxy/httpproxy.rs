@@ -1357,6 +1357,34 @@ async fn make_backend_call(
 			network_gateway: None,
 			backend_policies: policies,
 		},
+		Backend::Aws(_, config) => {
+			http::modify_req_uri(&mut req, |uri| {
+				let host_with_port = format!("{}:443", config.get_host());
+				uri.authority =
+					Some(Authority::try_from(host_with_port.as_str()).map_err(anyhow::Error::msg)?);
+				uri.path_and_query = Some(PathAndQuery::from_str(&config.get_path())?);
+				Ok(())
+			})
+			.map_err(ProxyError::Processing)?;
+
+			req.extensions_mut()
+				.insert(llm::bedrock::AwsRegion { region: config.region().to_string() });
+			req.extensions_mut()
+				.insert(llm::bedrock::AwsServiceName { name: config.service_name() });
+
+			let default_policies = BackendPolicies {
+				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
+				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {})),
+				..Default::default()
+			};
+			BackendCall {
+				target: Target::Hostname(config.get_host().into(), 443),
+				backend_policies: default_policies.merge(policies),
+				http_version_override: None,
+				transport_override: None,
+				network_gateway: None,
+			}
+		},
 		Backend::Dynamic(_, _) => {
 			let port = req
 				.extensions()

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::agentcore;
 use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
@@ -477,6 +478,25 @@ pub struct FullLocalBackend {
 }
 
 #[apply(schema_de!)]
+pub struct LocalAwsBackend {
+	#[serde(flatten)]
+	pub service: LocalAwsService,
+}
+
+#[apply(schema_de!)]
+pub enum LocalAwsService {
+	#[serde(rename = "agentCore")]
+	AgentCore(LocalAgentCoreBackend),
+}
+
+#[apply(schema_de!)]
+pub struct LocalAgentCoreBackend {
+	pub agent_runtime_arn: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub qualifier: Option<String>,
+}
+
+#[apply(schema_de!)]
 #[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalBackend {
 	// This one is a reference
@@ -492,6 +512,8 @@ pub enum LocalBackend {
 	MCP(LocalMcpBackend),
 	#[serde(rename = "ai")]
 	AI(LocalAIBackend),
+	#[serde(rename = "aws")]
+	Aws(LocalAwsBackend),
 	Invalid,
 }
 
@@ -689,6 +711,18 @@ impl LocalBackend {
 			LocalBackend::AI(tgt) => {
 				let be = tgt.clone().translate()?;
 				vec![Backend::AI(name, be).into()]
+			},
+			LocalBackend::Aws(aws_backend) => {
+				let config = match &aws_backend.service {
+					LocalAwsService::AgentCore(ac) => {
+						let agentcore_config =
+							agentcore::AgentCoreConfig::new(ac.agent_runtime_arn.clone(), ac.qualifier.clone())?;
+						crate::aws::AwsBackendConfig {
+							service: crate::aws::AwsService::AgentCore(agentcore_config),
+						}
+					},
+				};
+				vec![Backend::Aws(name, config).into()]
 			},
 			LocalBackend::Invalid => vec![Backend::Invalid.into()],
 		})

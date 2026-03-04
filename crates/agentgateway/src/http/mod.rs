@@ -762,6 +762,9 @@ impl Debug for DebugExtensions<'_> {
 		if let Some(e) = ext.get::<crate::llm::bedrock::AwsRegion>() {
 			d.field("AwsRegion", e);
 		}
+		if let Some(e) = ext.get::<crate::llm::bedrock::AwsServiceName>() {
+			d.field("AwsServiceName", e);
+		}
 		if let Some(e) = ext.get::<crate::client::ResolvedDestination>() {
 			d.field("ResolvedDestination", e);
 		}

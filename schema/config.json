@@ -3817,6 +3817,17 @@
           "required": [
             "ai"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "aws": {
+              "$ref": "#/$defs/LocalAwsBackend"
+            }
+          },
+          "required": [
+            "aws"
+          ]
         }
       ]
     },
@@ -4543,6 +4554,41 @@
       "additionalProperties": false,
       "required": [
         "providers"
+      ]
+    },
+    "LocalAwsBackend": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "agentCore": {
+              "$ref": "#/$defs/LocalAgentCoreBackend"
+            }
+          },
+          "required": [
+            "agentCore"
+          ]
+        }
+      ]
+    },
+    "LocalAgentCoreBackend": {
+      "type": "object",
+      "properties": {
+        "agentRuntimeArn": {
+          "type": "string"
+        },
+        "qualifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "agentRuntimeArn"
       ]
     },
     "LocalTCPRoute": {
