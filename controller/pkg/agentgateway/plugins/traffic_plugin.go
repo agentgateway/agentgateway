@@ -1487,6 +1487,20 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 		}
 	}
 
+	if len(spec.Metadata) > 0 {
+		if transform == nil {
+			transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
+		}
+		transform.Metadata = make(map[string]string, len(spec.Metadata))
+		for key, value := range spec.Metadata {
+			if isCEL(value) {
+				transform.Metadata[key] = string(value)
+			} else {
+				errs = append(errs, fmt.Errorf("metadata value is not a valid CEL expression: %s", value))
+			}
+		}
+	}
+
 	return transform, errors.Join(errs...)
 }
 

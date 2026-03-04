@@ -75,3 +75,4 @@
 |`backend.protocol`|The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.|
 |`extauthz`|`extauthz` contains dynamic metadata from ext_authz filters|
 |`extproc`|`extproc` contains dynamic metadata from ext_proc filters|
+|`metadata`|`metadata` contains values set by transformation metadata expressions.|

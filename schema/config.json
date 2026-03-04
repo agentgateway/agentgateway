@@ -2213,6 +2213,13 @@
             "null"
           ],
           "default": null
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
         }
       },
       "additionalProperties": false

@@ -21,6 +21,7 @@ use serde_json::json;
 use crate::cel::{Error, Expression, ROOT_CONTEXT};
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
+use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::{ResourceId, ResourceType};
@@ -69,6 +70,9 @@ pub struct Executor<'a> {
 
 	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
+
+	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
+	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
@@ -220,6 +224,8 @@ impl<'a> Executor<'a> {
 		self.llm = ExtensionOrDirect::Extension(ext);
 		self.basic_auth = ExtensionOrDirect::Extension(ext);
 		self.extauthz = ExtensionOrDirect::Extension(ext);
+		self.extproc = ExtensionOrDirect::Extension(ext);
+		self.metadata = ExtensionOrDirect::Extension(ext);
 		self.backend = ExtensionOrDirect::Extension(ext);
 		self.source = ExtensionOrDirect::Extension(ext);
 	}
@@ -227,11 +233,12 @@ impl<'a> Executor<'a> {
 		self.request = Some(req.into());
 		self.api_key = ExtensionOrDirect::Direct(req.api_key.as_ref());
 		self.jwt = ExtensionOrDirect::Direct(req.jwt.as_ref());
+		self.llm = ExtensionOrDirect::Direct(req.llm.as_ref());
 		self.basic_auth = ExtensionOrDirect::Direct(req.basic_auth.as_ref());
 		self.extauthz = ExtensionOrDirect::Direct(req.extauthz.as_ref());
+		self.extproc = ExtensionOrDirect::Direct(req.extproc.as_ref());
+		self.metadata = ExtensionOrDirect::Direct(req.metadata.as_ref());
 		self.backend = ExtensionOrDirect::Direct(req.backend.as_ref());
-		// self.extproc = ExtensionOrDirect::Direct(req.basic_auth.as_ref());
-		self.llm = ExtensionOrDirect::Direct(req.llm.as_ref());
 		self.source = ExtensionOrDirect::Direct(req.source.as_ref());
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
@@ -379,6 +386,7 @@ pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
 		source: req.extensions_mut().remove::<SourceContext>(),
 		extauthz: req.extensions_mut().remove::<ExtAuthzDynamicMetadata>(),
 		extproc: req.extensions_mut().remove::<ExtProcDynamicMetadata>(),
+		metadata: req.extensions_mut().remove::<TransformationMetadata>(),
 		llm: req.extensions_mut().remove::<LLMContext>(),
 		start_time: req.extensions_mut().remove::<RequestStartTime>(),
 	}
@@ -429,6 +437,7 @@ pub struct RequestSnapshot {
 
 	pub extauthz: Option<ExtAuthzDynamicMetadata>,
 	pub extproc: Option<ExtProcDynamicMetadata>,
+	pub metadata: Option<TransformationMetadata>,
 
 	pub llm: Option<LLMContext>,
 }
@@ -958,6 +967,17 @@ pub struct ExecutorSerde {
 	/// `extproc` contains dynamic metadata from ext_proc filters
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub extproc: Option<ExtProcDynamicMetadata>,
+
+	/// `metadata` contains values set by transformation metadata expressions.
+	#[serde(
+		default,
+		skip_serializing_if = "is_transformation_metadata_none_or_empty"
+	)]
+	pub metadata: Option<TransformationMetadata>,
+}
+
+fn is_transformation_metadata_none_or_empty(metadata: &Option<TransformationMetadata>) -> bool {
+	metadata.as_ref().is_none_or(|m| m.0.is_empty())
 }
 
 impl ExecutorSerde {
@@ -1028,6 +1048,7 @@ impl ExecutorSerde {
 		exec.backend = ExtensionOrDirect::Direct(self.backend.as_ref());
 		exec.extauthz = ExtensionOrDirect::Direct(self.extauthz.as_ref());
 		exec.extproc = ExtensionOrDirect::Direct(self.extproc.as_ref());
+		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
 		exec.mcp = self.mcp.as_ref();
 
 		exec
@@ -1127,6 +1148,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		extauthz: Some(ExtAuthzDynamicMetadata::default()),
 		extproc: Some(ExtProcDynamicMetadata::default()),
+		metadata: Some(TransformationMetadata::default()),
 	}
 }
 

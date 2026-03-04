@@ -718,6 +718,7 @@ message TrafficPolicySpec {
       repeated HeaderTransformation add = 2;
       repeated string remove = 3;
       BodyTransformation body = 4;
+      map<string, string> metadata = 5;
     }
     Transform request = 1;
     Transform response = 2;

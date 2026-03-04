@@ -958,6 +958,7 @@ impl TryFrom<&proto::agent::traffic_policy_spec::TransformationPolicy> for Trans
 			let mut set = Vec::new();
 			let mut remove = Vec::new();
 			let mut body = None;
+			let mut metadata = Vec::new();
 
 			if let Some(t) = t {
 				for h in &t.add {
@@ -972,6 +973,9 @@ impl TryFrom<&proto::agent::traffic_policy_spec::TransformationPolicy> for Trans
 				if let Some(b) = &t.body {
 					body = Some(b.expression.clone().into());
 				}
+				for (k, v) in &t.metadata {
+					metadata.push((k.clone().into(), v.clone().into()));
+				}
 			}
 
 			Ok(LocalTransform {
@@ -979,6 +983,7 @@ impl TryFrom<&proto::agent::traffic_policy_spec::TransformationPolicy> for Trans
 				set,
 				remove,
 				body,
+				metadata,
 			})
 		}
 

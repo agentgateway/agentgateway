@@ -570,6 +570,14 @@
         "null"
       ],
       "additionalProperties": true
+    },
+    "metadata": {
+      "description": "`metadata` contains values set by transformation metadata expressions.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
     }
   },
   "additionalProperties": false

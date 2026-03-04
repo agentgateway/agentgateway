@@ -1392,6 +1392,7 @@ async fn convert_llm_config(
 	let transformation = http::transformation_cel::Transformation::try_from_local_config(
 		LocalTransformationConfig {
 			request: Some(http::transformation_cel::LocalTransform {
+				metadata: Vec::new(),
 				set: vec![
 					(
 						strng::new("x-gateway-model-name"),
