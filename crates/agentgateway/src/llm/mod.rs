@@ -221,21 +221,31 @@ impl LLMInfo {
 	}
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct LLMResponse {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
 	/// count_tokens contains the number of tokens in the request, when using the token counting endpoint
 	/// These are not counted as 'input tokens' since they do not consume input tokens.
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub count_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub total_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub reasoning_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_creation_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_input_tokens: Option<u64>,
 
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub provider_model: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
 
+	#[serde(skip)]
 	// Time to get the first token. Only used for streaming.
 	pub first_token: Option<Instant>,
 }

@@ -9,21 +9,27 @@ info:
   inputTextTokenCount: 3
 ---
 {
-  "object": "list",
-  "model": "amazon.titan-embed-text-v2:0",
-  "data": [
-    {
-      "index": 0,
-      "object": "embedding",
-      "embedding": [
-        0.1,
-        0.2,
-        0.3
-      ]
+  "response": {
+    "object": "list",
+    "model": "amazon.titan-embed-text-v2:0",
+    "data": [
+      {
+        "index": 0,
+        "object": "embedding",
+        "embedding": [
+          0.1,
+          0.2,
+          0.3
+        ]
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3,
+      "total_tokens": 3
     }
-  ],
-  "usage": {
-    "prompt_tokens": 3,
+  },
+  "parsed": {
+    "input_tokens": 3,
     "total_tokens": 3
   }
 }

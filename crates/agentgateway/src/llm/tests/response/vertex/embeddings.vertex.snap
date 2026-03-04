@@ -21,30 +21,36 @@ info:
           truncated: false
 ---
 {
-  "object": "list",
-  "model": "text-embedding-004",
-  "data": [
-    {
-      "index": 0,
-      "object": "embedding",
-      "embedding": [
-        0.1,
-        0.2,
-        0.3
-      ]
-    },
-    {
-      "index": 1,
-      "object": "embedding",
-      "embedding": [
-        0.4,
-        0.5,
-        0.6
-      ]
+  "response": {
+    "object": "list",
+    "model": "text-embedding-004",
+    "data": [
+      {
+        "index": 0,
+        "object": "embedding",
+        "embedding": [
+          0.1,
+          0.2,
+          0.3
+        ]
+      },
+      {
+        "index": 1,
+        "object": "embedding",
+        "embedding": [
+          0.4,
+          0.5,
+          0.6
+        ]
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 9,
+      "total_tokens": 9
     }
-  ],
-  "usage": {
-    "prompt_tokens": 9,
+  },
+  "parsed": {
+    "input_tokens": 9,
     "total_tokens": 9
   }
 }

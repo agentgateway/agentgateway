@@ -3,7 +3,7 @@ source: crates/agentgateway/src/llm/tests.rs
 description: src/llm/tests/response/bedrock/basic.bin
 ---
 event: event
-data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"model","object":"response","output":[],"status":"in_progress"}}
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"","object":"response","output":[],"status":"in_progress"}}
 
 event: event
 data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
@@ -21,4 +21,4 @@ event: event
 data: {"type":"response.output_item.done","sequence_number":6,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
 
 event: event
-data: {"type":"response.completed","sequence_number":7,"response":{"created_at":123,"id":"","model":"model","object":"response","output":[],"status":"completed","usage":{"input_tokens":15,"input_tokens_details":{"cached_tokens":0},"output_tokens":142,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":157}}}
+data: {"type":"response.completed","sequence_number":7,"response":{"created_at":123,"id":"","model":"","object":"response","output":[],"status":"completed","usage":{"input_tokens":15,"input_tokens_details":{"cached_tokens":0},"output_tokens":142,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":157}}}

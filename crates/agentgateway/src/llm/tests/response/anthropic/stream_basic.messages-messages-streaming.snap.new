@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 99
 description: src/llm/tests/response/anthropic/stream_basic.json
 ---
 event: message_start

@@ -1,0 +1,72 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/completions/openrouter_reasoning.json
+info:
+  id: gen-1758648153-xeB95xIQsxABYYNTJLAj
+  provider: test
+  model: test
+  object: chat.completion
+  created: 1758648153
+  choices:
+    - logprobs: ~
+      finish_reason: stop
+      native_finish_reason: stop
+      index: 0
+      message:
+        role: assistant
+        content: hello world!
+        refusal: ~
+        reasoning: "Okay, the user wants me to write a story"
+        reasoning_details:
+          - type: reasoning.text
+            text: "Okay, the user wants me to write a story"
+            format: unknown
+            index: 0
+  usage:
+    prompt_tokens: 23
+    completion_tokens: 796
+    total_tokens: 819
+    prompt_tokens_details: ~
+---
+{
+  "response": {
+    "model": "test",
+    "usage": {
+      "prompt_tokens": 23,
+      "completion_tokens": 796,
+      "total_tokens": 819
+    },
+    "choices": [
+      {
+        "message": {
+          "content": "hello world!",
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": "Okay, the user wants me to write a story",
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "text": "Okay, the user wants me to write a story",
+              "format": "unknown",
+              "index": 0
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "stop",
+        "index": 0
+      }
+    ],
+    "id": "[id]",
+    "provider": "test",
+    "object": "chat.completion",
+    "created": "[date]"
+  },
+  "parsed": {
+    "input_tokens": 23,
+    "output_tokens": 796,
+    "total_tokens": 819,
+    "provider_model": "test"
+  }
+}

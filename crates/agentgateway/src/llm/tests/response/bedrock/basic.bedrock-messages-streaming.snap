@@ -3,7 +3,7 @@ source: crates/agentgateway/src/llm/tests.rs
 description: src/llm/tests/response/bedrock/basic.bin
 ---
 event: message_start
-data: {"type":"message_start","message":{"id":"","type":"message","role":"assistant","content":[],"model":"model","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+data: {"type":"message_start","message":{"id":"","type":"message","role":"assistant","content":[],"model":"","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
 
 event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}

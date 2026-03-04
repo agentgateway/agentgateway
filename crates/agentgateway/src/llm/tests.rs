@@ -40,11 +40,14 @@ fn test_response(
 	let provider_value = serde_json::from_str::<Value>(provider_str).unwrap();
 
 	let resp = xlate(Bytes::copy_from_slice(provider_str.as_bytes()))
-		.expect("Failed to translate provider response to OpenAI format");
-	let raw = resp
-		.serialize()
-		.expect("Failed to serialize OpenAI response");
-	let resp_val = serde_json::from_slice::<Value>(&raw).expect("Failed to parse OpenAI response");
+		.expect("Failed to translate provider response to expected format");
+	let llm_response = resp.to_llm_response(false);
+	let raw = resp.serialize().expect("Failed to serialize response");
+	let resp_val = serde_json::from_slice::<Value>(&raw).expect("Failed to parse response");
+	let report = json!({
+		"response": resp_val,
+		"parsed": llm_response,
+	});
 	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 
 	insta::with_settings!({
@@ -54,10 +57,10 @@ fn test_response(
 			prepend_module_to_snapshot => false,
 			snapshot_path => snapshot_path,
 	}, {
-			 insta::assert_json_snapshot!(snapshot_name, resp_val, {
-			".id" => "[id]",
-			".output.*.id" => "[id]",
-			".created" => "[date]",
+			 insta::assert_json_snapshot!(snapshot_name, report, {
+			".response.id" => "[id]",
+			".response.output.*.id" => "[id]",
+			".response.created" => "[date]",
 		});
 	});
 }
@@ -65,15 +68,19 @@ fn test_response(
 async fn test_streaming(
 	provider: &str,
 	relative_path: &str,
-	xlate: impl Fn(Body, AmendOnDrop) -> Result<Body, AIError>,
+	xlate: impl AsyncFnOnce(Response, AsyncLog<llm::LLMInfo>) -> Result<Response, AIError>,
 ) {
 	let input_path = fixture_path(relative_path);
 	let input_bytes =
 		&fs::read(&input_path).unwrap_or_else(|_| panic!("{relative_path}: Failed to read input file"));
 	let body = Body::from(input_bytes.clone());
 	let log = AsyncLog::default();
-	let resp = xlate(body, AmendOnDrop::new(log, LLMResponsePolicies::default()))
-		.expect("failed to translate stream");
+	let mut resp = Response::new(body);
+	resp.headers_mut().insert(
+		crate::http::x_headers::X_AMZN_REQUESTID,
+		"request_id".try_into().unwrap(),
+	);
+	let resp = xlate(resp, log).await.expect("failed to translate stream");
 	let resp_bytes = resp.collect().await.unwrap().to_bytes();
 	let resp_str = std::str::from_utf8(&resp_bytes).unwrap();
 	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
@@ -340,23 +347,44 @@ mod requests {
 mod response {
 	use super::*;
 
-	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", &[COMPLETIONS, MESSAGES, RESPONSES]),
-		("tool", &[COMPLETIONS, MESSAGES, RESPONSES]),
+	// <response from provider> --> <response to user>
+	const COMPLETIONS_TO_COMPLETIONS: &str = "completions-completions";
+	const MESSAGES_TO_MESSAGES: &str = "messages-messages";
+	const MESSAGES_TO_COMPLETIONS: &str = "messages-completions";
+	const COMPLETIONS_TO_MESSAGES: &str = "completions-messages";
+	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
+	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
+	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
+
+	const ALL_BEDROCK: &[&str] = &[
+		BEDROCK_TO_MESSAGES,
+		BEDROCK_TO_COMPLETIONS,
+		BEDROCK_TO_RESPONSES,
 	];
-	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] =
-		&[("basic", &[COMPLETIONS, MESSAGES, RESPONSES])];
+	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
+	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK)];
+
+	const ALL_ANTHROPIC: &[&str] = &[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS];
 	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC]),
-		("tool", &[ANTHROPIC]),
-		("thinking", &[ANTHROPIC]),
+		("basic", ALL_ANTHROPIC),
+		("tool", ALL_ANTHROPIC),
+		("thinking", ALL_ANTHROPIC),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("stream_basic", &[ANTHROPIC, COMPLETIONS]),
-		("stream_thinking", &[ANTHROPIC, COMPLETIONS]),
+		("stream_basic", ALL_ANTHROPIC),
+		("stream_thinking", ALL_ANTHROPIC),
 	];
-	const VERTEX_RESPONSES: &[(&str, &[&str])] = &[("basic", &[VERTEX]), ("tool", &[VERTEX])];
-	const VERTEX_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream_basic", &[VERTEX])];
+
+	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
+		(
+			"basic",
+			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
+		),
+		(
+			"openrouter_reasoning",
+			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
+		),
+	];
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
 		("response/bedrock-cohere/embeddings.json", &[BEDROCK_COHERE]),
@@ -366,123 +394,105 @@ mod response {
 
 	#[tokio::test]
 	async fn from_bedrock() {
-		let to_completions =
-			|i| conversion::bedrock::from_completions::translate_response(&i, &strng::new("fake-model"));
-		let to_messages =
-			|i| conversion::bedrock::from_messages::translate_response(&i, &strng::new("fake-model"));
-		let to_responses =
-			|i| conversion::bedrock::from_responses::translate_response(&i, &strng::new("fake-model"));
-
 		for (name, providers) in BEDROCK_RESPONSES {
 			let test = &format!("response/bedrock/{name}.json");
 			for provider in *providers {
-				match *provider {
-					COMPLETIONS => test_response(COMPLETIONS, test, to_completions),
-					MESSAGES => test_response(MESSAGES, test, to_messages),
-					RESPONSES => test_response(RESPONSES, test, to_responses),
-					other => panic!("unsupported provider in BEDROCK_RESPONSES: {other}"),
-				}
+				test_response_for_provider(provider, test)
 			}
 		}
-
-		let stream_to_completions = |i, log| {
-			Ok(conversion::bedrock::from_completions::translate_stream(
-				i,
-				0,
-				log,
-				"model",
-				"request-id",
-			))
-		};
-		let stream_to_messages = |i, log| {
-			Ok(conversion::bedrock::from_messages::translate_stream(
-				i,
-				0,
-				log,
-				"model",
-				"request-id",
-			))
-		};
-		let stream_to_responses = |i, log| {
-			Ok(conversion::bedrock::from_responses::translate_stream(
-				i,
-				0,
-				log,
-				"model",
-				"request-id",
-			))
-		};
 		for (name, providers) in BEDROCK_STREAM_RESPONSES {
 			let test = &format!("response/bedrock/{name}.bin");
 			for provider in *providers {
-				match *provider {
-					COMPLETIONS => test_streaming(COMPLETIONS, test, stream_to_completions).await,
-					MESSAGES => test_streaming(MESSAGES, test, stream_to_messages).await,
-					RESPONSES => test_streaming(RESPONSES, test, stream_to_responses).await,
-					other => panic!("unsupported provider in BEDROCK_STREAM_RESPONSES: {other}"),
-				}
+				test_streaming_response_for_provider(provider, test).await
 			}
 		}
 	}
 
 	#[tokio::test]
 	async fn from_anthropic() {
-		let to_completions = |i| conversion::messages::from_completions::translate_response(&i);
 		for (name, providers) in ANTHROPIC_RESPONSES {
 			let test = &format!("response/anthropic/{name}.json");
 			for provider in *providers {
-				match *provider {
-					ANTHROPIC => test_response(ANTHROPIC, test, to_completions),
-					other => panic!("unsupported provider in ANTHROPIC_RESPONSES: {other}"),
-				}
+				test_response_for_provider(provider, test)
 			}
 		}
 
-		let stream_to_completions = |i, log| {
-			Ok(conversion::messages::from_completions::translate_stream(
-				i, 1024, log,
-			))
-		};
 		for (name, providers) in ANTHROPIC_STREAM_RESPONSES {
 			let test = &format!("response/anthropic/{name}.json");
 			for provider in *providers {
-				match *provider {
-					COMPLETIONS => test_streaming(COMPLETIONS, test, stream_to_completions).await,
-					ANTHROPIC => test_streaming(ANTHROPIC, test, stream_to_completions).await,
-					other => panic!("unsupported provider in ANTHROPIC_STREAM_RESPONSES: {other}"),
-				}
+				test_streaming_response_for_provider(provider, test).await
 			}
 		}
 	}
 
 	#[tokio::test]
-	async fn from_vertex() {
-		let to_messages = |bytes: Bytes| -> Result<Box<dyn ResponseType>, AIError> {
-			Ok(Box::new(
-				serde_json::from_slice::<types::messages::Response>(&bytes)
-					.map_err(AIError::ResponseParsing)?,
-			))
-		};
-		for (name, providers) in VERTEX_RESPONSES {
-			let test = &format!("response/anthropic/{name}.json");
+	async fn from_completions() {
+		for (name, providers) in COMPLETIONS_RESPONSES {
+			let test = &format!("response/completions/{name}.json");
 			for provider in *providers {
-				match *provider {
-					VERTEX => test_response(VERTEX, test, to_messages),
-					other => panic!("unsupported provider in VERTEX_RESPONSES: {other}"),
-				}
+				test_response_for_provider(provider, test)
 			}
 		}
+	}
 
-		let stream_to_messages =
-			|body, log| Ok(conversion::messages::passthrough_stream(body, 1024, log));
-		for (name, providers) in VERTEX_STREAM_RESPONSES {
-			let test = &format!("response/anthropic/{name}.json");
-			for provider in *providers {
-				match *provider {
-					VERTEX => test_streaming(VERTEX, test, stream_to_messages).await,
-					other => panic!("unsupported provider in VERTEX_STREAM_RESPONSES: {other}"),
-				}
-			}
+	fn test_response_for_provider(provider: &str, test: &str) {
+		let (p, r) = build_provider_request(provider);
+		let test_fn = |i: Bytes| p.process_success(&r, &i);
+		test_response(provider, test, test_fn)
+	}
+
+	async fn test_streaming_response_for_provider(provider: &str, test: &str) {
+		let (p, r) = build_provider_request(provider);
+		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
+			p.process_streaming(r, LLMResponsePolicies::default(), log, false, i)
+				.await
+		};
+		test_streaming(provider, test, test_fn).await
+	}
+
+	fn build_provider_request(provider: &str) -> (AIProvider, LLMRequest) {
+		let bedrock_provider = AIProvider::Bedrock(bedrock::Provider {
+			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		});
+		let (p, r) = match provider {
+			COMPLETIONS_TO_COMPLETIONS => (
+				AIProvider::OpenAI(openai::Provider { model: None }),
+				dummy_llm_req(InputFormat::Completions),
+			),
+			COMPLETIONS_TO_MESSAGES => (
+				AIProvider::OpenAI(openai::Provider { model: None }),
+				dummy_llm_req(InputFormat::Messages),
+			),
+			MESSAGES_TO_MESSAGES => (
+				AIProvider::Anthropic(anthropic::Provider { model: None }),
+				dummy_llm_req(InputFormat::Messages),
+			),
+			MESSAGES_TO_COMPLETIONS => (
+				AIProvider::Anthropic(anthropic::Provider { model: None }),
+				dummy_llm_req(InputFormat::Completions),
+			),
+			BEDROCK_TO_MESSAGES => (bedrock_provider, dummy_llm_req(InputFormat::Messages)),
+			BEDROCK_TO_COMPLETIONS => (bedrock_provider, dummy_llm_req(InputFormat::Completions)),
+			BEDROCK_TO_RESPONSES => (bedrock_provider, dummy_llm_req(InputFormat::Responses)),
+			// No other ones are supported.
+			// We do not have Responses<-->Completions
+			other => panic!("unsupported provider for responses: {other}"),
+		};
+		(p, r)
+	}
+
+	fn dummy_llm_req(input_format: InputFormat) -> LLMRequest {
+		LLMRequest {
+			input_tokens: None,
+			input_format,
+			request_model: Default::default(),
+			provider: Default::default(),
+			streaming: false,
+			params: Default::default(),
+			prompt: None,
 		}
 	}
 
