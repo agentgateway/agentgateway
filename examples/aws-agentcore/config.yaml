@@ -8,13 +8,6 @@ binds:
     - matches:
       - path:
           pathPrefix: /supply-chain-agent
-      policies:
-        jwtAuth:
-          mode: strict
-          issuer: https://ceposta-solo.auth0.com/
-          audiences: [https://api.supply-chain-ui.local]
-          jwks:
-            url: https://ceposta-solo.auth0.com/.well-known/jwks.json
       backends:
       - aws:
           agentCore:
@@ -23,5 +16,5 @@ binds:
           transformations:
             request:
               set:
-                X-Amzn-Bedrock-AgentCore-Runtime-User-Id: jwt.sub
-                X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: jwt.sub
+                X-Amzn-Bedrock-AgentCore-Runtime-User-Id: "user-foo"
+                X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: "user-foo"
