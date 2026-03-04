@@ -38,9 +38,9 @@ metadata:
   namespace: default
 spec:
   parentRefs:
-    - name: foo-listenerset
-      group: gateway.networking.x-k8s.io
-      kind: XListenerSet
+    - name: foo
+      group: gateway.networking.k8s.io
+      kind: ListenerSet
   hostnames:
     - "foo.example.com"
   rules:
@@ -92,6 +92,29 @@ output:
         gatewayNamespace: default
         listenerName: http-9090
       protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: foo-svc.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - foo.example.com
+      key: default/foo.0.http-9090
+      listenerKey: default/foo.http-9090
+      matches:
+      - path:
+          pathPrefix: /
+      name:
+        kind: HTTPRoute
+        name: foo
+        namespace: default
 status:
 - apiVersion: gateway.networking.k8s.io/v1
   kind: ListenerSet
@@ -112,7 +135,7 @@ status:
       status: "True"
       type: Programmed
     listeners:
-    - attachedRoutes: 0
+    - attachedRoutes: 1
       conditions:
       - lastTransitionTime: fake
         message: No errors found
