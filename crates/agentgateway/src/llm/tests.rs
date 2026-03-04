@@ -387,12 +387,10 @@ mod response {
 			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
 		),
 	];
-	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		(
-			"stream",
-			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
-		),
-	];
+	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[(
+		"stream",
+		&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
+	)];
 
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
@@ -401,19 +399,8 @@ mod response {
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
 
-
-	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
-		(
-			"basic",
-			&[RESPONSES_TO_RESPONSES],
-		),
-	];
-	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		(
-			"stream",
-			&[RESPONSES_TO_RESPONSES],
-		),
-	];
+	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", &[RESPONSES_TO_RESPONSES])];
+	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", &[RESPONSES_TO_RESPONSES])];
 
 	#[tokio::test]
 	async fn from_bedrock() {
