@@ -4,7 +4,7 @@ Name|Version|License
 [anthropics/anthropic-sdk-go](https://github.com/anthropics/anthropic-sdk-go)|v1.22.1|MIT License
 [retry-go/v4](https://github.com/avast/retry-go)|v4.7.0|MIT License
 [xds/go](https://github.com/cncf/xds)|v0.0.0-20260202195803-dba9d589def2|Apache License 2.0
-[go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.36.1-0.20260206183300-2c82eafd9a42|Apache License 2.0
+[go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.37.1-0.20260227072845-439e4fd5530c|Apache License 2.0
 [ghodss/yaml](https://github.com/ghodss/yaml)|v1.0.1-0.20190212211648-25d852aebe32|MIT License
 [go-jose/v4](https://github.com/go-jose/go-jose)|v4.1.3|Apache License 2.0
 [go-logr/logr](https://github.com/go-logr/logr)|v1.4.3|Apache License 2.0
@@ -32,12 +32,12 @@ Name|Version|License
 [x/time](https://golang.org/x/time)|v0.14.0|BSD 3-clause "New" or "Revised" License
 [x/tools](https://golang.org/x/tools)|v0.41.0|BSD 3-clause "New" or "Revised" License
 [googleapis/rpc](https://google.golang.org/genproto/googleapis/rpc)|v0.0.0-20260128011058-8636f8732409|Apache License 2.0
-[google.golang.org/grpc](https://google.golang.org/grpc)|v1.79.0|Apache License 2.0
+[google.golang.org/grpc](https://google.golang.org/grpc)|v1.79.1|Apache License 2.0
 [google.golang.org/protobuf](https://google.golang.org/protobuf)|v1.36.11|BSD 3-clause "New" or "Revised" License
 [helm/v3](https://helm.sh/helm/v3)|v3.20.0|Apache License 2.0
-[istio.io/api](https://istio.io/api)|v1.29.0-alpha.0.0.20260224232148-8364b3863ae8|Apache License 2.0
-[istio.io/client-go](https://istio.io/client-go)|v1.29.0-alpha.0.0.20260224232748-1f028d1029d4|Apache License 2.0
-[istio.io/istio](https://istio.io/istio)|v0.0.0-20260226223414-e4dd300708de|Apache License 2.0
+[istio.io/api](https://istio.io/api)|v1.29.0-alpha.0.0.20260302212057-b10ab91e9ded|Apache License 2.0
+[istio.io/client-go](https://istio.io/client-go)|v1.29.0-alpha.0.0.20260302212359-b21b30ec7057|Apache License 2.0
+[istio.io/istio](https://istio.io/istio)|v0.0.0-20260304200359-546e4b34e37b|Apache License 2.0
 [k8s.io/api](https://k8s.io/api)|v0.35.1|Apache License 2.0
 [k8s.io/apiextensions-apiserver](https://k8s.io/apiextensions-apiserver)|v0.35.1|Apache License 2.0
 [k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.35.1|Apache License 2.0

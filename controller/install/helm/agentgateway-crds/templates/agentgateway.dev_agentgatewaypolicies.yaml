@@ -3789,6 +3789,7 @@ spec:
                           - Responses
                           - AnthropicTokenCount
                           - Embeddings
+                          - Realtime
                           type: string
                         description: |-
                           routes defines how to identify the type of traffic to handle.
