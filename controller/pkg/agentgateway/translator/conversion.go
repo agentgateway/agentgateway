@@ -243,8 +243,8 @@ func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 }
 
 // ConvertTLSRouteToAgw converts a TLSRouteRule to an agentgateway TCPRoute
-func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1a2.TLSRouteRule,
-	obj *gwv1a2.TLSRoute, pos int,
+func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
+	obj *gwv1.TLSRoute, pos int,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	routeRuleKey := strconv.Itoa(pos)
 	res := &api.TCPRoute{
@@ -1661,7 +1661,7 @@ func GetCommonRouteInfo(spec any) ([]gwv1.ParentReference, []gwv1.Hostname, sche
 	switch t := spec.(type) {
 	case *gwv1a2.TCPRoute:
 		return t.Spec.ParentRefs, nil, wellknown.TCPRouteGVK
-	case *gwv1a2.TLSRoute:
+	case *gwv1.TLSRoute:
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.TLSRouteGVK
 	case *gwv1.HTTPRoute:
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.HTTPRouteGVK

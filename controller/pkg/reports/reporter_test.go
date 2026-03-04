@@ -347,7 +347,7 @@ func TestBuildRouteStatus(t *testing.T) {
 					route.Status.RouteStatus = *status
 				case *gwv1a2.TCPRoute:
 					route.Status.RouteStatus = *status
-				case *gwv1a2.TLSRoute:
+				case *gwv1.TLSRoute:
 					route.Status.RouteStatus = *status
 				case *gwv1.GRPCRoute:
 					route.Status.RouteStatus = *status
@@ -391,7 +391,7 @@ func TestBuildRouteStatus(t *testing.T) {
 					route.Spec.ParentRefs = append(route.Spec.ParentRefs, gwv1.ParentReference{
 						Name: "additional-gateway",
 					})
-				case *gwv1a2.TLSRoute:
+				case *gwv1.TLSRoute:
 					route.Spec.ParentRefs = append(route.Spec.ParentRefs, gwv1.ParentReference{
 						Name: "additional-gateway",
 					})
@@ -466,7 +466,7 @@ func TestBuildRouteStatus(t *testing.T) {
 					r1.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener1.Name))
 				case *gwv1a2.TCPRoute:
 					r1.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener1.Name))
-				case *gwv1a2.TLSRoute:
+				case *gwv1.TLSRoute:
 					r1.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener1.Name))
 				case *gwv1.GRPCRoute:
 					r1.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener1.Name))
@@ -477,7 +477,7 @@ func TestBuildRouteStatus(t *testing.T) {
 					r2.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener2.Name))
 				case *gwv1a2.TCPRoute:
 					r2.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener2.Name))
-				case *gwv1a2.TLSRoute:
+				case *gwv1.TLSRoute:
 					r2.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener2.Name))
 				case *gwv1.GRPCRoute:
 					r2.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener2.Name))
@@ -519,7 +519,7 @@ func TestBuildRouteStatusWithMissingParentReferences(t *testing.T) {
 				r.Spec.ParentRefs = nil
 			case *gwv1a2.TCPRoute:
 				r.Spec.ParentRefs = nil
-			case *gwv1a2.TLSRoute:
+			case *gwv1.TLSRoute:
 				r.Spec.ParentRefs = nil
 			case *gwv1.GRPCRoute:
 				r.Spec.ParentRefs = nil
@@ -598,7 +598,7 @@ func fakeTranslate(reporter reporter.Reporter, obj client.Object) {
 		for _, pr := range route.Spec.ParentRefs {
 			routeReporter.ParentRef(&pr)
 		}
-	case *gwv1a2.TLSRoute:
+	case *gwv1.TLSRoute:
 		routeReporter := reporter.Route(route)
 		for _, pr := range route.Spec.ParentRefs {
 			routeReporter.ParentRef(&pr)
@@ -648,7 +648,7 @@ func tcpRoute(conditions ...metav1.Condition) client.Object {
 }
 
 func tlsRoute(conditions ...metav1.Condition) client.Object {
-	route := &gwv1a2.TLSRoute{
+	route := &gwv1.TLSRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "route",
 			Namespace: "default",

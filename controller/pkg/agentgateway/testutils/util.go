@@ -215,7 +215,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		HTTPRoutes:           krttest.GetMockCollection[*gwv1.HTTPRoute](mock),
 		GRPCRoutes:           krttest.GetMockCollection[*gwv1.GRPCRoute](mock),
 		TCPRoutes:            krttest.GetMockCollection[*gwv1a2.TCPRoute](mock),
-		TLSRoutes:            krttest.GetMockCollection[*gwv1a2.TLSRoute](mock),
+		TLSRoutes:            krttest.GetMockCollection[*gwv1.TLSRoute](mock),
 		ReferenceGrants:      krttest.GetMockCollection[*gwv1b1.ReferenceGrant](mock),
 		BackendTLSPolicies:   krttest.GetMockCollection[*gwv1.BackendTLSPolicy](mock),
 		ListenerSets:         krttest.GetMockCollection[*gwv1.ListenerSet](mock),

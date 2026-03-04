@@ -117,7 +117,7 @@ func enqueueStatus[T any](sw WorkerQueue, obj controllers.Object, ws T, extraGVK
 		res.GroupVersionKind = wellknown.HTTPRouteGVK
 	case *gwv1a2.TCPRoute:
 		res.GroupVersionKind = wellknown.TCPRouteGVK
-	case *gwv1a2.TLSRoute:
+	case *gwv1.TLSRoute:
 		res.GroupVersionKind = wellknown.TLSRouteGVK
 	case *gwv1.GRPCRoute:
 		res.GroupVersionKind = wellknown.GRPCRouteGVK

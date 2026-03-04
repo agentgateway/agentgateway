@@ -40,7 +40,7 @@ func AgwRouteCollection(
 	httpRouteCol krt.Collection[*gwv1.HTTPRoute],
 	grpcRouteCol krt.Collection[*gwv1.GRPCRoute],
 	tcpRouteCol krt.Collection[*gwv1a2.TCPRoute],
-	tlsRouteCol krt.Collection[*gwv1a2.TLSRoute],
+	tlsRouteCol krt.Collection[*gwv1.TLSRoute],
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
@@ -95,7 +95,7 @@ func AgwRouteCollection(
 	status.RegisterStatus(queue, tcpRouteStatus, GetStatus)
 
 	tlsRouteStatus, tlsRoutes := createTCPRouteCollection(tlsRouteCol, inputs, krtopts, "TLSRoutes",
-		func(ctx RouteContext, obj *gwv1a2.TLSRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
+		func(ctx RouteContext, obj *gwv1.TLSRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwTCPRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
@@ -106,8 +106,8 @@ func AgwRouteCollection(
 					}
 				}
 			}
-		}, func(status gwv1.RouteStatus) gwv1a2.TLSRouteStatus {
-			return gwv1a2.TLSRouteStatus{RouteStatus: status}
+		}, func(status gwv1.RouteStatus) gwv1.TLSRouteStatus {
+			return gwv1.TLSRouteStatus{RouteStatus: status}
 		})
 	status.RegisterStatus(queue, tlsRouteStatus, GetStatus)
 
@@ -131,8 +131,8 @@ func AgwRouteCollection(
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("GRPCAncestors")...),
-		krt.NewManyCollection(tlsRouteCol, func(krtctx krt.HandlerContext, obj *gwv1a2.TLSRoute) []*utils.AncestorBackend {
-			return extractAncestorBackends(obj.ObjectMeta, "TLSRoute", obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1a2.TLSRouteRule) []gwv1a2.BackendRef {
+		krt.NewManyCollection(tlsRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.TLSRoute) []*utils.AncestorBackend {
+			return extractAncestorBackends(obj.ObjectMeta, "TLSRoute", obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1.TLSRouteRule) []gwv1a2.BackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("TLSAncestors")...),

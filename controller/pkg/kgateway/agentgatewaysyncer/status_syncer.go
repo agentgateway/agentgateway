@@ -60,7 +60,7 @@ type AgentGwStatusSyncer struct {
 	httpRoutes         StatusSyncer[*gwv1.HTTPRoute, *gwv1.HTTPRouteStatus]
 	grpcRoutes         StatusSyncer[*gwv1.GRPCRoute, *gwv1.GRPCRouteStatus]
 	tcpRoutes          StatusSyncer[*gwv1a2.TCPRoute, *gwv1a2.TCPRouteStatus]
-	tlsRoutes          StatusSyncer[*gwv1a2.TLSRoute, *gwv1a2.TLSRouteStatus]
+	tlsRoutes          StatusSyncer[*gwv1.TLSRoute, *gwv1.TLSRouteStatus]
 	backendTLSPolicies StatusSyncer[*gwv1.BackendTLSPolicy, gwv1.PolicyStatus]
 	inferencePools     StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]
 
@@ -131,12 +131,12 @@ func NewAgwStatusSyncer(
 				}
 			},
 		},
-		tlsRoutes: StatusSyncer[*gwv1a2.TLSRoute, *gwv1a2.TLSRouteStatus]{
+		tlsRoutes: StatusSyncer[*gwv1.TLSRoute, *gwv1.TLSRouteStatus]{
 			name:           "tlsRoute",
 			controllerName: controllerName,
-			client:         kclient.NewFilteredDelayed[*gwv1a2.TLSRoute](client, wellknown.TLSRouteGVR, f),
-			build: func(om metav1.ObjectMeta, s *gwv1a2.TLSRouteStatus) *gwv1a2.TLSRoute {
-				return &gwv1a2.TLSRoute{
+			client:         kclient.NewFilteredDelayed[*gwv1.TLSRoute](client, wellknown.TLSRouteGVR, f),
+			build: func(om metav1.ObjectMeta, s *gwv1.TLSRouteStatus) *gwv1.TLSRoute {
+				return &gwv1.TLSRoute{
 					ObjectMeta: om,
 					Status:     *s,
 				}
@@ -370,8 +370,8 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 				merged.Parents = mergeRouteParentStatuses(s.controllerName, cur.Status.Parents, desired.Parents)
 				mergedAny = &merged
 			}
-		case *gwv1a2.TLSRouteStatus:
-			cur, ok := any(current).(*gwv1a2.TLSRoute)
+		case *gwv1.TLSRouteStatus:
+			cur, ok := any(current).(*gwv1.TLSRoute)
 			if ok {
 				merged := *desired
 				merged.Parents = mergeRouteParentStatuses(s.controllerName, cur.Status.Parents, desired.Parents)

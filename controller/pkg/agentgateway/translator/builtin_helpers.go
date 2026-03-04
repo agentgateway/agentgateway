@@ -102,7 +102,7 @@ func GetStatus[I, IS any](spec I) IS {
 		return any(t.Status).(IS)
 	case *gwv1a2.TCPRoute:
 		return any(t.Status).(IS)
-	case *gwv1a2.TLSRoute:
+	case *gwv1.TLSRoute:
 		return any(t.Status).(IS)
 	case *gwv1.ListenerSet:
 		return any(t.Status).(IS)

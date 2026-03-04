@@ -10,7 +10,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.22.1
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
-	github.com/envoyproxy/go-control-plane/envoy v1.36.1-0.20260206183300-2c82eafd9a42
+	github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260227072845-439e4fd5530c
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/mock v1.7.0-rc.1
@@ -31,12 +31,12 @@ require (
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.27.1
 	golang.org/x/net v0.50.0
-	google.golang.org/grpc v1.79.0
+	google.golang.org/grpc v1.79.1
 	google.golang.org/protobuf v1.36.11
 	helm.sh/helm/v3 v3.20.0
-	istio.io/api v1.29.0-alpha.0.0.20260224232148-8364b3863ae8
-	istio.io/client-go v1.29.0-alpha.0.0.20260224232748-1f028d1029d4
-	istio.io/istio v0.0.0-20260226223414-e4dd300708de
+	istio.io/api v1.29.0-alpha.0.0.20260302212057-b10ab91e9ded
+	istio.io/client-go v1.29.0-alpha.0.0.20260302212359-b21b30ec7057
+	istio.io/istio v0.0.0-20260304200359-546e4b34e37b
 	k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver v0.35.1
 	k8s.io/apimachinery v0.35.1
@@ -61,7 +61,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
-	github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20260206183300-2c82eafd9a42 // indirect
+	github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20260227072845-439e4fd5530c // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/swag/cmdutils v0.25.4 // indirect
@@ -151,7 +151,7 @@ require (
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.4 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
-	github.com/envoyproxy/protoc-gen-validate v1.3.0 // indirect
+	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
