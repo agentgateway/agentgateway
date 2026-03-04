@@ -1,22 +1,16 @@
-use crate::json::traverse;
 use crate::llm::bedrock::Provider;
+use crate::llm::policy::PromptCachingConfig;
 use crate::llm::policy::webhook::ResponseChoice;
-use crate::llm::policy::{PromptCachingConfig, SortedRoutes};
-use crate::llm::types::completions::{Choice, Usage};
-use crate::llm::types::messages;
 use crate::llm::{
 	AIError, AmendOnDrop, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
-	ResponseType, SimpleChatCompletionMessage, conversion, types,
+	ResponseType, SimpleChatCompletionMessage,
 };
 use crate::{json, llm, parse};
 use agent_core::prelude::Strng;
-use agent_core::strng;
 use bytes::Bytes;
 use http::HeaderMap;
-use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use std::time::Instant;
 use tracing::debug;
 
 fn lookup<'a, T, const C: usize>(
@@ -67,14 +61,13 @@ impl RequestType for Request {
 	}
 	fn model(&mut self) -> &mut Option<String> {
 		unimplemented!("model is not available");
-		todo!()
 	}
 
-	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
+	fn prepend_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
 		// Not supported
 	}
 
-	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
+	fn append_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
 		// Not supported
 	}
 
@@ -89,7 +82,7 @@ impl RequestType for Request {
 				.unwrap_or_default(),
 			provider,
 			streaming: self
-				.lookup(lookups::TEMPERATURE, |v| v.as_bool())
+				.lookup(lookups::STREAM, |v| v.as_bool())
 				.unwrap_or_default(),
 			params: LLMRequestParams {
 				temperature: self.lookup(lookups::TEMPERATURE, |v| v.as_f64()),
@@ -132,10 +125,10 @@ impl RequestType for Request {
 	) -> Result<Vec<u8>, AIError> {
 		self.to_openai()
 	}
-	fn to_bedrock_token_count(&self, headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
+	fn to_bedrock_token_count(&self, _headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
 		self.to_openai()
 	}
-	fn to_vertex(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
+	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
 		self.to_openai()
 	}
 }
@@ -164,6 +157,7 @@ impl Response {
 mod lookups {
 	pub const MODEL: [&[&str]; 1] = [&["model"]];
 	pub const TEMPERATURE: [&[&str]; 1] = [&["temperature"]];
+	pub const STREAM: [&[&str]; 1] = [&["stream"]];
 	pub const TOP_P: [&[&str]; 1] = [&["top_p"]];
 	pub const FREQUENCY_PENALTY: [&[&str]; 1] = [&["frequency_penalty"]];
 	pub const PRESENCE_PENALTY: [&[&str]; 1] = [&["presence_penalty"]];
@@ -244,7 +238,7 @@ impl ResponseType for Response {
 		)
 	}
 
-	fn set_webhook_choices(&mut self, resp: Vec<ResponseChoice>) -> anyhow::Result<()> {
+	fn set_webhook_choices(&mut self, _resp: Vec<ResponseChoice>) -> anyhow::Result<()> {
 		unimplemented!(
 			"to_webhook_choices is used for prompt guard; prompt guard is disable for detect."
 		)
@@ -332,17 +326,17 @@ pub fn passthrough_stream(
 					|l, v| l.response.provider_model = Some(v.into()),
 				);
 				if total_tokens.is_none()
-				&& let (Some(input), Some(output)) = (input_tokens, output_tokens)
+					&& let (Some(input), Some(output)) = (input_tokens, output_tokens)
 				{
 					log.non_atomic_mutate(|l| l.response.total_tokens = Some(input + output));
 				}
 				if input_tokens.is_some()
-				|| output_tokens.is_some()
-				|| total_tokens.is_some()
-				|| reasoning_tokens.is_some()
-				|| cache_creation_input_tokens.is_some()
-				|| cached_input_tokens.is_some()
-				|| provider_model.is_some()
+					|| output_tokens.is_some()
+					|| total_tokens.is_some()
+					|| reasoning_tokens.is_some()
+					|| cache_creation_input_tokens.is_some()
+					|| cached_input_tokens.is_some()
+					|| provider_model.is_some()
 				{
 					log.report_rate_limit();
 				}

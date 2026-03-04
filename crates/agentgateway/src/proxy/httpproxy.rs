@@ -1437,7 +1437,7 @@ async fn make_backend_call(
 				| RouteType::Responses
 				| RouteType::AnthropicTokenCount
 				| RouteType::Embeddings
-				| RouteType::ParsedPassthrough => {
+				| RouteType::Detect => {
 					let r = match route_type {
 						RouteType::Completions => Box::pin(llm.provider.process_completions_request(
 							&backend_info,
@@ -1483,7 +1483,7 @@ async fn make_backend_call(
 						))
 						.await
 						.map_err(|e| ProxyError::Processing(e.into()))?,
-						RouteType::ParsedPassthrough => Box::pin(llm.provider.process_passthrough_request(
+						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
 							req,

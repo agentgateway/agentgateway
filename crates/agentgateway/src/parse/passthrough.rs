@@ -187,26 +187,22 @@ where
 		};
 
 		// Try to decode items from our buffer
-		if !*this.error {
-			if let Err(e) = (try_decode)(
+		if !*this.error
+			&& let Err(_e) = (try_decode)(
 				*this.finished,
 				this.decode_buffer,
 				&mut *this.decoder,
 				this.handler,
 			) {
-				*this.error = true;
-			}
+			*this.error = true;
 		}
 		// We need more input data - poll the underlying body
 		let frame_to_send = ready!(this.body.as_mut().poll_frame(cx));
 		if !*this.error {
-			match &frame_to_send {
-				Some(Ok(frame)) => {
-					if let Some(data) = frame.data_ref() {
-						this.decode_buffer.extend_from_slice(data);
-					}
-				},
-				_ => {},
+			if let Some(Ok(frame)) = &frame_to_send
+				&& let Some(data) = frame.data_ref()
+			{
+				this.decode_buffer.extend_from_slice(data);
 			};
 
 			match (try_decode)(
@@ -216,7 +212,7 @@ where
 				this.handler,
 			) {
 				Ok(_) => {},
-				Err(e) => {
+				Err(_e) => {
 					*this.error = true;
 				},
 			}

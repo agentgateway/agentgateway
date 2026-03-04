@@ -267,6 +267,7 @@ fn convert_route_type(proto_rt: i32) -> llm::RouteType {
 		Ok(ProtoRT::Messages) => llm::RouteType::Messages,
 		Ok(ProtoRT::Models) => llm::RouteType::Models,
 		Ok(ProtoRT::Passthrough) => llm::RouteType::Passthrough,
+		Ok(ProtoRT::Detect) => llm::RouteType::Detect,
 		Ok(ProtoRT::Responses) => llm::RouteType::Responses,
 		Ok(ProtoRT::AnthropicTokenCount) => llm::RouteType::AnthropicTokenCount,
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
@@ -2181,6 +2182,7 @@ mod tests {
 						RouteType::Completions as i32,
 					),
 					("/v1/messages".to_string(), RouteType::Messages as i32),
+					("/v1/detect".to_string(), RouteType::Detect as i32),
 				]
 				.into_iter()
 				.collect(),
@@ -2228,7 +2230,7 @@ mod tests {
 			assert!(transformation_policy.get("system").is_some());
 
 			// Verify routes conversion
-			assert_eq!(ai_policy.routes.len(), 2);
+			assert_eq!(ai_policy.routes.len(), 3);
 			assert_eq!(
 				ai_policy.routes.get("/v1/chat/completions"),
 				Some(&llm::RouteType::Completions)
@@ -2236,6 +2238,10 @@ mod tests {
 			assert_eq!(
 				ai_policy.routes.get("/v1/messages"),
 				Some(&llm::RouteType::Messages)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1/detect"),
+				Some(&llm::RouteType::Detect)
 			);
 		} else {
 			panic!("Expected AI policy variant");

@@ -900,7 +900,7 @@ type BackendAI struct {
 
 // RouteType specifies how the AI gateway should process incoming requests
 // based on the URL path and the API format expected.
-// +kubebuilder:validation:Enum=Completions;Messages;Models;Passthrough;Responses;AnthropicTokenCount;Embeddings;Realtime
+// +kubebuilder:validation:Enum=Completions;Messages;Models;Passthrough;Detect;Responses;AnthropicTokenCount;Embeddings;Realtime
 type RouteType string
 
 const (
@@ -915,6 +915,9 @@ const (
 
 	// RouteTypePassthrough sends requests to upstream as-is without LLM processing
 	RouteTypePassthrough RouteType = "Passthrough"
+
+	// RouteTypeDetect sends requests as-is but attempts to extract request/response metadata for telemetry/rate limiting
+	RouteTypeDetect RouteType = "Detect"
 
 	// RouteTypeResponses processes OpenAI /v1/responses format requests
 	RouteTypeResponses RouteType = "Responses"
