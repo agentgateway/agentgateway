@@ -37,13 +37,15 @@ fn test_response(
 	let input_path = fixture_path(relative_path);
 	let provider_str = &fs::read_to_string(&input_path)
 		.unwrap_or_else(|_| panic!("{relative_path}: Failed to read input file"));
-	let provider_value = serde_json::from_str::<Value>(provider_str).unwrap();
+	let provider_value = serde_json::from_str::<Value>(provider_str)
+		.unwrap_or_else(|_| Value::String(provider_str.to_string()));
 
 	let resp = xlate(Bytes::copy_from_slice(provider_str.as_bytes()))
 		.expect("Failed to translate provider response to expected format");
 	let llm_response = resp.to_llm_response(false);
 	let raw = resp.serialize().expect("Failed to serialize response");
-	let resp_val = serde_json::from_slice::<Value>(&raw).expect("Failed to parse response");
+	let resp_val = serde_json::from_slice::<Value>(&raw)
+		.unwrap_or_else(|_| Value::String(provider_str.to_string()));
 	let report = json!({
 		"response": resp_val,
 		"parsed": llm_response,
@@ -368,7 +370,11 @@ mod response {
 	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
 	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK)];
 
-	const ALL_ANTHROPIC: &[&str] = &[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS, MESSAGES_TO_DETECT];
+	const ALL_ANTHROPIC: &[&str] = &[
+		MESSAGES_TO_MESSAGES,
+		MESSAGES_TO_COMPLETIONS,
+		MESSAGES_TO_DETECT,
+	];
 	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_ANTHROPIC),
 		("tool", ALL_ANTHROPIC),
@@ -390,7 +396,7 @@ mod response {
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[(
 		"stream",
-		&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
+		ALL_COMPLETIONS,
 	)];
 
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
@@ -402,6 +408,11 @@ mod response {
 
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", &[RESPONSES_TO_RESPONSES])];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", &[RESPONSES_TO_RESPONSES])];
+
+	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
+		("non-json", &[COMPLETIONS_TO_DETECT]),
+		("broken-sse", &[COMPLETIONS_TO_DETECT]),
+	];
 
 	#[tokio::test]
 	async fn from_bedrock() {
@@ -465,6 +476,18 @@ mod response {
 		for (name, providers) in RESPONSES_STREAM_RESPONSES {
 			let test = &format!("response/responses/{name}.json");
 			for provider in *providers {
+				test_streaming_response_for_provider(provider, test).await
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn detect() {
+		for (name, providers) in DETECT_RESPONSES {
+			let test = &format!("response/detect/{name}");
+			for provider in *providers {
+				// Test each one as a stream and not
+				test_response_for_provider(provider, test);
 				test_streaming_response_for_provider(provider, test).await
 			}
 		}
