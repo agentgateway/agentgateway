@@ -38,8 +38,8 @@ pub mod from_completions {
 	use crate::llm::types::completions::typed as completions;
 	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::types::messages::typed as messages;
-	use crate::llm::{AIError, AmendOnDrop, LLMInfo, types};
-	use crate::telemetry::log::AsyncLog;
+	use crate::llm::{AIError, AmendOnDrop, types};
+
 	use crate::{json, parse};
 
 	fn user_content_to_messages(

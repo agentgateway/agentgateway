@@ -7,14 +7,12 @@ use ::http::{HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
-use bytes::{Buf, BytesMut};
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
-use tokio_util::codec::Decoder;
 
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
@@ -107,8 +105,9 @@ pub enum RouteType {
 	Models,
 	/// Send the request to the upstream LLM provider as-is
 	Passthrough,
-	/// Send the request to the upstream LLM provider as-is
-	ParsedPassthrough,
+	/// Send the request to the upstream LLM provider as-is but attempt to extract information from it
+	/// and apply a subset of policies (rate limit and telemetry; no guardrails).
+	Detect,
 	/// OpenAI /responses
 	Responses,
 	/// OpenAI /embeddings
@@ -614,7 +613,7 @@ impl AIProvider {
 			.await
 	}
 
-	pub async fn process_passthrough_request(
+	pub async fn process_detect_request(
 		&self,
 		backend_info: &crate::http::auth::BackendInfo,
 		policies: Option<&Policy>,
@@ -637,6 +636,7 @@ impl AIProvider {
 
 		let req = if is_json {
 			if let Some(p) = policies {
+				// TODO: if we are going
 				p.unmarshal_request(&bytes, log)
 			} else {
 				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)

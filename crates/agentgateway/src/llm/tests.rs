@@ -398,10 +398,7 @@ mod response {
 		("basic", ALL_COMPLETIONS),
 		("openrouter_reasoning", ALL_COMPLETIONS),
 	];
-	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[(
-		"stream",
-		ALL_COMPLETIONS,
-	)];
+	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_COMPLETIONS)];
 
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
@@ -410,10 +407,7 @@ mod response {
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
 
-	const ALL_RESPONSES: &[&str] = &[
-		RESPONSES_TO_RESPONSES,
-		RESPONSES_TO_DETECT,
-	];
+	const ALL_RESPONSES: &[&str] = &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_RESPONSES)];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_RESPONSES)];
 

@@ -4096,6 +4096,7 @@ spec:
                           - Messages
                           - Models
                           - Passthrough
+                          - Detect
                           - Responses
                           - AnthropicTokenCount
                           - Embeddings

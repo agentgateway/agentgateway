@@ -668,6 +668,8 @@ func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_Rout
 		return api.BackendPolicySpec_Ai_MODELS
 	case agentgateway.RouteTypePassthrough:
 		return api.BackendPolicySpec_Ai_PASSTHROUGH
+	case agentgateway.RouteTypeDetect:
+		return api.BackendPolicySpec_Ai_DETECT
 	case agentgateway.RouteTypeResponses:
 		return api.BackendPolicySpec_Ai_RESPONSES
 	case agentgateway.RouteTypeAnthropicTokenCount:
