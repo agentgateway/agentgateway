@@ -14,6 +14,7 @@ import (
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/kclient"
+	"istio.io/istio/pkg/kube/krt"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -35,6 +36,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
@@ -190,9 +192,6 @@ func NewGatewayReconciler(
 	if r.agwParamClient != nil {
 		r.agwParamClient.AddEventHandler(agwParamEventHandler)
 	}
-	if controllerExtension != nil {
-		controllerExtension.Register(r.queue, agwParamEventHandler)
-	}
 
 	// Add a handler to reconcile the parent Gateway when child objects (Deployment, Service, etc.)
 	parentHandler := controllers.ObjectHandler(controllers.EnqueueForParentHandler(r.queue, gvk.KubernetesGateway))
@@ -200,6 +199,21 @@ func NewGatewayReconciler(
 	r.svcAccountClient.AddEventHandler(parentHandler)
 	r.svcClient.AddEventHandler(parentHandler)
 	r.configMapClient.AddEventHandler(parentHandler)
+
+	// add handler to reconcile the parent Gateway when the GatewayForDeployer changes
+	// this is necssary for two reasons:
+	// 1. we don't Fetch() the GatewayForDeployer, so we must reconcile to prevent a stale reference
+	// 2. if a ListenerSet adds a port to a GatewayForDeployer, we need to deploy the new ports
+	cfg.CommonCollections.GatewaysForDeployer.Register(func(o krt.Event[collections.GatewayForDeployer]) {
+		gw := o.Latest()
+		ref := types.NamespacedName{Namespace: gw.Namespace, Name: gw.Name}
+		logger.Debug("explicitly reconciling Gateway for deployer due to GatewayForDeployer change", "ref", ref)
+		r.queue.Add(ref)
+	})
+
+	if controllerExtension != nil {
+		controllerExtension.Register(r.queue, agwParamEventHandler)
+	}
 
 	// Add a handler to reconcile the Gateways when the xDS TLS certificate changes
 	r.setupTLSCertificateWatch(cfg.CertWatcher)
