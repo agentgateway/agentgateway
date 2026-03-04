@@ -361,6 +361,7 @@ mod response {
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
+	const RESPONSES_TO_DETECT: &str = "responses-detect";
 
 	const ALL_BEDROCK: &[&str] = &[
 		BEDROCK_TO_MESSAGES,
@@ -406,8 +407,12 @@ mod response {
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
 
-	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", &[RESPONSES_TO_RESPONSES])];
-	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", &[RESPONSES_TO_RESPONSES])];
+	const ALL_RESPONSES: &[&str] = &[
+		RESPONSES_TO_RESPONSES,
+		RESPONSES_TO_DETECT,
+	];
+	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_RESPONSES)];
+	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_RESPONSES)];
 
 	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
 		("non-json", &[COMPLETIONS_TO_DETECT]),
@@ -545,6 +550,10 @@ mod response {
 			),
 			MESSAGES_TO_DETECT => (
 				AIProvider::Anthropic(anthropic::Provider { model: None }),
+				dummy_llm_req(InputFormat::Detect),
+			),
+			RESPONSES_TO_DETECT => (
+				AIProvider::OpenAI(openai::Provider { model: None }),
 				dummy_llm_req(InputFormat::Detect),
 			),
 			// No other ones are supported.
