@@ -37,13 +37,15 @@ fn test_response(
 	let input_path = fixture_path(relative_path);
 	let provider_str = &fs::read_to_string(&input_path)
 		.unwrap_or_else(|_| panic!("{relative_path}: Failed to read input file"));
-	let provider_value = serde_json::from_str::<Value>(provider_str).unwrap();
+	let provider_value = serde_json::from_str::<Value>(provider_str)
+		.unwrap_or_else(|_| Value::String(provider_str.to_string()));
 
 	let resp = xlate(Bytes::copy_from_slice(provider_str.as_bytes()))
 		.expect("Failed to translate provider response to expected format");
 	let llm_response = resp.to_llm_response(false);
 	let raw = resp.serialize().expect("Failed to serialize response");
-	let resp_val = serde_json::from_slice::<Value>(&raw).expect("Failed to parse response");
+	let resp_val = serde_json::from_slice::<Value>(&raw)
+		.unwrap_or_else(|_| Value::String(provider_str.to_string()));
 	let report = json!({
 		"response": resp_val,
 		"parsed": llm_response,
@@ -352,11 +354,14 @@ mod response {
 	const COMPLETIONS_TO_COMPLETIONS: &str = "completions-completions";
 	const MESSAGES_TO_MESSAGES: &str = "messages-messages";
 	const MESSAGES_TO_COMPLETIONS: &str = "messages-completions";
+	const MESSAGES_TO_DETECT: &str = "messages-detect";
 	const COMPLETIONS_TO_MESSAGES: &str = "completions-messages";
+	const COMPLETIONS_TO_DETECT: &str = "completions-detect";
 	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
+	const RESPONSES_TO_DETECT: &str = "responses-detect";
 
 	const ALL_BEDROCK: &[&str] = &[
 		BEDROCK_TO_MESSAGES,
@@ -366,7 +371,11 @@ mod response {
 	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
 	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK)];
 
-	const ALL_ANTHROPIC: &[&str] = &[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS];
+	const ALL_ANTHROPIC: &[&str] = &[
+		MESSAGES_TO_MESSAGES,
+		MESSAGES_TO_COMPLETIONS,
+		MESSAGES_TO_DETECT,
+	];
 	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_ANTHROPIC),
 		("tool", ALL_ANTHROPIC),
@@ -377,20 +386,16 @@ mod response {
 		("stream_thinking", ALL_ANTHROPIC),
 	];
 
-	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
-		(
-			"basic",
-			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
-		),
-		(
-			"openrouter_reasoning",
-			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
-		),
+	const ALL_COMPLETIONS: &[&str] = &[
+		COMPLETIONS_TO_COMPLETIONS,
+		COMPLETIONS_TO_MESSAGES,
+		COMPLETIONS_TO_DETECT,
 	];
-	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[(
-		"stream",
-		&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
-	)];
+	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
+		("basic", ALL_COMPLETIONS),
+		("openrouter_reasoning", ALL_COMPLETIONS),
+	];
+	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_COMPLETIONS)];
 
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
@@ -399,8 +404,14 @@ mod response {
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
 
-	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", &[RESPONSES_TO_RESPONSES])];
-	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", &[RESPONSES_TO_RESPONSES])];
+	const ALL_RESPONSES: &[&str] = &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT];
+	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_RESPONSES)];
+	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_RESPONSES)];
+
+	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
+		("non-json", &[COMPLETIONS_TO_DETECT]),
+		("broken-sse", &[COMPLETIONS_TO_DETECT]),
+	];
 
 	#[tokio::test]
 	async fn from_bedrock() {
@@ -469,6 +480,18 @@ mod response {
 		}
 	}
 
+	#[tokio::test]
+	async fn detect() {
+		for (name, providers) in DETECT_RESPONSES {
+			let test = &format!("response/detect/{name}");
+			for provider in *providers {
+				// Test each one as a stream and not
+				test_response_for_provider(provider, test);
+				test_streaming_response_for_provider(provider, test).await
+			}
+		}
+	}
+
 	fn test_response_for_provider(provider: &str, test: &str) {
 		let (p, r) = build_provider_request(provider);
 		let test_fn = |i: Bytes| p.process_success(&r, &i);
@@ -515,6 +538,18 @@ mod response {
 			BEDROCK_TO_MESSAGES => (bedrock_provider, dummy_llm_req(InputFormat::Messages)),
 			BEDROCK_TO_COMPLETIONS => (bedrock_provider, dummy_llm_req(InputFormat::Completions)),
 			BEDROCK_TO_RESPONSES => (bedrock_provider, dummy_llm_req(InputFormat::Responses)),
+			COMPLETIONS_TO_DETECT => (
+				AIProvider::OpenAI(openai::Provider { model: None }),
+				dummy_llm_req(InputFormat::Detect),
+			),
+			MESSAGES_TO_DETECT => (
+				AIProvider::Anthropic(anthropic::Provider { model: None }),
+				dummy_llm_req(InputFormat::Detect),
+			),
+			RESPONSES_TO_DETECT => (
+				AIProvider::OpenAI(openai::Provider { model: None }),
+				dummy_llm_req(InputFormat::Detect),
+			),
 			// No other ones are supported.
 			// We do not have Responses<-->Completions
 			other => panic!("unsupported provider for responses: {other}"),

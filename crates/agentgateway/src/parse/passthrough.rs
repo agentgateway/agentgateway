@@ -113,3 +113,116 @@ where
 		}
 	}
 }
+
+pin_project! {
+	pub struct FullPassthroughBody<D, F> {
+		#[pin]
+		body: http::Body,
+		decoder: D,
+		decode_buffer: BytesMut,
+		handler: F,
+		finished: bool,
+		error: bool,
+	}
+}
+
+// full_passthrough_parser is a complete passthrough, used in cases where we are not even sure SSE is returned
+// We optimistically handle SSE events, but never modify the body.
+// As a side effect, this means we may call the handler function after we send an SSE chunk through!
+pub fn full_passthrough_parser<D, F>(body: http::Body, decoder: D, handler: F) -> http::Body
+where
+	D: Decoder + Send + 'static,
+	D::Error: Send + Into<axum_core::BoxError> + 'static,
+	F: FnMut(D::Item) + Send + 'static,
+{
+	http::Body::new(FullPassthroughBody {
+		body,
+		decoder,
+		handler,
+		decode_buffer: BytesMut::new(),
+		finished: false,
+		error: false,
+	})
+}
+
+impl<D, F> Body for FullPassthroughBody<D, F>
+where
+	D: Decoder + Send + 'static,
+	D::Error: Send + Into<axum_core::BoxError> + 'static,
+	F: FnMut(D::Item) + Send + 'static,
+{
+	type Data = Bytes;
+	type Error = http::Error;
+
+	fn poll_frame(
+		self: Pin<&mut Self>,
+		cx: &mut Context<'_>,
+	) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+		let mut this = self.project();
+		// If we're finished and have no more data, we're done
+		if *this.finished {
+			return Poll::Ready(None);
+		}
+
+		let try_decode = |finished: bool, buf: &mut BytesMut, decoder: &mut D, handler: &mut F| {
+			loop {
+				let decode = if finished {
+					decoder.decode_eof(buf)
+				} else {
+					decoder.decode(buf)
+				};
+				match decode {
+					Ok(Some(decoded_item)) => {
+						(handler)(decoded_item);
+					},
+					Ok(None) => {
+						// Nothing more to decode!
+						return Ok(());
+					},
+					Err(e) => {
+						return Err(http::Error::new(e));
+					},
+				}
+			}
+		};
+
+		// Try to decode items from our buffer
+		if !*this.error
+			&& let Err(_e) = (try_decode)(
+				*this.finished,
+				this.decode_buffer,
+				&mut *this.decoder,
+				this.handler,
+			) {
+			*this.error = true;
+		}
+		// We need more input data - poll the underlying body
+		let frame_to_send = ready!(this.body.as_mut().poll_frame(cx));
+		if !*this.error {
+			match &frame_to_send {
+				Some(Ok(frame)) => {
+					if let Some(data) = frame.data_ref() {
+						this.decode_buffer.extend_from_slice(data);
+					}
+				},
+				None => {
+					*this.finished = true;
+				},
+				Some(Err(_)) => {},
+			}
+
+			match (try_decode)(
+				*this.finished,
+				this.decode_buffer,
+				&mut *this.decoder,
+				this.handler,
+			) {
+				Ok(_) => {},
+				Err(_e) => {
+					*this.error = true;
+				},
+			}
+		};
+		Poll::Ready(frame_to_send)
+	}
+}

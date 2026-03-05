@@ -936,6 +936,8 @@ message BackendPolicySpec {
       MODELS = 3;
       // Sends requests to upstream as-is without LLM processing
       PASSTHROUGH = 4;
+      // Sends requests upstream as-is but attempts to detect usage/metadata for telemetry/rate limiting
+      DETECT = 9;
       // Processes OpenAI /responses format requests
       RESPONSES = 5;
       // Processes Anthropic /v1/messages/count_tokens format requests

@@ -2867,6 +2867,11 @@
           "const": "passthrough"
         },
         {
+          "description": "Send the request to the upstream LLM provider as-is but attempt to extract information from it\nand apply a subset of policies (rate limit and telemetry; no guardrails).",
+          "type": "string",
+          "const": "detect"
+        },
+        {
           "description": "OpenAI /responses",
           "type": "string",
           "const": "responses"

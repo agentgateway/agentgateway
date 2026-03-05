@@ -4739,6 +4739,7 @@ spec:
                                           - Messages
                                           - Models
                                           - Passthrough
+                                          - Detect
                                           - Responses
                                           - AnthropicTokenCount
                                           - Embeddings
@@ -10461,6 +10462,7 @@ spec:
                           - Messages
                           - Models
                           - Passthrough
+                          - Detect
                           - Responses
                           - AnthropicTokenCount
                           - Embeddings

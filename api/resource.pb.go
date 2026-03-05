@@ -1003,6 +1003,8 @@ const (
 	BackendPolicySpec_Ai_MODELS BackendPolicySpec_Ai_RouteType = 3
 	// Sends requests to upstream as-is without LLM processing
 	BackendPolicySpec_Ai_PASSTHROUGH BackendPolicySpec_Ai_RouteType = 4
+	// Sends requests upstream as-is but attempts to detect usage/metadata for telemetry/rate limiting
+	BackendPolicySpec_Ai_DETECT BackendPolicySpec_Ai_RouteType = 9
 	// Processes OpenAI /responses format requests
 	BackendPolicySpec_Ai_RESPONSES BackendPolicySpec_Ai_RouteType = 5
 	// Processes Anthropic /v1/messages/count_tokens format requests
@@ -1021,6 +1023,7 @@ var (
 		2: "MESSAGES",
 		3: "MODELS",
 		4: "PASSTHROUGH",
+		9: "DETECT",
 		5: "RESPONSES",
 		6: "ANTHROPIC_TOKEN_COUNT",
 		7: "EMBEDDINGS",
@@ -1032,6 +1035,7 @@ var (
 		"MESSAGES":              2,
 		"MODELS":                3,
 		"PASSTHROUGH":           4,
+		"DETECT":                9,
 		"RESPONSES":             5,
 		"ANTHROPIC_TOKEN_COUNT": 6,
 		"EMBEDDINGS":            7,
@@ -11126,7 +11130,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xab<\n" +
+	"\x04kind\"\xb7<\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -11144,7 +11148,7 @@ const file_resource_proto_rawDesc = "" +
 	"\fbackend_http\x18\f \x01(\v28.agentgateway.dev.resource.BackendPolicySpec.BackendHTTPH\x00R\vbackendHttp\x12Z\n" +
 	"\vbackend_tcp\x18\r \x01(\v27.agentgateway.dev.resource.BackendPolicySpec.BackendTCPH\x00R\n" +
 	"backendTcp\x12k\n" +
-	"\x0etransformation\x18\x0e \x01(\v2A.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicyH\x00R\x0etransformation\x1a\x87\"\n" +
+	"\x0etransformation\x18\x0e \x01(\v2A.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicyH\x00R\x0etransformation\x1a\x93\"\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -11248,14 +11252,16 @@ const file_resource_proto_rawDesc = "" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04MASK\x10\x01\x12\n" +
 	"\n" +
-	"\x06REJECT\x10\x02\"\xa0\x01\n" +
+	"\x06REJECT\x10\x02\"\xac\x01\n" +
 	"\tRouteType\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vCOMPLETIONS\x10\x01\x12\f\n" +
 	"\bMESSAGES\x10\x02\x12\n" +
 	"\n" +
 	"\x06MODELS\x10\x03\x12\x0f\n" +
-	"\vPASSTHROUGH\x10\x04\x12\r\n" +
+	"\vPASSTHROUGH\x10\x04\x12\n" +
+	"\n" +
+	"\x06DETECT\x10\t\x12\r\n" +
 	"\tRESPONSES\x10\x05\x12\x19\n" +
 	"\x15ANTHROPIC_TOKEN_COUNT\x10\x06\x12\x0e\n" +
 	"\n" +

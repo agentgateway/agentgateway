@@ -105,6 +105,9 @@ pub enum RouteType {
 	Models,
 	/// Send the request to the upstream LLM provider as-is
 	Passthrough,
+	/// Send the request to the upstream LLM provider as-is but attempt to extract information from it
+	/// and apply a subset of policies (rate limit and telemetry; no guardrails).
+	Detect,
 	/// OpenAI /responses
 	Responses,
 	/// OpenAI /embeddings
@@ -159,6 +162,7 @@ pub enum InputFormat {
 	Embeddings,
 	Realtime,
 	CountTokens,
+	Detect,
 }
 
 impl InputFormat {
@@ -170,6 +174,7 @@ impl InputFormat {
 			InputFormat::Realtime => false,
 			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
+			InputFormat::Detect => false,
 		}
 	}
 }
@@ -341,7 +346,7 @@ impl AIProvider {
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
 	) -> anyhow::Result<()> {
-		let override_path = route_type != RouteType::Passthrough;
+		let override_path = !matches!(route_type, RouteType::Passthrough | RouteType::Detect);
 		match self {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
@@ -376,10 +381,12 @@ impl AIProvider {
 			AIProvider::Vertex(provider) => {
 				let request_model = llm_request.map(|l| l.request_model.as_str());
 				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
-				let path = provider.get_path_for_model(route_type, request_model, streaming);
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						if override_path {
+							let path = provider.get_path_for_model(route_type, request_model, streaming);
+							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						}
 						uri.authority = Some(Authority::from_str(&provider.get_host(request_model))?);
 						Ok(())
 					})?;
@@ -608,6 +615,51 @@ impl AIProvider {
 			.await
 	}
 
+	pub async fn process_detect_request(
+		&self,
+		backend_info: &crate::http::auth::BackendInfo,
+		policies: Option<&Policy>,
+		hreq: Request,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		// We don't use read_body_and_default_model here because we need a lot of special logic
+		// Unfortunately we buffer just due to how our interface works. Ideally we could not when
+		// it is not even JSON
+		let buffer = http::buffer_limit(&hreq);
+		let is_json = hreq
+			.headers()
+			.typed_get::<headers::ContentType>()
+			.map(|v| v == headers::ContentType::json())
+			.unwrap_or_default();
+		let (parts, body) = hreq.into_parts();
+		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
+			return Err(AIError::RequestTooLarge);
+		};
+
+		let req = if is_json {
+			if let Some(p) = policies {
+				p.unmarshal_request(&bytes, log)
+			} else {
+				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)
+			}
+			.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
+		} else {
+			types::detect::Request::new_raw(bytes)
+		};
+
+		self
+			.process_request(
+				backend_info,
+				policies,
+				InputFormat::Detect,
+				req,
+				parts,
+				false,
+				log,
+			)
+			.await
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	async fn process_request(
 		&self,
@@ -620,6 +672,9 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
 		match (self, original_format) {
+			(_, InputFormat::Detect) => {
+				// All providers support detect; this is a passthrough!
+			},
 			(_, InputFormat::Completions) => {
 				// All providers support completions input
 			},
@@ -667,7 +722,8 @@ impl AIProvider {
 		}
 		if let Some(p) = policies {
 			// Apply model alias resolution
-			if let Some(model) = req.model()
+			if req.supports_model()
+				&& let Some(model) = req.model()
 				&& let Some(aliased) = p.resolve_model_alias(model.as_str())
 			{
 				*model = aliased.to_string();
@@ -876,6 +932,10 @@ impl AIProvider {
 		bytes: &Bytes,
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		match (self, req.input_format) {
+			(_, InputFormat::Detect) => Ok(Box::new(
+				serde_json::from_slice::<types::detect::Response>(bytes)
+					.unwrap_or_else(|_| types::detect::Response::new_raw(bytes.clone())),
+			)),
 			// Completions with OpenAI: just passthrough
 			(
 				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
@@ -1020,6 +1080,9 @@ impl AIProvider {
 					include_completion_in_log,
 					resp,
 				)
+			},
+			(_, InputFormat::Detect) => {
+				types::detect::passthrough_stream(AmendOnDrop::new(log, rate_limit), resp)
 			},
 			// Responses with OpenAI: just passthrough
 			(
@@ -1191,6 +1254,10 @@ impl AIProvider {
 				}
 			},
 			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+				// Passthrough; nothing needed
+				Ok(bytes.clone())
+			},
+			(_, InputFormat::Detect) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
