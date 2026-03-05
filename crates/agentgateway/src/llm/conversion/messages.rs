@@ -641,9 +641,12 @@ pub mod from_completions {
 					messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
 						let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
 						log.non_atomic_mutate(|r| {
-							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
-							r.response.cache_creation_input_tokens =
-								usage.cache_creation_input_tokens.map(|i| i as u64);
+							if let Some(crt) = usage.cache_read_input_tokens {
+								r.response.cached_input_tokens = Some(crt as u64);
+							}
+							if let Some(cwt) = usage.cache_creation_input_tokens {
+								r.response.cache_creation_input_tokens = Some(cwt as u64);
+							}
 							if let Some(o) = usage.output_tokens {
 								r.response.output_tokens = Some(o as u64);
 							}
@@ -736,9 +739,12 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 					if let Some(o) = usage.output_tokens {
 						r.response.output_tokens = Some(o as u64);
 					}
-					r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
-					r.response.cache_creation_input_tokens =
-						usage.cache_creation_input_tokens.map(|i| i as u64);
+					if let Some(crt) = usage.cache_read_input_tokens {
+						r.response.cached_input_tokens = Some(crt as u64);
+					}
+					if let Some(cwt) = usage.cache_creation_input_tokens {
+						r.response.cache_creation_input_tokens = Some(cwt as u64);
+					}
 					if let Some(inp) = r.response.input_tokens
 						&& let Some(o) = r.response.output_tokens
 					{

@@ -481,6 +481,26 @@ impl DropOnLog {
 					})
 					.observe(ot as f64)
 			}
+			if let Some(crt) = llm_response.cached_input_tokens {
+				log
+					.metrics
+					.gen_ai_token_usage
+					.get_or_create(&GenAILabelsTokenUsage {
+						gen_ai_token_type: strng::literal!("input_cache_read").into(),
+						common: gen_ai_labels.clone().into(),
+					})
+					.observe(crt as f64)
+			}
+			if let Some(cwt) = llm_response.cache_creation_input_tokens {
+				log
+					.metrics
+					.gen_ai_token_usage
+					.get_or_create(&GenAILabelsTokenUsage {
+						gen_ai_token_type: strng::literal!("input_cache_write").into(),
+						common: gen_ai_labels.clone().into(),
+					})
+					.observe(cwt as f64)
+			}
 			log
 				.metrics
 				.gen_ai_request_duration
