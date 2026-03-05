@@ -346,7 +346,7 @@ impl AIProvider {
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
 	) -> anyhow::Result<()> {
-		let override_path = route_type != RouteType::Passthrough;
+		let override_path = !matches!(route_type, RouteType::Passthrough | RouteType::Detect);
 		match self {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
@@ -381,10 +381,12 @@ impl AIProvider {
 			AIProvider::Vertex(provider) => {
 				let request_model = llm_request.map(|l| l.request_model.as_str());
 				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
-				let path = provider.get_path_for_model(route_type, request_model, streaming);
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						if override_path {
+							let path = provider.get_path_for_model(route_type, request_model, streaming);
+							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						}
 						uri.authority = Some(Authority::from_str(&provider.get_host(request_model))?);
 						Ok(())
 					})?;
@@ -636,7 +638,6 @@ impl AIProvider {
 
 		let req = if is_json {
 			if let Some(p) = policies {
-				// TODO: if we are going
 				p.unmarshal_request(&bytes, log)
 			} else {
 				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)
