@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use ::http::{HeaderMap, Method, Request};
 use hyper_util::client::legacy::Client;
+use serde_json::json;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tonic::Status;
@@ -21,9 +22,6 @@ use crate::test_helpers::extprocmock::{
 	request_header_response, response_body_response, response_header_response,
 };
 use crate::test_helpers::proxymock::*;
-use crate::types::agent::{
-	PolicyTarget, RouteTarget, SimpleBackendReference, TargetedPolicy, TrafficPolicy,
-};
 use crate::*;
 
 #[tokio::test]
@@ -206,28 +204,16 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 		.with_backend(*mock.address())
 		.with_backend(ext_proc.address)
 		.with_bind(simple_bind(basic_route(*mock.address())))
-		.with_policy(TargetedPolicy {
-			key: strng::new("ext_proc"),
-			name: None,
-			target: PolicyTarget::Route(RouteTarget {
-				name: "route".into(),
-				namespace: Default::default(),
-				rule_name: None,
-				kind: None,
-			}),
-			policy: TrafficPolicy::ExtProc(ext_proc::ExtProc {
-				policies: Default::default(),
-				target: Arc::new(SimpleBackendReference::Backend(strng::format!(
-					"/{}",
-					ext_proc.address
-				))),
-				failure_mode,
-				metadata_context,
-				request_attributes,
-				response_attributes,
-			})
-			.into(),
-		});
+		.attach_route_policy_builder(json!({
+			"extProc": {
+				"host": ext_proc.address,
+				"failureMode": failure_mode,
+				"metadataContext": metadata_context,
+				"requestAttributes": request_attributes,
+				"responseAttributes": response_attributes,
+			}
+		}))
+		.await;
 	let io = t.serve_http(strng::new("bind"));
 	(mock, ext_proc, t, io)
 }

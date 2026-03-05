@@ -35,10 +35,11 @@ use crate::transport::tls;
 use crate::types::agent::{
 	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindKey, BindProtocol,
 	Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch,
-	ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, RouteSet,
+	PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, RouteSet,
 	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
 };
+use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
 
@@ -299,6 +300,10 @@ pub struct TestBind {
 	pi: Arc<ProxyInputs>,
 	drain_rx: DrainWatcher,
 	_drain_tx: DrainTrigger,
+
+	// Counters to help make unique items
+	routes: usize,
+	policies: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -486,9 +491,75 @@ impl TestBind {
 		self
 	}
 
-	pub fn with_policy(self, p: TargetedPolicy) -> TestBind {
-		self.pi.stores.binds.write().insert_policy(p);
+	pub async fn attach_route_policy_builder(mut self, p: serde_json::Value) -> Self {
+		self.attach_route_policy(p).await;
 		self
+	}
+	pub async fn attach_backend(&mut self, p: serde_json::Value) {
+		let b: local::FullLocalBackend = serde_json::from_value(p).unwrap();
+
+		let policies = b
+			.policies
+			.map(|p| p.translate())
+			.transpose()
+			.unwrap()
+			.unwrap_or_default();
+		let bps = BackendWithPolicies {
+			backend: Backend::Opaque(crate::types::local::local_name(b.name), b.host),
+			inline_policies: policies,
+		};
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_backend(bps.backend.name(), bps)
+	}
+	pub async fn attach_route(&mut self, p: serde_json::Value) {
+		let pol: local::LocalRoute = serde_json::from_value(p).unwrap();
+		self.routes += 1;
+		let (route, backends) =
+			local::convert_route(self.pi.upstream.clone(), pol, self.routes, LISTENER_KEY)
+				.await
+				.unwrap();
+		for b in backends {
+			self
+				.pi
+				.stores
+				.binds
+				.write()
+				.insert_backend(b.backend.name(), b.into());
+		}
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_route(route, LISTENER_KEY);
+	}
+	pub async fn attach_route_policy(&mut self, p: serde_json::Value) {
+		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
+		let pols = local::split_policies(self.pi.upstream.clone(), pol)
+			.await
+			.unwrap();
+		for v in pols.route_policies.into_iter() {
+			self.policies += 1;
+			self.with_policy(TargetedPolicy {
+				key: strng::format!("pol-{}", self.policies),
+				name: None,
+				target: PolicyTarget::Route(RouteName {
+					name: "route".into(),
+					namespace: "".into(),
+					rule_name: None,
+					kind: None,
+				}),
+				policy: v.into(),
+			});
+		}
+	}
+
+	pub fn with_policy(&mut self, p: TargetedPolicy) {
+		self.pi.stores.binds.write().insert_policy(p);
 	}
 	pub fn serve_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
 		let io = self.serve(bind_name);
@@ -621,6 +692,9 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 		pi,
 		drain_rx,
 		_drain_tx: drain_tx,
+
+		routes: 0,
+		policies: 0,
 	})
 }
 
