@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -110,7 +111,12 @@ func RunForDirectory[Status any, Output any](t *testing.T, base string, run func
 		if name == "_defaults.yaml" {
 			continue
 		}
+		runOnly := os.Getenv("GOLDEN_TEST")
 		t.Run(name, func(t *testing.T) {
+			if runOnly != "" && name != runOnly+".yaml" {
+				t.Skipf("only running %v, skipped", runOnly)
+				return
+			}
 			data := file.AsStringOrFail(t, f)
 			inputData := data
 			idx := strings.Index(data, "---\n# Output")

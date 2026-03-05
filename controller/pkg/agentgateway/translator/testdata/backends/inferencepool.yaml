@@ -1,31 +1,3 @@
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: example-gateway
-  namespace: default
-spec:
-  gatewayClassName: agentgateway
-  listeners:
-    - name: http
-      protocol: HTTP
-      port: 80
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: external-service-route
-  namespace: default
-spec:
-  parentRefs:
-    - name: example-gateway
-  hostnames:
-    - "external.example.com"
-  rules:
-    - backendRefs:
-        - name: gateway-pool
-          kind: InferencePool
-          group: inference.networking.k8s.io
----
 apiVersion: inference.networking.k8s.io/v1
 kind: InferencePool
 metadata:
@@ -73,45 +45,6 @@ spec:
 ---
 # Output
 output:
-- gateway:
-    Name: example-gateway
-    Namespace: default
-  resource:
-    bind:
-      key: 80/default/example-gateway
-      port: 80
-- gateway:
-    Name: example-gateway
-    Namespace: default
-  resource:
-    listener:
-      bindKey: 80/default/example-gateway
-      key: default/example-gateway.http
-      name:
-        gatewayName: example-gateway
-        gatewayNamespace: default
-        listenerName: http
-      protocol: HTTP
-- gateway:
-    Name: example-gateway
-    Namespace: default
-  resource:
-    route:
-      backends:
-      - backend:
-          port: 8080
-          service:
-            hostname: gateway-pool.default.inference.cluster.local
-            namespace: default
-        weight: 1
-      hostnames:
-      - external.example.com
-      key: default/external-service-route.0.http
-      listenerKey: default/example-gateway.http
-      name:
-        kind: HTTPRoute
-        name: external-service-route
-        namespace: default
 - resource:
     policy:
       backend:
@@ -197,7 +130,7 @@ status:
       parentRef:
         group: gateway.networking.k8s.io
         kind: Gateway
-        name: example-gateway
+        name: basic
         namespace: default
 - apiVersion: gateway.networking.k8s.io/v1
   kind: BackendTLSPolicy
@@ -210,7 +143,7 @@ status:
     - ancestorRef:
         group: gateway.networking.k8s.io
         kind: Gateway
-        name: example-gateway
+        name: basic
       conditions:
       - lastTransitionTime: fake
         message: Configuration is valid

@@ -104,7 +104,8 @@ func NewAgwSyncer(
 		statusCollections:        status.NewStatusCollections(extraGVKs),
 		NackPublisher:            nack.NewPublisher(client),
 		gatewayCollectionOptions: []translator.GatewayCollectionConfigOption{
-			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc)},
+			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc),
+		},
 		customResourceCollections:   cfg.CustomResourceCollections,
 		workloadAddressProviderFunc: cfg.WorkloadAddressProviderFunc,
 		serviceAddressProviderFunc:  cfg.ServiceAddressProviderFunc,
@@ -340,6 +341,7 @@ func ReportListenerSetListenerConflicts(status *gwv1.ListenerEntryStatus, obj *g
 
 	status.Conditions = translator.SetConditions(obj.Generation, status.Conditions, gatewayConditions)
 }
+
 func (s *Syncer) buildGatewayCollection(
 	gatewayClasses krt.Collection[translator.GatewayClass],
 	listenerSets krt.Collection[translator.ListenerSet],
@@ -410,7 +412,7 @@ func (s *Syncer) buildAgwResources(
 	binds := krt.NewManyCollection(ports, func(ctx krt.HandlerContext, object krt.IndexObject[string, *translator.GatewayListener]) []agwir.AgwResource {
 		port, _ := strconv.Atoi(object.Key)
 		uniq := sets.New[types.NamespacedName]()
-		var protocol = api.Bind_Protocol(0)
+		protocol := api.Bind_Protocol(0)
 		for _, gw := range object.Objects {
 			uniq.Insert(types.NamespacedName{
 				Namespace: gw.ParentGateway.Namespace,
@@ -463,10 +465,14 @@ func (s *Syncer) buildAgwResources(
 		agwRoutes = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{agwRoutes, s.agwPlugins.AddResourceExtension.Routes})
 	}
 
-	agwPolicies, policyStatuses := AgwPolicyCollection(s.agwPlugins, ancestorBackends, krtopts)
+	ancestorsIndex := krt.NewIndex(ancestorBackends, "ancestors", func(o *utils.AncestorBackend) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.Backend}
+	})
+	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+	agwPolicies, policyStatuses := AgwPolicyCollection(s.agwPlugins, ancestorCollection, krtopts)
 
 	// Create an agentgateway backend collection from the kgateway backend resources
-	agwBackendStatus, agwBackends := s.newAgwBackendCollection(s.agwCollections.Backends, krtopts)
+	agwBackendStatus, agwBackends := s.newAgwBackendCollection(s.agwCollections.Backends, ancestorCollection, krtopts)
 
 	// Join all Agw resources
 	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("Resources")...)
@@ -499,7 +505,11 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 }
 
 // newAgwBackendCollection creates the ADP backend collection for agent gateway resources
-func (s *Syncer) newAgwBackendCollection(finalBackends krt.Collection[*agentgateway.AgentgatewayBackend], krtopts krtutil.KrtOptions) (
+func (s *Syncer) newAgwBackendCollection(
+	finalBackends krt.Collection[*agentgateway.AgentgatewayBackend],
+	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	krtopts krtutil.KrtOptions,
+) (
 	krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus],
 	krt.Collection[agwir.AgwResource],
 ) {
@@ -511,7 +521,7 @@ func (s *Syncer) newAgwBackendCollection(finalBackends krt.Collection[*agentgate
 			Krt:         ctx,
 			Collections: s.agwCollections,
 		}
-		return agentgatewaybackend.TranslateAgwBackend(pc, backend)
+		return agentgatewaybackend.TranslateAgwBackend(pc, backend, ancestors)
 	}, krtopts.ToOptions("Backends")...)
 }
 

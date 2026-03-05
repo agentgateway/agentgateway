@@ -15,7 +15,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-static-streamable
       mcp:
@@ -28,7 +31,10 @@ output:
       name:
         name: mcp-static-streamable
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-static-streamable/streamable-target
       name:

@@ -14,7 +14,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-static-no-protocol
       mcp:
@@ -26,7 +29,10 @@ output:
       name:
         name: mcp-static-no-protocol
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-static-no-protocol/default-target
       name:

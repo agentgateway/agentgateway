@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
+	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
@@ -18,6 +19,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
@@ -75,6 +77,7 @@ func BuildAgwBackend(
 func TranslateAgwBackend(
 	ctx plugins.PolicyCtx,
 	backend *agentgateway.AgentgatewayBackend,
+	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
 ) (*agentgateway.AgentgatewayBackendStatus, []agwir.AgwResource) {
 	var results []agwir.AgwResource
 	backends, err := BuildAgwBackend(ctx, backend)
@@ -92,15 +95,21 @@ func TranslateAgwBackend(
 		}, results
 	}
 
+	gtws := krt.FetchOne(ctx.Krt, ancestors, krt.FilterKey(utils.TypedNamespacedName{
+		NamespacedName: config.NamespacedName(backend),
+		Kind:           wellknown.AgentgatewayBackendGVK.Kind,
+	}.String()))
 	// handle all backends created as an MCPBackend backend may create multiple backends
-	for _, backend := range backends {
-		logger.Debug("creating backend", "backend", backend.Name)
-		resourceWrapper := translator.ToResourceGlobal(&api.Resource{
-			Kind: &api.Resource_Backend{
-				Backend: backend,
-			},
-		})
-		results = append(results, resourceWrapper)
+	for _, gateways := range gtws.Objects {
+		for _, backend := range backends {
+			logger.Debug("creating backend", "backend", backend.Name)
+			resourceWrapper := translator.ToResourceForGateway(gateways.Gateway, &api.Resource{
+				Kind: &api.Resource_Backend{
+					Backend: backend,
+				},
+			})
+			results = append(results, resourceWrapper)
+		}
 	}
 
 	return &agentgateway.AgentgatewayBackendStatus{
@@ -325,7 +334,8 @@ func translateAIBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBac
 func translateBackendPolicies(
 	ctx plugins.PolicyCtx,
 	namespace string,
-	policies *agentgateway.BackendFull) ([]*api.BackendPolicySpec, error) {
+	policies *agentgateway.BackendFull,
+) ([]*api.BackendPolicySpec, error) {
 	if policies == nil {
 		return nil, nil
 	}
@@ -334,7 +344,8 @@ func translateBackendPolicies(
 
 func translateMCPBackendPolicies(
 	ctx plugins.PolicyCtx,
-	namespace string, policies *agentgateway.BackendWithMCP) ([]*api.BackendPolicySpec, error) {
+	namespace string, policies *agentgateway.BackendWithMCP,
+) ([]*api.BackendPolicySpec, error) {
 	if policies == nil {
 		return nil, nil
 	}
@@ -346,7 +357,8 @@ func translateMCPBackendPolicies(
 
 func translateAIBackendPolicies(
 	ctx plugins.PolicyCtx,
-	namespace string, policies *agentgateway.BackendWithAI) ([]*api.BackendPolicySpec, error) {
+	namespace string, policies *agentgateway.BackendWithAI,
+) ([]*api.BackendPolicySpec, error) {
 	if policies == nil {
 		return nil, nil
 	}

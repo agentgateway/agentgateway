@@ -47,45 +47,6 @@ spec:
 ---
 # Output
 output:
-- gateway:
-    Name: example-gateway
-    Namespace: default
-  resource:
-    bind:
-      key: 80/default/example-gateway
-      port: 80
-- gateway:
-    Name: example-gateway
-    Namespace: default
-  resource:
-    listener:
-      bindKey: 80/default/example-gateway
-      key: default/example-gateway.http
-      name:
-        gatewayName: example-gateway
-        gatewayNamespace: default
-        listenerName: http
-      protocol: HTTP
-- gateway:
-    Name: example-gateway
-    Namespace: default
-  resource:
-    route:
-      backends:
-      - backend:
-          port: 8080
-          service:
-            hostname: external.example.com
-            namespace: default
-        weight: 1
-      hostnames:
-      - external.example.com
-      key: default/external-service-route.0.http
-      listenerKey: default/example-gateway.http
-      name:
-        kind: HTTPRoute
-        name: external-service-route
-        namespace: default
 - canonicalName: external-service
   canonicalRevision: latest
   clusterId: Kubernetes

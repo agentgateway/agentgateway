@@ -10,7 +10,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/example-backend
       name:

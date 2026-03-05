@@ -17,7 +17,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-static-with-auth
       mcp:
@@ -29,7 +32,10 @@ output:
       name:
         name: mcp-static-with-auth
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       inlinePolicies:
       - auth:

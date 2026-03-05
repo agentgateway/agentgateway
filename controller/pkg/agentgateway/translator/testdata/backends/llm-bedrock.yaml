@@ -27,7 +27,10 @@ data:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       ai:
         providerGroups:

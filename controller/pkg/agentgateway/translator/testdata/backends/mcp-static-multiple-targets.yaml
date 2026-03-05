@@ -21,7 +21,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-multi-static
       mcp:
@@ -39,7 +42,10 @@ output:
       name:
         name: mcp-multi-static
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-multi-static/http-target
       name:
@@ -48,7 +54,10 @@ output:
       static:
         host: http.example.com
         port: 9090
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-multi-static/sse-target
       name:

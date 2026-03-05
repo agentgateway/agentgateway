@@ -8,7 +8,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       dynamic: {}
       key: default/dynamic-backend
