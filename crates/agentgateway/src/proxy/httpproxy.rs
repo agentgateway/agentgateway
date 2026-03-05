@@ -1359,14 +1359,13 @@ async fn make_backend_call(
 		},
 		Backend::Dynamic(_, _) => {
 			let host = http::get_host(&req)?;
-			let port = req.uri().port_u16().unwrap_or_else(|| {
-				req
-					.extensions()
-					.get::<TCPConnectionInfo>()
-					.unwrap()
-					.local_addr
-					.port()
-			});
+			let port = req
+				.uri()
+				.port_u16()
+				.unwrap_or_else(|| match req.uri().scheme() {
+					Some(s) if *s == Scheme::HTTPS => 443,
+					_ => 80,
+				});
 			let target = Target::try_from((host, port)).map_err(ProxyError::Processing)?;
 			BackendCall {
 				target: target.clone(),
