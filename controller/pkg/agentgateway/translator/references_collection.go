@@ -116,7 +116,11 @@ type ReferenceGrant struct {
 }
 
 func (g ReferenceGrant) ResourceName() string {
-	return g.Source.String() + "/" + g.From.String() + "/" + g.To.String()
+	nameKey := "*"
+	if !g.AllowAll {
+		nameKey = g.AllowedName
+	}
+	return g.Source.String() + "/" + g.From.String() + "/" + g.To.String() + "/" + nameKey
 }
 
 // SecretAllowed checks if a secret is allowed to be used by a gateway
