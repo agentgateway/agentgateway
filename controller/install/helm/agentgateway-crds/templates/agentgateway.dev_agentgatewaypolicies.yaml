@@ -708,6 +708,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -840,6 +841,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -1342,6 +1344,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -1474,6 +1477,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -1972,6 +1976,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -2104,6 +2109,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -2819,6 +2825,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -2951,6 +2958,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -3453,6 +3461,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -3585,6 +3594,7 @@ spec:
                                                     metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                                                     metadata is evaluated before header or body transformations.
                                                   maxProperties: 16
+                                                  minProperties: 1
                                                   type: object
                                                 remove:
                                                   description: Remove is a list of
@@ -4522,6 +4532,7 @@ spec:
                               metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                               metadata is evaluated before header or body transformations.
                             maxProperties: 16
+                            minProperties: 1
                             type: object
                           remove:
                             description: Remove is a list of header names to remove
@@ -4631,6 +4642,7 @@ spec:
                               metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                               metadata is evaluated before header or body transformations.
                             maxProperties: 16
+                            minProperties: 1
                             type: object
                           remove:
                             description: Remove is a list of header names to remove
@@ -6910,6 +6922,7 @@ spec:
                               metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                               metadata is evaluated before header or body transformations.
                             maxProperties: 16
+                            minProperties: 1
                             type: object
                           remove:
                             description: Remove is a list of header names to remove
@@ -7019,6 +7032,7 @@ spec:
                               metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
                               metadata is evaluated before header or body transformations.
                             maxProperties: 16
+                            minProperties: 1
                             type: object
                           remove:
                             description: Remove is a list of header names to remove

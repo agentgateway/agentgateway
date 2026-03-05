@@ -136,11 +136,16 @@ impl Transformation {
 #[serde_as]
 #[derive(Debug, Default, Serialize)]
 pub struct TransformerConfig {
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub add: Vec<(HeaderOrPseudo, cel::Expression)>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub set: Vec<(HeaderOrPseudo, cel::Expression)>,
 	#[serde_as(serialize_as = "Vec<SerAsStr>")]
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub remove: Vec<HeaderName>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<cel::Expression>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub metadata: Vec<(Strng, cel::Expression)>,
 }
 
@@ -251,29 +256,10 @@ impl Transformation {
 		request: Option<&'a RequestSnapshot>,
 	) {
 		if !cfg.metadata.is_empty() {
-			let mut metadata = match &mut r {
-				RequestOrResponse::Request(req) => req
-					.extensions_mut()
-					.remove::<TransformationMetadata>()
-					.unwrap_or_default(),
-				RequestOrResponse::Response(resp) => resp
-					.extensions_mut()
-					.remove::<TransformationMetadata>()
-					.unwrap_or_default(),
-			};
 			for (name, expr) in &cfg.metadata {
 				if let Ok(v) = eval_metadata(&r, expr, request) {
+					let metadata = Self::get_meta(&mut r);
 					metadata.0.insert(name.to_string(), v);
-				}
-			}
-			if !metadata.0.is_empty() {
-				match &mut r {
-					RequestOrResponse::Request(req) => {
-						req.extensions_mut().insert(metadata);
-					},
-					RequestOrResponse::Response(resp) => {
-						resp.extensions_mut().insert(metadata);
-					},
 				}
 			}
 		}
@@ -294,6 +280,21 @@ impl Transformation {
 			*r.body() = http::Body::from(b);
 			r.headers().remove(&header::CONTENT_LENGTH);
 		}
+	}
+
+	fn get_meta<'a>(r: &'a mut RequestOrResponse<'_>) -> &'a mut TransformationMetadata {
+		let ext = match r {
+			RequestOrResponse::Request(req) => req.extensions_mut(),
+			RequestOrResponse::Response(resp) => resp.extensions_mut(),
+		};
+
+		if ext.get::<TransformationMetadata>().is_none() {
+			ext.insert(TransformationMetadata::default());
+		}
+
+		ext
+			.get_mut::<TransformationMetadata>()
+			.expect("we just put this there!")
 	}
 }
 
