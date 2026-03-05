@@ -25,9 +25,17 @@ spec:
 # Output
 output: []
 status:
-  conditions:
-  - lastTransitionTime: fake
-    message: 'failed to translate backend: jwks store hasn''t been initialized'
-    reason: TranslationError
-    status: "False"
-    type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: 'failed to translate backend: JwksUrlBuilderFactory must be initialized
+        before use'
+      reason: TranslationError
+      status: "False"
+      type: Accepted

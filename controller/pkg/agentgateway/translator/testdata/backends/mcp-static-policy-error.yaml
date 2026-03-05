@@ -19,9 +19,16 @@ spec:
 # Output
 output: []
 status:
-  conditions:
-  - lastTransitionTime: fake
-    message: 'failed to translate backend: secret default/missing-secret not found'
-    reason: TranslationError
-    status: "False"
-    type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-static-policy-error
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: 'failed to translate backend: secret default/missing-secret not found'
+      reason: TranslationError
+      status: "False"
+      type: Accepted
