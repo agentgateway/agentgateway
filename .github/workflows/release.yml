@@ -152,7 +152,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
+            type=raw,value=v${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -274,7 +274,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
+            type=raw,value=v${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests-musl
@@ -427,7 +427,7 @@ jobs:
         with:
           images: ${{ env.CONTROLLER_REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
+            type=raw,value=v${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/controller-digests
