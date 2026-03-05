@@ -152,7 +152,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -161,11 +161,11 @@ jobs:
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
 
       - name: Sign the container image
-        run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+        run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:v${{ env.VERSION }}
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:v${{ env.VERSION }}
 
   musl-build-image:
     runs-on: ${{ matrix.os }}
@@ -274,7 +274,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests-musl
@@ -283,11 +283,11 @@ jobs:
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
 
       - name: Sign the container image
-        run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}-musl
+        run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:v${{ env.VERSION }}-musl
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}-musl
+          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:v${{ env.VERSION }}-musl
 
   build-controller-image:
     runs-on: ${{ matrix.os }}
@@ -427,7 +427,7 @@ jobs:
         with:
           images: ${{ env.CONTROLLER_REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern=v{{version}},value=${{ env.VERSION }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/controller-digests
@@ -436,11 +436,11 @@ jobs:
             $(find . -type f -exec sh -c 'printf "${{ env.CONTROLLER_REGISTRY_IMAGE }}@sha256:%s " "$(basename "$1")"' _ {} \;)
 
       - name: Sign the container image
-        run: cosign sign --yes ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+        run: cosign sign --yes ${{ env.CONTROLLER_REGISTRY_IMAGE }}:v${{ env.VERSION }}
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ env.CONTROLLER_REGISTRY_IMAGE }}:v${{ env.VERSION }}
 
   push-helm-charts:
     runs-on: ubuntu-latest
