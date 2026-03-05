@@ -245,8 +245,8 @@ impl Socket {
 		// CONNECT :authority header. Without this, downstream consumers (ext_authz, CEL policy
 		// evaluation, telemetry) would see the HBONE listener port (15008) instead of the
 		// original service port.
-		// Note: peer_addr remains ztunnel's address — the original client IP is not preserved
-		// through the HBONE tunnel. Client identity comes from mTLS (TLSConnectionInfo).
+		// Note: peer_addr is the original client IP (ztunnel preserves the source address).
+		// Client identity comes from mTLS (TLSConnectionInfo).
 		if let Some(tcp) = ext.get::<TCPConnectionInfo>().cloned() {
 			ext.insert(TCPConnectionInfo {
 				local_addr: hbone_address,

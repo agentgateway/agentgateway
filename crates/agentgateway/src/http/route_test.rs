@@ -885,7 +885,7 @@ async fn test_waypoint_hostname_match() {
 		Some(GatewayAddress {
 			destination: Destination::Hostname(NamespacedHostname {
 				namespace: strng::new("istio-system"),
-				hostname: strng::new("my-waypoint"),
+				hostname: strng::new("my-waypoint.istio-system.svc.cluster.local"),
 			}),
 			hbone_mtls_port: 15008,
 		}),
@@ -928,7 +928,7 @@ async fn test_waypoint_hostname_mismatch() {
 		Some(GatewayAddress {
 			destination: Destination::Hostname(NamespacedHostname {
 				namespace: strng::new("istio-system"),
-				hostname: strng::new("other-waypoint"),
+				hostname: strng::new("other-waypoint.istio-system.svc.cluster.local"),
 			}),
 			hbone_mtls_port: 15008,
 		}),
@@ -962,7 +962,7 @@ async fn test_waypoint_hostname_mismatch() {
 
 #[tokio::test]
 async fn test_waypoint_hostname_fqdn_match() {
-	// Service whose waypoint hostname is a full FQDN instead of short name
+	// Service whose waypoint hostname is a FQDN in a different namespace
 	let svc = make_service(
 		"my-app",
 		"default",
@@ -1157,7 +1157,7 @@ async fn test_waypoint_no_self_addr() {
 		Some(GatewayAddress {
 			destination: Destination::Hostname(NamespacedHostname {
 				namespace: strng::new("istio-system"),
-				hostname: strng::new("my-waypoint"),
+				hostname: strng::new("my-waypoint.istio-system.svc.cluster.local"),
 			}),
 			hbone_mtls_port: 15008,
 		}),
