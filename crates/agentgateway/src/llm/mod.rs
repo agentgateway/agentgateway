@@ -210,7 +210,7 @@ pub struct LLMInfo {
 }
 
 impl LLMInfo {
-	fn new(req: LLMRequest, resp: LLMResponse) -> Self {
+	pub fn new(req: LLMRequest, resp: LLMResponse) -> Self {
 		Self {
 			request: req,
 			response: resp,

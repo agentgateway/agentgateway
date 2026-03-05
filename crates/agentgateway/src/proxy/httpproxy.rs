@@ -26,7 +26,7 @@ use crate::http::{
 	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
 	auth, filters, merge_in_headers, retry,
 };
-use crate::llm::{InputFormat, LLMRequest, RequestResult, RouteType};
+use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
 use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
@@ -1071,6 +1071,8 @@ async fn handle_upgrade(
 			&& llm_req.input_format == InputFormat::Realtime
 		{
 			let llm = log.llm_response.clone();
+			let llm_info = LLMInfo::new(llm_req.clone(), LLMResponse::default());
+			llm.store(Some(llm_info));
 			let mut server = parse::websocket::parser(server, llm).await;
 			let _ = agent_core::copy::copy_bidirectional(
 				&mut TokioIo::new(req),
