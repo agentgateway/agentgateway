@@ -417,7 +417,7 @@ func (s *Syncer) buildAgwResources(
 				Name:      gw.ParentGateway.Name,
 			})
 			// TODO: better handle conflicts of protocols. For now, we arbitrarily treat TLS > plain
-			if gw.Valid && gw.Conflict == "" {
+			if gw.Conflict == "" {
 				protocol = max(protocol, s.getBindProtocol(gw))
 			}
 		}
