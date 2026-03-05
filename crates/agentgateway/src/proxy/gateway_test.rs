@@ -1395,3 +1395,179 @@ async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value)
 fn deser<T: DeserializeOwned>(v: serde_json::Value) -> T {
 	serde_json::from_value(v).unwrap()
 }
+
+// --- Dynamic Forward Proxy (DFP) tests ---
+
+/// Helper to set up a DFP test: creates a Dynamic backend and a route pointing to it.
+fn setup_dfp() -> (TestBind, Client<MemoryConnector, Body>) {
+	let backend_name = ResourceName::new("dynamic".into(), "".into());
+	let dynamic_backend = Backend::Dynamic(backend_name, ());
+
+	let route = Route {
+		key: "route".into(),
+		name: RouteName {
+			name: "route".into(),
+			namespace: Default::default(),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: Default::default(),
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/".into()),
+			method: None,
+			query: vec![],
+		}],
+		inline_policies: Default::default(),
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			backend: BackendReference::Backend("/dynamic".into()),
+			inline_policies: Default::default(),
+		}],
+	};
+
+	let t = setup_proxy_test("{}").unwrap();
+	let pi = t.inputs();
+	pi.stores
+		.binds
+		.write()
+		.insert_backend(dynamic_backend.name(), dynamic_backend.into());
+	let t = t.with_bind(simple_bind(route));
+	let io = t.serve_http(BIND_KEY);
+	(t, io)
+}
+
+/// Helper to set up a DFP test behind an HTTPS listener.
+fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
+	let backend_name = ResourceName::new("dynamic".into(), "".into());
+	let dynamic_backend = Backend::Dynamic(backend_name, ());
+
+	let route = Route {
+		key: "route".into(),
+		name: RouteName {
+			name: "route".into(),
+			namespace: Default::default(),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: Default::default(),
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/".into()),
+			method: None,
+			query: vec![],
+		}],
+		inline_policies: Default::default(),
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			backend: BackendReference::Backend("/dynamic".into()),
+			inline_policies: Default::default(),
+		}],
+	};
+
+	let bind = Bind {
+		key: BIND_KEY,
+		// not really used
+		address: "127.0.0.1:0".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: Default::default(),
+			protocol: ListenerProtocol::HTTPS(
+				types::local::LocalTLSServerConfig {
+					cert: "../../examples/tls/certs/cert.pem".into(),
+					key: "../../examples/tls/certs/key.pem".into(),
+					root: None,
+					cipher_suites: None,
+					min_tls_version: None,
+					max_tls_version: None,
+				}
+				.try_into()
+				.unwrap(),
+			),
+			tcp_routes: Default::default(),
+			routes: RouteSet::from_list(vec![route]),
+		}]),
+		protocol: BindProtocol::tls,
+		tunnel_protocol: Default::default(),
+	};
+
+	let t = setup_proxy_test("{}").unwrap();
+	let pi = t.inputs();
+	pi.stores
+		.binds
+		.write()
+		.insert_backend(dynamic_backend.name(), dynamic_backend.into());
+	let t = t.with_bind(bind);
+	let io = t.serve_https(BIND_KEY, None);
+	(t, io)
+}
+
+/// DFP resolves the destination from the request's Host/URI authority, including the port.
+#[tokio::test]
+async fn dfp_uses_host_port() {
+	let mock = simple_mock().await;
+	let mock_addr = *mock.address();
+	let (_bind, io) = setup_dfp();
+
+	let r = rand::rng().random::<u128>();
+	let path = format!("/dfp-explicit-port-{r}");
+	let url = format!("http://{mock_addr}{path}");
+	let res = send_request(io, Method::GET, &url).await;
+
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.uri.path(), path);
+
+	// Also verify telemetry recorded the expected upstream endpoint with the explicit authority port.
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", &path),
+	])
+	.await
+	.unwrap();
+	let expected_endpoint = mock_addr.to_string();
+	assert_eq!(log["endpoint"].as_str(), Some(expected_endpoint.as_str()));
+}
+
+/// DFP defaults to port 80 when the URI has no explicit port and scheme is HTTP.
+#[tokio::test]
+async fn dfp_defaults_to_port_80_for_http() {
+	let (_bind, io) = setup_dfp();
+	let r = rand::rng().random::<u128>();
+	let path = format!("/dfp-http-default-{r}");
+
+	// No port in URI — should default to 80 per HTTP scheme
+	let res = send_request(io, Method::GET, &format!("http://127.0.0.1{path}")).await;
+
+	// Nothing listens on port 80 → 503
+	assert_eq!(res.status(), 503);
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", &path),
+	])
+	.await
+	.unwrap();
+	assert_eq!(log["endpoint"].as_str(), Some("127.0.0.1:80"));
+}
+
+/// DFP defaults to port 443 when the URI has no explicit port and scheme is HTTPS.
+#[tokio::test]
+async fn dfp_defaults_to_port_443_for_https() {
+	let (_bind, io) = setup_dfp_https();
+	let r = rand::rng().random::<u128>();
+	let path = format!("/dfp-https-default-{r}");
+
+	// No port in URI over HTTPS listener — should default to 443 per HTTPS scheme
+	let res = send_request(io, Method::GET, &format!("http://127.0.0.1{path}")).await;
+
+	// Nothing listens on port 443 → 503
+	assert_eq!(res.status(), 503);
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", &path),
+	])
+	.await
+	.unwrap();
+	assert_eq!(log["endpoint"].as_str(), Some("127.0.0.1:443"));
+}
