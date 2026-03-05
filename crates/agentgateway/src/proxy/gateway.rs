@@ -900,12 +900,9 @@ impl Gateway {
 				},
 			};
 
-			// Determine protocol from service discovery. app_protocols only contains
-			// entries for HTTP-family protocols (Http11/Http2/Grpc); TCP and unknown
-			// protocols are not stored. So port_is_http1/port_is_http2 returning true
-			// is a positive signal for HTTP; absence means TCP or unknown.
-			// TCP passthrough is the safer default since HTTP-over-TCP-passthrough
-			// still works, but TCP-over-HTTP-parser breaks.
+			// Determine protocol from service discovery. Default to HTTP since the vast
+			// majority of waypoint traffic is HTTP; only use TCP when there is a positive
+			// signal via explicit AppProtocol::Tcp/Tls (from istio/istio#59259).
 			let svc = discovery
 				.services
 				.get_by_vip(&crate::types::discovery::NetworkAddress {
@@ -913,10 +910,7 @@ impl Gateway {
 					address: resolved_addr.ip(),
 				});
 			let is_http = match svc {
-				Some(svc) => {
-					svc.port_is_http1(resolved_addr.port()) || svc.port_is_http2(resolved_addr.port())
-				},
-				// No service found — default to HTTP (existing waypoint behavior)
+				Some(svc) => !svc.port_is_tcp(resolved_addr.port()),
 				None => true,
 			};
 
