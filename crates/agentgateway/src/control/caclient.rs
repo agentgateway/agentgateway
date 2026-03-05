@@ -1,5 +1,4 @@
 use std::cmp;
-use std::io::Cursor;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -7,8 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rustls::client::Resumption;
 use rustls::server::VerifierBuilderError;
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
-use rustls_pemfile::Item;
-use rustls_pki_types::PrivateKeyDer;
+use rustls_pki_types::pem::{PemObject, SectionKind};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::sync::watch;
 use tonic::IntoRequest;
 use tracing::{error, info, warn};
@@ -215,28 +214,33 @@ struct Certificate {
 	der: rustls_pki_types::CertificateDer<'static>,
 }
 
-fn parse_key(mut key: &[u8]) -> Result<PrivateKeyDer<'static>, Error> {
-	let mut reader = std::io::BufReader::new(Cursor::new(&mut key));
-	let parsed = rustls_pemfile::read_one(&mut reader)
-		.map_err(|e| Error::CertificateParse(e.to_string()))?
-		.ok_or_else(|| Error::CertificateParse("no key".to_string()))?;
-	match parsed {
-		Item::Pkcs8Key(c) => Ok(PrivateKeyDer::Pkcs8(c)),
-		Item::Sec1Key(c) => Ok(PrivateKeyDer::Sec1(c)),
+fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, Error> {
+	let (kind, der) = <(SectionKind, Vec<u8>)>::from_pem_slice(key).map_err(|e| match e {
+		rustls_pki_types::pem::Error::NoItemsFound => Error::CertificateParse("no key".to_string()),
+		_ => Error::CertificateParse(e.to_string()),
+	})?;
+
+	match kind {
+		SectionKind::PrivateKey => Ok(PrivateKeyDer::Pkcs8(der.into())),
+		SectionKind::RsaPrivateKey => Ok(PrivateKeyDer::Pkcs1(der.into())),
+		SectionKind::EcPrivateKey => Ok(PrivateKeyDer::Sec1(der.into())),
 		_ => Err(Error::CertificateParse("no key".to_string())),
 	}
 }
 
-fn parse_cert(mut cert: Vec<u8>) -> Result<Certificate, Error> {
-	let mut reader = std::io::BufReader::new(Cursor::new(&mut cert));
-	let parsed = rustls_pemfile::read_one(&mut reader)
-		.map_err(|e| Error::CertificateParse(e.to_string()))?
-		.ok_or_else(|| Error::CertificateParse("no certificate".to_string()))?;
-	let Item::X509Certificate(der) = parsed else {
+fn parse_cert(cert: Vec<u8>) -> Result<Certificate, Error> {
+	let (kind, der) = <(SectionKind, Vec<u8>)>::from_pem_slice(&cert).map_err(|e| match e {
+		rustls_pki_types::pem::Error::NoItemsFound => {
+			Error::CertificateParse("no certificate".to_string())
+		},
+		_ => Error::CertificateParse(e.to_string()),
+	})?;
+	if kind != SectionKind::Certificate {
 		return Err(Error::CertificateParse("no certificate".to_string()));
-	};
+	}
+	let der = CertificateDer::from(der);
 
-	let (_, cert) = x509_parser::parse_x509_certificate(&der)
+	let (_, cert) = x509_parser::parse_x509_certificate(der.as_ref())
 		.map_err(|e| Error::CertificateParse(e.to_string()))?;
 	Ok(Certificate {
 		der: der.clone(),
@@ -245,17 +249,17 @@ fn parse_cert(mut cert: Vec<u8>) -> Result<Certificate, Error> {
 	})
 }
 
-fn parse_cert_multi(mut cert: &[u8]) -> Result<Vec<Certificate>, Error> {
-	let mut reader = std::io::BufReader::new(Cursor::new(&mut cert));
-	let parsed: Result<Vec<_>, _> = rustls_pemfile::read_all(&mut reader).collect();
+fn parse_cert_multi(cert: &[u8]) -> Result<Vec<Certificate>, Error> {
+	let parsed: Result<Vec<_>, _> = <(SectionKind, Vec<u8>)>::pem_slice_iter(cert).collect();
 	parsed
 		.map_err(|e| Error::CertificateParse(e.to_string()))?
 		.into_iter()
-		.map(|p| {
-			let Item::X509Certificate(der) = p else {
+		.map(|(kind, der)| {
+			if kind != SectionKind::Certificate {
 				return Err(Error::CertificateParse("no certificate".to_string()));
-			};
-			let (_, cert) = x509_parser::parse_x509_certificate(&der)
+			}
+			let der = CertificateDer::from(der);
+			let (_, cert) = x509_parser::parse_x509_certificate(der.as_ref())
 				.map_err(|e| Error::CertificateParse(e.to_string()))?;
 			Ok(Certificate {
 				der: der.clone(),
@@ -459,8 +463,6 @@ impl CaClient {
 			.map_err(|e| Error::CaClient(Box::new(e)))?;
 
 		let response = response.into_inner();
-
-		// Parse the certificate chain
 		let cert_chain = response.cert_chain;
 
 		if cert_chain.is_empty() {
