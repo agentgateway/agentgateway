@@ -382,7 +382,7 @@ pub struct Config {
 	pub stats_addr: Address,
 	pub readiness_addr: Address,
 	// For waypoint identification
-	pub self_addr: Option<Strng>,
+	pub self_addr: Option<types::discovery::WaypointIdentity>,
 	pub hbone: Arc<agent_hbone::Config>,
 	/// XDS address to use. If unset, XDS will not be used.
 	pub xds: XDSConfig,

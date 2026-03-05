@@ -1314,7 +1314,7 @@ async fn test_hostname_resolution_logic() {
 			destination: crate::types::discovery::gatewayaddress::Destination::Hostname(
 				crate::types::discovery::NamespacedHostname {
 					namespace: strng::new("istio-system"),
-					hostname: strng::new("waypoint"),
+					hostname: strng::new("waypoint.istio-system.svc.cluster.local"),
 				},
 			),
 			hbone_mtls_port: 15008,

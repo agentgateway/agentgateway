@@ -586,7 +586,7 @@ impl HTTPProxy {
 		let mut selected_route = http::route::select_best_route(
 			inputs.stores.clone(),
 			inputs.cfg.network.clone(),
-			inputs.cfg.self_addr.clone(),
+			inputs.cfg.self_addr.as_ref(),
 			self.target_address,
 			&selected_listener,
 			&req,
@@ -599,7 +599,7 @@ impl HTTPProxy {
 			let rewritten_selected = http::route::select_best_route(
 				inputs.stores.clone(),
 				inputs.cfg.network.clone(),
-				inputs.cfg.self_addr.clone(),
+				inputs.cfg.self_addr.as_ref(),
 				self.target_address,
 				&selected_listener,
 				&req,

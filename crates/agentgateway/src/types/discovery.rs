@@ -84,6 +84,46 @@ impl fmt::Display for NamespacedHostname {
 	}
 }
 
+/// Structured identity for a waypoint proxy, used for self-verification
+/// when routing HBONE waypoint traffic.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct WaypointIdentity {
+	pub gateway: Strng,
+	pub namespace: Strng,
+}
+
+impl WaypointIdentity {
+	/// Returns the full Kubernetes FQDN for this waypoint.
+	pub fn hostname(&self) -> Strng {
+		strng::format!("{}.{}.svc.cluster.local", self.gateway, self.namespace)
+	}
+
+	/// Checks whether this waypoint identity matches a NamespacedHostname waypoint destination.
+	/// The hostname from xDS is always a FQDN (e.g., "waypoint.ns.svc.cluster.local").
+	pub fn matches_hostname(&self, nh: &NamespacedHostname) -> bool {
+		nh.hostname == self.hostname()
+	}
+
+	/// Checks whether this waypoint identity matches an Address-based waypoint destination
+	/// by looking up this waypoint's own service VIPs.
+	pub fn matches_address(
+		&self,
+		addr: &NetworkAddress,
+		get_self_vips: impl FnOnce(&Strng, &Strng) -> Option<Vec<NetworkAddress>>,
+	) -> bool {
+		match get_self_vips(&self.namespace, &self.hostname()) {
+			Some(vips) => vips.contains(addr),
+			None => {
+				warn!(
+					"waypoint {}.{} cannot find own service for address verification",
+					self.gateway, self.namespace
+				);
+				false
+			},
+		}
+	}
+}
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct NetworkAddress {
 	pub network: Strng,
@@ -443,6 +483,12 @@ impl Service {
 	pub fn port_is_http1(&self, port: u16) -> bool {
 		matches!(self.app_protocols.get(&port), Some(AppProtocol::Http11))
 	}
+	pub fn port_is_tcp(&self, port: u16) -> bool {
+		matches!(
+			self.app_protocols.get(&port),
+			Some(AppProtocol::Tcp | AppProtocol::Tls)
+		)
+	}
 	pub fn namespaced_hostname(&self) -> NamespacedHostname {
 		NamespacedHostname {
 			namespace: self.namespace.clone(),
@@ -464,6 +510,8 @@ pub enum AppProtocol {
 	Http11,
 	Http2,
 	Grpc,
+	Tcp,
+	Tls,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -832,6 +880,8 @@ impl From<workload::AppProtocol> for Option<AppProtocol> {
 			workload::AppProtocol::Http11 => Some(AppProtocol::Http11),
 			workload::AppProtocol::Http2 => Some(AppProtocol::Http2),
 			workload::AppProtocol::Grpc => Some(AppProtocol::Grpc),
+			workload::AppProtocol::Tcp => Some(AppProtocol::Tcp),
+			workload::AppProtocol::Tls => Some(AppProtocol::Tls),
 		}
 	}
 }
