@@ -484,6 +484,23 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid AWS AgentCore backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "aws-agentcore-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					Aws: &agentgateway.AwsBackend{
+						AgentCore: &agentgateway.AwsAgentCoreBackend{
+							AgentRuntimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123",
+							Qualifier:       stringPtr("v1"),
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Bedrock backend with new route types (responses and anthropic_token_count)",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{

@@ -1,4 +1,4 @@
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,9 +46,11 @@ mod tests {
 
 	#[test]
 	fn test_valid_arn_parsing() {
-		let config =
-			AgentCoreConfig::new("arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(), None)
-				.unwrap();
+		let config = AgentCoreConfig::new(
+			"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(),
+			None,
+		)
+		.unwrap();
 		assert_eq!(config.region, "us-east-1");
 		assert_eq!(config.account_id, "123456789012");
 	}
@@ -61,24 +63,38 @@ mod tests {
 
 	#[test]
 	fn test_wrong_service() {
-		let err = AgentCoreConfig::new("arn:aws:bedrock:us-east-1:123456789012:runtime/abc123".to_string(), None)
-			.unwrap_err();
-		assert!(err.to_string().contains("expected service bedrock-agentcore"));
+		let err = AgentCoreConfig::new(
+			"arn:aws:bedrock:us-east-1:123456789012:runtime/abc123".to_string(),
+			None,
+		)
+		.unwrap_err();
+		assert!(
+			err
+				.to_string()
+				.contains("expected service bedrock-agentcore")
+		);
 	}
 
 	#[test]
 	fn test_get_host() {
-		let config =
-			AgentCoreConfig::new("arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/xyz".to_string(), None)
-				.unwrap();
-		assert_eq!(config.get_host(), "bedrock-agentcore.us-west-2.amazonaws.com");
+		let config = AgentCoreConfig::new(
+			"arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/xyz".to_string(),
+			None,
+		)
+		.unwrap();
+		assert_eq!(
+			config.get_host(),
+			"bedrock-agentcore.us-west-2.amazonaws.com"
+		);
 	}
 
 	#[test]
 	fn test_get_path_without_qualifier() {
-		let config =
-			AgentCoreConfig::new("arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(), None)
-				.unwrap();
+		let config = AgentCoreConfig::new(
+			"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(),
+			None,
+		)
+		.unwrap();
 		let path = config.get_path();
 		assert!(path.starts_with("/runtimes/"));
 		assert!(path.ends_with("/invocations"));

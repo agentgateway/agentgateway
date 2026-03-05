@@ -700,6 +700,26 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 					.map_err(|e| ProtoError::Generic(e.to_string()))?,
 			),
 			Some(proto::agent::backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), ()),
+			Some(proto::agent::backend::Kind::Aws(a)) => {
+				let aws_config = match &a.service {
+					Some(proto::agent::aws_backend::Service::AgentCore(ac)) => {
+						let agentcore_cfg = crate::agentcore::AgentCoreConfig::new(
+							ac.agent_runtime_arn.clone(),
+							ac.qualifier.clone(),
+						)
+						.map_err(|e| ProtoError::Generic(e.to_string()))?;
+						crate::aws::AwsBackendConfig {
+							service: crate::aws::AwsService::AgentCore(agentcore_cfg),
+						}
+					},
+					None => {
+						return Err(ProtoError::Generic(
+							"AwsBackend: missing service".to_string(),
+						));
+					},
+				};
+				Backend::Aws(name.into(), aws_config)
+			},
 			Some(proto::agent::backend::Kind::Ai(a)) => {
 				if a.provider_groups.is_empty() {
 					return Err(ProtoError::Generic(
@@ -2276,6 +2296,44 @@ mod tests {
 			panic!("Expected Transformation policy variant");
 		};
 		assert_eq!(transformation.expressions().count(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_kind_aws_conversion() -> Result<(), ProtoError> {
+		use proto::agent::aws_backend::Service;
+
+		let arn = "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string();
+		let qualifier = Some("v1".to_string());
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/aws-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "aws-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Aws(proto::agent::AwsBackend {
+				service: Some(Service::AgentCore(proto::agent::AwsAgentCoreBackend {
+					agent_runtime_arn: arn.clone(),
+					qualifier: qualifier.clone(),
+				})),
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = BackendWithPolicies::try_from(&proto_backend)?;
+		let Backend::Aws(name, config) = &bw.backend else {
+			panic!("Expected Backend::Aws, got {:?}", bw.backend);
+		};
+		assert_eq!(name.to_string(), "test-ns/aws-backend");
+		assert_eq!(config.region(), "us-east-1");
+		assert_eq!(config.service_name(), "bedrock-agentcore");
+		assert_eq!(
+			config.get_host(),
+			"bedrock-agentcore.us-east-1.amazonaws.com"
+		);
+		let path = config.get_path();
+		assert!(path.starts_with("/runtimes/"));
+		assert!(path.contains("qualifier=v1"));
 		Ok(())
 	}
 }

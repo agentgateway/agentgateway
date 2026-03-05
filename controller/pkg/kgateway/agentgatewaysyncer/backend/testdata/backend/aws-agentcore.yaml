@@ -1,0 +1,29 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: aws-agentcore-backend
+spec:
+  aws:
+    agentCore:
+      agentRuntimeArn: arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123
+      qualifier: v1
+---
+# Output
+output:
+- backend:
+    aws:
+      agentCore:
+        agentRuntimeArn: arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123
+        qualifier: v1
+    key: default/aws-agentcore-backend
+    name:
+      name: aws-agentcore-backend
+      namespace: default
+status:
+  conditions:
+  - lastTransitionTime: fake
+    message: Backend successfully accepted
+    reason: Accepted
+    status: "True"
+    type: Accepted

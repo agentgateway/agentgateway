@@ -54,7 +54,10 @@ mod tests {
 
 		assert_eq!(config.region(), "us-east-1");
 		assert_eq!(config.service_name(), "bedrock-agentcore");
-		assert_eq!(config.get_host(), "bedrock-agentcore.us-east-1.amazonaws.com");
+		assert_eq!(
+			config.get_host(),
+			"bedrock-agentcore.us-east-1.amazonaws.com"
+		);
 		assert!(config.get_path().starts_with("/runtimes/"));
 		assert!(config.get_path().ends_with("/invocations"));
 	}

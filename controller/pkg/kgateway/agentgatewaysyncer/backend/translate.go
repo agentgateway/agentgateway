@@ -69,6 +69,13 @@ func BuildAgwBackend(
 		}
 		return []*api.Backend{be}, errors.Join(errs...)
 	}
+	if b := backend.Spec.Aws; b != nil {
+		be, err := translateAwsBackends(backend, pols)
+		if err != nil {
+			return nil, errors.Join(append(errs, err)...)
+		}
+		return be, errors.Join(errs...)
+	}
 	return nil, errors.Join(append(errs, errors.New("unknown backend"))...)
 }
 
@@ -429,6 +436,33 @@ func translateLLMProvider(llm *agentgateway.LLMProvider, providerName string) (*
 	}
 
 	return provider, nil
+}
+
+func translateAwsBackends(
+	be *agentgateway.AgentgatewayBackend,
+	inlinePolicies []*api.BackendPolicySpec,
+) ([]*api.Backend, error) {
+	aws := be.Spec.Aws
+	if aws == nil || aws.AgentCore == nil {
+		return nil, errors.New("AwsBackend: agentCore is required")
+	}
+	ac := aws.AgentCore
+	awsBackend := &api.AwsBackend{
+		Service: &api.AwsBackend_AgentCore{
+			AgentCore: &api.AwsAgentCoreBackend{
+				AgentRuntimeArn: ac.AgentRuntimeArn,
+				Qualifier:       ac.Qualifier,
+			},
+		},
+	}
+	return []*api.Backend{{
+		Key:  be.Namespace + "/" + be.Name,
+		Name: plugins.ResourceName(be),
+		Kind: &api.Backend_Aws{
+			Aws: awsBackend,
+		},
+		InlinePolicies: inlinePolicies,
+	}}, nil
 }
 
 func toMCPProtocol(appProtocol string) api.MCPTarget_Protocol {

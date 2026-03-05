@@ -132,6 +132,7 @@ message Backend {
     AIBackend ai = 4;
     MCPBackend mcp = 5;
     DynamicForwardProxy dynamic = 6;
+    AwsBackend aws = 8;
   }
   repeated BackendPolicySpec inline_policies = 7;
 }
@@ -1057,6 +1058,17 @@ message StaticBackend {
 }
 
 message DynamicForwardProxy {}
+
+message AwsBackend {
+  oneof service {
+    AwsAgentCoreBackend agent_core = 1;
+  }
+}
+
+message AwsAgentCoreBackend {
+  string agent_runtime_arn = 1;
+  optional string qualifier = 2;
+}
 
 message AIBackend {
   message HostOverride {

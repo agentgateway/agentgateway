@@ -5607,6 +5607,27 @@ spec:
                     set
                   rule: '[has(self.provider),has(self.groups)].filter(x,x==true).size()
                     == 1'
+              aws:
+                description: aws represents an AWS service backend (AgentCore, etc.).
+                properties:
+                  agentCore:
+                    description: agentCore configures Amazon Bedrock AgentCore as
+                      a backend.
+                    properties:
+                      agentRuntimeArn:
+                        description: agentRuntimeArn is the ARN of the AgentCore runtime.
+                        type: string
+                      qualifier:
+                        description: qualifier optionally specifies the alias or version
+                          qualifier.
+                        type: string
+                    required:
+                    - agentRuntimeArn
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: exactly one of the fields in [agentCore] must be set
+                  rule: '[has(self.agentCore)].filter(x,x==true).size() == 1'
               dynamicForwardProxy:
                 description: |-
                   dynamicForwardProxy configures the proxy to dynamically send requests to the destination based on the incoming
@@ -11254,8 +11275,8 @@ spec:
               rule: 'has(self.policies) && has(self.policies.mcp) ? has(self.mcp)
                 : true'
             - message: exactly one of the fields in [ai static dynamicForwardProxy
-                mcp] must be set
-              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp)].filter(x,x==true).size()
+                mcp aws] must be set
+              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws)].filter(x,x==true).size()
                 == 1'
           status:
             description: status defines the current state of AgentgatewayBackend.

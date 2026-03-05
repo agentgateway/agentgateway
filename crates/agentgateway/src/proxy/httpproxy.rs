@@ -1367,10 +1367,12 @@ async fn make_backend_call(
 			})
 			.map_err(ProxyError::Processing)?;
 
-			req.extensions_mut()
-				.insert(llm::bedrock::AwsRegion { region: config.region().to_string() });
-			req.extensions_mut()
-				.insert(llm::bedrock::AwsServiceName { name: config.service_name() });
+			req.extensions_mut().insert(llm::bedrock::AwsRegion {
+				region: config.region().to_string(),
+			});
+			req.extensions_mut().insert(llm::bedrock::AwsServiceName {
+				name: config.service_name(),
+			});
 
 			let default_policies = BackendPolicies {
 				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
