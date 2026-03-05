@@ -1134,7 +1134,13 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
-			| Backend::Dynamic(name, _) => strng::format!("{}", name),
+			| Backend::Dynamic(name, _) => {
+				let mut s = String::with_capacity(name.namespace.len() + name.name.len() + 1);
+				s.push_str(&name.namespace);
+				s.push('/');
+				s.push_str(&name.name);
+				strng::new(&s)
+			},
 			Backend::Invalid => strng::literal!("invalid"),
 		}
 	}

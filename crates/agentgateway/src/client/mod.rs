@@ -486,8 +486,7 @@ impl Client {
 		.map_err(ProxyError::Processing)?;
 		let version = req.version();
 		let transport_name = transport.name();
-		let target_name = target.to_string();
-		let key = PoolKey(target, dest, transport, version);
+		let key = PoolKey(target.clone(), dest, transport, version);
 		trace!(?req, ?key, "sending request");
 		req.extensions_mut().insert(key);
 		let method = req.method().clone();
@@ -522,7 +521,7 @@ impl Client {
 			parent: None,
 			tracing::Level::DEBUG,
 
-			target = %target_name,
+			target = %target,
 			endpoint = %dest,
 			transport = %transport_name,
 

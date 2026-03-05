@@ -275,7 +275,10 @@ where
 				req.headers_mut().entry(HOST).or_insert_with(|| {
 					let hostname = uri.host().expect("authority implies host");
 					if let Some(port) = get_non_default_port(&uri) {
-						let s = format!("{hostname}:{port}");
+						let mut s = String::with_capacity(hostname.len() + port.as_str().len() + 1);
+						s.push_str(hostname);
+						s.push(':');
+						s.push_str(port.as_str());
 						HeaderValue::from_str(&s)
 					} else {
 						HeaderValue::from_str(hostname)
