@@ -40,6 +40,14 @@ get-tag () {
 }
 export TAG="$(get-tag)"
 
+maybe-prefix () {
+  if command -v ts > /dev/null; then
+    ts "$1:"
+  else
+    cat
+  fi
+}
+
 run_step() {
   local step_name="$1"
   shift
@@ -52,7 +60,7 @@ run_step() {
   start_seconds="$(date +%s)"
   echo "==> Step started: ${step_name}" >&2
 
-  if "$@"; then
+  if "$@" |& maybe-prefix "$step_name"; then
     rc=0
   else
     rc=$?
