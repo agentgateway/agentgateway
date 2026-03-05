@@ -399,7 +399,7 @@ mod tests {
 			Some(GatewayAddress {
 				destination: Destination::Hostname(NamespacedHostname {
 					namespace: strng::new("istio-system"),
-					hostname: strng::new("my-waypoint"),
+					hostname: strng::new("my-waypoint.istio-system.svc.cluster.local"),
 				}),
 				hbone_mtls_port: 15008,
 			}),
@@ -449,7 +449,7 @@ mod tests {
 			Some(GatewayAddress {
 				destination: Destination::Hostname(NamespacedHostname {
 					namespace: strng::new("istio-system"),
-					hostname: strng::new("other-waypoint"),
+					hostname: strng::new("other-waypoint.istio-system.svc.cluster.local"),
 				}),
 				hbone_mtls_port: 15008,
 			}),
@@ -500,7 +500,7 @@ mod tests {
 			Some(GatewayAddress {
 				destination: Destination::Hostname(NamespacedHostname {
 					namespace: strng::new("istio-system"),
-					hostname: strng::new("my-waypoint"),
+					hostname: strng::new("my-waypoint.istio-system.svc.cluster.local"),
 				}),
 				hbone_mtls_port: 15008,
 			}),
@@ -527,7 +527,7 @@ mod tests {
 			Some(GatewayAddress {
 				destination: Destination::Hostname(NamespacedHostname {
 					namespace: strng::new("default"),
-					hostname: strng::new("test-wp"),
+					hostname: strng::new("test-wp.default.svc.cluster.local"),
 				}),
 				hbone_mtls_port: 15008,
 			}),

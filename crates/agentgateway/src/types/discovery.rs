@@ -99,12 +99,8 @@ impl WaypointIdentity {
 	}
 
 	/// Checks whether this waypoint identity matches a NamespacedHostname waypoint destination.
-	/// Handles both short names (e.g., "waypoint") and FQDNs (e.g., "waypoint.ns.svc.cluster.local").
+	/// The hostname from xDS is always a FQDN (e.g., "waypoint.ns.svc.cluster.local").
 	pub fn matches_hostname(&self, nh: &NamespacedHostname) -> bool {
-		if nh.namespace == self.namespace && nh.hostname == self.gateway {
-			return true;
-		}
-		// Also check if hostname is a full FQDN
 		nh.hostname == self.hostname()
 	}
 
@@ -487,6 +483,12 @@ impl Service {
 	pub fn port_is_http1(&self, port: u16) -> bool {
 		matches!(self.app_protocols.get(&port), Some(AppProtocol::Http11))
 	}
+	pub fn port_is_tcp(&self, port: u16) -> bool {
+		matches!(
+			self.app_protocols.get(&port),
+			Some(AppProtocol::Tcp | AppProtocol::Tls)
+		)
+	}
 	pub fn namespaced_hostname(&self) -> NamespacedHostname {
 		NamespacedHostname {
 			namespace: self.namespace.clone(),
@@ -508,6 +510,8 @@ pub enum AppProtocol {
 	Http11,
 	Http2,
 	Grpc,
+	Tcp,
+	Tls,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -876,6 +880,8 @@ impl From<workload::AppProtocol> for Option<AppProtocol> {
 			workload::AppProtocol::Http11 => Some(AppProtocol::Http11),
 			workload::AppProtocol::Http2 => Some(AppProtocol::Http2),
 			workload::AppProtocol::Grpc => Some(AppProtocol::Grpc),
+			workload::AppProtocol::Tcp => Some(AppProtocol::Tcp),
+			workload::AppProtocol::Tls => Some(AppProtocol::Tls),
 		}
 	}
 }
