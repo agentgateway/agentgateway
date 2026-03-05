@@ -1358,14 +1358,16 @@ async fn make_backend_call(
 			backend_policies: policies,
 		},
 		Backend::Dynamic(_, _) => {
-			let port = req
-				.extensions()
-				.get::<TCPConnectionInfo>()
-				.unwrap()
-				.local_addr
-				.port();
-			let target =
-				Target::try_from((http::get_host(&req)?, port)).map_err(ProxyError::Processing)?;
+			let host = http::get_host(&req)?;
+			let port = req.uri().port_u16().unwrap_or_else(|| {
+				req
+					.extensions()
+					.get::<TCPConnectionInfo>()
+					.unwrap()
+					.local_addr
+					.port()
+			});
+			let target = Target::try_from((host, port)).map_err(ProxyError::Processing)?;
 			BackendCall {
 				target: target.clone(),
 				http_version_override: None,
