@@ -199,11 +199,17 @@ where
 		// We need more input data - poll the underlying body
 		let frame_to_send = ready!(this.body.as_mut().poll_frame(cx));
 		if !*this.error {
-			if let Some(Ok(frame)) = &frame_to_send
-				&& let Some(data) = frame.data_ref()
-			{
-				this.decode_buffer.extend_from_slice(data);
-			};
+			match &frame_to_send {
+				Some(Ok(frame)) => {
+					if let Some(data) = frame.data_ref() {
+						this.decode_buffer.extend_from_slice(data);
+					}
+				},
+				None => {
+					*this.finished = true;
+				},
+				Some(Err(_)) => {},
+			}
 
 			match (try_decode)(
 				*this.finished,

@@ -101,11 +101,11 @@ impl RequestType for Request {
 	}
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
-		unimplemented!("get_messages is used for prompt guard; prompt guard is disable for detect.")
+		unimplemented!("get_messages is used for prompt guard; prompt guard is disabled for detect.")
 	}
 
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
-		unimplemented!("set_messages is used for prompt guard; prompt guard is disable for detect.")
+		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for detect.")
 	}
 	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
 		match self {
@@ -167,13 +167,13 @@ mod lookups {
 	pub const DIMENSIONS: [&[&str]; 1] = [&["dimensions"]];
 	pub const USAGE_INPUT_TOKENS: [&[&str]; 3] = [
 		&["usage", "input_tokens"],
-		// Responses steaming
+		// Responses streaming
 		&["response", "usage", "input_tokens"],
 		&["usage", "prompt_tokens"],
 	];
 	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 3] = [
 		&["usage", "output_tokens"],
-		// Responses steaming
+		// Responses streaming
 		&["response", "usage", "output_tokens"],
 		&["usage", "completion_tokens"],
 	];
@@ -181,7 +181,7 @@ mod lookups {
 	pub const REASONING: [&[&str]; 3] = [
 		// Responses
 		&["usage", "output_tokens_details", "reasoning_tokens"],
-		// Responses steaming
+		// Responses streaming
 		&[
 			"response",
 			"usage",
@@ -234,13 +234,13 @@ impl ResponseType for Response {
 
 	fn to_webhook_choices(&self) -> Vec<ResponseChoice> {
 		unimplemented!(
-			"to_webhook_choices is used for prompt guard; prompt guard is disable for detect."
+			"to_webhook_choices is used for prompt guard; prompt guard is disabled for detect."
 		)
 	}
 
 	fn set_webhook_choices(&mut self, _resp: Vec<ResponseChoice>) -> anyhow::Result<()> {
 		unimplemented!(
-			"to_webhook_choices is used for prompt guard; prompt guard is disable for detect."
+			"set_webhook_choices is used for prompt guard; prompt guard is disabled for detect."
 		)
 	}
 
