@@ -1,25 +1,21 @@
-use ::http::{Method, StatusCode, Version};
+use ::http::{Method, Version};
 use agent_core::strng;
 use assert_matches::assert_matches;
-use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::RngExt;
-use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use x509_parser::nom::AsBytes;
 
-use crate::http::cors;
 use crate::http::tests_common::*;
-use crate::http::transformation_cel::Transformation;
-use crate::http::{Body, Response, transformation_cel};
+use crate::http::{Body, Response};
 use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
+use crate::read_body;
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
-	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindProtocol, Listener,
-	ListenerProtocol, ListenerSet, PathMatch, PolicyTarget, ResourceName, Route,
-	RouteBackendReference, RouteMatch, RouteName, RouteSet, Target, TargetedPolicy, TrafficPolicy,
+	Backend, BackendPolicy, BackendWithPolicies, Bind, BindProtocol, Listener, ListenerProtocol,
+	ListenerSet, ResourceName, RouteSet, Target,
 };
 use crate::types::backend;
 use crate::*;
@@ -62,28 +58,16 @@ async fn basic_http2() {
 
 #[tokio::test]
 async fn local_ratelimit() {
-	let (_mock, bind, io) = basic_setup().await;
-	let _bind = bind.with_policy(TargetedPolicy {
-		key: strng::new("rl"),
-		name: None,
-		target: PolicyTarget::Route(RouteName {
-			name: "route".into(),
-			namespace: "".into(),
-			rule_name: None,
-			kind: None,
-		}),
-		policy: TrafficPolicy::LocalRateLimit(vec![
-			http::localratelimit::RateLimitSpec {
-				max_tokens: 1,
-				tokens_per_fill: 1,
-				fill_interval: Duration::from_secs(1),
-				limit_type: Default::default(),
-			}
-			.try_into()
-			.unwrap(),
-		])
-		.into(),
-	});
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"localRateLimit": [{
+				"maxTokens": 1,
+				"tokensPerFill": 1,
+				"fillInterval": "1s",
+			}],
+		}))
+		.await;
 
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
@@ -91,56 +75,29 @@ async fn local_ratelimit() {
 	assert_eq!(res.status(), 429);
 }
 
-/// Helper to build a CORS policy for tests.
-fn cors_policy(allow_origins: Vec<&str>, allow_methods: Vec<&str>) -> cors::Cors {
-	cors::Cors::try_from(cors::CorsSerde {
-		allow_credentials: false,
-		allow_headers: vec!["*".to_string()],
-		allow_methods: allow_methods.into_iter().map(String::from).collect(),
-		allow_origins: allow_origins.into_iter().map(String::from).collect(),
-		expose_headers: vec![],
-		max_age: None,
-	})
-	.unwrap()
-}
-
 /// Verifies that a CORS preflight (OPTIONS) request returns 200 even when
 /// the rate limit is exhausted, because CORS runs before authentication and rate limiting.
 #[tokio::test]
 async fn cors_preflight_bypasses_ratelimit() {
-	let (_mock, bind, io) = basic_setup().await;
-	let route_target = PolicyTarget::Route(RouteName {
-		name: "route".into(),
-		namespace: "".into(),
-		rule_name: None,
-		kind: None,
-	});
+	let (_mock, mut bind, io) = basic_setup().await;
 
 	// Attach CORS + rate limit (1 token, essentially immediately exhausted after first real request)
-	let _bind = bind
-		.with_policy(TargetedPolicy {
-			key: strng::new("cors"),
-			name: None,
-			target: route_target.clone(),
-			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
-				.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("rl"),
-			name: None,
-			target: route_target,
-			policy: TrafficPolicy::LocalRateLimit(vec![
-				http::localratelimit::RateLimitSpec {
-					max_tokens: 1,
-					tokens_per_fill: 1,
-					fill_interval: Duration::from_secs(100),
-					limit_type: Default::default(),
-				}
-				.try_into()
-				.unwrap(),
-			])
-			.into(),
-		});
+	bind
+		.attach_route_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+			"localRateLimit": [{
+				"maxTokens": 1,
+				"tokensPerFill": 1,
+				"fillInterval": "100s",
+			}],
+		}))
+		.await;
 
 	// First real request exhausts the single token
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
@@ -169,38 +126,23 @@ async fn cors_preflight_bypasses_ratelimit() {
 /// still carries the CORS headers so browsers can read the error.
 #[tokio::test]
 async fn cors_headers_present_on_ratelimited_response() {
-	let (_mock, bind, io) = basic_setup().await;
-	let route_target = PolicyTarget::Route(RouteName {
-		name: "route".into(),
-		namespace: "".into(),
-		rule_name: None,
-		kind: None,
-	});
-
-	let _bind = bind
-		.with_policy(TargetedPolicy {
-			key: strng::new("cors"),
-			name: None,
-			target: route_target.clone(),
-			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
-				.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("rl"),
-			name: None,
-			target: route_target,
-			policy: TrafficPolicy::LocalRateLimit(vec![
-				http::localratelimit::RateLimitSpec {
-					max_tokens: 1,
-					tokens_per_fill: 1,
-					fill_interval: Duration::from_secs(100),
-					limit_type: Default::default(),
-				}
-				.try_into()
-				.unwrap(),
-			])
-			.into(),
-		});
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+			"localRateLimit": [{
+				"maxTokens": 1,
+				"tokensPerFill": 1,
+				"fillInterval": "100s",
+			}],
+		}))
+		.await;
 
 	// Exhaust rate limit with a normal cross-origin GET
 	let res = send_request_headers(
@@ -234,38 +176,24 @@ async fn cors_headers_present_on_ratelimited_response() {
 /// and authorization.
 #[tokio::test]
 async fn cors_preflight_bypasses_api_key_auth() {
-	let (_mock, bind, io) = basic_setup().await;
-	let route_target = PolicyTarget::Route(RouteName {
-		name: "route".into(),
-		namespace: "".into(),
-		rule_name: None,
-		kind: None,
-	});
-
-	let _bind = bind
-		.with_policy(TargetedPolicy {
-			key: strng::new("cors"),
-			name: None,
-			target: route_target.clone(),
-			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
-				.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("apikey"),
-			name: None,
-			target: route_target,
-			policy: TrafficPolicy::APIKey(
-				http::apikey::LocalAPIKeys {
-					keys: vec![http::apikey::LocalAPIKey {
-						key: http::apikey::APIKey::new("sk-123"),
-						metadata: None,
-					}],
-					mode: http::apikey::Mode::Strict,
-				}
-				.into(),
-			)
-			.into(),
-		});
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+			"apiKey": {
+				"keys": [{
+					"key": "sk-123",
+				}],
+				"mode": "strict",
+			},
+		}))
+		.await;
 
 	// Request without credentials should be rejected
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
@@ -291,37 +219,23 @@ async fn cors_preflight_bypasses_api_key_auth() {
 /// and authorization.
 #[tokio::test]
 async fn cors_preflight_bypasses_basic_auth() {
-	let (_mock, bind, io) = basic_setup().await;
-	let route_target = PolicyTarget::Route(RouteName {
-		name: "route".into(),
-		namespace: "".into(),
-		rule_name: None,
-		kind: None,
-	});
-
-	let _bind = bind
-		.with_policy(TargetedPolicy {
-			key: strng::new("cors"),
-			name: None,
-			target: route_target.clone(),
-			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
-				.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("basic"),
-			name: None,
-			target: route_target,
-			policy: TrafficPolicy::BasicAuth(
-				http::basicauth::LocalBasicAuth {
-					htpasswd: FileOrInline::Inline("user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00".to_string()),
-					realm: Some("my-realm".into()),
-					mode: http::basicauth::Mode::Strict,
-				}
-				.try_into()
-				.unwrap(),
-			)
-			.into(),
-		});
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+			"basicAuth": {
+				"htpasswd": "user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00",
+				"realm": "my-realm",
+				"mode": "strict",
+			},
+		}))
+		.await;
 
 	// Request without credentials should be rejected
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
@@ -347,47 +261,28 @@ async fn cors_preflight_bypasses_basic_auth() {
 /// authorization.
 #[tokio::test]
 async fn cors_preflight_bypasses_authorization() {
-	let (_mock, bind, io) = basic_setup().await;
-	let route_target = PolicyTarget::Route(RouteName {
-		name: "route".into(),
-		namespace: "".into(),
-		rule_name: None,
-		kind: None,
-	});
-
-	let _bind = bind
-		.with_policy(TargetedPolicy {
-			key: strng::new("cors"),
-			name: None,
-			target: route_target.clone(),
-			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
-				.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("apikey"),
-			name: None,
-			target: route_target.clone(),
-			policy: TrafficPolicy::APIKey(
-				http::apikey::LocalAPIKeys {
-					keys: vec![http::apikey::LocalAPIKey {
-						key: http::apikey::APIKey::new("sk-123"),
-						metadata: Some(json!({"group": "eng"})),
-					}],
-					mode: http::apikey::Mode::Strict,
-				}
-				.into(),
-			)
-			.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("auth"),
-			name: None,
-			target: route_target,
-			policy: TrafficPolicy::Authorization(deser(json!({
-				"rules": ["apiKey.group == 'admin'"]
-			})))
-			.into(),
-		});
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+			"apiKey": {
+				"keys": [{
+					"key": "sk-123",
+					"metadata": {"group": "eng"},
+				}],
+				"mode": "strict",
+			},
+			"authorization": {
+				"rules": ["apiKey.group == 'admin'"],
+			},
+		}))
+		.await;
 
 	// Authenticated request should be rejected by authorization (403)
 	let res = send_request_headers(
@@ -419,47 +314,28 @@ async fn cors_preflight_bypasses_authorization() {
 /// error body.
 #[tokio::test]
 async fn cors_headers_present_on_auth_rejected_response() {
-	let (_mock, bind, io) = basic_setup().await;
-	let route_target = PolicyTarget::Route(RouteName {
-		name: "route".into(),
-		namespace: "".into(),
-		rule_name: None,
-		kind: None,
-	});
-
-	let _bind = bind
-		.with_policy(TargetedPolicy {
-			key: strng::new("cors"),
-			name: None,
-			target: route_target.clone(),
-			policy: TrafficPolicy::CORS(cors_policy(vec!["http://example.com"], vec!["GET", "POST"]))
-				.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("apikey"),
-			name: None,
-			target: route_target.clone(),
-			policy: TrafficPolicy::APIKey(
-				http::apikey::LocalAPIKeys {
-					keys: vec![http::apikey::LocalAPIKey {
-						key: http::apikey::APIKey::new("sk-123"),
-						metadata: Some(json!({"group": "eng"})),
-					}],
-					mode: http::apikey::Mode::Strict,
-				}
-				.into(),
-			)
-			.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("auth"),
-			name: None,
-			target: route_target,
-			policy: TrafficPolicy::Authorization(deser(json!({
-				"rules": ["apiKey.group == 'admin'"]
-			})))
-			.into(),
-		});
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+			"apiKey": {
+				"keys": [{
+					"key": "sk-123",
+					"metadata": {"group": "eng"},
+				}],
+				"mode": "strict",
+			},
+			"authorization": {
+				"rules": ["apiKey.group == 'admin'"],
+			},
+		}))
+		.await;
 
 	// 401: missing credentials, CORS headers should still be present
 	let res = send_request_headers(
@@ -612,58 +488,36 @@ async fn basic_tcp() {
 
 #[tokio::test]
 async fn direct_response() {
-	let mock = simple_mock().await;
-	let xfm = transformation_cel::LocalTransformationConfig {
-		response: Some(transformation_cel::LocalTransform {
-			add: vec![("x-xfm".into(), "\"x-xfm-val\"".into())],
-			..Default::default()
-		}),
-		request: None,
-	};
-	let xfm = Transformation::try_from_local_config(xfm, true).unwrap();
-	let bind = base_gateway(&mock).with_route(Route {
-		key: "route2".into(),
-		name: RouteName {
-			name: "route2".into(),
-			namespace: Default::default(),
-			rule_name: None,
-			kind: None,
-		},
-		hostnames: Default::default(),
-		matches: vec![RouteMatch {
-			headers: vec![],
-			path: PathMatch::PathPrefix("/p".into()),
-			method: None,
-			query: vec![],
-		}],
-		inline_policies: vec![
-			TrafficPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
-				add: vec![("x-filter".into(), "x-filter-val".into())],
-				set: vec![],
-				remove: vec![],
-			}),
-			TrafficPolicy::DirectResponse(crate::http::filters::DirectResponse {
-				body: Bytes::from_static(b"hello"),
-				status: StatusCode::UNPROCESSABLE_ENTITY,
-			}),
-			TrafficPolicy::Transformation(xfm),
-		],
-		backends: vec![],
-	});
-	let io = bind.serve_http(BIND_KEY);
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route(json!({
+			"policies": {
+				"responseHeaderModifier": {
+					"add": {
+						"x-filter": "x-filter-val"
+					},
+				},
+				"directResponse": {
+					"body": "hello",
+					"status": 422,
+				},
+				"transformations": {
+					"response": {
+						"add": {
+							"x-xfm": "'x-xfm-val'",
+						},
+					},
+				},
+			},
+		}))
+		.await;
 
 	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
 	assert_eq!(res.status(), 422);
 	// Each type of response modifier should still run even though its a direct response
 	assert_eq!(res.hdr("x-filter"), "x-filter-val");
 	assert_eq!(res.hdr("x-xfm"), "x-xfm-val");
-	assert_eq!(
-		http::read_body_with_limit(res.into_body(), 100)
-			.await
-			.unwrap()
-			.as_bytes(),
-		b"hello"
-	);
+	assert_eq!(read_body!(res).as_bytes(), b"hello");
 }
 
 #[tokio::test]
@@ -922,63 +776,50 @@ async fn send_http_version(t: &TestBind, v: Version) -> Response {
 
 #[tokio::test]
 async fn header_manipulation() {
-	let mock = simple_mock().await;
-	let backend_xfm = transformation_cel::LocalTransformationConfig {
-		request: Some(transformation_cel::LocalTransform {
-			set: vec![("x-backend-xfm-req".into(), "\"backend-xfm-req\"".into())],
-			..Default::default()
-		}),
-		response: Some(transformation_cel::LocalTransform {
-			add: vec![("x-backend-xfm-resp".into(), "\"backend-xfm-resp\"".into())],
-			..Default::default()
-		}),
-	};
-	let backend_xfm = Transformation::try_from_local_config(backend_xfm, true).unwrap();
-	let bind = base_gateway(&mock).with_route(Route {
-		key: "route2".into(),
-		name: RouteName {
-			name: "route2".into(),
-			namespace: Default::default(),
-			rule_name: None,
-			kind: None,
-		},
-		hostnames: Default::default(),
-		matches: vec![RouteMatch {
-			headers: vec![],
-			path: PathMatch::PathPrefix("/p".into()),
-			method: None,
-			query: vec![],
-		}],
-		inline_policies: vec![
-			TrafficPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
-				add: vec![("x-route-req".into(), "route-req".into())],
-				set: vec![],
-				remove: vec![],
-			}),
-			TrafficPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
-				add: vec![("x-route-resp".into(), "route-resp".into())],
-				set: vec![],
-				remove: vec![],
-			}),
-		],
-		backends: vec![RouteBackendReference {
-			weight: 1,
-			backend: BackendReference::Backend(strng::format!("/{}", mock.address())),
-			inline_policies: vec![
-				BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
-					add: vec![("x-backend-req".into(), "backend-req".into())],
-					set: vec![],
-					remove: vec![],
-				}),
-				BackendPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
-					add: vec![("x-backend-resp".into(), "backend-resp".into())],
-					set: vec![],
-					remove: vec![],
-				}),
-				BackendPolicy::Transformation(backend_xfm),
-			],
-		}],
-	});
+	let (mock, mut bind, _io) = basic_setup().await;
+	bind
+		.attach_route(json!({
+			"policies": {
+				"requestHeaderModifier": {
+					"add": {
+						"x-route-req": "route-req",
+					},
+				},
+				"responseHeaderModifier": {
+					"add": {
+						"x-route-resp": "route-resp",
+					},
+				},
+			},
+			"backends": [{
+				"host": mock.address().to_string(),
+				"policies": {
+					"requestHeaderModifier": {
+						"add": {
+							"x-backend-req": "backend-req",
+						},
+					},
+					"responseHeaderModifier": {
+						"add": {
+							"x-backend-resp": "backend-resp",
+						},
+					},
+					"transformations": {
+						"request": {
+							"set": {
+								"x-backend-xfm-req": "'backend-xfm-req'",
+							},
+						},
+						"response": {
+							"add": {
+								"x-backend-xfm-resp": "'backend-xfm-resp'",
+							},
+						},
+					},
+				},
+			}],
+		}))
+		.await;
 	let io = bind.serve_http(BIND_KEY);
 
 	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
@@ -1003,71 +844,56 @@ async fn header_manipulation() {
 
 #[tokio::test]
 async fn inline_backend_policies() {
-	let mock = simple_mock().await;
-	let bind = base_gateway(&mock)
-		.with_route(Route {
-			key: "route2".into(),
-			name: RouteName {
-				name: "route2".into(),
-				namespace: Default::default(),
-				rule_name: None,
-				kind: None,
+	let (mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_backend(json!({
+			"name": "backend1",
+			"host": mock.address(),
+			"policies": {
+				"requestHeaderModifier": {
+					"add": {
+						"x-backend-req": "backend-req",
+					}
+				},
+				"responseHeaderModifier": {
+					"add": {
+						"x-backend-resp": "backend-resp",
+					}
+				}
+			}
+		}))
+		.await;
+	bind
+		.attach_route(json!({
+			"policies": {
+				"requestHeaderModifier": {
+					"add": {
+						"x-route-req": "route-req",
+					},
+				},
+				"responseHeaderModifier": {
+					"add": {
+						"x-route-resp": "route-resp",
+					},
+				},
 			},
-			hostnames: Default::default(),
-			matches: vec![RouteMatch {
-				headers: vec![],
-				path: PathMatch::PathPrefix("/p".into()),
-				method: None,
-				query: vec![],
+			"backends": [{
+				"backend": "/backend1",
+				"policies": {
+					"requestHeaderModifier": {
+						"add": {
+							"x-backend-route-req": "backend-route-req",
+						},
+					},
+					"responseHeaderModifier": {
+						"add": {
+							"x-backend-route-resp": "backend-route-resp",
+						},
+					},
+				},
 			}],
-			inline_policies: vec![
-				TrafficPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
-					add: vec![("x-route-req".into(), "route-req".into())],
-					set: vec![],
-					remove: vec![],
-				}),
-				TrafficPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
-					add: vec![("x-route-resp".into(), "route-resp".into())],
-					set: vec![],
-					remove: vec![],
-				}),
-			],
-			backends: vec![RouteBackendReference {
-				weight: 1,
-				backend: BackendReference::Backend(strng::format!("/{}", mock.address())),
-				inline_policies: vec![
-					BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
-						add: vec![("x-backend-route-req".into(), "backend-route-req".into())],
-						set: vec![],
-						remove: vec![],
-					}),
-					BackendPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
-						add: vec![("x-backend-route-resp".into(), "backend-route-resp".into())],
-						set: vec![],
-						remove: vec![],
-					}),
-				],
-			}],
-		})
-		.with_raw_backend(BackendWithPolicies {
-			backend: Backend::Opaque(
-				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
-				Target::Address(*mock.address()),
-			),
-			inline_policies: vec![
-				BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
-					add: vec![("x-backend-req".into(), "backend-req".into())],
-					set: vec![],
-					remove: vec![],
-				}),
-				BackendPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
-					add: vec![("x-backend-resp".into(), "backend-resp".into())],
-					set: vec![],
-					remove: vec![],
-				}),
-			],
-		});
-	let io = bind.serve_http(BIND_KEY);
+		}))
+		.await;
 
 	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
 	assert_eq!(res.status(), 200);
@@ -1090,49 +916,27 @@ async fn inline_backend_policies() {
 
 #[tokio::test]
 async fn api_key() {
-	let (_mock, bind, io) = basic_setup().await;
-	let _bind = bind
-		.with_policy(TargetedPolicy {
-			key: strng::new("apikey"),
-			name: Default::default(),
-			target: PolicyTarget::Route(RouteName {
-				name: "route".into(),
-				namespace: "".into(),
-				rule_name: None,
-				kind: None,
-			}),
-			policy: TrafficPolicy::APIKey(
-				http::apikey::LocalAPIKeys {
-					keys: vec![
-						http::apikey::LocalAPIKey {
-							key: http::apikey::APIKey::new("sk-123"),
-							metadata: Some(json!({"group": "eng"})),
-						},
-						http::apikey::LocalAPIKey {
-							key: http::apikey::APIKey::new("sk-456"),
-							metadata: Some(json!({"group": "sales"})),
-						},
-					],
-					mode: http::apikey::Mode::Strict,
-				}
-				.into(),
-			)
-			.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("auth"),
-			name: Default::default(),
-			target: PolicyTarget::Route(RouteName {
-				name: "route".into(),
-				namespace: "".into(),
-				rule_name: None,
-				kind: None,
-			}),
-			policy: TrafficPolicy::Authorization(deser(json!({
-				"rules": ["apiKey.group == 'eng'"]
-			})))
-			.into(),
-		});
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"apiKey": {
+				"keys": [
+					{
+						"key": "sk-123",
+						"metadata": {"group": "eng"},
+					},
+					{
+						"key": "sk-456",
+						"metadata": {"group": "sales"},
+					}
+				],
+				"mode": "strict",
+			},
+			"authorization": {
+				"rules": ["apiKey.group == 'eng'"],
+			},
+		}))
+		.await;
 
 	let res = send_request_headers(
 		io.clone(),
@@ -1167,48 +971,19 @@ async fn api_key() {
 
 #[tokio::test]
 async fn basic_auth() {
-	let (_mock, bind, io) = basic_setup().await;
-	let _bind = bind
-		.with_policy(TargetedPolicy {
-			key: strng::new("basic"),
-			name: None,
-			target: PolicyTarget::Route(RouteName {
-				name: "route".into(),
-				namespace: "".into(),
-				rule_name: None,
-				kind: None,
-			}),
-			policy: TrafficPolicy::BasicAuth(
-				http::basicauth::LocalBasicAuth {
-					htpasswd: FileOrInline::Inline(
-						"user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00
-bcrypt_test:$2y$05$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa
-sha1_test:{SHA}W6ph5Mm5Pz8GgiULbPgzG37mj9g=
-crypt_test:bGVh02xkuGli2"
-							.to_string(),
-					),
-					realm: Some("my-realm".into()),
-					mode: http::basicauth::Mode::Strict,
-				}
-				.try_into()
-				.unwrap(),
-			)
-			.into(),
-		})
-		.with_policy(TargetedPolicy {
-			key: strng::new("auth"),
-			name: Default::default(),
-			target: PolicyTarget::Route(RouteName {
-				name: "route".into(),
-				namespace: "".into(),
-				rule_name: None,
-				kind: None,
-			}),
-			policy: TrafficPolicy::Authorization(deser(json!({
-				"rules": ["basicAuth.username == 'user'"]
-			})))
-			.into(),
-		});
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+      .attach_route_policy(json!({
+			"basicAuth": {
+				"htpasswd": "user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00\nbcrypt_test:$2y$05$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa\nsha1_test:{SHA}W6ph5Mm5Pz8GgiULbPgzG37mj9g=\ncrypt_test:bGVh02xkuGli2",
+				"realm": "my-realm",
+				"mode": "strict",
+			},
+			"authorization": {
+				"rules": ["basicAuth.username == 'user'"],
+			},
+		}))
+      .await;
 
 	use base64::Engine;
 	let md5 = base64::prelude::BASE64_STANDARD.encode(b"user:password");
@@ -1390,8 +1165,4 @@ async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value)
 	.unwrap();
 	let valid = is_json_subset(&want, &log);
 	assert!(valid, "want={want:#?} got={log:#?}");
-}
-
-fn deser<T: DeserializeOwned>(v: serde_json::Value) -> T {
-	serde_json::from_value(v).unwrap()
 }

@@ -2471,6 +2471,12 @@ InvalidKeyData
 	}
 
 	#[test]
+	fn test_target_deserializes_from_json_value() {
+		let target: Target = serde_json::from_value(serde_json::json!("127.0.0.1:8080")).unwrap();
+		assert!(matches!(target, Target::Address(addr) if addr.to_string() == "127.0.0.1:8080"));
+	}
+
+	#[test]
 	fn test_all_matches_subdomain() {
 		let matches: Vec<_> = HostnameMatch::all_matches("api.example.com").collect();
 

@@ -1078,6 +1078,7 @@
 |`binds[].listeners[].routes[].backends[].(1)service.name.namespace`||
 |`binds[].listeners[].routes[].backends[].(1)service.name.hostname`||
 |`binds[].listeners[].routes[].backends[].(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)backend`||
 |`binds[].listeners[].routes[].backends[].(1)host`||
 |`binds[].listeners[].routes[].backends[].(1)dynamic`||
 |`binds[].listeners[].routes[].backends[].(1)mcp`||
