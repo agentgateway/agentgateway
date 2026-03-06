@@ -18,7 +18,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       key: traffic/default/basic-auth-pre-routing:basicauth:default/test
       name:

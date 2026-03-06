@@ -20,7 +20,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         logging:

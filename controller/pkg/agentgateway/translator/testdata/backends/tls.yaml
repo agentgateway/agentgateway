@@ -322,7 +322,10 @@ output:
       name:
         name: openai-single
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:
@@ -336,7 +339,10 @@ output:
         backend:
           name: ai-groups
           namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:
@@ -351,7 +357,10 @@ output:
           name: ai-groups
           namespace: default
           section: anthropic
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:
@@ -365,7 +374,10 @@ output:
         backend:
           name: openai-single
           namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:
@@ -380,7 +392,10 @@ output:
         service:
           hostname: mcp-svc.default.svc.cluster.local
           namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:
@@ -395,7 +410,10 @@ output:
           name: mcp-backend
           namespace: default
           section: mcp-static
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:

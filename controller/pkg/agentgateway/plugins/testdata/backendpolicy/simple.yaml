@@ -46,7 +46,10 @@ data:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         backendHttp:
@@ -62,7 +65,10 @@ output:
           kind: HTTPRoute
           name: test
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:

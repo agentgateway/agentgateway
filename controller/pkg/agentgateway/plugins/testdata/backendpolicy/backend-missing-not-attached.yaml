@@ -1,3 +1,4 @@
+# Intentionally no output. There is no backend, so nothing to attach to.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -14,20 +15,7 @@ spec:
         - name: mtls
 ---
 # Output
-output:
-- resource:
-    policy:
-      backend:
-        backendTls: {}
-      key: default/agw:tls:default/missing
-      name:
-        kind: AgentgatewayPolicy
-        name: agw
-        namespace: default
-      target:
-        backend:
-          name: missing
-          namespace: default
+output: []
 status:
   ancestors:
   - ancestorRef:

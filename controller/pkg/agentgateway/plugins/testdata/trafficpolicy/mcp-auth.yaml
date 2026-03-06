@@ -1,7 +1,7 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
-  name: mcp-backend-static
+  name: be
   namespace: default
 spec:
   mcp:
@@ -20,7 +20,7 @@ metadata:
   namespace: default
 spec:
   targetRefs:
-    - name: mcp-backend-static
+    - name: be
       kind: AgentgatewayBackend
       group: agentgateway.dev
   backend:
@@ -56,7 +56,10 @@ metadata:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         mcpAuthentication:
@@ -73,21 +76,21 @@ output:
               resourceDocumentation: http://mcp-website-fetcher.default.svc.cluster.local/docs
               resourcePolicyUri: http://mcp-website-fetcher.default.svc.cluster.local/policies
               scopesSupported: '["tools/call/fetch"]'
-      key: default/keycloak-mcp-authn-policy:mcp-authentication:default/mcp-backend-static
+      key: default/keycloak-mcp-authn-policy:mcp-authentication:default/be
       name:
         kind: AgentgatewayPolicy
         name: keycloak-mcp-authn-policy
         namespace: default
       target:
         backend:
-          name: mcp-backend-static
+          name: be
           namespace: default
 status:
   ancestors:
   - ancestorRef:
       group: agentgateway.dev
       kind: AgentgatewayBackend
-      name: mcp-backend-static
+      name: be
       namespace: default
     conditions:
     - lastTransitionTime: fake

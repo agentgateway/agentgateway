@@ -45,7 +45,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         inferenceRouting:
@@ -64,7 +67,10 @@ output:
         service:
           hostname: gateway-pool.default.inference.cluster.local
           namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:
@@ -79,7 +85,10 @@ output:
           hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
           namespace: default
           port: 9002
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:

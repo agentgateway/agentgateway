@@ -13,7 +13,7 @@ spec:
       attempts: 2147483648
 ---
 # Output
-output: null
+output: []
 status:
   ancestors:
   - ancestorRef:

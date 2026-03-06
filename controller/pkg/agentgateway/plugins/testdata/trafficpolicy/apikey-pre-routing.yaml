@@ -27,7 +27,10 @@ data:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       key: traffic/default/apikey-pre-routing:apikeyauth:default/test
       name:

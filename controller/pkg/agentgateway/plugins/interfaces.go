@@ -2,11 +2,13 @@ package plugins
 
 import (
 	"context"
+	"sort"
 
 	"istio.io/istio/pilot/pkg/util/protoconv"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/ptr"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -33,16 +35,17 @@ func (p *PolicyPlugin) ApplyPolicies(inputs PolicyPluginInput) (krt.Collection[A
 
 // AgwPolicy wraps an Agw policy for collection handling
 type AgwPolicy struct {
-	Policy *api.Policy
+	Gateway *types.NamespacedName
+	Policy  *api.Policy
 	// TODO: track errors per policy
 }
 
 func (p AgwPolicy) Equals(in AgwPolicy) bool {
-	return protoconv.Equals(p.Policy, in.Policy)
+	return ptr.Equal(p.Gateway, in.Gateway) && protoconv.Equals(p.Policy, in.Policy)
 }
 
 func (p AgwPolicy) ResourceName() string {
-	return p.Policy.Key
+	return p.Gateway.String() + "/" + p.Policy.Key
 }
 
 type AddResourcesPlugin struct {
@@ -87,4 +90,17 @@ func TypedResourceFromName(typ string, o types.NamespacedName) *api.TypedResourc
 		Namespace: o.Namespace,
 		Name:      o.Name,
 	}
+}
+
+func appendPolicyForGateways(policies []AgwPolicy, gatewayTargets []types.NamespacedName, policy *api.Policy) []AgwPolicy {
+	sort.Slice(gatewayTargets, func(i, j int) bool {
+		return gatewayTargets[i].String() < gatewayTargets[j].String()
+	})
+	for _, gatewayTarget := range gatewayTargets {
+		policies = append(policies, AgwPolicy{
+			Gateway: ptr.Of(gatewayTarget),
+			Policy:  policy,
+		})
+	}
+	return policies
 }

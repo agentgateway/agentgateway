@@ -60,12 +60,6 @@ func ToResourceForGateway(gw types.NamespacedName, resource any) ir.AgwResource 
 	}
 }
 
-func ToResourceGlobal(resource any) ir.AgwResource {
-	return ir.AgwResource{
-		Resource: ToAgwResource(resource),
-	}
-}
-
 // AgwBind is a wrapper type that contains the bind on the gateway, as well as the status for the bind.
 type AgwBind struct {
 	*api.Bind

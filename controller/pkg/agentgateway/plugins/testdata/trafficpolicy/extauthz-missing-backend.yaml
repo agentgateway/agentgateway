@@ -23,7 +23,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       key: traffic/default/grpc:extauth:default/test
       name:

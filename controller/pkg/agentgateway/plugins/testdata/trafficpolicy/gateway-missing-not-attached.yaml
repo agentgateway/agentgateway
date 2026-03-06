@@ -14,7 +14,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: fake-gw
+    Namespace: default
+  resource:
     policy:
       key: traffic/default/agw:timeout:default/fake-gw
       name:

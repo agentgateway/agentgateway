@@ -62,7 +62,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         http:
@@ -77,7 +80,10 @@ output:
         gateway:
           name: test
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         logging:
@@ -97,7 +103,10 @@ output:
         gateway:
           name: test
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         tcp:
@@ -114,7 +123,10 @@ output:
         gateway:
           name: test
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         tls:
