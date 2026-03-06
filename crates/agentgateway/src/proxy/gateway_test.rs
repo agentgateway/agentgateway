@@ -1403,28 +1403,7 @@ fn setup_dfp() -> (TestBind, Client<MemoryConnector, Body>) {
 	let backend_name = ResourceName::new("dynamic".into(), "".into());
 	let dynamic_backend = Backend::Dynamic(backend_name, ());
 
-	let route = Route {
-		key: "route".into(),
-		name: RouteName {
-			name: "route".into(),
-			namespace: Default::default(),
-			rule_name: None,
-			kind: None,
-		},
-		hostnames: Default::default(),
-		matches: vec![RouteMatch {
-			headers: vec![],
-			path: PathMatch::PathPrefix("/".into()),
-			method: None,
-			query: vec![],
-		}],
-		inline_policies: Default::default(),
-		backends: vec![RouteBackendReference {
-			weight: 1,
-			backend: BackendReference::Backend("/dynamic".into()),
-			inline_policies: Default::default(),
-		}],
-	};
+	let route = basic_named_route("/dynamic".into());
 
 	let t = setup_proxy_test("{}").unwrap();
 	let pi = t.inputs();
@@ -1442,28 +1421,7 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 	let backend_name = ResourceName::new("dynamic".into(), "".into());
 	let dynamic_backend = Backend::Dynamic(backend_name, ());
 
-	let route = Route {
-		key: "route".into(),
-		name: RouteName {
-			name: "route".into(),
-			namespace: Default::default(),
-			rule_name: None,
-			kind: None,
-		},
-		hostnames: Default::default(),
-		matches: vec![RouteMatch {
-			headers: vec![],
-			path: PathMatch::PathPrefix("/".into()),
-			method: None,
-			query: vec![],
-		}],
-		inline_policies: Default::default(),
-		backends: vec![RouteBackendReference {
-			weight: 1,
-			backend: BackendReference::Backend("/dynamic".into()),
-			inline_policies: Default::default(),
-		}],
-	};
+	let route = basic_named_route("/dynamic".into());
 
 	let bind = Bind {
 		key: BIND_KEY,
