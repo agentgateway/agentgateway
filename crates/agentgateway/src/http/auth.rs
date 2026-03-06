@@ -85,6 +85,24 @@ pub enum AzureUserAssignedIdentity {
 	ResourceId(String),
 }
 
+/// Per-instance credential cache for [`AzureAuth`].
+///
+/// Each [`AzureAuth`] value owns its own cache so that different backends
+/// (e.g. two `ExplicitConfig` entries with different client secrets) get
+/// independent credentials instead of sharing a single global cache.
+/// Clones share the same underlying `Arc`, so the credential is built at
+/// most once per config instance.
+#[derive(Default, Clone)]
+pub struct AzureCredentialCache(
+	Arc<tokio::sync::OnceCell<Arc<dyn azure_core::credentials::TokenCredential>>>,
+);
+
+impl std::fmt::Debug for AzureCredentialCache {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("AzureCredentialCache")
+	}
+}
+
 #[apply(schema!)]
 pub enum AzureAuth {
 	/// Use explicit Azure credentials
@@ -92,17 +110,33 @@ pub enum AzureAuth {
 	ExplicitConfig {
 		#[serde(flatten)]
 		credential_source: AzureAuthCredentialSource,
+		/// Cached credential, populated on first use.
+		#[serde(skip)]
+		#[cfg_attr(feature = "schema", schemars(skip))]
+		cached_cred: AzureCredentialCache,
 	},
 	/// Use implicit Azure auth. Note that this is for developer use-cases only!
-	DeveloperImplicit {},
+	DeveloperImplicit {
+		/// Cached credential, populated on first use.
+		#[serde(skip)]
+		#[cfg_attr(feature = "schema", schemars(skip))]
+		cached_cred: AzureCredentialCache,
+	},
 	/// Automatically detect authentication method based on environment.
 	/// Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.
-	Implicit {},
+	Implicit {
+		/// Cached credential, populated on first use.
+		#[serde(skip)]
+		#[cfg_attr(feature = "schema", schemars(skip))]
+		cached_cred: AzureCredentialCache,
+	},
 }
 
 impl Default for AzureAuth {
 	fn default() -> Self {
-		Self::Implicit {}
+		Self::Implicit {
+			cached_cred: Default::default(),
+		}
 	}
 }
 
@@ -144,7 +178,7 @@ pub enum BackendAuth {
 	#[serde(rename = "aws")]
 	Aws(AwsAuth),
 	#[serde(rename = "azure")]
-	Azure(Option<AzureAuth>),
+	Azure(AzureAuth),
 }
 
 #[derive(Clone)]
@@ -186,8 +220,7 @@ pub async fn apply_backend_auth(
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
 		},
 		BackendAuth::Azure(azure_auth) => {
-			let auth = azure_auth.as_ref().unwrap_or(&AzureAuth::Implicit {});
-			let token = azure::get_token(&backend_info.inputs.upstream, auth)
+			let token = azure::get_token(&backend_info.inputs.upstream, azure_auth)
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
@@ -536,16 +569,8 @@ mod azure {
 
 	use crate::client;
 	use crate::http::auth::{AzureAuth, AzureAuthCredentialSource, AzureUserAssignedIdentity};
-	use tokio::sync::OnceCell;
 
 	const SCOPES: &[&str] = &["https://cognitiveservices.azure.com/.default"];
-
-	/// Cached credential for `AzureAuth::Implicit`.
-	static IMPLICIT_CRED: OnceCell<Arc<dyn TokenCredential>> = OnceCell::const_new();
-	/// Cached credential for `AzureAuth::DeveloperImplicit`.
-	static DEV_IMPLICIT_CRED: OnceCell<Arc<dyn TokenCredential>> = OnceCell::const_new();
-	/// Cached credential for `AzureAuth::ExplicitConfig`.
-	static EXPLICIT_CRED: OnceCell<Arc<dyn TokenCredential>> = OnceCell::const_new();
 
 	/// A credential chain that mirrors the Azure Go SDK's DefaultAzureCredential.
 	///
@@ -674,7 +699,7 @@ mod azure {
 			|| std::env::var_os("MSI_ENDPOINT").is_some()
 	}
 
-	async fn token_credential_from_auth(
+	async fn build_credential(
 		client: &client::Client,
 		auth: &AzureAuth,
 	) -> anyhow::Result<Arc<dyn TokenCredential>> {
@@ -683,7 +708,9 @@ mod azure {
 			..Default::default()
 		};
 		match auth {
-			AzureAuth::ExplicitConfig { credential_source } => match credential_source {
+			AzureAuth::ExplicitConfig {
+				credential_source, ..
+			} => match credential_source {
 				AzureAuthCredentialSource::ClientSecret {
 					tenant_id,
 					client_id,
@@ -727,8 +754,8 @@ mod azure {
 					))?)
 				},
 			},
-			AzureAuth::DeveloperImplicit {} => Ok(azure_identity::DeveloperToolsCredential::new(None)?),
-			AzureAuth::Implicit {} => {
+			AzureAuth::DeveloperImplicit { .. } => Ok(azure_identity::DeveloperToolsCredential::new(None)?),
+			AzureAuth::Implicit { .. } => {
 				// Build a DefaultAzureCredential chain following the Azure Go SDK pattern.
 				// Each credential is tried in order; the first to succeed is cached and
 				// used for all subsequent requests.
@@ -891,14 +918,15 @@ mod azure {
 		client: &client::Client,
 		auth: &AzureAuth,
 	) -> anyhow::Result<http::HeaderValue> {
-		let cell = match auth {
-			AzureAuth::Implicit {} => &IMPLICIT_CRED,
-			AzureAuth::DeveloperImplicit {} => &DEV_IMPLICIT_CRED,
-			AzureAuth::ExplicitConfig { .. } => &EXPLICIT_CRED,
+		let cache = match auth {
+			AzureAuth::Implicit { cached_cred, .. } => &cached_cred.0,
+			AzureAuth::DeveloperImplicit { cached_cred, .. } => &cached_cred.0,
+			AzureAuth::ExplicitConfig { cached_cred, .. } => &cached_cred.0,
 		};
-		let cred = cell
-			.get_or_try_init(|| token_credential_from_auth(client, auth))
-			.await?;
+		let cred = cache
+			.get_or_try_init(|| build_credential(client, auth))
+			.await?
+			.clone();
 		let token = cred.get_token(SCOPES, None).await?;
 		let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
 		hv.set_sensitive(true);
