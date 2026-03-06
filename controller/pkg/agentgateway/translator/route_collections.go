@@ -597,6 +597,7 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 			return ptr.Of(&RouteAttachment{
 				From:         from,
 				To:           e.ParentKey,
+				Gateway:      e.ParentGateway,
 				ListenerName: string(e.ParentSection),
 			})
 		})
@@ -604,17 +605,25 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 }
 
 type RouteAttachment struct {
-	From         TypedResource
+	// Route
+	From TypedResource
+	// Immediate parent (Gateway or ListenerSet)
 	To           ParentKey
 	ListenerName string
+	// Eventual parent (always Gateway)
+	Gateway types.NamespacedName
 }
 
 func (r RouteAttachment) ResourceName() string {
-	return r.From.Kind.Kind + "/" + r.From.Name.String() + "->" + r.To.String() + "/" + r.ListenerName
+	to := r.To.String()
+	if r.To.Kind != wellknown.GatewayGVK {
+		to += "/" + r.Gateway.String()
+	}
+	return r.From.Kind.Kind + "/" + r.From.Name.String() + "->" + to + "/" + r.ListenerName
 }
 
 func (r RouteAttachment) Equals(other RouteAttachment) bool {
-	return r.From == other.From && r.To == other.To && r.ListenerName == other.ListenerName
+	return r.From == other.From && r.To == other.To && r.ListenerName == other.ListenerName && r.Gateway == other.Gateway
 }
 
 func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext, obj T, kind string, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {
