@@ -115,7 +115,8 @@ func translatePoliciesForBackendTLS(
 			Kind: string(target.Kind),
 		}
 
-		uniqueGateways = uniqueGateways.Union(references.LookupGatewaysForBackend(krtctx, tgtRef))
+		gatewayTargets := references.LookupGatewaysForBackend(krtctx, tgtRef).UnsortedList()
+		uniqueGateways = uniqueGateways.InsertAll(gatewayTargets...)
 
 		var mtlsClientRef *gwv1.SecretObjectReference
 		var mtlsClientRefNamespace string
@@ -232,7 +233,7 @@ func translatePoliciesForBackendTLS(
 				},
 			},
 		}
-		policies = append(policies, AgwPolicy{Policy: policy})
+		policies = appendPolicyForGateways(policies, gatewayTargets, policy)
 	}
 	ancestorStatus := make([]gwv1.PolicyAncestorStatus, 0, len(btls.Spec.TargetRefs))
 	for g := range uniqueGateways {
