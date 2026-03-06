@@ -466,7 +466,6 @@ func TestAncestors(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 func (r ancestorRef) NamespacedName() types.NamespacedName {
