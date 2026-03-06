@@ -16,7 +16,7 @@ env:
   CARGO_TERM_COLOR: always
   CI: true
   RUST_VERSION: "1.93.1"
-  GO_VERSION: "1.25.7"
+  GO_VERSION: "1.26.1"
 
 jobs:
   #### Proxy jobs ####
