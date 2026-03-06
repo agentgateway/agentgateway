@@ -33,7 +33,7 @@ func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 			wellknown.InferencePoolGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					status, policyCol := krt.NewStatusManyCollection(agw.InferencePools, func(krtctx krt.HandlerContext, infPool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
-						return translatePoliciesForInferencePool(krtctx, agw.ControllerName, input.Ancestors, agw.Services, infPool)
+						return translatePoliciesForInferencePool(krtctx, agw.ControllerName, input.References, agw.Services, infPool)
 					}, agw.KrtOpts.ToOptions("agentgateway/InferencePools")...)
 					return convertStatusCollection(status), policyCol
 				},
@@ -46,7 +46,7 @@ func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 func translatePoliciesForInferencePool(
 	krtctx krt.HandlerContext,
 	controllerName string,
-	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	references ReferenceIndex,
 	services krt.Collection[*corev1.Service],
 	pool *inf.InferencePool,
 ) (*inf.InferencePoolStatus, []AgwPolicy) {
@@ -54,7 +54,7 @@ func translatePoliciesForInferencePool(
 
 	epr := pool.Spec.EndpointPickerRef
 	validationErr := validateInferencePoolEndpointPickerRef(krtctx, pool, services)
-	attachedGateways := inferencePoolAttachedGateways(krtctx, ancestors, pool)
+	attachedGateways := inferencePoolAttachedGateways(krtctx, references, pool)
 	status := buildInferencePoolStatus(pool, controllerName, attachedGateways, validationErr)
 
 	// 'service/{namespace}/{hostname}:{port}'
@@ -91,7 +91,11 @@ func translatePoliciesForInferencePool(
 			},
 		},
 	}
-	infPolicies = append(infPolicies, AgwPolicy{Policy: inferencePolicy})
+	gatewayTargets := make([]types.NamespacedName, 0, len(attachedGateways))
+	for gatewayTarget := range attachedGateways {
+		gatewayTargets = append(gatewayTargets, gatewayTarget)
+	}
+	infPolicies = appendPolicyForGateways(infPolicies, gatewayTargets, inferencePolicy)
 
 	// Create the TLS policy for the endpoint picker
 	// TODO: we would want some way if they explicitly set a BackendTLSPolicy for the EPP to respect that
@@ -110,7 +114,7 @@ func translatePoliciesForInferencePool(
 			},
 		},
 	}
-	infPolicies = append(infPolicies, AgwPolicy{Policy: inferencePolicyTLS})
+	infPolicies = appendPolicyForGateways(infPolicies, gatewayTargets, inferencePolicyTLS)
 
 	logger.Debug("generated inference pool policies",
 		"pool", pool.Name,
@@ -187,13 +191,10 @@ func inferencePoolValidationError(errs []string) error {
 
 func inferencePoolAttachedGateways(
 	krtctx krt.HandlerContext,
-	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	references ReferenceIndex,
 	pool *inf.InferencePool,
 ) map[types.NamespacedName]struct{} {
 	gateways := make(map[types.NamespacedName]struct{})
-	if ancestors == nil {
-		return gateways
-	}
 
 	targetRef := utils.TypedNamespacedName{
 		NamespacedName: types.NamespacedName{
@@ -203,11 +204,8 @@ func inferencePoolAttachedGateways(
 		Kind: wellknown.InferencePoolKind,
 	}
 
-	ancestorBackends := krt.Fetch(krtctx, ancestors, krt.FilterKey(targetRef.String()))
-	for _, gwl := range ancestorBackends {
-		for _, i := range gwl.Objects {
-			gateways[i.Gateway] = struct{}{}
-		}
+	for gateway := range references.LookupGatewaysForBackend(krtctx, targetRef) {
+		gateways[gateway] = struct{}{}
 	}
 	return gateways
 }

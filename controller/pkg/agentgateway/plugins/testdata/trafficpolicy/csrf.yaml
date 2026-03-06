@@ -17,22 +17,23 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/agw:csrf:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/agw:csrf:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      csrf:
-        additionalOrigins:
-        - https://example.com
-        - https://app.example.com
-        - http://localhost:3000
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        csrf:
+          additionalOrigins:
+          - https://example.com
+          - https://app.example.com
+          - http://localhost:3000
 status:
   ancestors:
   - ancestorRef:

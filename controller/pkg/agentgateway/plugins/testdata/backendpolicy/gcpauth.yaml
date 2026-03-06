@@ -16,22 +16,23 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    backend:
-      auth:
-        gcp:
-          idToken:
-            audience: hello.world.example.com
-    key: backend/default/id:backend-auth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: id
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: test
+- resource:
+    policy:
+      backend:
+        auth:
+          gcp:
+            idToken:
+              audience: hello.world.example.com
+      key: backend/default/id:backend-auth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: id
         namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
 status:
   ancestors:
   - ancestorRef:

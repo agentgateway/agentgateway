@@ -109,11 +109,6 @@ type Config struct {
 	Status Status
 }
 
-type TypedResource struct {
-	Kind schema.GroupVersionKind
-	Name types.NamespacedName
-}
-
 // Spec defines the spec for the  In order to use below helper methods,
 // this must be one of:
 // * golang/protobuf Message

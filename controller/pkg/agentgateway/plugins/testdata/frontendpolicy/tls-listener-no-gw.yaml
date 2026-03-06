@@ -14,19 +14,20 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    frontend:
-      tls:
-        handshakeTimeout: 15s
-    key: frontend/default/tls-policy:frontend-tls:default/fake-gw
-    name:
-      kind: AgentgatewayPolicy
-      name: tls-policy
-      namespace: default
-    target:
-      gateway:
-        name: fake-gw
+- resource:
+    policy:
+      frontend:
+        tls:
+          handshakeTimeout: 15s
+      key: frontend/default/tls-policy:frontend-tls:default/fake-gw
+      name:
+        kind: AgentgatewayPolicy
+        name: tls-policy
         namespace: default
+      target:
+        gateway:
+          name: fake-gw
+          namespace: default
 status:
   ancestors:
   - ancestorRef:

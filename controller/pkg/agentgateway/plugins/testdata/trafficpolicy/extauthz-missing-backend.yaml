@@ -23,26 +23,27 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/grpc:extauth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: grpc
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/grpc:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: grpc
         namespace: default
-    traffic:
-      extAuthz:
-        grpc:
-          context:
-            hello: world
-          metadata:
-            user: jwt.sub
-        includeRequestBody:
-          allowPartialMessage: true
-          maxRequestBytes: 1024
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          grpc:
+            context:
+              hello: world
+            metadata:
+              user: jwt.sub
+          includeRequestBody:
+            allowPartialMessage: true
+            maxRequestBytes: 1024
 status:
   ancestors:
   - ancestorRef:

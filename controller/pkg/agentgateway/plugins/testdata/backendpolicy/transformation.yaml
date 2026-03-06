@@ -21,27 +21,28 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    backend:
-      transformation:
-        request:
-          set:
-          - expression: request.headers['x-request-id']
-            name: x-backend-req
-        response:
-          add:
-          - expression: string(response.code)
-            name: x-backend-resp
-    key: default/agw:backend-transformation:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: test
+- resource:
+    policy:
+      backend:
+        transformation:
+          request:
+            set:
+            - expression: request.headers['x-request-id']
+              name: x-backend-req
+          response:
+            add:
+            - expression: string(response.code)
+              name: x-backend-resp
+      key: default/agw:backend-transformation:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
 status:
   ancestors:
   - ancestorRef:
