@@ -104,13 +104,15 @@ output:
   name: infra-backend-v1
   namespace: default
   ports:
-  - servicePort: 443
+  - appProtocol: TLS
+    servicePort: 443
 - canonical: true
   hostname: infra-backend-v2.default.svc.cluster.local
   name: infra-backend-v2
   namespace: default
   ports:
-  - servicePort: 443
+  - appProtocol: TLS
+    servicePort: 443
 status:
 - apiVersion: gateway.networking.k8s.io/v1
   kind: BackendTLSPolicy

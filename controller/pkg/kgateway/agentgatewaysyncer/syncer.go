@@ -461,7 +461,8 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 		return []utils.TypedNamespacedName{o.Backend}
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
-	agwPolicies, policyStatuses := AgwPolicyCollection(s.agwPlugins, ancestorCollection, krtopts)
+	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection)
+	agwPolicies, policyStatuses := AgwPolicyCollection(s.agwPlugins, referenceIndex, krtopts)
 
 	// Create an agentgateway backend collection from the kgateway backend resources
 	agwBackendStatus, agwBackends := s.newAgwBackendCollection(s.agwCollections.Backends, ancestorCollection, krtopts)
