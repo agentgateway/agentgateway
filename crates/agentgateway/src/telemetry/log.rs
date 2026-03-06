@@ -698,6 +698,18 @@ pub struct RequestLog {
 	pub response_bytes: u64,
 }
 
+fn version_to_str(v: &::http::Version) -> ValueBag<'static> {
+    match *v {
+        ::http::Version::HTTP_09 => "0.9".into(),
+        ::http::Version::HTTP_10 => "1.0".into(),
+        ::http::Version::HTTP_11 => "1.1".into(),
+        ::http::Version::HTTP_2  => "2".into(),
+        ::http::Version::HTTP_3  => "3".into(),
+        _                        => "unknown".into(),
+    }
+}
+
+
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
 		let Some(mut log) = self.log.take() else {
@@ -894,16 +906,13 @@ impl Drop for DropOnLog {
 			),
 			("route", route_identifier.route.as_deref().map(display)),
 			("endpoint", log.endpoint.display()),
-			("src.addr", Some(display(&log.tcp_info.peer_addr))),
-			("http.method", log.method.display()),
-			("http.host", log.host.display()),
-			("http.path", log.path.display()),
-			// TODO: incoming vs outgoing
-			("http.version", log.version.as_ref().map(debug)),
-			(
-				"http.status",
-				log.status.as_ref().map(|s| s.as_u16().into()),
-			),
+			("client.address",            Some(display(&log.tcp_info.peer_addr))),
+	        ("http.request.method",       log.method.display()),
+	        ("server.address",            log.host.display()),
+	        ("url.path",                  log.path.display()),
+	        // TODO: incoming vs outgoing
+	        ("network.protocol.version",  log.version.as_ref().map(version_to_str)),
+	        ("http.response.status_code", log.status.as_ref().map(|s| s.as_u16().into())),
 			("grpc.status", grpc.map(Into::into)),
 			(
 				"tls.sni",
