@@ -4,9 +4,12 @@ go 1.25.1
 
 replace github.com/agentgateway/agentgateway/api => ./api
 
+replace github.com/agentgateway/agentgateway/controller/api => ./controller/api
+
 require (
 	// Also update AgentgatewayDefaultTag in pkg/deployer/wellknown.go and test/deployer/testdata/*
 	github.com/agentgateway/agentgateway/api v0.0.0
+	github.com/agentgateway/agentgateway/controller/api v0.0.0
 	github.com/anthropics/anthropic-sdk-go v1.22.1
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
@@ -18,7 +21,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/kagent-dev/mockllm v0.0.3
-	github.com/kelseyhightower/envconfig v1.4.0
+	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/openai/openai-go/v3 v3.21.0
@@ -36,7 +39,7 @@ require (
 	helm.sh/helm/v3 v3.20.0
 	istio.io/api v1.29.0-alpha.0.0.20260302212057-b10ab91e9ded
 	istio.io/client-go v1.29.0-alpha.0.0.20260302212359-b21b30ec7057
-	istio.io/istio v0.0.0-20260304200359-546e4b34e37b
+	istio.io/istio v0.0.0-20260305143300-1334b393da45
 	k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver v0.35.1
 	k8s.io/apimachinery v0.35.1
