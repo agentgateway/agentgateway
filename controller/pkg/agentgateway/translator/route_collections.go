@@ -6,7 +6,6 @@ import (
 	"iter"
 	"strings"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/controllers"
@@ -27,6 +26,7 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"

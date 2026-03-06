@@ -157,6 +157,7 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 			}
 			// TODO: add support for inferencepool https://github.com/kgateway-dev/kgateway/issues/13295
 			// TODO: add support for ListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
+			// If we add ListenerSet, we MUST update ReferenceIndex
 
 		default:
 			// TODO(npolshak): support attaching policies to k8s services, serviceentries, and other backends

@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"

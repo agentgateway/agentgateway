@@ -7,11 +7,12 @@ import (
 	"testing"
 	"text/template"
 
-	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/test/util/assert"
 	"k8s.io/apimachinery/pkg/types"
+
+	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 )
 
 const (

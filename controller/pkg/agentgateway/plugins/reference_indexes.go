@@ -1,11 +1,12 @@
 package plugins
 
 import (
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 )
 
 type RouteAttachment struct {

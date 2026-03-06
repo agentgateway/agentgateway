@@ -37,7 +37,7 @@ Name|Version|License
 [helm/v3](https://helm.sh/helm/v3)|v3.20.0|Apache License 2.0
 [istio.io/api](https://istio.io/api)|v1.29.0-alpha.0.0.20260302212057-b10ab91e9ded|Apache License 2.0
 [istio.io/client-go](https://istio.io/client-go)|v1.29.0-alpha.0.0.20260302212359-b21b30ec7057|Apache License 2.0
-[istio.io/istio](https://istio.io/istio)|v0.0.0-20260304200359-546e4b34e37b|Apache License 2.0
+[istio.io/istio](https://istio.io/istio)|v0.0.0-20260306202201-fae9194a853b|Apache License 2.0
 [k8s.io/api](https://k8s.io/api)|v0.35.1|Apache License 2.0
 [k8s.io/apiextensions-apiserver](https://k8s.io/apiextensions-apiserver)|v0.35.1|Apache License 2.0
 [k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.35.1|Apache License 2.0
