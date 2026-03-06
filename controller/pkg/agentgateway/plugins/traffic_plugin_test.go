@@ -58,13 +58,13 @@ func TestFrontendPolicies(t *testing.T) {
 func policyTest(t *testing.T, folder string) {
 	t.Helper()
 	testutils.RunForDirectory(t, folder, func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
-		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy", "HTTPRoute")
+		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
 		r := ri.Outputs.Resources.List()
 		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
 			x := ir.GetAgwResourceName(resource.Resource)
 			return strings.HasPrefix(x, "policy/")
 		})
-		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
+		return sq.DumpStatus(), slices.SortBy(r, func(a ir.AgwResource) string {
 			return a.ResourceName()
 		})
 	})

@@ -135,7 +135,7 @@ metadata:
   namespace: agentgateway-system
 ---
 # Output
-output: null
+output: []
 status:
   ancestors:
   - ancestorRef:

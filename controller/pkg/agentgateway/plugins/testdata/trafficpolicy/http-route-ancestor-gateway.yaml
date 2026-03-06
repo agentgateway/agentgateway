@@ -13,7 +13,22 @@ spec:
       request: 5s
 ---
 # Output
-output: null
+output:
+- resource:
+    policy:
+      key: traffic/default/agw:timeout:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+      traffic:
+        timeout:
+          request: 5s
 status:
   ancestors:
   - ancestorRef:
