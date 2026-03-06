@@ -55,6 +55,7 @@ output:
           remove:
           - server
           - x-internal-header
+  Target: null
 status:
   ancestors:
   - ancestorRef:

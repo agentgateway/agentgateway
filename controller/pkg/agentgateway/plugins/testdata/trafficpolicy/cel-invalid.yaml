@@ -36,6 +36,7 @@ output:
           set:
           - expression: '''foolen_'' + request.headers[''content-length'']'
             name: x-valid-header
+  Target: null
 status:
   ancestors:
   - ancestorRef:

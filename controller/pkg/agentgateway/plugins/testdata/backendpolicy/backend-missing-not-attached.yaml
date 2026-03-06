@@ -27,6 +27,7 @@ output:
       backend:
         name: missing
         namespace: default
+  Target: null
 status:
   ancestors:
   - ancestorRef:

@@ -33,6 +33,7 @@ output:
         - https://example.com
         - https://app.example.com
         - http://localhost:3000
+  Target: null
 status:
   ancestors:
   - ancestorRef:

@@ -51,6 +51,7 @@ output:
         set:
         - name: set-req-header
           value: foo
+  Target: null
 - Policy:
     key: traffic/default/agw:header-modifier:default/test
     name:
@@ -71,6 +72,7 @@ output:
         set:
         - name: set-res-header
           value: foo
+  Target: null
 status:
   ancestors:
   - ancestorRef:

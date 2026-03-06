@@ -19,7 +19,7 @@ type ReferenceIndex struct {
 	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend]
 }
 
-func (p ReferenceIndex) LookupGateways(ctx krt.HandlerContext, object utils.TypedNamespacedName) sets.Set[types.NamespacedName] {
+func (p ReferenceIndex) LookupGatewaysForBackend(ctx krt.HandlerContext, object utils.TypedNamespacedName) sets.Set[types.NamespacedName] {
 	gateways := sets.New[types.NamespacedName]()
 	if p.ancestors == nil {
 		return gateways

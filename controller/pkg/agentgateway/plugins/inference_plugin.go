@@ -200,7 +200,7 @@ func inferencePoolAttachedGateways(
 		Kind: wellknown.InferencePoolKind,
 	}
 
-	for gateway := range references.LookupGateways(krtctx, targetRef) {
+	for gateway := range references.LookupGatewaysForBackend(krtctx, targetRef) {
 		gateways[gateway] = struct{}{}
 	}
 	return gateways

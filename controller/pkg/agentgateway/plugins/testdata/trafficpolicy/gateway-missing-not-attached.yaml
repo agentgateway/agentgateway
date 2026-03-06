@@ -27,6 +27,7 @@ output:
     traffic:
       timeout:
         request: 5s
+  Target: null
 status:
   ancestors:
   - ancestorRef:

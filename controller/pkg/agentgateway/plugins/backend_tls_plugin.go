@@ -9,7 +9,6 @@ import (
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
@@ -116,7 +115,7 @@ func translatePoliciesForBackendTLS(
 			Kind: string(target.Kind),
 		}
 
-		uniqueGateways = uniqueGateways.Union(references.LookupGateways(krtctx, tgtRef))
+		uniqueGateways = uniqueGateways.Union(references.LookupGatewaysForBackend(krtctx, tgtRef))
 
 		var mtlsClientRef *gwv1.SecretObjectReference
 		var mtlsClientRefNamespace string
@@ -233,7 +232,7 @@ func translatePoliciesForBackendTLS(
 				},
 			},
 		}
-		policies = append(policies, AgwPolicy{policy})
+		policies = append(policies, AgwPolicy{Policy: policy})
 	}
 	ancestorStatus := make([]gwv1.PolicyAncestorStatus, 0, len(btls.Spec.TargetRefs))
 	for g := range uniqueGateways {

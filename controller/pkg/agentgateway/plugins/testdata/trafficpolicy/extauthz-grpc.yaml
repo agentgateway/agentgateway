@@ -57,6 +57,7 @@ output:
           service:
             hostname: extauthz.default.svc.cluster.local
             namespace: default
+  Target: null
 status:
   ancestors:
   - ancestorRef:

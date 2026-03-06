@@ -76,6 +76,7 @@ output:
       gateway:
         name: test
         namespace: default
+  Target: null
 - Policy:
     frontend:
       tls:
@@ -92,6 +93,7 @@ output:
       gateway:
         name: test
         namespace: default
+  Target: null
 - Policy:
     frontend:
       tcp:
@@ -108,6 +110,7 @@ output:
       gateway:
         name: test
         namespace: default
+  Target: null
 - Policy:
     frontend:
       logging:
@@ -127,6 +130,7 @@ output:
       gateway:
         name: test
         namespace: default
+  Target: null
 status:
   ancestors:
   - ancestorRef:

@@ -64,6 +64,7 @@ output:
             }
           issuer: https://example.com
       phase: GATEWAY
+  Target: null
 status:
   ancestors:
   - ancestorRef:

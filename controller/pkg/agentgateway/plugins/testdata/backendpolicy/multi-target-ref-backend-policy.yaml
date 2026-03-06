@@ -160,6 +160,7 @@ output:
       backend:
         name: test1
         namespace: default
+  Target: null
 - Policy:
     backend:
       mcpAuthentication:
@@ -184,6 +185,7 @@ output:
       backend:
         name: test2
         namespace: default
+  Target: null
 - Policy:
     backend:
       mcpAuthentication:
@@ -208,6 +210,7 @@ output:
       backend:
         name: test3
         namespace: default
+  Target: null
 - Policy:
     backend:
       mcpAuthentication:
@@ -232,6 +235,7 @@ output:
       backend:
         name: dummy-oauth
         namespace: default
+  Target: null
 status:
   ancestors:
   - ancestorRef:

@@ -46,6 +46,7 @@ output:
           metadata:
             user: admin
       phase: GATEWAY
+  Target: null
 status:
   ancestors:
   - ancestorRef:

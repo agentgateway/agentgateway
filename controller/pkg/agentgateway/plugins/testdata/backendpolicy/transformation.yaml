@@ -42,6 +42,7 @@ output:
         kind: HTTPRoute
         name: test
         namespace: default
+  Target: null
 status:
   ancestors:
   - ancestorRef:

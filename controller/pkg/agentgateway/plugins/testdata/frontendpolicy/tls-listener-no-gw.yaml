@@ -27,6 +27,7 @@ output:
       gateway:
         name: fake-gw
         namespace: default
+  Target: null
 status:
   ancestors:
   - ancestorRef:

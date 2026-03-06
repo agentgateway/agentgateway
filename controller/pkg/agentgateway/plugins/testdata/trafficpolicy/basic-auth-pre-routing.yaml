@@ -33,6 +33,7 @@ output:
         htpasswdContent: user1:$apr1$xyz123$abc
         realm: My Realm
       phase: GATEWAY
+  Target: null
 status:
   ancestors:
   - ancestorRef:

@@ -81,6 +81,7 @@ output:
       backend:
         name: mcp-backend-static
         namespace: default
+  Target: null
 status:
   ancestors:
   - ancestorRef:

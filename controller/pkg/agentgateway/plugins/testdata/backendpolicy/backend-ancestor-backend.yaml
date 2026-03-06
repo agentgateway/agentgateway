@@ -37,6 +37,7 @@ output:
       backend:
         name: be
         namespace: default
+  Target: null
 status:
   ancestors:
   - ancestorRef:
