@@ -25,6 +25,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
 	agentjwksstore "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwksstore"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
+	agentoidcstore "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidcstore"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/common"
@@ -328,7 +330,13 @@ func (s *setup) Start(ctx context.Context) error {
 		return err
 	}
 
-	jwksUrlFactory := jwks_url.NewJwksUrlFactory(agwCollections.ConfigMaps, agwCollections.Backends, agwCollections.AgentgatewayPolicies)
+	jwksUrlFactory := jwks_url.NewJwksUrlFactory(
+		agwCollections.ConfigMaps,
+		agwCollections.Services,
+		agwCollections.Backends,
+		agwCollections.AgentgatewayPolicies,
+		agwCollections.BackendTLSPolicies,
+	)
 	jwks_url.JwksUrlBuilderFactory = func() jwks_url.JwksUrlBuilder { return jwksUrlFactory }
 
 	for _, mgrCfgFunc := range s.extraManagerConfig {
@@ -352,6 +360,11 @@ func (s *setup) Start(ctx context.Context) error {
 		}
 	}
 
+	if _, exists := runnablesRegistry[oidc.RunnableName]; !exists {
+		if err := buildOIDCStore(ctx, mgr, s.apiClient, commoncol, agwCollections); err != nil {
+			return fmt.Errorf("error creating oidc provider store %w", err)
+		}
+	}
 	// rebuild jwks store if it doesn't exist
 	if _, exists := runnablesRegistry[jwks.RunnableName]; !exists {
 		if err := buildJwksStore(ctx, mgr, s.apiClient, commoncol, agwCollections); err != nil {
@@ -471,6 +484,39 @@ func buildJwksStore(ctx context.Context, mgr manager.Manager, apiClient apiclien
 	jwksStoreCMCtrl := agentjwksstore.NewJWKSStoreConfigMapsController(apiClient, jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace(), jwksStore)
 	jwksStoreCMCtrl.Init(ctx)
 	if err := mgr.Add(jwksStoreCMCtrl); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func buildOIDCStore(ctx context.Context, mgr manager.Manager, apiClient apiclient.Client, commonCollections *collections.CommonCollections, agwCollections *agwplugins.AgwCollections) error {
+	oidcStorePolicyCtrl := agentoidcstore.NewOIDCStorePolicyController(agwCollections)
+	if err := mgr.Add(oidcStorePolicyCtrl); err != nil {
+		return err
+	}
+	oidcStorePolicyCtrl.Init(ctx)
+
+	oidcStore := oidc.BuildProviderStore(
+		ctx,
+		apiClient,
+		commonCollections,
+		oidcStorePolicyCtrl.SourceChanges(),
+		oidc.DefaultStorePrefix,
+		namespaces.GetPodNamespace(),
+	)
+	if err := mgr.Add(oidcStore); err != nil {
+		return err
+	}
+
+	oidcStoreCMCtrl := agentoidcstore.NewOIDCStoreConfigMapsController(
+		apiClient,
+		oidc.DefaultStorePrefix,
+		namespaces.GetPodNamespace(),
+		oidcStore,
+	)
+	oidcStoreCMCtrl.Init(ctx)
+	if err := mgr.Add(oidcStoreCMCtrl); err != nil {
 		return err
 	}
 

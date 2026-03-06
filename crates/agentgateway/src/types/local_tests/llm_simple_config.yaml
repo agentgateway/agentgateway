@@ -8,7 +8,7 @@ llm:
     jwtAuth:
       issuer: agentgateway.dev
       audiences: [test.agentgateway.dev]
-      jwks: '{"keys":[]}'
+      jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI","crv":"P-256","alg":"ES256","x":"XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo","y":"g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"}]}'
     authorization:
       rules:
       - 'jwt.email.endsWith("@example.com")'

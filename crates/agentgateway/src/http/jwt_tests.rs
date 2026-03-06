@@ -1,10 +1,9 @@
-use std::collections::HashSet;
-
-use super::{JWTValidationOptions, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
-use crate::telemetry::log::MetricsConfig;
 use itertools::Itertools;
 use serde_json::json;
+use std::collections::HashSet;
 
+use super::{JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
+use crate::telemetry::log::MetricsConfig;
 type ProviderInfo = (&'static str, &'static str, &'static str);
 
 // Deserialization: missing jwtValidationOptions defaults required_claims to ["exp"]
@@ -131,6 +130,24 @@ fn test_deserialize_rejects_old_validation_options_key() {
 }
 
 #[test]
+fn test_deserialize_local_oidc_rejects_provider_backend() {
+	let json = r#"{
+		"mode": "Optional",
+		"issuer": "https://issuer.example.com",
+		"audiences": ["aud"],
+		"providerBackend": { "backend": "default/idp" }
+	}"#;
+	let err = serde_json::from_str::<LocalJwtConfig>(json)
+		.expect_err("providerBackend should be rejected for local JWT OIDC config");
+	assert!(
+		err
+			.to_string()
+			.contains("did not match any variant of untagged enum LocalJwtConfig"),
+		"unexpected error: {err}"
+	);
+}
+
+#[test]
 pub fn test_azure_jwks() {
 	// Regression test for https://github.com/agentgateway/agentgateway/issues/477
 	let azure_ad = json!({
@@ -188,6 +205,122 @@ pub fn test_basic_jwks() {
 		p.keys.keys().collect_vec(),
 		vec!["XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI"]
 	);
+}
+
+#[test]
+pub fn test_ec_jwks_without_alg_infers_curve_specific_algorithm_p256() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "p256-kid",
+				"crv": "P-256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let provider = Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		None,
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	let validation = &provider.keys.get("p256-kid").unwrap().validation;
+	assert_eq!(validation.algorithms, vec![jsonwebtoken::Algorithm::ES256]);
+}
+
+#[test]
+pub fn test_ec_jwks_without_alg_infers_curve_specific_algorithm_p384() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "p384-kid",
+				"crv": "P-384",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let provider = Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		None,
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	let validation = &provider.keys.get("p384-kid").unwrap().validation;
+	assert_eq!(validation.algorithms, vec![jsonwebtoken::Algorithm::ES384]);
+}
+
+#[test]
+pub fn test_jwks_skips_non_signature_use_keys() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "enc",
+				"kty": "EC",
+				"kid": "enc-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			},
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "sig-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let provider = Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		None,
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	assert!(provider.keys.contains_key("sig-kid"));
+	assert!(!provider.keys.contains_key("enc-kid"));
+}
+
+#[test]
+pub fn test_jwks_rejects_set_without_signature_keys() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "enc",
+				"kty": "EC",
+				"kid": "enc-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	match Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		None,
+		JWTValidationOptions::default(),
+	) {
+		Err(JwkError::NoUsableSigningKeys) => {},
+		Err(other) => panic!("unexpected error: {other}"),
+		Ok(_) => panic!("expected no usable signing keys"),
+	}
 }
 
 fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
@@ -320,6 +453,34 @@ pub fn test_jwt_rejections_table() {
 	let token_unknown_kid = build_unsigned_token("non-existent-kid", issuer, allowed_aud, now + 600);
 	let res = jwt.validate_claims(&token_unknown_kid);
 	assert!(matches!(res, Err(TokenError::UnknownKeyId(_))));
+}
+
+// Regression: callback ID token validation must enforce audience == oauth2.client_id.
+#[test]
+pub fn test_callback_id_token_requires_client_id_audience() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	use jsonwebtoken::errors::ErrorKind;
+
+	let (jwt, kid, issuer, client_id_aud) = setup_test_jwt();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+
+	let valid_token = build_unsigned_token(kid, issuer, client_id_aud, now + 600);
+	assert!(jwt.validate_claims(&valid_token).is_ok());
+
+	let wrong_audience_token = build_unsigned_token(kid, issuer, "other-client-id", now + 600);
+	let err = jwt
+		.validate_claims(&wrong_audience_token)
+		.expect_err("wrong aud must be rejected");
+	match err {
+		TokenError::Invalid(inner) => {
+			assert!(matches!(inner.kind(), ErrorKind::InvalidAudience));
+		},
+		other => panic!("expected Invalid(..), got {other:?}"),
+	}
 }
 
 // Strict mode: reject requests that are missing the Authorization header

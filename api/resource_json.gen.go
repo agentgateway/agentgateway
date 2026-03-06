@@ -787,6 +787,17 @@ func (this *TrafficPolicySpec_JWTProvider) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_JWTProvider_OIDC
+func (this *TrafficPolicySpec_JWTProvider_OIDC) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_JWTProvider_OIDC
+func (this *TrafficPolicySpec_JWTProvider_OIDC) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_JWT
 func (this *TrafficPolicySpec_JWT) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -905,6 +916,17 @@ func (this *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) MarshalJSON() (
 
 // UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ExtProc_NamespacedMetadataContext
 func (this *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_OAuth2
+func (this *TrafficPolicySpec_OAuth2) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_OAuth2
+func (this *TrafficPolicySpec_OAuth2) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

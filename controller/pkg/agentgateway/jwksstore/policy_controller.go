@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/backendtransport"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
@@ -46,22 +47,51 @@ func (j *JwksStorePolicyController) Init(ctx context.Context) {
 		wellknown.AgentgatewayBackendGVR,
 		kclient.Filter{ObjectFilter: j.agw.Client.ObjectFilter()},
 	), j.agw.KrtOpts.ToOptions("AgentgatewayBackend")...)
+	lookup := backendtransport.NewBackendTransportLookup(
+		j.agw.ConfigMaps,
+		j.agw.Services,
+		j.agw.Backends,
+		j.agw.AgentgatewayPolicies,
+		j.agw.BackendTLSPolicies,
+	)
 
 	// TODO JwksSource should be per-policy, i.e. the same jwks url for multiple policies should result in multiple JwksSources
 	// Otherwise changes to one policy (removal for example) could result in disruption of traffic for other policies (while ConfigMaps are re-synced)
 	j.jwks = krt.NewManyCollection(j.agw.AgentgatewayPolicies, func(kctx krt.HandlerContext, p *agentgateway.AgentgatewayPolicy) []jwks.JwksSource {
 		toret := make([]jwks.JwksSource, 0)
+		pctx := plugins.PolicyCtx{Krt: kctx, Collections: j.agw, BackendTransportLookup: lookup}
 
 		// enqueue Traffic JWT providers (if present)
 		if p.Spec.Traffic != nil && p.Spec.Traffic.JWTAuthentication != nil {
 			for _, provider := range p.Spec.Traffic.JWTAuthentication.Providers {
-				if provider.JWKS.Remote == nil {
-					continue
-				}
-
-				if s := j.buildJwksSource(kctx, p.Name, p.Namespace, provider.JWKS.Remote); s != nil {
+				switch {
+				case provider.JWKS.Remote != nil:
+					if s := j.buildJwksSource(kctx, p.Name, p.Namespace, provider.JWKS.Remote); s != nil {
+						toret = append(toret, *s)
+					}
+				case provider.JWKS.OIDC != nil:
+					s, err := plugins.ResolveOIDCJWKSSource(pctx, p.Name, p.Namespace, string(provider.Issuer), provider.JWKS.OIDC.BackendRef)
+					if err != nil {
+						polLogger.Error("error resolving oidc jwks source", "error", err, "policy", p.Name, "issuer", provider.Issuer)
+						continue
+					}
 					toret = append(toret, *s)
 				}
+			}
+		}
+
+		if p.Spec.Traffic != nil && p.Spec.Traffic.OAuth2 != nil && p.Spec.Traffic.OAuth2.Issuer != nil {
+			s, err := plugins.ResolveOIDCJWKSSource(
+				pctx,
+				p.Name,
+				p.Namespace,
+				string(*p.Spec.Traffic.OAuth2.Issuer),
+				p.Spec.Traffic.OAuth2.BackendRef,
+			)
+			if err != nil {
+				polLogger.Error("error resolving oauth2 oidc jwks source", "error", err, "policy", p.Name, "issuer", *p.Spec.Traffic.OAuth2.Issuer)
+			} else {
+				toret = append(toret, *s)
 			}
 		}
 

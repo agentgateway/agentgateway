@@ -121,12 +121,17 @@ impl TryFrom<&http::Uri> for HboneAddress {
 
 pub struct Gateway {
 	pi: Arc<ProxyInputs>,
+	oidc: Arc<crate::http::oidc::OidcClient>,
 	drain: drain::DrainWatcher,
 }
 
 impl Gateway {
-	pub fn new(pi: Arc<ProxyInputs>, drain: DrainWatcher) -> Gateway {
-		Gateway { drain, pi }
+	pub fn new(
+		pi: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
+		drain: DrainWatcher,
+	) -> Gateway {
+		Gateway { drain, pi, oidc }
 	}
 
 	pub async fn run(self) {
@@ -161,6 +166,7 @@ impl Gateway {
 					.map(|id| {
 						let subdrain = subdrain.clone();
 						let pi = self.pi.clone();
+						let oidc = self.oidc.clone();
 						let b = b.clone();
 						std::thread::spawn(move || {
 							let res = core_affinity::set_for_current(id);
@@ -172,7 +178,7 @@ impl Gateway {
 								.build()
 								.unwrap()
 								.block_on(async {
-									let _ = Self::run_bind(pi.clone(), subdrain.clone(), b.clone())
+									let _ = Self::run_bind(pi.clone(), oidc.clone(), subdrain.clone(), b.clone())
 										.in_current_span()
 										.await;
 								})
@@ -180,8 +186,15 @@ impl Gateway {
 					})
 					.collect::<Vec<_>>();
 			} else {
-				let task =
-					js.spawn(Self::run_bind(self.pi.clone(), subdrain.clone(), b.clone()).in_current_span());
+				let task = js.spawn(
+					Self::run_bind(
+						self.pi.clone(),
+						self.oidc.clone(),
+						subdrain.clone(),
+						b.clone(),
+					)
+					.in_current_span(),
+				);
 				active.insert(b.address, task);
 			}
 		};
@@ -218,6 +231,7 @@ impl Gateway {
 
 	pub(super) async fn run_bind(
 		pi: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		drain: DrainWatcher,
 		b: Arc<Bind>,
 	) -> anyhow::Result<()> {
@@ -284,6 +298,7 @@ impl Gateway {
 				};
 				stream.with_logging(LoggingMode::Downstream);
 				let pi = pi.clone();
+				let oidc = oidc.clone();
 				// We got the connection; make a strong drain blocker.
 				let drain = upgrader.upgrade(weak.clone());
 				let start = Instant::now();
@@ -296,7 +311,7 @@ impl Gateway {
 						_ = force_shutdown.changed() => {
 							info!(bind=?name, "connection forcefully terminated");
 						}
-						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, drain) => {}
+						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, oidc, drain) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
 				});
@@ -346,6 +361,7 @@ impl Gateway {
 		bind_protocol: BindProtocol,
 		mut raw_stream: Socket,
 		inputs: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		drain: DrainWatcher,
 	) {
 		let policies = inputs
@@ -371,6 +387,7 @@ impl Gateway {
 				let err = Self::proxy(
 					bind_name,
 					inputs,
+					oidc.clone(),
 					None,
 					raw_stream,
 					Arc::new(policies),
@@ -397,6 +414,7 @@ impl Gateway {
 							let _ = Self::proxy(
 								bind_name,
 								inputs,
+								oidc.clone(),
 								Some(selected_listener),
 								stream,
 								Arc::new(policies),
@@ -438,6 +456,7 @@ impl Gateway {
 		tunnel_protocol: TunnelProtocol,
 		mut raw_stream: Socket,
 		inputs: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		drain: DrainWatcher,
 	) {
 		let policies = inputs
@@ -461,18 +480,20 @@ impl Gateway {
 		match tunnel_protocol {
 			TunnelProtocol::Direct => {
 				// No tunnel
-				Self::proxy_bind(bind_name, bind_protocol, raw_stream, inputs, drain).await
+				Self::proxy_bind(bind_name, bind_protocol, raw_stream, inputs, oidc, drain).await
 			},
 			TunnelProtocol::HboneWaypoint => {
 				let _ =
-					Self::terminate_waypoint_hbone(bind_name, inputs, raw_stream, policies, drain).await;
+					Self::terminate_waypoint_hbone(bind_name, inputs, oidc, raw_stream, policies, drain)
+						.await;
 			},
 			TunnelProtocol::HboneGateway => {
-				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
+				let _ = Self::terminate_gateway_hbone(inputs, oidc, raw_stream, policies, drain).await;
 			},
 			TunnelProtocol::Proxy => {
 				let _ =
-					Self::terminate_proxy_protocol(bind_name, bind_protocol, inputs, raw_stream, drain).await;
+					Self::terminate_proxy_protocol(bind_name, bind_protocol, inputs, oidc, raw_stream, drain)
+						.await;
 			},
 		}
 	}
@@ -480,6 +501,7 @@ impl Gateway {
 	async fn proxy(
 		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		selected_listener: Option<Arc<Listener>>,
 		stream: Socket,
 		policies: Arc<FrontendPolices>,
@@ -518,6 +540,7 @@ impl Gateway {
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
 			inputs,
+			oidc,
 			selected_listener,
 			target_address,
 		};
@@ -695,6 +718,7 @@ impl Gateway {
 		bind_name: BindKey,
 		bind_protocol: BindProtocol,
 		inp: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		mut raw_stream: Socket,
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
@@ -746,13 +770,14 @@ impl Gateway {
 
 		// Continue with normal protocol handling - the identity is now in the socket
 		// extensions and will flow through to CEL authorization via with_source()
-		Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, drain).await;
+		Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, oidc, drain).await;
 		Ok(())
 	}
 
 	async fn terminate_waypoint_hbone(
 		bind_name: BindKey,
 		inp: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		raw_stream: Socket,
 		policies: FrontendPolices,
 		drain: DrainWatcher,
@@ -775,6 +800,7 @@ impl Gateway {
 			Self::serve_waypoint_connect(
 				bind_name.clone(),
 				inp.clone(),
+				oidc.clone(),
 				pols.clone(),
 				req,
 				ext,
@@ -798,6 +824,7 @@ impl Gateway {
 
 	async fn terminate_gateway_hbone(
 		inp: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		raw_stream: Socket,
 		policies: FrontendPolices,
 		drain: DrainWatcher,
@@ -816,7 +843,8 @@ impl Gateway {
 		debug!("accepted connection");
 		let cfg = inp.cfg.clone();
 		let request_handler = move |req, ext, graceful| {
-			Self::serve_gateway_connect(inp.clone(), req, ext, graceful).instrument(info_span!("inbound"))
+			Self::serve_gateway_connect(inp.clone(), oidc.clone(), req, ext, graceful)
+				.instrument(info_span!("inbound"))
 		};
 
 		let (_, force_shutdown) = watch::channel(());
@@ -837,6 +865,7 @@ impl Gateway {
 	async fn serve_waypoint_connect(
 		bind_name: BindKey,
 		pi: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		policies: Arc<FrontendPolices>,
 		req: agent_hbone::server::H2Request,
 		ext: Arc<Extension>,
@@ -915,6 +944,7 @@ impl Gateway {
 		let _ = Self::proxy(
 			bind_name,
 			pi,
+			oidc,
 			None,
 			Socket::from_hbone(ext, socket_addr, con),
 			policies.clone(),
@@ -927,6 +957,7 @@ impl Gateway {
 	#[allow(clippy::too_many_arguments)]
 	async fn serve_gateway_connect(
 		pi: Arc<ProxyInputs>,
+		oidc: Arc<crate::http::oidc::OidcClient>,
 		req: agent_hbone::server::H2Request,
 		ext: Arc<Extension>,
 		drain: DrainWatcher,
@@ -972,6 +1003,7 @@ impl Gateway {
 			bind.protocol,
 			Socket::from_hbone(ext, socket_addr, con),
 			pi,
+			oidc,
 			drain,
 		)
 		.await

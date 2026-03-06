@@ -297,6 +297,7 @@ pub async fn tls_mock() -> (MockServer, MockTlsCertificates) {
 
 pub struct TestBind {
 	pi: Arc<ProxyInputs>,
+	oidc: Arc<crate::http::oidc::OidcClient>,
 	drain_rx: DrainWatcher,
 	_drain_tx: DrainTrigger,
 }
@@ -358,6 +359,9 @@ impl TestBind {
 	}
 	pub fn inputs(&self) -> Arc<ProxyInputs> {
 		self.pi.clone()
+	}
+	pub fn oidc(&self) -> Arc<crate::http::oidc::OidcClient> {
+		self.oidc.clone()
 	}
 	pub fn with_route(self, r: Route) -> Self {
 		self.pi.stores.binds.write().insert_route(r, LISTENER_KEY);
@@ -487,7 +491,13 @@ impl TestBind {
 	}
 
 	pub fn with_policy(self, p: TargetedPolicy) -> TestBind {
-		self.pi.stores.binds.write().insert_policy(p);
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_policy(p)
+			.expect("test policy should compile");
 		self
 	}
 	pub fn serve_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
@@ -552,6 +562,7 @@ impl TestBind {
 			bind.protocol,
 			server,
 			self.pi.clone(),
+			self.oidc.clone(),
 			self.drain_rx.clone(),
 		);
 		tokio::spawn(async move {
@@ -566,6 +577,7 @@ impl TestBind {
 		let addr = listener.local_addr().unwrap();
 
 		let pi = self.pi.clone();
+		let oidc = self.oidc.clone();
 		let drain_rx = self.drain_rx.clone();
 
 		tokio::spawn(async move {
@@ -587,6 +599,7 @@ impl TestBind {
 					BindProtocol::http,
 					socket,
 					pi.clone(),
+					oidc.clone(),
 					drain_rx.clone(),
 				);
 				tokio::spawn(bind);
@@ -602,7 +615,10 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 	agent_core::telemetry::testing::setup_test_logging();
 	let config = crate::config::parse_config(cfg.to_string(), None)?;
 	let encoder = config.session_encoder.clone();
-	let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+	let oidc = Arc::new(crate::http::oidc::OidcClient::new());
+	let stores = Stores::from_init(crate::store::StoresInit {
+		ipv6_enabled: config.ipv6_enabled,
+	});
 	let client = client::Client::new(&config.dns, None, Default::default(), None);
 	let (drain_tx, drain_rx) = drain::new();
 	let pi = Arc::new(ProxyInputs {
@@ -619,6 +635,7 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 	});
 	Ok(TestBind {
 		pi,
+		oidc,
 		drain_rx,
 		_drain_tx: drain_tx,
 	})

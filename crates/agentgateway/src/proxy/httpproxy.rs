@@ -1,5 +1,5 @@
 use rand::RngExt;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,6 +12,7 @@ use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
 use rand::seq::IndexedRandom;
+use rustls_pki_types::ServerName;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -66,6 +67,7 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 async fn apply_request_policies(
 	policies: &store::RoutePolicies,
 	client: PolicyClient,
+	oidc: &crate::http::oidc::OidcClient,
 	log: &mut RequestLog,
 	req: &mut Request,
 	response_policies: &mut ResponsePolicies,
@@ -80,8 +82,22 @@ async fn apply_request_policies(
 			.apply(response_policies.headers())?;
 	}
 
-	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
+	if let Some(oauth) = &policies.oauth2 {
+		let resp = oauth
+			.apply(&client.inputs.upstream, &client, oidc.tokens(), req)
+			.await
+			.map_err(ProxyResponse::from)?;
+		if let Some(direct_response) = resp.direct_response {
+			let mut direct_response = direct_response;
+			merge_in_headers(resp.response_headers, direct_response.headers_mut());
+			return Err(ProxyResponse::DirectResponse(Box::new(direct_response)));
+		}
+		merge_in_headers(resp.response_headers, response_policies.headers());
+	}
+
+	if let Some(jwt) = &policies.jwt {
+		jwt
+			.apply(Some(log), req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
@@ -248,13 +264,28 @@ async fn apply_backend_policies(
 async fn apply_gateway_policies(
 	policies: &GatewayPolicies,
 	client: PolicyClient,
+	oidc: &crate::http::oidc::OidcClient,
 	log: &mut RequestLog,
 	req: &mut Request,
 	ext_proc: Option<&mut ExtProcRequest>,
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
-	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
+	if let Some(oauth) = &policies.oauth2 {
+		let resp = oauth
+			.apply(&client.inputs.upstream, &client, oidc.tokens(), req)
+			.await
+			.map_err(ProxyResponse::from)?;
+		if let Some(direct_response) = resp.direct_response {
+			let mut direct_response = direct_response;
+			merge_in_headers(resp.response_headers, direct_response.headers_mut());
+			return Err(ProxyResponse::DirectResponse(Box::new(direct_response)));
+		}
+		merge_in_headers(resp.response_headers, response_headers);
+	}
+
+	if let Some(jwt) = &policies.jwt {
+		jwt
+			.apply(Some(log), req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
@@ -323,6 +354,7 @@ async fn apply_llm_request_policies(
 pub struct HTTPProxy {
 	pub(super) bind_name: BindKey,
 	pub(super) inputs: Arc<ProxyInputs>,
+	pub(super) oidc: Arc<crate::http::oidc::OidcClient>,
 	pub(super) selected_listener: Option<Arc<Listener>>,
 	pub(super) target_address: SocketAddr,
 }
@@ -575,6 +607,7 @@ impl HTTPProxy {
 		apply_gateway_policies(
 			&gateway_policies,
 			self.policy_client(),
+			self.oidc.as_ref(),
 			log,
 			&mut req,
 			maybe_gateway_ext_proc.as_mut(),
@@ -660,6 +693,7 @@ impl HTTPProxy {
 		apply_request_policies(
 			&route_policies,
 			self.policy_client(),
+			self.oidc.as_ref(),
 			log,
 			&mut req,
 			response_policies,
@@ -1238,6 +1272,7 @@ impl DerefMut for MustSnapshot<'_> {
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
 	route_policies: Arc<store::LLMRequestPolicies>,
@@ -2017,6 +2052,15 @@ pub struct PolicyClient {
 }
 
 impl PolicyClient {
+	fn server_name_from_host(host: &str) -> Result<ServerName<'static>, ProxyError> {
+		if let Ok(ip) = host.parse::<IpAddr>() {
+			return Ok(ServerName::IpAddress(ip.into()));
+		}
+		ServerName::try_from(host.to_owned()).map_err(|e| {
+			ProxyError::ProcessingString(format!("invalid OIDC endpoint host `{host}` for SNI: {e}"))
+		})
+	}
+
 	pub async fn call_reference(
 		&self,
 		req: Request,
@@ -2053,6 +2097,45 @@ impl PolicyClient {
 		let pols = get_backend_policies(&self.inputs, &backend, policies, None);
 		self
 			.internal_call_with_policies(req, backend.backend, pols)
+			.await
+	}
+
+	pub async fn call_oidc_provider(
+		&self,
+		req: Request,
+		backend_ref: &SimpleBackendReference,
+	) -> Result<Response, ProxyError> {
+		let endpoint_host = req
+			.uri()
+			.host()
+			.ok_or_else(|| ProxyError::ProcessingString("OIDC endpoint URI missing host".to_string()))?;
+		let endpoint_scheme = req.uri().scheme().cloned().ok_or_else(|| {
+			ProxyError::ProcessingString("OIDC endpoint URI missing scheme".to_string())
+		})?;
+		let endpoint_server_name = Self::server_name_from_host(endpoint_host)?;
+
+		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
+		trace!("resolved OIDC provider {:?} to {:?}", backend_ref, &backend);
+
+		let backend = BackendWithPolicies::from(backend);
+		let resolved = get_backend_policies(&self.inputs, &backend, &[], None);
+
+		// Provider calls intentionally use transport settings only (TLS + HTTP version behavior).
+		let mut provider_policies = BackendPolicies {
+			http: resolved.http.clone(),
+			..Default::default()
+		};
+
+		if let Some(tls) = resolved.backend_tls.clone() {
+			provider_policies.backend_tls = Some(tls);
+		} else if endpoint_scheme == Scheme::HTTPS {
+			let mut tls = crate::http::backendtls::SYSTEM_TRUST.clone();
+			tls.hostname_override = Some(endpoint_server_name);
+			provider_policies.backend_tls = Some(tls);
+		}
+
+		self
+			.internal_call_with_policies(req, backend.backend, provider_policies)
 			.await
 	}
 

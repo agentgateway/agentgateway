@@ -12,6 +12,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -38,6 +39,7 @@ func (f *jwksUrlFactoryForTesting) BuildJwksUrlAndTlsConfig(krtctx krt.HandlerCo
 func init() {
 	jwks_url.JwksUrlBuilderFactory = func() jwks_url.JwksUrlBuilder { return &jwksUrlFactoryForTesting{} }
 	jwks.BuildJwksConfigMapNamespacedNameFunc(jwks.DefaultJwksStorePrefix, "agentgateway-system")
+	oidc.BuildProviderConfigMapNamespacedNameFunc(oidc.DefaultStorePrefix, "agentgateway-system")
 }
 
 func TestTrafficPolicies(t *testing.T) {

@@ -24,6 +24,54 @@ policies:
       file: ./manifests/jwt/pub-key
 ```
 
+Dynamic OIDC discovery is also supported for JWT validation (runtime-managed key rotation):
+
+```yaml
+policies:
+  jwtAuth:
+    issuer: "https://issuer.example.com"
+    audiences: [test.agentgateway.dev]
+```
+
+Optional for private IdP connectivity:
+
+```yaml
+policies:
+  jwtAuth:
+    issuer: "https://issuer.example.com"
+    audiences: [test.agentgateway.dev]
+    providerBackend:
+      host: "idp.internal.example.com:443"
+```
+
+Controller/XDS (`AgentgatewayPolicy`) uses `jwks.oidc`:
+
+```yaml
+traffic:
+  jwtAuthentication:
+    providers:
+    - issuer: "https://issuer.example.com"
+      audiences: ["test.agentgateway.dev"]
+      jwks:
+        oidc: {}
+```
+
+Optional private IdP path in XDS:
+
+```yaml
+traffic:
+  jwtAuthentication:
+    providers:
+    - issuer: "https://issuer.example.com"
+      audiences: ["test.agentgateway.dev"]
+      jwks:
+        oidc:
+          backendRef:
+            kind: Service
+            name: idp-discovery
+            port: 8443
+```
+
 With this configuration, users will be required to pass a valid JWT token matching the criteria.
 An example token signed by the key above can be found at `manifests/jwt/pub-key/example*.key`; this can be
 passed into the MCP inspector `Authentication > Bearer Token` field.

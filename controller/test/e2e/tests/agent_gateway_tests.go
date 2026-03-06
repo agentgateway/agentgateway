@@ -15,6 +15,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extproc"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/jwtauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/mcp"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/oauth2auth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/policystatus"
 	global_rate_limit "github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/rate_limit/global"
 	local_rate_limit "github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/rate_limit/local"
@@ -33,6 +34,7 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	agentgatewaySuiteRunner.Register("BasicAuth", basicauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("ApiKeyAuth", apikeyauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("JwtAuth", jwtauth.NewTestingSuite)
+	agentgatewaySuiteRunner.Register("OAuth2Auth", oauth2auth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("CSRF", csrf.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Extauth", extauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Extproc", extproc.NewTestingSuite)

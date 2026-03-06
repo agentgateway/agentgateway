@@ -220,6 +220,7 @@ pub struct RoutePolicies {
 	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub direct_response: Option<filters::DirectResponse>,
+	pub oauth2: Option<Arc<http::oauth2::OAuth2>>,
 	pub cors: Option<http::cors::Cors>,
 }
 
@@ -231,6 +232,7 @@ pub struct GatewayPolicies {
 	pub transformation: Option<http::transformation_cel::Transformation>,
 	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
 	pub api_key: Option<http::apikey::APIKeyAuthentication>,
+	pub oauth2: Option<Arc<http::oauth2::OAuth2>>,
 }
 
 impl GatewayPolicies {
@@ -356,9 +358,20 @@ pub struct LLMResponsePolicies {
 	pub prompt_guard: Vec<ResponseGuard>,
 }
 
+#[derive(Clone)]
+pub struct StoreInit {
+	pub ipv6_enabled: bool,
+}
+
+impl Default for StoreInit {
+	fn default() -> Self {
+		Self { ipv6_enabled: true }
+	}
+}
+
 impl Default for Store {
 	fn default() -> Self {
-		Self::with_ipv6_enabled(true)
+		Self::from_init(StoreInit::default())
 	}
 }
 
@@ -370,7 +383,89 @@ pub struct RoutePath<'a> {
 }
 
 impl Store {
-	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
+	fn remove_policy_target_entry(&mut self, target: &PolicyTarget, key: &PolicyKey) {
+		let should_remove_target = if let Some(keys) = self.policies_by_target.get_mut(target) {
+			keys.remove(key);
+			keys.is_empty()
+		} else {
+			false
+		};
+		if should_remove_target {
+			self.policies_by_target.remove(target);
+		}
+	}
+
+	fn validate_target_auth_conflicts(&self) -> anyhow::Result<()> {
+		Self::validate_target_auth_conflicts_maps(&self.policies_by_key, &self.policies_by_target)
+	}
+
+	fn validate_target_auth_conflicts_maps(
+		policies_by_key: &HashMap<PolicyKey, Arc<TargetedPolicy>>,
+		policies_by_target: &hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
+	) -> anyhow::Result<()> {
+		for (target, keys) in policies_by_target {
+			let mut jwt_source: Option<&PolicyKey> = None;
+			let mut oauth2_source: Option<&PolicyKey> = None;
+			for key in keys {
+				let Some(policy) = policies_by_key.get(key) else {
+					continue;
+				};
+				let crate::types::agent::PolicyType::Traffic(traffic) = &policy.policy else {
+					continue;
+				};
+				match &traffic.policy {
+					TrafficPolicy::JwtAuth(_) if jwt_source.is_none() => jwt_source = Some(key),
+					TrafficPolicy::OAuth2(_) if oauth2_source.is_none() => oauth2_source = Some(key),
+					_ => {},
+				}
+				if let (Some(jwt), Some(oauth2)) = (&jwt_source, &oauth2_source) {
+					anyhow::bail!(
+						"`jwtAuth` and `oauth2` cannot both apply to target {:?} (jwt policy `{}`, oauth2 policy `{}`)",
+						target,
+						jwt,
+						oauth2
+					);
+				}
+			}
+		}
+		Ok(())
+	}
+
+	fn rebuild_policies_by_target(
+		policies_by_key: &HashMap<PolicyKey, Arc<TargetedPolicy>>,
+	) -> hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>> {
+		let mut policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>> =
+			hashbrown::HashMap::new();
+		for (key, policy) in policies_by_key {
+			policies_by_target
+				.entry(policy.target.clone())
+				.or_default()
+				.insert(key.clone());
+		}
+		policies_by_target
+	}
+
+	fn preflight_sync_local_policies(
+		&self,
+		incoming_policies: &[TargetedPolicy],
+		previous_policy_keys: &HashSet<PolicyKey>,
+	) -> anyhow::Result<()> {
+		let mut projected_policies_by_key = self.policies_by_key.clone();
+		for key in previous_policy_keys {
+			projected_policies_by_key.remove(key);
+		}
+		for policy in incoming_policies {
+			projected_policies_by_key.insert(policy.key.clone(), Arc::new(policy.clone()));
+		}
+		let projected_policies_by_target = Self::rebuild_policies_by_target(&projected_policies_by_key);
+		Self::validate_target_auth_conflicts_maps(
+			&projected_policies_by_key,
+			&projected_policies_by_target,
+		)
+	}
+
+	pub fn from_init(init: StoreInit) -> Self {
+		let StoreInit { ipv6_enabled } = init;
 		let (tx, _) = tokio::sync::broadcast::channel(1000);
 		Self {
 			ipv6_enabled,
@@ -404,115 +499,147 @@ impl Store {
 			.policies_by_target
 			.get(&route.as_route_rule_target_ref());
 		let route = self.policies_by_target.get(&route.as_route_target_ref());
-		let rules = route_rule
+
+		let mut authz = Vec::new();
+		let mut pol = RoutePolicies::default();
+
+		// Apply inline policies first
+		for rule in inline {
+			self.apply_traffic_policy(&mut pol, &mut authz, rule);
+		}
+
+		// Apply stored policies.
+		let stored_keys = route_rule
 			.iter()
 			.copied()
 			.flatten()
 			.chain(route.iter().copied().flatten())
 			.chain(listener.iter().copied().flatten())
-			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_key.get(n))
-			.filter_map(|p| p.policy.as_traffic_route_phase());
-		let rules = inline.iter().chain(rules);
+			.chain(gateway.iter().copied().flatten());
 
-		let mut authz = Vec::new();
-		let mut pol = RoutePolicies::default();
-		for rule in rules {
-			match &rule {
-				TrafficPolicy::LocalRateLimit(p) => {
-					if pol.local_rate_limit.is_empty() {
-						pol.local_rate_limit = p.clone();
-					}
-				},
-				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::RemoteRateLimit(p) => {
-					pol.remote_rate_limit.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::APIKey(p) => {
-					pol.api_key.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Transformation(p) => {
-					pol.transformation.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Authorization(p) => {
-					// Authorization policies merge, unlike others
-					authz.push(p.clone().0);
-				},
-				TrafficPolicy::AI(p) => {
-					pol.llm.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Csrf(p) => {
-					pol.csrf.get_or_insert_with(|| p.clone());
-				},
+		for key in stored_keys {
+			let Some(policy_obj) = self.policies_by_key.get(key) else {
+				continue;
+			};
+			let Some(rule) = policy_obj.policy.as_traffic_route_phase() else {
+				continue;
+			};
 
-				TrafficPolicy::Timeout(p) => {
-					pol.timeout.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Retry(p) => {
-					pol.retry.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::RequestHeaderModifier(p) => {
-					pol.request_header_modifier.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::ResponseHeaderModifier(p) => {
-					pol
-						.response_header_modifier
-						.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::RequestRedirect(p) => {
-					pol.request_redirect.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::UrlRewrite(p) => {
-					pol.url_rewrite.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::HostRewrite(p) => {
-					pol.hostname_rewrite.get_or_insert(*p);
-				},
-				TrafficPolicy::RequestMirror(p) => {
-					if pol.request_mirror.is_empty() {
-						pol.request_mirror = p.clone();
-					}
-				},
-				TrafficPolicy::DirectResponse(p) => {
-					pol.direct_response.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::CORS(p) => {
-					pol.cors.get_or_insert_with(|| p.clone());
-				},
-			}
+			self.apply_traffic_policy(&mut pol, &mut authz, rule);
 		}
+
 		if !authz.is_empty() {
 			pol.authorization = Some(HTTPAuthorizationSet::new(authz.into()));
 		}
+		debug_assert!(
+			pol.oauth2.is_none() || pol.jwt.is_none(),
+			"invalid state: both `jwtAuth` and `oauth2` configured for route policies"
+		);
 
 		pol
+	}
+
+	fn apply_traffic_policy(
+		&self,
+		pol: &mut RoutePolicies,
+		authz: &mut Vec<http::authorization::RuleSet>,
+		rule: &TrafficPolicy,
+	) {
+		match rule {
+			TrafficPolicy::LocalRateLimit(p) => {
+				if pol.local_rate_limit.is_empty() {
+					pol.local_rate_limit = p.clone();
+				}
+			},
+			TrafficPolicy::ExtAuthz(p) => {
+				pol.ext_authz.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::ExtProc(p) => {
+				pol.ext_proc.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::RemoteRateLimit(p) => {
+				pol.remote_rate_limit.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::JwtAuth(p) => {
+				pol.jwt.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::BasicAuth(p) => {
+				pol.basic_auth.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::APIKey(p) => {
+				pol.api_key.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::OAuth2(p) => {
+				pol.oauth2.get_or_insert_with(|| Arc::new(p.clone()));
+			},
+			TrafficPolicy::Transformation(p) => {
+				pol.transformation.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::Authorization(p) => {
+				authz.push(p.clone().0);
+			},
+			TrafficPolicy::AI(p) => {
+				pol.llm.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::Csrf(p) => {
+				pol.csrf.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::Timeout(p) => {
+				pol.timeout.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::Retry(p) => {
+				pol.retry.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::RequestHeaderModifier(p) => {
+				pol.request_header_modifier.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::ResponseHeaderModifier(p) => {
+				pol
+					.response_header_modifier
+					.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::RequestRedirect(p) => {
+				pol.request_redirect.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::UrlRewrite(p) => {
+				pol.url_rewrite.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::HostRewrite(p) => {
+				pol.hostname_rewrite.get_or_insert(*p);
+			},
+			TrafficPolicy::RequestMirror(p) => {
+				if pol.request_mirror.is_empty() {
+					pol.request_mirror = p.clone();
+				}
+			},
+			TrafficPolicy::DirectResponse(p) => {
+				pol.direct_response.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::CORS(p) => {
+				pol.cors.get_or_insert_with(|| p.clone());
+			},
+		}
 	}
 
 	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
-		let rules = listener
+		let keys = listener
 			.iter()
 			.copied()
 			.flatten()
-			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_key.get(n))
-			.filter_map(|p| p.policy.as_traffic_gateway_phase());
+			.chain(gateway.iter().copied().flatten());
 
 		let mut pol = GatewayPolicies::default();
-		for rule in rules {
-			match &rule {
+		for key in keys {
+			let Some(policy_obj) = self.policies_by_key.get(key) else {
+				continue;
+			};
+			let Some(rule) = policy_obj.policy.as_traffic_gateway_phase() else {
+				continue;
+			};
+
+			match rule {
 				TrafficPolicy::JwtAuth(p) => {
 					pol.jwt.get_or_insert_with(|| p.clone());
 				},
@@ -527,6 +654,9 @@ impl Store {
 				},
 				TrafficPolicy::ExtProc(p) => {
 					pol.ext_proc.get_or_insert_with(|| p.clone());
+				},
+				TrafficPolicy::OAuth2(p) => {
+					pol.oauth2.get_or_insert_with(|| Arc::new(p.clone()));
 				},
 				TrafficPolicy::Transformation(p) => {
 					pol.transformation.get_or_insert_with(|| p.clone());
@@ -536,6 +666,10 @@ impl Store {
 				},
 			}
 		}
+		debug_assert!(
+			pol.oauth2.is_none() || pol.jwt.is_none(),
+			"invalid state: both `jwtAuth` and `oauth2` configured for gateway policies"
+		);
 
 		pol
 	}
@@ -924,19 +1058,38 @@ impl Store {
 		self.backends.insert(key, arc);
 	}
 
-	pub fn insert_policy(&mut self, pol: TargetedPolicy) {
+	pub fn insert_policy(&mut self, pol: TargetedPolicy) -> anyhow::Result<()> {
 		let pol = Arc::new(pol);
-		if let Some(old) = self.policies_by_key.insert(pol.key.clone(), pol.clone()) {
-			// Remove the old target. We may add it back, though.
-			if let Some(o) = self.policies_by_target.get_mut(&old.target) {
-				o.remove(&pol.key);
-			}
+		let replaced = self.policies_by_key.insert(pol.key.clone(), pol.clone());
+		if let Some(old) = replaced.as_ref() {
+			// Remove the old target. We may add it back if validation fails.
+			self.remove_policy_target_entry(&old.target, &pol.key);
 		}
 		self
 			.policies_by_target
 			.entry(pol.target.clone())
 			.or_default()
 			.insert(pol.key.clone());
+
+		if let Err(err) = self.validate_target_auth_conflicts() {
+			// Rollback insertion and restore replaced policy (if any).
+			self.remove_policy_target_entry(&pol.target, &pol.key);
+			match replaced {
+				Some(old) => {
+					self.policies_by_key.insert(old.key.clone(), old.clone());
+					self
+						.policies_by_target
+						.entry(old.target.clone())
+						.or_default()
+						.insert(old.key.clone());
+				},
+				None => {
+					self.policies_by_key.remove(&pol.key);
+				},
+			}
+			return Err(err);
+		}
+		Ok(())
 	}
 
 	pub fn insert_listener(&mut self, mut lis: Listener, bind_name: BindKey) {
@@ -1127,7 +1280,7 @@ impl Store {
 	}
 	fn insert_xds_policy(&mut self, raw: XdsPolicy) -> anyhow::Result<()> {
 		let policy: TargetedPolicy = (&raw).try_into()?;
-		self.insert_policy(policy);
+		self.insert_policy(policy)?;
 		Ok(())
 	}
 }
@@ -1187,8 +1340,10 @@ impl StoreUpdater {
 		policies: Vec<TargetedPolicy>,
 		backends: Vec<BackendWithPolicies>,
 		prev: PreviousState,
-	) -> PreviousState {
+	) -> anyhow::Result<PreviousState> {
 		let mut s = self.state.write().expect("mutex acquired");
+		s.preflight_sync_local_policies(&policies, &prev.policies)?;
+
 		let mut old_binds = prev.binds;
 		let mut old_pols = prev.policies;
 		let mut old_backends = prev.backends;
@@ -1211,7 +1366,7 @@ impl StoreUpdater {
 		for p in policies {
 			old_pols.remove(&p.key);
 			next_state.policies.insert(p.key.clone());
-			s.insert_policy(p);
+			s.insert_policy(p)?;
 		}
 		for remaining_bind in old_binds {
 			s.remove_bind(remaining_bind);
@@ -1222,7 +1377,7 @@ impl StoreUpdater {
 		for remaining_backend in old_backends {
 			s.remove_backend(remaining_backend);
 		}
-		next_state
+		Ok(next_state)
 	}
 }
 
@@ -1267,12 +1422,15 @@ fn preload_tokenizers() {
 
 #[cfg(test)]
 mod tests {
+	use std::sync::{Arc, RwLock};
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
+	use secrecy::SecretString;
 
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
+	use crate::types::agent::{OAuth2Policy, PolicyPhase};
 	use crate::types::frontend::LoggingPolicy;
 
 	fn listener() -> ListenerName {
@@ -1330,6 +1488,75 @@ mod tests {
 			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),
 			otlp: None,
 		})
+	}
+
+	fn test_oauth2_policy() -> OAuth2Policy {
+		OAuth2Policy {
+			provider_id: "https://issuer.example.com".to_string(),
+			oidc_issuer: Some("https://issuer.example.com".to_string()),
+			provider_backend: None,
+			client_id: "client-id".to_string(),
+			client_secret: SecretString::new("secret".into()),
+			resolved_provider: Some(Box::new(crate::types::agent::ResolvedOAuth2Provider {
+				authorization_endpoint: "https://issuer.example.com/authorize".to_string(),
+				token_endpoint: "https://issuer.example.com/token".to_string(),
+				jwks_inline: Some(
+					serde_json::json!({
+						"keys": [{
+							"kty": "EC",
+							"crv": "P-256",
+							"kid": "test-kid",
+							"alg": "ES256",
+							"x": "WfUSsBlmKtTX8Rfmo9K-6PsKG1Ysw1j3St-ZUZSq4HU",
+							"y": "vO_R0kjX3d1oz-2aUtpoWfBp-wu7YxO_XjGSHv40tgM",
+							"use": "sig",
+						}]
+					})
+					.to_string(),
+				),
+				end_session_endpoint: Some("https://issuer.example.com/logout".to_string()),
+				token_endpoint_auth_methods_supported: vec!["client_secret_post".to_string()],
+			})),
+			redirect_uri: Some("https://example.com/_gateway/callback".to_string()),
+			allow_insecure_redirect_uri: false,
+			scopes: vec!["openid".to_string()],
+			cookie_name: None,
+			refreshable_cookie_max_age_seconds: None,
+			sign_out_path: Some("/logout".to_string()),
+			post_logout_redirect_uri: None,
+		}
+	}
+
+	fn test_oauth2() -> http::oauth2::OAuth2 {
+		http::oauth2::OAuth2::new(test_oauth2_policy()).expect("test oauth2 policy should build")
+	}
+
+	fn test_jwt() -> http::jwt::Jwt {
+		http::jwt::Jwt::from_providers(vec![], http::jwt::Mode::Optional)
+	}
+
+	fn gateway_traffic_policy(
+		listener: &ListenerName,
+		key: &str,
+		policy: TrafficPolicy,
+		for_listener: bool,
+	) -> TargetedPolicy {
+		let policy_key: PolicyKey = strng::new(key);
+		let target = PolicyTarget::Gateway(ListenerTarget {
+			gateway_name: listener.gateway_name.clone(),
+			gateway_namespace: listener.gateway_namespace.clone(),
+			listener_name: if for_listener {
+				Some(listener.listener_name.clone())
+			} else {
+				None
+			},
+		});
+		TargetedPolicy {
+			key: policy_key,
+			name: None,
+			target,
+			policy: (policy, PolicyPhase::Gateway).into(),
+		}
 	}
 
 	fn insert_policy_at_level(
@@ -1478,5 +1705,142 @@ mod tests {
 		let bind = Bind::try_from_xds(&xds_bind, true).unwrap();
 		assert_eq!(bind.address.port(), 9090);
 		assert_eq!(bind.address.ip(), IpAddr::V6(Ipv6Addr::UNSPECIFIED));
+	}
+
+	#[test]
+	fn insert_policy_rejects_route_target_with_oauth2_and_jwt() {
+		let mut store = Store::from_init(StoreInit::default());
+		let target = PolicyTarget::Route(route("r", "ns", Some("HTTPRoute")));
+
+		let jwt_key: PolicyKey = strng::new("route-jwt");
+		store
+			.insert_policy(TargetedPolicy {
+				key: jwt_key.clone(),
+				name: None,
+				target: target.clone(),
+				policy: TrafficPolicy::JwtAuth(test_jwt()).into(),
+			})
+			.expect("first policy should insert");
+
+		let oauth2_key: PolicyKey = strng::new("route-oauth2");
+		let err = store
+			.insert_policy(TargetedPolicy {
+				key: oauth2_key.clone(),
+				name: None,
+				target,
+				policy: TrafficPolicy::OAuth2(test_oauth2()).into(),
+			})
+			.expect_err("mixed jwt+oauth2 on the same target must be rejected");
+		assert!(err.to_string().contains("cannot both apply to target"));
+		assert!(store.policies_by_key.contains_key(&jwt_key));
+		assert!(!store.policies_by_key.contains_key(&oauth2_key));
+	}
+
+	#[test]
+	fn insert_policy_accepts_oauth2_runtime() {
+		let mut store = Store::from_init(StoreInit::default());
+		let key: PolicyKey = strng::new("valid-oauth2");
+		let policy = TargetedPolicy {
+			key: key.clone(),
+			name: None,
+			target: PolicyTarget::Route(route("r", "ns", Some("HTTPRoute"))),
+			policy: TrafficPolicy::OAuth2(test_oauth2()).into(),
+		};
+
+		store
+			.insert_policy(policy)
+			.expect("oauth2 runtime policy should be inserted");
+		assert!(store.policies_by_key.contains_key(&key));
+	}
+
+	#[test]
+	fn insert_policy_rejects_gateway_target_with_oauth2_and_jwt() {
+		let listener = listener();
+
+		let mut store = Store::from_init(StoreInit::default());
+		store
+			.insert_policy(gateway_traffic_policy(
+				&listener,
+				"listener-jwt",
+				TrafficPolicy::JwtAuth(test_jwt()),
+				true,
+			))
+			.expect("first policy should insert");
+		let err = store
+			.insert_policy(gateway_traffic_policy(
+				&listener,
+				"listener-oauth2",
+				TrafficPolicy::OAuth2(test_oauth2()),
+				true,
+			))
+			.expect_err("mixed jwt+oauth2 on the same gateway target must be rejected");
+		assert!(err.to_string().contains("cannot both apply to target"));
+
+		let mut store = Store::from_init(StoreInit::default());
+		store
+			.insert_policy(gateway_traffic_policy(
+				&listener,
+				"listener-oauth2",
+				TrafficPolicy::OAuth2(test_oauth2()),
+				true,
+			))
+			.expect("first policy should insert");
+		let err = store
+			.insert_policy(gateway_traffic_policy(
+				&listener,
+				"listener-jwt",
+				TrafficPolicy::JwtAuth(test_jwt()),
+				true,
+			))
+			.expect_err("mixed jwt+oauth2 on the same gateway target must be rejected");
+		assert!(err.to_string().contains("cannot both apply to target"));
+	}
+
+	#[test]
+	fn sync_local_conflicting_policy_batch_is_atomic() {
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(
+			Store::from_init(StoreInit::default()),
+		)));
+		let bind = Bind::try_from_xds(
+			&XdsBind {
+				key: "atomic-bind".to_string(),
+				port: 8080,
+				protocol: 0,        // HTTP
+				tunnel_protocol: 0, // Direct
+			},
+			false,
+		)
+		.expect("test bind should parse");
+		let target = PolicyTarget::Route(route("r", "ns", Some("HTTPRoute")));
+		let policies = vec![
+			TargetedPolicy {
+				key: strng::new("atomic-jwt"),
+				name: None,
+				target: target.clone(),
+				policy: TrafficPolicy::JwtAuth(test_jwt()).into(),
+			},
+			TargetedPolicy {
+				key: strng::new("atomic-oauth2"),
+				name: None,
+				target,
+				policy: TrafficPolicy::OAuth2(test_oauth2()).into(),
+			},
+		];
+
+		let err = updater
+			.sync_local(vec![bind], policies, vec![], PreviousState::default())
+			.expect_err("sync_local should reject conflicting auth policies");
+		assert!(err.to_string().contains("cannot both apply to target"));
+
+		let dump = updater.dump();
+		assert!(dump.binds.is_empty(), "failed sync should not insert binds");
+		assert!(
+			dump.policies.is_empty(),
+			"failed sync should not insert policies"
+		);
+		assert!(
+			dump.backends.is_empty(),
+			"failed sync should not insert backends"
+		);
 	}
 }

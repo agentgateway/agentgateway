@@ -7,13 +7,14 @@ use axum_core::RequestExt;
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
-use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet, KeyAlgorithm};
+use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet, KeyAlgorithm, PublicKeyUse};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use secrecy::SecretString;
 use serde_json::{Map, Value};
 
 use crate::client::Client;
 use crate::http::Request;
+use crate::http::oidc::{OidcCallContext, OidcJwtResolver};
 use crate::telemetry::log::RequestLog;
 use crate::*;
 
@@ -21,7 +22,7 @@ use crate::*;
 #[path = "jwt_tests.rs"]
 mod tests;
 
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Clone, Debug, thiserror::Error, PartialEq)]
 pub enum TokenError {
 	#[error("the token is invalid or malformed: {0:?}")]
 	Invalid(jsonwebtoken::errors::Error),
@@ -57,6 +58,13 @@ pub enum JwkError {
 		algorithm: AlgorithmParameters,
 		key_id: String,
 	},
+	#[error("the key {key_id:?} uses unsupported elliptic curve {curve:?}")]
+	UnsupportedEllipticCurve {
+		key_id: String,
+		curve: EllipticCurve,
+	},
+	#[error("no usable signing keys found in JWKS")]
+	NoUsableSigningKeys,
 }
 
 #[derive(Clone)]
@@ -133,6 +141,12 @@ pub enum LocalJwtConfig {
 		jwks: serdes::FileInlineOrRemote,
 		#[serde(default)]
 		jwt_validation_options: JWTValidationOptions,
+	},
+	Oidc {
+		#[serde(default)]
+		mode: Mode,
+		issuer: String,
+		audiences: Option<Vec<String>>,
 	},
 }
 
@@ -216,41 +230,88 @@ impl Default for JWTValidationOptions {
 }
 
 impl LocalJwtConfig {
-	pub async fn try_into(self, client: Client) -> Result<Jwt, JwkError> {
-		let (mode, providers_cfg) = match self {
-			LocalJwtConfig::Multi { mode, providers } => (mode, providers),
+	pub async fn try_into(
+		self,
+		client: Client,
+		oidc_provider: OidcJwtResolver<'_>,
+	) -> Result<Jwt, JwkError> {
+		match self {
+			LocalJwtConfig::Multi {
+				mode,
+				providers: providers_cfg,
+			} => {
+				let mut providers = Vec::with_capacity(providers_cfg.len());
+				for pc in providers_cfg {
+					let jwks: JwkSet = pc
+						.jwks
+						.load::<JwkSet>(client.clone())
+						.await
+						.map_err(JwkError::JwkLoadError)?;
+					let provider =
+						Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+					providers.push(provider);
+				}
+				Ok(Jwt { mode, providers })
+			},
 			LocalJwtConfig::Single {
 				mode,
 				issuer,
 				audiences,
 				jwks,
 				jwt_validation_options,
-			} => (
+			} => {
+				let jwks: JwkSet = jwks
+					.load::<JwkSet>(client.clone())
+					.await
+					.map_err(JwkError::JwkLoadError)?;
+				let provider = Provider::from_jwks(jwks, issuer, audiences, jwt_validation_options)?;
+				Ok(Jwt {
+					mode,
+					providers: vec![provider],
+				})
+			},
+			LocalJwtConfig::Oidc {
 				mode,
-				vec![ProviderConfig {
-					issuer,
-					audiences,
-					jwks,
-					jwt_validation_options,
-				}],
-			),
-		};
+				issuer,
+				audiences,
+			} => {
+				let (_metadata, jwt) = oidc_provider
+					.get_info(
+						OidcCallContext::new(&client, None, None),
+						&issuer,
+						audiences.clone(),
+					)
+					.await
+					.map_err(|e| JwkError::JwkLoadError(e.into()))?;
+				let mut jwt = Arc::unwrap_or_clone(jwt);
 
-		let mut providers = Vec::with_capacity(providers_cfg.len());
-		for pc in providers_cfg {
-			let jwks: JwkSet = pc
-				.jwks
-				.load::<JwkSet>(client.clone())
-				.await
-				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
-			providers.push(provider);
+				jwt.mode = mode; // Override mode from config
+
+				// If audiences were provided, update validation for all providers in this jwt instance
+				if let Some(audiences) = &audiences {
+					for provider in &mut jwt.providers {
+						for jwk in provider.keys.values_mut() {
+							jwk.validation.set_audience(audiences);
+						}
+					}
+				}
+				Ok(jwt)
+			},
 		}
-		Ok(Jwt { mode, providers })
 	}
 }
 
 impl Provider {
+	pub fn from_inline_jwks(
+		jwks_json: &str,
+		issuer: String,
+		audiences: Option<Vec<String>>,
+		jwt_validation_options: JWTValidationOptions,
+	) -> Result<Provider, JwkError> {
+		let jwks: JwkSet = serde_json::from_str(jwks_json)?;
+		Self::from_jwks(jwks, issuer, audiences, jwt_validation_options)
+	}
+
 	pub fn from_jwks(
 		jwks: JwkSet,
 		issuer: String,
@@ -267,6 +328,12 @@ impl Provider {
 
 		for jwk in jwks.keys {
 			let kid = jwk.common.key_id.ok_or(JwkError::MissingKeyId)?;
+			if let Some(public_key_use) = &jwk.common.public_key_use
+				&& *public_key_use != PublicKeyUse::Signature
+			{
+				debug!(%kid, ?public_key_use, "Skipping non-signature JWK");
+				continue;
+			}
 
 			let decoding_key =
 				match &jwk.algorithm {
@@ -294,8 +361,15 @@ impl Provider {
 					// based on the algorithm properties.
 					// Add each key algorithm in the correct family.
 					match &jwk.algorithm {
-						AlgorithmParameters::EllipticCurve(_) => {
-							vec![Algorithm::ES256, Algorithm::ES384]
+						AlgorithmParameters::EllipticCurve(ec) => match &ec.curve {
+							EllipticCurve::P256 => vec![Algorithm::ES256],
+							EllipticCurve::P384 => vec![Algorithm::ES384],
+							curve => {
+								return Err(JwkError::UnsupportedEllipticCurve {
+									key_id: kid.clone(),
+									curve: curve.clone(),
+								});
+							},
 						},
 						AlgorithmParameters::RSA(_) => {
 							vec![Algorithm::RS256, Algorithm::RS384, Algorithm::RS512]
@@ -308,7 +382,10 @@ impl Provider {
 				},
 			};
 			// The new() requires 1 algorithm, so just pass the first before we override it
-			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
+			let first_algorithm = *supported_algorithms
+				.first()
+				.expect("supported_algorithms is non-empty by construction");
+			let mut validation = Validation::new(first_algorithm);
 			validation.algorithms = supported_algorithms;
 			// only set audience if audiences were provided
 			// otherwise, disable audience validation
@@ -330,6 +407,10 @@ impl Provider {
 					validation,
 				},
 			);
+		}
+
+		if keys.is_empty() {
+			return Err(JwkError::NoUsableSigningKeys);
 		}
 
 		Ok(Provider { issuer, keys })
@@ -406,7 +487,9 @@ impl Jwt {
 			// Otherwise with no, don't attempt to authenticate.
 			return Ok(());
 		};
-		let claims = match self.validate_claims(bearer.token()) {
+
+		let claims = self.validate_claims(bearer.token());
+		let claims = match claims {
 			Ok(claims) => claims,
 			Err(e) if self.mode == Mode::Permissive => {
 				debug!("token verification failed ({e}), continue due to permissive mode");
@@ -419,7 +502,6 @@ impl Jwt {
 		{
 			log.jwt_sub = Some(sub.to_string());
 		};
-		// Remove the token.
 		req.headers_mut().remove(http::header::AUTHORIZATION);
 		// Insert the claims into extensions so we can reference it later
 		req.extensions_mut().insert(claims);

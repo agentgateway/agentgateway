@@ -159,3 +159,11 @@ func WithScheme(scheme string) Option {
 		config.scheme = scheme
 	}
 }
+
+// WithInsecureSkipVerify returns the Option to skip TLS certificate verification.
+// This is intended for test-only traffic against self-signed endpoints.
+func WithInsecureSkipVerify() Option {
+	return func(config *requestConfig) {
+		config.ignoreServerCert = true
+	}
+}

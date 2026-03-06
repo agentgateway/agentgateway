@@ -15,7 +15,7 @@ use crate::types::agent::{
 use crate::*;
 
 fn run_test(req: &Request, routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Option<String> {
-	let stores = Stores::with_ipv6_enabled(true);
+	let stores = Stores::from_init(crate::store::StoresInit::default());
 	let network = strng::literal!("network");
 	let dummy_dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1000);
 
@@ -859,7 +859,7 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 				.collect(),
 		),
 	});
-	let stores = Stores::with_ipv6_enabled(true);
+	let stores = Stores::from_init(crate::store::StoresInit::default());
 	let network = strng::literal!("network");
 	let dummy_dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1000);
 	let req = request("http://example.com", http::Method::GET, &[]);
