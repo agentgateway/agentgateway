@@ -1,7 +1,6 @@
 package testutils
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -163,7 +162,6 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 		}
 	})
 	syncer := agentgatewaysyncer.NewAgwSyncer(
-		context.Background(),
 		wellknown.DefaultAgwControllerName,
 		// Only used for NACK, so no need to do anything special here.
 		fc,

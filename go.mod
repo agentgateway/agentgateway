@@ -271,3 +271,5 @@ require (
 	sigs.k8s.io/mcs-api v0.2.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 )
+
+replace istio.io/istio => /home/john/go/src/istio.io/istio
