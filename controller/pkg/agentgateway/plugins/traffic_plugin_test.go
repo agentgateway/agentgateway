@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/slices"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -43,7 +45,38 @@ func init() {
 func TestTrafficPolicies(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/trafficpolicy", func(t *testing.T, ctx plugins.PolicyCtx) (*gwv1.PolicyStatus, []plugins.AgwPolicy) {
 		pol := testutils.GetTestResource(t, ctx.Collections.AgentgatewayPolicies)
-		s, o := plugins.TranslateAgentgatewayPolicy(ctx.Krt, pol, ctx.Collections)
+		_, ri := testutils.Syncer(t, ctx)
+		s, o := plugins.TranslateAgentgatewayPolicy(ctx.Krt, pol, ctx.Collections, ri.Outputs.References)
+		return s, o
+	})
+}
+
+func TestBackendPolicies(t *testing.T) {
+	testutils.RunForDirectory(t, "testdata/backendpolicy", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
+		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
+		//pol := testutils.GetTestResource(t, ctx.Collections.AgentgatewayPolicies)
+		r := ri.Outputs.Resources.List()
+		//return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
+		//	return a.ResourceName()
+		//})
+		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
+			//x := ir.GetAgwResourceName(resource.Resource)
+			return true
+			//return strings.HasPrefix(x, "route/") || strings.HasPrefix(x, "tcp_route/") || strings.HasPrefix(x, "policy/")
+		})
+		return sq.DumpStatus(), slices.SortBy(r, func(a ir.AgwResource) string {
+			return a.ResourceName()
+		})
+		//s, o := plugins.TranslateAgentgatewayPolicy(ctx.Krt, pol, ctx.Collections, ri.Outputs.References)
+		//return s, o
+	})
+}
+
+func TestFrontendPolicies(t *testing.T) {
+	testutils.RunForDirectory(t, "testdata/frontendpolicy", func(t *testing.T, ctx plugins.PolicyCtx) (*gwv1.PolicyStatus, []plugins.AgwPolicy) {
+		_, ri := testutils.Syncer(t, ctx)
+		pol := testutils.GetTestResource(t, ctx.Collections.AgentgatewayPolicies)
+		s, o := plugins.TranslateAgentgatewayPolicy(ctx.Krt, pol, ctx.Collections, ri.Outputs.References)
 		return s, o
 	})
 }

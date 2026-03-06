@@ -24,6 +24,9 @@ spec:
     - backendRefs:
         - name: reviews
           port: 8080
+        - name: be
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
 ---
 apiVersion: v1
 kind: Secret

@@ -37,14 +37,14 @@ func BuildReferenceIndex(
 	attachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment],
 ) ReferenceIndex {
 	return ReferenceIndex{
-		ancestors:   ancestors,
+		Ancestors:   ancestors,
 		attachments: attachments,
 	}
 }
 
 type ReferenceIndex struct {
 	// Backend --> Gateway
-	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend]
+	Ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend]
 	// Route --> Gateway
 	attachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
 	// Gateway --> Gateway: trivial, no collection needed
@@ -61,7 +61,7 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 		return sets.New(object.NamespacedName)
 	case wellknown.HTTPRouteGVK.Kind, wellknown.GRPCRouteGVK.Kind, wellknown.TCPRouteGVK.Kind, wellknown.TLSRouteGVK.Kind:
 		gateways := sets.New[types.NamespacedName]()
-		if p.ancestors == nil {
+		if p.Ancestors == nil {
 			return gateways
 		}
 		for _, indexed := range krt.Fetch(ctx, p.attachments, krt.FilterKey(object.String())) {
@@ -72,10 +72,10 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 		return gateways
 	default:
 		gateways := sets.New[types.NamespacedName]()
-		if p.ancestors == nil {
+		if p.Ancestors == nil {
 			return gateways
 		}
-		for _, indexed := range krt.Fetch(ctx, p.ancestors, krt.FilterKey(object.String())) {
+		for _, indexed := range krt.Fetch(ctx, p.Ancestors, krt.FilterKey(object.String())) {
 			for _, ancestor := range indexed.Objects {
 				gateways.Insert(ancestor.Gateway)
 			}

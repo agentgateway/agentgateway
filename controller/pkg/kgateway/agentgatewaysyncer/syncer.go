@@ -120,9 +120,9 @@ func (s *Syncer) StatusCollections() *status.StatusCollections {
 }
 
 type OutputCollections struct {
-	Resources krt.Collection[agwir.AgwResource]
-	Addresses krt.Collection[Address]
-	Ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend]
+	Resources  krt.Collection[agwir.AgwResource]
+	Addresses  krt.Collection[Address]
+	References plugins.ReferenceIndex
 }
 
 type CustomResourceCollectionsConfig struct {
@@ -184,7 +184,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 
 	s.Outputs.Resources = agwResources
 	s.Outputs.Addresses = addresses
-	s.Outputs.Ancestors = ancestorCollection
+	s.Outputs.References = ancestorCollection
 }
 
 func (s *Syncer) buildFinalGatewayStatus(
@@ -390,7 +390,7 @@ func (s *Syncer) buildListenerSetCollection(
 	)
 }
 
-func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend], PolicyStatusCollections, krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]) {
+func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex, PolicyStatusCollections, krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
@@ -477,7 +477,7 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	// Join all Agw resources
 	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("Resources")...)
 
-	return allAgwResources, routeAttachments, ancestorCollection, policyStatuses, agwBackendStatus
+	return allAgwResources, routeAttachments, referenceIndex, policyStatuses, agwBackendStatus
 }
 
 // buildListenerFromGateway creates a listener resource from a gateway

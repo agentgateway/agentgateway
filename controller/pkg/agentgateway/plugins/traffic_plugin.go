@@ -118,22 +118,17 @@ type ResolvedTarget struct {
 }
 
 // TranslateAgentgatewayPolicy generates policies for a single traffic policy
-func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, references ...ReferenceIndex) (*gwv1.PolicyStatus, []AgwPolicy) {
+func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, references ReferenceIndex) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
 
 	pctx := PolicyCtx{Krt: ctx, Collections: agw}
-	var referenceIndex ReferenceIndex
-	if len(references) > 0 {
-		referenceIndex = references[0]
-	}
-
 	var policyTargets []ResolvedTarget
 	// TODO: add selectors
 	for _, target := range policy.Spec.TargetRefs {
 		var policyTarget *api.PolicyTarget
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
 
-		gatewayTargets := referenceIndex.LookupGatewaysForTarget(ctx, utils.TypedNamespacedName{
+		gatewayTargets := references.LookupGatewaysForTarget(ctx, utils.TypedNamespacedName{
 			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(target.Name)},
 			Kind:           gk.Kind,
 		}).UnsortedList()

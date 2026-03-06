@@ -24,41 +24,37 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    key: traffic/default/agw:rbac:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      backend:
+        mcpAuthorization:
+          allow:
+          - mcp.tool.name == "echo"
+          - jwt.sub == "test-user" && mcp.tool.name == "add"
+      key: default/agw:mcp-authorization:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      authorization:
-        deny:
-        - "true"
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    backend:
-      mcpAuthorization:
-        allow:
-        - mcp.tool.name == "echo"
-        - jwt.sub == "test-user" && mcp.tool.name == "add"
-    key: default/agw:mcp-authorization:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
+      target:
+        gateway:
+          name: test
+          namespace: default
+- resource:
+    policy:
+      key: traffic/default/agw:rbac:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        authorization:
+          deny:
+          - "true"
 status:
   ancestors:
   - ancestorRef:

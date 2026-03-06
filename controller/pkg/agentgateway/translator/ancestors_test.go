@@ -452,7 +452,7 @@ func TestAncestors(t *testing.T) {
 					ctx := testutils.BuildMockPolicyContext(t, []any{yml})
 					_, ri := testutils.Syncer(t, ctx)
 
-					ancestors := ri.Outputs.Ancestors.List()
+					ancestors := ri.Outputs.References.Ancestors.List()
 					assert.Equal(t, len(ancestors), 1)
 					assert.Equal(t, len(ancestors[0].Objects), 1)
 					got := ancestors[0].Objects[0]

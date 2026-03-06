@@ -32,7 +32,7 @@ func (t *TestStatusQueue) Push(target status.Resource, data any) {
 func (t *TestStatusQueue) Run(ctx context.Context) {
 }
 
-func (t *TestStatusQueue) Dump() []any {
+func (t *TestStatusQueue) dump() []crd.IstioKind {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	objs := []crd.IstioKind{}
@@ -68,7 +68,21 @@ func (t *TestStatusQueue) Dump() []any {
 		}
 		return gocmp.Compare(a.Name, b.Name)
 	})
-	return slices.Map(objs, func(e crd.IstioKind) any {
+	return objs
+}
+
+// DumpStatus returns just the status of the 1 objects that had status written, or panics
+func (t *TestStatusQueue) DumpStatus() any {
+	d := t.dump()
+	if len(d) != 1 {
+		panic("DumpStatus called with multiple status messages")
+	}
+	return d[0].Status
+}
+
+// Dump returns all objects that had status written
+func (t *TestStatusQueue) Dump() []any {
+	return slices.Map(t.dump(), func(e crd.IstioKind) any {
 		return e
 	})
 }
