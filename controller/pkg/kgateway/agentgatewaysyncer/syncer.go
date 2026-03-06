@@ -465,7 +465,7 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	}).AsCollection(append(krtopts.ToOptions("RouteAttachments"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
 	ancestorsIndex := krt.NewIndex(ancestorBackends, "ancestors", func(o *utils.AncestorBackend) []utils.TypedNamespacedName {
-		return []utils.TypedNamespacedName{o.Source, o.Backend}
+		return []utils.TypedNamespacedName{o.Backend}
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex)
