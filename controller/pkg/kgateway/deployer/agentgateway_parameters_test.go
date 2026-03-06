@@ -377,3 +377,24 @@ func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "contains an invalid key")
 }
+
+func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
+	deployment := &appsv1.Deployment{}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-session-key",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"key": []byte("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
+		},
+	}
+
+	err := addSessionKeyChecksumAnnotation([]client.Object{deployment}, secret)
+	require.NoError(t, err)
+	require.NotNil(t, deployment.Spec.Template.Annotations)
+	assert.Equal(t,
+		"2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
+		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation],
+	)
+}

@@ -77,6 +77,7 @@ spec:
     metadata:
       annotations:
         checksum/config: aaf5e2738c763c66015fbfc634d35ab6ccf946d18956c1ad787c730ba03aa5d4
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         gateway.kgateway.dev/gateway-full-name: extremely-long-gateway-name-that-exceeds-the-sixty-three-character-limit-imposed-by-kubernetes-dns-naming-requirements
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"

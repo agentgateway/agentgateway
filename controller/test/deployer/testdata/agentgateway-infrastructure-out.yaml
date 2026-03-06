@@ -103,6 +103,7 @@ spec:
     metadata:
       annotations:
         checksum/config: a1c83112dda602acaac811fc898dd49fe4c4736a4e4c7d895019293dc7ab1726
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         extra-annotation: v1
         gateway.kgateway.dev/gateway-full-name: gw
         infra-and-params: params-but-only-because-overlays-happen-last

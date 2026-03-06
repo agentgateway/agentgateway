@@ -95,6 +95,7 @@ spec:
     metadata:
       annotations:
         checksum/config: b90a8eb34d3d5082498d2226b619beea258e6753371b9970790b026550cd2ec5
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         foo: |-
           bar
           attack
