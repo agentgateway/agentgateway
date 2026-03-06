@@ -5,14 +5,14 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.0
   labels:
-    app: kgateway
-    app.kubernetes.io/name: kgateway
+    app: agentgateway
+    app.kubernetes.io/name: agentgateway
   name: agentgatewaybackends.agentgateway.dev
 spec:
   group: agentgateway.dev
   names:
     categories:
-    - kgateway
+    - agentgateway
     kind: AgentgatewayBackend
     listKind: AgentgatewayBackendList
     plural: agentgatewaybackends

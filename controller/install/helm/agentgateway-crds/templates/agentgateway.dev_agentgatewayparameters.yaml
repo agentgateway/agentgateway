@@ -5,15 +5,15 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.0
   labels:
-    app: kgateway
-    app.kubernetes.io/name: kgateway
+    app: agentgateway
+    app.kubernetes.io/name: agentgateway
     gateway.networking.k8s.io/policy: Direct
   name: agentgatewayparameters.agentgateway.dev
 spec:
   group: agentgateway.dev
   names:
     categories:
-    - kgateway
+    - agentgateway
     kind: AgentgatewayParameters
     listKind: AgentgatewayParametersList
     plural: agentgatewayparameters

@@ -13,8 +13,8 @@ import (
 
 // +genclient
 // +kubebuilder:object:root=true
-// +kubebuilder:metadata:labels={app=kgateway,app.kubernetes.io/name=kgateway}
-// +kubebuilder:resource:categories=kgateway,shortName=agbe
+// +kubebuilder:metadata:labels={app=agentgateway,app.kubernetes.io/name=agentgateway}
+// +kubebuilder:resource:categories=agentgateway,shortName=agbe
 // +kubebuilder:subresource:status
 type AgentgatewayBackend struct {
 	metav1.TypeMeta `json:",inline"`

@@ -18,8 +18,8 @@ import (
 
 // +genclient
 // +kubebuilder:object:root=true
-// +kubebuilder:metadata:labels={app=kgateway,app.kubernetes.io/name=kgateway}
-// +kubebuilder:resource:categories=kgateway,shortName=agpol
+// +kubebuilder:metadata:labels={app=agentgateway,app.kubernetes.io/name=agentgateway}
+// +kubebuilder:resource:categories=agentgateway,shortName=agpol
 // +kubebuilder:subresource:status
 // +kubebuilder:metadata:labels="gateway.networking.k8s.io/policy=Direct"
 type AgentgatewayPolicy struct {
