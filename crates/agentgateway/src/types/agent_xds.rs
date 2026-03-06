@@ -539,10 +539,18 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
                         };
 						crate::http::auth::AzureAuth::ExplicitConfig {
 							credential_source: src,
+							cached_cred: Default::default(),
 						}
 					},
 					Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
-						crate::http::auth::AzureAuth::DeveloperImplicit {}
+						crate::http::auth::AzureAuth::DeveloperImplicit {
+							cached_cred: Default::default(),
+						}
+					},
+					Some(proto::agent::azure::Kind::Implicit(_)) => {
+						crate::http::auth::AzureAuth::Implicit {
+							cached_cred: Default::default(),
+						}
 					},
 					None => return Err(ProtoError::MissingRequiredField),
 				};
