@@ -122,6 +122,11 @@ spec:
             - name: RUST_LOG
               value: {{ ($gateway.logging).level | default "info" | quote }}
             {{- end }}
+            - name: SESSION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "agentgateway.sessionKeySecretName is required" $gateway.sessionKeySecretName }}
+                  key: key
             - name: XDS_ADDRESS
               {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
               value: "https://{{ $gateway.xds.host }}:{{ $gateway.xds.port }}"
@@ -182,9 +187,6 @@ spec:
             - name: xds-token
               mountPath: /var/run/secrets/xds-tokens
               readOnly: true
-            - name: session-key
-              mountPath: /var/run/secrets/agentgateway/session
-              readOnly: true
             {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
             - name: xds-ca
               mountPath: /etc/xds-tls
@@ -207,12 +209,6 @@ spec:
                 audience: kgateway
                 expirationSeconds: 43200
                 path: xds-token
-        - name: session-key
-          secret:
-            secretName: {{ required "agentgateway.sessionKeySecretName is required" $gateway.sessionKeySecretName }}
-            items:
-            - key: key
-              path: key
         - name: tmp
           emptyDir: {}
         {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}

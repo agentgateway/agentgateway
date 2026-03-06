@@ -142,6 +142,11 @@ spec:
           value: "1"
         - name: RUST_LOG
           value: info
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: gw-session-key
         - name: XDS_ADDRESS
           value: https://xds.cluster.local:9978
         - name: XDS_ROOT_CA
@@ -201,9 +206,6 @@ spec:
         - mountPath: /var/run/secrets/xds-tokens
           name: xds-token
           readOnly: true
-        - mountPath: /var/run/secrets/agentgateway/session
-          name: session-key
-          readOnly: true
         - mountPath: /etc/xds-tls
           name: xds-ca
           readOnly: true
@@ -224,12 +226,6 @@ spec:
               audience: kgateway
               expirationSeconds: 43200
               path: xds-token
-      - name: session-key
-        secret:
-          items:
-          - key: key
-            path: key
-          secretName: gw-session-key
       - emptyDir: {}
         name: tmp
       - configMap:

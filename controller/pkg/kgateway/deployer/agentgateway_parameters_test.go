@@ -6,6 +6,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"istio.io/istio/pkg/kube"
+	"istio.io/istio/pkg/kube/kclient"
+	"istio.io/istio/pkg/test"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -20,6 +23,19 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 )
+
+func newSyncedSecretClient(t *testing.T, objects ...client.Object) kclient.Client[*corev1.Secret] {
+	t.Helper()
+
+	fakeClient := fake.NewClient(t, objects...)
+	secretClient := kclient.NewFiltered[*corev1.Secret](fakeClient, kclient.Filter{
+		ObjectFilter: fakeClient.ObjectFilter(),
+	})
+	stop := test.NewStop(t)
+	fakeClient.RunAndWait(stop)
+	kube.WaitForCacheSync("test", stop, secretClient.HasSynced)
+	return secretClient
+}
 
 func TestAgentgatewayParametersApplier_ApplyToHelmValues_Image(t *testing.T) {
 	params := &agentgateway.AgentgatewayParameters{
@@ -107,7 +123,6 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_FiltersReservedSessionK
 			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
 				Env: []corev1.EnvVar{
 					{Name: "SESSION_KEY", Value: "inline-key"},
-					{Name: "SESSION_KEY_FILE", Value: "/tmp/key"},
 					{Name: "CUSTOM_VAR", Value: "custom_value"},
 				},
 			},
@@ -327,7 +342,7 @@ func TestBuildSessionKeySecret_UsesExistingValidKey(t *testing.T) {
 		},
 	}
 	generator := &agentgatewayParametersHelmValuesGenerator{
-		apiClient: fake.NewClient(t, secret),
+		secretClient: newSyncedSecretClient(t, secret),
 		sessionKeyGen: func() (string, error) {
 			return "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100", nil
 		},
@@ -361,7 +376,7 @@ func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
 		},
 	}
 	generator := &agentgatewayParametersHelmValuesGenerator{
-		apiClient: fake.NewClient(t, secret),
+		secretClient: newSyncedSecretClient(t, secret),
 		sessionKeyGen: func() (string, error) {
 			return "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", nil
 		},

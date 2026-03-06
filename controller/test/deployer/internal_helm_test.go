@@ -87,11 +87,11 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway",
 			Validate: func(t *testing.T, outputYaml string) {
 				t.Helper()
-				assert.Contains(t, outputYaml, "mountPath: /var/run/secrets/agentgateway/session",
-					"deployment should mount the managed session key Secret")
-				assert.Contains(t, outputYaml, "name: session-key",
-					"deployment should include the session key volume")
-				assert.Contains(t, outputYaml, "secretName: gw-session-key",
+				assert.Contains(t, outputYaml, "name: SESSION_KEY",
+					"deployment should inject the managed session key via env")
+				assert.Contains(t, outputYaml, "secretKeyRef:",
+					"deployment should reference the session key Secret from env")
+				assert.Contains(t, outputYaml, "name: gw-session-key",
 					"deployment should reference the controller-managed session key Secret")
 				assert.Contains(t, outputYaml, "kind: Secret",
 					"rendered objects should include the controller-managed session key Secret")

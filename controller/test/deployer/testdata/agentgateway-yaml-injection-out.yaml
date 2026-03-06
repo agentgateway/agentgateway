@@ -136,6 +136,11 @@ spec:
           value: |-
             json
             attack
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: gw-session-key
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -196,9 +201,6 @@ spec:
         - mountPath: /var/run/secrets/xds-tokens
           name: xds-token
           readOnly: true
-        - mountPath: /var/run/secrets/agentgateway/session
-          name: session-key
-          readOnly: true
       securityContext:
         sysctls:
         - name: net.ipv4.ip_unprivileged_port_start
@@ -216,12 +218,6 @@ spec:
               audience: kgateway
               expirationSeconds: 43200
               path: xds-token
-      - name: session-key
-        secret:
-          items:
-          - key: key
-            path: key
-          secretName: gw-session-key
       - emptyDir: {}
         name: tmp
 status: {}

@@ -26,7 +26,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 )
 
-var reservedManagedGatewayEnvVars = sets.New[string]("SESSION_KEY", "SESSION_KEY_FILE")
+var reservedManagedGatewayEnvVars = sets.New[string]("SESSION_KEY")
 
 // AgentgatewayParametersApplier applies AgentgatewayParameters configurations and overlays.
 type AgentgatewayParametersApplier struct {
@@ -166,18 +166,19 @@ func (a *AgentgatewayParametersApplier) ApplyOverlaysToObjects(objs []client.Obj
 }
 
 type agentgatewayParametersHelmValuesGenerator struct {
-	apiClient      apiclient.Client
 	agwParamClient kclient.Client[*agentgateway.AgentgatewayParameters]
 	gwClassClient  kclient.Client[*gwv1.GatewayClass]
+	secretClient   kclient.Client[*corev1.Secret]
 	inputs         *deployer.Inputs
 	sessionKeyGen  func() (string, error)
 }
 
 func newAgentgatewayParametersHelmValuesGenerator(cli apiclient.Client, inputs *deployer.Inputs) *agentgatewayParametersHelmValuesGenerator {
+	filter := kclient.Filter{ObjectFilter: cli.ObjectFilter()}
 	return &agentgatewayParametersHelmValuesGenerator{
-		apiClient:      cli,
-		agwParamClient: kclient.NewFilteredDelayed[*agentgateway.AgentgatewayParameters](cli, wellknown.AgentgatewayParametersGVR, kclient.Filter{ObjectFilter: cli.ObjectFilter()}),
-		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown.GatewayClassGVR, kclient.Filter{ObjectFilter: cli.ObjectFilter()}),
+		agwParamClient: kclient.NewFilteredDelayed[*agentgateway.AgentgatewayParameters](cli, wellknown.AgentgatewayParametersGVR, filter),
+		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown.GatewayClassGVR, filter),
+		secretClient:   kclient.NewFiltered[*corev1.Secret](cli, filter),
 		inputs:         inputs,
 		sessionKeyGen:  generateSessionKey,
 	}
@@ -282,7 +283,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveParameters(gw *gwv1.G
 }
 
 func (g *agentgatewayParametersHelmValuesGenerator) GetCacheSyncHandlers() []cache.InformerSynced {
-	return []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced}
+	return []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced, g.secretClient.HasSynced}
 }
 
 // GetResolvedParametersForGateway returns both the GatewayClass-level and Gateway-level
@@ -424,8 +425,9 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveSessionKey(
 	namespace string,
 	secretName string,
 ) (string, error) {
-	secret, err := g.apiClient.Kube().CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
-	if err == nil {
+	_ = ctx
+
+	if secret := g.secretClient.Get(secretName, namespace); secret != nil {
 		key, found := secret.Data["key"]
 		if !found || len(key) == 0 {
 			return "", fmt.Errorf("session key secret %s/%s missing key entry", namespace, secretName)
@@ -435,9 +437,6 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveSessionKey(
 			return "", fmt.Errorf("session key secret %s/%s contains an invalid key: %w", namespace, secretName, err)
 		}
 		return resolvedKey, nil
-	}
-	if client.IgnoreNotFound(err) != nil {
-		return "", fmt.Errorf("failed to read session key secret %s/%s: %w", namespace, secretName, err)
 	}
 
 	key, err := g.sessionKeyGen()
