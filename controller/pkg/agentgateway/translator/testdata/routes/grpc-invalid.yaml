@@ -43,21 +43,4 @@ status:
     namespace: default
   spec: null
   status:
-    parents:
-    - conditions:
-      - lastTransitionTime: fake
-        message: ""
-        reason: Accepted
-        status: "True"
-        type: Accepted
-      - lastTransitionTime: fake
-        message: 'referencing unsupported backendRef: group "" kind "ConfigMap"'
-        reason: InvalidKind
-        status: "False"
-        type: ResolvedRefs
-      controllerName: agentgateway.dev/agentgateway
-      parentRef:
-        group: gateway.networking.k8s.io
-        kind: Gateway
-        name: test-gateway
-        namespace: default
+    parents: []

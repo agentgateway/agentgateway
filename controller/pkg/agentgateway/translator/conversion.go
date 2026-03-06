@@ -817,17 +817,19 @@ func NormalizeReference(group *gwv1.Group, kind *gwv1.Kind, defaultGVK schema.Gr
 	return result
 }
 
-// ToInternalParentReference converts a gwv1.ParentReference to a ParentKey.
-func ToInternalParentReference(p gwv1.ParentReference, localNamespace string) (ParentKey, error) {
+// ToInternalParentReference converts a gwv1.ParentReference to a TypedNamespacedName.
+func ToInternalParentReference(p gwv1.ParentReference, localNamespace string) (utils.TypedNamespacedName, error) {
 	ref := NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK)
 	if !allowedParentReferences.Contains(ref) {
-		return ParentKey{}, fmt.Errorf("unsupported Parent: %v/%v", p.Group, p.Kind)
+		return utils.TypedNamespacedName{}, fmt.Errorf("unsupported Parent: %v/%v", p.Group, p.Kind)
 	}
-	return ParentKey{
-		Kind: ref,
-		Name: string(p.Name),
-		// Unset namespace means "same namespace"
-		Namespace: defaultString(p.Namespace, localNamespace),
+	return utils.TypedNamespacedName{
+		Kind: ref.Kind,
+		NamespacedName: types.NamespacedName{
+			Name: string(p.Name),
+			// Unset namespace means "same namespace"
+			Namespace: defaultString(p.Namespace, localNamespace),
+		},
 	}, nil
 }
 
@@ -842,7 +844,7 @@ func ReferenceAllowed(
 	hostnames []gwv1.Hostname,
 	localNamespace string,
 ) *ParentError {
-	if parentRef.Kind == wellknown.ServiceGVK {
+	if parentRef.Kind == wellknown.ServiceGVK.Kind {
 		key := parentRef.Namespace + "/" + parentRef.Name
 		svc := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Services, krt.FilterKey(key)))
 
@@ -853,7 +855,7 @@ func ReferenceAllowed(
 				Message: fmt.Sprintf("parent service: %q not found", parentRef.Name),
 			}
 		}
-	} else if parentRef.Kind == wellknown.ServiceEntryGVK {
+	} else if parentRef.Kind == wellknown.ServiceEntryGVK.Kind {
 		// check that the referenced svc entry exists
 		key := parentRef.Namespace + "/" + parentRef.Name
 		svcEntry := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.ServiceEntries, krt.FilterKey(key)))
@@ -956,9 +958,9 @@ func extractParentReferenceInfo(ctx RouteContext, parents RouteParents, obj cont
 			continue
 		}
 		pk := ParentReference{
-			ParentKey:   ir,
-			SectionName: ptr.OrEmpty(ref.SectionName),
-			Port:        ptr.OrEmpty(ref.Port),
+			TypedNamespacedName: ir,
+			SectionName:         ptr.OrEmpty(ref.SectionName),
+			Port:                ptr.OrEmpty(ref.Port),
 		}
 		gk := ir
 		currentParents := parents.Fetch(ctx.Krt, gk)
@@ -1010,30 +1012,16 @@ func isInvalidBackend(err *reporter.RouteCondition) bool {
 		err.Reason == gwv1.RouteReasonInvalidKind
 }
 
-// ParentKey holds info about a parentRef (eg route binding to a Gateway). This is a mirror of
-// gwv1.ParentReference in a form that can be stored in a map
-type ParentKey struct {
-	Kind schema.GroupVersionKind
-	// Name is the original name of the resource (eg Kubernetes Gateway name)
-	Name string
-	// Namespace is the namespace of the resource
-	Namespace string
-}
-
-func (p ParentKey) String() string {
-	return p.Kind.Kind + "/" + p.Namespace + "/" + p.Name
-}
-
 // ParentReference holds the parent key, section name and port for a parent reference.
 type ParentReference struct {
-	ParentKey
+	utils.TypedNamespacedName
 
 	SectionName gwv1.SectionName
 	Port        gwv1.PortNumber
 }
 
 func (p ParentReference) String() string {
-	return p.ParentKey.String() + "/" + string(p.SectionName) + "/" + fmt.Sprint(p.Port)
+	return p.TypedNamespacedName.String() + "/" + string(p.SectionName) + "/" + fmt.Sprint(p.Port)
 }
 
 // ParentInfo holds info about a "Parent" - something that can be referenced as a ParentRef in the API.
@@ -1064,8 +1052,8 @@ type ParentInfo struct {
 type RouteParentReference struct {
 	// InternalName refers to the internal name of the parent we can reference it by. For example "my-ns/my-gateway"
 	InternalName string
-	// InternalKind is the Group/Kind of the Parent
-	InternalKind schema.GroupVersionKind
+	// InternalKind is the Kind of the Parent
+	InternalKind string
 	// DeniedReason, if present, indicates why the reference was not valid
 	DeniedReason *ParentError
 	// OriginalReference contains the original reference
@@ -1073,7 +1061,7 @@ type RouteParentReference struct {
 	// Hostname is the hostname match of the Parent, if any
 	Hostname        string
 	BannedHostnames sets.Set[string]
-	ParentKey       ParentKey
+	ParentKey       utils.TypedNamespacedName
 	ParentSection   gwv1.SectionName
 	Accepted        bool
 	ParentGateway   types.NamespacedName

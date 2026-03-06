@@ -65,21 +65,4 @@ status:
     namespace: default
   spec: null
   status:
-    parents:
-    - conditions:
-      - lastTransitionTime: fake
-        message: ""
-        reason: Accepted
-        status: "True"
-        type: Accepted
-      - lastTransitionTime: fake
-        message: ""
-        reason: ResolvedRefs
-        status: "True"
-        type: ResolvedRefs
-      controllerName: agentgateway.dev/agentgateway
-      parentRef:
-        group: gateway.networking.k8s.io
-        kind: Gateway
-        name: tls-gw
-        namespace: default
+    parents: []

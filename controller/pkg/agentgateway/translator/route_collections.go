@@ -6,6 +6,7 @@ import (
 	"iter"
 	"strings"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/controllers"
@@ -43,7 +44,7 @@ func AgwRouteCollection(
 	tlsRouteCol krt.Collection[*gwv1.TLSRoute],
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
-) (krt.Collection[agwir.AgwResource], krt.Collection[*RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
+) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
 	httpRouteStatus, httpRoutes := createRouteCollection(httpRouteCol, inputs, krtopts, "HTTPRoutes",
 		func(ctx RouteContext, obj *gwv1.HTTPRoute) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
@@ -113,7 +114,7 @@ func AgwRouteCollection(
 
 	routes := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{httpRoutes, grpcRoutes, tcpRoutes, tlsRoutes}, krtopts.ToOptions("ADPRoutes")...)
 
-	routeAttachments := krt.JoinCollection([]krt.Collection[*RouteAttachment]{
+	routeAttachments := krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{
 		gatewayRouteAttachmentCountCollection(inputs, httpRouteCol, wellknown.HTTPRouteGVK, krtopts),
 		gatewayRouteAttachmentCountCollection(inputs, grpcRouteCol, wellknown.GRPCRouteGVK, krtopts),
 		gatewayRouteAttachmentCountCollection(inputs, tlsRouteCol, wellknown.TLSRouteGVK, krtopts),
@@ -229,8 +230,7 @@ func ProcessParentReferences[T any](
 			prStatusRef := parent.OriginalReference
 			{
 				stringPtr := func(s string) *string { return &s }
-				prStatusRef.Group = (*gwv1.Group)(stringPtr(parent.ParentKey.Kind.Group))
-				prStatusRef.Kind = (*gwv1.Kind)(stringPtr(parent.ParentKey.Kind.Kind))
+				prStatusRef.Kind = (*gwv1.Kind)(stringPtr(parent.ParentKey.Kind))
 				prStatusRef.Namespace = (*gwv1.Namespace)(stringPtr(parent.ParentKey.Namespace))
 				prStatusRef.Name = gwv1.ObjectName(parent.ParentKey.Name)
 				prStatusRef.SectionName = nil
@@ -321,7 +321,7 @@ func buildAttachedRoutesMapAllowed(
 	seen := make(map[attachKey]struct{})
 
 	for _, parent := range allowedParents {
-		if parent.ParentKey.Kind != wellknown.GatewayGVK {
+		if parent.ParentKey.Kind != wellknown.GatewayGVK.Kind {
 			continue
 		}
 		gw := types.NamespacedName{Namespace: parent.ParentKey.Namespace, Name: parent.ParentKey.Name}
@@ -460,7 +460,7 @@ func createTCPRouteCollection[T controllers.Object, ST any](
 func ListenersPerGateway(parentRefs []RouteParentReference) map[types.NamespacedName]map[string]struct{} {
 	l := make(map[types.NamespacedName]map[string]struct{})
 	for _, p := range parentRefs {
-		if p.ParentKey.Kind != wellknown.GatewayGVK {
+		if p.ParentKey.Kind != wellknown.GatewayGVK.Kind {
 			continue
 		}
 		gw := types.NamespacedName{Namespace: p.ParentKey.Namespace, Name: p.ParentKey.Name}
@@ -581,20 +581,20 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 	col krt.Collection[T],
 	kind schema.GroupVersionKind,
 	opts krtutil.KrtOptions,
-) krt.Collection[*RouteAttachment] {
-	return krt.NewManyCollection(col, func(krtctx krt.HandlerContext, obj T) []*RouteAttachment {
+) krt.Collection[*plugins.RouteAttachment] {
+	return krt.NewManyCollection(col, func(krtctx krt.HandlerContext, obj T) []*plugins.RouteAttachment {
 		ctx := inputs.WithCtx(krtctx)
-		from := TypedResource{
-			Kind: kind,
-			Name: config.NamespacedName(obj),
+		from := utils.TypedNamespacedName{
+			Kind:           kind.Kind,
+			NamespacedName: config.NamespacedName(obj),
 		}
 
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
-		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **RouteAttachment {
-			if e.ParentKey.Kind != wellknown.GatewayGVK && e.ParentKey.Kind != wellknown.ListenerSetGVK {
+		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
+			if e.ParentKey.Kind != wellknown.GatewayGVK.Kind && e.ParentKey.Kind != wellknown.ListenerSetGVK.Kind {
 				return nil
 			}
-			return ptr.Of(&RouteAttachment{
+			return ptr.Of(&plugins.RouteAttachment{
 				From:         from,
 				To:           e.ParentKey,
 				Gateway:      e.ParentGateway,
@@ -602,28 +602,6 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 			})
 		})
 	}, opts.ToOptions(kind.Kind+"/count")...)
-}
-
-type RouteAttachment struct {
-	// Route
-	From TypedResource
-	// Immediate parent (Gateway or ListenerSet)
-	To           ParentKey
-	ListenerName string
-	// Eventual parent (always Gateway)
-	Gateway types.NamespacedName
-}
-
-func (r RouteAttachment) ResourceName() string {
-	to := r.To.String()
-	if r.To.Kind != wellknown.GatewayGVK {
-		to += "/" + r.Gateway.String()
-	}
-	return r.From.Kind.Kind + "/" + r.From.Name.String() + "->" + to + "/" + r.ListenerName
-}
-
-func (r RouteAttachment) Equals(other RouteAttachment) bool {
-	return r.From == other.From && r.To == other.To && r.ListenerName == other.ListenerName && r.Gateway == other.Gateway
 }
 
 func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext, obj T, kind string, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {

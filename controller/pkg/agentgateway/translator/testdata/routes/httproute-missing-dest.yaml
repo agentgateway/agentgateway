@@ -39,21 +39,4 @@ status:
     namespace: default
   spec: null
   status:
-    parents:
-    - conditions:
-      - lastTransitionTime: fake
-        message: ""
-        reason: Accepted
-        status: "True"
-        type: Accepted
-      - lastTransitionTime: fake
-        message: backend(unknown.default.svc.cluster.local) not found
-        reason: BackendNotFound
-        status: "False"
-        type: ResolvedRefs
-      controllerName: agentgateway.dev/agentgateway
-      parentRef:
-        group: gateway.networking.k8s.io
-        kind: Gateway
-        name: test-gateway
-        namespace: default
+    parents: []

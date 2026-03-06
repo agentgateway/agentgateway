@@ -189,19 +189,21 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 
 func (s *Syncer) buildFinalGatewayStatus(
 	gatewayStatuses krt.StatusCollection[*gwv1.Gateway, gwv1.GatewayStatus],
-	routeAttachments krt.Collection[*translator.RouteAttachment],
+	routeAttachments krt.Collection[*plugins.RouteAttachment],
 	krtopts krtutil.KrtOptions,
 ) krt.StatusCollection[*gwv1.Gateway, gwv1.GatewayStatus] {
-	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *translator.RouteAttachment) []translator.ParentKey {
-		return []translator.ParentKey{o.To}
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.To}
 	})
 	return krt.NewCollection(
 		gatewayStatuses,
 		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus]) *krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus] {
-			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, translator.ParentKey{
-				Kind:      wellknown.GatewayGVK,
-				Namespace: i.Obj.Namespace,
-				Name:      i.Obj.Name,
+			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
+				Kind: wellknown.GatewayGVK.Kind,
+				NamespacedName: types.NamespacedName{
+					Namespace: i.Obj.Namespace,
+					Name:      i.Obj.Name,
+				},
 			}))
 			counts := map[string]int32{}
 			for _, r := range routes {
@@ -222,11 +224,11 @@ func (s *Syncer) buildFinalGatewayStatus(
 func (s *Syncer) buildFinalListenerSetStatus(
 	gateways krt.Collection[*translator.GatewayListener],
 	listenerSetStatus krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus],
-	routeAttachments krt.Collection[*translator.RouteAttachment],
+	routeAttachments krt.Collection[*plugins.RouteAttachment],
 	krtopts krtutil.KrtOptions,
 ) krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus] {
-	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *translator.RouteAttachment) []translator.ParentKey {
-		return []translator.ParentKey{o.To}
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.To}
 	})
 
 	gatewayIndex := krt.NewIndex(gateways, "gateway-parent-section-name", func(gwl *translator.GatewayListener) []utils.SectionedNamespacedName {
@@ -247,10 +249,12 @@ func (s *Syncer) buildFinalListenerSetStatus(
 
 			invalidListenerCount := 0
 			lsStatus := i.Status.DeepCopy()
-			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, translator.ParentKey{
-				Kind:      wellknown.ListenerSetGVK,
-				Namespace: i.Obj.Namespace,
-				Name:      i.Obj.Name,
+			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
+				Kind: wellknown.ListenerSetGVK.Kind,
+				NamespacedName: types.NamespacedName{
+					Namespace: i.Obj.Namespace,
+					Name:      i.Obj.Name,
+				},
 			}))
 			counts := map[string]int32{}
 			for _, r := range routes {
@@ -386,7 +390,7 @@ func (s *Syncer) buildListenerSetCollection(
 	)
 }
 
-func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*translator.RouteAttachment], krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend], PolicyStatusCollections, krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]) {
+func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend], PolicyStatusCollections, krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
@@ -456,9 +460,9 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.Routes != nil {
 		agwRoutes = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{agwRoutes, s.agwPlugins.AddResourceExtension.Routes})
 	}
-	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "from", func(o *translator.RouteAttachment) []translator.TypedResource {
-		return []translator.TypedResource{o.From}
-	}).AsCollection(krtopts.ToOptions("RouteAttachments")...)
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "from", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.From}
+	}).AsCollection(append(krtopts.ToOptions("RouteAttachments"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
 	ancestorsIndex := krt.NewIndex(ancestorBackends, "ancestors", func(o *utils.AncestorBackend) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.Source, o.Backend}
