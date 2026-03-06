@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"istio.io/istio/pkg/kube/krt"
@@ -54,21 +55,11 @@ func TestTrafficPolicies(t *testing.T) {
 func TestBackendPolicies(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/backendpolicy", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
 		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
-		//pol := testutils.GetTestResource(t, ctx.Collections.AgentgatewayPolicies)
+		time.Sleep(time.Second)
 		r := ri.Outputs.Resources.List()
-		//return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
-		//	return a.ResourceName()
-		//})
-		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
-			//x := ir.GetAgwResourceName(resource.Resource)
-			return true
-			//return strings.HasPrefix(x, "route/") || strings.HasPrefix(x, "tcp_route/") || strings.HasPrefix(x, "policy/")
-		})
 		return sq.DumpStatus(), slices.SortBy(r, func(a ir.AgwResource) string {
 			return a.ResourceName()
 		})
-		//s, o := plugins.TranslateAgentgatewayPolicy(ctx.Krt, pol, ctx.Collections, ri.Outputs.References)
-		//return s, o
 	})
 }
 

@@ -52,18 +52,12 @@ type ReferenceIndex struct {
 }
 
 func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object utils.TypedNamespacedName) sets.Set[types.NamespacedName] {
-	if object.Kind == wellknown.GatewayGVK.Kind {
-		return sets.New(object.NamespacedName)
-	}
 	switch object.Kind {
 	case wellknown.GatewayGVK.Kind:
 		// Trivial case
 		return sets.New(object.NamespacedName)
 	case wellknown.HTTPRouteGVK.Kind, wellknown.GRPCRouteGVK.Kind, wellknown.TCPRouteGVK.Kind, wellknown.TLSRouteGVK.Kind:
 		gateways := sets.New[types.NamespacedName]()
-		if p.Ancestors == nil {
-			return gateways
-		}
 		for _, indexed := range krt.Fetch(ctx, p.attachments, krt.FilterKey(object.String())) {
 			for _, ancestor := range indexed.Objects {
 				gateways.Insert(ancestor.Gateway)
@@ -72,9 +66,6 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 		return gateways
 	default:
 		gateways := sets.New[types.NamespacedName]()
-		if p.Ancestors == nil {
-			return gateways
-		}
 		for _, indexed := range krt.Fetch(ctx, p.Ancestors, krt.FilterKey(object.String())) {
 			for _, ancestor := range indexed.Objects {
 				gateways.Insert(ancestor.Gateway)

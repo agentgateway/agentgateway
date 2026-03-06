@@ -23,7 +23,80 @@ spec:
             - 'jwt.sub == "test-user" && mcp.tool.name == "add"'
 ---
 # Output
-output: null
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/test
+      port: 8080
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/test
+      key: default/test.http
+      name:
+        gatewayName: test
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: reviews.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      - {}
+      hostnames:
+      - www.example.com
+      key: default/test.0.http
+      listenerKey: default/test.http
+      name:
+        kind: HTTPRoute
+        name: test
+        namespace: default
+- resource:
+    policy:
+      backend:
+        mcpAuthorization:
+          allow:
+          - mcp.tool.name == "echo"
+          - jwt.sub == "test-user" && mcp.tool.name == "add"
+      key: default/agw:mcp-authorization:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+- resource:
+    policy:
+      key: traffic/default/agw:rbac:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+      traffic:
+        authorization:
+          deny:
+          - "true"
 status:
   ancestors:
   - ancestorRef:
