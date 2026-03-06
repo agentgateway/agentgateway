@@ -21,7 +21,7 @@ spec:
   template:
     metadata:
       annotations:
-      {{- /* Add configmap checksum to trigger rollout when config changes */}}
+      {{- /* Add managed resource checksums to trigger rollout when config changes */}}
       {{- $configChecksum := dict "checksum/config" (include (print $.Template.BasePath "/configmap.yaml") . | sha256sum) }}
       {{- toYaml (merge
           $configChecksum
@@ -182,6 +182,9 @@ spec:
             - name: xds-token
               mountPath: /var/run/secrets/xds-tokens
               readOnly: true
+            - name: session-key
+              mountPath: /var/run/secrets/agentgateway/session
+              readOnly: true
             {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
             - name: xds-ca
               mountPath: /etc/xds-tls
@@ -204,6 +207,12 @@ spec:
                 audience: kgateway
                 expirationSeconds: 43200
                 path: xds-token
+        - name: session-key
+          secret:
+            secretName: {{ required "agentgateway.sessionKeySecretName is required" $gateway.sessionKeySecretName }}
+            items:
+            - key: key
+              path: key
         - name: tmp
           emptyDir: {}
         {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}

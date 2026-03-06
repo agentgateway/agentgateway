@@ -25,6 +25,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
+const testSessionKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+
 type HelmTestCase struct {
 	Name   string
 	Inputs *pkgdeployer.Inputs
@@ -179,6 +181,9 @@ func (dt DeployerTester) RunHelmChartTest(
 		fakeClient,
 		inputs,
 	)
+	gwParams.WithSessionKeyGenerator(func() (string, error) {
+		return testSessionKey, nil
+	})
 	if tt.HelmValuesGeneratorOverride != nil {
 		gwParams.WithHelmValuesGeneratorOverride(tt.HelmValuesGeneratorOverride(inputs))
 	}

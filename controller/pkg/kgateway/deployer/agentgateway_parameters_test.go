@@ -1,6 +1,7 @@
 package deployer
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,9 +13,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 )
 
@@ -96,6 +99,30 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_Env(t *testing.T) {
 	require.Len(t, vals.Agentgateway.Env, 2)
 	assert.Equal(t, "CUSTOM_VAR", vals.Agentgateway.Env[0].Name)
 	assert.Equal(t, "ANOTHER_VAR", vals.Agentgateway.Env[1].Name)
+}
+
+func TestAgentgatewayParametersApplier_ApplyToHelmValues_FiltersReservedSessionKeyEnvVars(t *testing.T) {
+	params := &agentgateway.AgentgatewayParameters{
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+				Env: []corev1.EnvVar{
+					{Name: "SESSION_KEY", Value: "inline-key"},
+					{Name: "SESSION_KEY_FILE", Value: "/tmp/key"},
+					{Name: "CUSTOM_VAR", Value: "custom_value"},
+				},
+			},
+		},
+	}
+
+	applier := NewAgentgatewayParametersApplier(params)
+	vals := &deployer.HelmConfig{
+		Agentgateway: &deployer.AgentgatewayHelmGateway{},
+	}
+
+	applier.ApplyToHelmValues(vals)
+
+	require.Len(t, vals.Agentgateway.Env, 1)
+	assert.Equal(t, "CUSTOM_VAR", vals.Agentgateway.Env[0].Name)
 }
 
 func TestAgentgatewayParametersApplier_ApplyOverlaysToObjects(t *testing.T) {
@@ -286,4 +313,67 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_RawConfigWithLogging(t 
 	// Both should be set - merging happens in helm template
 	assert.Equal(t, "text", string(vals.Agentgateway.Logging.Format))
 	assert.Equal(t, vals.Agentgateway.RawConfig.Raw, rawConfigJSON)
+}
+
+func TestBuildSessionKeySecret_UsesExistingValidKey(t *testing.T) {
+	const existingKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-session-key",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"key": []byte(existingKey),
+		},
+	}
+	generator := &agentgatewayParametersHelmValuesGenerator{
+		apiClient: fake.NewClient(t, secret),
+		sessionKeyGen: func() (string, error) {
+			return "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100", nil
+		},
+	}
+	gw := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw",
+			Namespace: "default",
+		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: "agentgateway",
+		},
+	}
+
+	managedSecret, err := generator.buildSessionKeySecret(context.Background(), gw, "gw-session-key")
+	require.NoError(t, err)
+	require.NotNil(t, managedSecret)
+	assert.Equal(t, existingKey, string(managedSecret.Data["key"]))
+	assert.Equal(t, corev1.SecretTypeOpaque, managedSecret.Type)
+	assert.Equal(t, "gw-session-key", managedSecret.Name)
+}
+
+func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-session-key",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"key": []byte("not-a-valid-key"),
+		},
+	}
+	generator := &agentgatewayParametersHelmValuesGenerator{
+		apiClient: fake.NewClient(t, secret),
+		sessionKeyGen: func() (string, error) {
+			return "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", nil
+		},
+	}
+	gw := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw",
+			Namespace: "default",
+		},
+	}
+
+	_, err := generator.buildSessionKeySecret(context.Background(), gw, "gw-session-key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "contains an invalid key")
 }

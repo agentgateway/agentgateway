@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{cmp, env};
+use std::{cmp, env, fs};
 
 use agent_core::durfmt;
 use agent_core::prelude::*;
@@ -225,10 +225,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		ThreadingMode::default()
 	};
 
-	let session_encoder = match raw.session {
-		None => crate::http::sessionpersistence::Encoder::base64(),
-		Some(s) => crate::http::sessionpersistence::Encoder::aes(s.key.expose_secret())?,
-	};
+	let session_encoder = session_encoder(raw.session.as_ref())?;
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -465,6 +462,44 @@ fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
 		.transpose()
 }
 
+const DEFAULT_SESSION_KEY_FILE: &str = "/var/run/secrets/agentgateway/session/key";
+
+fn session_encoder(
+	raw_session: Option<&crate::RawSession>,
+) -> anyhow::Result<crate::http::sessionpersistence::Encoder> {
+	session_encoder_with_default_file(raw_session, Path::new(DEFAULT_SESSION_KEY_FILE))
+}
+
+fn session_encoder_with_default_file(
+	raw_session: Option<&crate::RawSession>,
+	default_session_key_file: &Path,
+) -> anyhow::Result<crate::http::sessionpersistence::Encoder> {
+	if default_session_key_file.exists() {
+		let key = fs::read_to_string(default_session_key_file).with_context(|| {
+			format!(
+				"failed to read default session key file {}",
+				default_session_key_file.display()
+			)
+		})?;
+		return crate::http::sessionpersistence::Encoder::aes(key.trim());
+	}
+
+	if let Some(path) = parse::<String>("SESSION_KEY_FILE")? {
+		let key = fs::read_to_string(&path)
+			.with_context(|| format!("failed to read SESSION_KEY_FILE {path}"))?;
+		return crate::http::sessionpersistence::Encoder::aes(key.trim());
+	}
+
+	if let Some(key) = parse::<String>("SESSION_KEY")? {
+		return crate::http::sessionpersistence::Encoder::aes(key.trim());
+	}
+
+	match raw_session {
+		None => Ok(crate::http::sessionpersistence::Encoder::base64()),
+		Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret()),
+	}
+}
+
 pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
 	if let Some(inner) = &inp
 		&& inner.as_ref().is_empty()
@@ -561,11 +596,11 @@ fn get_cpu_count() -> anyhow::Result<usize> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::{env, fs};
+	use tempfile::NamedTempFile;
 
 	#[test]
 	fn test_parse_otlp_headers() {
-		use std::env;
-
 		unsafe {
 			// Test JSON format
 			env::set_var(
@@ -611,5 +646,106 @@ mod tests {
 
 		// Test missing env var
 		assert_eq!(parse_otlp_headers("NONEXISTENT_VAR").unwrap(), None);
+	}
+
+	#[test]
+	fn session_key_file_overrides_inline_session_config() {
+		let key_from_file = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+		let inline_key = "f1e1d1c1b1a1918171615141312111000f0e0d0c0b0a09080706050403020100";
+		let key_file = NamedTempFile::new().expect("temp key file");
+		fs::write(key_file.path(), key_from_file).expect("write temp key file");
+
+		unsafe {
+			env::set_var("SESSION_KEY_FILE", key_file.path());
+			env::remove_var("SESSION_KEY");
+		}
+
+		let config = parse_config(
+			format!(
+				r#"
+config:
+  session:
+    key: "{inline_key}"
+"#
+			),
+			None,
+		)
+		.expect("config should parse");
+
+		let state = crate::http::sessionpersistence::SessionState::HTTP(
+			crate::http::sessionpersistence::HTTPSessionState {
+				backend: "127.0.0.1:8080".parse().expect("socket addr"),
+			},
+		);
+		let encoded = state.encode(&config.session_encoder).expect("encode state");
+
+		let file_encoder = crate::http::sessionpersistence::Encoder::aes(key_from_file)
+			.expect("encoder from SESSION_KEY_FILE");
+		let inline_encoder =
+			crate::http::sessionpersistence::Encoder::aes(inline_key).expect("inline encoder");
+
+		assert!(crate::http::sessionpersistence::SessionState::decode(&encoded, &file_encoder).is_ok());
+		assert!(
+			crate::http::sessionpersistence::SessionState::decode(&encoded, &inline_encoder).is_err()
+		);
+
+		unsafe {
+			env::remove_var("SESSION_KEY_FILE");
+		}
+	}
+
+	#[test]
+	fn session_key_env_enables_aes_session_encoder() {
+		let session_key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+		unsafe {
+			env::remove_var("SESSION_KEY_FILE");
+			env::set_var("SESSION_KEY", session_key);
+		}
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+		assert!(matches!(
+			config.session_encoder,
+			crate::http::sessionpersistence::Encoder::Aes(_)
+		));
+
+		unsafe {
+			env::remove_var("SESSION_KEY");
+		}
+	}
+
+	#[test]
+	fn default_session_key_file_overrides_session_key_env() {
+		let mounted_key = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+		let env_key = "f1e1d1c1b1a1918171615141312111000f0e0d0c0b0a09080706050403020100";
+		let mounted_file = NamedTempFile::new().expect("temp mounted key file");
+		fs::write(mounted_file.path(), mounted_key).expect("write mounted key file");
+
+		unsafe {
+			env::remove_var("SESSION_KEY_FILE");
+			env::set_var("SESSION_KEY", env_key);
+		}
+
+		let encoder = session_encoder_with_default_file(None, mounted_file.path())
+			.expect("encoder from mounted session key file");
+		let state = crate::http::sessionpersistence::SessionState::HTTP(
+			crate::http::sessionpersistence::HTTPSessionState {
+				backend: "127.0.0.1:8080".parse().expect("socket addr"),
+			},
+		);
+		let encoded = state.encode(&encoder).expect("encode state");
+
+		let mounted_encoder =
+			crate::http::sessionpersistence::Encoder::aes(mounted_key).expect("mounted encoder");
+		let env_encoder = crate::http::sessionpersistence::Encoder::aes(env_key).expect("env encoder");
+
+		assert!(
+			crate::http::sessionpersistence::SessionState::decode(&encoded, &mounted_encoder).is_ok()
+		);
+		assert!(crate::http::sessionpersistence::SessionState::decode(&encoded, &env_encoder).is_err());
+
+		unsafe {
+			env::remove_var("SESSION_KEY");
+		}
 	}
 }

@@ -200,6 +200,9 @@ spec:
         - mountPath: /var/run/secrets/xds-tokens
           name: xds-token
           readOnly: true
+        - mountPath: /var/run/secrets/agentgateway/session
+          name: session-key
+          readOnly: true
         - mountPath: /etc/xds-tls
           name: xds-ca
           readOnly: true
@@ -220,6 +223,12 @@ spec:
               audience: kgateway
               expirationSeconds: 43200
               path: xds-token
+      - name: session-key
+        secret:
+          items:
+          - key: key
+            path: key
+          secretName: gw-session-key
       - emptyDir: {}
         name: tmp
       - configMap:
@@ -229,3 +238,15 @@ spec:
           name: gw-xds-ca
         name: xds-ca
 status: {}
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: gw
+  name: gw-session-key
+  namespace: default
+type: Opaque

@@ -45,6 +45,13 @@ func (gp *GatewayParameters) WithHelmValuesGeneratorOverride(generator deployer.
 	return gp
 }
 
+func (gp *GatewayParameters) WithSessionKeyGenerator(generator func() (string, error)) *GatewayParameters {
+	if gp.agwHelmValuesGenerator != nil && generator != nil {
+		gp.agwHelmValuesGenerator.sessionKeyGen = generator
+	}
+	return gp
+}
+
 // GetAgentgatewayParametersClient returns the AgentgatewayParameters client if Agentgateway is enabled, nil otherwise.
 // This allows the reconciler to reuse the same client for watching changes.
 func (gp *GatewayParameters) GetAgentgatewayParametersClient() kclient.Client[*agentgateway.AgentgatewayParameters] {
@@ -116,6 +123,14 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 			// Agentgateway not enabled; skip overlays (not an error since overlays are optional).
 			return rendered, nil
 		}
+		sessionKeySecret, err := gp.agwHelmValuesGenerator.buildSessionKeySecret(
+			ctx,
+			gw,
+			gatewaySessionKeySecretName(gw.Name),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build session key secret for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
+		}
 		resolved, err := gp.agwHelmValuesGenerator.GetResolvedParametersForGateway(gw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve AgentgatewayParameters for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
@@ -136,6 +151,7 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 				return nil, err
 			}
 		}
+		rendered = append(rendered, sessionKeySecret)
 	}
 
 	return rendered, nil
