@@ -2,8 +2,12 @@ package deployer
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"maps"
+	"strings"
 
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/util/smallset"
@@ -21,6 +25,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 )
+
+var reservedManagedGatewayEnvVars = sets.New[string]("SESSION_KEY")
 
 // AgentgatewayParametersApplier applies AgentgatewayParameters configurations and overlays.
 type AgentgatewayParametersApplier struct {
@@ -97,9 +103,24 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *deployer.HelmCon
 	}
 
 	// Apply explicit environment variables last so they can override logging.level.
-	res.Env = mergeEnvVars(res.Env, configs.Env)
+	res.Env = mergeEnvVars(res.Env, filterReservedManagedGatewayEnvVars(configs.Env))
 
 	vals.Agentgateway.AgentgatewayParametersConfigs = res
+}
+
+func filterReservedManagedGatewayEnvVars(envs []corev1.EnvVar) []corev1.EnvVar {
+	if len(envs) == 0 {
+		return envs
+	}
+
+	filtered := make([]corev1.EnvVar, 0, len(envs))
+	for _, env := range envs {
+		if reservedManagedGatewayEnvVars.Has(env.Name) {
+			continue
+		}
+		filtered = append(filtered, env)
+	}
+	return filtered
 }
 
 // mergeEnvVars merges two slices of environment variables.
@@ -147,14 +168,19 @@ func (a *AgentgatewayParametersApplier) ApplyOverlaysToObjects(objs []client.Obj
 type agentgatewayParametersHelmValuesGenerator struct {
 	agwParamClient kclient.Client[*agentgateway.AgentgatewayParameters]
 	gwClassClient  kclient.Client[*gwv1.GatewayClass]
+	secretClient   kclient.Client[*corev1.Secret]
 	inputs         *deployer.Inputs
+	sessionKeyGen  func() (string, error)
 }
 
 func newAgentgatewayParametersHelmValuesGenerator(cli apiclient.Client, inputs *deployer.Inputs) *agentgatewayParametersHelmValuesGenerator {
+	filter := kclient.Filter{ObjectFilter: cli.ObjectFilter()}
 	return &agentgatewayParametersHelmValuesGenerator{
-		agwParamClient: kclient.NewFilteredDelayed[*agentgateway.AgentgatewayParameters](cli, wellknown.AgentgatewayParametersGVR, kclient.Filter{ObjectFilter: cli.ObjectFilter()}),
-		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown.GatewayClassGVR, kclient.Filter{ObjectFilter: cli.ObjectFilter()}),
+		agwParamClient: kclient.NewFilteredDelayed[*agentgateway.AgentgatewayParameters](cli, wellknown.AgentgatewayParametersGVR, filter),
+		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown.GatewayClassGVR, filter),
+		secretClient:   kclient.NewFiltered[*corev1.Secret](cli, filter),
 		inputs:         inputs,
+		sessionKeyGen:  generateSessionKey,
 	}
 }
 
@@ -257,7 +283,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveParameters(gw *gwv1.G
 }
 
 func (g *agentgatewayParametersHelmValuesGenerator) GetCacheSyncHandlers() []cache.InformerSynced {
-	return []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced}
+	return []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced, g.secretClient.HasSynced}
 }
 
 // GetResolvedParametersForGateway returns both the GatewayClass-level and Gateway-level
@@ -319,6 +345,9 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 		PullPolicy: nil,
 	}
 
+	sessionKeySecretName := gatewaySessionKeySecretName(gw.Name)
+	gtw.SessionKeySecretName = &sessionKeySecretName
+
 	gtw.Service = &deployer.AgentgatewayHelmService{}
 	// Extract loadBalancerIP from Gateway.spec.addresses and set it on the service
 	if err := deployer.SetLoadBalancerIPFromGatewayForAgentgateway(gw, gtw.Service); err != nil {
@@ -326,6 +355,98 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 	}
 
 	return &deployer.HelmConfig{Agentgateway: gtw}, nil
+}
+
+func gatewaySessionKeySecretName(gatewayName string) string {
+	return safeLabelValue(fmt.Sprintf("%s-session-key", safeLabelValue(gatewayName)))
+}
+
+func safeLabelValue(name string) string {
+	if len(name) <= 63 {
+		return name
+	}
+	sum := sha256.Sum256([]byte(name))
+	hash := hex.EncodeToString(sum[:])[:12]
+	prefix := strings.TrimSuffix(name[:50], "-")
+	return fmt.Sprintf("%s-%s", prefix, hash)
+}
+
+func generateSessionKey() (string, error) {
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		return "", fmt.Errorf("failed to generate session key: %w", err)
+	}
+	return hex.EncodeToString(key[:]), nil
+}
+
+func validateSessionKey(key string) error {
+	key = strings.TrimSpace(key)
+	decoded, err := hex.DecodeString(key)
+	if err != nil {
+		return fmt.Errorf("invalid hex-encoded session key: %w", err)
+	}
+	if len(decoded) != 32 {
+		return fmt.Errorf("invalid session key length: expected 32 bytes, got %d", len(decoded))
+	}
+	return nil
+}
+
+func (g *agentgatewayParametersHelmValuesGenerator) buildSessionKeySecret(
+	ctx context.Context,
+	gw *gwv1.Gateway,
+	secretName string,
+) (*corev1.Secret, error) {
+	key, err := g.resolveSessionKey(ctx, gw.Namespace, secretName)
+	if err != nil {
+		return nil, err
+	}
+	return &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: gw.Namespace,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
+				wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"key": []byte(key),
+		},
+	}, nil
+}
+
+func (g *agentgatewayParametersHelmValuesGenerator) resolveSessionKey(
+	ctx context.Context,
+	namespace string,
+	secretName string,
+) (string, error) {
+	_ = ctx
+
+	if secret := g.secretClient.Get(secretName, namespace); secret != nil {
+		key, found := secret.Data["key"]
+		if !found || len(key) == 0 {
+			return "", fmt.Errorf("session key secret %s/%s missing key entry", namespace, secretName)
+		}
+		resolvedKey := strings.TrimSpace(string(key))
+		if err := validateSessionKey(resolvedKey); err != nil {
+			return "", fmt.Errorf("session key secret %s/%s contains an invalid key: %w", namespace, secretName, err)
+		}
+		return resolvedKey, nil
+	}
+
+	key, err := g.sessionKeyGen()
+	if err != nil {
+		return "", err
+	}
+	if err := validateSessionKey(key); err != nil {
+		return "", fmt.Errorf("generated invalid session key for %s/%s: %w", namespace, secretName, err)
+	}
+	return key, nil
 }
 
 func GatewayIRFrom(gw *gwv1.Gateway, controllerNameGuess string) *collections.GatewayForDeployer {

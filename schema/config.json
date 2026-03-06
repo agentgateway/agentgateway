@@ -247,7 +247,7 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "The signing key to be used. If not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
+          "description": "The AES-256-GCM session protection key to be used for session tokens.\nIf not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
           "type": "string"
         }
       },

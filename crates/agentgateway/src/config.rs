@@ -225,10 +225,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		ThreadingMode::default()
 	};
 
-	let session_encoder = match raw.session {
-		None => crate::http::sessionpersistence::Encoder::base64(),
-		Some(s) => crate::http::sessionpersistence::Encoder::aes(s.key.expose_secret())?,
-	};
+	let session_encoder = session_encoder(raw.session.as_ref())?;
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -465,6 +462,19 @@ fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
 		.transpose()
 }
 
+fn session_encoder(
+	raw_session: Option<&crate::RawSession>,
+) -> anyhow::Result<crate::http::sessionpersistence::Encoder> {
+	if let Some(key) = parse::<String>("SESSION_KEY")? {
+		return crate::http::sessionpersistence::Encoder::aes(key.trim());
+	}
+
+	match raw_session {
+		None => Ok(crate::http::sessionpersistence::Encoder::base64()),
+		Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret()),
+	}
+}
+
 pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
 	if let Some(inner) = &inp
 		&& inner.as_ref().is_empty()
@@ -561,10 +571,18 @@ fn get_cpu_count() -> anyhow::Result<usize> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::env;
+	use std::sync::{LazyLock, Mutex};
+
+	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+	fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+		ENV_LOCK.lock().expect("env mutex poisoned")
+	}
 
 	#[test]
 	fn test_parse_otlp_headers() {
-		use std::env;
+		let _env_lock = lock_env();
 
 		unsafe {
 			// Test JSON format
@@ -611,5 +629,71 @@ mod tests {
 
 		// Test missing env var
 		assert_eq!(parse_otlp_headers("NONEXISTENT_VAR").unwrap(), None);
+	}
+
+	#[test]
+	fn session_key_env_overrides_inline_session_config() {
+		let _env_lock = lock_env();
+
+		let env_key = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+		let inline_key = "f1e1d1c1b1a1918171615141312111000f0e0d0c0b0a09080706050403020100";
+
+		unsafe {
+			env::set_var("SESSION_KEY", env_key);
+		}
+
+		let config = parse_config(
+			format!(
+				r#"
+config:
+  session:
+    key: "{inline_key}"
+"#
+			),
+			None,
+		)
+		.expect("config should parse");
+
+		let state = crate::http::sessionpersistence::SessionState::HTTP(
+			crate::http::sessionpersistence::HTTPSessionState {
+				backend: "127.0.0.1:8080".parse().expect("socket addr"),
+			},
+		);
+		let encoded = state.encode(&config.session_encoder).expect("encode state");
+
+		let env_encoder =
+			crate::http::sessionpersistence::Encoder::aes(env_key).expect("encoder from env");
+		let inline_encoder =
+			crate::http::sessionpersistence::Encoder::aes(inline_key).expect("inline encoder");
+
+		assert!(crate::http::sessionpersistence::SessionState::decode(&encoded, &env_encoder).is_ok());
+		assert!(
+			crate::http::sessionpersistence::SessionState::decode(&encoded, &inline_encoder).is_err()
+		);
+
+		unsafe {
+			env::remove_var("SESSION_KEY");
+		}
+	}
+
+	#[test]
+	fn session_key_env_enables_aes_session_encoder() {
+		let _env_lock = lock_env();
+
+		let session_key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+		unsafe {
+			env::set_var("SESSION_KEY", session_key);
+		}
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+		assert!(matches!(
+			config.session_encoder,
+			crate::http::sessionpersistence::Encoder::Aes(_)
+		));
+
+		unsafe {
+			env::remove_var("SESSION_KEY");
+		}
 	}
 }

@@ -19,7 +19,7 @@
 |`config.statsAddr`|Stats/metrics server address in the format "ip:port"|
 |`config.readinessAddr`|Readiness probe server address in the format "ip:port"|
 |`config.session`|Configuration for stateful session management|
-|`config.session.key`|The signing key to be used. If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
+|`config.session.key`|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
 |`config.connectionTerminationDeadline`||
 |`config.connectionMinTerminationDeadline`||
 |`config.workerThreads`||
