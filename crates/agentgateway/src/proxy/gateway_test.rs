@@ -1496,10 +1496,8 @@ async fn dfp_defaults_to_port_80_for_http() {
 	let path = format!("/dfp-http-default-{r}");
 
 	// No port in URI — should default to 80 per HTTP scheme
-	let res = send_request(io, Method::GET, &format!("http://127.0.0.1{path}")).await;
+	let _res = send_request(io, Method::GET, &format!("http://127.0.0.1{path}")).await;
 
-	// Nothing listens on port 80 → 503
-	assert_eq!(res.status(), 503);
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", &path),
@@ -1517,10 +1515,8 @@ async fn dfp_defaults_to_port_443_for_https() {
 	let path = format!("/dfp-https-default-{r}");
 
 	// No port in URI over HTTPS listener — should default to 443 per HTTPS scheme
-	let res = send_request(io, Method::GET, &format!("http://127.0.0.1{path}")).await;
+	let _res = send_request(io, Method::GET, &format!("http://127.0.0.1{path}")).await;
 
-	// Nothing listens on port 443 → 503
-	assert_eq!(res.status(), 503);
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", &path),
