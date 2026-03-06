@@ -24,23 +24,7 @@ spec:
     - port: 80
 ---
 # Output
-output:
-- Policy:
-    backend:
-      health:
-        eviction:
-          duration: 60s
-        unhealthyCondition: response.code >= 500
-    key: default/agw:health:default/be
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      backend:
-        name: be
-        namespace: default
-  Target: null
+output: null
 status:
   ancestors:
   - ancestorRef:

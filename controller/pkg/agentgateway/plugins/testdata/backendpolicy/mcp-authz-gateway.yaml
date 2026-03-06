@@ -24,7 +24,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:rbac:default/test
     name:
       kind: AgentgatewayPolicy
@@ -38,8 +41,10 @@ output:
       authorization:
         deny:
         - "true"
-  Target: null
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     backend:
       mcpAuthorization:
         allow:
@@ -54,7 +59,6 @@ output:
       gateway:
         name: test
         namespace: default
-  Target: null
 status:
   ancestors:
   - ancestorRef:

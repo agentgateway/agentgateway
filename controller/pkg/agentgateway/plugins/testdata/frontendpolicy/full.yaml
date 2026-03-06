@@ -62,7 +62,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     frontend:
       http:
         http2FrameSize: 17000
@@ -76,8 +79,10 @@ output:
       gateway:
         name: test
         namespace: default
-  Target: null
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     frontend:
       tls:
         alpn:
@@ -93,8 +98,10 @@ output:
       gateway:
         name: test
         namespace: default
-  Target: null
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     frontend:
       tcp:
         keepalives:
@@ -110,8 +117,10 @@ output:
       gateway:
         name: test
         namespace: default
-  Target: null
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     frontend:
       logging:
         fields:
@@ -130,7 +139,6 @@ output:
       gateway:
         name: test
         namespace: default
-  Target: null
 status:
   ancestors:
   - ancestorRef:

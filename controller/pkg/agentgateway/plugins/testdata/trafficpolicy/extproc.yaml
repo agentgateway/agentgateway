@@ -25,7 +25,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/http:extproc:default/test
     name:
       kind: AgentgatewayPolicy
@@ -42,7 +45,6 @@ output:
           service:
             hostname: extproc-svc.default.svc.cluster.local
             namespace: default
-  Target: null
 status:
   ancestors:
   - ancestorRef:

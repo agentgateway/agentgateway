@@ -27,7 +27,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     frontend:
       http:
         http2FrameSize: 16384
@@ -41,7 +44,6 @@ output:
       gateway:
         name: test
         namespace: default
-  Target: null
 status:
   ancestors:
   - ancestorRef:

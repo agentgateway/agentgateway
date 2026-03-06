@@ -23,7 +23,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/grpc:extauth:default/test
     name:
       kind: AgentgatewayPolicy
@@ -43,7 +46,6 @@ output:
         includeRequestBody:
           allowPartialMessage: true
           maxRequestBytes: 1024
-  Target: null
 status:
   ancestors:
   - ancestorRef:

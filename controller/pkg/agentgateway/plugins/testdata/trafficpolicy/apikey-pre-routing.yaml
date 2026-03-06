@@ -27,7 +27,10 @@ data:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/apikey-pre-routing:apikeyauth:default/test
     name:
       kind: AgentgatewayPolicy
@@ -46,7 +49,6 @@ output:
           metadata:
             user: admin
       phase: GATEWAY
-  Target: null
 status:
   ancestors:
   - ancestorRef:

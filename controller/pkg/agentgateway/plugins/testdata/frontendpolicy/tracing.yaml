@@ -28,7 +28,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     frontend:
       tracing:
         path: /custom/v1/traces
@@ -46,7 +49,6 @@ output:
       gateway:
         name: test
         namespace: default
-  Target: null
 status:
   ancestors:
   - ancestorRef:

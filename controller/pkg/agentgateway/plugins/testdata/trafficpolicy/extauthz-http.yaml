@@ -40,7 +40,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/http:extauth:default/test
     name:
       kind: AgentgatewayPolicy
@@ -73,7 +76,6 @@ output:
           service:
             hostname: extauthz.default.svc.cluster.local
             namespace: default
-  Target: null
 status:
   ancestors:
   - ancestorRef:

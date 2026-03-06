@@ -33,7 +33,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/jwt-pre-routing:jwt:default/test
     name:
       kind: AgentgatewayPolicy
@@ -64,7 +67,6 @@ output:
             }
           issuer: https://example.com
       phase: GATEWAY
-  Target: null
 status:
   ancestors:
   - ancestorRef:

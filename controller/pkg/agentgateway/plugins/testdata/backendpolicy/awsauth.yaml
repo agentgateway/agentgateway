@@ -26,26 +26,7 @@ data:
   sessionToken: c2VjcmV0LXNlc3Npb25Ub2tlbg==
 ---
 # Output
-output:
-- Policy:
-    backend:
-      auth:
-        aws:
-          explicitConfig:
-            accessKeyId: secret-accessKey
-            secretAccessKey: secret-secretKey
-            sessionToken: secret-sessionToken
-    key: backend/default/agw:backend-auth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: test
-        namespace: default
-  Target: null
+output: null
 status:
   ancestors:
   - ancestorRef:

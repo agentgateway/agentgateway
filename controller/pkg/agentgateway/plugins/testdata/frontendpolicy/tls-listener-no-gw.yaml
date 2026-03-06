@@ -14,7 +14,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: fake-gw
+    Namespace: default
+  Policy:
     frontend:
       tls:
         handshakeTimeout: 15s
@@ -27,7 +30,6 @@ output:
       gateway:
         name: fake-gw
         namespace: default
-  Target: null
 status:
   ancestors:
   - ancestorRef:

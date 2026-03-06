@@ -456,12 +456,15 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.Routes != nil {
 		agwRoutes = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{agwRoutes, s.agwPlugins.AddResourceExtension.Routes})
 	}
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "from", func(o *translator.RouteAttachment) []translator.TypedResource {
+		return []translator.TypedResource{o.From}
+	}).AsCollection(krtopts.ToOptions("RouteAttachments")...)
 
 	ancestorsIndex := krt.NewIndex(ancestorBackends, "ancestors", func(o *utils.AncestorBackend) []utils.TypedNamespacedName {
-		return []utils.TypedNamespacedName{o.Backend}
+		return []utils.TypedNamespacedName{o.Source, o.Backend}
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
-	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection)
+	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex)
 	agwPolicies, policyStatuses := AgwPolicyCollection(s.agwPlugins, referenceIndex, krtopts)
 
 	// Create an agentgateway backend collection from the kgateway backend resources

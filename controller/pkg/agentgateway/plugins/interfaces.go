@@ -3,7 +3,6 @@ package plugins
 import (
 	"context"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"istio.io/istio/pilot/pkg/util/protoconv"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/controllers"
@@ -35,17 +34,17 @@ func (p *PolicyPlugin) ApplyPolicies(inputs PolicyPluginInput) (krt.Collection[A
 
 // AgwPolicy wraps an Agw policy for collection handling
 type AgwPolicy struct {
-	Target *utils.TypedNamespacedName
-	Policy *api.Policy
+	Gateway *types.NamespacedName
+	Policy  *api.Policy
 	// TODO: track errors per policy
 }
 
 func (p AgwPolicy) Equals(in AgwPolicy) bool {
-	return ptr.Equal(p.Target, in.Target) && protoconv.Equals(p.Policy, in.Policy)
+	return ptr.Equal(p.Gateway, in.Gateway) && protoconv.Equals(p.Policy, in.Policy)
 }
 
 func (p AgwPolicy) ResourceName() string {
-	return p.Target.String() + "/" + p.Policy.Key
+	return p.Gateway.String() + "/" + p.Policy.Key
 }
 
 type AddResourcesPlugin struct {

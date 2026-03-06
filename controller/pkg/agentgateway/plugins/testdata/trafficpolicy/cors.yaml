@@ -30,7 +30,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:cors:default/test
     name:
       kind: AgentgatewayPolicy
@@ -59,7 +62,6 @@ output:
         exposeHeaders:
         - x-custom-header
         maxAge: 86400s
-  Target: null
 status:
   ancestors:
   - ancestorRef:

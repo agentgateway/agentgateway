@@ -20,7 +20,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:retry:default/test
     name:
       kind: AgentgatewayPolicy
@@ -39,7 +42,6 @@ output:
         - 502
         - 503
         - 504
-  Target: null
 status:
   ancestors:
   - ancestorRef:

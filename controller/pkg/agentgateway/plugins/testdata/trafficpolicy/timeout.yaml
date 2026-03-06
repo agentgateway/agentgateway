@@ -14,7 +14,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:timeout:default/test
     name:
       kind: AgentgatewayPolicy
@@ -27,7 +30,6 @@ output:
     traffic:
       timeout:
         request: 30s
-  Target: null
 status:
   ancestors:
   - ancestorRef:

@@ -20,7 +20,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:transformation:default/test
     name:
       kind: AgentgatewayPolicy
@@ -36,7 +39,6 @@ output:
           set:
           - expression: '''foolen_'' + request.headers[''content-length'']'
             name: x-valid-header
-  Target: null
 status:
   ancestors:
   - ancestorRef:

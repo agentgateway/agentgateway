@@ -31,7 +31,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:header-modifier:default/test
     name:
       kind: AgentgatewayPolicy
@@ -51,8 +54,10 @@ output:
         set:
         - name: set-req-header
           value: foo
-  Target: null
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:header-modifier:default/test
     name:
       kind: AgentgatewayPolicy
@@ -72,7 +77,6 @@ output:
         set:
         - name: set-res-header
           value: foo
-  Target: null
 status:
   ancestors:
   - ancestorRef:

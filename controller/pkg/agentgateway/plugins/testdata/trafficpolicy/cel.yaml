@@ -28,7 +28,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:transformation:default/test
     name:
       kind: AgentgatewayPolicy
@@ -55,7 +58,6 @@ output:
           remove:
           - server
           - x-internal-header
-  Target: null
 status:
   ancestors:
   - ancestorRef:

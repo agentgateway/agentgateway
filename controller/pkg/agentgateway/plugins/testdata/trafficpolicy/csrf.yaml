@@ -17,7 +17,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/agw:csrf:default/test
     name:
       kind: AgentgatewayPolicy
@@ -33,7 +36,6 @@ output:
         - https://example.com
         - https://app.example.com
         - http://localhost:3000
-  Target: null
 status:
   ancestors:
   - ancestorRef:

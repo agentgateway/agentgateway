@@ -14,20 +14,7 @@ spec:
         - name: mtls
 ---
 # Output
-output:
-- Policy:
-    backend:
-      backendTls: {}
-    key: default/agw:tls:default/missing
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      backend:
-        name: missing
-        namespace: default
-  Target: null
+output: null
 status:
   ancestors:
   - ancestorRef:

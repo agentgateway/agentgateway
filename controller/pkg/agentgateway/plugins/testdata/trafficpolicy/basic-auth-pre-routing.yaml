@@ -18,7 +18,10 @@ spec:
 ---
 # Output
 output:
-- Policy:
+- Gateway:
+    Name: test
+    Namespace: default
+  Policy:
     key: traffic/default/basic-auth-pre-routing:basicauth:default/test
     name:
       kind: AgentgatewayPolicy
@@ -33,7 +36,6 @@ output:
         htpasswdContent: user1:$apr1$xyz123$abc
         realm: My Realm
       phase: GATEWAY
-  Target: null
 status:
   ancestors:
   - ancestorRef:

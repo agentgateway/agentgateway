@@ -23,40 +23,7 @@ spec:
             - 'jwt.sub == "test-user" && mcp.tool.name == "add"'
 ---
 # Output
-output:
-- Policy:
-    key: traffic/default/agw:rbac:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: test
-        namespace: default
-    traffic:
-      authorization:
-        deny:
-        - "true"
-  Target: null
-- Policy:
-    backend:
-      mcpAuthorization:
-        allow:
-        - mcp.tool.name == "echo"
-        - jwt.sub == "test-user" && mcp.tool.name == "add"
-    key: default/agw:mcp-authorization:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: test
-        namespace: default
-  Target: null
+output: null
 status:
   ancestors:
   - ancestorRef:
