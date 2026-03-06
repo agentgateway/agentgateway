@@ -1368,7 +1368,7 @@ async fn make_backend_call(
 				});
 			let target = Target::try_from((host, port)).map_err(ProxyError::Processing)?;
 			BackendCall {
-				target: target.clone(),
+				target,
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
