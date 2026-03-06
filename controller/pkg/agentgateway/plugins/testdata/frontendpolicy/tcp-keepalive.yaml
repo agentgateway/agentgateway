@@ -29,25 +29,23 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    frontend:
-      tcp:
-        keepalives:
-          interval: 30s
-          retries: 3
-          time: 120s
-    key: frontend/default/tcp-keepalive-policy:frontend-tcp:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: tcp-keepalive-policy
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      frontend:
+        tcp:
+          keepalives:
+            interval: 30s
+            retries: 3
+            time: 120s
+      key: frontend/default/tcp-keepalive-policy:frontend-tcp:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: tcp-keepalive-policy
         namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
 status:
   ancestors:
   - ancestorRef:

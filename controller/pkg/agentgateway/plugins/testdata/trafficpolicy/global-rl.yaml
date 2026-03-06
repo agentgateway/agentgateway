@@ -31,31 +31,29 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    key: traffic/default/http:rl-global:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: http
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/http:rl-global:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: http
         namespace: default
-    traffic:
-      remoteRateLimit:
-        descriptors:
-        - entries:
-          - key: user-agent
-            value: request.headers["user-agent"]
-        domain: api-gateway
-        target:
-          port: 4444
-          service:
-            hostname: rl-svc.default.svc.cluster.local
-            namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        remoteRateLimit:
+          descriptors:
+          - entries:
+            - key: user-agent
+              value: request.headers["user-agent"]
+          domain: api-gateway
+          target:
+            port: 4444
+            service:
+              hostname: rl-svc.default.svc.cluster.local
+              namespace: default
 status:
   ancestors:
   - ancestorRef:

@@ -32,34 +32,32 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    key: traffic/default/grpc:extauth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: grpc
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/grpc:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: grpc
         namespace: default
-    traffic:
-      extAuthz:
-        grpc:
-          context:
-            hello: world
-          metadata:
-            user: jwt.sub
-        includeRequestBody:
-          allowPartialMessage: true
-          maxRequestBytes: 1024
-        target:
-          port: 1024
-          service:
-            hostname: extauthz.default.svc.cluster.local
-            namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          grpc:
+            context:
+              hello: world
+            metadata:
+              user: jwt.sub
+          includeRequestBody:
+            allowPartialMessage: true
+            maxRequestBytes: 1024
+          target:
+            port: 1024
+            service:
+              hostname: extauthz.default.svc.cluster.local
+              namespace: default
 status:
   ancestors:
   - ancestorRef:

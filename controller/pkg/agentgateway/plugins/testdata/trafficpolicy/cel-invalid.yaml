@@ -20,25 +20,23 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    key: traffic/default/agw:transformation:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/agw:transformation:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      transformation:
-        request:
-          set:
-          - expression: '''foolen_'' + request.headers[''content-length'']'
-            name: x-valid-header
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        transformation:
+          request:
+            set:
+            - expression: '''foolen_'' + request.headers[''content-length'']'
+              name: x-valid-header
 status:
   ancestors:
   - ancestorRef:

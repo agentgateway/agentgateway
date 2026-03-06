@@ -44,33 +44,28 @@ func init() {
 }
 
 func TestTrafficPolicies(t *testing.T) {
-	testutils.RunForDirectory(t, "testdata/trafficpolicy", func(t *testing.T, ctx plugins.PolicyCtx) (*gwv1.PolicyStatus, []plugins.AgwPolicy) {
-		pol := testutils.GetTestResource(t, ctx.Collections.AgentgatewayPolicies)
-		_, ri := testutils.Syncer(t, ctx)
-		s, o := plugins.TranslateAgentgatewayPolicy(ctx.Krt, pol, ctx.Collections, ri.Outputs.References)
-		return s, o
-	})
+	policyTest(t, "testdata/trafficpolicy")
 }
 
 func TestBackendPolicies(t *testing.T) {
-	testutils.RunForDirectory(t, "testdata/backendpolicy", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
-		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
+	policyTest(t, "testdata/backendpolicy")
+}
+
+func TestFrontendPolicies(t *testing.T) {
+	policyTest(t, "testdata/frontendpolicy")
+}
+
+func policyTest(t *testing.T, folder string) {
+	t.Helper()
+	testutils.RunForDirectory(t, folder, func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
+		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy", "HTTPRoute")
 		r := ri.Outputs.Resources.List()
 		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
 			x := ir.GetAgwResourceName(resource.Resource)
 			return strings.HasPrefix(x, "policy/")
 		})
-		return sq.DumpStatus(), slices.SortBy(r, func(a ir.AgwResource) string {
+		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
 			return a.ResourceName()
 		})
-	})
-}
-
-func TestFrontendPolicies(t *testing.T) {
-	testutils.RunForDirectory(t, "testdata/frontendpolicy", func(t *testing.T, ctx plugins.PolicyCtx) (*gwv1.PolicyStatus, []plugins.AgwPolicy) {
-		_, ri := testutils.Syncer(t, ctx)
-		pol := testutils.GetTestResource(t, ctx.Collections.AgentgatewayPolicies)
-		s, o := plugins.TranslateAgentgatewayPolicy(ctx.Krt, pol, ctx.Collections, ri.Outputs.References)
-		return s, o
 	})
 }

@@ -40,42 +40,40 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    key: traffic/default/http:extauth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: http
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/http:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: http
         namespace: default
-    traffic:
-      extAuthz:
-        http:
-          addRequestHeaders:
-            x-custom-header: random()
-          includeResponseHeaders:
-          - x-custom-header
-          metadata:
-            githubUser: response.headers["x-auth-request-user"]
-          path: |
-            "/prefix/" + request.path
-          redirect: |
-            "/signin"
-        includeRequestBody:
-          allowPartialMessage: true
-          maxRequestBytes: 1024
-        includeRequestHeaders:
-        - authorization
-        target:
-          port: 1024
-          service:
-            hostname: extauthz.default.svc.cluster.local
-            namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          http:
+            addRequestHeaders:
+              x-custom-header: random()
+            includeResponseHeaders:
+            - x-custom-header
+            metadata:
+              githubUser: response.headers["x-auth-request-user"]
+            path: |
+              "/prefix/" + request.path
+            redirect: |
+              "/signin"
+          includeRequestBody:
+            allowPartialMessage: true
+            maxRequestBytes: 1024
+          includeRequestHeaders:
+          - authorization
+          target:
+            port: 1024
+            service:
+              hostname: extauthz.default.svc.cluster.local
+              namespace: default
 status:
   ancestors:
   - ancestorRef:

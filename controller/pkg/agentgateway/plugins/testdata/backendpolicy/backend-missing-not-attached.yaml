@@ -1,3 +1,4 @@
+# Intentionally no output. There is no backend, so nothing to attach to.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:

@@ -31,52 +31,27 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    key: traffic/default/agw:header-modifier:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/agw:header-modifier:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      requestHeaderModifier:
-        add:
-        - name: add-req-header
-          value: bar,baz
-        remove:
-        - remove-req-header
-        set:
-        - name: set-req-header
-          value: foo
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    key: traffic/default/agw:header-modifier:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
-        namespace: default
-    traffic:
-      responseHeaderModifier:
-        add:
-        - name: add-res-header
-          value: bar,baz
-        remove:
-        - server
-        set:
-        - name: set-res-header
-          value: foo
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        responseHeaderModifier:
+          add:
+          - name: add-res-header
+            value: bar,baz
+          remove:
+          - server
+          set:
+          - name: set-res-header
+            value: foo
 status:
   ancestors:
   - ancestorRef:

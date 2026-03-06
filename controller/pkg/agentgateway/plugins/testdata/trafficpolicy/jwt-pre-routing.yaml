@@ -33,40 +33,38 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    key: traffic/default/jwt-pre-routing:jwt:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: jwt-pre-routing
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/jwt-pre-routing:jwt:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: jwt-pre-routing
         namespace: default
-    traffic:
-      jwt:
-        mode: STRICT
-        providers:
-        - audiences:
-          - my-app
-          inline: |-
-            {
-              "keys": [
-                {
-                  "kty": "RSA",
-                  "e": "AQAB",
-                  "use": "sig",
-                  "kid": "test-key",
-                  "alg": "RS256",
-                  "n": "test"
-                }
-              ]
-            }
-          issuer: https://example.com
-      phase: GATEWAY
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        jwt:
+          mode: STRICT
+          providers:
+          - audiences:
+            - my-app
+            inline: |-
+              {
+                "keys": [
+                  {
+                    "kty": "RSA",
+                    "e": "AQAB",
+                    "use": "sig",
+                    "kid": "test-key",
+                    "alg": "RS256",
+                    "n": "test"
+                  }
+                ]
+              }
+            issuer: https://example.com
+        phase: GATEWAY
 status:
   ancestors:
   - ancestorRef:

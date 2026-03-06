@@ -20,28 +20,26 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    frontend:
-      logging:
-        fields:
-          add:
-          - expression: request.headers["x-request-id"]
-            name: trace.id
-          remove:
-          - request.headers["authorization"]
-        filter: response.code >= 400
-    key: frontend/default/accesslog-policy:frontend-logging:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: accesslog-policy
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      frontend:
+        logging:
+          fields:
+            add:
+            - expression: request.headers["x-request-id"]
+              name: trace.id
+            remove:
+            - request.headers["authorization"]
+          filter: response.code >= 400
+      key: frontend/default/accesslog-policy:frontend-logging:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: accesslog-policy
         namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
 status:
   ancestors:
   - ancestorRef:

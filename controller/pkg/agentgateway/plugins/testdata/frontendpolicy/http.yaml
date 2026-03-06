@@ -27,23 +27,21 @@ spec:
 ---
 # Output
 output:
-- Gateway:
-    Name: test
-    Namespace: default
-  Policy:
-    frontend:
-      http:
-        http2FrameSize: 16384
-        maxBufferSize: 2048
-    key: frontend/default/http-policy:frontend-http:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: http-policy
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      frontend:
+        http:
+          http2FrameSize: 16384
+          maxBufferSize: 2048
+      key: frontend/default/http-policy:frontend-http:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: http-policy
         namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
 status:
   ancestors:
   - ancestorRef:
